@@ -12,6 +12,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { hydrateResolvedEmptyReferences } from './reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
@@ -47,6 +48,7 @@ export interface PlainTextRenderOptions extends RenderLossSinkOptions {
  */
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f: a definition whose own expansion this render emits loses its
   // line, and the lines come before the occurrences that decide it. So when the
   // document has a definition at all, render once to find out which pairs were

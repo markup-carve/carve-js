@@ -7,7 +7,7 @@ const targets = {
   plain: carveToPlainTextWithReport,
   ansi: carveToAnsiWithReport,
 }
-const blanked = { markdown: '[lbl]: <>\n', plain: '[lbl]:\n', ansi: '[lbl]: \n' }
+const blanked = { markdown: '[lbl]: <>\n', plain: '[lbl]:\n', ansi: '[lbl]:\n' }
 
 for (const [name, render] of Object.entries(targets)) {
   describe(name, () => {
@@ -21,8 +21,10 @@ for (const [name, render] of Object.entries(targets)) {
       expect(losses.map(loss => [loss.code, loss.target])).toEqual([['destination-denied', name]])
     })
 
-    it('keeps the title of a blanked definition', () => {
-      expect(unstyled(render('[lbl]: javascript:x "T"\n').value)).toContain('"T"')
+    it('writes a blanked definition with target syntax', () => {
+      const value = unstyled(render('[lbl]: javascript:x "T"\n').value)
+      if (name === 'markdown') expect(value).toContain('"T"')
+      else expect(value).toBe('[lbl]:\n')
     })
 
     it('leaves an allowed destination and reports nothing', () => {

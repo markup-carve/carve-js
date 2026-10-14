@@ -46,7 +46,8 @@ test('keeps a footnote-shaped label out of image reference resolution', () => {
   expect(images(carveToHtml(result.value))).toEqual([])
 })
 
-test('reports an empty destination on the rendered outer image', () => {
+test('preserves an empty destination on the rendered outer image', () => {
   const result = migrateDjot('![a ![b]() c]()')
-  expect(result.report.diagnostics.some(d => /An image with an empty destination/.test(d.message))).toBe(true)
+  expect(result.report.diagnostics.some(d => /An image with an empty destination/.test(d.message))).toBe(false)
+  expect(images(carveToHtml(result.value))).toEqual([{ src: '', alt: 'a b c' }])
 })

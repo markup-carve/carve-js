@@ -14,6 +14,7 @@ import { codeLines, rawSource } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { hydrateResolvedEmptyReferences } from './reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLoss, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
@@ -61,6 +62,7 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
   // lines come before the occurrences that decide whether they survive, so a
   // document holding a definition is rendered once to find out which pairs were

@@ -34,10 +34,10 @@ describe('reference state transitions', () => {
     expect(isUnresolvedReference(node)).toBe(false)
   })
 
-  it('keeps empty destinations unresolved and resolves images through the same boundary', () => {
+  it('resolves empty destinations and images through the same boundary', () => {
     const node = { type: 'image' as const, src: '' as const, alt: 'text', ref: 'label' }
     expect(resolveReferenceDestination(node, '')).toBe(node)
-    expect(isUnresolvedReference(node)).toBe(true)
+    expect(isUnresolvedReference(node)).toBe(false)
     expect(resolveReferenceDestination(node, '/image.png')).toMatchObject({ src: '/image.png', ref: 'label' })
     expect(isUnresolvedReference(node)).toBe(false)
   })

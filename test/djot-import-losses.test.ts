@@ -22,7 +22,6 @@ it.each([
 
 it.each([
   ['##\n', 'An empty heading', 1],
-  ['[link][]\n\n[link]:\n[link2]: url\n', 'A link with an empty destination', 1],
   ['[link][a and\nb]\n', 'An unresolved Djot reference', 1],
   ['[link][a and\nb]\n\n[a and\nb]: url\n', 'An unresolved Djot reference', 1],
   ['[Link][]\n\n[link]: /url\n', 'An unresolved Djot reference', 1],
@@ -203,12 +202,12 @@ it.each([
 })
 
 
-it.each(['![a]()', '![a][missing]', '![a][]\n\n[a]:'])('reports images with missing destinations: %s', (source) => {
+it.each(['![a][missing]'])('reports images with missing destinations: %s', (source) => {
   expect(djotToCarveWithLosses(source).losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('image') }))
 })
 
-it('preserves a space-only destination without an empty-target loss', () => {
-  expect(djotToCarveWithLosses('[a]( )').losses).toEqual([])
+it.each(['[a]( )', '[a](\n)', '> [a](\n> )', '- [a](\n  )', '[a](\n  )', '![a]()', '![a][]\n\n[a]:', '[link][]\n\n[link]:\n[link2]: url\n'])('preserves an empty destination without a loss: %s', source => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
 })
 
 
@@ -216,19 +215,10 @@ it('keeps an unfinished reference label with an inner opener literal', () => {
   expect(djotToCarveWithLosses('[a][[b]').losses).toEqual([])
 })
 
-it('reports a newline-only destination as empty', () => {
-  expect(djotToCarveWithLosses('[a](\n)').losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
-})
-
-
 it('does not turn an unfinished reference containing code into a link loss', () => {
   expect(djotToCarveWithLosses('[a][b `c] [x][y]` z').losses).toEqual([])
 })
 
-
-it.each(['> [a](\n> )', '- [a](\n  )', '[a](\n  )'])('reports empty destinations after folding container prefixes: %s', (source) => {
-  expect(djotToCarveWithLosses(source).losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
-})
 
 it.each(['[a][b][c]\n\n[b]: /u', '[a][b]()\n\n[b]: /u'])('does not reuse an accepted reference payload: %s', (source) => {
   expect(djotToCarveWithLosses(source).losses).toEqual([])

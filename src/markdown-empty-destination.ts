@@ -2,11 +2,7 @@ import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { rawBracketRunCloses } from './parse.js'
 import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
-/*
- * CommonMark links an empty destination; Carve reads `[t]()` as literal text
- * (markup-carve/carve#2069). The Markdown importer writes such a link as its
- * text and such an image as its alt text, matching markup-carve/carve-php#2067.
- */
+/* Convert CommonMark empty destinations to native Carve links and images. */
 
 import { markdownEmphasis } from './markdown-emphasis.js'
 import { htmlToCarve } from './html-import.js'
@@ -14,6 +10,7 @@ import { htmlToCarve } from './html-import.js'
 /** Labels whose first reference definition has an empty destination, to its decoded title. */
 export interface EmptyDestinationReferences {
   empty: Map<string, string>
+  titled: Set<string>
   defined: Set<string>
   labels: Map<string, string>
   inline: Map<string, string>
@@ -44,7 +41,7 @@ function rewriteParenthesizedTitle(value: string): string {
   return value
 }
 
-const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map(), footnotes: new Map() }
+const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), titled: new Set(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map(), footnotes: new Map() }
 
 let references = NO_REFERENCES
 let boundaryKey: string | undefined
@@ -79,7 +76,7 @@ export function referenceDestinationLabel(
   const authored = references.sourceLabels.get(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
   if (authored !== undefined && (references.inline.has(authored) || table && references.tableInline.has(authored))) return authored
   const key = normalizeReferenceLabel(referenceSourceText(label, placeholders))
-  const found = references.empty.has(key) ? undefined : references.labels.get(key)
+  const found = references.labels.get(key)
   return table && found !== undefined && references.tableInline.has(found) && authored === undefined ? undefined : found
 }
 
@@ -179,6 +176,7 @@ export function extractReferenceDefinitions(
   sourceLines: number[]
   references: EmptyDestinationReferences
   definitions: string[]
+  discardedEmptyDefinitions: Array<{ line: number; label: string }>
   /** Input line indices this pass read as HTML BLOCK content. */
   htmlLines: Set<number>
   /** Input line indices opening a list item whose content is a task box plus an HTML comment. */
@@ -192,10 +190,12 @@ export function extractReferenceDefinitions(
   while (inputLines.some(line => line.includes(`CARVEMDTITLEBREAK${titleSerial}Z`))) titleSerial++
   const titleBreakMarker = `CARVEMDTITLEBREAK${titleSerial}Z`
   const empty = new Map<string, string>()
+  const titled = new Set<string>()
   const defined = new Set<string>()
   const authoredDefinitions = new Set<string>()
   const labels = new Map<string, string>()
   const definitions: string[] = []
+  const discardedEmptyDefinitions: Array<{ line: number; label: string }> = []
   const inline = new Map<string, string>()
   const tableInline = new Map<string, string>()
   let nextSerial = 1
@@ -511,7 +511,7 @@ export function extractReferenceDefinitions(
           const canonical = `carve-import-reference-${nextSerial++}`
           inline.set(canonical, `${target}${title}`)
           sourceLabels.set(key, canonical)
-        } else if (!authoredRepeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        } else if (!authoredRepeated) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
         if (opensItem) {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
@@ -558,7 +558,17 @@ export function extractReferenceDefinitions(
         i++
       }
       const authoredKey = normalizeReferenceLabel(definition[1]!)
-      if (!defined.has(key) && !authoredDefinitions.has(authoredKey)) empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
+      if (!defined.has(key) && !authoredDefinitions.has(authoredKey)) {
+        empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
+        if (raw !== '') titled.add(key)
+        if (raw !== '') discardedEmptyDefinitions.push({ line: sourceIndex, label: definition[1]! })
+        const canonicalLabel = definition[1]!.includes('\\')
+          ? definition[1]!
+          : decodeLinkTitle(definition[1]!, decodeEntity)
+        labels.set(key, canonicalLabel)
+        sourceLabels.set(key, canonicalLabel)
+        if (raw === '') definitions.push(`[${canonicalLabel}]:`)
+      }
       defined.add(key)
       authoredDefinitions.add(authoredKey)
       canStart = true
@@ -577,8 +587,9 @@ export function extractReferenceDefinitions(
     lines: kept,
     titleBreakMarker,
     sourceLines: keptSource,
-    references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes },
+    references: { empty, titled, defined, labels, inline, tableInline, sourceLabels, footnotes },
     definitions,
+    discardedEmptyDefinitions,
     htmlLines,
     taskHtmlLines,
   }
@@ -605,11 +616,6 @@ export function escapeLineInitialBlockSyntax(text: string): string {
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
-}
-
-function quoteAttributeValue(value: string): string {
-  if (/^[^\s"'{}]+$/u.test(value)) return value
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
 
 /** CommonMark's alt text: the description's content with its markup removed. */
@@ -667,9 +673,8 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
 }
 
 /**
- * The Carve a link or image with no destination leaves behind: a link's text,
- * or an image's plain alt text written as the HTML importer writes
- * `<img src="">`, in a span when a title survives.
+ * Write a native Carve link or image for a Markdown empty destination.
+ * Image alternative text is flattened through the HTML importer.
  */
 function unwrapEmptyDestination(
   label: string,
@@ -680,20 +685,21 @@ function unwrapEmptyDestination(
   protect: (s: string) => string,
   decodeEntity: (entity: string) => string,
   keepBoundary = true,
+  hasTitle = false,
 ): string {
   // Bare at the start of a line or container, the text would open a block.
   const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*(?:#{1,6}[ \t]+)?$/.test(before)
   if (image) {
-    const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
+    const titleAttr = hasTitle ? ` title="${escapeHtml(title)}"` : ''
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
     const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
     return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary, true)
   }
-  if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect, keepBoundary)
-  return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect, keepBoundary)
+  const slot = hasTitle ? `( "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")` : '()'
+  return `[${label}]${protect(slot)}`
 }
 
-/** Rewrites every link and image with an empty destination on one line of inline text. */
+/** Rewrites empty Markdown destinations to native Carve spellings. */
 export function unwrapEmptyDestinations(
   line: string,
   placeholders: readonly string[],
@@ -725,7 +731,7 @@ export function unwrapEmptyDestinations(
   }
   let imageSubject: string | undefined
   let imageRanges: Array<[number, number]> = []
-  const unwrap = (m: RegExpExecArray, title: string, subject: string, emittedPrefix: string) => {
+  const unwrap = (m: RegExpExecArray, title: string, subject: string, emittedPrefix: string, hasTitle: boolean) => {
     if (subject !== imageSubject) {
       imageSubject = subject
       imageRanges = []
@@ -747,13 +753,13 @@ export function unwrapEmptyDestinations(
     const isolatedPlainLabel = /^[A-Za-z0-9 ]+$/.test(m[1]!)
       && (emittedPrefix === '' || /\s$/.test(emittedPrefix))
       && (next === undefined || /\s/.test(next))
-    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && !isolatedPlainLabel && (keepBoundaryAt?.(subject, m.index) ?? true))
+    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && !isolatedPlainLabel && (keepBoundaryAt?.(subject, m.index) ?? true), hasTitle)
   }
   if (references.empty.size > 0) {
     const byReference = (m: RegExpExecArray, reference: string, subject: string, emittedPrefix: string): string | null => {
       const key = normalizeReferenceLabel(referenceSourceText(reference, placeholders))
       const title = references.empty.get(key)
-      return title === undefined ? null : unwrap(m, title, subject, emittedPrefix)
+      return title === undefined || !references.titled.has(key) ? null : unwrap(m, title, subject, emittedPrefix, true)
     }
     let subject = line
     replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m, before) => byReference(m, m[2] ?? m[1]!, subject, before))
@@ -767,7 +773,7 @@ export function unwrapEmptyDestinations(
   const subject = line
   replaceAt(
     new RegExp(String.raw`!?\[${LABEL}\]\([ \t]*(?:<>(?:[ \t]+("[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*)?\)`, 'g'),
-    (m, before) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject, before),
+    (m, before) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject, before, m[2] !== undefined),
   )
   return line
 }

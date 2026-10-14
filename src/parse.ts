@@ -90,7 +90,7 @@ import { ownValue, setOwn } from './own-property.js'
 import { codeContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
-import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
+import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
@@ -537,6 +537,7 @@ export const RE_ESCAPABLE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/
  */
 const RE_LINK_DEF =
   /^[ \t]*\[(?!@)([^\]]+)\]: +(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\[\s\S])*)"|'((?:[^'\\]|\\[\s\S])*)'))?(?: (\{.*\}))?[ \t]*$/u
+const RE_EMPTY_LINK_DEF = /^[ \t]*\[(?![@^])([^\]]+)\]:[ \t]*$/
 
 /** A reference definition read off one line. */
 interface LinkDefMatch {
@@ -552,6 +553,8 @@ interface LinkDefMatch {
  * changes all of them at once.
  */
 function matchLinkDef(line: string): LinkDefMatch | null {
+  const empty = RE_EMPTY_LINK_DEF.exec(line)
+  if (empty !== null) return { label: empty[1]!, href: '', title: undefined, attrText: null }
   const m = RE_LINK_DEF.exec(line)
   if (m === null) return null
   const href = linkDestinationValue(m[2]!)
@@ -657,7 +660,7 @@ export const isTableRow = (line: string): boolean => {
 // still consumed into the cell above, where the same row ending in any other
 // control character became a paragraph between two tables.
 const RE_TABLE_CONT = /^\+.*\|[ \t]*$/
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')?[ \t]*\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
 const RE_FRONTMATTER_OPEN = new RegExp('^--- ?(\\w*)' + TRAILING_WS)
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
@@ -4308,7 +4311,7 @@ function isBlockImageLine(line: string): boolean {
     m !== null &&
     // Check the whole line because opaque spans can extend beyond the label.
     buildBracketMap(line)(1) === 2 + m[1]!.length &&
-    linkDestinationValue(m[2]!) !== null &&
+    (m[2] === '' || linkDestinationValue(m[2]!) !== null) &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
 }
@@ -8578,8 +8581,8 @@ const ATTR_INERT_PREV = new Set([
  */
 function execLinkTail(tail: string, canReadAttrs?: (offset: number) => boolean): [string, string, string | undefined, string | undefined, string | undefined] | null {
   const scanned = scanDestination(tail)
-  if (scanned === null || scanned.dest === '') return null
-  const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
+  if (scanned === null) return null
+  const rest = (scanned.dest === '' ? RE_EMPTY_LINK_REST : RE_LINK_REST).exec(tail.slice(scanned.end))
   if (rest === null) return null
   const end = scanned.end + rest[0].length
   const attrs = tail[end] === '{' && (canReadAttrs === undefined || canReadAttrs(end))
@@ -9433,6 +9436,7 @@ function emphasisBrackets(text: string, memo: EmphasisMemo): BracketClose {
 const RE_AUTOLINK_STICKY = new RegExp(RE_AUTOLINK.source.replace(/^\^/, ''), 'yu')
 const RE_RAW_INLINE_STICKY = new RegExp(RE_RAW_INLINE.source.replace(/^\^/, ''), 'y')
 const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.replace(/^\^/, ''), 'y')
+const RE_EMPTY_LINK_REST_STICKY = new RegExp(RE_EMPTY_LINK_REST.source.replace(/^\^/, ''), 'y')
 
 // Autolinks and cross-references outside code spans, as [start, end) pairs.
 // PART 8 resolves them before links, so a `[` inside one opens no run.
@@ -9492,12 +9496,12 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
     if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
     if (!destinationOpeners.has(close + 1)) continue
     const scanned = scanDestination(text, close + 1)
-    if (scanned === null || scanned.dest === '') continue
-    RE_LINK_REST_STICKY.lastIndex = scanned.end
-    const rest = RE_LINK_REST_STICKY.exec(text)
+    if (scanned === null) continue
+    const restPattern = scanned.dest === '' ? RE_EMPTY_LINK_REST_STICKY : RE_LINK_REST_STICKY
+    restPattern.lastIndex = scanned.end
+    const rest = restPattern.exec(text)
     if (rest === null) continue
-    const title = rest[1] ?? rest[2]
-    const end = scanned.end + (title === undefined ? 0 : title.length + 3)
+    const end = scanned.end + rest[0].length - 1
     found.set(close + 1, end)
     covered = end
   }
@@ -9835,7 +9839,7 @@ class ParseSession {
     // cannot add definitions. Lookahead keeps access to the complete lexer.
     let lastDefinitionLine = -1
     for (let index = lexer.pos; index < lexer.lineCount; index++) {
-      if (lexer.lineAt(index)!.includes(']: ')) lastDefinitionLine = index
+      if (lexer.lineAt(index)!.includes(']:')) lastDefinitionLine = index
     }
     if (lastDefinitionLine === -1) return
     // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
@@ -12937,7 +12941,7 @@ class ParseSession {
     const m = RE_BARE_IMAGE.exec(line)!
     // `isBlockImageLine` has already read the run as a destination, so the
     // escapes are resolved here as they are on the inline tail.
-    const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: unescapeAttrValue(m[1]!) }
+    const img: Image = { type: 'image', src: m[2] === '' ? '' : linkDestinationValue(m[2]!)!, alt: unescapeAttrValue(m[1]!) }
     const title = m[3] ?? m[4]
     if (title !== undefined) img.title = unescapeAttrValue(title)
     if (m[5]) img.attrs = parseAttrs(m[5])

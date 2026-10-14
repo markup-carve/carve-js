@@ -704,8 +704,7 @@ interface CarrierRead {
  * resolving one. A value that is merely unusual is not empty and is kept - the
  * rule is over the DESTINATION, not over the reason it is missing.
  *
- * An ABSENT attribute is the same shape and reaches this the same way: an `<a>`
- * with no `href` names no destination just as an `<a href="">` does.
+ * An absent attribute is handled separately from an explicit empty value.
  *
  * The character list is the URL spec's ASCII whitespace rather than the regex
  * `\s` class, which adds a vertical tab and the Unicode spaces that are not
@@ -725,7 +724,7 @@ function destinationIsDenied(value: string | undefined): boolean {
 }
 
 function destinationIsCarried(value: string | undefined): boolean {
-  return !destinationIsEmpty(value) && !destinationIsDenied(value)
+  return value !== undefined && (value === '' || !destinationIsEmpty(value)) && !destinationIsDenied(value)
 }
 
 /**
@@ -4898,13 +4897,8 @@ class Importer {
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'a') {
-      // A DESTINATION CARVE CANNOT CARRY IS NOT A DESTINATION
-      // (`spec/docs/html-import.md`). Carve spells a link's destination in one
-      // slot and has NO spelling for an empty one - `[t]()` is literal text -
-      // so building the link node emitted four punctuation characters the HTML
-      // never held, into the middle of the prose. No link node is built: the
-      // element's CONTENT stands in its place, carried by a span where an
-      // attribute survives and bare where none does.
+      // An absent href unwraps the anchor. An explicit empty href has a
+      // native Carve link spelling and reaches the link branch below.
       //
       // AND THE DESTINATION IS NOT REBUILT, which is the normative half. This
       // is what Carve's own renderer emits: PART 9 section 25 blanks a
@@ -4912,7 +4906,7 @@ class Importer {
       // visible text, so any route from a `title`, from the anchor's text or
       // from a round-trip attribute back to a destination would reconstruct the
       // exact value a security rule removed. The round trip owes the text.
-      if (destinationIsEmpty(this.attr(node, 'href'))) {
+      if (this.attr(node, 'href') !== '' && destinationIsEmpty(this.attr(node, 'href'))) {
         return this.unwrapDestinationLess(node, 'Unwrapped <a> with no destination', children, attrs, path)
       }
       if (destinationIsDenied(this.attr(node, 'href'))) {
@@ -4944,16 +4938,13 @@ class Importer {
       }]
     }
     if (tag === 'img') {
-      // The same rule as the link one branch up, and it is the SAME shape: an
-      // `<img>` whose `src` names no destination the source can carry builds no
-      // image node either. AN IMAGE'S CONTENT IS ITS ALTERNATIVE TEXT - that is
-      // what every target with no image shows for it, and what a browser shows
-      // for one it cannot load - so the alt text is what stands in its place.
+      // An absent src unwraps the image to its alt text. An explicit empty
+      // src reaches the image branch below.
       //
       // The alt arrives as a raw attribute value rather than through the node
       // walk, so it becomes a TEXT node and the writer escapes it for the prose
       // slot it lands in, the same as any other imported text.
-      if (destinationIsEmpty(this.attr(node, 'src'))) {
+      if (this.attr(node, 'src') !== '' && destinationIsEmpty(this.attr(node, 'src'))) {
         const alt = this.attr(node, 'alt') ?? ''
         const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
         return this.unwrapDestinationLess(node, 'Unwrapped <img> with no source', stands, attrs, path)
