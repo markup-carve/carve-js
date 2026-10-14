@@ -129,15 +129,16 @@ export function fileSystemResolver(
         : { source: null, id: includePath, denial: 'outside-root' }
     }
     if (!contains(real)) return { source: null, id: includePath, denial: 'outside-root' }
+    // Only a regular file is read: a FIFO reports size 0, passes the cap, and
+    // `readFileSync` then blocks the event loop until a writer appears.
     const maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
-    if (Number.isFinite(maxFileBytes)) {
-      try {
-        if (statSync(real).size > maxFileBytes) {
-          return { source: null, id: real, denial: 'denied' }
-        }
-      } catch {
+    try {
+      const info = statSync(real)
+      if (!info.isFile() || info.size > maxFileBytes) {
         return { source: null, id: real, denial: 'denied' }
       }
+    } catch {
+      return { source: null, id: real, denial: 'denied' }
     }
     try {
       return { source: readFileSync(real, 'utf8'), id: real }
