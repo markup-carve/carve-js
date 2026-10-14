@@ -9,6 +9,7 @@ import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from 
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
+import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
  * Markdown -> Carve converter.
@@ -1404,9 +1405,17 @@ function convertInline(
   // The caller writes every returned line as it stands, so a code value may add one.
   breakableCode = false,
 ): string {
-  if (input.includes('][') && !input.includes('`') && !input.includes('<'))
+  if (input.includes('][') && !input.includes('<')) {
+    const codeRanges: Array<[number, number]> = []
+    const codeEnds = backtickRunEnds(input)
+    if (codeEnds) for (let at = 0; at < input.length; at++) {
+      if (input[at] !== '`' || at > 0 && input[at - 1] === '\\') continue
+      const end = codeEnds[at]!
+      if (end > at) { codeRanges.push([at, end]); at = end - 1 }
+    }
     input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
-      (whole, first: string, second: string, third: string, destination: string) =>
+      (whole, first: string, second: string, third: string, destination: string, at: number) =>
+        !codeRanges.some(([start, end]) => at >= start && at < end) &&
         referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
           ? first.startsWith('^')
@@ -1414,6 +1423,7 @@ function convertInline(
             : referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined
               ? `\\[${first}][${second}][${third}]\\${destination}` : whole
           : whole)
+  }
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',

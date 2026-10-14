@@ -43,6 +43,8 @@ test('a reference chain does not erase a footnote opener', () => {
 test('a footnote chain rewrite leaves authored escapes and code intact', () => {
   expect(carveToHtml(markdownToCarve('[^1]\\[b\\][c](/u)\n\n[c]: /v\n\n[^1]: note'))).toContain('<a href="/u">c</a>')
   expect(markdownToCarve('```\n[^1]\\[b\\][c](/u)\n```\n\n[c]: /v')).toContain('[^1]\\[b\\][c](/u)')
+  expect(markdownToCarve('`[^1]\\[b\\][c](/u)`\n\n[c]: /v')).toContain('[^1]\\[b\\][c](/u)')
+  expect(carveToHtml(markdownToCarve('`x` [^1][b][c](/u)\n\n[c]: /v\n\n[^1]: note'))).toContain('<a href="/v">b</a>(/u)')
 })
 
 test('a raw newline angle shortcut leaves formatted labels on the normal path', () => {
