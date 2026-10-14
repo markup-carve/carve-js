@@ -3826,7 +3826,11 @@ class CarveRenderSession {
           const textCell = { ...cell }
           delete textCell.span
           const text = this.renderTableCell(textCell, ctx, false, false).trim()
-          rendered += `\u00020,1,0\u0003${text}`
+          const firstContentLine = cell.children.find(child => child.pos?.startLine !== undefined)?.pos?.startLine
+          const sourceLine = firstContentLine !== undefined && row.pos?.startLine !== undefined
+            ? firstContentLine - row.pos.startLine : 1
+          const continuationLine = sourceLine >= 1 && sourceLine <= row.continuationLines ? sourceLine : 1
+          rendered += `\u00020,${continuationLine},0\u0003${text}`
         }
         const marker = /\u0002([0-9]+),([0-9]+),([0-9]+)\u0003/g
         const firstMarker = marker.exec(rendered)
@@ -3936,7 +3940,14 @@ class CarveRenderSession {
    * line in both.
    */
   private captionRow(caption: InlineNode[], ctx: CarveContext): string | undefined {
-    const written = this.renderInlines(caption, ctx)
+    const wasCaption = this.inCaption
+    this.inCaption = true
+    let written: string
+    try {
+      written = this.renderInlines(caption, ctx)
+    } finally {
+      this.inCaption = wasCaption
+    }
 
     return trimNonNbsp(written) === '' ? undefined : `^ ${written}`
   }
@@ -4664,12 +4675,13 @@ class CarveRenderSession {
    * does (carve-js#1344).
    */
   private termKeepsLineIndent = false
+  private inCaption = false
 
   private unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
     if (/[ \t][\r\n]/.test(content)) {
       return 'a line of the value ends in whitespace, which the block layer strips'
     }
-    if (!this.termKeepsLineIndent && /[\r\n][ \t]/.test(content)) {
+    if (!this.termKeepsLineIndent && !this.inCaption && /[\r\n][ \t]/.test(content)) {
       return 'a line of the value starts with whitespace, which the block layer strips'
     }
     if (needsPad && /[\r\n]$/.test(content)) {
@@ -4688,7 +4700,7 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
+    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
     if (this.termKeepsLineIndent && marker.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
@@ -4701,7 +4713,7 @@ class CarveRenderSession {
 
   private hidesLineBlockCloser(content: string, ctx: CarveContext): boolean {
     return ctx.lineBlockDepth > 0
-      && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
+      && new RegExp(`[\\r\\n][ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
   }
 
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true, cellWraps?: readonly VerbatimCellWrap[]): string {
