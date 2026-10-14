@@ -413,7 +413,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
       let childBody = body
       if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (emptyDjotTaskTailEnd(body, n + 1 === lines.length || lines[n + 1]!.trim() === '') !== undefined ? 2 : (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length)), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
         childBody = body.slice(child[1]!.length)
         if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\](?:[ \t]+|$)/, '')
       }
