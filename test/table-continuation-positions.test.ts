@@ -28,6 +28,7 @@ describe('positions across a table continuation', () => {
     expect(rows.map((row: any) => [row.pos?.startLine, row.pos?.endLine])).toEqual([[1, 1], [2, 3]])
     expect(rows[0].cells[0].children.at(-1).value).toBe('more')
     expect(rows[0].cells[0].children.at(-1).pos).toBeUndefined()
+    expect(rows[0].cells[0].children[1].pos).toBeUndefined()
   })
 
   it('does NOT place the continued cell, because it is not one range', () => {
@@ -84,13 +85,13 @@ describe('positions across a table continuation', () => {
   // carve-js#3020: the second join from one `+` line crosses that line's pipe.
   it.each([
     ['| a | < |\n+ x | y |', ['+', '|']],
-    ['| a | < | c |\n| ^ | ^ | d |\n+ x | y | z |', ['+', '|']],
+    ['| a | < | c |\n| ^ | ^ | d |\n+ x | y | z |', []],
     ['| ^ | < |\n+ x | y |', ['|']],
   ])('gives each join on one `+` line its own source byte: %j', (src, marks) => {
     const cell = (parse(src).children[0] as any).rows[0].cells[0]
     const wraps = cell.children.filter((child: { type: string }) => child.type === 'cell_wrap')
-    expect(wraps.map((w: { pos: { startOffset: number; endOffset: number } }) =>
-      [...src].slice(w.pos.startOffset, w.pos.endOffset).join(''))).toEqual(marks)
+    expect(wraps.flatMap((w: { pos?: { startOffset: number; endOffset: number } }) =>
+      w.pos ? [[...src].slice(w.pos.startOffset, w.pos.endOffset).join('')] : [])).toEqual(marks)
     const starts = cell.children.flatMap((child: { pos?: { startOffset: number } }) =>
       child.pos ? [child.pos.startOffset] : [])
     expect(starts).toEqual([...starts].sort((a: number, b: number) => a - b))

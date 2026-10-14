@@ -3301,7 +3301,7 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
 
 function stripPositionsOutsideRow(nodes: InlineNode[], start: number, end: number): InlineNode[] {
   for (const node of nodes) {
-    if (node.type !== 'cell_wrap' && node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
+    if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
       (node.pos.startOffset < start || node.pos.endOffset > end)) delete node.pos
     if (node.type === 'citation_group') {
       for (const item of node.items) {
