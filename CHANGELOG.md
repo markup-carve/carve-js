@@ -194,7 +194,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Added
 - A quote and a footnote body take the `+` first-block form: a lone `+` followed by a line at column 0 makes that line's block the body (#2973).
 
-- New default-on lint rule `table-span-marker-blocked` reports a `^` or `<` that cannot span and says why, including inside a footnote definition's table (#3078, #3081).
+- New default-on lint rule `table-span-marker-blocked` reports a `^` or `<` that cannot span and says why, including inside a footnote definition's table. A marker under a shorter row reports that no cell is above it, and markers are found across lone CR line breaks (#3078, #3081, #3085).
 
 - Roundtrip HTML export (`{ roundtrip: true }`) writes `data-carve-*` carriers for ids, labels, autolinks, raw content, cross-references, caption numbers, bare divs, line blocks, substitutions, tabs and code groups. HTML import rebuilds them and refuses contradictory pairs. Default output is unchanged (#2721, #2732, #2781, #2783, #2785, #2791, #2837, #2874, #2888, #2899, #2986, #2994).
 
