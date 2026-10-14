@@ -40,6 +40,15 @@ describe('table-span-marker-blocked', () => {
     expect(findings(source)).toEqual([])
   })
 
+  it.each([
+    '| a | b |\r| < | c |\r+ x | y |\r',
+    '| a | b |\r| < | c |\r',
+    '| a | b |\r\n| < | c |\r\n+ x | y |\r\n',
+  ])('locates the marker across CR line breaks in %j', (source) => {
+    const start = source.indexOf('<')
+    expect(findings(source)).toMatchObject([{ line: 2, column: 3, start, end: start + 1 }])
+  })
+
   it('uses UTF-16 offsets after an astral character in a quote', () => {
     const source = '😀\n> | ^ | b |\n'
     expect(findings(source)).toMatchObject([{
