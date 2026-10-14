@@ -1409,13 +1409,16 @@ function convertInline(
     const codeRanges: Array<[number, number]> = []
     const codeEnds = backtickRunEnds(input)
     if (codeEnds) for (let at = 0; at < input.length; at++) {
-      if (input[at] !== '`' || at > 0 && input[at - 1] === '\\') continue
+      if (input[at] !== '`') continue
+      let slashes = 0
+      for (let before = at - 1; before >= 0 && input[before] === '\\'; before--) slashes++
+      if (slashes % 2) continue
       const end = codeEnds[at]!
       if (end > at) { codeRanges.push([at, end]); at = end - 1 }
     }
     input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
       (whole, first: string, second: string, third: string, destination: string, at: number) =>
-        !codeRanges.some(([start, end]) => at >= start && at < end) &&
+        !codeRanges.some(([start, end]) => at < end && at + whole.length > start) &&
         referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
           ? first.startsWith('^')
