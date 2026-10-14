@@ -1131,6 +1131,28 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   return strippedDefinitions.restore(frontmatter === '' ? containers : `${frontmatter}${separator}${containers}`)
 }
 
+function imageLossChildText(label: string, quoteDepth: number): string {
+  if (quoteDepth) label = label.replace(/\n([^\n]*)/g, (_all, line: string) => {
+    for (let depth = 0; depth < quoteDepth; depth++) line = line.replace(/^[ \t]*>(?:[ \t]|$)/, '')
+    return '\n' + line
+  })
+  label = djotImageLabelAttributes(label, true)
+  const child = (value: string): string => djotImageLabelText(value, source => convertDjotInput(source, true, true, true, true))
+  const plain = child(label)
+  const reserved = plain + '\n' + label.replace(/[^A-Za-z0-9]/g, '')
+  let serial = 0
+  while (reserved.includes(`DJOTTRAILSPACE${serial}Z`)) serial++
+  const marker = `DJOTTRAILSPACE${serial}Z`
+  const mask = maskDjotCodeAndDestinations(label)
+  const probe = label.replace(/([ \t]+)((?:(?:\{%%\}|\[\]\{\}|\{\}|[\]}`_*~^+=-])[ \t]*)*)(\n)/g, (all, whitespace: string, hidden: string, newline: string, at: number) => {
+    if (at > 0 && mask[at - 1] === '\\' && !isDjotEscaped(label, at - 1)) return all
+    return whitespace + marker + hidden + newline
+  })
+  if (probe === label) return plain
+  const protectedText = child(probe).replaceAll(marker, '')
+  return protectedText.replace(/[ \t]+\n/g, '\n') === plain.replace(/[ \t]+\n/g, '\n') ? protectedText : plain
+}
+
 export function djotToCarveWithLosses(djot: string): { value: string; losses: DjotImportLoss[] } {
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
@@ -1144,7 +1166,16 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
   const codeSource = source.includes('`') && source.includes(':::')
     ? replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), image => image.replace(/[^\n]/g, ' '))
     : source
-  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted, undefined, codeSource) }
+  const imageLossCache = new Map<string, string>()
+  const imageText = (label: string, depth: number): string => {
+    const key = `${depth}:${label}`
+    const cached = imageLossCache.get(key)
+    if (cached !== undefined) return cached
+    const text = imageLossChildText(label, depth)
+    if (label.length <= 256) imageLossCache.set(key, text)
+    return text
+  }
+  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted, undefined, codeSource, imageText) }
 }
 
 function dropLeadingDjotSeparators(source: string): string {
