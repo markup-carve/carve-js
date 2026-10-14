@@ -22,3 +22,7 @@ test('trailing spaces in an image alternative have an exact loss', () => {
     line: 1,
   })
 })
+
+test('a colon inside a fence is code, not an empty definition term', () => {
+  expect(djotToCarveWithLosses('```\n:\n```').losses).toEqual([])
+})

@@ -22,3 +22,7 @@ test.each([
 test('keeps nested image syntax inside an attribute value', () => {
   expect(djotToCarve('{title="![![x](a)](b)"}\na')).toContain('\\!\\[\\!\\[x\\]\\(a\\)\\]\\(b\\)')
 })
+
+test('a code span crossing image brackets stays intact', () => {
+  expect(carveToHtml(djotToCarve('![![`x](a)](b) y`'))).toContain('x](a)](b) y')
+})
