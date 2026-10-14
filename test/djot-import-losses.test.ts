@@ -27,7 +27,6 @@ it.each([
   ['[link][a and\nb]\n\n[a and\nb]: url\n', 'An unresolved Djot reference', 1],
   ['[Link][]\n\n[link]: /url\n', 'An unresolved Djot reference', 1],
   ['[[foo](bar)](baz)\n', 'A link inside another link', 1],
-  [': term\n', 'An empty definition description', 1],
   ['> : term\n', 'An empty definition description', 1],
   ['- : term\n', 'An empty definition description', 1],
   ['intro\n\n> : term\n', 'An empty definition description', 3],
@@ -43,7 +42,7 @@ it.each([
   ['- : term\n  - sibling\n\n    body\n', 'An empty definition description', 1],
   ['> : term\n> - sibling\n>\n>   body\n', 'An empty definition description', 1],
   [
-    ': apple\n fruit\n\n  Paragraph one\n\n  Paragraph two\n\n  - sub\n  - list\n\n: orange\n',
+    '> : apple\n> fruit\n>\n>   Paragraph one\n>\n>   Paragraph two\n>\n>   - sub\n>   - list\n>\n> : orange\n',
     'An empty definition description',
     11,
   ],

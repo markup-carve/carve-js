@@ -247,29 +247,42 @@ function charsThroughColumns(line: string, wanted: number): number {
 /** Translate Djot definition-item structure without touching unrelated source. */
 function convertDefinitionLists(source: string, emptyTerm: string): string {
   const lines = source.split('\n')
-  const masked = maskDjotCodeAndDestinations(source).split('\n')
-  const stack: Array<{ source: number; target: number; body: boolean; ready: boolean }> = []
+  const sourceMask = maskDjotCodeAndDestinations(source)
+  const masked = sourceMask.split('\n')
+  let boundaries: Set<number> | undefined
+  let sourceOffset = 0
+  type DefinitionContext = { source: number; target: number; body: boolean; ready: boolean; termEnd: number }
+  const stack: DefinitionContext[] = []
+  const finish = (context: DefinitionContext): void => {
+    if (!context.body) lines[context.termEnd] += `\n${' '.repeat(context.target)}:  ${emptyTerm}`
+  }
+  const pop = (): void => { finish(stack.pop()!) }
   for (let i = 0; i < lines.length; i++) {
+    const sourceAt = sourceOffset
+    sourceOffset += lines[i]!.length + 1
     const fenceCandidate = /^([ \t]*):[ \t]+(`{3,}|~{3,})(.*)$/.exec(lines[i]!)
     const rawFence =
       fenceCandidate && !(fenceCandidate[2]![0] === '`' && fenceCandidate[3]!.includes('`')) ? fenceCandidate : null
     const term =
       /^([ \t]*):[ \t]+(\S.*)$/.exec(masked[i] ?? '') ??
-      (fenceCandidate && masked[i]?.trimStart().startsWith(':') ? /^([ \t]*):[ \t]+(\S.*)$/.exec(lines[i]!) : null)
+      (masked[i]?.trimStart().startsWith(':') ? /^([ \t]*):(?:[ \t]+(.*)|$)/.exec(lines[i]!) : null)
     if (term) {
       const [indent] = leadingIndent(term[1]!)
-      while (stack.length && indent < stack.at(-1)!.source) stack.pop()
+      while (stack.length && indent < stack.at(-1)!.source) pop()
       const top = stack.at(-1)
-      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.trim() === ''
+      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.trim() === '' || (boundaries ??= new Set(djotInlineBoundaries(source, sourceMask, true))).has(sourceAt)
       if (mayStart) {
-        const authoredTerm = /^([ \t]*):[ \t]+(\S.*)$/.exec(lines[i]!)
-        const termText = authoredTerm?.[2] ?? term[2]!
+        const authoredTerm = /^([ \t]*):(?:[ \t]+(.*)|$)/.exec(lines[i]!)
+        let termText = authoredTerm?.[2] ?? term[2] ?? ''
+        if (termText.trim() === '' || termText.trimStart().startsWith('{') && /^(?:[ \t]|\{%%\})*$/.test(djotImageLabelAttributes(termText))) termText = emptyTerm
         const containerBody = /^:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.test(termText)
         const startsDefinitionBody = rawFence || containerBody
         if (!top || indent === top.source) {
           const target = top?.target ?? indent
-          if (!top) stack.push({ source: indent, target, body: false, ready: false })
+          if (!top) stack.push({ source: indent, target, body: false, ready: false, termEnd: i })
           else {
+            finish(top)
+            top.termEnd = i
             top.body = false
             top.ready = false
           }
@@ -288,7 +301,7 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
           top.body = true
           lines[i] = `${lead}{loose}\n${' '.repeat(target)}:: ${startsDefinitionBody ? emptyTerm : termText}`
           if (startsDefinitionBody) lines[i] += `\n${' '.repeat(target)}:  ${termText}`
-          stack.push({ source: indent, target, body: !!startsDefinitionBody, ready: !!startsDefinitionBody })
+          stack.push({ source: indent, target, body: !!startsDefinitionBody, ready: !!startsDefinitionBody, termEnd: i })
           continue
         }
       }
@@ -305,11 +318,19 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
     }
     if (!stack.at(-1)!.ready) {
       const continuation = lines[i]!.trimStart()
-      if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |[0-9A-Za-z]+[.)] )/.test(continuation)) lines[i] = continuation
-      continue
+      const indent = leadingIndent(lines[i]!)[0]
+      const marker = /^(?:#{1,6}(?:[ \t]|$)|>|\||:{3,}|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation) || /^(?:[*-][ \t]*){3,}$/.test(continuation)
+      if (indent <= stack.at(-1)!.source && marker) {
+        while (stack.length && stack.at(-1)!.source >= indent) pop()
+        if (!stack.length) continue
+      } else {
+        stack.at(-1)!.termEnd = i
+        if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] )/.test(continuation)) lines[i] = (!marker ? continuation.replace(/^([ivxlcdmIVXLCDM]+)([.)])(?=[ \t])/, '$1\\$2') : continuation).replace(/^:(?=[ \t]|$)/, '\\:')
+        continue
+      }
     }
     const [indent] = leadingIndent(lines[i]!)
-    while (stack.length && indent < stack.at(-1)!.source + 2) stack.pop()
+    while (stack.length && indent < stack.at(-1)!.source + 2) pop()
     const context = stack.at(-1)
     if (!context) continue
     const payload = lines[i]!.slice(charsThroughColumns(lines[i]!, context.source + 2))
@@ -319,6 +340,7 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
       : `${' '.repeat(context.target)}:  ${' '.repeat(extra)}${payload}`
     context.body = true
   }
+  while (stack.length) pop()
   return lines.join('\n')
 }
 
