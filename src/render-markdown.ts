@@ -1338,7 +1338,7 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       if (title === undefined && /^[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s\\]+$/.test(label) && destination === label) {
         return `<${label}>`
       }
-      if (title === undefined && node.href === `mailto:${label}` &&
+      if (title === undefined && node.href === `mailto:${label}` && destination === node.href &&
           /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(label)) {
         return `<${label}>`
       }

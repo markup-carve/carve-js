@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { carveToMarkdown, markdownToCarve } from '../src/index.js'
+import { carveToMarkdown, markdownToCarve, renderMarkdown } from '../src/index.js'
+import { fromAstJson } from '../src/ast-json.js'
 
 it.each([
   '<https://github.com/markup-carve>',
@@ -7,6 +8,7 @@ it.each([
   '<https://example.com/path?a=1&b=2>',
   '<HTTPS://EXAMPLE.COM>',
   '<user@example.com>',
+  '<mailto:user@example.com>',
 ])('keeps a representable autolink through Markdown: %s', source => {
   expect(carveToMarkdown(source).trimEnd()).toBe(source)
   expect(markdownToCarve(carveToMarkdown(source)).trimEnd()).toBe(source)
@@ -26,4 +28,12 @@ it.each([
 it('keeps an authored explicit link explicit even when its label is the destination', () => {
   const source = '[https://example.com](https://example.com)'
   expect(carveToMarkdown(source).trimEnd()).toBe(source)
+})
+
+it('falls back when an email destination needs encoding', () => {
+  const document = fromAstJson({
+    type: 'document', srcByteLength: 0,
+    children: [{ type: 'paragraph', children: [{ type: 'autolink', text: 'a|b@example.com', href: 'mailto:a|b@example.com' }] }],
+  })
+  expect(renderMarkdown(document)).toBe('[a|b@example.com](mailto:a%7Cb@example.com)\n')
 })
