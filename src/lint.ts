@@ -1731,6 +1731,21 @@ function collectSilentFailures(
     }
   }
   walk(doc.children)
+  // Footnote bodies sit outside `children`; only the span-marker rule reads their tables.
+  const spanTables = [...tables]
+  const walkTables = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walkTables(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node.type === 'table') spanTables.push(node as unknown as Table)
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') walkTables(node[key])
+    }
+  }
+  walkTables(Object.values(doc.footnoteDefs ?? {}))
 
   // 1. Trailing attribute block on a heading: literal text, not attributes.
   for (const h of headings) {
@@ -2023,7 +2038,7 @@ function collectSilentFailures(
     }
   }
 
-  for (const table of tables) {
+  for (const table of spanTables) {
     const grid = resolveTableSpans(table.rows)
     for (let r = 0; r < grid.length; r++) {
       for (let c = 0; c < grid[r]!.length; c++) {
@@ -2069,6 +2084,9 @@ function collectSilentFailures(
         )
       }
     }
+  }
+
+  for (const table of tables) {
     const kv = table.attrs?.keyValues ?? {}
     const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
     const lineNo = table.pos?.startLine ?? 1
