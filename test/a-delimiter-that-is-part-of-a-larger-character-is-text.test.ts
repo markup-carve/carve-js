@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, htmlToCarve } from '../src/index.js'
+import { carveToCarve, carveToHtml, htmlToCarve, parse, renderCarve } from '../src/index.js'
+import type { InlineNode } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // CARVE-P3-025 (markup-carve/carve#3209): a delimiter followed by a combining
@@ -45,6 +46,56 @@ describe('a delimiter that is part of a larger character is text', () => {
     expect(html('{^́x {^y^}')).toBe('<p>{^́x <sup>y</sup></p>')
   })
 
+  it.each([
+    ['{+\u20E3x+} {+y+}', '<p>{+\u20E3x+} <ins>y</ins></p>'],
+    ['{-\uFE0Ex-} {-y-}', '<p>{-\uFE0Ex-} <del>y</del></p>'],
+    ['{~\u0301a~>b~} {~c~>d~}', '<p>{~\u0301a~&gt;b~} <del>c</del><ins>d</ins></p>'],
+    ['{#\uFE0F\u20E3 x#} {#y#}', '<p>{#\uFE0F\u20E3 x#} <span class="critic-comment">y</span></p>'],
+    ['a{% y %}b {%\u093Ex%}', '<p>ab {%\u093Ex%}</p>'],
+    ['{-\u0301-}', '<p>{-\u0301-}</p>'],
+    ['{%\u200D%}', '<p>{%\u200D%}</p>'],
+  ])('applies to the editorial and comment opener in %s', (source, expected) => {
+    expect(html(source)).toBe(expected)
+  })
+
+  it('leaves a decorated frame inside another as text', () => {
+    expect(html('{+a {+\u0301b+} c+}')).toBe('<p><ins>a {+\u0301b</ins> c+}</p>')
+    expect(html('{-a {-\u0301b-} c-}')).toBe('<p><del>a {-\u0301b</del> c-}</p>')
+    expect(html('{~a {#\u0301 ~> #} b~}')).toBe('<p><del>a {#\u0301 </del><ins> #} b</ins></p>')
+    expect(html('*a {%\u0301 b* %}')).toBe('<p><strong>a {%\u0301 b</strong> %}</p>')
+  })
+
+  it('does not hide a bracket behind a decorated comment opener', () => {
+    expect(html('[a {#\u0301 ] #}](u)')).toBe('<p>[a {#\u0301 ] #}](u)</p>')
+    expect(html('[x {%\u0301 ] %}](u)')).toBe('<p>[x {%\u0301 ] %}](u)</p>')
+    expect(html('[a {# ] #}](u)')).toBe('<p><a href="u">a <span class="critic-comment"> ] </span></a></p>')
+  })
+
+  it('leaves an undecorated editorial or comment opener alone', () => {
+    expect(html('{+\u200Bx+} {-y-} {~a~>b~} {#c#} d{% e %}')).toBe('<p><ins>\u200Bx</ins> <del>y</del> <del>a</del><ins>b</ins> <span class="critic-comment">c</span> d</p>')
+  })
+
+  it('refuses to write an editorial frame whose opener would be decorated', () => {
+    const tree = parse('{+x+} {-x-} {~x~>y~} {#x#}\n')
+    const paragraph = tree.children[0] as { children: InlineNode[] }
+    const frames = paragraph.children.filter((node) => node.type !== 'text')
+    expect(frames.map((node) => node.type)).toEqual(['insert', 'delete', 'substitution', 'critic_comment'])
+    for (const frame of frames) {
+      const one = structuredClone(tree)
+      const decorated = structuredClone(frame) as InlineNode & { children?: InlineNode[]; old?: InlineNode[]; text?: string }
+      const first = (decorated.children ?? decorated.old)?.[0] as { value: string } | undefined
+      if (first) first.value = '\u0301x'
+      else decorated.text = '\u0301x'
+      ;(one.children[0] as { children: InlineNode[] }).children = [decorated]
+      expect(() => renderCarve(one)).toThrow(/combining mark, a variation selector or a joiner/)
+    }
+  })
+
+  it('does not spell an editorial frame whose content starts with an extender', () => {
+    expect(htmlToCarve('<p><ins>\u0301x</ins></p>').value).toBe('\u0301x\n')
+    expect(htmlToCarve('<p><del>\uFE0Ex</del></p>').value).toBe('\uFE0Ex\n')
+  })
+
   // Controls: an undecorated opener and a format character (U+200B, Cf) are
   // outside the clause.
   it('leaves an opener before anything else alone', () => {
@@ -60,7 +111,8 @@ describe('a delimiter that is part of a larger character is text', () => {
 
   it('writes source that reads back the same tree', () => {
     for (const source of [`${KEYCAP}abc*`, `*a${KEYCAP}`, '*a*́ b*', '/*️a*/', `{${KEYCAP}abc*}`,
-      '*\u093Ex *y*', '{*\u093Ex*}', '{^\u20E3x^}', '{,\uFE0Ex,}']) {
+      '*\u093Ex *y*', '{*\u093Ex*}', '{^\u20E3x^}', '{,\uFE0Ex,}', '{+\u20E3x+} {+y+}', '{-\uFE0Ex-} {-y-}',
+      '{~\u0301a~>b~} {~c~>d~}', '{#\uFE0F\u20E3 x#} {#y#}', 'a{% y %}b {%\u093Ex%}']) {
       const written = carveToCarve(source)
       expect(written).toBe(`${source}\n`)
       expect(html(written)).toBe(html(source))
@@ -103,6 +155,13 @@ describe('a delimiter that is part of a larger character is text', () => {
     expectScansLinearly((input) => void carveToHtml(input), '{*️a*} ', {
       label: 'decorated forced openers',
       smallRepeats: 3000,
+    })
+  })
+
+  perfIt('scans a run of decorated editorial and comment openers in linear time', () => {
+    expectScansLinearly((input) => void carveToHtml(input), '{+\u0301a+} {~\u0301b~>c~} {#\u0301d#} {%\u0301e%} ', {
+      label: 'decorated editorial openers',
+      smallRepeats: 1000,
     })
   })
 

@@ -4665,11 +4665,16 @@ class CarveRenderSession {
       case 'hard_break':
         return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
       case 'insert':
-        return withAttrs(`{+${marked(node.children)}+}`)
+        return withAttrs(`{+${spelledContent(node.children)}+}`)
       case 'delete':
-        return withAttrs(`{-${marked(node.children)}-}`)
-      case 'substitution':
-        return withAttrs(`{~${renderSession.renderInlines(node.old, ctx)}~>${renderSession.renderInlines(node.new, ctx)}~}`)
+        return withAttrs(`{-${spelledContent(node.children)}-}`)
+      case 'substitution': {
+        const old = renderSession.renderInlines(node.old, ctx)
+        if (extendsGrapheme(old, 0)) {
+          throw new SourceUnspellableError(node.type, 'a substitution whose old text starts with a combining mark, a variation selector or a joiner has no Carve source spelling', node)
+        }
+        return withAttrs(`{~${old}~>${renderSession.renderInlines(node.new, ctx)}~}`)
+      }
       case 'critic_comment':
         // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
         // so an escape reaches the reader as a backslash. The content takes any
@@ -4678,6 +4683,9 @@ class CarveRenderSession {
         // old `[^}]` matcher as the rule and refused one brace too many).
         if (node.text.includes('#}')) {
           throw new SourceUnspellableError('critic_comment', 'an editorial comment holding its closing sequence has no Carve source spelling')
+        }
+        if (extendsGrapheme(node.text, 0)) {
+          throw new SourceUnspellableError('critic_comment', 'an editorial comment whose text starts with a combining mark, a variation selector or a joiner has no Carve source spelling', node)
         }
         return `{#${node.text}#}`
       case 'heading_ref':

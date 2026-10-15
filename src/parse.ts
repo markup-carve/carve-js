@@ -8694,7 +8694,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   let lastDelimitedCommentClose: number | undefined
   let lastEditorialCommentClose: number | undefined
   const opaqueEnd = (j: number, inImageAlt: boolean): number | undefined => {
-    if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#')) return undefined
+    if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#') || extendsGrapheme(s, j + 2)) return undefined
     if (inImageAlt && s[j + 1] === '%') return undefined
     const last = s[j + 1] === '%'
       ? (lastDelimitedCommentClose ??= s.lastIndexOf('%}'))
@@ -9054,7 +9054,7 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
         continue
       }
     }
-    if (text[at] === '{' && (text[at + 1] === '%' || text[at + 1] === '#')) {
+    if (text[at] === '{' && (text[at + 1] === '%' || text[at + 1] === '#') && !extendsGrapheme(text, at + 2)) {
       const marker = text[at + 1]!
       const last = marker === '%' ? lastComment : lastEditorial
       let close = nextComments.get(marker) ?? -1
@@ -9084,10 +9084,12 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
 
 const PAIR_MARKERS = '/*_^,~=+-'
 
-// Every forced opener, `{^` and `{,` included, needs a whole delimiter too.
-function splitForcedOpener(text: string, open: number): boolean {
+// Every braced opener needs a whole delimiter: the forced spans, the editorial
+// frames and the comment `{%` (CARVE-P3-025).
+const BRACED_OPENER_MARKERS = '/*_^,~=+-#%'
+function splitBracedOpener(text: string, open: number): boolean {
   const marker = text[open + 1]
-  return marker !== undefined && FORCED_TYPE[marker] !== undefined && extendsGrapheme(text, open + 2)
+  return marker !== undefined && BRACED_OPENER_MARKERS.includes(marker) && extendsGrapheme(text, open + 2)
 }
 
 interface InlinePairView {
@@ -15903,7 +15905,7 @@ class ParseSession {
    * Escapes, code spans and closed comments hide their contents.
    */
   private substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
-    if (text[open + 1] !== '~') return null
+    if (text[open + 1] !== '~' || splitBracedOpener(text, open)) return null
     const end = this.bracedPairEnd(text, open, '~}')
     if (end === -1) return null
     if (this.substitutionScans === undefined) {
@@ -15917,7 +15919,7 @@ class ParseSession {
       for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
       for (let at = 0; at < text.length; at++) {
         const marker = text[at + 1]
-        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitForcedOpener(text, at)) continue
+        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitBracedOpener(text, at)) continue
         const close = this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
       }
@@ -16028,14 +16030,14 @@ class ParseSession {
         const close = brackets?.(at)
         if (close !== undefined) bracketEnds.add(close)
       }
-      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitForcedOpener(text, at)) openerMarks.add(++at)
+      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitBracedOpener(text, at)) openerMarks.add(++at)
     }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
       const nextId = next === undefined ? -1 : PAIR_MARKERS.indexOf(next)
       // Where the pair opening here ends, if it closes at all.
-      if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined && !splitForcedOpener(text, j)) {
+      if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined && !splitBracedOpener(text, j)) {
         const stop = tables[nextId]![j + 2]!
         ends[j] = stop === -1 ? -1 : stop + 2
       }
@@ -16142,6 +16144,7 @@ class ParseSession {
 
   /** Where a braced inline opened at `open` closes (exclusive), or -1. */
   private bracedPairEnd(text: string, open: number, closer: string): number {
+    if (splitBracedOpener(text, open)) return -1
     const wordEnd = this.plainBracedWordEnd(text, open, closer[0]!)
     if (wordEnd !== -1) return wordEnd
     const stop = this.pairCloser(text, open + 2, closer[0]!)
@@ -16737,7 +16740,7 @@ class ParseSession {
       // an opener in the content is ordinary text, and an opener with no closer
       // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
       // text and scanning resumes after the closer.
-      if (c === '{' && text[i + 1] === '%') {
+      if (c === '{' && text[i + 1] === '%' && !extendsGrapheme(text, i + 2)) {
         const close = this.delimitedCommentClose(text, i + 2)
         if (close !== -1) {
           flush()
@@ -17242,7 +17245,7 @@ class ParseSession {
             continue
           }
         }
-        const criticClose = text[i + 1] === '#' && criticCmtSuf?.[i] ? text.indexOf('#}', i + 2) : -1
+        const criticClose = text[i + 1] === '#' && criticCmtSuf?.[i] && !extendsGrapheme(text, i + 2) ? text.indexOf('#}', i + 2) : -1
         if (criticClose > i + 2) {
           flush()
           out.push(this.withPos({ type: 'critic_comment', text: text.slice(i + 2, criticClose) } as CriticComment, source, text, i, criticClose + 2))
@@ -17252,7 +17255,7 @@ class ParseSession {
         // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
         // bare delimiter, but with no word-boundary condition.
         const delim = text[i + 1]
-        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !splitForcedOpener(text, i)
+        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !splitBracedOpener(text, i)
           ? this.bracedPairEnd(text, i, `${delim}}`)
           : -1
         if (forced !== -1 && forced <= inlineEnd) {
@@ -17763,7 +17766,7 @@ class ParseSession {
       }
       // Comment contents are transparent to the surrounding emphasis structure.
       // Only a closed form is a comment; an unterminated opener remains literal.
-      if (ch === '{' && text[j + 1] === '%') {
+      if (ch === '{' && text[j + 1] === '%' && !extendsGrapheme(text, j + 2)) {
         const close = this.delimitedCommentClose(text, j + 2)
         if (close !== -1) {
           j = close + 1
@@ -17854,11 +17857,11 @@ class ParseSession {
     // The pairs whose closer the parser searches for across the block are asked
     // the same question here, so the scan hides the region the parser builds.
     const marker = text[open + 1]
-    if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-') && !splitForcedOpener(text, open)) {
+    if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-') && !splitBracedOpener(text, open)) {
       const stop = this.pairCloser(text, open + 2, marker)
       if (stop !== -1) return this.pairAttributeEnd(text, stop + 2) - 1
     }
-    if (marker === '#') {
+    if (marker === '#' && !extendsGrapheme(text, open + 2)) {
       memo.lastCritic ??= text.lastIndexOf('#}')
       const close = memo.lastCritic >= open + 3 ? text.indexOf('#}', open + 2) : -1
       if (close > open + 2) return close + 1
