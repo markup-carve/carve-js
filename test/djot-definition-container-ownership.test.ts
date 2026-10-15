@@ -25,3 +25,10 @@ test('Djot definition container ownership preserves Native structure', () => {
     expect(result.report.diagnostics.filter(d => /empty definition|definition item with an empty term/i.test(d.message)), row.source).toEqual([])
   }
 })
+
+test('joining description paragraphs does not invent an attributed span', () => {
+  const result = migrateDjot('- : term\n\n    [x\n\n    ]{.c}')
+  const html = carveToHtml(result.value)
+  expect(html).not.toContain('<span')
+  expect(html.replace(/\s+/g, ' ')).toContain('[x ]{.c}')
+})

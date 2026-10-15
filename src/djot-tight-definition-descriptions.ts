@@ -49,7 +49,9 @@ export function tightDjotDefinitionDescriptions(source: string): string {
         if (first?.startOffset === undefined || last?.endOffset === undefined) continue
         const prefix = lines[first.startLine - 1]!.slice(0, sourceOffset(first.startOffset) - offsets[first.startLine - 1]!)
         const continuation = prefix.replace(/:[ \t]+$/, spaces => ' '.repeat(spaces.length))
-        const contents = description.map(paragraph => { const copy = { ...paragraph }; delete copy.attrs; return renderCarve({ type: 'document', children: [copy] }).replace(/\n+$/, '') }).join('\n')
+        const joined = { ...description[0]!, children: description.flatMap((paragraph, index) => [...(index ? [{ type: 'soft_break' as const }] : []), ...paragraph.children]) }
+        delete joined.attrs
+        const contents = renderCarve({ type: 'document', children: [joined] }).replace(/\n+$/, '')
         edits.push({ start: sourceOffset(first.startOffset), end: sourceOffset(last.endOffset), value: contents.replace(/\n/g, '\n' + continuation) })
       }
     }
