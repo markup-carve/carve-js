@@ -112,6 +112,13 @@ for (const warning of expanded.warnings) {
 const html = renderDocument(expanded.doc)
 ```
 
+A resolver may also return `{ source, id }` with `source` as a `Uint8Array`,
+which is read as UTF-8. An included file is refused as non-text
+(`include-non-text`) when its bytes are not well-formed UTF-8, or when the
+string returned holds a lone surrogate or a NUL. It is not repaired: the
+U+FFFD replacement of CARVE-P0-023 covers the top-level document only.
+`fileSystemResolver` refuses such a file the same way.
+
 Each warning carries a `file` naming the document it arose in, so a host can
 route a diagnostic to the right editor buffer. A directive that failed to
 resolve is attributed to the document containing it, not to the target it

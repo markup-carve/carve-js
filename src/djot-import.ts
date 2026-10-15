@@ -25,6 +25,7 @@ import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 
 import { escapePlainDjotText } from './djot-plain-text.js'
 import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-migrate.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
   let fence: { ch: string; len: number } | null = null
@@ -1238,7 +1239,7 @@ function collapseLiteralNestedImages(source: string): string {
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
-  try { return convertDjotInput(djot) } finally { resetParagraphContext() }
+  try { return convertDjotInput(replaceLoneSurrogates(djot)) } finally { resetParagraphContext() }
 }
 
 function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false, skipHeadingTargets = false): string {
@@ -1456,6 +1457,7 @@ function imageLossChildText(label: string, quoteDepth: number): string {
 }
 
 export function djotToCarveWithLosses(djot: string): { value: string; losses: DjotImportLoss[] } {
+  djot = replaceLoneSurrogates(djot)
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
   const source = (frontmatter + separator).replace(/[^\n]/g, ' ') + body

@@ -29,6 +29,7 @@ import {
 import { parse } from './parse.js'
 import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 
 /**
  * Maximum input length. The pipeline runs many full-string passes, so cost is
@@ -1150,7 +1151,7 @@ export function bbcodeToCarve(bbcode: string): string {
     throw new BbcodeInputTooLargeError(inputBytes)
   }
 
-  let text = bbcode.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n')
+  let text = replaceLoneSurrogates(bbcode.replace(/\0/g, '\ufffd')).replace(/\r\n?/g, '\n')
   text = escapePlainBbcodeText(text)
   const literal = stashLiteralRuns(text)
   text = literal.text

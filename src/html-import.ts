@@ -59,6 +59,7 @@ export type HtmlImportAdapter =
 export { HTML_IMPORT_DIAGNOSTIC_CODES } from './html-import-report.js'
 export type { HtmlImportDiagnostic, HtmlImportDiagnosticCode, HtmlImportFidelity, HtmlImportConfidence } from './html-import-report.js'
 import { HtmlImportReportCollector, type DiagnosticMark, type HtmlImportDiagnostic } from './html-import-report.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 
 export interface HtmlImportOptions {
   mode?: HtmlImportMode
@@ -7019,13 +7020,13 @@ function listTableOf(
 
 export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlImportResult<Document> {
   const importer = new Importer(options)
-  const value = importer.import(html)
+  const value = importer.import(replaceLoneSurrogates(html))
   return { value, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }
 
 export function htmlToCarve(html: string, options: HtmlImportOptions = {}): HtmlImportResult<string> {
   const importer = new Importer(options, true)
-  const value = importer.import(html)
+  const value = importer.import(replaceLoneSurrogates(html))
   // The loss belongs to serialization, not to the import: a consumer that keeps
   // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
   // the importer records where it built one and only this function reports it.

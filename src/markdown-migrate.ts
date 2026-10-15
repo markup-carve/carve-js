@@ -2765,6 +2765,7 @@ import {
   carrierMarker,
   carrierPayload,
 } from './carrier-markers.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
@@ -5950,6 +5951,7 @@ export function markdownToCarveWithLosses(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
 ): { value: string; losses: MarkdownImportLoss[] } {
+  markdown = replaceLoneSurrogates(markdown)
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
   const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
