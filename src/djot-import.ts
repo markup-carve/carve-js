@@ -1137,22 +1137,31 @@ function collapsePlainNestedImageChains(source: string): string {
     }).join('\n')
   }
   const chunks: string[] = []
-  let copied = 0
+  let copied = 0, lineStart = 0, lineEnd = source.indexOf('\n'), quoteLine = -1, quotePrefix = ''
   for (let start = 0; start < source.length; start++) {
     if (source.slice(start, start + 2) !== '![' || mask[start] !== '!' || isDjotEscaped(source, start)) continue
+    while (lineEnd >= 0 && lineEnd < start) { lineStart = lineEnd + 1; lineEnd = source.indexOf('\n', lineStart) }
+    if (quoteLine !== lineStart) {
+      quoteLine = lineStart
+      quotePrefix = /^(?:[ \t]*>[ \t])+/.exec(source.slice(lineStart))?.[0] ?? ''
+    }
     let at = start, lastUnsafe = -1, previous = '', nonSpace = ''
     const labels: string[] = [], positions: number[] = []
     while (source.slice(at, at + 2) === '![' && mask[at] === '!') {
       positions.push(at)
       at += 2
       const begin = at, level = labels.length
-      while (at < source.length && /[A-Za-z0-9 \t\n]/.test(source[at]!)) {
-        const ch = source[at++]!
+      while (at < source.length) {
+        const ch = String.fromCodePoint(source.codePointAt(at)!)
+        if (!/[\p{L}\p{N}\p{M} ,;?/=&@\t\n]/u.test(ch)) break
+        if (ch === '\n' && quotePrefix && !source.startsWith(quotePrefix, at + ch.length)) break
+        at += ch.length
+        if (ch === '\n' && quotePrefix) at += quotePrefix.length
         if (ch === '\n' && (nonSpace === '\n' || previous === ' ' || previous === '\t')) lastUnsafe = level
         if (ch !== ' ' && ch !== '\t') nonSpace = ch
         previous = ch
       }
-      labels.push(source.slice(begin, at))
+      labels.push(source.slice(begin, at).split('\n' + quotePrefix).join('\n'))
       if (source.slice(at, at + 2) !== '![') break
     }
     if (labels.length < 2 || source[at] !== ']') { start = Math.max(start, at - 1); continue }
@@ -1170,7 +1179,7 @@ function collapsePlainNestedImageChains(source: string): string {
     const count = labels.length - first
     if (count < 2) { start = Math.max(start, at - 1); continue }
     const end = ends[count - 1]!
-    chunks.push(source.slice(copied, positions[first]!), '![' + labels.slice(first).join('') + '](' + targets[count - 1]! + ')')
+    chunks.push(source.slice(copied, positions[first]!), '![' + labels.slice(first).join('').replaceAll('\n', '\n' + quotePrefix) + '](' + targets[count - 1]! + ')')
     copied = end
     start = end - 1
   }

@@ -303,9 +303,18 @@ export function djotImportLosses(
     }
     const current = stack.at(-1), ch = source[at]!
     if (current && ch !== '[' && ch !== ']' && !(ch === '!' && source[at + 1] === '[')) {
-      if (masked[at] !== ch || escaped[at] || !/[A-Za-z0-9 \t\n]/.test(ch) || ch === '\n' && !/[A-Za-z0-9]/.test(current.last)) current.plain = false
+      const point = String.fromCodePoint(source.codePointAt(at)!)
+      if ((point.length === 1 ? masked[at] : masked.slice(at, at + point.length).join('')) !== point || escaped[at] || !/[\p{L}\p{N}\p{M} ,;?/=&@\t\n]/u.test(point) || ch === '\n' && !/[\p{L}\p{N}\p{M},;?/=&@]/u.test(current.last)) current.plain = false
+      if (point.length > 1) { current.first ||= point; current.last = point; at++; continue }
       if (!current.first) current.first = ch
       current.last = ch
+      if (ch === '\n' && current.plain) {
+        const depth = quoteDepths[lineAt(current.at) - 1]!
+        if (depth > 0 && quoteDepths[lineAt(at + 1) - 1] === depth) {
+          const prefix = /^(?:[ \t]*>[ \t])+/.exec(source.slice(at + 1))?.[0]
+          if (prefix && (prefix.match(/>/g) ?? []).length === depth) { at += prefix.length; continue }
+        }
+      }
     }
     if (masked[at] !== ch || escaped[at]) continue
     if (ch === '[') {
