@@ -1143,7 +1143,7 @@ function collapsePlainNestedImageChains(source: string): string {
     while (lineEnd >= 0 && lineEnd < start) { lineStart = lineEnd + 1; lineEnd = source.indexOf('\n', lineStart) }
     if (quoteLine !== lineStart) {
       quoteLine = lineStart
-      quotePrefix = /^(?:[ \t]*>[ \t]?)+/.exec(source.slice(lineStart))?.[0] ?? ''
+      quotePrefix = /^(?:[ \t]*>[ \t])+/.exec(source.slice(lineStart))?.[0] ?? ''
     }
     let at = start, lastUnsafe = -1, previous = '', nonSpace = ''
     const labels: string[] = [], positions: number[] = []
@@ -1153,12 +1153,10 @@ function collapsePlainNestedImageChains(source: string): string {
       const begin = at, level = labels.length
       while (at < source.length) {
         const ch = String.fromCodePoint(source.codePointAt(at)!)
-        if (!/[\p{L}\p{N}\p{M} ,;:?/=&@\t\n]/u.test(ch) || ch === ':' && (at === begin || nonSpace === '' || nonSpace === '\n')) break
+        if (!/[\p{L}\p{N}\p{M} ,;?/=&@\t\n]/u.test(ch)) break
+        if (ch === '\n' && quotePrefix && !source.startsWith(quotePrefix, at + ch.length)) break
         at += ch.length
-        if (ch === '\n' && quotePrefix) {
-          if (!source.startsWith(quotePrefix, at)) break
-          at += quotePrefix.length
-        }
+        if (ch === '\n' && quotePrefix) at += quotePrefix.length
         if (ch === '\n' && (nonSpace === '\n' || previous === ' ' || previous === '\t')) lastUnsafe = level
         if (ch !== ' ' && ch !== '\t') nonSpace = ch
         previous = ch
