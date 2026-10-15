@@ -274,6 +274,12 @@ function collectUnresolvedRefLinks(
   doc: Document,
 ): Array<{ ref: string; rawRef: string; collapsed: boolean; image: boolean; node: Positioned }> {
   const found: Array<{ ref: string; rawRef: string; collapsed: boolean; image: boolean; node: Positioned }> = []
+  const emptyDefinitions = new Set<string>()
+  walkDocument(doc, (node) => {
+    if (node.type === 'link_reference_definition' && node.href === '' && typeof node.label === 'string') {
+      emptyDefinitions.add(normalizeRefLabel(node.label))
+    }
+  })
   walkDocument(doc, (node) => {
     // UNRESOLVED means no destination. PART 12 §3a keeps `ref` and `rawRef` on
     // a RESOLVED reference too, so a ref alone no longer answers this
@@ -282,6 +288,7 @@ function collectUnresolvedRefLinks(
     const image = node.type === 'image'
     const destination = image ? node.src : node.href
     if (typeof destination === 'string' && destination !== '') return
+    if (destination === '' && emptyDefinitions.has(normalizeRefLabel(node.ref))) return
     found.push({
       ref: node.ref,
       rawRef: typeof node.rawRef === 'string' ? node.rawRef : `${image ? '!' : ''}[${node.ref}]`,

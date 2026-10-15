@@ -457,7 +457,10 @@ export function extractReferenceDefinitions(
       if (!emptied) {
         const target = trimReferenceWhitespace(destination)
         if (target === '') {
-          keep(line, ...continued)
+          const marker = line.indexOf(`[${definition[1]}]:`)
+          const next = lines[i + 1]
+          const setext = next?.startsWith(quotePrefix) && /^ {0,3}(?:=+|-+)[ \t]*$/.test(next.slice(quotePrefix.length))
+          keep(marker < 0 || setext ? line : line.slice(0, marker) + '\\' + line.slice(marker), ...continued)
           canStart = false
           continue
         }
