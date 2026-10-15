@@ -77,6 +77,11 @@ const RE_EMPTY_LINK_REST_STICKY = new RegExp(RE_EMPTY_LINK_REST.source.slice(1),
 
 /** Complete destination openers, with nested destinations scanned once. */
 export function completeDestinationOpeners(text: string): Set<number> {
+  return new Set(destinationSlotEnds(text).keys())
+}
+
+/** Each complete destination slot's `(`, mapped to the offset after its `)`, in linear time. */
+export function destinationSlotEnds(text: string): Map<number, number> {
   const stops = new Int32Array(text.length + 1)
   stops[text.length] = text.length
   for (let i = text.length - 1; i >= 0; i--) {
@@ -88,22 +93,23 @@ export function completeDestinationOpeners(text: string): Set<number> {
     } else if (c === ')' || RE_DESTINATION_WHITESPACE.test(c)) stops[i] = i
     else stops[i] = stops[i + 1]!
   }
-  const found = new Set<number>()
-  const closes = new Map<string, boolean>()
+  const found = new Map<number, number>()
+  const closes = new Map<string, number>()
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '(') continue
     const stop = stops[i + 1]!
     if (stop < i + 1) continue
     const empty = stop === i + 1
     const key = `${stop}:${empty}`
-    let closed = closes.get(key)
-    if (closed === undefined) {
+    let end = closes.get(key)
+    if (end === undefined) {
       const rest = empty ? RE_EMPTY_LINK_REST_STICKY : RE_LINK_REST_STICKY
       rest.lastIndex = stop
-      closed = rest.test(text)
-      closes.set(key, closed)
+      const m = rest.exec(text)
+      end = m === null ? -1 : stop + m[0].length
+      closes.set(key, end)
     }
-    if (closed) found.add(i)
+    if (end !== -1) found.set(i, end)
   }
   return found
 }
