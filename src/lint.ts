@@ -44,6 +44,7 @@ import {
   type UnclosedContainer,
 } from './parse.js'
 import { normalizeRefLabel } from './label-key.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 import {
   slugify,
   inlineText,
@@ -67,7 +68,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
+import type { Attrs, BlockNode, Document, Heading, InlineNode, Table } from './ast.js'
 import { inspectColonFences } from './colon-fences.js'
 import { resolveTableSpans } from './table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
@@ -279,9 +280,10 @@ function collectUnresolvedRefLinks(
     // a RESOLVED reference too, so a ref alone no longer answers this
     // (carve#596) - flagging on it reported every working reference link.
     if ((node.type !== 'link' && node.type !== 'image') || typeof node.ref !== 'string') return
+    // A definition may resolve to an empty destination, so `href: ""` alone is
+    // not unresolved; ask the predicate every render target uses.
+    if (!isUnresolvedReference(node as unknown as InlineNode)) return
     const image = node.type === 'image'
-    const destination = image ? node.src : node.href
-    if (typeof destination === 'string' && destination !== '') return
     found.push({
       ref: node.ref,
       rawRef: typeof node.rawRef === 'string' ? node.rawRef : `${image ? '!' : ''}[${node.ref}]`,

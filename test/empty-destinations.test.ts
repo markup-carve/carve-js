@@ -72,6 +72,18 @@ describe('explicit empty destinations', () => {
     expect(lintCarve('[r]:').map((warning) => warning.rule)).toContain('empty-reference-definition')
   })
 
+  it.each([
+    ['[r]:\n\n[x][r]', 'link'],
+    ['[r]:   \n\n[x][r]', 'link with trailing spaces after the colon'],
+    ['[r]:\n\n![x][r]', 'image'],
+  ])('does not call a reference to an empty definition unresolved (%s)', (source) => {
+    expect(lintCarve(source).map((warning) => warning.rule)).toEqual(['empty-reference-definition'])
+  })
+
+  it('still reports a reference with no definition', () => {
+    expect(lintCarve('[x][q]').map((warning) => warning.rule)).toEqual(['unresolved-reference-link'])
+  })
+
   it('reports metadata an empty definition cannot spell', () => {
     const document = { type: 'document' as const, children: [
       { type: 'link_reference_definition' as const, label: 'r', href: '', title: 'T', attrs: { id: 'x' } },
