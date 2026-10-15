@@ -8,8 +8,21 @@ export function isResolvedEmptyReference(node: Link | Image): boolean {
   return resolvedEmptyReferences.has(node)
 }
 
+/** Carry the runtime resolution bit from `source` onto its structural copy `copy`. */
+export function copyResolvedEmptyReferences(source: unknown, copy: unknown): void {
+  const stack: Array<[unknown, unknown]> = [[source, copy]]
+  while (stack.length > 0) {
+    const [from, to] = stack.pop()!
+    if (from === null || typeof from !== 'object' || to === null || typeof to !== 'object') continue
+    if (resolvedEmptyReferences.has(from as Link | Image)) resolvedEmptyReferences.add(to as Link | Image)
+    for (const [key, child] of Object.entries(from)) {
+      if (key !== 'pos' && key !== 'attrs') stack.push([child, (to as Record<string, unknown>)[key]])
+    }
+  }
+}
+
 /** Restore the runtime resolution bit after whole-document JSON decoding. */
-export function hydrateResolvedEmptyReferences(document: Document): void {
+export function hydrateResolvedEmptyReferences(document: Document, keepResolved = false): void {
   const definitions = new Map<string, string>()
   for (const child of document.children) {
     if (child.type === 'link_reference_definition') {
@@ -31,7 +44,7 @@ export function hydrateResolvedEmptyReferences(document: Document): void {
         definitions.has(normalizeRefLabel(node.ref)) &&
         definitions.get(normalizeRefLabel(node.ref)) === ''
       if (resolved) resolvedEmptyReferences.add(value as Link | Image)
-      else resolvedEmptyReferences.delete(value as Link | Image)
+      else if (!keepResolved) resolvedEmptyReferences.delete(value as Link | Image)
     }
     for (const [key, child] of Object.entries(node)) {
       if (key !== 'pos' && key !== 'attrs') stack.push(child)

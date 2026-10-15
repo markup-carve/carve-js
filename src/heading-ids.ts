@@ -1,7 +1,7 @@
 import { smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { trimMatchingEdges, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { visitDocumentIds } from './document-ids.js'
-import { resolveReferenceDestination } from './reference-state.js'
+import { copyResolvedEmptyReferences, hydrateResolvedEmptyReferences, resolveReferenceDestination } from './reference-state.js'
 import { forEachChildBlockList, withClonedChildBlockLists } from './block-children.js'
 /*
  * Heading identifier generation + cross-reference resolution.
@@ -106,7 +106,11 @@ function derivedRefLabel(label: string): string {
  * once so the three consumers cannot each pick a different depth of copy.
  */
 export function deepCloneInlines(nodes: InlineNode[]): InlineNode[] {
-  return JSON.parse(JSON.stringify(nodes)) as InlineNode[]
+  const copy = JSON.parse(JSON.stringify(nodes)) as InlineNode[]
+  // The resolved-empty bit lives outside the node, so JSON alone would turn
+  // a reference resolved to an empty definition back into an unresolved one.
+  copyResolvedEmptyReferences(nodes, copy)
+  return copy
 }
 
 /**
@@ -546,6 +550,8 @@ function resolveHeadingIdsImpl(
    */
   ingestedCaptionTargets?: Map<string, InlineNode[]>,
 ): Document {
+  // A decoded tree arrives without the runtime bit; keep any a caller set.
+  hydrateResolvedEmptyReferences(doc, true)
   const ingested = ingestedCaptionTargets !== undefined
   const used = documentIds ?? new DocumentIdRegistry()
   const targets = new Map<string, InlineNode[]>()
