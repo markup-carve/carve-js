@@ -9438,6 +9438,17 @@ function crossrefBodyCanEnd(text: string, from: number, memo: CrossrefMemo): boo
   return false
 }
 
+export function forEachCrossrefRun(text: string, visit: (start: number, end: number, id: string) => void): void {
+  if (!text.includes('</#')) return
+  const memo: CrossrefMemo = { lastCloser: text.lastIndexOf('>') }
+  for (let at = 0; at < text.length; at++) {
+    if (!text.startsWith('</#', at) || text[at + 3] === '>' || !crossrefBodyCanEnd(text, at + 3, memo)) continue
+    const closer = text.indexOf('>', at + 3)
+    visit(at, closer + 1, text.slice(at + 3, closer))
+    at = closer
+  }
+}
+
 interface EmphasisMemo {
   // Per delimiter, scan positions known to reach no closer. Not a single bound:
   // an opener inside a skipped plain brace group does not scan a suffix.

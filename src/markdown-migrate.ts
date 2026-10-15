@@ -12,6 +12,7 @@ import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-empha
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
+import { convertedIds, protectUnresolvedCrossrefs } from './imported-crossrefs.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -1309,6 +1310,7 @@ function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect):
 }
 
 let inlineCarriersEnabled = false
+let importedCrossrefIds: Set<string> | null = null
 let inlineCarriersDamaged = false
 let footChainMarker = ''
 
@@ -2473,6 +2475,7 @@ function convertInline(
   // backtick and false of an unmatched one. An unmatched one is not literal text
   // in Carve: it opens a verbatim span that runs to the END of the block, so a
   // single stray backtick in migrated prose swallowed the rest of the line.
+  if (importedCrossrefIds !== null && !holdsFenceBody) line = protectUnresolvedCrossrefs(line, importedCrossrefIds, protect)
   if (!holdsFenceBody) line = escapeVerbatimDelimiter(line)
   // `{#id}` is ordinary text in CommonMark, where in Djot it is a deliberate
   // attribute block - which is why `djotToCarve` is right to leave it and this
@@ -6030,6 +6033,11 @@ export function markdownToCarveWithLosses(
     }
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')
+    }
+    if (importedCrossrefIds === null && markdown.includes('</#')) {
+      importedCrossrefIds = convertedIds(value)
+      try { return markdownToCarveWithLosses(markdown, dialect) }
+      finally { importedCrossrefIds = null }
     }
     return { value, losses }
   } finally {
