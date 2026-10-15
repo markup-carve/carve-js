@@ -38,7 +38,7 @@ export function tightDjotDefinitionDescriptions(source: string): string {
     if (node.type === 'list' && !tight && node.items.every(item => item.children.every(child => ['definition_list', 'paragraph', 'comment'].includes(child.type))) && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && node.items.reduce((count, item) => count + item.children.filter(child => child.type === 'paragraph').length, 0) < 2) {
       tight = true
       clearLoose(node)
-      for (const item of node.items) for (let i = 1; i < item.children.length; i++) clearGap(item.children[i - 1]!.pos, item.children[i]!.pos, true)
+      for (const item of node.items) for (let i = 1; i < item.children.length; i++) clearGap(item.children[i - 1]!.pos, item.children[i]!.pos, item.children[i - 1]!.type === 'definition_list')
       for (let i = 1; i < node.items.length; i++) clearGap(node.items[i - 1]!.pos, node.items[i]!.pos)
     }
     if (node.type === 'definition_list' && tight) {
