@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -54,4 +54,12 @@ it('keeps an existing output and refuses an output inside the source', () => {
   expect(() => migrateMarkdownDirectory(source, output)).toThrow(/already exists/)
   expect(readFileSync(join(output, 'keep.txt'), 'utf8')).toBe('keep')
   expect(() => migrateMarkdownDirectory(source, join(source, 'out'))).toThrow(/outside/)
+  expect(() => migrateMarkdownDirectory(source, join(source, '..', 'source', 'new', 'out'))).toThrow(/outside/)
+  expect(existsSync(join(source, 'new'))).toBe(false)
+  if (process.platform !== 'win32') {
+    const alias = join(root, 'alias')
+    symlinkSync(source, alias, 'dir')
+    expect(() => migrateMarkdownDirectory(source, join(alias, 'new', 'out'))).toThrow(/outside/)
+    expect(existsSync(join(source, 'new'))).toBe(false)
+  }
 })

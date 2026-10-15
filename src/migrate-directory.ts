@@ -18,16 +18,32 @@ function collect(root: string, dir = root): Entry[] {
   return entries
 }
 
+function futurePath(path: string): string {
+  let ancestor = path
+  const missing: string[] = []
+  while (!existsSync(ancestor)) {
+    const parent = dirname(ancestor)
+    if (parent === ancestor) throw new Error(`cannot resolve output path: ${path}`)
+    missing.unshift(basename(ancestor))
+    ancestor = parent
+  }
+  return join(realpathSync(ancestor), ...missing)
+}
+
+function pathExists(path: string): boolean {
+  try { lstatSync(path); return true }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
 export function migrateMarkdownDirectory(source: string, target: string): { files: number; assets: number; review: number; skipped: number; report: string } {
   const sourcePath = resolve(source)
   if (!existsSync(sourcePath) || !statSync(sourcePath).isDirectory()) throw new Error(`source is not a directory: ${sourcePath}`)
   const sourceRoot = realpathSync(sourcePath)
-  const outputPath = resolve(target)
-  const lexical = relative(sourcePath, outputPath)
-  if (lexical === '' || (lexical !== '..' && !lexical.startsWith(`..${sep}`) && !isAbsolute(lexical))) throw new Error('output must be outside the source directory')
-  mkdirSync(dirname(outputPath), { recursive: true })
-  const outputRoot = join(realpathSync(dirname(outputPath)), basename(outputPath))
-  if (existsSync(outputRoot)) throw new Error(`output already exists: ${outputRoot}`)
+  const outputRoot = futurePath(resolve(target))
+  if (pathExists(outputRoot)) throw new Error(`output already exists: ${outputRoot}`)
   const nested = relative(sourceRoot, outputRoot)
   if (nested === '' || (nested !== '..' && !nested.startsWith(`..${sep}`) && !isAbsolute(nested))) {
     throw new Error('output must be outside the source directory')
@@ -35,6 +51,7 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
   const entries = collect(sourceRoot)
   entries.sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)))
   if (!entries.some((entry) => entry.kind === 'markdown')) throw new Error('source contains no Markdown files')
+  mkdirSync(dirname(outputRoot), { recursive: true })
   const shell = mkdtempSync(join(dirname(outputRoot), `.${basename(outputRoot)}-`))
   const temporary = join(shell, 'out')
   mkdirSync(temporary)
@@ -65,7 +82,7 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
     }
     const review = files.filter((file) => file.diagnostics.some((diagnostic) => diagnostic.fidelity === 'degraded' || diagnostic.fidelity === 'dropped')).map((file) => file.source)
     writeFileSync(join(temporary, 'migration-report.json'), JSON.stringify({ schemaVersion: 1, sourceFormat: 'markdown', files, assets, skipped, review }, null, 2) + '\n')
-    if (existsSync(outputRoot)) throw new Error(`output appeared during conversion: ${outputRoot}`)
+    if (pathExists(outputRoot)) throw new Error(`output appeared during conversion: ${outputRoot}`)
     renameSync(temporary, outputRoot)
     rmSync(shell, { recursive: true, force: true })
     return { files: files.length, assets: assets.length, review: review.length, skipped: skipped.length, report: join(outputRoot, 'migration-report.json') }
