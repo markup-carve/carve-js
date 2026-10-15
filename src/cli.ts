@@ -114,7 +114,8 @@ Usage:
                                    ::: list-table) are HTML-only; --report and
                                    --check-loss apply to all
   carve migrate --from markdown --directory SOURCE --output TARGET
-                                   Convert a Markdown folder and copy assets
+                                   Convert a Markdown folder, check local links,
+                                   and copy assets
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.

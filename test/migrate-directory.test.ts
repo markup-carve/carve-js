@@ -42,6 +42,67 @@ it('refuses destination collisions without leaving an output', () => {
   expect(() => readFileSync(join(root, 'output', 'migration-report.json'))).toThrow()
 })
 
+it('rewrites verified document links and reports missing files, fragments, and assets', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-links-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(join(source, 'chapters'), { recursive: true })
+  writeFileSync(join(source, 'index.md'), '# Home\n\n[good](chapters/intro.md#Intro) [self](#Home) [query](?view=1) [encoded](chapters/a%23b.md#A) [bad](chapters/intro.md#intro) [gone](missing.md) [route](/docs/intro) ![image](lost.png) [asset](manual.pdf#page=2)\n')
+  writeFileSync(join(source, 'chapters/intro.md'), '# Intro\n\n[home](../index.md#Home)\n')
+  writeFileSync(join(source, 'chapters/a#b.md'), '# A\n')
+  writeFileSync(join(source, 'manual.pdf'), 'pdf')
+  const output = join(root, 'output')
+  const summary = migrateMarkdownDirectory(source, output)
+  const report = JSON.parse(readFileSync(summary.report, 'utf8'))
+  expect(readFileSync(join(output, 'index.crv'), 'utf8')).toContain('(chapters/intro.crv#Intro)')
+  expect(readFileSync(join(output, 'index.crv'), 'utf8')).toContain('(chapters/a%23b.crv#A)')
+  expect(readFileSync(join(output, 'chapters/intro.crv'), 'utf8')).toContain('(../index.crv#Home)')
+  expect(report.review).toEqual(['index.md'])
+  expect(report.files[2].links).toEqual(expect.arrayContaining([
+    expect.objectContaining({ target: 'missing.md', status: 'unresolved' }),
+    expect.objectContaining({ target: 'chapters/intro.md#intro', status: 'unresolved', reason: 'fragment missing from target' }),
+    expect.objectContaining({ target: 'lost.png', status: 'unresolved' }),
+    expect.objectContaining({ target: '/docs/intro', status: 'unresolved', reason: 'site-root path needs route mapping' }),
+    expect.objectContaining({ target: '#Home', status: 'valid' }),
+    expect.objectContaining({ target: '?view=1', status: 'valid' }),
+    expect.objectContaining({ target: 'manual.pdf#page=2', status: 'unresolved', reason: 'asset fragment needs site check' }),
+  ]))
+})
+
+it('does not treat data-id as an anchor', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-links-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'page.md'), '# Page\n\n[false anchor](other.md#shadow) [false code](other.md#ghost) [legacy](other.md#legacy)\n\n<a href=" other.md ">raw</a>\n\n<img src=" chart.png " srcset="missing-responsive.png 2x, chart,v2.png 1x">\n\n<link rel="preload" as="image" imagesrcset="chart,v2.png 2x">\n\n<video poster="missing-poster.png"></video>\n')
+  writeFileSync(join(source, 'other.md'), '# Other\n\n<div data-id="shadow">Text</div>\n\n`id="ghost"`\n\n<a name="legacy"></a>\n')
+  writeFileSync(join(source, 'chart.png'), 'png')
+  writeFileSync(join(source, 'chart,v2.png'), 'png')
+  const report = JSON.parse(readFileSync(migrateMarkdownDirectory(source, join(root, 'output')).report, 'utf8'))
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'other.md#shadow', status: 'unresolved', reason: 'fragment missing from target',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'other.md#ghost', status: 'unresolved', reason: 'fragment missing from target',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'other.md#legacy', status: 'rewritten',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'other.md', status: 'unresolved', reason: 'raw HTML link needs manual rewrite',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'chart.png', status: 'valid',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links.filter((link: { target: string }) => link.target === 'chart,v2.png')).toHaveLength(2)
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'missing-responsive.png', status: 'unresolved', reason: 'target missing from output',
+  })
+  expect(report.files.find((file: { source: string }) => file.source === 'page.md').links).toContainEqual({
+    target: 'missing-poster.png', status: 'unresolved', reason: 'target missing from output',
+  })
+})
+
 it('keeps an existing output and refuses an output inside the source', () => {
   const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
   roots.push(root)

@@ -1,8 +1,145 @@
 import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, lstatSync, writeFileSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { migrateMarkdown } from './index.js'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, posix } from 'node:path'
+import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
+interface LinkCheck { target: string; status: 'rewritten' | 'valid' | 'unresolved'; reason?: string }
+
+function htmlIds(html: string): Set<string> {
+  const ids = new Set<string>()
+  const pending: Html.ParentNode[] = [parseFragment(html)]
+  for (let node = pending.pop(); node; node = pending.pop()) {
+    for (const child of node.childNodes) {
+      if (!('tagName' in child)) continue
+      for (const attr of child.attrs) if (attr.name === 'id' || (attr.name === 'name' && child.tagName === 'a')) ids.add(attr.value)
+      pending.push(child)
+    }
+  }
+  return ids
+}
+
+interface RawUrl { target: string; manual?: boolean }
+
+function normalizeHtmlUrl(value: string): string {
+  return value.replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, '').replace(/[\t\n\r]/g, '')
+}
+
+function srcsetUrls(value: string): string[] {
+  const urls: string[] = []
+  let index = 0
+  while (index < value.length) {
+    while (index < value.length && /[ \t\n\r\f,]/.test(value[index]!)) index++
+    const start = index
+    while (index < value.length && !/[ \t\n\r\f]/.test(value[index]!)) index++
+    const raw = value.slice(start, index)
+    const url = raw.replace(/,+$/, '')
+    if (url) urls.push(normalizeHtmlUrl(url))
+    if (raw.endsWith(',')) continue
+    let inParentheses = false
+    while (index < value.length) {
+      const char = value[index++]!
+      if (char === '(') inParentheses = true
+      else if (char === ')') inParentheses = false
+      else if (char === ',' && !inParentheses) break
+    }
+  }
+  return urls
+}
+
+function htmlUrls(html: string): RawUrl[] {
+  const urls: RawUrl[] = []
+  const pending: Html.ParentNode[] = [parseFragment(html)]
+  for (let node = pending.pop(); node; node = pending.pop()) {
+    for (const child of node.childNodes) {
+      if (!('tagName' in child)) continue
+      for (const attr of child.attrs) {
+        if (attr.name === 'srcset' || attr.name === 'imagesrcset') {
+          if (/\bdata:/i.test(attr.value)) urls.push({ target: attr.value, manual: true })
+          else for (const target of srcsetUrls(attr.value)) urls.push({ target })
+        } else if (attr.name === 'href' || attr.name === 'src' || attr.name === 'poster'
+          || (attr.name === 'data' && child.tagName === 'object')
+          || (attr.name === 'action' && child.tagName === 'form')
+          || (attr.name === 'formaction' && (child.tagName === 'button' || child.tagName === 'input'))) {
+          urls.push({ target: normalizeHtmlUrl(attr.value) })
+        }
+      }
+      pending.push(child)
+    }
+  }
+  return urls
+}
+
+function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>): { href: string; check: LinkCheck } | null {
+  if (/^[a-z][a-z\d+.-]*:/i.test(destination) || destination.startsWith('//')) return null
+  if (destination.startsWith('/')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'site-root path needs route mapping' } }
+  const match = /^([^?#]*)(\?[^#]*)?(?:#(.*))?$/.exec(destination)
+  if (!match) return null
+  let pathname: string
+  let fragment: string
+  try { pathname = decodeURIComponent(match[1]!); fragment = decodeURIComponent(match[3] ?? '') }
+  catch { return { href: destination, check: { target: destination, status: 'unresolved', reason: 'invalid URL encoding' } } }
+  const target = pathname ? posix.normalize(posix.join(posix.dirname(source), pathname)) : source
+  if (target === '..' || target.startsWith('../')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'outside source directory' } }
+  const mapped = /\.(md|markdown)$/i.test(target) ? target.replace(/\.(md|markdown)$/i, '.crv') : target
+  if (!outputs.has(mapped)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'target missing from output' } }
+  if (fragment && !ids.has(mapped)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'asset fragment needs site check' } }
+  if (fragment && !ids.get(mapped)?.has(fragment)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
+  if (mapped !== target && pathname && !/\.(md|markdown)$/i.test(match[1]!)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'encoded extension needs manual rewrite' } }
+  const newPath = pathname && mapped !== target ? match[1]!.replace(/\.(md|markdown)$/i, '.crv') : match[1]!
+  const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${match[3]}`}`
+  return { href, check: { target: destination, status: href === destination ? 'valid' : 'rewritten' } }
+}
+
+function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: unknown[]; links?: LinkCheck[] }>, assets: string[]): string[] {
+  const outputs = new Set([...files.map((file) => file.output), ...assets])
+  const ids = new Map<string, Set<string>>()
+  for (const file of files) {
+    const html = carveToHtml(readFileSync(join(temporary, file.output), 'utf8'))
+    ids.set(file.output, htmlIds(html))
+  }
+  const broken: string[] = []
+  for (const file of files) {
+    const path = join(temporary, file.output)
+    const original = readFileSync(path, 'utf8')
+    const document = parse(original)
+    const links: LinkCheck[] = []
+    let changed = false
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return
+      const node = value as Record<string, unknown>
+      if ((node.type === 'raw_inline' || node.type === 'raw_block') && node.format === 'html' && typeof node.content === 'string') {
+        for (const url of htmlUrls(node.content)) {
+          if (url.manual) { links.push({ target: url.target, status: 'unresolved', reason: 'raw HTML srcset needs manual review' }); continue }
+          const result = inspectDestination(url.target, file.source, outputs, ids)
+          if (result) links.push(result.check.status === 'rewritten' ? { target: url.target, status: 'unresolved', reason: 'raw HTML link needs manual rewrite' } : result.check)
+        }
+      }
+      const key = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : null
+      if (key && typeof node[key] === 'string' && node[key]) {
+        const result = inspectDestination(node[key], file.source, outputs, ids)
+        if (result) {
+          if (result.check.status === 'rewritten' && node.ref) {
+            links.push({ target: node[key], status: 'unresolved', reason: 'reference link needs manual rewrite' })
+          } else {
+            links.push(result.check)
+            if (result.href !== node[key]) { node[key] = result.href; changed = true }
+          }
+        }
+      }
+      for (const [name, child] of Object.entries(node)) {
+        if (name === 'position' || name === 'attrs') continue
+        if (Array.isArray(child)) child.forEach(visit)
+        else if (child && typeof child === 'object') visit(child)
+      }
+    }
+    visit(document)
+    file.links = links
+    if (links.some((link) => link.status === 'unresolved')) broken.push(file.source)
+    if (changed) writeFileSync(path, renderCarve(document))
+  }
+  return broken
+}
 
 function collect(root: string, dir = root): Entry[] {
   const entries: Entry[] = []
@@ -102,7 +239,7 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
   const shell = mkdtempSync(join(dirname(outputRoot), `.${basename(outputRoot)}-`))
   const temporary = join(shell, 'out')
   mkdirSync(temporary)
-  const files: Array<{ source: string; output: string; diagnostics: ReturnType<typeof migrateMarkdown>['report']['diagnostics'] }> = []
+  const files: Array<{ source: string; output: string; diagnostics: ReturnType<typeof migrateMarkdown>['report']['diagnostics']; links?: LinkCheck[] }> = []
   const assets: string[] = []
   const skipped: string[] = []
   const destinations = new Set(['migration-report.json'])
@@ -127,7 +264,8 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
         files.push({ source: entry.path, output: destination, diagnostics: result.report.diagnostics })
       }
     }
-    const review = files.filter((file) => file.diagnostics.some((diagnostic) => diagnostic.fidelity === 'degraded' || diagnostic.fidelity === 'dropped')).map((file) => file.source)
+    const broken = new Set(checkLinks(temporary, files, assets))
+    const review = files.filter((file) => broken.has(file.source) || file.diagnostics.some((diagnostic) => diagnostic.fidelity === 'degraded' || diagnostic.fidelity === 'dropped')).map((file) => file.source)
     writeFileSync(join(temporary, 'migration-report.json'), JSON.stringify({ schemaVersion: 1, sourceFormat: 'markdown', files, assets, skipped, review }, null, 2) + '\n')
     placeOutput(temporary, outputRoot)
     rmSync(shell, { recursive: true, force: true })
