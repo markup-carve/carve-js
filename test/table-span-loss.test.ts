@@ -73,6 +73,38 @@ describe('table render losses', () => {
     expect(carveToAnsiWithReport(headers).losses).toEqual([])
   })
 
+  it('keeps a later header row in source order and reports its demotion', () => {
+    const input = '| A | B |\n|= C |= D |\n'
+    const result = carveToMarkdownWithReport(input)
+    expect(result.value).toContain('| A | B |\n| C | D |')
+    expect(result.losses).toMatchObject([{ code: 'table-header-row-demoted', target: 'markdown' }])
+    const html = carveToHtmlWithReport(input)
+    expect(html.value.indexOf('<td>A</td>')).toBeLessThan(html.value.indexOf('<th scope="row">C</th>'))
+    expect(html.losses).toEqual([])
+    for (const render of [carveToPlainTextWithReport, carveToAnsiWithReport, carveToCarveWithReport]) {
+      const other = render(input)
+      expect(other.value.indexOf('A')).toBeLessThan(other.value.indexOf('C'))
+      expect(other.losses).toEqual([])
+    }
+  })
+
+  it('reports mixed header cells written as body cells', () => {
+    const input = '| A |= B |\n| C | D |\n'
+    const result = carveToMarkdownWithReport(input)
+    expect(result.value).toContain('| A | B |\n| C | D |')
+    expect(result.losses).toMatchObject([{ code: 'table-header-cell-demoted', target: 'markdown' }])
+    expectSchemaLoss(result.losses[0]!)
+    expect(() => carveToMarkdownWithReport(input, { strictLosses: true })).toThrow(RenderLossError)
+  })
+
+  it('reports each mixed header row without changing row order', () => {
+    const result = carveToMarkdownWithReport('|= H |= X |\n|= R1 | a |\n|= R2 | b |\n')
+    expect(result.value).toContain('| H | X |\n| --- | --- |\n| R1 | a |\n| R2 | b |')
+    expect(result.losses.map(loss => loss.code)).toEqual([
+      'table-header-cell-demoted', 'table-header-cell-demoted',
+    ])
+  })
+
   it('reports row loss before cell and content losses', () => {
     const ast = {
       type: 'document', children: [{ type: 'table', rows: [
