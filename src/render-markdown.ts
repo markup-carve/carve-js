@@ -920,15 +920,16 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     }
     headerCells.push(flags)
   }
-  const hasHeaderRow = node.rows.some((row, i) => headerCells[i]!.every(Boolean) && row.cells.some((cell) => cell.header))
+  const ownsHeader = (rowIndex: number): boolean => node.rows[rowIndex]!.cells.some((cell, cellIndex) => cell.header && !spanGrid[rowIndex]![cellIndex]!.skip)
+  const hasHeaderRow = node.rows.some((_, i) => headerCells[i]!.every(Boolean) && ownsHeader(i))
   for (const [rowIndex, row] of node.rows.entries()) {
-    const isHeader = headerCells[rowIndex]!.every(Boolean) && row.cells.some((cell) => cell.header)
+    const isHeader = headerCells[rowIndex]!.every(Boolean) && ownsHeader(rowIndex)
     // Only the first row can become Markdown's header. A later header row
     // stays in place, and mixed rows lose their individual header roles.
     if (isHeader && rowIndex > 0) tableHeaderRowDemoted(ctx.options, row)
     const cells = row.cells.map((cell, cellIndex) => {
-      if (!isHeader && cell.header) tableHeaderCellDemoted(ctx.options, cell)
       const span = spanGrid[rowIndex]![cellIndex]!
+      if (!isHeader && cell.header && !span.skip) tableHeaderCellDemoted(ctx.options, cell)
       tableSpanFlattened(ctx.options, { ...span, pos: cell.pos }, 'markdown')
       return escapeCellPipes(
         withinSingleLineSlot(() => {
