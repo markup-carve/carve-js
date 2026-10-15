@@ -997,6 +997,9 @@ const IMPLEMENTED = new Set([
   'a-braced-comment-does-not-decide-a-quote',
   'a-below-column-line-continues-a-paragraph-only-where-one-is-open',
   'a-caption-scope-resets-at-a-structural-only-line',
+  // ARRIVED WITH THIS PIN BUMP (spec c6ae329e). All four rows are byte-exact
+  // on this build before the entry was added (markup-carve/carve#3201).
+  'inside-an-unclosed-fence-only-the-innermost-container-s-closer-is-structural',
 ])
 
 /**
