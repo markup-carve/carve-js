@@ -1,3 +1,4 @@
+import { freeMarkerSerial } from './marker-serial.js'
 import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
@@ -6548,8 +6549,7 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   markdown = markdown.replace(/\r\n?/g, '\n')
-  let footChainSerial = 0
-  while (markdown.includes(`CARVEMDFOOTCHAIN${footChainSerial}Z`)) footChainSerial++
+  const footChainSerial = freeMarkerSerial(markdown, 'CARVEMDFOOTCHAIN')
   footChainMarker = `CARVEMDFOOTCHAIN${footChainSerial}Z`
   const brokenAngle = /^\[([^\[\]\n]+)\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.exec(markdown)
   if (brokenAngle) return markdown.replace(/^\[[^\[\]\n]+\]\(/, () => `[${convertInline(brokenAngle[1]!, dialect)}]\\(`)
