@@ -734,11 +734,18 @@ function formatAttribution(attribution: string): string {
   let name: string | null = null
   let datetime: string | null = null
 
+  let quotedName: string | null = null
   const leadingId = /^["'](\d+)["']/.exec(remaining)
   if (leadingId) {
     id = leadingId[1]!
     remaining = remaining.slice(leadingId[0].length).trim()
   } else {
+    // A quoted name is taken whole first, so a field spelled inside it stays name text.
+    const leadingQuote = /^(["'])(.*?)\1(?=\s|$)/.exec(remaining)
+    if (leadingQuote) {
+      quotedName = leadingQuote[2]!
+      remaining = remaining.slice(leadingQuote[0].length)
+    }
     const namedId = /\b(?:post_id|id)=["']?(\d+)["']?/i.exec(remaining)
     if (namedId) {
       id = namedId[1]!
@@ -763,7 +770,8 @@ function formatAttribution(attribution: string): string {
   if (namedTime) {
     const value = namedTime[1] ?? namedTime[2]!
     const unix = /^\d{9,11}$/.test(value) ? new Date(Number(value) * 1000) : null
-    if (unix !== null && Number.isFinite(unix.getTime())) datetime = unix.toISOString().slice(0, 10)
+    // An explicit date wins over a Unix time; the time then stays as written beside it.
+    if (datetime === null && unix !== null && Number.isFinite(unix.getTime())) datetime = unix.toISOString().slice(0, 10)
     else datetime = datetime !== null ? `${datetime} ${value}` : value
     remaining = remaining.replace(namedTime[0], '')
   }
@@ -771,7 +779,8 @@ function formatAttribution(attribution: string): string {
   remaining = remaining.replace(/\buser_id=(?:"[^"]*"|'[^']*'|\S+)/gi, '')
 
   remaining = remaining.trim()
-  if (remaining.length >= 2 && ((remaining.startsWith('"') && remaining.endsWith('"')) ||
+  if (quotedName !== null) remaining = remaining === '' ? quotedName : `${quotedName} ${remaining}`
+  else if (remaining.length >= 2 && ((remaining.startsWith('"') && remaining.endsWith('"')) ||
       (remaining.startsWith("'") && remaining.endsWith("'")))) {
     remaining = remaining.slice(1, -1)
   }

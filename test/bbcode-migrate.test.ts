@@ -76,6 +76,19 @@ describe('bbcodeToCarve — quotes', () => {
     expect(bbcodeToCarve('[quote=date="2024-01-01" time="12"]q[/quote]')).toContain('2024-01-01 12')
   })
 
+  it('takes a quoted name whole before reading any field', () => {
+    expect(bbcodeToCarve('[quote="Bob user_id=7"]x[/quote]')).toBe('> x\n^ Bob user_id=7\n')
+    expect(bbcodeToCarve('[quote="user_id=3"]x[/quote]')).toBe('> x\n^ user_id=3\n')
+    expect(bbcodeToCarve('[quote="Ann time=1700000000 id=4"]x[/quote]')).toBe('> x\n^ Ann time=1700000000 id=4\n')
+    expect(bbcodeToCarve('[quote="Bob user_id=7" user_id=7]x[/quote]')).toBe('> x\n^ Bob user_id=7\n')
+  })
+
+  it('keeps an explicit date when a Unix time follows it', () => {
+    expect(bbcodeToCarve('[quote="Alice" date="2024-01-01" time=1700000000]x[/quote]')).toBe(
+      '> x\n^ Alice (2024-01-01 1700000000)\n',
+    )
+  })
+
   it('nests without recursing, and drops a stray closer', () => {
     expect(bbcodeToCarve('[quote=A][quote=B]inner[/quote]outer[/quote]')).toContain('> > inner')
     expect(bbcodeToCarve('no open [/quote] here')).toBe('no open  here\n')
