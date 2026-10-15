@@ -10,7 +10,7 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
  * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened`,
  * `destination-denied`, `editorial-comment-flattened`, `carrier-attribute-dropped`,
  * `list-style-dropped`, `list-delimiter-changed`, `table-span-flattened`,
- * `table-header-row-demoted` and `table-header-cell-demoted`
+ * and `table-header-row-demoted`
  * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
  * the conversion-diagnostics channel
@@ -132,7 +132,6 @@ describe('the render-loss code enum', () => {
       'list-delimiter-changed',
       'table-span-flattened',
       'table-header-row-demoted',
-      'table-header-cell-demoted',
     ])
   })
 
@@ -159,7 +158,6 @@ describe('the render-loss code enum', () => {
     for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('|= First | < |\n|= Second | Cell |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('|= First |\n|= Second |\n').losses) seen.add(loss.code)
-    for (const loss of carveToMarkdownWithReport('| A |= B |\n').losses) seen.add(loss.code)
     expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
   })
 

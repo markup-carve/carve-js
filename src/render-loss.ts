@@ -11,7 +11,6 @@ export type RenderLossCode =
   | 'list-delimiter-changed'
   | 'table-span-flattened'
   | 'table-header-row-demoted'
-  | 'table-header-cell-demoted'
 
 export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
@@ -32,7 +31,6 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'list-delimiter-changed'; target: 'markdown'; nodeType: 'block'; delim: '.' | ')'; emittedDelim: '.' | ')' })
   | (RenderLossBase & { code: 'table-span-flattened'; target: 'markdown' | 'plain' | 'ansi'; nodeType: 'block'; colspan?: number; rowspan?: number })
   | (RenderLossBase & { code: 'table-header-row-demoted'; target: 'markdown'; nodeType: 'block' })
-  | (RenderLossBase & { code: 'table-header-cell-demoted'; target: 'markdown'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -220,16 +218,6 @@ export function tableHeaderRowDemoted(opts: RenderLossSinkOptions, row: { pos?: 
     nodeType: 'block',
     message: 'Wrote a later header row as a body row',
     ...(row.pos ? { pos: row.pos } : {}),
-  })
-}
-
-export function tableHeaderCellDemoted(opts: RenderLossSinkOptions, cell: { pos?: Position }): void {
-  opts.onRenderLoss?.({
-    code: 'table-header-cell-demoted',
-    target: 'markdown',
-    nodeType: 'block',
-    message: 'Wrote header cells as body cells',
-    ...(cell.pos ? { pos: cell.pos } : {}),
   })
 }
 
