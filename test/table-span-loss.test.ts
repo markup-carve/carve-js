@@ -133,6 +133,14 @@ describe('table render losses', () => {
     ])
   })
 
+  it('keeps a rowspan over a body cell from making a later row all-header', () => {
+    const result = carveToMarkdownWithReport('| A |= B |\n|^ |= C |\n')
+    expect(result.losses.map(loss => loss.code)).toEqual([
+      'table-span-flattened', 'table-header-cell-demoted', 'table-header-cell-demoted',
+    ])
+    expect(result.value).toContain('| A | B |\n|  | C |')
+  })
+
   it('reports row loss before cell and content losses', () => {
     const ast = {
       type: 'document', children: [{ type: 'table', rows: [
