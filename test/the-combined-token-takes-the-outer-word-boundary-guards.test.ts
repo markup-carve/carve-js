@@ -38,6 +38,19 @@ describe('the combined token takes the outer word-boundary guards', () => {
     expect(html('x /*a*/, b')).toBe('<p>x <strong><em>a</em></strong>, b</p>')
   })
 
+  it.each([
+    ['a_/*y*/ x', '<p>a_/<strong>y</strong>/ x</p>'],
+    ['see snake_/*glob*/ now', '<p>see snake_/<strong>glob</strong>/ now</p>'],
+    ['_a_/*y*/', '<p><u>a</u>/<strong>y</strong>/</p>'],
+  ])('refuses %j after a `_` that opens nothing (carve#3226)', (src, expected) => {
+    expect(html(src)).toBe(expected)
+  })
+
+  it('forms after a `_` that opens a span that closes (PART 9 §9)', () => {
+    expect(html('_/*x*/_')).toBe('<p><u><strong><em>x</em></strong></u></p>')
+    expect(html('_/*x*/ y_')).toBe('<p><u><strong><em>x</em></strong> y</u></p>')
+  })
+
   it('emphasizes intraword through the forced form', () => {
     expect(html('a{/*y*/}b')).toBe('<p>a<em><strong>y</strong></em>b</p>')
     expect(html('a{*/y/*}b')).toBe('<p>a<strong><em>y</em></strong>b</p>')
