@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml, carveToMarkdown, carveToPlainText } from '../src/index.js'
 import { replaceLoneSurrogates } from '../src/well-formed.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // An oracle independent of the code under test (String#isWellFormed is ES2024).
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
@@ -65,14 +66,23 @@ describe('a well-formed string', () => {
 })
 
 describe('replaceLoneSurrogates', () => {
-  it('stays linear on a long run of lone surrogates', () => {
-    const text = '\uD800'.repeat(200_000) + '\uDC00'.repeat(200_000)
-    const started = performance.now()
+  it('pairs only a high surrogate directly followed by a low one', () => {
+    const text = '\uD800'.repeat(3) + '\uDC00'.repeat(3)
     const out = replaceLoneSurrogates(text)
-    expect(performance.now() - started).toBeLessThan(1000)
-    // The one high/low boundary pairs up; everything else is replaced.
     expect(out.length).toBe(text.length)
     expect(wellFormed(out)).toBe(true)
-    expect(out.slice(199_998, 200_002)).toBe('�𐀀�')
+    expect(out).toBe('\uFFFD\uFFFD\uD800\uDC00\uFFFD\uFFFD')
   })
+
+  perfIt('scans a run of lone surrogates linearly', () => {
+    expectScansLinearly((input) => void replaceLoneSurrogates(input), '\uDC00a\uD800', {
+      smallRepeats: 4096, minSampleMs: 100,
+    })
+  }, 90000)
+
+  perfIt('parses a document of lone surrogates linearly', () => {
+    expectScansLinearly((input) => void carveToHtml(input), 'a\uD800 ', {
+      smallRepeats: 1024, minSampleMs: 100,
+    })
+  }, 90000)
 })
