@@ -26,7 +26,7 @@ describe('bold-italic /*...*/ empty and space-initial rejection', () => {
     expect(h('/*x*/')).toBe('<p><strong><em>x</em></strong></p>')
   })
 
-  it('keeps bold-italic mid-word-adjacent', () => {
-    expect(h('x/*y*/z')).toBe('<p>x<strong><em>y</em></strong>z</p>')
+  it('does not open or close the combined token against a word (carve#3217)', () => {
+    expect(h('x/*y*/z')).toBe('<p>x/<strong>y</strong>/z</p>')
   })
 })

@@ -1000,6 +1000,11 @@ const IMPLEMENTED = new Set([
   // ARRIVED WITH THIS PIN BUMP (spec c6ae329e). All four rows are byte-exact
   // on this build before the entry was added (markup-carve/carve#3201).
   'inside-an-unclosed-fence-only-the-innermost-container-s-closer-is-structural',
+  // ARRIVED WITH THIS PIN BUMP (spec 166274ca).
+  'editorial-markup-closes-outside-a-cross-reference-or-a-bracket-run',
+  'an-autolink-is-opaque-to-the-bracket-scan',
+  'a-delimiter-that-is-part-of-a-larger-character-is-text',
+  'the-combined-bold-italic-token-does-not-open-or-close-inside-a-word',
 ])
 
 /**

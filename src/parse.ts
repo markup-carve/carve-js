@@ -9427,7 +9427,9 @@ function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): nu
     for (;;) {
       const close = text.indexOf('*/', offset)
       if (close === -1) break
-      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2)) memo.boldItalic.push(close)
+      // bare_closer('/'): the outer `/` does not close before a letter or digit
+      // (carve#3217), so that `*/` is content and a later one may close.
+      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2) && !/[A-Za-z0-9]/.test(text[close + 2] ?? '')) memo.boldItalic.push(close)
       offset = close + 1
     }
   }
@@ -17354,7 +17356,9 @@ class ParseSession {
     const c = text[i]!
 
     // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
-    if (c === '/' && text[i + 1] === '*') {
+    // bare_opener('/'): the outer `/` does not open after a letter or digit
+    // (carve#3217); `a{/*y*/}b` is the intraword spelling.
+    if (c === '/' && text[i + 1] === '*' && !/[A-Za-z0-9]/.test(text[i - 1] ?? '')) {
       const start = i + 2
       // A bold-italic span requires a non-whitespace char right after `/*`
       // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial

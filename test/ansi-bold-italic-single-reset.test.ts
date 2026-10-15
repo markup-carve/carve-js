@@ -20,8 +20,8 @@ describe('ANSI bold italic emits one reset', () => {
     expect(out).toBe(`${ESC}[1m${ESC}[3mx${RESET}\n`)
   })
 
-  it('emits one reset mid-word too', () => {
-    expect(carveToAnsi('a/*y*/b\n')).toBe(`a${ESC}[1m${ESC}[3my${RESET}b\n`)
+  it('emits one reset between words too', () => {
+    expect(carveToAnsi('a /*y*/ b\n')).toBe(`a ${ESC}[1m${ESC}[3my${RESET} b\n`)
   })
 
   it('still nests when the author wrote the nested spelling', () => {

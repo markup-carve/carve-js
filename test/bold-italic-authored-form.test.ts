@@ -34,9 +34,10 @@ describe('the authored bold-italic spelling survives a format', () => {
     expect(carveToHtml(COMBINED)).toBe(carveToHtml(NESTED))
   })
 
-  it('keeps the mid-word form, which only the combined production accepts', () => {
-    // A bare `/` needs a word boundary, so `a*/y/*b` is not the same document -
-    // this spelling exists precisely because the two-char token skips that guard.
+  it('reads the mid-word spelling as text around a bold span (carve#3217)', () => {
+    // The outer `/` takes the bare word-boundary guards, so the token does not
+    // form and the slashes are text. The source still writes back unchanged.
+    expect(carveToHtml('a/*y*/b\n')).toBe('<p>a/<strong>y</strong>/b</p>')
     expect(carveToCarve('a/*y*/b\n')).toBe('a/*y*/b\n')
   })
 

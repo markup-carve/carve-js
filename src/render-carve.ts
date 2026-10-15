@@ -4574,7 +4574,9 @@ class CarveRenderSession {
           const content = renderSession.renderInlines(inner.children, ctx)
           // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
           // emphasis holding literal stars, so fall back to the nested spelling.
-          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !extendsGrapheme(content, 0) && !extendsGrapheme(nextChar, 0)) {
+          // A letter or digit against the outer `/` keeps the token from
+          // opening or closing (carve#3217); the nested path braces it.
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !extendsGrapheme(content, 0) && !extendsGrapheme(nextChar, 0) && !/[A-Za-z0-9]/.test(prevChar) && !/[A-Za-z0-9]/.test(nextChar)) {
             return withAttrs(`/*${content}*/`)
           }
         }

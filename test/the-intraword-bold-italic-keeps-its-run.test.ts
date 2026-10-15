@@ -6,24 +6,27 @@ import { carveToMarkdown, htmlToAst, renderMarkdown } from '../src/index.js'
  * the core as the character inside the run, so `a ***x***b` looked unable to
  * flank. It is part of the run the reader lexes, not content beside it.
  *
+ * The combined bold-italic token no longer opens or closes against a word
+ * (carve#3217), so the intraword sources use the forced spelling.
+ *
  * Read back with markdown-it-py 3.0.0 (`commonmark` preset, `strikethrough`
  * enabled) and pulldown-cmark 0.13.4.
  */
 describe('the intraword bold-italic keeps its run', () => {
   it.each([
-    ['a /*x*/b', 'a ***x***b'],
-    ['a/*x*/b', 'a***x***b'],
-    ['a /*~x*/b', 'a ***\\~x***b'],
-    ['a /**x*/b', 'a ***\\*x***b'],
+    ['a {*/x/*}b', 'a ***x***b'],
+    ['a{*/x/*}b', 'a***x***b'],
+    ['a {*/~x/*}b', 'a ***\\~x***b'],
+    ['a {*/*x/*}b', 'a ***\\*x***b'],
     ['a {*{/x/}*}b', 'a ***x***b'],
   ])('writes %j as a run', (source, expected) => {
     expect(carveToMarkdown(`${source}\n`)).toBe(`${expected}\n`)
   })
 
   it.each([
-    ['a /*x~*/b', 'a <strong>*x\\~*</strong>b'],
-    ['a /*x!*/b', 'a <strong>*x!*</strong>b'],
-    ['a/*~x*/b', 'a<strong>*\\~x*</strong>b'],
+    ['a {*/x~/*}b', 'a <strong>*x\\~*</strong>b'],
+    ['a {*/x!/*}b', 'a <strong>*x!*</strong>b'],
+    ['a{*/~x/*}b', 'a<strong>*\\~x*</strong>b'],
   ])('keeps the fallback in %j, where the run cannot flank', (source, expected) => {
     // `a ***x\~***b` and `a***\~x***b` come back as literal text in both
     // readers: a run whose inside character is punctuation needs a neighbour
