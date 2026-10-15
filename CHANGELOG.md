@@ -47,7 +47,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Markdown output preserves representable autolinks (#3093).
 
 ### Added
-- `carve migrate --from markdown --directory SOURCE --output TARGET` converts a folder of Markdown files, copies regular assets and writes `migration-report.json`. It skips symlinks, refuses an existing target, colliding outputs or an entry changed during the run, replaces ill-formed bytes as single-file migration does, and leaves no partial target on error (#3166, #3179).
+- `carve migrate --from markdown --directory SOURCE --output TARGET` converts a folder of Markdown files, copies regular assets and writes `migration-report.json`. Local links and images are checked against the output: a `.md` target that resolves is rewritten to `.crv`, and the rest are listed for review. It skips symlinks, refuses an existing target, colliding outputs or an entry changed during the run, replaces ill-formed bytes as single-file migration does, and leaves no partial target on error (#3166, #3179, #3181, #3184).
 - Opt-in table alignment: `carveToCarve` and `carve fmt --align-tables` pad table columns to a common width, measured by Unicode grapheme and display width, and the Prettier plugin takes `carveAlignTables`. Canonical formatting stays the default (#3117).
 
 ### Performance
