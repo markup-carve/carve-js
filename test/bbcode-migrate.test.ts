@@ -54,6 +54,28 @@ describe('bbcodeToCarve — quotes', () => {
     )
   })
 
+  it('strips one pair of quotes around a bare name', () => {
+    expect(bbcodeToCarve('[quote="alice"]q[/quote]')).toBe('> q\n^ alice\n')
+    expect(bbcodeToCarve("[quote='carol']q[/quote]")).toBe('> q\n^ carol\n')
+    expect(bbcodeToCarve('[quote="Jane Doe"]q[/quote]')).toBe('> q\n^ Jane Doe\n')
+  })
+
+  it('reads phpBB post id and Unix time without printing user id', () => {
+    expect(bbcodeToCarve('[quote="alice" post_id=12 time=1700000000 user_id=3]q[/quote]')).toBe(
+      '> q\n^ alice (2023-11-14) #12\n',
+    )
+  })
+
+  it('reads a vBulletin post id after the name', () => {
+    expect(bbcodeToCarve('[QUOTE=bob;123]q[/QUOTE]')).toBe('> q\n^ bob #123\n')
+    expect(bbcodeToCarve('[QUOTE="bob;123"]q[/QUOTE]')).toBe('> q\n^ bob #123\n')
+  })
+
+  it('reads a quoted phpBB timestamp the same as a bare one', () => {
+    expect(bbcodeToCarve('[quote="alice" post_id=12 time="1700000000"]q[/quote]')).toBe('> q\n^ alice (2023-11-14) #12\n')
+    expect(bbcodeToCarve('[quote=date="2024-01-01" time="12"]q[/quote]')).toContain('2024-01-01 12')
+  })
+
   it('nests without recursing, and drops a stray closer', () => {
     expect(bbcodeToCarve('[quote=A][quote=B]inner[/quote]outer[/quote]')).toContain('> > inner')
     expect(bbcodeToCarve('no open [/quote] here')).toBe('no open  here\n')
