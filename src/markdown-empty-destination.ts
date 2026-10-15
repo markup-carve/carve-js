@@ -17,6 +17,8 @@ export interface EmptyDestinationReferences {
   tableInline: Map<string, string>
   sourceLabels: Map<string, string>
   footnotes: Map<string, string>
+  /** Stands for a line break inside a title written at a use, so the break can take the use's quote prefix. */
+  titleWrap?: string
 }
 
 function trimReferenceWhitespace(value: string): string {
@@ -187,8 +189,9 @@ export function extractReferenceDefinitions(
   const taskHtmlLines = new Set<number>()
   const lines = [...inputLines]
   let titleSerial = 0
-  while (inputLines.some(line => line.includes(`CARVEMDTITLEBREAK${titleSerial}Z`))) titleSerial++
+  while (inputLines.some(line => line.includes(`CARVEMDTITLEBREAK${titleSerial}Z`) || line.includes(`CARVEMDTITLEWRAP${titleSerial}Z`))) titleSerial++
   const titleBreakMarker = `CARVEMDTITLEBREAK${titleSerial}Z`
+  const titleWrap = `CARVEMDTITLEWRAP${titleSerial}Z`
   const empty = new Map<string, string>()
   const titled = new Set<string>()
   const defined = new Set<string>()
@@ -438,19 +441,27 @@ export function extractReferenceDefinitions(
       canStart = false
       continue
     }
-    const titleOnNext = /^[ \t]*<>[ \t]*$/.test(definition?.[2] ?? '') && /^[ \t]*["'(]/.test(lines[i + 1] ?? '')
-    if ((canStart || lineDepth > depth) && !opensItem && quotePrefix === '' && definition &&
+    // A paragraph continuation line of this definition, without its quote
+    // prefix. A line with fewer `>` is a lazy continuation (CommonMark 5.1).
+    const continuationAt = (at: number): string | undefined => {
+      const following = lines[at]
+      if (following === undefined) return undefined
+      const followingPrefix = /^((?: {0,3}>[ \t]?)*)/.exec(following)![1]!
+      if ((followingPrefix.match(/>/g) ?? []).length > lineDepth) return undefined
+      const body = following.slice(followingPrefix.length)
+      return body.trim() === '' || opensBlock(body) ? undefined : body
+    }
+    const titleOnNext = /^[ \t]*<>[ \t]*$/.test(definition?.[2] ?? '') && /^[ \t]*["'(]/.test(continuationAt(i + 1) ?? '')
+    if ((canStart || lineDepth > depth) && !opensItem && (quotePrefix === '' || listIndent === 0) && definition &&
       (/^[ \t]*<>[ \t]+["'(]/.test(definition[2]!) || titleOnNext)) {
       // CommonMark lets a definition title wrap. Join the continuation lines so
       // the empty-destination branch below sees one title, and restore the
       // breaks when the title is decoded.
-      let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${lines[i + 1]!.trimStart()}` : definition[2]!
+      let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${continuationAt(i + 1)!.trimStart()}` : definition[2]!
       let end = titleOnNext ? i + 1 : i
       while (!new RegExp(String.raw`^[ \t]*<>[ \t]+${TITLE}`).test(joined)) {
-        const following = lines[end + 1]
-        if (following === undefined || !following.startsWith(quotePrefix)) break
-        const body = following.slice(quotePrefix.length)
-        if (body.trim() === '' || opensBlock(body)) break
+        const body = continuationAt(end + 1)
+        if (body === undefined) break
         joined += titleBreakMarker + body
         end++
       }
@@ -619,7 +630,7 @@ export function extractReferenceDefinitions(
     lines: kept,
     titleBreakMarker,
     sourceLines: keptSource,
-    references: { empty, titled, defined, labels, inline, tableInline, sourceLabels, footnotes },
+    references: { empty, titled, defined, labels, inline, tableInline, sourceLabels, footnotes, titleWrap },
     definitions,
     discardedEmptyDefinitions,
     htmlLines,
@@ -724,10 +735,12 @@ function unwrapEmptyDestination(
   if (image) {
     const titleAttr = hasTitle ? ` title="${escapeHtml(title)}"` : ''
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
-    const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
+    const written = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
+    const text = hasTitle && references.titleWrap !== undefined ? written.replaceAll('\n', references.titleWrap) : written
     return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary, true)
   }
-  const slot = hasTitle ? `( "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")` : '()'
+  const escaped = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const slot = hasTitle ? `( "${references.titleWrap === undefined ? escaped : escaped.replaceAll('\n', references.titleWrap)}")` : '()'
   return `[${label}]${protect(slot)}`
 }
 
