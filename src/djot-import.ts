@@ -1,3 +1,4 @@
+import { tightDjotDefinitionDescriptions } from './djot-tight-definition-descriptions.js'
 import { djotImageEmptyDestinations } from './djot-image-empty-destinations.js'
 import { importedDjotHeadingTargets } from './djot-heading-targets.js'
 import { genericDjotDivClasses } from './djot-div-classes.js'
@@ -339,15 +340,26 @@ function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): s
 }
 
 function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth = 0): string {
-  if (/^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)+:/m.test(source)) {
+  const marker = String.raw`(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))`
+  const head = new RegExp(`^([ \t]*)${marker}[ \t]+`)
+  const heads = new RegExp(`^[ \t]*(?:${marker}[ \t]+)+`)
+  const termTail = new RegExp(`^(?:${marker}[ \t]+)*:(?:[ \t]|$)`)
+  if (new RegExp(`^[ \t]*(?:${marker}[ \t]+)+[:{]`, 'm').test(source)) {
     const lines = source.split('\n'), mask = maskDjotCodeAndDestinations(source), masks = mask.split('\n')
     const boundaries = new Set(djotInlineBoundaries(source, mask, true)), result: string[] = []
     let offset = 0, start = 0
     for (let at = 0; at < lines.length; at++) {
-      const line = lines[at]!, item = /^([ \t]*)(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+(?=(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*:(?:[ \t]|$))/.exec(line)
+      const line = lines[at]!, item = head.exec(line)
       const sourceAt = offset
       offset += line.length + 1
-      if (!item || masks[at]![item[0].length] !== line[item[0].length] || at !== 0 && !boundaries.has(sourceAt)) continue
+      if (!item || masks[at]![item[1]!.length] !== line[item[1]!.length] || at !== 0 && !boundaries.has(sourceAt) && !/^[ \t]*\{loose\}[ \t]*$/.test(lines[at - 1]!)) continue
+      if (!termTail.test(line.slice(item[0].length))) {
+        const prefix = heads.exec(line)?.[0]
+        const attribute = prefix ? readAttributes(line, prefix.length) : undefined
+        const next = lines[at + 1]
+        const markers = prefix ? [...prefix.matchAll(new RegExp(`${marker}[ \t]+`, 'g'))] : []
+        if (markers.length < 2 || !attribute || attribute.end !== line.length || !next || !/^[ \t]*:(?:[ \t]|$)/.test(next) || leadingIndent(next)[0] <= (markers.at(-1)?.index ?? Number.MAX_SAFE_INTEGER)) continue
+      }
       if (at > start) result.push(convertRootDefinitionLists(lines.slice(start, at).join('\n'), emptyTerm))
       const column = leadingIndent(item[0])[0] + item[0].replace(/^[ \t]*/, '').replaceAll('\t', ' ').length
       const nested = [line.slice(item[0].length)]
@@ -376,6 +388,11 @@ function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth
         if (end > index + 1 && end < converted.length && /^[^ \t]/.test(converted[end]!) && !converted[end]!.startsWith('::')) for (let blank = index + 1; blank < end; blank++) removed.add(blank)
       }
       if (removed.size) converted = converted.filter((_line, index) => !removed.has(index))
+      if (end < lines.length && leadingIndent(lines[end]!)[0] === leadingIndent(item[1]!)[0] && /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]/.test(lines[end]!.replace(/^[ \t]*/, ''))) {
+        let tail = converted.length
+        while (tail > 0 && converted[tail - 1]!.replace(/^[ \t]+|[ \t]+$/g, '') === '') tail--
+        if (converted[tail - 1] === ':  ' + emptyTerm) converted.length = tail
+      }
       result.push(item[0] + emptyTerm + '\n' + converted.map(value => ' '.repeat(column) + value).join('\n'))
       at = end - 1
       start = end
@@ -951,9 +968,9 @@ function foldHeadingContinuations(source: string): string {
   const quotePrefix = /^(?:[ \t]*>(?:[ \t]|$))*/
   const trimRight = (text: string): string => trimEndMatchingEdges(text, code => code === 32 || code === 9)
   const result: string[] = []
+  const definitionHosts = new Map<number, number>()
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
-    if (!line.includes('#')) { result.push(line); continue }
     let at = 0, depth = 0, column = 0
     while (true) {
       container.lastIndex = at
@@ -970,12 +987,18 @@ function foldHeadingContinuations(source: string): string {
         }
       }
     }
+    for (const held of definitionHosts.keys()) if (held > depth) definitionHosts.delete(held)
+    if (depth > 0 && column > 0 && /^:(?:[ \t]|$)/.test(line.slice(at)) && masked[i]![at] === ':') definitionHosts.set(depth, column)
+    else if (column > 0) definitionHosts.delete(depth)
+    if (!line.includes('#')) { result.push(line); continue }
     const heading = /^([ \t]*)(#{1,6})(?:[ \t]+\S|[ \t]*$)/.exec(line.slice(at))
     if (!heading || masked[i]![at + heading[1]!.length] !== '#') {
       result.push(line)
       continue
     }
-    const quoteHeading = depth > 0 && column === 0
+    const definitionColumn = definitionHosts.get(depth)
+    const inDefinitionHost = definitionColumn !== undefined && heading[1]!.length >= definitionColumn
+    const quoteHeading = depth > 0 && column === 0 && !inDefinitionHost
     const firstLine = quoteHeading ? line.slice(0, at) + line.slice(at + heading[1]!.length) : line
     if (!quoteHeading) column += heading[1]!.length
     const marker = new RegExp(`^${heading[2]}[ \\t]+`)
@@ -1338,7 +1361,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     .replaceAll(emptyNote, '%%%%').replaceAll(imageParagraph, '{%%}')
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
-  const containers = genericDjotDivClasses(converted, djotContentStart)
+  const containers = tightDjotDefinitionDescriptions(genericDjotDivClasses(converted, djotContentStart))
   return strippedDefinitions.restore(frontmatter === '' ? containers : `${frontmatter}${separator}${containers}`)
 }
 
