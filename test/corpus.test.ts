@@ -1029,6 +1029,10 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['598-editorial-markup-closes-outside-a-cross-reference-or-a-bracket-run-5', {
+    reason: 'PART 9 E2a (ruled 2026-10-15): a cross-reference is atomic, so the `~>` ending it is no arrow',
+    html: '<p><s>a &lt;/#x~&gt;y&gt; b</s></p>',
+  }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
