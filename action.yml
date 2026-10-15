@@ -41,10 +41,9 @@ inputs:
     default: 'false'
   portable:
     description: >
-      Also flag whitespace that parses differently under Djot (a `>` blockquote
-      marker with no space after it). Advisory: the document is correct in
-      Carve either way, and this only matters to an author who wants the
-      source to stay valid Djot.
+      Deprecated. Passed through as `carve lint --portable` for older `version`
+      pins; current releases always check blockquote marker spacing and accept
+      the flag as a no-op. For a Djot portability check run `carve portability`.
     required: false
     default: 'false'
   version:
@@ -90,26 +89,29 @@ runs:
 
         # Both checks RUN even when the first fails, so one push shows every
         # problem rather than the formatting one, then the lint one tomorrow.
+        # The highest exit wins: 2 (could not run) must not read as 1 (problems).
         status=0
+        record() { if [ "$1" -gt "$status" ]; then status=$1; fi; }
+
+        if [ "$CARVE_PORTABLE" = "true" ]; then
+          echo "::warning::carve: the 'portable' input is deprecated; current releases always check blockquote marker spacing"
+        fi
 
         if [ "$CARVE_FMT" = "true" ]; then
-          carve fmt --check "${documents[@]}" || status=1
+          rc=0; carve fmt --check "${documents[@]}" || rc=$?; record "$rc"
         fi
 
         if [ "$CARVE_LINT" = "true" ]; then
-          if [ "$CARVE_FROM_DJOT" = "true" ] && [ "$CARVE_PORTABLE" = "true" ]; then
-            carve lint --from-djot --portable "${documents[@]}" || status=1
-          elif [ "$CARVE_FROM_DJOT" = "true" ]; then
-            carve lint --from-djot "${documents[@]}" || status=1
-          elif [ "$CARVE_PORTABLE" = "true" ]; then
-            carve lint --portable "${documents[@]}" || status=1
-          else
-            carve lint "${documents[@]}" || status=1
-          fi
+          lint=(carve lint)
+          if [ "$CARVE_FROM_DJOT" = "true" ]; then lint+=(--from-djot); fi
+          if [ "$CARVE_PORTABLE" = "true" ]; then lint+=(--portable); fi
+          rc=0; "${lint[@]}" "${documents[@]}" || rc=$?; record "$rc"
         fi
 
-        if [ "$status" -ne 0 ]; then
+        if [ "$status" -eq 1 ]; then
           echo "carve: run 'carve fmt --write' locally, or install the pre-commit hook"
+        elif [ "$status" -gt 1 ]; then
+          echo "carve: a check could not run (exit $status); see the error above"
         fi
 
         exit "$status"

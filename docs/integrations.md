@@ -10,7 +10,7 @@ what canonical form is.
 
 
 ```yaml
-- uses: markup-carve/carve-js@0.1.12
+- uses: markup-carve/carve-js@0.1.11
   with:
     files: 'docs/**/*.crv'   # default: **/*.crv
 ```
@@ -20,7 +20,9 @@ even when the first fails, so one push shows every problem rather than the
 formatting one today and the lint one tomorrow. A repository with no Carve
 documents yet passes rather than failing on an empty glob.
 
-Inputs: `files`, `fmt`, `lint`, `from-djot`, `portable`, `version`.
+Inputs: `files`, `fmt`, `lint`, `from-djot`, `portable` (deprecated), `version`.
+From the release after 0.1.11, a run exits 1 when a document has problems and 2
+when a check could not run; 0.1.11 reports both as 1.
 
 ## pre-commit
 

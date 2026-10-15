@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -85,14 +85,13 @@ describe('GitHub Action', () => {
     const script = action.runs.steps.map((s) => s.run ?? '').join('\n')
     const help = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
 
-    for (const invocation of [
-      'carve fmt --check',
-      'carve lint --from-djot',
-      'carve lint --portable',
-      'carve lint',
-    ]) {
+    for (const [invocation, subcommand, flag] of [
+      ['carve fmt --check', 'fmt', '--check'],
+      ['lint=(carve lint)', 'lint', undefined],
+      ['lint+=(--from-djot)', 'lint', '--from-djot'],
+      ['lint+=(--portable)', 'lint', '--portable'],
+    ] as const) {
       expect(script).toContain(invocation)
-      const [, subcommand, flag] = invocation.split(' ')
       expect(help).toContain(`'${subcommand}'`)
       if (flag) expect(help).toContain(flag.replace(/^--/, ''))
     }
@@ -110,7 +109,31 @@ describe('GitHub Action', () => {
     // stop at the formatting failure and hide the lint one until tomorrow.
     const script = action.runs.steps.map((s) => s.run ?? '').join('\n')
 
-    expect(script).toContain('|| status=1')
+    expect(script).toContain('|| rc=$?; record "$rc"')
+  })
+
+  it.runIf(process.platform !== 'win32')('keeps exit 2 apart from exit 1 and runs lint after a failed fmt', () => {
+    const step = action.runs.steps.find((s) => s.run?.includes('record'))!.run!
+    const dir = mkdtempSync(join(tmpdir(), 'carve-action-'))
+    try {
+      mkdirSync(join(dir, 'bin'))
+      writeFileSync(join(dir, 'a.crv'), '')
+      writeFileSync(join(dir, 'bin', 'carve'), '#!/bin/sh\necho "$@" >> calls\n[ "$1" = fmt ] && exit "$FMT_RC"\nexit "$LINT_RC"\n', { mode: 0o755 })
+      const run = (fmt: number, lint: number): number => {
+        const result = spawnSync('bash', ['-c', step], {
+          cwd: dir,
+          env: { PATH: `${join(dir, 'bin')}:${process.env.PATH}`, CARVE_FILES: '*.crv', CARVE_FMT: 'true', CARVE_LINT: 'true', CARVE_FROM_DJOT: 'false', CARVE_PORTABLE: 'false', FMT_RC: String(fmt), LINT_RC: String(lint) },
+        })
+        return result.status ?? -1
+      }
+      expect(run(0, 0)).toBe(0)
+      expect(run(1, 0)).toBe(1)
+      expect(run(0, 2)).toBe(2)
+      expect(run(2, 1)).toBe(2)
+      expect(readFileSync(join(dir, 'calls'), 'utf8').match(/^lint /gm)).toHaveLength(4)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
