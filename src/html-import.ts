@@ -22,6 +22,7 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
+import { convertedIds, preserveHtmlTextCrossrefs } from './imported-crossrefs.js'
 import { EXTENDER_LEADING_SPAN_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
@@ -7036,7 +7037,11 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   importer.reportSerializationLosses(value)
   for (;;) {
     try {
-      const carve = renderCarveForHtmlImport(value)
+      let carve = renderCarveForHtmlImport(value)
+      if (carve.includes('</\\#')) {
+        preserveHtmlTextCrossrefs(value, convertedIds(carve))
+        carve = renderCarveForHtmlImport(value)
+      }
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {
       if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
