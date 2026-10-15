@@ -1,6 +1,7 @@
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table-display-width.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
 import type {
@@ -1247,7 +1248,8 @@ function neighborsForceBraces(delim: string, prevChar: string, nextChar: string)
     /[A-Za-z0-9_]/.test(prevChar) ||
     prevChar === delim ||
     (prevChar === '/' && (delim === '/' || delim === '_')) ||
-    /[A-Za-z0-9_]/.test(nextChar)
+    /[A-Za-z0-9_]/.test(nextChar) ||
+    extendsGrapheme(nextChar, 0)
   )
 }
 
@@ -1271,7 +1273,7 @@ function renderEmphasis(
     // also puts the closer at the start of the next line (carve-js#1786).
     /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
     // A leading `*` would form the combined bold-italic opener.
-    (delim === '/' && content.startsWith('*'))
+    (delim === '/' && content.startsWith('*') && !extendsGrapheme(content, 1))
   return needsForced
     ? `{${delim}${content}${closeDelim}}`
     : `${delim}${content}${closeDelim}`
@@ -2448,7 +2450,8 @@ function firstBoundary(node: InlineNode | undefined): string {
   if (!node) return ''
   switch (node.type) {
     case 'text':
-      return node.value[0] ?? ''
+      // A whole code point, so an astral grapheme extender is seen (CARVE-P3-025).
+      return node.value.slice(0, (node.value.codePointAt(0) ?? 0) > 0xffff ? 2 : 1)
     // The CHARACTER, not the backslash that precedes it in the output. A text
     // node holding `_b_` and an escaped-text node holding `_` describe the same
     // neighbour, and the writer has to brace an adjacent delimiter the same way
@@ -4510,6 +4513,10 @@ class CarveRenderSession {
     }
     const emphasisOf = (delim: string, children: InlineNode[]): string => {
       const content = marked(children)
+      // Bare or braced, the opener is then part of a larger character (CARVE-P3-025).
+      if (extendsGrapheme(content, 0)) {
+        throw new SourceUnspellableError(node.type, `a ${node.type} whose content starts with a combining mark, a variation selector or a joiner has no Carve source spelling`, node)
+      }
       // An empty code span is written as an unclosed run, which swallows a bare
       // closer; only the braced one ends it.
       const last = children[children.length - 1]
@@ -4563,7 +4570,7 @@ class CarveRenderSession {
           const content = renderSession.renderInlines(inner.children, ctx)
           // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
           // emphasis holding literal stars, so fall back to the nested spelling.
-          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !extendsGrapheme(content, 0) && !extendsGrapheme(nextChar, 0)) {
             return withAttrs(`/*${content}*/`)
           }
         }

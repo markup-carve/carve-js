@@ -86,6 +86,7 @@ import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp, trimEndSpaceTab, trimEndNonNbsp } from './trim-non-nbsp.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 import { ownValue, setOwn } from './own-property.js'
 import { codeContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
@@ -9082,6 +9083,13 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
 
 const PAIR_MARKERS = '/*_^,~=+-'
 
+// A forced opener of the five bare delimiters needs a whole delimiter too; `{^`
+// and `{,` are outside the clause.
+function splitForcedOpener(text: string, open: number): boolean {
+  const marker = text[open + 1]
+  return marker !== undefined && '/*_~='.includes(marker) && extendsGrapheme(text, open + 2)
+}
+
 interface InlinePairView {
   tables: Array<Int32Array | undefined>
   attributeTails: Map<number, number>
@@ -9419,7 +9427,7 @@ function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): nu
     for (;;) {
       const close = text.indexOf('*/', offset)
       if (close === -1) break
-      if (close > 0 && !isCarveWhitespace(text[close - 1])) memo.boldItalic.push(close)
+      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2)) memo.boldItalic.push(close)
       offset = close + 1
     }
   }
@@ -15904,7 +15912,7 @@ class ParseSession {
       for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
       for (let at = 0; at < text.length; at++) {
         const marker = text[at + 1]
-        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined) continue
+        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitForcedOpener(text, at)) continue
         const close = this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
       }
@@ -16015,14 +16023,14 @@ class ParseSession {
         const close = brackets?.(at)
         if (close !== undefined) bracketEnds.add(close)
       }
-      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0')) openerMarks.add(++at)
+      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitForcedOpener(text, at)) openerMarks.add(++at)
     }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
       const nextId = next === undefined ? -1 : PAIR_MARKERS.indexOf(next)
       // Where the pair opening here ends, if it closes at all.
-      if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined) {
+      if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined && !splitForcedOpener(text, j)) {
         const stop = tables[nextId]![j + 2]!
         ends[j] = stop === -1 ? -1 : stop + 2
       }
@@ -16047,7 +16055,7 @@ class ParseSession {
           else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
           else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
           else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
-          else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next))) stop = j
+          else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, j + 1)) stop = j
           else stop = table[j + 1]!
           table[j] = stop
         }
@@ -16056,6 +16064,7 @@ class ParseSession {
         const canOpenBare = bareTables[bareId] !== undefined && next !== undefined && !isCarveWhitespace(next)
           && next !== ch && before !== ch && (!before || !/[A-Za-z0-9_]/.test(before))
           && (ch !== '=' || next !== '>') && ((ch !== '/' && ch !== '_') || before !== '/')
+          && !extendsGrapheme(text, j + 1)
         bareClose = canOpenBare ? bareTables[bareId]![j + 1]! : -1
         bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
         if (bareTail !== undefined) barePairs.set(j, { close: bareClose, end: bareTail })
@@ -17238,7 +17247,7 @@ class ParseSession {
         // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
         // bare delimiter, but with no word-boundary condition.
         const delim = text[i + 1]
-        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined
+        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !splitForcedOpener(text, i)
           ? this.bracedPairEnd(text, i, `${delim}}`)
           : -1
         if (forced !== -1 && forced <= inlineEnd) {
@@ -17345,7 +17354,7 @@ class ParseSession {
       // matching carve-php parseBoldItalic.
       // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
       // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
-      if (start < text.length && !isCarveWhitespace(text[start])) {
+      if (start < text.length && !isCarveWhitespace(text[start]) && !extendsGrapheme(text, start)) {
         const close = combinedSpanCloser(text, start, noClose)
         if (close !== undefined && close + 2 <= end) {
           const inner = text.slice(start, close)
@@ -17389,6 +17398,7 @@ class ParseSession {
         // Opener must be followed by a non-whitespace character (CARVE-P3-013;
         // a tab counts, PART 7).
         if (!after || isCarveWhitespace(after)) continue
+        if (extendsGrapheme(text, i + 1)) continue
         // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
         // same delimiter (before OR after) does not open, so a doubled
         // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
@@ -17823,6 +17833,7 @@ class ParseSession {
         // Word-boundary closer (spec §9): no bare delimiter closes when followed
         // by an alphanumeric. Applies to every delimiter, not just / and _.
         if (next && /[A-Za-z0-9]/.test(next)) continue
+        if (extendsGrapheme(text, j + 1)) continue
         return j
       }
     }
@@ -17836,7 +17847,7 @@ class ParseSession {
     // The pairs whose closer the parser searches for across the block are asked
     // the same question here, so the scan hides the region the parser builds.
     const marker = text[open + 1]
-    if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
+    if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-') && !splitForcedOpener(text, open)) {
       const stop = this.pairCloser(text, open + 2, marker)
       if (stop !== -1) return this.pairAttributeEnd(text, stop + 2) - 1
     }
