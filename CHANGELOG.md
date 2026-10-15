@@ -12,8 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.12] - 2026-10-15
 
 ### Breaking
-- Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal (#3112, markup-carve/carve#2878).
-- AST envelopes carry contract version `2.0`, so 0.1.11 readers refuse trees written by this release (#3112).
+- Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal. AST envelopes carry contract version `2.0`, so 0.1.11 readers refuse trees written by this release (#3112, markup-carve/carve#2878).
 - Markdown, plain text and ANSI rendering report `table-span-flattened` for each merged table cell, and Markdown reports `table-header-row-demoted` for each header row after the first. A `--strict-losses` build with merged cells now fails; allow the codes with `--allow-loss` where the flattening is acceptable (#3119, markup-carve/carve#3202).
 
 ### Fixes
