@@ -4511,12 +4511,16 @@ class CarveRenderSession {
       }
       return content
     }
-    const emphasisOf = (delim: string, children: InlineNode[]): string => {
+    const spelledContent = (children: InlineNode[]): string => {
       const content = marked(children)
       // Bare or braced, the opener is then part of a larger character (CARVE-P3-025).
       if (extendsGrapheme(content, 0)) {
         throw new SourceUnspellableError(node.type, `a ${node.type} whose content starts with a combining mark, a variation selector or a joiner has no Carve source spelling`, node)
       }
+      return content
+    }
+    const emphasisOf = (delim: string, children: InlineNode[]): string => {
+      const content = spelledContent(children)
       // An empty code span is written as an unclosed run, which swallows a bare
       // closer; only the braced one ends it.
       const last = children[children.length - 1]
@@ -4583,9 +4587,9 @@ class CarveRenderSession {
       case 'strike':
         return withAttrs(emphasisOf('~', node.children))
       case 'superscript':
-        return withAttrs(renderForcedEmphasis('^', marked(node.children)))
+        return withAttrs(renderForcedEmphasis('^', spelledContent(node.children)))
       case 'subscript':
-        return withAttrs(renderForcedEmphasis(',', marked(node.children)))
+        return withAttrs(renderForcedEmphasis(',', spelledContent(node.children)))
       case 'highlight':
         return withAttrs(emphasisOf('=', node.children))
       case 'code':
