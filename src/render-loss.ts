@@ -9,6 +9,8 @@ export type RenderLossCode =
   | 'carrier-attribute-dropped'
   | 'list-style-dropped'
   | 'list-delimiter-changed'
+  | 'table-span-flattened'
+  | 'table-header-row-demoted'
 
 export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
@@ -27,6 +29,8 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
   | (RenderLossBase & { code: 'list-style-dropped'; target: 'markdown'; nodeType: 'block'; style: ListStyle })
   | (RenderLossBase & { code: 'list-delimiter-changed'; target: 'markdown'; nodeType: 'block'; delim: '.' | ')'; emittedDelim: '.' | ')' })
+  | (RenderLossBase & { code: 'table-span-flattened'; target: 'markdown' | 'plain' | 'ansi'; nodeType: 'block'; colspan?: number; rowspan?: number })
+  | (RenderLossBase & { code: 'table-header-row-demoted'; target: 'markdown'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -187,6 +191,33 @@ export function listDelimiterChanged(
     emittedDelim: emitted,
     message: `Changed an ordered list delimiter from ${authored} to ${emitted} while rendering markdown`,
     ...(node.pos ? { pos: node.pos } : {}),
+  })
+}
+
+export function tableSpanFlattened(
+  opts: RenderLossSinkOptions,
+  cell: { colspan: number; rowspan: number; pos?: Position | undefined },
+  target: 'markdown' | 'plain' | 'ansi',
+): void {
+  if (cell.colspan <= 1 && cell.rowspan <= 1) return
+  opts.onRenderLoss?.({
+    code: 'table-span-flattened',
+    target,
+    nodeType: 'block',
+    message: 'Flattened a spanning table cell into separate cells',
+    ...(cell.colspan > 1 ? { colspan: cell.colspan } : {}),
+    ...(cell.rowspan > 1 ? { rowspan: cell.rowspan } : {}),
+    ...(cell.pos ? { pos: cell.pos } : {}),
+  })
+}
+
+export function tableHeaderRowDemoted(opts: RenderLossSinkOptions, row: { pos?: Position }): void {
+  opts.onRenderLoss?.({
+    code: 'table-header-row-demoted',
+    target: 'markdown',
+    nodeType: 'block',
+    message: 'Wrote a later header row as a body row',
+    ...(row.pos ? { pos: row.pos } : {}),
   })
 }
 
