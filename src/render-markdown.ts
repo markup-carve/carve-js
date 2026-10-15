@@ -901,6 +901,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   const spanGrid = resolveTableSpans(node.rows)
+  const hasHeaderRow = node.rows.some((row) => row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header))
   for (const [rowIndex, row] of node.rows.entries()) {
     const isHeader = row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)
     // Only the first row can become Markdown's header. A later header row
@@ -919,25 +920,20 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
       )
     })
     const rendered = `| ${cells.join(' | ')} |`
-    // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
-    if (isHeader && rowIndex === 0) {
+    if (isHeader) {
       row.cells.forEach((cell, i) => {
-        // The first row supplies Markdown's column alignment.
         if (cell.align !== undefined) aligns[i] = cell.align
       })
+    }
+    // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
+    if (isHeader && rowIndex === 0) {
       header = rendered
       headerColumns = cells.length
     } else {
       rows.push(rendered)
-      // Keep the effective column alignment from later all-header rows.
-      if (isHeader && header !== undefined) {
-        row.cells.forEach((cell, i) => {
-          if (cell.align !== undefined) aligns[i] = cell.align
-        })
-      }
       // A headerless table still declares its columns somewhere, so fall back to
       // the first row that carries an alignment.
-      if (header === undefined) {
+      if (!hasHeaderRow) {
         row.cells.forEach((cell, i) => {
           if (aligns[i] === undefined) aligns[i] = cell.align
         })
