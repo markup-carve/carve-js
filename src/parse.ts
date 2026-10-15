@@ -17354,9 +17354,9 @@ class ParseSession {
     const c = text[i]!
 
     // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
-    // bare_opener('/'): the outer `/` does not open after a letter or digit
-    // (carve#3217); `a{/*y*/}b` is the intraword spelling.
-    if (c === '/' && text[i + 1] === '*' && !/[A-Za-z0-9]/.test(text[i - 1] ?? '')) {
+    // bare_opener('/'): the outer `/` does not open after a word character
+    // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
+    if (c === '/' && text[i + 1] === '*' && !/[A-Za-z0-9_/]/.test(text[i - 1] ?? '')) {
       const start = i + 2
       // A bold-italic span requires a non-whitespace char right after `/*`
       // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
