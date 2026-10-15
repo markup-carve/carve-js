@@ -667,6 +667,16 @@ function decodeHtmlEntities(s: string, headingHeadDrops = true): string {
  */
 const RE_LINE_INITIAL_DEFINITION = /^\*?(?=\[[^\]\n]*\]:)/
 
+/**
+ * CommonMark needs a destination, so `[foo]:` alone is paragraph text; Carve
+ * reads the same line as an empty definition and drops it from the output.
+ */
+const RE_EMPTY_DEFINITION_SHAPE = /^((?:[ \t]*>)*[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)?)\[(?=[^^\]\n][^\]\n]*\]:[ \t]*(?:\n|$))/
+
+function escapeEmptyDefinitionShape(text: string): string {
+  return text.replace(RE_EMPTY_DEFINITION_SHAPE, '$1\\[')
+}
+
 const NATIVE_INLINE_HTML_TAGS = new Set([
   'mark',
   'u',
@@ -7439,6 +7449,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
       quoteCol = contentCol
       if (run.blank) sourceBlanks.add(out.length)
+      if (run.lines.length > 0) run.lines[0] = escapeEmptyDefinitionShape(run.lines[0]!)
       out.push(...run.lines)
       i = run.end - 1
       prevType = 'block_quote'
@@ -7448,6 +7459,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       reportOrderedTask(line, sourceLine(i))
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
+      if (written.lines.length > 0) written.lines[0] = escapeEmptyDefinitionShape(written.lines[0]!)
       if (footnote !== null) {
         const marker = convertInline(
           footnote[1]!,
@@ -7581,7 +7593,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    const converted = convertInline(body, dialect, false, false, undefined, true, false, true, undefined, true, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body), false, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
+    const converted = escapeEmptyDefinitionShape(convertInline(body, dialect, false, false, undefined, true, false, true, undefined, true, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body), false, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body)))
     // A pipe row GFM did NOT read as a table row stays text. Carve needs no
     // delimiter row, so passing the line through was itself the conversion and
     // the migrated document grew a table the author never saw
