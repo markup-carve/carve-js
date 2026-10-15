@@ -119,6 +119,20 @@ describe('table render losses', () => {
     expect(result.losses[0]?.pos?.startColumn).not.toBe(result.losses[1]?.pos?.startColumn)
   })
 
+  it('reports span and header-cell losses in cell order', () => {
+    const ast = { type: 'document', children: [{ type: 'table', rows: [{
+      type: 'table_row', cells: [
+        { type: 'table_cell', header: false, children: [{ type: 'text', value: 'A' }] },
+        { type: 'table_cell', header: false, span: 'colspan', children: [] },
+        { type: 'table_cell', header: true, children: [{ type: 'text', value: 'H' }] },
+        { type: 'table_cell', header: false, children: [] },
+      ],
+    }] }] } as Parameters<typeof renderMarkdownWithReport>[0]
+    expect(renderMarkdownWithReport(ast).losses.map(loss => loss.code)).toEqual([
+      'table-span-flattened', 'table-header-cell-demoted',
+    ])
+  })
+
   it('reports row loss before cell and content losses', () => {
     const ast = {
       type: 'document', children: [{ type: 'table', rows: [
