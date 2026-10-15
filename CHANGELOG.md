@@ -9,6 +9,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+- An unclosed code fence after a `%%` comment line (on its own, or as the only content of a quote or list item) inside a `:::` container ends at that container's closer instead of running to the end of the document, and one under an open quote or list item paragraph in a container stays paragraph text, as it does at the top level.
+
 ## [0.1.12] - 2026-10-15
 
 ### Breaking

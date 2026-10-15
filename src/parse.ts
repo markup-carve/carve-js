@@ -3542,7 +3542,8 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       paragraphOpen = false
       continue
     }
-    paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
+    paragraphOpen = !isBlankLine(text) && !RE_COMMENT_LINE.test(text) && !interruptsParagraph &&
+      (paragraphOpen || !lineOpensBlock(text) || opensParagraphInBlock(text))
   }
 
   for (const unclosed of stack) index.set(base + unclosed.lineIndex, base + lexer.pos)
@@ -3550,6 +3551,20 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, unclosed))
   }
   return lines
+}
+
+// A quote or list line whose content is paragraph text leaves that paragraph
+// open, so an unclosed fence on the next line cannot interrupt it (§10 I4).
+function opensParagraphInBlock(text: string): boolean {
+  const quote = RE_BLOCKQUOTE.exec(text)
+  if (quote) {
+    const content = quote[1]
+    return content !== undefined && !isBlankLine(content) && !RE_COMMENT_LINE.test(content) &&
+      (!lineOpensBlock(content) || opensParagraphInBlock(content))
+  }
+  const content = (RE_TASK.exec(text)?.[3] ?? RE_UNORDERED.exec(text)?.[2] ?? RE_ORDERED.exec(text)?.[4])
+  return content !== undefined && !RE_COMMENT_LINE.test(content) &&
+    (!lineOpensBlock(content) || opensParagraphInBlock(content))
 }
 
 function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
