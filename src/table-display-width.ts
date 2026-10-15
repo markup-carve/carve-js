@@ -39,7 +39,34 @@ function characters(text: string): Character[] {
   })
 }
 
-function breakBefore(chars: Character[], index: number): boolean {
+/**
+ * Context each boundary rule reads from the characters before it, carried
+ * forward once so no rule rescans the text (carve-js#3143).
+ */
+interface Context {
+  /** Regional indicators ending at this character. */
+  riRun: number
+  /** GB9c: the last character that is not a non-linker Indic extender is a linker. */
+  linkerBefore: boolean
+  /** GB11: the last character that is not Extend is Extended_Pictographic. */
+  pictBefore: boolean
+}
+
+function contexts(chars: Character[]): Context[] {
+  const out: Context[] = []
+  let riRun = 0
+  let linkerBefore = false
+  let pictBefore = false
+  for (const char of chars) {
+    riRun = char.gcb === RI ? riRun + 1 : 0
+    if (!(char.indicExtend && !char.linker)) linkerBefore = char.linker
+    if (char.gcb !== EXTEND) pictBefore = char.pict
+    out.push({ riRun, linkerBefore, pictBefore })
+  }
+  return out
+}
+
+function breakBefore(chars: Character[], context: Context[], index: number): boolean {
   const left = chars[index - 1]!
   const right = chars[index]!
   const a = left.gcb
@@ -52,21 +79,9 @@ function breakBefore(chars: Character[], index: number): boolean {
   if ((a === LVT || a === T) && b === T) return false // GB8
   if (b === EXTEND || b === ZWJ || b === SPACING_MARK) return false // GB9, GB9a
   if (a === PREPEND) return false // GB9b
-  if (right.consonant) {
-    let j = index - 1
-    while (j >= 0 && chars[j]!.indicExtend && !chars[j]!.linker) j--
-    if (j >= 0 && chars[j]!.linker) return false // GB9c
-  }
-  if (right.pict && a === ZWJ) {
-    let j = index - 2
-    while (j >= 0 && chars[j]!.gcb === EXTEND) j--
-    if (j >= 0 && chars[j]!.pict) return false // GB11
-  }
-  if (a === RI && b === RI) {
-    let count = 0
-    for (let j = index - 1; j >= 0 && chars[j]!.gcb === RI; j--) count++
-    if (count % 2 === 1) return false // GB12, GB13
-  }
+  if (right.consonant && context[index - 1]!.linkerBefore) return false // GB9c
+  if (right.pict && a === ZWJ && index >= 2 && context[index - 2]!.pictBefore) return false // GB11
+  if (a === RI && b === RI && context[index - 1]!.riRun % 2 === 1) return false // GB12, GB13
   return true // GB999
 }
 
@@ -74,10 +89,11 @@ function breakBefore(chars: Character[], index: number): boolean {
 export function tableGraphemeClusters(text: string): string[] {
   const chars = characters(text)
   if (chars.length === 0) return []
+  const context = contexts(chars)
   const clusters: string[] = []
   let current = ''
   for (let i = 0; i < chars.length; i++) {
-    if (i > 0 && breakBefore(chars, i)) {
+    if (i > 0 && breakBefore(chars, context, i)) {
       clusters.push(current)
       current = ''
     }
