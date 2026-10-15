@@ -7700,6 +7700,13 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       ? `${frontmatter.join('\n')}\n`
       : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
   output = output.replaceAll(removed.titleBreakMarker, '\n  ')
+  const titleWrap = removed.references.titleWrap
+  if (titleWrap !== undefined && output.includes(titleWrap)) {
+    // A wrapped title continues inside the quote that holds its use.
+    output = output.split('\n').map(line => line.includes(titleWrap)
+      ? line.replaceAll(titleWrap, `\n${/^(?:[ \t]*>[ \t]?)*/.exec(line)![0].replace(/[ \t]*$/, '').replace(/>$/, '> ')}`)
+      : line).join('\n')
+  }
   output = output.replaceAll(footChainMarker, '')
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
