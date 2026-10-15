@@ -9610,6 +9610,11 @@ class ParseSession {
     // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
     const strippedBom = source.charCodeAt(0) === 0xfeff
     if (strippedBom) source = source.slice(1)
+    // Replace unpaired surrogate code units before the first line is read. A
+    // valid pair remains one supplementary character.
+    if (/[\uD800-\uDFFF]/.test(source)) {
+      source = source.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
+    }
     // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
     // byte never reaches output (decided cross-impl behavior; WHATWG-style).
     if (source.includes('\0')) source = source.replace(/\0/g, '�')
