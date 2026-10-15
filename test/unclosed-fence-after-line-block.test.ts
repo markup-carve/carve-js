@@ -95,3 +95,21 @@ it.each([
     '  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>\n'
   expect(carveToHtml(source).trim()).toBe(expected.trim())
 })
+
+// A block-attribute line leaves no paragraph open either, bare or as the only
+// content of a quote or item (spec corpus 606).
+it.each([
+  ['{#x}', '  <pre id="x"><code>code\n::::\n</code></pre>\n'],
+  ['> {#x}', '  <blockquote>\n\n  </blockquote>\n  <pre><code>code\n::::\n</code></pre>\n'],
+  ['- {#x}', '  <ul>\n    <li></li>\n  </ul>\n  <pre><code>code\n::::\n</code></pre>\n'],
+])('ends an unclosed fence after the attribute line %s at the innermost closer', (first, block) => {
+  const source = '::: note\n' + first + '\n```\ncode\n::::\n:::\nafter *b*\n'
+  const expected = '<aside class="admonition note" aria-label="Note">\n' + block +
+    '</aside>\n<p>after <strong>b</strong></p>\n'
+  expect(carveToHtml(source).trim()).toBe(expected.trim())
+})
+
+it('ends an unclosed fence after an attribute line at a nested container closer', () => {
+  const source = '::: outer\n:::: inner\n{.c}\n```\ncode\n:::\n::::\n:::\nafter *b*\n'
+  expect(carveToHtml(source).trim()).toBe('<div class="outer">\n  <div class="inner">\n    <pre class="c"><code>code\n:::\n</code></pre>\n  </div>\n</div>\n<p>after <strong>b</strong></p>')
+})

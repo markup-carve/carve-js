@@ -3542,7 +3542,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       paragraphOpen = false
       continue
     }
-    paragraphOpen = !isBlankLine(text) && !RE_COMMENT_LINE.test(text) && !interruptsParagraph &&
+    paragraphOpen = !isBlankLine(text) && !leavesNoParagraph(text) && !interruptsParagraph &&
       (paragraphOpen || !lineOpensBlock(text) || opensParagraphInBlock(text))
   }
 
@@ -3553,17 +3553,22 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   return lines
 }
 
+// A comment line and a block-attribute line are not paragraph text.
+function leavesNoParagraph(text: string): boolean {
+  return RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text.trimEnd())
+}
+
 // A quote or list line whose content is paragraph text leaves that paragraph
 // open, so an unclosed fence on the next line cannot interrupt it (§10 I4).
 function opensParagraphInBlock(text: string): boolean {
   const quote = RE_BLOCKQUOTE.exec(text)
   if (quote) {
     const content = quote[1]
-    return content !== undefined && !isBlankLine(content) && !RE_COMMENT_LINE.test(content) &&
+    return content !== undefined && !isBlankLine(content) && !leavesNoParagraph(content) &&
       (!lineOpensBlock(content) || opensParagraphInBlock(content))
   }
   const content = (RE_TASK.exec(text)?.[3] ?? RE_UNORDERED.exec(text)?.[2] ?? RE_ORDERED.exec(text)?.[4])
-  return content !== undefined && !RE_COMMENT_LINE.test(content) &&
+  return content !== undefined && !leavesNoParagraph(content) &&
     (!lineOpensBlock(content) || opensParagraphInBlock(content))
 }
 
