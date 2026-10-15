@@ -65,6 +65,9 @@ CLI:
 npx carve README.crv
 npx carve lint README.crv
 npx carve fmt -w README.crv
+
+# Align table pipes by Unicode display width when desired:
+npx carve fmt --align-tables -w README.crv
 ```
 
 See [Browser use](https://github.com/markup-carve/carve-js/blob/main/docs/browser.md),

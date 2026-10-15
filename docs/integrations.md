@@ -54,6 +54,9 @@ Prettier's layout options are deliberately ignored. `printWidth`, `tabWidth` and
 PART 11 of the grammar fixes it. Honoring `printWidth` here would produce output
 that `carve fmt --check` then rejects.
 
+To opt into aligned tables, set `"carveAlignTables": true` in the Prettier
+configuration. Use `carve fmt --align-tables --check` for the matching CLI gate.
+
 ---
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)

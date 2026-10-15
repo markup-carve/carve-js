@@ -84,6 +84,17 @@ describe('the writer on lists nested to and past the cap', () => {
   })
 })
 
+describe('the cap check counts container depth only', () => {
+  it('still writes a declared carve-out one level under the cap', () => {
+    // A paragraph holding only an image is written as a block image, which does
+    // not read back as the paragraph. Inline depth is not container depth.
+    const image = (parse('x ![a](a.png)').children[0] as { children: unknown[] }).children[1]
+    let node = { type: 'paragraph', children: [image] } as unknown as Document['children'][number]
+    for (let i = 1; i < MAX_NESTING_DEPTH; i++) node = { type: 'div', children: [node] } as Document['children'][number]
+    expect(renderCarve({ type: 'document', children: [node] } as Document)).toContain('a.png')
+  })
+})
+
 describe('the writer past the cap costs a bounded number of parses', () => {
   perfIt('writes or refuses a deep list in a few parses of its own size', () => {
     // Relative to parsing the same document, so the reading does not depend on

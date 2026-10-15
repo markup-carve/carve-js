@@ -33,6 +33,8 @@ carve fmt -w   file.crv    # format in place
 carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fmt --migrate -w file.crv # also respell case-only reference misses
+carve fmt --align-tables -w file.crv # align table pipes by display width
+carve fmt --align-tables --check file.crv # check the aligned form
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
 carve diff a.crv b.crv     # semantic changes, ignoring source reflow

@@ -1,6 +1,7 @@
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { tableDisplayWidth } from './table-display-width.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
 import type {
   Attrs,
@@ -49,7 +50,9 @@ import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
 
-export interface CarveRenderOptions extends RenderLossSinkOptions {}
+export interface CarveRenderOptions extends RenderLossSinkOptions {
+  alignTables?: boolean
+}
 
 /**
  * The writer's recursion bound, and it must sit ABOVE the parser's.
@@ -341,26 +344,38 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
  * reference link comes back with an empty href and reports a difference that
  * escaping never caused.
  */
+/** Nodes whose body the parser reads one container level deeper. */
+const NESTING_CONTAINERS: ReadonlySet<string> = new Set([
+  'block_quote', 'list_item', 'table_cell', 'section', 'admonition', 'directive', 'div', 'line_block', 'figure_group',
+])
+
 /**
- * Whether some path through `ast` nests as deep as `MAX_NESTING_DEPTH`.
+ * Whether some node sits as deep in containers as `MAX_NESTING_DEPTH`.
  *
- * Counts every node holding a `children` array, which over-counts the parser's
- * container depth by the leaf block at most; a list's `items` wrapper is skipped
- * because the parser charges a list level once, to the item body. Iterative for
- * the same reason as `collectEscapeUnits`.
+ * Counted in the parser's unit, container ancestors, so inline nesting adds
+ * nothing: a declared carve-out such as a paragraph holding only an image stays
+ * out of the check one level under the cap. A definition's body is a level of
+ * its own. Iterative for the same reason as `collectEscapeUnits`.
  */
 function nestingReachesCap(ast: Document): boolean {
   const stack: Array<[unknown, number]> = [[ast, 0]]
   while (stack.length > 0) {
     const [node, depth] = stack.pop()!
+    if (Array.isArray(node)) {
+      for (const child of node) stack.push([child, depth])
+      continue
+    }
     if (!node || typeof node !== 'object') continue
-    const root = node === ast
     const record = node as Record<string, unknown>
-    const children = root ? record['children'] : record['children'] ?? record['items']
-    if (!Array.isArray(children)) continue
-    const below = root || Array.isArray(record['items']) ? depth : depth + 1
-    if (below >= MAX_NESTING_DEPTH) return true
-    for (const child of children) stack.push([child, below])
+    let below = depth
+    if (typeof record['type'] === 'string') {
+      if (depth >= MAX_NESTING_DEPTH) return true
+      if (NESTING_CONTAINERS.has(record['type'])) below = depth + 1
+    }
+    for (const [key, value] of Object.entries(record)) {
+      if (key === 'attrs' || key === 'pos') continue
+      stack.push([value, key === 'definitions' && Array.isArray(record['terms']) ? below + 1 : below])
+    }
   }
   return false
 }
@@ -2503,6 +2518,7 @@ function lastBoundary(node: InlineNode | undefined): string {
 /** State owned by one synchronous source-render operation. */
 class CarveRenderSession {
   private renderedVerbatimTail = false
+  private alignTables = false
 
   private refusedSpans: SourceUnspellableError[] = []
 
@@ -2517,6 +2533,7 @@ class CarveRenderSession {
   }
 
   renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+    this.alignTables = opts.alignTables === true
     this.repeatedScopes = new WeakMap()
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
@@ -3854,6 +3871,7 @@ class CarveRenderSession {
    */
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []
+    const rowSlots: { index: number, cells: string[], marker: '|' | '+', attrs: string }[] = []
     const continuations = node.rows.map(row => Array.from({ length: row.continuationLines ?? 0 }, () =>
       Array.from({ length: row.cells.length }, () => ' ')))
     const first = node.rows[0]
@@ -3866,6 +3884,9 @@ class CarveRenderSession {
     }
     const authored = authoredSeparator(node)
     const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
+    let separator = needsDelimiter
+      ? authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`
+      : undefined
 
     node.rows.forEach((row, rowIndex) => {
       // `|` alone is prose and `||` is one empty cell (CARVE-P9-082), so a row
@@ -3915,11 +3936,36 @@ class CarveRenderSession {
           current = next ?? null
         }
       })
-      rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
-      for (const line of continuations[rowIndex]!) rows.push(`+${line.join('|')}|`)
+      const attrs = renderAttrs(row.attrs)
+      rowSlots.push({ index: rows.length, cells, marker: '|', attrs })
+      rows.push(renderTableRow(cells, attrs))
+      for (const line of continuations[rowIndex]!) {
+        rowSlots.push({ index: rows.length, cells: line, marker: '+', attrs: '' })
+        rows.push(`+${line.join('|')}|`)
+      }
     })
-    if (needsDelimiter) {
-      rows.splice(1 + (first?.continuationLines ?? 0), 0, authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
+    if (this.alignTables && rowSlots.length > 0) {
+      const widths: number[] = []
+      for (const slot of rowSlots) {
+        slot.cells.forEach((cell, index) => {
+          widths[index] = Math.max(widths[index] ?? 0, tableDisplayWidth(cell))
+        })
+      }
+      const separatorCells = separator?.slice(1, -1).split('|')
+      separatorCells?.forEach((cell, index) => {
+        widths[index] = Math.max(widths[index] ?? 0, tableDisplayWidth(cell))
+      })
+      for (const slot of rowSlots) {
+        rows[slot.index] = `${slot.marker}${slot.cells.map((cell, index) =>
+          cell + ' '.repeat(widths[index]! - tableDisplayWidth(cell))).join('|')}|${slot.attrs}`
+      }
+      if (separatorCells) {
+        separator = `|${separatorCells.map((cell, index) =>
+          cell + ' '.repeat(widths[index]! - tableDisplayWidth(cell))).join('|')}|`
+      }
+    }
+    if (separator !== undefined) {
+      rows.splice(1 + (first?.continuationLines ?? 0), 0, separator)
     }
     const caption = node.caption === undefined ? undefined : this.captionRow(node.caption, ctx)
     if (caption !== undefined) rows.push(caption)
