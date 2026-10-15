@@ -135,10 +135,14 @@ Table body partitions and source attributes are documented in
 ## Check table preservation
 
 Render-loss reports cover the events defined by the Carve render-loss schema.
-They do not assess every semantic change. For example, GFM output flattens merged
-cells and moves table captions into paragraphs without emitting a render loss.
+Markdown, plain, and ANSI output report flattened merged cells as
+`table-span-flattened`. Markdown also reports later header rows written as body
+rows as `table-header-row-demoted`. Moving a table caption into a paragraph
+does not emit a render loss. Render-loss reports do not assess every semantic
+change.
 
-Use the separate preservation assessment when those structures matter:
+Use the separate preservation assessment when caption placement or other table
+structure matters:
 
 ```ts
 import { carveToPreservationReport } from '@markup-carve/carve'
@@ -157,9 +161,8 @@ assessment checks spans, caption association, header roles, row groups,
 attributes, column metadata, block cells, and alignment. Diagnostics carry
 AST JSON node paths and field names. `maxDiagnostics` bounds retained detail
 while `totalDiagnostics` counts all findings; strict refusal uses that count.
-`result.losses` is the normative render-loss report, which names flattened
-spans and demoted header rows (`table-span-flattened`,
-`table-header-row-demoted`); the assessment adds the fields it does not cover.
+`result.losses` is the normative render-loss report; the assessment adds the
+fields it does not cover.
 
 The report sets `complete: false` and lists its unchecked boundaries. A clean
 assessment does not establish preservation of non-table semantics, source
