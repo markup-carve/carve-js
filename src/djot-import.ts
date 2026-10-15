@@ -1124,9 +1124,7 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
   return djotInlineLayout(source, at => omitQuoteDelimiters || imageQuotes.has(at))
 }
 
-function collapsePlainNestedImageChains(source: string): string {
-  if (!source.includes('![') || !source.includes('\n')) return source
-  let mask = maskDjotCodeAndDestinations(source)
+function maskDjotReferenceDefinitions(source: string, mask: string): string {
   if (source.includes(']:')) {
     const accepted = new Map<number, { label: string; target: string; end: number }>()
     foldDjotReferences(source, accepted)
@@ -1136,6 +1134,12 @@ function collapsePlainNestedImageChains(source: string): string {
       return n <= covered ? ' '.repeat(line.length) : line
     }).join('\n')
   }
+  return mask
+}
+
+function collapsePlainNestedImageChains(source: string): string {
+  if (!source.includes('![') || !source.includes('\n')) return source
+  const mask = maskDjotReferenceDefinitions(source, maskDjotCodeAndDestinations(source))
   const chunks: string[] = []
   let copied = 0, lineStart = 0, lineEnd = source.indexOf('\n'), quoteLine = -1, quotePrefix = ''
   for (let start = 0; start < source.length; start++) {
@@ -1613,7 +1617,7 @@ function escapeDjotTableAttributeBoundaries(source: string): string {
 
 function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new Set()): string {
   if (!source.includes('](')) return source
-  const mask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false })
+  const mask = maskDjotReferenceDefinitions(source, maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false }))
   const rows = djotTableRows(source, mask)
   let imageLines: DjotImageLineOwner[] | undefined
   const angles = new Map(
