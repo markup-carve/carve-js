@@ -223,13 +223,13 @@ export function tableHeaderRowDemoted(opts: RenderLossSinkOptions, row: { pos?: 
   })
 }
 
-export function tableHeaderCellDemoted(opts: RenderLossSinkOptions, row: { pos?: Position }): void {
+export function tableHeaderCellDemoted(opts: RenderLossSinkOptions, cell: { pos?: Position }): void {
   opts.onRenderLoss?.({
     code: 'table-header-cell-demoted',
     target: 'markdown',
     nodeType: 'block',
     message: 'Wrote header cells as body cells',
-    ...(row.pos ? { pos: row.pos } : {}),
+    ...(cell.pos ? { pos: cell.pos } : {}),
   })
 }
 
