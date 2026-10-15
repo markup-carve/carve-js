@@ -2,9 +2,31 @@ import type { Document, Image, Link } from './ast.js'
 import { normalizeRefLabel } from './label-key.js'
 
 const resolvedEmptyReferences = new WeakSet<Link | Image>()
+let mayHaveResolvedEmptyReferences = false
+let activeDefinitions: Map<string, string> | null = null
+
+/** Use the rendered document's definitions when resolving runtime-only bits. */
+export function withResolvedEmptyReferenceDefinitions<T>(document: Document, render: () => T): T {
+  const definitions = new Map<string, string>()
+  for (const child of document.children) {
+    if (child.type === 'link_reference_definition') definitions.set(normalizeRefLabel(child.label), child.href)
+  }
+  const previous = activeDefinitions
+  activeDefinitions = definitions
+  try {
+    return render()
+  } finally {
+    activeDefinitions = previous
+  }
+}
 
 /** A matching empty definition is meaningful even though the destination is empty. */
 export function isResolvedEmptyReference(node: Link | Image): boolean {
+  if (activeDefinitions !== null) {
+    const destination = node.type === 'link' ? node.href : node.src
+    return destination === '' && typeof node.ref === 'string' && !/[\r\n]/.test(node.ref) &&
+      activeDefinitions.get(normalizeRefLabel(node.ref)) === ''
+  }
   return resolvedEmptyReferences.has(node)
 }
 
@@ -14,7 +36,10 @@ export function copyResolvedEmptyReferences(source: unknown, copy: unknown): voi
   while (stack.length > 0) {
     const [from, to] = stack.pop()!
     if (from === null || typeof from !== 'object' || to === null || typeof to !== 'object') continue
-    if (resolvedEmptyReferences.has(from as Link | Image)) resolvedEmptyReferences.add(to as Link | Image)
+    if (resolvedEmptyReferences.has(from as Link | Image)) {
+      resolvedEmptyReferences.add(to as Link | Image)
+      mayHaveResolvedEmptyReferences = true
+    }
     for (const [key, child] of Object.entries(from)) {
       if (key !== 'pos' && key !== 'attrs') stack.push([child, (to as Record<string, unknown>)[key]])
     }
@@ -24,16 +49,22 @@ export function copyResolvedEmptyReferences(source: unknown, copy: unknown): voi
 /** Restore the runtime resolution bit after whole-document JSON decoding. */
 export function hydrateResolvedEmptyReferences(document: Document, keepResolved = false): void {
   const definitions = new Map<string, string>()
+  let hasEmptyDefinition = false
   for (const child of document.children) {
     if (child.type === 'link_reference_definition') {
       definitions.set(normalizeRefLabel(child.label), child.href)
+      hasEmptyDefinition ||= child.href === ''
     }
   }
+  // No runtime bit can need restoring or clearing until one has been set.
+  if (!mayHaveResolvedEmptyReferences && !hasEmptyDefinition) return
   const stack: unknown[] = [document]
   while (stack.length > 0) {
     const value = stack.pop()
     if (Array.isArray(value)) {
-      for (const child of value) stack.push(child)
+      for (const child of value) {
+        if (child !== null && typeof child === 'object') stack.push(child)
+      }
       continue
     }
     if (value === null || typeof value !== 'object') continue
@@ -43,11 +74,14 @@ export function hydrateResolvedEmptyReferences(document: Document, keepResolved 
       const resolved = destination === '' && !/[\r\n]/.test(node.ref) &&
         definitions.has(normalizeRefLabel(node.ref)) &&
         definitions.get(normalizeRefLabel(node.ref)) === ''
-      if (resolved) resolvedEmptyReferences.add(value as Link | Image)
+      if (resolved) {
+        resolvedEmptyReferences.add(value as Link | Image)
+        mayHaveResolvedEmptyReferences = true
+      }
       else if (!keepResolved) resolvedEmptyReferences.delete(value as Link | Image)
     }
     for (const [key, child] of Object.entries(node)) {
-      if (key !== 'pos' && key !== 'attrs') stack.push(child)
+      if (key !== 'pos' && key !== 'attrs' && child !== null && typeof child === 'object') stack.push(child)
     }
   }
 }
@@ -69,7 +103,10 @@ export function resolveReferenceDestination(
   node: UnresolvedReference,
   destination: string,
 ): ResolvedLink | ResolvedImage | UnresolvedReference {
-  if (destination === '') resolvedEmptyReferences.add(node)
+  if (destination === '') {
+    resolvedEmptyReferences.add(node)
+    mayHaveResolvedEmptyReferences = true
+  }
   else resolvedEmptyReferences.delete(node)
   const resolved = destination as ReferenceDestination
   if (node.type === 'link') {

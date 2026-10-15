@@ -1,5 +1,5 @@
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
-import { hydrateResolvedEmptyReferences } from './reference-state.js'
+import { withResolvedEmptyReferenceDefinitions } from './reference-state.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -612,6 +612,14 @@ export function renderHtml(
   opts: RenderOptions = {},
   seededDocumentIds?: DocumentIdRegistry,
 ): string {
+  return withResolvedEmptyReferenceDefinitions(ast, () => renderHtmlImpl(ast, opts, seededDocumentIds))
+}
+
+function renderHtmlImpl(
+  ast: Document,
+  opts: RenderOptions,
+  seededDocumentIds?: DocumentIdRegistry,
+): string {
   normalizeSmartTypography(opts.smartTypography)
   // A sole-image paragraph renders as a bare block image at EVERY column, and
   // the parse tree deliberately does not say so (markup-carve/carve#1660). This
@@ -622,9 +630,7 @@ export function renderHtml(
   // that lives in that arm cannot reach them (carve-js#1440). Copy on write -
   // `ast` belongs to the caller.
   const original = ast
-  hydrateResolvedEmptyReferences(ast)
   ast = collapseLoneImageParagraphs(ast)
-  hydrateResolvedEmptyReferences(ast)
   inheritDocumentIds(original, ast)
   // PART 9 §10: an extension may add semantic span names. Core renders them,
   // so the order below is the union in the canonical order rather than
