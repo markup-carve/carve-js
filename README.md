@@ -137,7 +137,9 @@ Table body partitions and source attributes are documented in
 Render-loss reports cover the events defined by the Carve render-loss schema.
 Markdown, plain, and ANSI output report flattened merged cells as
 `table-span-flattened`. Markdown also reports later header rows written as body
-rows as `table-header-row-demoted`. Moving a table caption into a paragraph
+rows as `table-header-row-demoted`, a header row moved above earlier body rows
+as `table-header-row-hoisted`, and each header cell in a row that is not a
+header row as `table-header-cell-demoted`. Moving a table caption into a paragraph
 does not emit a render loss. Render-loss reports do not assess every semantic
 change.
 
