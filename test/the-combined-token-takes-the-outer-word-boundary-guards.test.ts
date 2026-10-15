@@ -4,9 +4,9 @@ import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 
 /**
  * carve#3217. `bold_italic` opens with bare_opener('/') and closes with
- * bare_closer('/'): the outer `/` does not open after a letter or digit and
- * does not close before one. Once the token fails, each delimiter is read on
- * its own. Corpus 130-4 and 601.
+ * bare_closer('/'): the outer `/` does not open after an ASCII letter, digit,
+ * underscore or slash. It does not close before an ASCII letter or digit.
+ * Once the token fails, each delimiter is read on its own. Corpus 130-4 and 601.
  */
 const html = (src: string) => carveToHtml(`${src}\n`)
 
@@ -19,6 +19,8 @@ describe('the combined token takes the outer word-boundary guards', () => {
     ['Run src/*test*/fixtures now', '<p>Run src/<strong>test</strong>/fixtures now</p>'],
     ['see lib/*.js and src/*foo*/bar', '<p>see lib/<strong>.js and src/*foo</strong>/bar</p>'],
     ['@me/*y*/ x', '<p><span class="mention"><strong>@me</strong></span>/<strong>y</strong>/ x</p>'],
+    ['_/*y*/', '<p>_/<strong>y</strong>/</p>'],
+    ['//*y*/', '<p>//<strong>y</strong>/</p>'],
   ])('reads %j as text around a bold span', (src, expected) => {
     expect(html(src)).toBe(expected)
   })
@@ -59,6 +61,8 @@ describe('the writer braces a combined token a word would stop', () => {
     ['a', 'b', 'a{*/y/*}b'],
     ['a', ' b', 'a{*/y/*} b'],
     ['a ', '2', 'a {*/y/*}2'],
+    ['_', ' b', '_{*/y/*} b'],
+    ['/', ' b', '\\/*/y/* b'],
   ])('writes %j + bold italic + %j in the forced form', (before, after, expected) => {
     const tree = flagged(before, after) as never
     const written = renderCarve(tree)
