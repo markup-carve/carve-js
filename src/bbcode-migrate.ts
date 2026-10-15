@@ -27,6 +27,8 @@ import {
   HANDLED_PLAIN,
 } from './carve-escape.js'
 import { parse } from './parse.js'
+import { extendsGrapheme } from './grapheme-extender.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from './import-report-messages.js'
 import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { replaceLoneSurrogates } from './well-formed.js'
@@ -492,6 +494,12 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Writt
     const inner = writeMarks(piece.children, '', '')
     let body = inner.text
     if (body === '') return
+    if (extendsGrapheme(body, 0)) {
+      extenderLeadingSpans++
+      push(inner)
+      escapeBrace = false
+      return
+    }
     // The post's own text was escaped while the tags were still tags, so a
     // literal delimiter now touching an opener was never seen: escape it.
     if (textPart >= 0 && textPart === parts.length - 1 && '*/_~='.includes(last)) {
@@ -1138,9 +1146,16 @@ function convertOther(text: string): string {
       // Forced brace form: a BBCode sup/sub is often intraword
       // (E=mc[sup]2[/sup]), where a bare `^2^` would be literal in Carve. An
       // empty one has no spelling and goes (ruling markup-carve/carve-rs#1719).
-      .replace(/\[sup\]([\s\S]*?)\[\/sup\]/gi, (_whole, body: string) => (body === '' ? '' : `{^${body}^}`))
-      .replace(/\[sub\]([\s\S]*?)\[\/sub\]/gi, (_whole, body: string) => (body === '' ? '' : `{,${body},}`))
+      .replace(/\[sup\]([\s\S]*?)\[\/sup\]/gi, (_whole, body: string) => braceScript('^', body))
+      .replace(/\[sub\]([\s\S]*?)\[\/sub\]/gi, (_whole, body: string) => braceScript(',', body))
   )
+}
+
+function braceScript(delim: string, body: string): string {
+  if (body === '') return ''
+  if (!extendsGrapheme(body, 0)) return `{${delim}${body}${delim}}`
+  extenderLeadingSpans++
+  return body
 }
 
 function cleanup(text: string): string {
@@ -1154,7 +1169,18 @@ function cleanup(text: string): string {
 /**
  * Convert BBCode markup to Carve markup.
  */
+/** Spans dropped by the current conversion because their content starts with an extender. */
+let extenderLeadingSpans = 0
+
+/** `bbcodeToCarve` with the losses it can name, for `migrateBbcode`. */
+export function bbcodeToCarveWithLosses(bbcode: string): { value: string; losses: Array<{ code: 'structure-unspellable'; message: string }> } {
+  const value = bbcodeToCarve(bbcode)
+  const losses = Array.from({ length: extenderLeadingSpans }, () => ({ code: 'structure-unspellable' as const, message: EXTENDER_LEADING_SPAN_UNSPELLABLE }))
+  return { value, losses }
+}
+
 export function bbcodeToCarve(bbcode: string): string {
+  extenderLeadingSpans = 0
   const inputBytes = UTF8_ENCODER.encode(bbcode).byteLength
   if (inputBytes > BBCODE_MAX_INPUT_LENGTH) {
     throw new BbcodeInputTooLargeError(inputBytes)

@@ -1,7 +1,7 @@
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { extendsGrapheme } from './grapheme-extender.js'
+import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table-display-width.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
 import type {
@@ -4515,7 +4515,7 @@ class CarveRenderSession {
       const content = marked(children)
       // Bare or braced, the opener is then part of a larger character (CARVE-P3-025).
       if (extendsGrapheme(content, 0)) {
-        throw new SourceUnspellableError(node.type, `a ${node.type} whose content starts with a combining mark, a variation selector or a joiner has no Carve source spelling`, node)
+        throw new SourceUnspellableError(node.type, `a ${node.type} ${LEADING_EXTENDER_REASON}`, node)
       }
       return content
     }

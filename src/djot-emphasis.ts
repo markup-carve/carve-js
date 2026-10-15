@@ -2,6 +2,7 @@ import { MAX_NESTING_DEPTH } from './parse.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 import { nativeAttributeReader } from './djot-attributes.js'
 
 type Pair = {
@@ -19,8 +20,8 @@ type Opener = { start: number; end: number; kind: string; forced: boolean }
 
 export { djotStructuralPrefixSteps, djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
-export function djotEmphasis(source: string, convert: (plain: string) => string, flattened?: (offset: number) => void, omitQuoteDelimiters = false): string {
-  return processDjotEmphasis(source, convert, undefined, flattened, omitQuoteDelimiters)
+export function djotEmphasis(source: string, convert: (plain: string) => string, flattened?: (offset: number) => void, omitQuoteDelimiters = false, extenderLeading?: (offset: number) => void): string {
+  return processDjotEmphasis(source, convert, undefined, flattened, omitQuoteDelimiters, false, extenderLeading)
 }
 
 export function djotReferenceEmphasis(source: string, convert: (plain: string) => string): string {
@@ -33,7 +34,7 @@ export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
   return paired
 }
 
-function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void, omitQuoteDelimiters = false, imageLabels = false): string {
+function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void, omitQuoteDelimiters = false, imageLabels = false, extenderLeading?: (offset: number) => void): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source, imageLabels)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   const cells = new Set<number>()
   if (source.includes('|')) {
@@ -398,6 +399,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       new Set([...outer, pair.kind]),
     )
     if (pair.kind === '"' || pair.kind === "'") return content
+    // The opener would be part of a larger character (CARVE-P3-025).
+    if (extendsGrapheme(content, 0)) {
+      extenderLeading?.(pair.start)
+      return content
+    }
     const delimiter = pair.kind === '=' ? '=' : pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
     const emptyBoundary =
       (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||

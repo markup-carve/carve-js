@@ -16,6 +16,14 @@
  * ordered item. See "A lost checkbox on an ordered task item says it one way" in
  * `docs/html-import-contract.md`.
  */
+/**
+ * A span whose content starts with a combining mark, a variation selector or a
+ * joiner: its opener would be part of a larger character (CARVE-P3-025), so
+ * every importer drops the span and keeps the text (carve-js#3146).
+ */
+export const EXTENDER_LEADING_SPAN_UNSPELLABLE =
+  'Dropped a span whose content starts with a combining mark, a variation selector or a joiner: Carve cannot spell its opener there, so the text is kept without it'
+
 export const ORDERED_TASK_ITEM_UNSPELLABLE =
   'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text'
 

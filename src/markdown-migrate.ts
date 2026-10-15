@@ -38,7 +38,8 @@ import {
   useEmptyDestinationReferences,
   useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
-import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, EXTENDER_LEADING_SPAN_UNSPELLABLE, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 import { opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -73,8 +74,26 @@ type TagReplacer = string | ((match: string, body: string, offset: number, full:
  * form keeps the common, whitespace-separated case clean on a Markdown->Carve
  * round-trip (corpus 67-superscript-and-subscript).
  */
+/** The body with a leading character reference decoded, as the later entity pass will leave it. */
+function decodeLeadingReference(body: string): string {
+  const reference = /^&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(body)
+  return reference ? decodeHtmlEntitiesRaw(reference[0]) + body.slice(reference[0].length) : body
+}
+
+/** A span whose content starts with an extender has no Carve opener (CARVE-P3-025). */
+function extenderLeadingBody(body: string): boolean {
+  if (!extendsGrapheme(decodeLeadingReference(body), 0)) return false
+  importLosses.push({ code: 'structure-unspellable', message: EXTENDER_LEADING_SPAN_UNSPELLABLE })
+  return true
+}
+
+function wrapped(open: string, close: string): (match: string, body: string) => string {
+  return (_match, body) => extenderLeadingBody(body) ? body : `${open}${body}${close}`
+}
+
 function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
   return (match, body, offset, full, spans = []) => {
+    if (extenderLeadingBody(body)) return body
     // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
     let before = full[offset - 1] ?? ''
@@ -109,9 +128,9 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   // `attributedNative` instead of this table (carve#2838).
   [/<mark>([^<]+)<\/mark>/gi, markerForm('=')],
   [/<u>([^<]+)<\/u>/gi, markerForm('_')],
-  [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
-  [/<del>([^<]+)<\/del>/gi, '~$1~'],
-  [/<s>([^<]+)<\/s>/gi, '~$1~'],
+  [/<ins>([^<]+)<\/ins>/gi, wrapped('{+', '+}')],
+  [/<del>([^<]+)<\/del>/gi, wrapped('~', '~')],
+  [/<s>([^<]+)<\/s>/gi, wrapped('~', '~')],
   [/<sup>([^<]+)<\/sup>/gi, markerForm('^')],
   [/<sub>([^<]+)<\/sub>/gi, markerForm(',')],
   [/<strong>([^<]+)<\/strong>/gi, markerForm('*')],
@@ -1427,9 +1446,9 @@ function convertInline(
               ? `\\[${first}][${second}][${third}]\\${destination}` : whole
           : whole)
   }
-  const reportFlattenedEmphasis = () => importLosses.push({
+  const reportFlattenedEmphasis = (reason?: 'extender') => importLosses.push({
     code: 'structure-unspellable',
-    message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
+    message: reason === 'extender' ? EXTENDER_LEADING_SPAN_UNSPELLABLE : 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
   })
   if (!input.includes('www.') && /^[A-Za-z0-9 *_.,;?!'"-]+$/.test(input)) {
     let line = escapeCarveOnlyMarker(input)
@@ -1841,7 +1860,7 @@ function convertInline(
       label = output
     }
     let depth = 0
-    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value), { before: '[', after: ']' })
+    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value), { before: '[', after: ']' }, true, decodeLeadingReference)
     if (depth > 0) {
       for (const match of converted.matchAll(/\x00P(\d+)\x00/g)) {
         if (/^\{[*/~]/.test(protectedSpans[Number(match[1])] ?? '')) {
@@ -2475,7 +2494,7 @@ function convertInline(
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
   line = line.replace(/\n([ \t]{4,}~{3,}[ \t]*)(?=\n|$)/g, (_match, run: string) => `\n${protect(run)}`)
-  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, undefined, true)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, undefined, true, undefined, undefined, true, decodeLeadingReference)
 
   // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
   // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),

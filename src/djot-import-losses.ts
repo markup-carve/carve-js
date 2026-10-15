@@ -2,6 +2,7 @@ import { djotBlockLayout } from './djot-block-layout.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from './import-report-messages.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
@@ -88,6 +89,8 @@ export function djotImportLosses(
     source,
     (text) => text,
     (at) => report('Emphasis exceeding the native nesting budget is flattened; its text is preserved.', lineAt(at)),
+    false,
+    (at) => report(EXTENDER_LEADING_SPAN_UNSPELLABLE, lineAt(at)),
   )
   const rawFormatMessage = 'A Djot raw-format identifier containing U+0085 cannot be spelled in Carve; its raw-output behavior is lost.'
   const rawFormats: Array<[number, number]> = []
