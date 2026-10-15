@@ -1319,8 +1319,6 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       b.type === 'paragraph' &&
       b.children.length >= 3 &&
       b.children[0]!.type === 'image' &&
-      // A REAL image only (see above): an unresolved reference is literal text,
-      // not a figure target.
       !isUnresolvedReference(b.children[0] as Image) &&
       isAtContentColumn(b) &&
       b.children[1]!.type === 'soft_break' &&

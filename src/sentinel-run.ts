@@ -1,31 +1,16 @@
 /**
- * Picking a run of in-band markers a document cannot collide with.
- */
-
-/**
- * The pool every run is taken from: the BMP private-use area, minus its first
- * code point. U+E000 is the parser's nbsp marker (see above), so it is never
- * allocatable no matter what the document contains.
+ * Allocate private-use markers absent from the document. Writers and converters
+ * use temporary markers whose authored equivalents would otherwise collide.
+ * Each caller owns its run and slot meanings.
+ *
+ * U+E000 is reserved for the parser's non-breaking-space marker.
  */
 const ALLOCATABLE_START = 0xe001
 const PRIVATE_USE_END = 0xf8ff
 
-/**
- * Which private-use code points a tree's strings occupy.
- *
- * A SET rather than the joined text. Joining was the obvious spelling and it
- * does not survive contact with the documents §25 exists for: one string per
- * node, concatenated, is a second copy of the whole document, and a document
- * near the engine's own byte budget puts that copy past V8's maximum string
- * length - a `RangeError` thrown out of a renderer that was about to refuse the
- * input for its size anyway. The set is bounded by the private-use area, so it
- * costs one pass and at most 6400 entries however large the tree is.
- *
- * ITERATIVE on purpose: `JSON.stringify` would be one line, and it recurses - so
- * on an AST deeper than the JS stack it throws a RangeError before a writer can
- * reach its own §25 depth REFUSAL, which is a documented behaviour with tests on
- * it. An explicit stack has no such limit. Shared objects and arrays are visited
- * once: resolved references can share a long display-text subtree.
+/** Collect occupied points with a bounded set and an iterative tree walk.
+ * Joining all strings can exceed V8's string limit; recursive traversal can
+ * throw before the documented depth refusal. Shared subtrees are visited once.
  */
 export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<number> {
   const occupied = new Set<number>()
@@ -68,20 +53,8 @@ function runFrom(base: number, length: number): string[] {
   return run
 }
 
-/**
- * `length` private-use code points, none of them in `occupied`.
- *
- * The preferred run is tried first: the common case is a document with no
- * private-use characters at all, and it should not pay for a scan. When any of
- * the preferred code points IS taken the scan walks the private-use area ONE
- * code point at a time, so a document that occupies every sixth character still
- * finds one of the runs between them - stepping a whole run at a time would
- * declare the area full while most of it was free.
- *
- * The last resort is the preferred run again rather than a throw. It needs the
- * whole private-use area occupied, and a writer that refuses to render is worse
- * than one that falls back to the behaviour it had before the run was picked at
- * all.
+/** Pick an unused run, trying `base` first and then scanning the pool.
+ * If none exists, retain the old fallback instead of refusing to render.
  */
 export function pickSentinelRun(occupied: Set<number>, base: number, length: number): string[] {
   const taken = (from: number): boolean => {
@@ -95,10 +68,8 @@ export function pickSentinelRun(occupied: Set<number>, base: number, length: num
   while (start + length - 1 <= PRIVATE_USE_END) {
     let i = 0
     while (i < length && !occupied.has(start + i)) i++
-    // Every code point from `start` was free, so the run is.
     if (i === length) return runFrom(start, length)
-    // `start + i` is occupied, so no run containing it can be taken: resume past
-    // it rather than one code point on.
+    // Every start from `start` through the occupied point would contain it.
     start = start + i + 1
   }
 

@@ -1579,22 +1579,8 @@ function guardLeadingBom(text: string): string {
   return text.startsWith('\ufeff') ? ` ${text}` : text
 }
 
-/**
- * `line` without its trailing space-and-tab run.
- *
- * `dropTrailingWhitespace` in src/parse.ts answers the same question for the
- * parser, and answers it unconditionally, so this does too
- * (markup-carve/carve#1027).
- *
- * IT USED TO KEEP AN ESCAPED SPACE. `normalize` rewrites the escaped-space
- * sentinel back to `\ `, and a line ending in that pair was left alone so the
- * writer would not turn the author's no-break space into a line break. The
- * parser has since stopped drawing that distinction: the strip runs first and a
- * backslash left in the last column is a hard break, so keeping the space no
- * longer preserves anything - it just spells the same hard break in two
- * characters instead of one. The one tree that still needs the old behavior is
- * handled where the sentinel is resolved, in `normalize`, because that is where
- * the alternative spelling is still available.
+/** Mirrors `dropTrailingWhitespace` in `src/parse.ts`: strip unconditionally
+ * (markup-carve/carve#1027). Escaped-space handling lives in `normalize`.
  */
 function dropTrailingWs(line: string): string {
   return trimEndSpaceTab(line)
