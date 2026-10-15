@@ -31,11 +31,34 @@ export function tightDjotDefinitionDescriptions(source: string): string {
       inserted = true
     }
   }
+  const hasParagraphGap = (node: Extract<BlockNode, { type: 'list' }>): boolean => {
+    let previous: BlockNode | undefined
+    for (const item of node.items) for (const child of item.children) {
+      if (previous?.type === 'paragraph' && previous.pos && child.pos) {
+        let blank = false
+        for (let line = previous.pos.endLine - 1; line < child.pos.startLine - 1; line++) {
+          if (/^[ \t>]*$/.test(lines[line]!)) blank = true
+          else if (blank && child.type === 'definition_list' && /^[ \t>]*\{(?!loose\}[ \t]*$)/.test(lines[line]!)) return true
+        }
+        if (blank && (child.type === 'paragraph' || child.type === 'comment')) return true
+      }
+      previous = child
+    }
+    return false
+  }
   const pending: [BlockNode, boolean][] = parse(source).children.map(node => [node, false])
   while (pending.length) {
     const [node, inherited] = pending.pop()!
     let tight = node.type === 'list' ? node.tight : inherited
-    if (node.type === 'list' && !tight && node.items.every(item => item.children.every(child => ['definition_list', 'paragraph', 'comment'].includes(child.type))) && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && node.items.reduce((count, item) => count + item.children.filter(child => child.type === 'paragraph').length, 0) < 2) {
+    if (node.type === 'list' && tight && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && hasParagraphGap(node)) {
+      tight = false
+      if (node.pos) {
+        const at = sourceOffset(node.pos.startOffset), line = node.pos.startLine - 1
+        const prefix = lines[line]!.slice(0, at - offsets[line]!)
+        edits.push({ start: at, end: at, value: '{loose}\n' + prefix })
+      }
+    }
+    if (node.type === 'list' && !tight && node.items.every(item => item.children.every(child => ['definition_list', 'paragraph', 'comment'].includes(child.type))) && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && !hasParagraphGap(node)) {
       tight = true
       clearLoose(node)
       for (const item of node.items) for (let i = 1; i < item.children.length; i++) clearGap(item.children[i - 1]!.pos, item.children[i]!.pos, item.children[i - 1]!.type === 'definition_list')
@@ -49,7 +72,7 @@ export function tightDjotDefinitionDescriptions(source: string): string {
         if (first?.startOffset === undefined || last?.endOffset === undefined) continue
         const prefix = lines[first.startLine - 1]!.slice(0, sourceOffset(first.startOffset) - offsets[first.startLine - 1]!)
         const continuation = prefix.replace(/:[ \t]+$/, spaces => ' '.repeat(spaces.length))
-        const joined = { ...description[0]!, children: description.flatMap((paragraph, index) => [...(index ? [{ type: 'soft_break' as const }] : []), ...paragraph.children]) }
+        const joined = { ...description[0]!, children: description.flatMap((paragraph, index) => [...(index && description[index - 1]!.children.at(-1)?.type !== 'hard_break' ? [{ type: 'soft_break' as const }] : []), ...paragraph.children]) }
         delete joined.attrs
         const contents = renderCarve({ type: 'document', children: [joined] }).replace(/\n+$/, '')
         edits.push({ start: sourceOffset(first.startOffset), end: sourceOffset(last.endOffset), value: contents.replace(/\n/g, '\n' + continuation) })
