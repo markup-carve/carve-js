@@ -5,6 +5,7 @@
  * over each block's text content. No backtracking.
  */
 
+import { replaceLoneSurrogates } from './well-formed.js'
 import { AppendOnlyCloser } from './append-only-closer.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { SubstitutionScanner } from './substitution-scanner.js'
@@ -9612,6 +9613,9 @@ class ParseSession {
     // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
     // byte never reaches output (decided cross-impl behavior; WHATWG-style).
     if (source.includes('\0')) source = source.replace(/\0/g, '�')
+    // A lone surrogate becomes U+FFFD too, so output is always well-formed
+    // (CARVE-P0-023).
+    source = replaceLoneSurrogates(source)
     const lexer = new Lexer(
       source,
       opts,
