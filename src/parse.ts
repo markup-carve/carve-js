@@ -25,6 +25,7 @@ import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
 import { resolveSpanGrid } from './table-spans.js'
+import { delimitedTable } from './delimited-table.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -2255,7 +2256,12 @@ function consumeLooseKey(node: BlockNode): void {
 function deriveTableMetadata(table: Table): void {
   const columns = tableColumnsFromAttrs(table.attrs)
   if (columns) table.columns = columns
-  const rowGroups = tableRowGroupsFromAttrs(table.attrs, table.rows.length)
+  const attrs = table.sourceFormat && table.attrs?.keyValues?.['header-rows'] === undefined &&
+    ['footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols'].some(key => table.attrs?.keyValues?.[key] !== undefined)
+    ? { ...table.attrs, keyValues: { ...(table.attrs?.keyValues ?? {}), 'header-rows': String(table.rows.filter((row) => row.cells[0]?.header).length) } }
+    : table.attrs
+  if (attrs !== table.attrs && attrs) table.attrs = attrs
+  const rowGroups = tableRowGroupsFromAttrs(attrs, table.rows.length)
   if (rowGroups) table.rowGroups = rowGroups
 }
 
@@ -10999,7 +11005,7 @@ class ParseSession {
         continue
       }
 
-      const node = this.parseBlock(lexer)
+      let node = this.parseBlock(lexer)
       // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
       // `pending` floats PAST anything that renders nothing and attaches to the
       // next VISIBLE block, so
@@ -11025,6 +11031,15 @@ class ParseSession {
           // Leading attrs are earlier in source; the block's own trailing
           // attrs win on conflict (id/key last), classes accumulate (§15).
           node.attrs = mergeAttrs(pending, node.attrs ?? {})
+        }
+        const candidate = node.type === 'code_block' ? node
+          : node.type === 'figure' && node.target.type === 'code_block' ? node.target : undefined
+        if (candidate && node.attrs?.keyValues?.table === '') {
+          const table = delimitedTable(candidate, node.attrs)
+          if (table) {
+            if (node.type === 'figure') table.caption = node.caption
+            node = table
+          }
         }
         if (node.type === 'table') deriveTableMetadata(node)
         consumeLooseKey(node)

@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest'
+import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, parse, renderCarve } from '../src/index.js'
+
+describe('delimited table fences', () => {
+  it('renders CSV as an ordinary captioned table and keeps the source form', () => {
+    const source = '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n'
+    expect(parse(source).children[0]?.type).toBe('table')
+    const html = carveToHtml(source)
+    expect(html).toContain('<caption>Stock on hand</caption>')
+    expect(html).toContain('>Pear, green</td>')
+    expect(html).toContain('<th scope="col"')
+    const canonical = carveToCarve(source)
+    expect(canonical).toContain('```csv')
+    expect(carveToHtml(canonical)).toBe(html)
+  })
+
+  it('keeps TSV fields literal and honors header-rows=0', () => {
+    const source = '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n'
+    const html = carveToHtml(source)
+    expect(html).toContain('<td>^</td><td>&lt;x&gt;</td>')
+    expect(html).not.toContain('<th')
+    expect(carveToCarve(source)).toContain('```tsv')
+  })
+
+  it('retains a quoted newline in one CSV cell', () => {
+    const source = '{table}\n```csv\nName,Note\nA,"one\ntwo"\n```\n'
+    expect(carveToHtml(source)).toContain('<td>one\ntwo</td>')
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
+  it('keeps the default header when a footer is declared', () => {
+    const source = '{table footer-rows=1}\n```csv\nItem,Qty\nApple,2\nTotal,2\n```\n'
+    const html = carveToHtml(source)
+    expect(html).toContain('<thead>')
+    expect(html).toContain('<tfoot>')
+    expect(html).toContain('<th scope="col">Item</th>')
+  })
+
+  it('leaves unmarked and malformed fences as code', () => {
+    expect(parse('```csv\na,b\n```\n').children[0]?.type).toBe('code_block')
+    expect(parse('{table}\n```csv\n"bad\n```\n').children[0]?.type).toBe('code_block')
+  })
+
+  it('keeps the source form across AST JSON', () => {
+    const source = '{table}\n```csv\na,b\n1,2\n```\n'
+    const ast = carveToAstJson(source)
+    expect(ast.children[0]).toMatchObject({ type: 'table', sourceFormat: 'csv' })
+    expect(renderCarve(fromAstJson(ast))).toBe(source)
+  })
+
+  it('keeps a single empty record distinct from an empty table', () => {
+    const record = '{table}\n```csv\n""\n```\n'
+    const empty = '{table}\n```csv\n```\n'
+    expect(carveToCarve(record)).toContain('""')
+    expect(carveToHtml(carveToCarve(record))).toBe(carveToHtml(record))
+    expect(carveToHtml(carveToCarve(empty))).toBe(carveToHtml(empty))
+  })
+
+  it('keeps derived header metadata when body rows are declared', () => {
+    const source = '{table body-rows=1,1}\n```csv\nh\na\nb\n```\n'
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+})
