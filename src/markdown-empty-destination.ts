@@ -212,6 +212,7 @@ export function extractReferenceDefinitions(
     }
   }
   const kept: string[] = []
+  const bareReferenceHeads: Array<{ index: number; key: string; marker: number; labelLength: number }> = []
   // The source index each kept line came from, so a diagnostic can name the
   // line the author wrote rather than its offset in this stripped array.
   const keptSource: number[] = []
@@ -460,7 +461,8 @@ export function extractReferenceDefinitions(
           const marker = line.indexOf(`[${definition[1]}]:`)
           const next = lines[i + 1]
           const setext = next?.startsWith(quotePrefix) && /^ {0,3}(?:=+|-+)[ \t]*$/.test(next.slice(quotePrefix.length))
-          keep(marker < 0 || setext ? line : line.slice(0, marker) + '\\' + line.slice(marker), ...continued)
+          if (marker >= 0 && !setext) bareReferenceHeads.push({ index: kept.length, key, marker, labelLength: definition[1]!.length })
+          keep(line, ...continued)
           canStart = false
           continue
         }
@@ -585,6 +587,12 @@ export function extractReferenceDefinitions(
     keep(line)
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
+  }
+  for (const { index, key, marker, labelLength } of bareReferenceHeads) {
+    const line = kept[index]!
+    kept[index] = defined.has(key)
+      ? line.slice(0, marker + labelLength + 2) + '[]' + line.slice(marker + labelLength + 2)
+      : line.slice(0, marker) + '\\' + line.slice(marker)
   }
   return {
     lines: kept,
