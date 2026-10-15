@@ -55,6 +55,7 @@ it('keeps an existing output and refuses an output inside the source', () => {
   expect(readFileSync(join(output, 'keep.txt'), 'utf8')).toBe('keep')
   expect(() => migrateMarkdownDirectory(source, join(source, 'out'))).toThrow(/outside/)
   expect(() => migrateMarkdownDirectory(source, join(source, '..', 'source', 'new', 'out'))).toThrow(/outside/)
+  expect(() => migrateMarkdownDirectory(source, `${root}/zzz/../source/new/out`)).toThrow(/outside/)
   expect(existsSync(join(source, 'new'))).toBe(false)
   if (process.platform !== 'win32') {
     const alias = join(root, 'alias')
