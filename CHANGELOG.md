@@ -27,7 +27,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `fileSystemResolver` (`./node`) reads only regular files, so an include naming a FIFO, device or directory is denied instead of blocking the process (#3108).
 - `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back differently (#3107, #3109).
 - Djot import keeps definition lists intact: empty root definitions, definitions in quotes and list items, block interruptions in terms, literal markers, container ownership and tight descriptions (#3102, #3110, #3113, #3114, #3126).
-- Djot import keeps image alternatives and references across multiline labels, deletion spans, quotes and Unicode text (#3095, #3106, #3115).
+- Djot import keeps image alternatives and references across multiline labels, deletion spans, quotes and Unicode text, and no longer rewrites reference URL data such as `![a![b](x)](y)` as nested images (#3095, #3106, #3115, #3132).
 - Djot import preserves empty nested task items and generic DIV classes (#3083, #3090).
 - Markdown import no longer slows down exponentially with deeply nested block quotes (#3096).
 - Unresolved references containing NUL no longer select sanitized headings (#3088).
