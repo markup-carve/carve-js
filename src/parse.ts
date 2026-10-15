@@ -92,7 +92,7 @@ import { ownValue, setOwn } from './own-property.js'
 import { codeContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
-import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
+import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
@@ -8729,6 +8729,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     const m = RE_AUTOLINK_STICKY.exec(s)
     return m ? j + m[0].length : undefined
   }
+  // A nested run's destination slot is content of the run around it, so a `]`
+  // inside `(/u])` closes nothing (grammar `nested`/`altNested`, CARVE-P3-001).
+  let slotEnds: Map<number, number> | undefined
+  const nestedSlotEnd = (j: number): number | undefined =>
+    s[j + 1] === '(' ? (slotEnds ??= destinationSlotEnds(s)).get(j + 1) : undefined
   const map = new Map<number, number>()
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
@@ -8783,7 +8788,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       structural?.add(j)
       const open = stack.pop()
       imageAlt?.pop()
-      if (open !== undefined) map.set(open, j)
+      if (open !== undefined) {
+        map.set(open, j)
+        const slotEnd = stack.length > 0 ? nestedSlotEnd(j) : undefined
+        if (slotEnd !== undefined) j = slotEnd - 1
+      }
     }
   }
   let budget = BRACKET_RESCAN_BUDGET * s.length + 64
@@ -8831,6 +8840,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       else if (ch === ']') {
         imageDepth.pop()
         if (imageDepth.length === 0) return j
+        const slotEnd = nestedSlotEnd(j)
+        if (slotEnd !== undefined) {
+          budget -= slotEnd - j
+          j = slotEnd - 1
+        }
       }
     }
     return undefined
