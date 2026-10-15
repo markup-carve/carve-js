@@ -22,7 +22,8 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
-import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve, renderCarveForHtmlImport } from './render-carve.js'
 import { mergeAttrs, parse } from './parse.js'
@@ -5555,7 +5556,7 @@ class Importer {
    * Unwraps the node a writer refusal names and reports the loss. False when
    * the node is not in the tree or came from no element.
    */
-  unwrapUnspellable(document: Document, target: object, targets: readonly object[] = [target]): boolean {
+  unwrapUnspellable(document: Document, target: object, targets: readonly object[] = [target], message?: string): boolean {
     const wanted = new Set(targets.filter(node => this.inlineOrigins.has(node) && Array.isArray((node as { children?: unknown }).children)))
     const removed = new Set<object>()
     const stack: unknown[] = [document]
@@ -5582,7 +5583,7 @@ class Importer {
       const tag = domTag(origin.node) ?? 'element'
       this.report.add(
         'structure-unspellable',
-        `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
+        message ?? `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
         'warning', origin.path, origin.node,
       )
       const attrs = (node as InlineNode).attrs
@@ -7039,7 +7040,8 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {
       if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
-      if (!importer.unwrapUnspellable(value, error.node, error.nodes)) throw error
+      const message = error.reason.endsWith(LEADING_EXTENDER_REASON) ? EXTENDER_LEADING_SPAN_UNSPELLABLE : undefined
+      if (!importer.unwrapUnspellable(value, error.node, error.nodes, message)) throw error
     }
   }
 }

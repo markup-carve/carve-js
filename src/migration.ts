@@ -1,6 +1,6 @@
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { djotToCarveWithLosses, stripDjotFootnoteDefinitionAttributes } from './djot-import.js'
-import { bbcodeToCarve } from './bbcode-migrate.js'
+import { bbcodeToCarveWithLosses } from './bbcode-migrate.js'
 import {
   htmlToCarve,
   type HtmlImportAdapter,
@@ -135,5 +135,6 @@ export function migrateDjot(source: string): MigrationResult {
 }
 
 export function migrateBbcode(source: string): MigrationResult {
-  return assessed(source, bbcodeToCarve(source), 'bbcode')
+  const imported = bbcodeToCarveWithLosses(source)
+  return assessed(source, imported.value, 'bbcode', imported.losses.map(loss => ({ code: loss.code, message: loss.message, severity: 'warning', fidelity: 'dropped', confidence: 'exact' })))
 }

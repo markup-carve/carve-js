@@ -1,4 +1,5 @@
 import { MAX_NESTING_DEPTH } from './parse.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 
 interface Run {
   start: number
@@ -24,7 +25,7 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough): string {
+export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender') => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough, leadingText: (body: string) => string = body => body): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -228,11 +229,15 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     let first = frame.first, last = frame.last
     let strong = frame.strong, italic = frame.italic, strike = frame.strike
     frame.keep &&= hostDepth + stack.length + frame.peak < MAX_NESTING_DEPTH
-    if (frame.keep) {
+    // The opener would be part of a larger character (CARVE-P3-025).
+    const extenderLeading = frame.keep && extendsGrapheme(leadingText(output.slice(frame.slot + 1).join('')), 0)
+    if (extenderLeading) onFlatten('extender')
+    else if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => (/[*_]/.test(source[i] ?? '') || pair.kind === '~' && source[i] === '~') && !claimed.has(i))
       const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
-      const braced = (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const beforeExtender = extendsGrapheme(leadingText(source.slice(pair.close + pair.width, pair.close + pair.width + 40)), 0)
+      const braced = beforeExtender || (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
