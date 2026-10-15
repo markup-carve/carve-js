@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, diffAst, fromAstJson, mergeAst, renderCarve } from '../src/index.js'
-import { carveToAstJson, diffAst, mergeAst } from '../src/index.js'
 
 const merge = (base: string, ours: string, theirs: string) =>
   mergeAst(carveToAstJson(base), carveToAstJson(ours), carveToAstJson(theirs))
