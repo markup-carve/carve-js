@@ -1007,6 +1007,8 @@ const IMPLEMENTED = new Set([
   'the-combined-bold-italic-token-does-not-open-or-close-inside-a-word',
   // ARRIVED WITH THIS PIN BUMP (spec fff74c66).
   'the-combined-bold-italic-token-does-not-open-after-an-underscore-or-a-slash',
+  // ARRIVED WITH THIS PIN BUMP (spec 347ee0ec).
+  'the-combined-bold-italic-token-does-not-open-inside-an-open-bare-italic-or-bold',
 ])
 
 /**
