@@ -121,10 +121,8 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
         if (process.platform !== 'win32') chmodSync(out, read.mode)
         assets.push(entry.path)
       } else {
-        let sourceText: string
-        try { sourceText = new TextDecoder('utf-8', { fatal: true }).decode(read.bytes) }
-        catch { throw new Error(`invalid UTF-8 in ${entry.path}`) }
-        const result = migrateMarkdown(sourceText)
+        // Decoded as single-file migration does: ill-formed bytes become U+FFFD (CARVE-P0-023).
+        const result = migrateMarkdown(read.bytes.toString('utf8'))
         writeFileSync(out, result.value, { flag: 'wx' })
         files.push({ source: entry.path, output: destination, diagnostics: result.report.diagnostics })
       }

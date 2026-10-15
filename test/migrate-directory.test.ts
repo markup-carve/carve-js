@@ -100,7 +100,7 @@ it.runIf(posix)('refuses an output directory that appears before the tree is mov
   expect(readFileSync(join(output, 'page.crv'), 'utf8')).toBe('Page\n')
 })
 
-it.runIf(posix && process.getuid?.() !== 0)('reports an unreadable file as a read failure, not as invalid UTF-8', () => {
+it.runIf(posix && process.getuid?.() !== 0)('reports an unreadable file as a read failure', () => {
   const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
   roots.push(root)
   const source = join(root, 'source')
@@ -127,4 +127,26 @@ it.runIf(posix)('keeps an asset\'s permission bits under a restrictive umask', (
   try { migrateMarkdownDirectory(source, join(root, 'output')) }
   finally { process.umask(umask) }
   expect(statSync(join(root, 'output', 'run.sh')).mode & 0o777).toBe(0o755)
+})
+
+it('replaces ill-formed bytes as single-file migration does', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'page.md'), Buffer.from([0x61, 0xed, 0xa0, 0x80, 0x62, 0x0a]))
+  migrateMarkdownDirectory(source, join(root, 'output'))
+  expect(readFileSync(join(root, 'output', 'page.crv'), 'utf8')).toBe('a\uFFFD\uFFFD\uFFFDb\n')
+})
+
+it('matches the Markdown extension by ASCII case only', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'page.MD'), 'Page\n')
+  writeFileSync(join(source, 'x.mar\u212Adown'), 'Kelvin\n')
+  const summary = migrateMarkdownDirectory(source, join(root, 'output'))
+  expect(summary).toMatchObject({ files: 1, assets: 1 })
+  expect(readFileSync(join(root, 'output', 'x.mar\u212Adown'), 'utf8')).toBe('Kelvin\n')
 })
