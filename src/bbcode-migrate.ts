@@ -738,7 +738,7 @@ function formatAttribution(attribution: string): string {
     id = leadingId[1]!
     remaining = remaining.slice(leadingId[0].length).trim()
   } else {
-    const namedId = /\bid=["']?(\d+)["']?/i.exec(remaining)
+    const namedId = /\b(?:post_id|id)=["']?(\d+)["']?/i.exec(remaining)
     if (namedId) {
       id = namedId[1]!
       remaining = remaining.replace(namedId[0], '')
@@ -757,13 +757,28 @@ function formatAttribution(attribution: string): string {
     remaining = remaining.replace(namedDate[0], '')
   }
 
-  const namedTime = /\btime=["']([^"']+)["']/i.exec(remaining)
+  // phpBB stores `time` as Unix seconds, quoted or not; other forums write a clock time.
+  const namedTime = /\btime=(?:["']([^"']+)["']|(\d+)(?=\s|$))/i.exec(remaining)
   if (namedTime) {
-    datetime = datetime !== null ? `${datetime} ${namedTime[1]!}` : namedTime[1]!
+    const value = namedTime[1] ?? namedTime[2]!
+    const unix = /^\d{9,11}$/.test(value) ? new Date(Number(value) * 1000) : null
+    if (unix !== null && Number.isFinite(unix.getTime())) datetime = unix.toISOString().slice(0, 10)
+    else datetime = datetime !== null ? `${datetime} ${value}` : value
     remaining = remaining.replace(namedTime[0], '')
   }
 
+  remaining = remaining.replace(/\buser_id=(?:"[^"]*"|'[^']*'|\S+)/gi, '')
+
   remaining = remaining.trim()
+  if (remaining.length >= 2 && ((remaining.startsWith('"') && remaining.endsWith('"')) ||
+      (remaining.startsWith("'") && remaining.endsWith("'")))) {
+    remaining = remaining.slice(1, -1)
+  }
+  const vbId = /^(.+);(\d+)$/.exec(remaining)
+  if (vbId && id === null) {
+    remaining = vbId[1]!
+    id = vbId[2]!
+  }
   if (name === null && remaining !== '') name = remaining
 
   let out = name ?? ''
