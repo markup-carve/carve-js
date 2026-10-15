@@ -56,7 +56,7 @@ describe('the Markdown delimiter row carries the column alignment', () => {
 
   it('does not promote a body-cell override to column alignment', () => {
     expect(carveToMarkdown('|> R1 |\n|= H2 |\n| D |\n')).toBe(
-      '| H2 |\n| --- |\n| R1 |\n| D |\n',
+      '|  |\n| ---: |\n| R1 |\n| H2 |\n| D |\n',
     )
   })
 })

@@ -31,7 +31,7 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderRowDemoted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { resolveTableSpans } from './table-spans.js'
 import { inlineText } from './heading-ids.js'
@@ -903,7 +903,10 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const spanGrid = resolveTableSpans(node.rows)
   for (const [rowIndex, row] of node.rows.entries()) {
     const isHeader = row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)
-    if (isHeader && header !== undefined) tableHeaderRowDemoted(ctx.options, row)
+    // Only the first row can become Markdown's header. A later header row
+    // stays in place, and mixed rows lose their individual header roles.
+    if (isHeader && rowIndex > 0) tableHeaderRowDemoted(ctx.options, row)
+    else if (!isHeader && row.cells.some((cell) => cell.header)) tableHeaderCellDemoted(ctx.options, row)
     const cells = row.cells.map((cell, cellIndex) => {
       const span = spanGrid[rowIndex]![cellIndex]!
       tableSpanFlattened(ctx.options, { ...span, pos: cell.pos }, 'markdown')
@@ -917,24 +920,21 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     })
     const rendered = `| ${cells.join(' | ')} |`
     // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
-    if (isHeader) {
-      if (header === undefined) aligns.length = 0
+    if (isHeader && rowIndex === 0) {
       row.cells.forEach((cell, i) => {
-        // Multiple header rows collapse to Markdown's one header row. The
-        // last header that specifies a column alignment wins in Carve, so the
-        // delimiter must use the same effective value.
+        // The first row supplies Markdown's column alignment.
         if (cell.align !== undefined) aligns[i] = cell.align
       })
-      if (header === undefined) {
-        header = rendered
-        headerColumns = cells.length
-      } else {
-        // Markdown cannot keep this row as another header, but dropping it
-        // would violate the presentation target's content floor.
-        rows.push(rendered)
-      }
+      header = rendered
+      headerColumns = cells.length
     } else {
       rows.push(rendered)
+      // Keep the effective column alignment from later all-header rows.
+      if (isHeader && header !== undefined) {
+        row.cells.forEach((cell, i) => {
+          if (cell.align !== undefined) aligns[i] = cell.align
+        })
+      }
       // A headerless table still declares its columns somewhere, so fall back to
       // the first row that carries an alignment.
       if (header === undefined) {
