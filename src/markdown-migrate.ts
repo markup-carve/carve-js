@@ -1886,7 +1886,8 @@ function convertInline(
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
     const inner = trimMatchingEdges(paren.slice(1, -1), (code) => code === 32 || code === 9 || code === 10)
     // Non-ASCII spaces and a BOM belong to the URL, not the title separator.
-    const pointyEnd = inner.startsWith('<') ? inner.indexOf('>') : -1
+    const pointyClose = inner.startsWith('<') ? /^<(?:[^<>\n\\]|\\[^\n])*>/.exec(inner) : null
+    const pointyEnd = pointyClose ? pointyClose[0].length - 1 : inner.startsWith('<') ? inner.indexOf('>') : -1
     if (inner.startsWith('<') && pointyEnd < 0) return undefined
     const m = pointyEnd < 0 ? inner.match(/^((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u) : null
     const url = pointyEnd >= 0 ? inner.slice(1, pointyEnd) : m ? m[1]! : inner
