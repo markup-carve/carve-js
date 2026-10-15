@@ -410,6 +410,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       (mask[pair.start - 2] === '{' && source.slice(Math.max(0, pair.start - 2), pair.start) === '{}')
     const forced =
       omitQuoteDelimiters || pair.kind === '~' || pair.kind === '^' || pair.forced ||
+      extendsGrapheme(source, pair.end) ||
       emptyBoundary ||
       scope ||
       content.startsWith('\0') ||

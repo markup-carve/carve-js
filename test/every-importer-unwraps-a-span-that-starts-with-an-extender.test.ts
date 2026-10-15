@@ -6,8 +6,8 @@ import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from '../src/import-report-messages
 // carve-js#3146: after CARVE-P3-025 a span whose content starts with a grapheme
 // extender has no Carve spelling. Every importer drops the span, keeps its
 // text and reports the same diagnostic.
-const ACUTE = '́'
-const SPACING = 'ा'
+const ACUTE = '\u0301'
+const SPACING = '\u093E'
 
 const report = (rows: readonly { code: string; message: string }[]) =>
   rows.filter(row => row.message === EXTENDER_LEADING_SPAN_UNSPELLABLE).map(row => row.code)

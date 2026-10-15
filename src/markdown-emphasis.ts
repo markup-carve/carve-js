@@ -236,7 +236,8 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => (/[*_]/.test(source[i] ?? '') || pair.kind === '~' && source[i] === '~') && !claimed.has(i))
       const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
-      const braced = (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const beforeExtender = extendsGrapheme(leadingText(source.slice(pair.close + pair.width, pair.close + pair.width + 40)), 0)
+      const braced = beforeExtender || (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'

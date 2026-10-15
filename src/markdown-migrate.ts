@@ -87,8 +87,16 @@ function extenderLeadingBody(body: string): boolean {
   return true
 }
 
-function wrapped(open: string, close: string): (match: string, body: string) => string {
-  return (_match, body) => extenderLeadingBody(body) ? body : `${open}${body}${close}`
+/** The text after a tag form starts with an extender, so a bare closer there would not close. */
+function extenderFollows(full: string, end: number): boolean {
+  return extendsGrapheme(decodeLeadingReference(full.slice(end, end + 40)), 0)
+}
+
+function wrapped(open: string, close: string, braced = open): (match: string, body: string, offset: number, full: string) => string {
+  return (match, body, offset, full) => {
+    if (extenderLeadingBody(body)) return body
+    return extenderFollows(full, offset + match.length) ? `${braced}${body}${close}${braced === open ? '' : '}'}` : `${open}${body}${close}`
+  }
 }
 
 function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
@@ -115,7 +123,7 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
     const after = full[offset + match.length] ?? ''
     const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
     const padded = /^\s|\s$/.test(body)
-    return intraword || padded || (marker === '/' && before === '/') ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+    return intraword || padded || (marker === '/' && before === '/') || extenderFollows(full, offset + match.length) ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
   }
 }
 
@@ -129,8 +137,8 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   [/<mark>([^<]+)<\/mark>/gi, markerForm('=')],
   [/<u>([^<]+)<\/u>/gi, markerForm('_')],
   [/<ins>([^<]+)<\/ins>/gi, wrapped('{+', '+}')],
-  [/<del>([^<]+)<\/del>/gi, wrapped('~', '~')],
-  [/<s>([^<]+)<\/s>/gi, wrapped('~', '~')],
+  [/<del>([^<]+)<\/del>/gi, wrapped('~', '~', '{~')],
+  [/<s>([^<]+)<\/s>/gi, wrapped('~', '~', '{~')],
   [/<sup>([^<]+)<\/sup>/gi, markerForm('^')],
   [/<sub>([^<]+)<\/sub>/gi, markerForm(',')],
   [/<strong>([^<]+)<\/strong>/gi, markerForm('*')],

@@ -439,7 +439,7 @@ function nextChars(pieces: MarkPiece[]): string[] {
     next[k] = after
     const piece = pieces[k]!
     if (typeof piece === 'string') {
-      if (piece !== '') after = piece[0]!
+      if (piece !== '') after = String.fromCodePoint(piece.codePointAt(0)!)
     } else if (hasContent(piece)) {
       after = '{'
     }
@@ -520,6 +520,7 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Writt
       // `#_x_` is a hashtag, `@_x_` a mention, `:_x_:` a symbol.
       (delim === '_' && (before === '#' || before === '@' || before === ':')) ||
       word.test(next) ||
+      extendsGrapheme(next, 0) ||
       body.startsWith(delim) ||
       body.endsWith(delim) ||
       (delim === '/' && body.startsWith('*') && body.endsWith('*'))
