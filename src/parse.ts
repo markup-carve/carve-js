@@ -3482,20 +3482,18 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     for (const char of source.slice(0, markerAt)) column += char === '\t' ? 4 - (column % 4) : 1
     return column
   }
+  // Only the innermost container's own closer ends an unclosed fence. An
+  // ancestor's width closes nothing there, so stopping on it ran the body to EOF.
   const hostCloserAt = (at: number): boolean => {
     const candidate = lexer.lineAt(at) ?? ''
     const width = RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length
-    if (width === undefined) return false
-    for (let frame = stack.length - 1; frame >= 0; frame--) {
-      const owner = stack[frame]!
-      if (owner.fenceWidth !== width) continue
-      const ownerColumn = authoredColonColumn(owner.lineIndex, width)
-      const column = authoredColonColumn(at, width)
-      if (ownerColumn === undefined || column === undefined
-        ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
-        : column === ownerColumn) return true
-    }
-    return false
+    const owner = stack[stack.length - 1]
+    if (width === undefined || owner === undefined || owner.fenceWidth !== width) return false
+    const ownerColumn = authoredColonColumn(owner.lineIndex, width)
+    const column = authoredColonColumn(at, width)
+    return ownerColumn === undefined || column === undefined
+      ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
+      : column === ownerColumn
   }
 
   while (!lexer.eof()) {
