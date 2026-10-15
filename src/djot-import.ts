@@ -26,6 +26,7 @@ import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 import { escapePlainDjotText } from './djot-plain-text.js'
 import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-migrate.js'
 import { replaceLoneSurrogates } from './well-formed.js'
+import { freeMarkerSerial } from './marker-serial.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
   let fence: { ch: string; len: number } | null = null
@@ -1443,8 +1444,7 @@ function imageLossChildText(label: string, quoteDepth: number): string {
   const child = (value: string): string => djotImageLabelText(value, source => convertDjotInput(source, true, true, true, true))
   const plain = child(label)
   const reserved = plain + '\n' + label.replace(/[^A-Za-z0-9]/g, '')
-  let serial = 0
-  while (reserved.includes(`DJOTTRAILSPACE${serial}Z`)) serial++
+  const serial = freeMarkerSerial(reserved, 'DJOTTRAILSPACE')
   const marker = `DJOTTRAILSPACE${serial}Z`
   const mask = maskDjotCodeAndDestinations(label)
   const probe = label.replace(/([ \t]+)((?:(?:\{%%\}|\[\]\{\}|\{\}|[\]}`_*~^+=-])[ \t]*)*)(\n)/g, (all, whitespace: string, hidden: string, newline: string, at: number) => {

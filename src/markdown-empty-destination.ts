@@ -1,3 +1,4 @@
+import { freeMarkerSerial } from './marker-serial.js'
 import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { rawBracketRunCloses } from './parse.js'
 import { trimMatchingEdges } from './trim-non-nbsp.js'
@@ -190,8 +191,7 @@ export function extractReferenceDefinitions(
   const htmlLines = new Set<number>()
   const taskHtmlLines = new Set<number>()
   const lines = [...inputLines]
-  let titleSerial = 0
-  while (inputLines.some(line => line.includes(`CARVEMDTITLEBREAK${titleSerial}Z`) || line.includes(`CARVEMDTITLEWRAP${titleSerial}Z`))) titleSerial++
+  const titleSerial = freeMarkerSerial(inputLines, 'CARVEMDTITLEBREAK', 'CARVEMDTITLEWRAP')
   const titleBreakMarker = `CARVEMDTITLEBREAK${titleSerial}Z`
   const titleWrap = `CARVEMDTITLEWRAP${titleSerial}Z`
   const empty = new Map<string, string>()
