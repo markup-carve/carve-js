@@ -8701,6 +8701,15 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     const close = s.indexOf(`${s[j + 1]}}`, j + 2)
     return close === -1 ? undefined : close + 2
   }
+  // An autolink body resolves no escapes, so a `]` inside it is content
+  // (CARVE-P3-001); its attribute block is not skipped.
+  const hasAngle = s.includes('<')
+  const autolinkEnd = (j: number): number | undefined => {
+    if (!hasAngle || s[j] !== '<') return undefined
+    RE_AUTOLINK_STICKY.lastIndex = j
+    const m = RE_AUTOLINK_STICKY.exec(s)
+    return m ? j + m[0].length : undefined
+  }
   const map = new Map<number, number>()
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
@@ -8739,6 +8748,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
+      continue
+    }
+    const linkEnd = autolinkEnd(j)
+    if (linkEnd !== undefined) {
+      j = linkEnd - 1
       continue
     }
     if (imageAlt && ch === '!') lastBang = j
@@ -8785,6 +8799,12 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       if (commentEnd !== undefined) {
         budget -= commentEnd - j
         j = commentEnd - 1
+        continue
+      }
+      const linkEnd = autolinkEnd(j)
+      if (linkEnd !== undefined) {
+        budget -= linkEnd - j
+        j = linkEnd - 1
         continue
       }
       if (ch === '!') rescanBang = j
