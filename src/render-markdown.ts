@@ -907,7 +907,9 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     // Only the first row can become Markdown's header. A later header row
     // stays in place, and mixed rows lose their individual header roles.
     if (isHeader && rowIndex > 0) tableHeaderRowDemoted(ctx.options, row)
-    else if (!isHeader && row.cells.some((cell) => cell.header)) tableHeaderCellDemoted(ctx.options, row)
+    else if (!isHeader) {
+      for (const cell of row.cells) if (cell.header) tableHeaderCellDemoted(ctx.options, cell)
+    }
     const cells = row.cells.map((cell, cellIndex) => {
       const span = spanGrid[rowIndex]![cellIndex]!
       tableSpanFlattened(ctx.options, { ...span, pos: cell.pos }, 'markdown')

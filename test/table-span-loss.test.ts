@@ -105,6 +105,14 @@ describe('table render losses', () => {
     ])
   })
 
+  it('reports each demoted header cell at its own position', () => {
+    const result = carveToMarkdownWithReport('|= A |= B | C |\n')
+    expect(result.losses.map(loss => loss.code)).toEqual([
+      'table-header-cell-demoted', 'table-header-cell-demoted',
+    ])
+    expect(result.losses[0]?.pos?.startColumn).not.toBe(result.losses[1]?.pos?.startColumn)
+  })
+
   it('reports row loss before cell and content losses', () => {
     const ast = {
       type: 'document', children: [{ type: 'table', rows: [
