@@ -141,6 +141,30 @@ describe('table render losses', () => {
     expect(result.value).toContain('| A | B |\n|  | C |')
   })
 
+  it('does not report a header loss for an absorbed placeholder', () => {
+    const ast = { type: 'document', children: [{ type: 'table', rows: [{
+      type: 'table_row', cells: [
+        { type: 'table_cell', header: false, children: [{ type: 'text', value: 'A' }] },
+        { type: 'table_cell', header: true, span: 'colspan', children: [] },
+        { type: 'table_cell', header: false, children: [] },
+      ],
+    }] }] } as Parameters<typeof renderMarkdownWithReport>[0]
+    expect(renderMarkdownWithReport(ast).losses.map(loss => loss.code)).toEqual(['table-span-flattened'])
+  })
+
+  it('reports a cell header loss before its span loss', () => {
+    const ast = { type: 'document', children: [{ type: 'table', rows: [{
+      type: 'table_row', cells: [
+        { type: 'table_cell', header: true, children: [{ type: 'text', value: 'H' }] },
+        { type: 'table_cell', header: false, span: 'colspan', children: [] },
+        { type: 'table_cell', header: false, children: [] },
+      ],
+    }] }] } as Parameters<typeof renderMarkdownWithReport>[0]
+    expect(renderMarkdownWithReport(ast).losses.map(loss => loss.code)).toEqual([
+      'table-header-cell-demoted', 'table-span-flattened',
+    ])
+  })
+
   it('reports row loss before cell and content losses', () => {
     const ast = {
       type: 'document', children: [{ type: 'table', rows: [
