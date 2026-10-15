@@ -9084,11 +9084,10 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
 
 const PAIR_MARKERS = '/*_^,~=+-'
 
-// A forced opener of the five bare delimiters needs a whole delimiter too; `{^`
-// and `{,` are outside the clause.
+// Every forced opener, `{^` and `{,` included, needs a whole delimiter too.
 function splitForcedOpener(text: string, open: number): boolean {
   const marker = text[open + 1]
-  return marker !== undefined && '/*_~='.includes(marker) && extendsGrapheme(text, open + 2)
+  return marker !== undefined && FORCED_TYPE[marker] !== undefined && extendsGrapheme(text, open + 2)
 }
 
 interface InlinePairView {
