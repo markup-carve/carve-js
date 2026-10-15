@@ -158,8 +158,9 @@ attributes, column metadata, block cells, and alignment. Diagnostics carry
 AST JSON node paths and field names. `maxDiagnostics` bounds retained detail
 while `totalDiagnostics` counts all findings; strict refusal uses that count.
 `result.losses` is the normative render-loss report, which names flattened
-spans and demoted header rows (`table-span-flattened`,
-`table-header-row-demoted`); the assessment adds the fields it does not cover.
+spans and demoted header rows or cells (`table-span-flattened`,
+`table-header-row-demoted`, `table-header-cell-demoted`); the assessment adds
+the fields it does not cover.
 
 The report sets `complete: false` and lists its unchecked boundaries. A clean
 assessment does not establish preservation of non-table semantics, source
