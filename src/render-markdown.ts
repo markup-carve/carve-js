@@ -901,9 +901,28 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   const spanGrid = resolveTableSpans(node.rows)
-  const hasHeaderRow = node.rows.some((row) => row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header))
+  // A span placeholder has the header role of the cell it extends. In
+  // particular, '^' can continue a body cell from an earlier row.
+  const headerCells: boolean[][] = []
+  const activeHeaders: boolean[] = []
   for (const [rowIndex, row] of node.rows.entries()) {
-    const isHeader = row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)
+    const flags: boolean[] = []
+    for (const [cellIndex, cell] of row.cells.entries()) {
+      const span = spanGrid[rowIndex]![cellIndex]!
+      flags[cellIndex] = span.skip && cell.span === 'rowspan'
+        ? activeHeaders[cellIndex] ?? false
+        : span.skip && cell.span === 'colspan'
+          ? flags[cellIndex - 1] ?? false
+          : cell.header
+      if (!span.skip && span.rowspan > 1) {
+        for (let i = cellIndex; i < cellIndex + span.colspan; i++) activeHeaders[i] = flags[cellIndex]!
+      }
+    }
+    headerCells.push(flags)
+  }
+  const hasHeaderRow = node.rows.some((row, i) => headerCells[i]!.every(Boolean) && row.cells.some((cell) => cell.header))
+  for (const [rowIndex, row] of node.rows.entries()) {
+    const isHeader = headerCells[rowIndex]!.every(Boolean) && row.cells.some((cell) => cell.header)
     // Only the first row can become Markdown's header. A later header row
     // stays in place, and mixed rows lose their individual header roles.
     if (isHeader && rowIndex > 0) tableHeaderRowDemoted(ctx.options, row)
