@@ -1005,6 +1005,8 @@ const IMPLEMENTED = new Set([
   'an-autolink-is-opaque-to-the-bracket-scan',
   'a-delimiter-that-is-part-of-a-larger-character-is-text',
   'the-combined-bold-italic-token-does-not-open-or-close-inside-a-word',
+  // ARRIVED WITH THIS PIN BUMP (spec fff74c66).
+  'the-combined-bold-italic-token-does-not-open-after-an-underscore-or-a-slash',
 ])
 
 /**
