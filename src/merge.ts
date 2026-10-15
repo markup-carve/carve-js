@@ -4,6 +4,7 @@ import type { AstJsonDocument } from './ast-json.js'
 import { fromAstJson } from './ast-json.js'
 import { NODE_POSITION_KIND } from './wire-fields.js'
 import { AstStructuralIndex, astPointer, type AstPath } from './ast-structural-index.js'
+import { mergeText } from './diff.js'
 
 export interface MergeConflict {
   /** Base-relative JSON Pointer into the exchange tree (the root is the empty string). */
@@ -490,6 +491,19 @@ function mergeValue(
   nodePosition: boolean,
   structuralIndex: AstStructuralIndex,
 ): Value {
+  if (nodePosition && [base, ours, theirs].every(
+    (value) => Array.isArray(value) && value.every(
+      (node) => typeof node === 'object' && node !== null && typeof node.type === 'string',
+    ),
+  )) {
+    // Compare text runs the way `diff` does, so a rewrap is no change; return the
+    // authored arrays, since the normalized form drops a soft break with no text before it.
+    type Nodes = Array<{ type: string; [key: string]: unknown }>
+    const [b, o, t] = [base, ours, theirs].map((value) => mergeText(value as Nodes))
+    if (equal(o, t, nodePosition, structuralIndex)) return ours
+    if (equal(o, b, nodePosition, structuralIndex)) return theirs
+    if (equal(t, b, nodePosition, structuralIndex)) return ours
+  }
   if (equal(ours, theirs, nodePosition, structuralIndex)) return ours
   if (equal(ours, base, nodePosition, structuralIndex)) return theirs
   if (equal(theirs, base, nodePosition, structuralIndex)) return ours

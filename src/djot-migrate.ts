@@ -468,6 +468,12 @@ export function maskDjotFences(
             ownerIndent: indent,
           })
         if (column > 0) stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
+        const definitionPrefix = /^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}(?=:(?:[ \t]|$))/.exec(view)?.[0]
+        if (definitionPrefix) {
+          const items = [...definitionPrefix.matchAll(/(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+/g)]
+          const last = items.at(-1)!
+          stack.push({ indent: last.index!, column: definitionPrefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length, ownerIndent: last.index! })
+        }
       }
     }
 
