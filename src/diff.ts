@@ -110,7 +110,9 @@ export function mergeText(nodes: Node[]): Node[] {
   }
   for (const node of nodes) {
     if (node.type === 'soft_break') {
-      if (first !== undefined) run.push(' ')
+      // A break after inline markup still renders as a space, so it starts a run.
+      first ??= { type: 'text', value: '' } as Node
+      run.push(' ')
       continue
     }
     if (node.type === 'text' && typeof node['value'] === 'string') {

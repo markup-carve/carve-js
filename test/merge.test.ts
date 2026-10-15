@@ -54,6 +54,16 @@ describe('three-way structural merge', () => {
     }
   })
 
+  it('treats removing a soft break after a link as a change', () => {
+    const base = 'A [word](u)\nnext and the old tail.\n'
+    const ours = 'A [word](u)next and the old tail.\n'
+    const theirs = 'A [word](u)\nnext and the new tail.\n'
+    expect(diffAst(carveToAstJson(base), carveToAstJson(ours))).not.toEqual([])
+    const result = merge(base, ours, theirs)
+    if (result.ok) expect(renderCarve(fromAstJson(result.ast))).toContain('[word](u)next')
+    else expect(result.conflicts.length).toBeGreaterThan(0)
+  })
+
   it('conflicts on two different edits to rewrapped text', () => {
     const base = 'The quick brown fox jumps over the lazy dog and keeps running far away.\n'
     const ours = 'The quick blue fox jumps over the lazy dog\nand keeps running far away.\n'
