@@ -720,12 +720,19 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const sameKind = sharedKind !== undefined
       if (parent && !nested && sharedKind !== undefined) { kind = sharedKind; parent.kind = kind }
       if (!parent || nested) {
+        let definitionTarget: number | undefined
+        if (parent && nested && blank) {
+          let previous = n - 1
+          while (previous >= 0 && /^[ \t>]*$/.test(lines[previous]!) && (lines[previous]!.match(/>/g) ?? []).length === quoteDepth) previous--
+          const head = previous < 0 ? null : /^((?:[ \t]*>(?:[ \t]|$))*)([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}):(?:[ \t]|$)/.exec(lines[previous]!)
+          if (head && (head[1]!.match(/>/g) ?? []).length === quoteDepth && head[2]!.length === indent && mask[previous]![head[1]!.length + head[2]!.length] === ':') definitionTarget = parent.target + indent - parent.column
+        }
         context = {
           sourcePrefix,
           depth: quoteDepth,
           column: indent,
           content: compactDjotListPrefix(item[0].slice(0, -1)).length,
-          target: nested ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0,
+          target: definitionTarget ?? (nested ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0),
           kind,
           bullet: item[1] === '*' ? '*' : '-',
           loose: false,
