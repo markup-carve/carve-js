@@ -27,6 +27,8 @@ export interface FileSystemResolverOptions {
   maxFileBytes?: number
 }
 
+const UTF8_FATAL = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+
 /** Default per-target read cap for {@link fileSystemResolver}: 4 MiB. */
 export const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024
 
@@ -140,10 +142,18 @@ export function fileSystemResolver(
     } catch {
       return { source: null, id: real, denial: 'denied' }
     }
+    let bytes: Uint8Array
     try {
-      return { source: readFileSync(real, 'utf8'), id: real }
+      bytes = readFileSync(real)
     } catch {
       return { source: null, id: real, denial: 'denied' }
+    }
+    // Bytes that are not well-formed UTF-8 go to the expander undecoded, which
+    // refuses them as non-text (I7) instead of replacing them (CARVE-P0-023).
+    try {
+      return { source: UTF8_FATAL.decode(bytes), id: real }
+    } catch {
+      return { source: bytes, id: real }
     }
   }
 }

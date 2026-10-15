@@ -14,6 +14,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
@@ -134,8 +135,12 @@ export interface IncludeContext {
  * paths to files (filesystem, VFS) should return one; without it two
  * spellings of the same file ("b.crv" vs "./b.crv") defeat the cycle guard
  * and only the depth limit stops the recursion.
+ *
+ * `source` may be raw bytes, read as UTF-8. Bytes that are not well-formed
+ * UTF-8, and a string holding a lone surrogate, are non-text and refused (I7):
+ * the replacement rule of CARVE-P0-023 covers the root document only.
  */
-export type IncludeResolved = string | { source: string; id?: string }
+export type IncludeResolved = string | { source: string | Uint8Array; id?: string }
 
 /** Why a resolver refused an include target, when it can classify the refusal. */
 export type IncludeDenial = 'outside-root' | 'not-found' | 'no-root' | 'denied' | 'unresolved'
@@ -457,6 +462,17 @@ function childContext(state: State): IncludeContext {
  * encounter fixes the order, and a later successful read upgrades an entry
  * that was first seen unresolved.
  */
+const INCLUDE_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+
+/** UTF-8 bytes as text, or null when they are not well-formed UTF-8. */
+function decodeIncludeBytes(bytes: Uint8Array): string | null {
+  try {
+    return INCLUDE_DECODER.decode(bytes)
+  } catch {
+    return null
+  }
+}
+
 function note(state: State, id: string, resolved: boolean, denial?: IncludeDenial): void {
   const current = state.dependencies.get(id)
   if (resolved) {
@@ -547,10 +563,11 @@ function resolveChild(
     warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved.`, node)
     return null
   }
-  const source = typeof resolved === 'string' ? resolved : (resolved as { source?: unknown }).source
+  const supplied = typeof resolved === 'string' ? resolved : (resolved as { source?: unknown }).source
+  const source = supplied instanceof Uint8Array ? decodeIncludeBytes(supplied) : supplied
   const id =
     typeof resolved === 'string' ? d.path : ((resolved as { id?: unknown }).id as string | undefined) ?? d.path
-  if (typeof source !== 'string' || source.includes('\0')) {
+  if (typeof source !== 'string' || source.includes('\0') || replaceLoneSurrogates(source) !== source) {
     note(state, id, false)
     warn(state, 'include-non-text', `Include "${d.path}" did not resolve to text.`, node)
     return null

@@ -49,6 +49,7 @@ import {
 } from './wire-fields.js'
 import { ownValue, setOwn } from './own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from './abbr-budget.js'
+import { replaceLoneSurrogates } from './well-formed.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -1399,14 +1400,15 @@ function astJsonDepth(
  * boundary normalizes the same characters in source text.
  */
 function normalizeIngestedValue(text: string): string {
-  const denulled = text.includes('\0') ? text.replace(/\0/g, '\ufffd') : text
+  const denulled = replaceLoneSurrogates(text.includes('\0') ? text.replace(/\0/g, '\ufffd') : text)
   return denulled.includes('\r') ? denulled.replace(/\r\n?/g, '\n') : denulled
 }
 
 /**
- * Replace every U+0000 with U+FFFD in every string value of an ingested
- * payload, before anything reads one of them (PART 12 section 21), and collapse
- * every carriage return to a line feed alongside it.
+ * Replace every U+0000 and every lone surrogate with U+FFFD in every string
+ * value of an ingested payload, before anything reads one of them (PART 12
+ * section 21, CARVE-P0-023), and collapse every carriage return to a line feed
+ * alongside it.
  */
 function normalizeIngestedValues<T>(node: T): T {
   if (typeof node === 'string') {
