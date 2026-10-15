@@ -5,8 +5,9 @@ const html = '<table><caption>Limits</caption><tr><th>System</th><th colspan="2"
 const source = migrateHtml(html).value
 
 describe('table preservation assessment', () => {
-  it('reports span and caption degradation separately from the normative render-loss channel', () => {
-    expect(carveToMarkdownWithReport(source).totalLosses).toBe(0)
+  it('reports span and caption degradation beyond the normative render-loss channel', () => {
+    // The render-loss channel reports only the two spans (CARVE-P2-024); the caption is not a loss there.
+    expect(carveToMarkdownWithReport(source).losses.map(l => l.code)).toEqual(['table-span-flattened', 'table-span-flattened'])
     const ast = carveToAstJson(source)
     const report = assessTablePreservation(ast, 'markdown')
     expect(report.diagnostics.map(d => d.field)).toEqual(['caption', 'colspan', 'rowspan'])
@@ -36,9 +37,9 @@ describe('table preservation assessment', () => {
 })
 
 
-it('offers a checked output API without changing the render-loss schema', () => {
+it('offers a checked output API beside the render-loss report', () => {
   const result = carveToPreservationReport(source, 'markdown')
-  expect(result).toMatchObject({ totalLosses: 0, preservation: { totalDiagnostics: 3 } })
+  expect(result).toMatchObject({ totalLosses: 2, preservation: { totalDiagnostics: 3 } })
   expect(() => carveToPreservationReport(source, 'markdown', { strictPreservation: true })).toThrow(PreservationError)
   expect(carveToPreservationReport(source, 'html', { strictPreservation: true }).value).toContain('colspan="2"')
 })

@@ -3482,20 +3482,18 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     for (const char of source.slice(0, markerAt)) column += char === '\t' ? 4 - (column % 4) : 1
     return column
   }
+  // Only the innermost container's own closer ends an unclosed fence. An
+  // ancestor's width closes nothing there, so stopping on it ran the body to EOF.
   const hostCloserAt = (at: number): boolean => {
     const candidate = lexer.lineAt(at) ?? ''
     const width = RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length
-    if (width === undefined) return false
-    for (let frame = stack.length - 1; frame >= 0; frame--) {
-      const owner = stack[frame]!
-      if (owner.fenceWidth !== width) continue
-      const ownerColumn = authoredColonColumn(owner.lineIndex, width)
-      const column = authoredColonColumn(at, width)
-      if (ownerColumn === undefined || column === undefined
-        ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
-        : column === ownerColumn) return true
-    }
-    return false
+    const owner = stack[stack.length - 1]
+    if (width === undefined || owner === undefined || owner.fenceWidth !== width) return false
+    const ownerColumn = authoredColonColumn(owner.lineIndex, width)
+    const column = authoredColonColumn(at, width)
+    return ownerColumn === undefined || column === undefined
+      ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
+      : column === ownerColumn
   }
 
   while (!lexer.eof()) {
@@ -8703,6 +8701,15 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     const close = s.indexOf(`${s[j + 1]}}`, j + 2)
     return close === -1 ? undefined : close + 2
   }
+  // An autolink body resolves no escapes, so a `]` inside it is content
+  // (CARVE-P3-001); its attribute block is not skipped.
+  const hasAngle = s.includes('<')
+  const autolinkEnd = (j: number): number | undefined => {
+    if (!hasAngle || s[j] !== '<') return undefined
+    RE_AUTOLINK_STICKY.lastIndex = j
+    const m = RE_AUTOLINK_STICKY.exec(s)
+    return m ? j + m[0].length : undefined
+  }
   const map = new Map<number, number>()
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
@@ -8741,6 +8748,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
+      continue
+    }
+    const linkEnd = autolinkEnd(j)
+    if (linkEnd !== undefined) {
+      j = linkEnd - 1
       continue
     }
     if (imageAlt && ch === '!') lastBang = j
@@ -8787,6 +8799,12 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       if (commentEnd !== undefined) {
         budget -= commentEnd - j
         j = commentEnd - 1
+        continue
+      }
+      const linkEnd = autolinkEnd(j)
+      if (linkEnd !== undefined) {
+        budget -= linkEnd - j
+        j = linkEnd - 1
         continue
       }
       if (ch === '!') rescanBang = j

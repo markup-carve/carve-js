@@ -350,6 +350,8 @@ A profile's `maxLength` is not enforced here - it is a pre-parse guard on
 source bytes, and there is no source at this seam. `'carve'` is deliberately
 not a target: `carveToCarve` runs a different composition on purpose, because a
 formatter must write back what the author wrote.
+Pass `{ alignTables: true }` to `carveToCarve` to pad table cells by Unicode 18
+display width. The default keeps the canonical one-space padding.
 
 ### Mention and tag resolvers
 

@@ -93,7 +93,7 @@ const HELP = `carve - Carve markup tooling
 Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
-  carve fmt [-w|--check] [--stamp] [--migrate] [files...]
+  carve fmt [-w|--check] [--stamp] [--migrate] [--align-tables] [files...]
                                    Format Carve source canonically
   carve flatten [--include-root DIR] [file]
                                    Write the document as ONE self-contained
@@ -162,7 +162,8 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 raw-format-dropped, ruby-flattened,
                                 editorial-comment-flattened,
                                 carrier-attribute-dropped,
-                                list-style-dropped, list-delimiter-changed)
+                                list-style-dropped, list-delimiter-changed,
+                                table-span-flattened, table-header-row-demoted)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -172,6 +173,7 @@ fmt - format Carve source canonically.
     -w, --write    Rewrite the given files in place
         --check    Exit 1 if any file is not formatted (no writes)
         --stdout   Print formatted output to stdout (single file or stdin)
+        --align-tables  Pad table cells to shared display widths
         --stamp    Append a provenance marker (a comment recording the spec
                    version and engine) at the end of the document; replaces an
                    existing one. Deterministic (no timestamp); renders nothing.
@@ -536,6 +538,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     stamp?: boolean
     'stamp-block'?: boolean
     migrate?: boolean
+    'align-tables'?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -549,6 +552,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
         stamp: { type: 'boolean' },
         'stamp-block': { type: 'boolean' },
         migrate: { type: 'boolean' },
+        'align-tables': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -575,7 +579,9 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
   // form. Format, then stamp, so the marker lands on canonical output.
   const stampForm: StampForm | null = values['stamp-block'] ? 'block' : values.stamp ? 'line' : null
   const format = (src: string): string => {
-    const out = carveToCarve(values.migrate ? migrateCaseOnlyReferences(src) : src)
+    const out = carveToCarve(values.migrate ? migrateCaseOnlyReferences(src) : src, {
+      alignTables: values['align-tables'] === true,
+    })
     return stampForm ? stampCarve(out, `carve-js ${LIB_VERSION}`, stampForm) : out
   }
 
@@ -970,7 +976,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed']
+  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed', 'table-span-flattened', 'table-header-row-demoted']
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
     io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)

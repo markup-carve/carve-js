@@ -287,10 +287,13 @@ export function djotImportLosses(
     else if (masked[at] === '[' && !escaped[at]) next = -1
     referenceEnds[at] = next
   }
-  const stack: { at: number; nested: boolean }[] = []
+  const stack: { at: number; nested: boolean; plain: boolean; first: string; last: string }[] = []
   const carryNested = (nested: boolean): void => {
     const parent = stack.at(-1)
-    if (nested && parent) parent.nested = true
+    if (parent) {
+      parent.plain = false
+      if (nested) parent.nested = true
+    }
   }
   let boundary = 0
   for (let at = 0; at < source.length; at++) {
@@ -298,9 +301,16 @@ export function djotImportLosses(
       stack.length = 0
       boundary++
     }
-    if (masked[at] !== source[at] || escaped[at]) continue
-    if (source[at] === '[') {
-      stack.push({ at, nested: false })
+    const current = stack.at(-1), ch = source[at]!
+    if (current && ch !== '[' && ch !== ']' && !(ch === '!' && source[at + 1] === '[')) {
+      if (masked[at] !== ch || escaped[at] || !/[A-Za-z0-9 \t\n]/.test(ch) || ch === '\n' && !/[A-Za-z0-9]/.test(current.last)) current.plain = false
+      if (!current.first) current.first = ch
+      current.last = ch
+    }
+    if (masked[at] !== ch || escaped[at]) continue
+    if (ch === '[') {
+      if (current && (source[at - 1] !== '!' || escaped[at - 1])) current.plain = false
+      stack.push({ at, nested: false, plain: true, first: '', last: '' })
       continue
     }
     if (source[at] !== ']') continue
@@ -335,7 +345,7 @@ export function djotImportLosses(
     if (image) rawFormatIgnored.push([open, at + 1])
     if (image && destination !== undefined && destination !== '') {
       const label = source.slice(open + 1, at)
-      if (label.includes('\n')) {
+      if (label.includes('\n') && !opener.plain) {
         const childText = (imageChildText ?? collapsedReferenceText)(label, quoteDepths[lineAt(open) - 1]!)
         if (/\n[ \t]*\n/.test(childText))
           report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
@@ -347,6 +357,12 @@ export function djotImportLosses(
       if (opener.nested) report('A link inside another link cannot be spelled in Carve.', lineAt(open))
       const parent = stack.at(-1)
       if (parent) parent.nested = true
+    }
+    const parent = stack.at(-1)
+    if (parent) {
+      if (!image || destination === undefined || destination === '' || !opener.plain) parent.plain = false
+      if (!parent.first) parent.first = opener.first
+      if (opener.last) parent.last = opener.last
     }
     at = end - 1
   }

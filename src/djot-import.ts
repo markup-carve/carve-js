@@ -1124,6 +1124,61 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
   return djotInlineLayout(source, at => omitQuoteDelimiters || imageQuotes.has(at))
 }
 
+function collapsePlainNestedImageChains(source: string): string {
+  if (!source.includes('![') || !source.includes('\n')) return source
+  let mask = maskDjotCodeAndDestinations(source)
+  if (source.includes(']:')) {
+    const accepted = new Map<number, { label: string; target: string; end: number }>()
+    foldDjotReferences(source, accepted)
+    let covered = -1
+    mask = mask.split('\n').map((line, n) => {
+      covered = Math.max(covered, accepted.get(n)?.end ?? -1)
+      return n <= covered ? ' '.repeat(line.length) : line
+    }).join('\n')
+  }
+  const chunks: string[] = []
+  let copied = 0
+  for (let start = 0; start < source.length; start++) {
+    if (source.slice(start, start + 2) !== '![' || mask[start] !== '!' || isDjotEscaped(source, start)) continue
+    let at = start, lastUnsafe = -1, previous = '', nonSpace = ''
+    const labels: string[] = [], positions: number[] = []
+    while (source.slice(at, at + 2) === '![' && mask[at] === '!') {
+      positions.push(at)
+      at += 2
+      const begin = at, level = labels.length
+      while (at < source.length && /[A-Za-z0-9 \t\n]/.test(source[at]!)) {
+        const ch = source[at++]!
+        if (ch === '\n' && (nonSpace === '\n' || previous === ' ' || previous === '\t')) lastUnsafe = level
+        if (ch !== ' ' && ch !== '\t') nonSpace = ch
+        previous = ch
+      }
+      labels.push(source.slice(begin, at))
+      if (source.slice(at, at + 2) !== '![') break
+    }
+    if (labels.length < 2 || source[at] !== ']') { start = Math.max(start, at - 1); continue }
+    const targets: string[] = [], ends: number[] = []
+    for (let level = 0; level < labels.length; level++) {
+      if (source.slice(at, at + 2) !== '](') break
+      at += 2
+      const begin = at
+      while (at < source.length && !/[\s()\[\]<>\\]/.test(source[at]!)) at++
+      if (at === begin || source[at] !== ')') break
+      targets.push(source.slice(begin, at++))
+      ends.push(at)
+    }
+    const first = Math.max(labels.length - targets.length, lastUnsafe + 1)
+    const count = labels.length - first
+    if (count < 2) { start = Math.max(start, at - 1); continue }
+    const end = ends[count - 1]!
+    chunks.push(source.slice(copied, positions[first]!), '![' + labels.slice(first).join('') + '](' + targets[count - 1]! + ')')
+    copied = end
+    start = end - 1
+  }
+  if (!chunks.length) return source
+  chunks.push(source.slice(copied))
+  return chunks.join('')
+}
+
 function collapseLiteralNestedImages(source: string): string {
   if (!source.includes('![![')) return source
   const mask = maskDjotCodeAndDestinations(source)
@@ -1184,7 +1239,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
-  let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
+  let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(collapsePlainNestedImageChains(sourceBody)))
   const hasSourceNuls = body.includes('\0U\0')
   const headingCandidate = !skipHeadingTargets && hasSourceNuls && !/(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[\^[^\]\n]+\]:/.test(body) && body.includes('][') && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t]/.test(body)
   const actualHeadingTargets = headingCandidate ? importedDjotHeadingTargets(convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters, true)) : undefined

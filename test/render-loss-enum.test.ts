@@ -9,7 +9,8 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 /**
  * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened`,
  * `destination-denied`, `editorial-comment-flattened`, `carrier-attribute-dropped`,
- * and `list-style-dropped`
+ * `list-style-dropped`, `list-delimiter-changed`, `table-span-flattened`,
+ * and `table-header-row-demoted`
  * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
  * the conversion-diagnostics channel
@@ -120,7 +121,7 @@ const collidesWithCarrier = (): unknown => ({
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('names seven codes in the selected schema', () => {
+  it('names nine codes in the selected schema', () => {
     expect(schemaCodes()).toEqual([
       'raw-format-dropped',
       'ruby-flattened',
@@ -129,6 +130,8 @@ describe('the render-loss code enum', () => {
       'carrier-attribute-dropped',
       'list-style-dropped',
       'list-delimiter-changed',
+      'table-span-flattened',
+      'table-header-row-demoted',
     ])
   })
 
@@ -153,6 +156,8 @@ describe('the render-loss code enum', () => {
     }
     for (const loss of carveToMarkdownWithReport('a. one\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('|= First | < |\n|= Second | Cell |\n').losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('|= First |\n|= Second |\n').losses) seen.add(loss.code)
     expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
   })
 
