@@ -120,7 +120,8 @@ const BRACKET_2 = String.raw`\[(?:${BRACKET_0}|${BRACKET_1})*\]`
 const BRACKET_3 = String.raw`\[(?:${BRACKET_0}|${BRACKET_2})*\]`
 const LABEL = String.raw`((?:${BRACKET_0}|${BRACKET_3})*)`
 
-const DESTINATION = String.raw`(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)`
+const ANGLE_DESTINATION = String.raw`<(?:[^<>\n\\]|\\[^\n])*>`
+const DESTINATION = String.raw`(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)`
 const TITLE = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\((?:[^()\\\n]|\\.)*\))`
 
 function normalizeReferenceLabel(label: string): string {
@@ -267,7 +268,7 @@ export function extractReferenceDefinitions(
   /** The content column every container prefix on the line put the body at. */
   let blockIndent = 0
   const leadingSpaces = (s: string) => /^ */.exec(s)![0].length
-  const lineTitle = new RegExp(String.raw`^[ \t]*(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
+  const lineTitle = new RegExp(String.raw`^[ \t]*(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
   const opensBlock = (text: string): boolean =>
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
     /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
@@ -490,7 +491,7 @@ export function extractReferenceDefinitions(
     if (
       (canStart || opensItem || lineDepth > depth) &&
       definition &&
-      new RegExp(String.raw`^[ \t]*(?:(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*)?$`).test(definition[2]!)
+      new RegExp(String.raw`^[ \t]*(?:(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*)?$`).test(definition[2]!)
     ) {
       depth = lineDepth
       const key = normalizeReferenceLabel(definition[1]!)
@@ -557,7 +558,7 @@ export function extractReferenceDefinitions(
           i += 2
         } else if (title) i++
         if (!repeated && definition[1]!.includes('|')) tableInline.set(definition[1]!, `${target}${title}`)
-        const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
+        const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(new RegExp(String.raw`^<((?:[^<>\n\\]|\\[^\n])+)>`), (_match, url: string) =>
           url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
         ))
         if ((multilineTitle || wrappedDestinationTitle) && !repeated) {
