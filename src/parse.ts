@@ -8703,11 +8703,13 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     const close = s.indexOf(`${s[j + 1]}}`, j + 2)
     return close === -1 ? undefined : close + 2
   }
-  // An autolink body resolves no escapes, so a `]` inside it is content
-  // (CARVE-P3-001); its attribute block is not skipped.
+  // An autolink or cross-reference body resolves no escapes, so a `]` inside
+  // it is content (CARVE-P3-001); its attribute block is not skipped.
   const hasAngle = s.includes('<')
+  const crossrefs: CrossrefMemo = { lastCloser: hasAngle ? s.lastIndexOf('>') : -1 }
   const autolinkEnd = (j: number): number | undefined => {
     if (!hasAngle || s[j] !== '<') return undefined
+    if (s.startsWith('</#', j) && s[j + 3] !== '>' && crossrefBodyCanEnd(s, j + 3, crossrefs)) return s.indexOf('>', j + 3) + 1
     RE_AUTOLINK_STICKY.lastIndex = j
     const m = RE_AUTOLINK_STICKY.exec(s)
     return m ? j + m[0].length : undefined
@@ -15917,6 +15919,8 @@ class ParseSession {
         if (close !== undefined) hosts.set(at, close + 1)
       }
       for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
+      // An autolink or a cross-reference is atomic (PART 9 E2a): a `~>` ending one is no arrow.
+      for (const [at, end] of atomicLinkRegions(text)) if (!hosts.has(at)) hosts.set(at, end)
       for (let at = 0; at < text.length; at++) {
         const marker = text[at + 1]
         if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitBracedOpener(text, at)) continue

@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+- An autolink or a cross-reference is atomic to editorial substitution: a `~>` that ends one is no arrow, so `{~a <https://x~>y> b~}` is a strikethrough around the autolink (markup-carve/carve#3244).
+- A `]` inside a cross-reference no longer closes a link, image, span or inline-note label opened before it, so `[a </#x]> b](u)` is one link (markup-carve/carve#3244).
+
 ## [0.1.12] - 2026-10-15
 
 ### Breaking
