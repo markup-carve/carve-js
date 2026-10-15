@@ -21,6 +21,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - The combined bold-italic token `/*x*/` no longer opens after a letter, digit, `_` or `/`, or closes before a letter or digit, so `src/*test*/fixtures` keeps its slashes (#3151, #3154, markup-carve/carve#3217).
 - A lone surrogate in an input string becomes U+FFFD in the parser, in AST JSON ingest and in every importer, instead of reaching HTML output and heading ids (#3135, #3139, #3142, #3152, markup-carve/carve#3212).
 - An autolink or a cross-reference is atomic to editorial substitution and to the bracket scan: a `~>` inside one is no arrow, and a `]` inside a cross-reference no longer closes a label opened before it (#3168, markup-carve/carve#3244).
+- Markdown and HTML import write an unresolved cross-reference back verbatim, so `</#x~>y>` stays a cross-reference instead of gaining a `\#` and becoming text (#3183, #3182).
 - A `]` inside a nested link's destination no longer closes the image alt, span or link around it, so `![a [x](/u]) b](/i)` is one image (#3180, #3177).
 - An unclosed code fence in a `:::` container ends at the container's closer when it follows a comment line or a quote or list item line (#3167).
 - A cross-reference to a heading holding a reference resolved by an empty definition shows the link text instead of the reference's source (#3160, markup-carve/carve#2878).
