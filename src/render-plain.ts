@@ -13,7 +13,8 @@ import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './reference-state.js'
-import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { resolveTableSpans } from './table-spans.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
@@ -252,14 +253,16 @@ function renderDefinitionList(items: DefinitionItem[], ctx: PlainContext, traili
 }
 
 function renderTable(node: Table, ctx: PlainContext): string {
+  const spanGrid = resolveTableSpans(node.rows)
   // Use the table's true column count (max cells across rows) so a row with
   // rowspan/colspan filler cells still emits every column (matches the HTML and
   // Markdown renderers and carve-php / carve-rs).
   const cols = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
   let out = ''
-  for (const row of node.rows) {
+  for (const [rowIndex, row] of node.rows.entries()) {
     const cells: string[] = []
     for (let i = 0; i < cols; i++) {
+      if (i < row.cells.length) tableSpanFlattened(ctx.options, { ...spanGrid[rowIndex]![i]!, pos: row.cells[i]!.pos }, 'plain')
       cells.push(i < row.cells.length ? trimNonNbsp(row.cells[i]!.blocks === undefined
         ? renderInlines(row.cells[i]!.children ?? [], ctx)
         : renderCellContent(row.cells[i]!.blocks!, nodes => renderInlines(nodes, ctx), 'renderPlainText', ctx.blockDepth)).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : '')

@@ -31,8 +31,9 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderRowDemoted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
+import { resolveTableSpans } from './table-spans.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
 import { orderedMarker, renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
@@ -899,19 +900,24 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let headerColumns = 0
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
-  for (const row of node.rows) {
-    const cells = row.cells.map((cell) =>
-      escapeCellPipes(
+  const spanGrid = resolveTableSpans(node.rows)
+  for (const [rowIndex, row] of node.rows.entries()) {
+    const isHeader = row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)
+    if (isHeader && header !== undefined) tableHeaderRowDemoted(ctx.options, row)
+    const cells = row.cells.map((cell, cellIndex) => {
+      const span = spanGrid[rowIndex]![cellIndex]!
+      tableSpanFlattened(ctx.options, { ...span, pos: cell.pos }, 'markdown')
+      return escapeCellPipes(
         withinSingleLineSlot(() => {
           const cellCtx = { ...ctx, roundtrip: false }
           if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], cellCtx))
           return trimNonNbsp(renderCellBlocks(cell.blocks, cellCtx))
         }),
-      ),
-    )
+      )
+    })
     const rendered = `| ${cells.join(' | ')} |`
     // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
-    if (row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)) {
+    if (isHeader) {
       if (header === undefined) aligns.length = 0
       row.cells.forEach((cell, i) => {
         // Multiple header rows collapse to Markdown's one header row. The
