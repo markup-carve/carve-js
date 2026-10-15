@@ -47,6 +47,14 @@ describe('explicit empty destinations', () => {
     expect(renderAnsi(image)).not.toContain('![t][r]')
   })
 
+  it('derives a cross-reference label from a resolved empty reference', () => {
+    const source = '{#h}\n# A [t][r]\n\nsee </#h>\n\n[r]:'
+    const see = '<p>see <a href="#h">A t</a></p>'
+    expect(carveToHtml(source)).toContain(see)
+    expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(carveToAstJson(source)))))).toContain(see)
+    expect(carveToHtml('{#h}\n# A [t][r]\n\nsee </#h>')).toContain('<p>see <a href="#h">A [t][r]</a></p>')
+  })
+
   it('collapses a resolved empty reference image after AST JSON decoding', () => {
     const document = carveToAstJson('[a]:\n\n![al][a]')
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(document))))).toBe('<img src="" alt="al">')
