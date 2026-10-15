@@ -1,4 +1,5 @@
 import { backtickRunEnds } from './backtick-run-index.js'
+import { extendsGrapheme } from './grapheme-extender.js'
 
 /** Find arrows under the substitution scanner's escape and comment rules. */
 export class SubstitutionScanner {
@@ -63,7 +64,7 @@ export class SubstitutionScanner {
         }
         if (!closed) return -1
         at = end - 1
-      } else if (text[at] === '{' && (text[at + 1] === '%' || text[at + 1] === '#')) {
+      } else if (text[at] === '{' && (text[at + 1] === '%' || text[at + 1] === '#') && !extendsGrapheme(text, at + 2)) {
         const marker = text[at + 1]!
         const kind = marker === '%' ? 1 : 2
         if ((disabled & kind) !== 0) continue
@@ -83,7 +84,7 @@ export class SubstitutionScanner {
     const codeEnds = backtickRunEnds(text)
     for (let at = 0; at < n; at++) {
       if ((text[at] === '~' && text[at + 1] === '>') ||
-          (text[at] === '{' && (text[at + 1] === '#' || text[at + 1] === '%'))) points.push(at)
+          (text[at] === '{' && (text[at + 1] === '#' || text[at + 1] === '%') && !extendsGrapheme(text, at + 2))) points.push(at)
     }
     points.push(n)
     const nextEvents = new Int32Array(n + 2).fill(points.length - 1)
