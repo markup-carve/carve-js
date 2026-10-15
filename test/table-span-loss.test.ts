@@ -95,6 +95,12 @@ describe('table render losses', () => {
     expect(result.losses).toMatchObject([{ code: 'table-header-cell-demoted', target: 'markdown' }])
     expectSchemaLoss(result.losses[0]!)
     expect(() => carveToMarkdownWithReport(input, { strictLosses: true })).toThrow(RenderLossError)
+    const html = carveToHtmlWithReport(input)
+    expect(html.value).toContain('<th scope="row">B</th>')
+    expect(html.losses).toEqual([])
+    for (const render of [carveToPlainTextWithReport, carveToAnsiWithReport, carveToCarveWithReport]) {
+      expect(render(input).losses).toEqual([])
+    }
   })
 
   it('reports each mixed header row without changing row order', () => {
