@@ -1000,6 +1000,8 @@ const IMPLEMENTED = new Set([
   // ARRIVED WITH THIS PIN BUMP (spec c6ae329e). All four rows are byte-exact
   // on this build before the entry was added (markup-carve/carve#3201).
   'inside-an-unclosed-fence-only-the-innermost-container-s-closer-is-structural',
+  'an-unclosed-fence-under-an-open-paragraph-in-a-container-opens-nothing',
+  'an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter',
   // ARRIVED WITH THIS PIN BUMP (spec 166274ca).
   'editorial-markup-closes-outside-a-cross-reference-or-a-bracket-run',
   'an-autolink-is-opaque-to-the-bracket-scan',
@@ -1029,10 +1031,6 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['598-editorial-markup-closes-outside-a-cross-reference-or-a-bracket-run-5', {
-    reason: 'PART 9 E2a (ruled 2026-10-15): a cross-reference is atomic, so the `~>` ending it is no arrow',
-    html: '<p><s>a &lt;/#x~&gt;y&gt; b</s></p>',
-  }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

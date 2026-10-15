@@ -9,17 +9,25 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Fixes
-- An autolink or a cross-reference is atomic to editorial substitution: a `~>` that ends one is no arrow, so `{~a <https://x~>y> b~}` is a strikethrough around the autolink (markup-carve/carve#3244).
-- A `]` inside a cross-reference no longer closes a link, image, span or inline-note label opened before it, so `[a </#x]> b](u)` is one link (markup-carve/carve#3244).
-
 ## [0.1.12] - 2026-10-15
 
 ### Breaking
 - Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal. AST envelopes carry contract version `2.0`, so 0.1.11 readers refuse trees written by this release (#3112, markup-carve/carve#2878).
-- Markdown, plain text and ANSI rendering report `table-span-flattened` for each merged table cell, and Markdown reports `table-header-row-demoted` for each header row after the first. A `--strict-losses` build with merged cells now fails; allow the codes with `--allow-loss` where the flattening is acceptable (#3119, markup-carve/carve#3202).
+- Markdown, plain text and ANSI rendering report `table-span-flattened` for each merged table cell. Markdown also reports `table-header-row-demoted` for each header row after the first, `table-header-row-hoisted` for a header row it moves above earlier body rows, and `table-header-cell-demoted` for each header cell outside a header row. A `--strict-losses` build with such tables now fails; allow the codes with `--allow-loss` where the change is acceptable (#3119, #3158, #3159, #3144, markup-carve/carve#3202).
+- An included file whose bytes are not well-formed UTF-8 is refused as non-text instead of read with replacement characters. Re-encode such files as UTF-8. A custom resolver may return the raw bytes as `source` to get the same check (#3142, markup-carve/carve#3221).
 
 ### Fixes
+- An emphasis or braced opener followed by a combining mark, spacing mark, variation selector or zero-width joiner is text, so a keycap emoji such as `*️⃣` keeps its star. The writer and every importer drop a span whose text starts with such a character and report `structure-unspellable` (#3134, #3141, #3153, #3149, #3146, #3150, markup-carve/carve#3209).
+- The combined bold-italic token `/*x*/` no longer opens after a letter, digit, `_` or `/`, or closes before a letter or digit, so `src/*test*/fixtures` keeps its slashes (#3151, #3154, markup-carve/carve#3217).
+- A lone surrogate in an input string becomes U+FFFD in the parser, in AST JSON ingest and in every importer, instead of reaching HTML output and heading ids (#3135, #3139, #3142, #3152, markup-carve/carve#3212).
+- An autolink or a cross-reference is atomic to editorial substitution and to the bracket scan: a `~>` inside one is no arrow, and a `]` inside a cross-reference no longer closes a label opened before it (#3168, markup-carve/carve#3244).
+- Markdown and HTML import write an unresolved cross-reference back verbatim, so `</#x~>y>` stays a cross-reference instead of gaining a `\#` and becoming text (#3183, #3182).
+- A `]` inside a nested link's destination no longer closes the image alt, span or link around it, so `![a [x](/u]) b](/i)` is one image (#3180, #3177).
+- An unclosed code fence in a `:::` container ends at the container's closer when it follows a comment line or a quote or list item line (#3167).
+- A cross-reference to a heading holding a reference resolved by an empty definition shows the link text instead of the reference's source (#3160, markup-carve/carve#2878).
+- Markdown import reads a reference definition whose title wraps onto later lines, inside a block quote too, and an angle destination holding an escaped `<` or `>`, so their uses resolve (#3162, #3165, #3164, #3170, #3169, #3174, #3173).
+- Markdown import keeps a bare `[label]:` paragraph literal, or writes it as a link when a later definition resolves it, and lint no longer reports a reference to an empty definition as unresolved (#3136, #3138).
+- The BBCode importer keeps a quoted quote name whole even when it spells a field, and an explicit `date` wins over a Unix `time` (#3148, #3145).
 - `carve merge` treats a rewrapped paragraph as unchanged, as `carve diff` already did, and both count a line break after a link or emphasis as a space, so removing it is a change (#3125, #3131).
 - The BBCode importer reads forum quote attributions: quoted names, phpBB `post_id` and Unix `time`, and vBulletin `name;id` (#3127).
 - The GitHub Action reports exit 2 when a check could not run instead of folding it into exit 1, and warns that the `portable` input is deprecated (#3128).
@@ -39,9 +47,13 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Markdown output preserves representable autolinks (#3093).
 
 ### Added
+- `carve migrate --from markdown --directory SOURCE --output TARGET` converts a folder of Markdown files, copies regular assets and writes `migration-report.json`. Local links and images are checked against the output: a `.md` target that resolves is rewritten to `.crv`, and the rest are listed for review. It skips symlinks, refuses an existing target, colliding outputs or an entry changed during the run, replaces ill-formed bytes as single-file migration does, and leaves no partial target on error (#3166, #3179, #3181, #3184).
 - Opt-in table alignment: `carveToCarve` and `carve fmt --align-tables` pad table columns to a common width, measured by Unicode grapheme and display width, and the Prettier plugin takes `carveAlignTables`. Canonical formatting stays the default (#3117).
 
 ### Performance
+- Markdown and Djot import find their internal marker serials in one scan, so a document spelling many such markers no longer imports in quadratic time (#3178).
+- Table alignment measures cell width in linear time, so a long run of regional indicators no longer takes quadratic time (#3147, #3143).
+- HTML rendering reads reference definitions once per render instead of rescanning the tree, and a reference whose definition was removed from the AST renders unresolved (#3172, #3161).
 - Include directive candidates are looked up from an index built once per inline run, so a run with many `{{` candidates scans in linear time (#3104).
 - Djot image chains with plain, quoted or Unicode labels convert without reparsing each nested label (#3118, #3130).
 - Editor session sidecar collection visits only the fields each node type owns and reuses collected paths (#3103).

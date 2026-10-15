@@ -34,3 +34,4 @@
 2286: Spec corpus pin bump. Carries no engine change of its own.
 2374: Spec corpus pin bump listing nineteen new corpus categories. Carries no engine change of its own.
 2521: Describes exact-case reference matching in a parse.ts comment. Comment text only; no parsed or rendered document changes.
+3171: Shortens sentinel allocator and renderer comments. Comment text only; no statement or emitted byte moves.
