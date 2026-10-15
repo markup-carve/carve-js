@@ -70,7 +70,7 @@ function htmlUrls(html: string): RawUrl[] {
   return urls
 }
 
-function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>): { href: string; check: LinkCheck } | null {
+function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, sources: Set<string>): { href: string; check: LinkCheck } | null {
   if (/^[a-z][a-z\d+.-]*:/i.test(destination) || destination.startsWith('//')) return null
   if (destination.startsWith('/')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'site-root path needs route mapping' } }
   const match = /^([^?#]*)(\?[^#]*)?(?:#(.*))?$/.exec(destination)
@@ -82,7 +82,7 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
   const target = pathname ? posix.normalize(posix.join(posix.dirname(source), pathname)) : source
   if (target === '..' || target.startsWith('../')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'outside source directory' } }
   const mapped = /\.(md|markdown)$/i.test(target) ? target.replace(/\.(md|markdown)$/i, '.crv') : target
-  if (!outputs.has(mapped)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'target missing from output' } }
+  if (!outputs.has(mapped) || (mapped !== target && !sources.has(target))) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'target missing from output' } }
   if (fragment && !ids.has(mapped)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'asset fragment needs site check' } }
   if (fragment && !ids.get(mapped)?.has(fragment)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
   if (mapped !== target && pathname && !/\.(md|markdown)$/i.test(match[1]!)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'encoded extension needs manual rewrite' } }
@@ -93,6 +93,7 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
 
 function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: unknown[]; links?: LinkCheck[] }>, assets: string[]): string[] {
   const outputs = new Set([...files.map((file) => file.output), ...assets])
+  const sources = new Set(files.map((file) => file.source))
   const ids = new Map<string, Set<string>>()
   for (const file of files) {
     const html = carveToHtml(readFileSync(join(temporary, file.output), 'utf8'))
@@ -111,13 +112,13 @@ function checkLinks(temporary: string, files: Array<{ source: string; output: st
       if ((node.type === 'raw_inline' || node.type === 'raw_block') && node.format === 'html' && typeof node.content === 'string') {
         for (const url of htmlUrls(node.content)) {
           if (url.manual) { links.push({ target: url.target, status: 'unresolved', reason: 'raw HTML srcset needs manual review' }); continue }
-          const result = inspectDestination(url.target, file.source, outputs, ids)
+          const result = inspectDestination(url.target, file.source, outputs, ids, sources)
           if (result) links.push(result.check.status === 'rewritten' ? { target: url.target, status: 'unresolved', reason: 'raw HTML link needs manual rewrite' } : result.check)
         }
       }
       const key = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : null
       if (key && typeof node[key] === 'string' && node[key]) {
-        const result = inspectDestination(node[key], file.source, outputs, ids)
+        const result = inspectDestination(node[key], file.source, outputs, ids, sources)
         if (result) {
           if (result.check.status === 'rewritten' && node.ref) {
             links.push({ target: node[key], status: 'unresolved', reason: 'reference link needs manual rewrite' })
