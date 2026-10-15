@@ -295,6 +295,11 @@ describe('carve migrate — HTML import', () => {
 })
 
 describe('carve migrate — the other importers', () => {
+  it('rejects single-file flags in folder mode', async () => {
+    const t = makeIO()
+    expect(await run(['migrate', '--from', 'markdown', '--directory', 'src', '--output', 'dst', '--report', 'report.json'], t.io)).toBe(2)
+    expect(t.err).toContain('single-file options are not allowed')
+  })
   it.each([
     ['markdown', '**bold** and _em_\n'],
     ['md', '**bold** and _em_\n'],
