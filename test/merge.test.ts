@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-
-import { carveToAstJson, mergeAst } from '../src/index.js'
+import { carveToAstJson, diffAst, fromAstJson, mergeAst, renderCarve } from '../src/index.js'
 
 const merge = (base: string, ours: string, theirs: string) =>
   mergeAst(carveToAstJson(base), carveToAstJson(ours), carveToAstJson(theirs))
@@ -16,6 +15,52 @@ describe('three-way structural merge', () => {
     const result = merge('see [docs](/a)\n', 'see [docs](/b)\n', 'see [docs](/a)\n')
     expect(result.ok).toBe(true)
     if (result.ok) expect(JSON.stringify(result.ast)).toContain('/b')
+  })
+
+  it('merges a paragraph rewrap with a word edit', () => {
+    const base = 'The quick brown fox jumps over the lazy dog and keeps running far away.\n'
+    const ours = 'The quick brown fox jumps over the lazy dog\nand keeps running far away.\n'
+    const theirs = 'The quick red fox jumps over the lazy dog and keeps running far away.\n'
+    const result = merge(base, ours, theirs)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.ast).toEqual(merge(theirs, theirs, theirs).ast)
+  })
+
+  it('merges a paragraph rewrap with an unchanged side', () => {
+    const base = 'The quick brown fox jumps over the lazy dog and keeps running far away.\n'
+    const ours = 'The quick brown fox jumps over the lazy dog\nand keeps running far away.\n'
+    const result = merge(base, ours, base)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(diffAst(result.ast, carveToAstJson(base))).toEqual([])
+  })
+
+  it('keeps a soft break that follows inline markup when the other side only rewraps', () => {
+    const base = 'An *emphasis*\nthen text and a long tail of words here.\n'
+    const ours = 'An *emphasis*\nthen text and a long tail\nof words here.\n'
+    const theirs = 'An *emphasis*\nthen text and a short tail of words here.\n'
+    const result = merge(base, ours, theirs)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(renderCarve(fromAstJson(result.ast))).toContain('*emphasis*\nthen text and a short tail')
+  })
+
+  it('keeps that soft break whichever side the result comes from', () => {
+    const base = 'An *emphasis*\nthen the old tail of words here.\n'
+    const edited = 'An *emphasis*\nthen the new tail of words here.\n'
+    const rewrapped = 'An *emphasis*\nthen the new tail\nof words here.\n'
+    for (const [ours, theirs] of [[rewrapped, edited], [rewrapped, base]] as const) {
+      const result = merge(base, ours, theirs)
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(renderCarve(fromAstJson(result.ast))).toContain('*emphasis*\nthen the new tail')
+    }
+  })
+
+  it('conflicts on two different edits to rewrapped text', () => {
+    const base = 'The quick brown fox jumps over the lazy dog and keeps running far away.\n'
+    const ours = 'The quick blue fox jumps over the lazy dog\nand keeps running far away.\n'
+    const theirs = 'The quick red fox jumps over the lazy dog and keeps running far away.\n'
+    const result = merge(base, ours, theirs)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.conflicts.map((item) => item.reason)).toContain('both-changed')
   })
 
   it('combines independent edits in different nodes', () => {

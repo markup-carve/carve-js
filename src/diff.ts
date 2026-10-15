@@ -98,7 +98,7 @@ function isNode(value: unknown): value is Node {
  * not a soft one: it is a construct the author wrote and the renderer honors,
  * so losing one changes the document and has to be reported.
  */
-function mergeText(nodes: Node[]): Node[] {
+export function mergeText(nodes: Node[]): Node[] {
   const out: Node[] = []
   let run: string[] = []
   let first: Node | undefined
