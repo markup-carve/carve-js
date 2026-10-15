@@ -52,7 +52,7 @@ export function tightDjotDefinitionDescriptions(source: string): string {
     let tight = node.type === 'list' ? node.tight : inherited
     if (node.type === 'list' && tight && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && hasParagraphGap(node)) {
       tight = false
-      if (node.pos) {
+      if (node.pos?.startOffset !== undefined) {
         const at = sourceOffset(node.pos.startOffset), line = node.pos.startLine - 1
         const prefix = lines[line]!.slice(0, at - offsets[line]!)
         edits.push({ start: at, end: at, value: '{loose}\n' + prefix })
