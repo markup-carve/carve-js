@@ -9,27 +9,39 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-15
+
+### Breaking
+- Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal (#3112, markup-carve/carve#2878).
+- AST envelopes carry contract version `2.0`, so 0.1.11 readers refuse trees written by this release (#3112).
+- Markdown, plain text and ANSI rendering report `table-span-flattened` for each merged table cell, and Markdown reports `table-header-row-demoted` for each header row after the first. A `--strict-losses` build with merged cells now fails; allow the codes with `--allow-loss` where the flattening is acceptable (#3119, markup-carve/carve#3202).
+
 ### Fixes
-- `fileSystemResolver` (`./node`) reads only regular files: a FIFO, device or directory inside the root is denied instead of opened, so an include naming a FIFO no longer blocks the process.
-- An escaped include directive (`\{{ path }}`) stays literal: `expandIncludes` no longer expands it, `findDirectiveSites` no longer reports it, and `renderCarve` keeps the escape instead of writing a live directive (#3101).
-- A cross-reference `</#id>` is opaque to emphasis like an autolink: an earlier bare `/` no longer pairs with the slash inside it (#3100).
-- `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back as a different document after a search that took seconds to minutes (CARVE-P9-078). A hand-built tree nested past the cap is refused the same way; the check counts container depth only, so a declared carve-out just under the cap is still written (#3107, #3109).
+- `carve merge` treats a rewrapped paragraph as unchanged, as `carve diff` already did, and both count a line break after a link or emphasis as a space, so removing it is a change (#3125, #3131).
+- The BBCode importer reads forum quote attributions: quoted names, phpBB `post_id` and Unix `time`, and vBulletin `name;id` (#3127).
+- The GitHub Action reports exit 2 when a check could not run instead of folding it into exit 1, and warns that the `portable` input is deprecated (#3128).
+- A `]` inside an autolink no longer closes a link, image or span label opened before it, so `[a <https://x]> b](u)` is one link (#3120, markup-carve/carve#3204).
 - A `[` inside an autolink or cross-reference no longer opens a bracket run for emphasis pairing, and a braced closer inside a cross-reference no longer closes the braced span (#3105).
-- An unclosed code fence inside nested `:::` containers ends at its own container's closer. A colon line of an enclosing container's width inside it used to turn the rest of the document into code (#3116).
-- A `]` inside an autolink no longer closes a link, image or span label opened before it: the bracket scan skips the autolink body, so `[a <https://x]> b](u)` is one link (CARVE-P3-001, markup-carve/carve#3204).
-
-### Performance
-- `expandIncludes`, `findDirectiveSites` and `renderCarve` look up the run node behind each include directive candidate from an index built once per inline run, so a run with many `{{` candidates (escaped or live) scans in linear time instead of quadratic (#3104).
-
-## [0.1.12] - 2026-10-14
-
-### Fixes
-- Markdown import no longer slows down exponentially with deeply nested block quotes (#3096).
+- A cross-reference `</#id>` is opaque to emphasis like an autolink: an earlier bare `/` no longer pairs with the slash inside it (#3100).
+- An unclosed code fence inside nested `:::` containers ends at its own container's closer instead of turning the rest of the document into code (#3116).
+- An escaped include directive (`\{{ path }}`) stays literal in `expandIncludes`, `findDirectiveSites` and `renderCarve` (#3101).
+- `fileSystemResolver` (`./node`) reads only regular files, so an include naming a FIFO, device or directory is denied instead of blocking the process (#3108).
+- `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back differently (#3107, #3109).
+- Djot import keeps definition lists intact: empty root definitions, definitions in quotes and list items, block interruptions in terms, literal markers, container ownership and tight descriptions (#3102, #3110, #3113, #3114, #3126).
+- Djot import keeps image alternatives and references across multiline labels, deletion spans, quotes and Unicode text (#3095, #3106, #3115).
 - Djot import preserves empty nested task items and generic DIV classes (#3083, #3090).
-- Djot image alternative text reports blank lines and trailing spaces only when they survive import (#3095).
+- Markdown import no longer slows down exponentially with deeply nested block quotes (#3096).
 - Unresolved references containing NUL no longer select sanitized headings (#3088).
 - The `wikilinks()` extension ignores an escaped bracket when finding a closing `]]` (#3092).
 - Markdown output preserves representable autolinks (#3093).
+
+### Added
+- Opt-in table alignment: `carveToCarve` and `carve fmt --align-tables` pad table columns to a common width, measured by Unicode grapheme and display width, and the Prettier plugin takes `carveAlignTables`. Canonical formatting stays the default (#3117).
+
+### Performance
+- Include directive candidates are looked up from an index built once per inline run, so a run with many `{{` candidates scans in linear time (#3104).
+- Djot image chains with plain, quoted or Unicode labels convert without reparsing each nested label (#3118, #3130).
+- Editor session sidecar collection visits only the fields each node type owns and reuses collected paths (#3103).
 
 ## [0.1.11] - 2026-10-14
 
