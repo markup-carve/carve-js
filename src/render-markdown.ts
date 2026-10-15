@@ -31,7 +31,7 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderRowDemoted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableHeaderRowHoisted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { resolveTableSpans } from './table-spans.js'
 import { inlineText } from './heading-ids.js'
@@ -904,8 +904,11 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   for (const [rowIndex, row] of node.rows.entries()) {
     const isHeader = row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)
     if (isHeader && header !== undefined) tableHeaderRowDemoted(ctx.options, row)
+    // CARVE-P11-031 writes the first header row above the body rows before it.
+    else if (isHeader && rowIndex > 0) tableHeaderRowHoisted(ctx.options, row)
     const cells = row.cells.map((cell, cellIndex) => {
       const span = spanGrid[rowIndex]![cellIndex]!
+      if (!isHeader && cell.header && cell.span === undefined) tableHeaderCellDemoted(ctx.options, cell)
       tableSpanFlattened(ctx.options, { ...span, pos: cell.pos }, 'markdown')
       return escapeCellPipes(
         withinSingleLineSlot(() => {
