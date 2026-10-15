@@ -211,3 +211,16 @@ it('matches the Markdown extension by ASCII case only', () => {
   expect(summary).toMatchObject({ files: 1, assets: 1 })
   expect(readFileSync(join(root, 'output', 'x.mar\u212Adown'), 'utf8')).toBe('Kelvin\n')
 })
+
+it('does not rewrite a link to a missing Markdown file onto an asset of the mapped name', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-links-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'index.md'), '[go](ghost.md)\n')
+  writeFileSync(join(source, 'ghost.crv'), 'Already Carve\n')
+  const summary = migrateMarkdownDirectory(source, join(root, 'output'))
+  const report = JSON.parse(readFileSync(summary.report, 'utf8'))
+  expect(readFileSync(join(root, 'output', 'index.crv'), 'utf8')).toContain('(ghost.md)')
+  expect(report.files[0].links).toEqual([expect.objectContaining({ target: 'ghost.md', status: 'unresolved', reason: 'target missing from output' })])
+})
