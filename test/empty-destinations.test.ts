@@ -116,6 +116,17 @@ describe('explicit empty destinations', () => {
     expect(result.losses).toContainEqual(expect.objectContaining({ code: 'structure-unspellable', line: 3 }))
   })
 
+  it.each([
+    ['[t][r]\n\n[r]: <> "a\nb"', 3],
+    ['[t][r]\n\n[r]: <> (a\nb)', 3],
+    ["[t][r]\n\n[r]: <>\n  'a\nb'", 3],
+  ])('inlines a titled empty Markdown definition whose title wraps: %j', (source, line) => {
+    const result = markdownToCarveWithLosses(source)
+    expect(result.value.trim()).toBe('[t]( "a\nb")')
+    expect(carveToHtml(result.value)).toBe('<p><a href="" title="a\nb">t</a></p>')
+    expect(result.losses).toContainEqual(expect.objectContaining({ code: 'structure-unspellable', line }))
+  })
+
   it('imports empty Djot destinations without a false loss', () => {
     const inline = djotToCarveWithLosses('[t]()')
     expect(inline.value).toBe('[t]()')

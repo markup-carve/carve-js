@@ -438,6 +438,27 @@ export function extractReferenceDefinitions(
       canStart = false
       continue
     }
+    const titleOnNext = /^[ \t]*<>[ \t]*$/.test(definition?.[2] ?? '') && /^[ \t]*["'(]/.test(lines[i + 1] ?? '')
+    if ((canStart || lineDepth > depth) && !opensItem && quotePrefix === '' && definition &&
+      (/^[ \t]*<>[ \t]+["'(]/.test(definition[2]!) || titleOnNext)) {
+      // CommonMark lets a definition title wrap. Join the continuation lines so
+      // the empty-destination branch below sees one title, and restore the
+      // breaks when the title is decoded.
+      let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${lines[i + 1]!.trimStart()}` : definition[2]!
+      let end = titleOnNext ? i + 1 : i
+      while (!new RegExp(String.raw`^[ \t]*<>[ \t]+${TITLE}`).test(joined)) {
+        const following = lines[end + 1]
+        if (following === undefined || !following.startsWith(quotePrefix)) break
+        const body = following.slice(quotePrefix.length)
+        if (body.trim() === '' || opensBlock(body)) break
+        joined += titleBreakMarker + body
+        end++
+      }
+      if (end > i && new RegExp(String.raw`^[ \t]*<>[ \t]+${TITLE}[ \t]*$`).test(joined)) {
+        definition[2] = joined
+        i = end
+      }
+    }
     if (
       (canStart || opensItem || lineDepth > depth) &&
       definition &&
@@ -564,7 +585,7 @@ export function extractReferenceDefinitions(
       }
       const authoredKey = normalizeReferenceLabel(definition[1]!)
       if (!defined.has(key) && !authoredDefinitions.has(authoredKey)) {
-        empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
+        empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity).replaceAll(titleBreakMarker, '\n'))
         if (raw !== '') titled.add(key)
         if (raw !== '') discardedEmptyDefinitions.push({ line: sourceIndex, label: definition[1]! })
         const canonicalLabel = definition[1]!.includes('\\')
