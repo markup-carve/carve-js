@@ -80,6 +80,15 @@ HTML migration produces Carve with a structured fidelity report. Markdown,
 Djot, and BBCode importers return Carve source. Source-preserving patches let
 editors apply canonical formatting without replacing unrelated bytes.
 
+Convert a Markdown directory with the installed CLI:
+
+```sh
+npx carve migrate --from markdown --directory docs --output docs-carve --check-loss
+```
+
+The command copies assets and writes `docs-carve/migration-report.json` with
+files that need review.
+
 - [Migration](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md)
 - [Djot image alternative text](docs/djot-image-alt-fidelity.md): multiline values and export diagnostics.
 - [HTML import](https://github.com/markup-carve/carve-js/blob/main/docs/html-import.md)

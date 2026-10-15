@@ -73,6 +73,7 @@ import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
 import { migrateCaseOnlyReferences } from './case-migrate.js'
+import { migrateMarkdownDirectory } from './migrate-directory.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */
 export interface CliIO {
@@ -112,6 +113,8 @@ Usage:
                                    (write a table whose cells hold blocks as
                                    ::: list-table) are HTML-only; --report and
                                    --check-loss apply to all
+  carve migrate --from markdown --directory SOURCE --output TARGET
+                                   Convert a Markdown folder and copy assets
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -249,14 +252,14 @@ exits 1 if anything is reported, 0 if clean.
 `
 
 async function runMigrate(args: string[], io: CliIO): Promise<number> {
-  let values: { from?: string; mode?: string; adapter?: string; report?: string; 'check-loss'?: boolean; 'list-table'?: boolean; help?: boolean }
+  let values: { from?: string; mode?: string; adapter?: string; report?: string; directory?: string; output?: string; 'check-loss'?: boolean; 'list-table'?: boolean; help?: boolean }
   let positionals: string[]
   try {
     const parsed = parseArgs({
       args,
       options: {
         from: { type: 'string' }, mode: { type: 'string' }, adapter: { type: 'string' },
-        report: { type: 'string' }, 'check-loss': { type: 'boolean' }, 'list-table': { type: 'boolean' },
+        report: { type: 'string' }, directory: { type: 'string' }, output: { type: 'string' }, 'check-loss': { type: 'boolean' }, 'list-table': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -276,6 +279,20 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   if (!['html', 'markdown', 'md', 'djot', 'bbcode'].includes(from)) {
     io.writeErr(`carve migrate: unknown source format ${from}\n`)
     return 2
+  }
+  if (values.directory !== undefined || values.output !== undefined) {
+    if (!values.directory || !values.output || !['markdown', 'md'].includes(from) || positionals.length || values.report !== undefined || values.mode !== undefined || values.adapter !== undefined || values['list-table']) {
+      io.writeErr('carve migrate: folder mode requires --from markdown --directory SOURCE --output TARGET; single-file options are not allowed\n')
+      return 2
+    }
+    try {
+      const summary = migrateMarkdownDirectory(values.directory, values.output)
+      io.write(`${summary.files} file(s) converted; ${summary.assets} asset(s) copied; ${summary.review} file(s) need review; ${summary.skipped} entry(s) skipped. Report: ${summary.report}\n`)
+      return values['check-loss'] && (summary.review > 0 || summary.skipped > 0) ? 1 : 0
+    } catch (error) {
+      io.writeErr(`carve migrate: ${error instanceof Error ? error.message : String(error)}\n`)
+      return 2
+    }
   }
   if (positionals.length > 1) { io.writeErr('carve migrate: takes at most one input file\n'); return 2 }
   const modes = new Set(['safe', 'semantic', 'roundtrip'])
