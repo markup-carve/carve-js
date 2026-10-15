@@ -120,6 +120,7 @@ const BRACKET_2 = String.raw`\[(?:${BRACKET_0}|${BRACKET_1})*\]`
 const BRACKET_3 = String.raw`\[(?:${BRACKET_0}|${BRACKET_2})*\]`
 const LABEL = String.raw`((?:${BRACKET_0}|${BRACKET_3})*)`
 
+const DESTINATION = String.raw`(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)`
 const TITLE = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\((?:[^()\\\n]|\\.)*\))`
 
 function normalizeReferenceLabel(label: string): string {
@@ -451,23 +452,39 @@ export function extractReferenceDefinitions(
       const body = following.slice(followingPrefix.length)
       return body.trim() === '' || opensBlock(body) ? undefined : body
     }
-    const titleOnNext = /^[ \t]*<>[ \t]*$/.test(definition?.[2] ?? '') && /^[ \t]*["'(]/.test(continuationAt(i + 1) ?? '')
+    // A quoted definition with a destination joins a wrapped title too, and
+    // its uses become titled inline links (carve-js#3169).
+    const quotedDestination = lineDepth > 0 && listIndent === 0 && !definition?.[1]?.startsWith('^') &&
+      new RegExp(String.raw`^[ \t]*${DESTINATION}(?:[ \t]+["'(]|[ \t]*$)`).test(definition?.[2] ?? '')
+    const destinationPattern = quotedDestination ? DESTINATION : '<>'
+    const titleOnNext = new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]*$`).test(definition?.[2] ?? '') &&
+      /^[ \t]*["'(]/.test(continuationAt(i + 1) ?? '')
+    let wrappedDestinationTitle = false
     if ((canStart || lineDepth > depth) && !opensItem && (quotePrefix === '' || listIndent === 0) && definition &&
-      (/^[ \t]*<>[ \t]+["'(]/.test(definition[2]!) || titleOnNext)) {
+      (new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+["'(]`).test(definition[2]!) || titleOnNext)) {
       // CommonMark lets a definition title wrap. Join the continuation lines so
-      // the empty-destination branch below sees one title, and restore the
-      // breaks when the title is decoded.
+      // the branch below sees one title, and restore the breaks when the title
+      // is decoded or written.
+      const empty = /^[ \t]*<>/.test(definition[2]!)
+      const marker = empty ? titleBreakMarker : titleWrap
       let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${continuationAt(i + 1)!.trimStart()}` : definition[2]!
       let end = titleOnNext ? i + 1 : i
-      while (!new RegExp(String.raw`^[ \t]*<>[ \t]+${TITLE}`).test(joined)) {
-        const body = continuationAt(end + 1)
-        if (body === undefined) break
-        joined += titleBreakMarker + body
-        end++
+      const opener = new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+(["'(])((?:[^\\]|\\.)*)$`).exec(joined)
+      const closer = opener ? (opener[1] === '(' ? /[()]/ : new RegExp(opener[1]!)) : null
+      // Read on only while the title is open, so a run of definitions stays linear.
+      if (closer !== null && !closer.test(opener![2]!.replace(/\\./g, ''))) {
+        for (;;) {
+          const body = continuationAt(end + 1)
+          if (body === undefined) break
+          joined += marker + body
+          end++
+          if (closer.test(body.replace(/\\./g, ''))) break
+        }
       }
-      if (end > i && new RegExp(String.raw`^[ \t]*<>[ \t]+${TITLE}[ \t]*$`).test(joined)) {
+      if (end > i && new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+${TITLE}[ \t]*$`).test(joined)) {
         definition[2] = joined
         i = end
+        wrappedDestinationTitle = !empty && joined.includes(titleWrap)
       }
     }
     if (
@@ -543,12 +560,12 @@ export function extractReferenceDefinitions(
         const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
           url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
         ))
-        if (multilineTitle && !repeated) {
+        if ((multilineTitle || wrappedDestinationTitle) && !repeated) {
           while (reservedReferences.has(nextSerial)) nextSerial++
           const canonical = `carve-import-reference-${nextSerial++}`
           inline.set(canonical, `${target}${title}`)
           sourceLabels.set(key, canonical)
-        } else if (!authoredRepeated) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        } else if (!authoredRepeated && !wrappedDestinationTitle) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
         if (opensItem) {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
