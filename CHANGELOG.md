@@ -49,6 +49,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Opt-in table alignment: `carveToCarve` and `carve fmt --align-tables` pad table columns to a common width, measured by Unicode grapheme and display width, and the Prettier plugin takes `carveAlignTables`. Canonical formatting stays the default (#3117).
 
 ### Performance
+- Markdown and Djot import find their internal marker serials in one scan, so a document spelling many such markers no longer imports in quadratic time (#3178).
 - Table alignment measures cell width in linear time, so a long run of regional indicators no longer takes quadratic time (#3147, #3143).
 - HTML rendering reads reference definitions once per render instead of rescanning the tree, and a reference whose definition was removed from the AST renders unresolved (#3172, #3161).
 - Include directive candidates are looked up from an index built once per inline run, so a run with many `{{` candidates scans in linear time (#3104).
