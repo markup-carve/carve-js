@@ -12668,7 +12668,8 @@ class ParseSession {
                 (!/^[`~]/.test(below) || startsInterruptingBlock(lexer, below))) || isBlockAttributeLine(below) ||
                 /^:{3,}[ \t]*$/.test(below)) &&
                 !(priorLazyDefinition && opensCodeFence(below))))) break
-        const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) &&
+        // At document column 0 a definition is a document-level interrupter (CARVE-P0-010).
+        const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
           RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol
         // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
         // THE COLUMN" (markup-carve/carve-js#2255, markup-carve/carve#2488). The
@@ -12713,7 +12714,7 @@ class ParseSession {
             ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
             (indentColumns(ln, contentCol) < contentCol &&
               (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
-              (insideOpenQuoteParagraph(lazyState) && RE_FOOTNOTE_DEF.test(below)) ||
+              (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
               !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn)))
           && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
         ) {
