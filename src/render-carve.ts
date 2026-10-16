@@ -3190,6 +3190,11 @@ class CarveRenderSession {
         if (ctx.lineBlockDepth > 0) {
           return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
         }
+        // A guarded em-dash line in a description's own paragraph stays below
+        // the body column, where it folds as text (carve#3295).
+        if (this.descriptionParagraphs.has(node)) {
+          return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `))
+        }
 
         return withAttrs(text)
       }
@@ -3799,6 +3804,7 @@ class CarveRenderSession {
          * escapes the brace and the second is not a block-attribute line - so
          * both keep writing their own text.
          */
+        this.markDescriptionParagraphs(def)
         const outerDescriptionBody = this.descriptionBody
         this.descriptionBody = true
         let written: string
@@ -3814,10 +3820,23 @@ class CarveRenderSession {
         }
         const lines = written.split('\n')
         out.push(`: ${lines.shift() ?? ''}`)
-        for (const line of lines) out.push(`${DEFINITION_BODY_INDENT}${line}`)
+        // A description nested in another one leaves the tag for the outermost.
+        const tag = this.markerColumnTag()
+        for (const line of lines) {
+          if (!line.startsWith(tag)) out.push(`${DEFINITION_BODY_INDENT}${line}`)
+          else out.push(outerDescriptionBody ? line : line.slice(tag.length))
+        }
       })
     }
     return out.join('\n')
+  }
+
+  /** Paragraphs a description writes at its own column, through any colon fence. */
+  private markDescriptionParagraphs(blocks: BlockNode[]): void {
+    for (const block of blocks) {
+      if (block.type === 'paragraph') this.descriptionParagraphs.add(block)
+      else if (block.type === 'admonition' || block.type === 'div') this.markDescriptionParagraphs(block.children)
+    }
   }
 
   private renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
@@ -4809,6 +4828,7 @@ class CarveRenderSession {
 
   private itemParagraph = false
   private descriptionBody = false
+  private descriptionParagraphs = new WeakSet<BlockNode>()
   private descriptionParagraph = false
   private verbatimLineGuardNodes: InlineNode[] = []
 

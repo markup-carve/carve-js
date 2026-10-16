@@ -22,17 +22,17 @@
   {
     "id": "js-16-1",
     "source": ":: t\n: ::: note\n  more\n ---\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more</p>\n</aside>\n</dd>\n</dl>\n<p>—</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more\n—</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-16-2",
     "source": ":: t\n: ::: note\n  more\n | a |\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more</p>\n</aside>\n</dd>\n</dl>\n<p>| a |</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more\n| a |</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-20-1",
     "source": ":: t\n: ::: note\n  para\n ---\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>para</p>\n</aside>\n</dd>\n</dl>\n<p>—</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n—</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-21-1",

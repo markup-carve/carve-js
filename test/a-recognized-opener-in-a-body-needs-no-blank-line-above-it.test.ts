@@ -159,8 +159,9 @@ describe('a recognized opener in a body needs no blank line above it', () => {
     })
 
     it('the same floor applies after a continuation', () => {
+      // Below the column the marker opens nothing and folds (carve#3295).
       expect(carveToHtml(':: t\n:  body\n   more\n > q\n')).toBe(
-        '<dl>\n  <dt>t</dt>\n  <dd>body\nmore</dd>\n</dl>\n<p>&gt; q</p>',
+        '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n&gt; q</dd>\n</dl>',
       )
     })
   })
