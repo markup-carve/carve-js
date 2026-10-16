@@ -14909,7 +14909,7 @@ class ParseSession {
           let lazyLine = l
           if (lazyState.quoteInner === null && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
-            lazyLine = l
+            lazyLine = enclosingLazy || lexer.atDocumentLevel ? LAZY_FRAME + l.replace(/^[ \t]+/, '') : l
           } else if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = l.replace(/^[ \t]+/, '')
           } else if (quoteLazyFramed) {
