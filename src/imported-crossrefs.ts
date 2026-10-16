@@ -5,7 +5,7 @@ import { forEachCrossrefRun, parse } from './parse.js'
 
 export function convertedIds(source: string): Set<string> {
   const ids = new Set<string>()
-  visitDocumentIds(resolveHeadingIds(parse(source)), id => { ids.add(id); ids.add(id.toLowerCase()) })
+  visitDocumentIds(resolveHeadingIds(parse(source)), id => { ids.add(id) })
   return ids
 }
 
