@@ -12201,6 +12201,7 @@ class ParseSession {
       let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
       let nestedItemParagraphOpen = false
+      let nestedDescriptionOpened = false
       // The next entry ends the body, and so does a line below its column after a
       // blank. A second blank ends it regardless of the following indentation.
       const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
@@ -12463,6 +12464,10 @@ class ParseSession {
             indentColumns(ln) - contentCol < nestedItemColumn &&
             !isLinkDefLine(localLine) &&
             !RE_FOOTNOTE_DEF.test(localLine)
+          if (!lazyUnderNestedItem && lazyState.opaque === null) {
+            if (RE_DEFLIST_DEF.test(localLine)) nestedDescriptionOpened = true
+            else if (dedented === localLine && (RE_DEFLIST_TERM.test(localLine) || isListMarkerLine(localLine))) nestedDescriptionOpened = false
+          }
           if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(dedented)
           bodySourceLines.push(ln)
@@ -12661,7 +12666,8 @@ class ParseSession {
             (belowLeadColon && RE_COMMENT_LINE.test(below)) ||
             (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
               (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
-                isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? '')))) &&
+                (!nestedDescriptionOpened && indentColumns(bodySourceLines.at(-1) ?? '') > contentCol &&
+                  isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? ''))))) &&
           !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
           (retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
             ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
@@ -14255,9 +14261,12 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
+        // A run past an open quote's column is quoted text, not an item-ending break.
         if (!isBlankLine(l) && lw <= baseIndent && lazyState.literalColon === undefined &&
             !insideOpenFence(lazyState) &&
-            RE_HR.test((nested.at(-1) ?? '').trimStart())) break
+            RE_HR.test((nested.at(-1) ?? '').trimStart()) &&
+            !(insideOpenQuoteParagraph(lazyState) &&
+              indentColumns(nestedSourceLines.at(-1) ?? '') > contentCol)) break
         // Check the rebased leaf once; collection-only note text stores no continuation claim.
         if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked) {
           markerNoteClaimChecked = true
@@ -14350,8 +14359,9 @@ class ParseSession {
             !lazyState.commentAtColumn && lazyState.inDefList !== 'description') break
         const descriptionMarkerColumn = lazyState.inDefList === 'description' && isListMarkerLine(l)
           ? indentColumns(l, contentCol + 2) : -1
+        // At the item content column, a marker opens a list after the description.
         const belowOpenDescription = lazyState.lazyFoldable &&
-          descriptionMarkerColumn >= contentCol && descriptionMarkerColumn < contentCol + 2 &&
+          descriptionMarkerColumn > contentCol && descriptionMarkerColumn < contentCol + 2 &&
           !/^:[ \t]+%%/.test((nested.at(-1) ?? '').trimStart())
         if (lw >= contentCol && !belowOpenDescription && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
