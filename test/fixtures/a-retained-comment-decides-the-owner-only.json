@@ -1,0 +1,47 @@
+[
+  {
+    "id": "js-17-1",
+    "source": ":: t\n: para\n %% c\n::::\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>para</dd>\n</dl>\n<div>\n</div>"
+  },
+  {
+    "id": "js-31-1",
+    "source": ":: t\n: para\n%% c\n::::\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>para</dd>\n</dl>\n<div>\n</div>"
+  },
+  {
+    "id": "js-42-1",
+    "source": "[r][] [^p] [^c]\n[^c]: > para\n  %% c\n      > tail\n",
+    "html": "<p>[r][] [^p] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<blockquote><p>para</p></blockquote>\n<blockquote><p>tail</p></blockquote>\n<p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n</li>\n</ol>\n</section>"
+  },
+  {
+    "id": "js-42-2",
+    "source": "[r][] [^p] [^c]\n[^c]: > para\n   %% c\n      > tail\n",
+    "html": "<p>[r][] [^p] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<blockquote><p>para</p></blockquote>\n<blockquote><p>tail</p></blockquote>\n<p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n</li>\n</ol>\n</section>"
+  },
+  {
+    "id": "js-45-1",
+    "source": ":: t\n: ::: note\n  more\n %% c\n::::\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more</p>\n</aside>\n</dd>\n</dl>\n<div>\n</div>"
+  },
+  {
+    "id": "js-51-1",
+    "source": "1. :: t\n   : para\n%% c\n```\n",
+    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>\n<p>para</p>\n<pre><code></code></pre>\n</dd>\n</dl>\n</li>\n</ol>"
+  },
+  {
+    "id": "js-55-1",
+    "source": ":: t\n: 1. para\n %% c\n::::\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<ol>\n<li>para</li>\n</ol>\n</dd>\n</dl>\n<div>\n</div>"
+  },
+  {
+    "id": "js-56-1",
+    "source": "1. :: t\n   : para\n%% c\ntail\n",
+    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>\n<p>para</p>\n<p>tail</p>\n</dd>\n</dl>\n</li>\n</ol>"
+  },
+  {
+    "id": "js-59-1",
+    "source": "- :: t\n  : para\n %% c\n```\n",
+    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>\n<p>para</p>\n<pre><code></code></pre>\n</dd>\n</dl>\n</li>\n</ul>"
+  }
+]

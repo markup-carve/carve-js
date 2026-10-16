@@ -8251,6 +8251,8 @@ function rebaseOverindentedBlocks(
           end = j
           continue
         }
+        if (descriptionColumn !== null && column < descriptionColumn &&
+            colonFenceOpenerLen(candidate.trimStart()) !== null) break
         if (column < base) break
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
@@ -11445,10 +11447,12 @@ class ParseSession {
         pendingBlanks = 0
         pendingBlankLineNumbers = []
         pendingBlankSources = []
-        const content = sliceColumns(ln, bodyColumn, true)
+        const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
+          ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
+        const belowQuotedComment: boolean = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
         bodyLines.push(content)
         trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, bodyColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
-        retainedBelowComment = false
+        retainedBelowComment = belowQuotedComment
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
         bodySourceLines.push(ln)
         lexer.consume()
@@ -12622,6 +12626,7 @@ class ParseSession {
           (retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
             ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
             !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn))
+          && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
         ) {
           const lineIndex = lexer.pos
           if (indentColumns(ln, contentCol) < contentCol) {
@@ -14259,7 +14264,7 @@ class ParseSession {
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
         if (belowItemComment && !heldCommentSpan &&
             !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
-            !lazyState.commentAtColumn) break
+            !lazyState.commentAtColumn && lazyState.inDefList !== 'description') break
         if (lw >= contentCol && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
           // quote-lazy MARKER line never reaches the content-column arm, not even
@@ -14676,7 +14681,7 @@ class ParseSession {
             // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-              indentColumns(l, contentCol) > 0)) &&
+              (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description'))) &&
             (!lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
               // A list marker indented past the base column but BELOW the content
               // column folds into what the item is still holding open, rather than
@@ -14768,7 +14773,7 @@ class ParseSession {
               (RE_TASK.test(l) || RE_UNORDERED.test(l) || RE_ORDERED.test(l) || extractItemAttr(l) !== null)) {
             // Retained markers below the content column stay text on reparse.
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
-          } else if (lazyState.commentAtColumn && lazyState.opaque === null && lazyState.literalColon === undefined &&
+          } else if (lazyState.commentAtColumn && lazyState.inDefList !== 'description' && lazyState.opaque === null && lazyState.literalColon === undefined &&
               indentColumns(l, contentCol) < contentCol && !RE_COMMENT_LINE.test(l)) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
@@ -14799,7 +14804,7 @@ class ParseSession {
             // staying the paragraph's inline verbatim run (carve-js#540).
             const flushed = l.replace(/^[ \t]+/, '')
             lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
-          } else if (lazyState.commentAtColumn && !RE_COMMENT_LINE.test(l)) {
+          } else if (lazyState.commentAtColumn && lazyState.inDefList !== 'description' && !RE_COMMENT_LINE.test(l)) {
             // The comment retained this item's frame, but closed its paragraph.
             // Keep the fold explicit so a closed descendant cannot claim it.
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
