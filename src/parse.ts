@@ -3660,7 +3660,7 @@ interface QuoteFenceHosts {
   initialMarkerColumn?: number | undefined
   columns: number[]
   markers: number[]
-  kinds: ('item' | 'note')[]
+  kinds: ('item' | 'note' | 'description')[]
   terms: boolean[]
   colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean; literal: boolean; markerBody?: boolean; opaque?: OpaqueGroup }>
   /**
@@ -3669,6 +3669,8 @@ interface QuoteFenceHosts {
    * differ for an over-indented opener, and then a closer at either one ends it.
    */
   fence: { marker: string; column: number; floor: number } | null
+  /** The column of the definition list a `: ` line at it continues. */
+  definitionList?: number | undefined
   commentBoundary?: boolean
   rejectedItemComment?: boolean
   commentBoundaryBelow?: boolean
@@ -3777,6 +3779,7 @@ function trackQuoteHostFence(
     host.columns = [0]; host.markers = []; host.kinds = []; host.terms = []
     host.colons = []
     host.initialMarkerColumn = undefined
+    host.definitionList = undefined
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
@@ -3828,16 +3831,30 @@ function trackQuoteHostFence(
       inner = tail.replace(/^[ \t]*/, '')
       continue
     }
-    const note = RE_FOOTNOTE_DEF.exec(inner)
+    // A quote does not rebase (CARVE-P0-004): past its column the line is text.
+    const note = host.kinds.length > 0 || at === 0 ? RE_FOOTNOTE_DEF.exec(inner) : null
     if (note) {
       host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note'); host.terms.push(false)
       at += 2
       inner = note[2]!
       blockStart = true
+      break
+    }
+    // A description body is a host too: its column is where the body's blocks open.
+    const description = at === host.columns.at(-1)! && host.definitionList === at ? RE_DEFLIST_DEF.exec(inner) : null
+    if (description) {
+      host.markers.push(at); host.columns.push(at + 1 + description[1]!.length)
+      host.kinds.push('description'); host.terms.push(false)
+      at += 1 + description[1]!.length
+      inner = description[2]!
+      blockStart = true
     }
     break
   }
   if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
+  if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
+  else if (host.definitionList !== undefined && column <= host.definitionList &&
+    host.kinds.at(-1) !== 'description') host.definitionList = undefined
   const floor = host.columns.at(-1)!
   const pendingColonBody = colons.at(-1)?.awaitingBody === true
   if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
@@ -3920,8 +3937,8 @@ function trackQuoteHostFence(
     }
     const row = isTableRow(inner) || (wasInTable && RE_TABLE_CONT.test(inner))
     if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
-        (host.kinds.at(-1) === 'item' && (RE_DEFLIST_TERM.test(inner) ||
-          isBlockAttributeLine(inner)))) {
+        (host.kinds.at(-1) === 'item' && RE_DEFLIST_TERM.test(inner)) ||
+        (host.kinds.at(-1) !== 'note' && isBlockAttributeLine(inner))) {
       state.inTable = row
       closeBlockQuoteParagraph(state)
       return true
@@ -10763,9 +10780,20 @@ class ParseSession {
       // let it through on top of that.
       let deepestTrackedListColumn: number | null = null
       let reachedOuterListColumn: number | null = null
+      // A reached quote does not rebase (CARVE-P0-004): an item outside it lends no column.
+      let innermostReachedQuote = -1
+      for (let i = 0; i < composed.depth && i < openCols.length; i++) {
+        if (openCols[i]!.quote) innermostReachedQuote = i
+      }
       for (let i = 0; i < openCols.length; i++) {
         const entry = openCols[i]!
         if (entry.quote) continue
+        if (i < innermostReachedQuote) {
+          if (i < composed.depth && (reachedOuterListColumn === null || entry.col > reachedOuterListColumn)) {
+            reachedOuterListColumn = entry.col
+          }
+          continue
+        }
         if (deepestTrackedListColumn === null || entry.col > deepestTrackedListColumn) {
           deepestTrackedListColumn = entry.col
         }
@@ -10773,7 +10801,10 @@ class ParseSession {
           reachedOuterListColumn = entry.col
         }
       }
-      for (const { col: column } of listCols) {
+      // `listCols` stops at the first quote, so behind an item's quote it holds only outer columns.
+      const quoteBehindItem = openCols.slice(0, Math.max(innermostReachedQuote, 0)).some((entry) => !entry.quote)
+      for (const { col: column, inQuote } of quoteBehindItem ? [] : listCols) {
+        if (innermostReachedQuote >= 0 && !inQuote) continue
         if (deepestTrackedListColumn === null || column > deepestTrackedListColumn) {
           deepestTrackedListColumn = column
         }
