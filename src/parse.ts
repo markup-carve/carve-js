@@ -13189,7 +13189,7 @@ class ParseSession {
       if (
         isBlankLine(ln) ||
         (lexer.hostBody === 'list' && !lazyFootnote && leadingWhitespace(ln) >= FOOTNOTE_BODY_COLUMN && RE_FOOTNOTE_DEF.test(ln.trimStart())) ||
-        (RE_CAPTION.test(ln) && !lexer.markerOpensSublist) ||
+        (RE_CAPTION.test(ln) && !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) ||
         colonFenceShapeEndsLazyContinuation(ln) ||
         (quoteTermContinuation && RE_HEADING.test(ln)) ||
         (quoteTermContinuation && (
