@@ -3631,7 +3631,7 @@ function parseAbbrDef(lexer: Lexer): AbbreviationDef {
 
 type BlockQuoteLazyMode =
   | { kind: 'closed' }
-  | { kind: 'paragraph'; absorbingFence: boolean; term?: boolean }
+  | { kind: 'paragraph'; absorbingFence: boolean; term?: boolean; itemParagraph?: boolean }
   | { kind: 'code_fence'; close: RegExp }
   | { kind: 'comment_fence'; length: number }
   // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
@@ -4133,6 +4133,7 @@ function classifyQuotedLine(
   if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree, hasLiteralCommentCloser, wasInTable)) return null
   const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
+  const wasItemParagraph = state.mode.kind === 'paragraph' && state.mode.itemParagraph === true
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -4309,6 +4310,11 @@ function classifyQuotedLine(
     if (descent && descent.levels === 0) descent.preserved = true
     return null
   }
+  if (wasItemParagraph && isListMarkerLine(content) &&
+      !bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content, prefixMemo))) {
+    closeBlockQuoteParagraph(state)
+    return null
+  }
   // A list at block start carries its first block's continuation state.
   // A marker in an existing paragraph is still ordinary paragraph text.
   if (!blockQuoteParagraphOpen(state) && isListMarkerLine(content)) {
@@ -4327,7 +4333,9 @@ function classifyQuotedLine(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
-  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing, ...(wasTerm ? { term: true } : {}) }
+  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing,
+    ...(wasTerm ? { term: true } : {}),
+    ...((wasItemParagraph || (isListMarkerLine(content) && !blockQuoteParagraphOpen(state))) ? { itemParagraph: true } : {}) }
 
   return null
 }
