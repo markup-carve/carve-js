@@ -195,6 +195,18 @@ describe('expandIncludes', () => {
     expect(result.html).toContain('#region')
   })
 
+  it('@region allows only spaces and tabs around the comment marker', () => {
+    const tabbed = expand('{{ child @region:demo }}', { child: '\t  //\t#region demo\nBody.\n  #endregion demo' })
+    expect(tabbed.warnings).toEqual([])
+    expect(tabbed.html).toBe('<p>Body.</p>')
+    for (const space of ['\u00a0', '\u3000', '\f', '\v']) {
+      const before = expand('{{ child @region:demo }}', { child: `${space}// #region demo\nBody.\n// #endregion demo` })
+      expect(before.warnings.map((warning) => warning.rule)).toEqual(['include-region-invalid'])
+      const after = expand('{{ child @region:demo }}', { child: `//${space}#region demo\nBody.\n// #endregion demo` })
+      expect(after.warnings.map((warning) => warning.rule)).toEqual(['include-region-invalid'])
+    }
+  })
+
   it('@region rejects missing, duplicate, unmatched and conflicting selectors', () => {
     const cases = [
       ['// #region other\nText\n// #endregion other', 'include-region-invalid'],
