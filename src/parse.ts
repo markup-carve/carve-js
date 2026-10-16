@@ -4346,6 +4346,11 @@ function classifyQuotedLine(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
+  // A footnote's extent takes no lazy line (CARVE-P0-012): its text opens no paragraph here.
+  if (atColumn && state.hosts?.kinds.at(-1) === 'note') {
+    closeBlockQuoteParagraph(state)
+    return null
+  }
   state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing,
     ...(wasTerm ? { term: true } : {}),
     ...((wasItemParagraph || (isListMarkerLine(content) && !blockQuoteParagraphOpen(state))) ? { itemParagraph: true } : {}) }
@@ -6246,7 +6251,10 @@ function trackItemLazyState(
   // are read there exactly as they are here, rather than enumerated. An
   // enumeration of block kinds is how the three engines drifted apart.
   if (readDescendant && state.inDefList === false) {
-    const dedented = content.slice(run!)
+    // A footnote body is measured from the note's column, so its continuation keeps that offset.
+    const dedented = state.deepest?.inFootnoteBody === true
+      ? sliceColumns(content, state.ownedColumn, true)
+      : content.slice(run!)
     const inlineFence = RE_FENCE.exec(dedented)
     const inlineMarker = inlineFence?.[2] ?? RE_RAW_FENCE.exec(dedented)?.[1]
     const inner = (state.deepest ??= {
