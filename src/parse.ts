@@ -14169,6 +14169,8 @@ class ParseSession {
       let hostedNoteBodyColumn: number | undefined
       while (!lexer.eof()) {
         const l = lexer.peek()!
+        // An enclosing item already took this line as lazy text: it reached no column.
+        const enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
         if (hostedNoteBodyColumn !== undefined && lexer.hostBody !== null &&
             !isBlankLine(l) && indentColumns(l, hostedNoteBodyColumn) < hostedNoteBodyColumn) break
         const noteCommentEnd = markerNoteItem && !markerNoteLeft ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
@@ -14843,7 +14845,7 @@ class ParseSession {
           if (descendantOpaque !== null && !descriptionFenceAwaitingPayload) lazyState.lazyFoldable = false
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
-              RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol)
+              RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol && !enclosingLazy)
             hostedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
           lexer.consume()
         } else if (
@@ -15017,7 +15019,7 @@ class ParseSession {
           }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
-              RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol)
+              RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol && !enclosingLazy)
             hostedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
           lexer.consume()
         } else if (
