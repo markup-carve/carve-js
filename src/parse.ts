@@ -3854,6 +3854,11 @@ function trackQuoteHostFence(
     break
   }
   if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
+  if (blockStart && host.kinds.at(-1) === 'item' && host.kinds.includes('note') &&
+      !opensCodeFence(inner) && colonFenceOpenerLen(inner) === null && !RE_DEFLIST_TERM.test(inner)) {
+    closeBlockQuoteParagraph(state)
+    return true
+  }
   if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
   else if (host.definitionList !== undefined && column <= host.definitionList &&
     host.kinds.at(-1) !== 'description') host.definitionList = undefined
@@ -13072,6 +13077,7 @@ class ParseSession {
       }
       if (
         isBlankLine(ln) ||
+        (lexer.hostBody === 'list' && leadingWhitespace(ln) >= FOOTNOTE_BODY_COLUMN && RE_FOOTNOTE_DEF.test(ln.trimStart())) ||
         (RE_CAPTION.test(ln) && !lexer.markerOpensSublist) ||
         colonFenceShapeEndsLazyContinuation(ln) ||
         (quoteTermContinuation && RE_HEADING.test(ln)) ||
@@ -13715,6 +13721,8 @@ class ParseSession {
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
       let nestedOwnerIsList = false
+      let quotedFootnoteColumn: number | undefined
+      let quotedFootnoteOffset = 0
       let closedListFence = false
       const markerLineTerm = RE_DEFLIST_TERM.test(content)
       let singleMarkerTerm = markerLineTerm
@@ -14343,12 +14351,27 @@ class ParseSession {
           // both references give at every closer offset. A MARKED line (`>  code`)
           // is not quote-lazy and keeps the content-column dedent that preserves
           // its authored indentation.
-          const dedented =
+          const quoteFootnote = RE_BLOCKQUOTE.test(content) && RE_FOOTNOTE_DEF.test(placed.trimStart()) && leadingWhitespace(placed) >= FOOTNOTE_BODY_COLUMN
+          let dedented =
             lazyState.opaque?.kind === 'code' && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
               ? l.startsWith(LAZY_FRAME)
                 ? l
                 : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+              : quoteFootnote
+                ? placed.trimStart()
               : placed
+          if (quoteFootnote) {
+            // Keep the authored gap to the note's body when lifting it out of the quote.
+            quotedFootnoteColumn = indentColumns(l)
+            quotedFootnoteOffset = indentColumns(placed)
+          } else if (quotedFootnoteColumn !== undefined && dedented === placed) {
+            if (indentColumns(l) < quotedFootnoteColumn) {
+              dedented = placed.trimStart()
+              quotedFootnoteColumn = undefined
+            } else {
+              dedented = sliceColumns(placed, quotedFootnoteOffset, true)
+            }
+          }
           // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
           // authored base. Without this guard the rebase saw an over-indented
           // fence CLOSER - one written past its opener, which is body text, not a
