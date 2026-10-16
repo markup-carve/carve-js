@@ -3475,7 +3475,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
   let paragraphOpen: boolean = false
-  let itemParagraphOpen = false
+  let paragraphPrefix: string | false = false
   let markerLineLiteral: { width: number; column: number } | undefined
   const authoredColonColumn = (at: number, width: number): number | undefined => {
     const source = lexer.rootLines?.[lexer.lineNumber(at) - 1]
@@ -3506,7 +3506,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
     if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, undefined, !paragraphOpen && markerLineLiteral === undefined, hostCloserAt)) {
       paragraphOpen = false
-      itemParagraphOpen = false
+      paragraphPrefix = false
       continue
     }
     const close = RE_ADMONITION_CLOSE.exec(text)
@@ -3518,7 +3518,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       if (stack.length === 0) break
       lines.push({ text, lineIndex })
       paragraphOpen = false
-      itemParagraphOpen = false
+      paragraphPrefix = false
       continue
     }
 
@@ -3532,7 +3532,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
         RE_ADMONITION_CLOSE.exec(text.trimStart())?.[1]?.length === markerLineLiteral.width) {
       markerLineLiteral = undefined
       paragraphOpen = false
-      itemParagraphOpen = false
+      paragraphPrefix = false
       continue
     }
     if (stack.at(-1)!.kind === 'line block') continue
@@ -3544,17 +3544,29 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
         fenceWidth: openerLen,
       })
       paragraphOpen = false
-      itemParagraphOpen = false
+      paragraphPrefix = false
       continue
     }
     // A quote or item line that carries paragraph text leaves a paragraph open
     // even where it interrupts the one above (`> para` then `> more`).
-    const itemLine = RE_TASK.test(text) || RE_UNORDERED.test(text) || RE_ORDERED.test(text)
-    const previousParagraphOpen: boolean = paragraphOpen && !(itemParagraphOpen && itemLine)
-    paragraphOpen = !isBlankLine(text) && !leavesNoParagraph(text) &&
-      ((!interruptsParagraph && (previousParagraphOpen || !lineOpensBlock(text))) || opensParagraphInBlock(text))
-    itemParagraphOpen = paragraphOpen &&
-      ((itemLine && !previousParagraphOpen) || (itemParagraphOpen && previousParagraphOpen))
+    const leavesParagraphOpen = (line: string, wasOpen: string | false, interrupted: boolean): string | false => {
+      if (isBlankLine(line) || leavesNoParagraph(line) || RE_HEADING.test(line) || RE_HR.test(line) || isLinkDefLine(line)) return false
+      const quote = RE_BLOCKQUOTE.exec(line)
+      if (quote) {
+        const inner = quote[1] !== undefined &&
+          leavesParagraphOpen(quote[1], wasOpen && wasOpen[0] === '>' ? wasOpen.slice(1) : false, false)
+        return inner && `>${inner}`
+      }
+      const item = RE_TASK.exec(line)?.[3] ?? RE_UNORDERED.exec(line)?.[2] ?? RE_ORDERED.exec(line)?.[4]
+      if (wasOpen && !interrupted && (item === undefined || wasOpen[0] !== '-')) return wasOpen
+      if (item !== undefined) {
+        const inner = leavesParagraphOpen(item, false, false)
+        return inner && `-${inner}`
+      }
+      return ((!interrupted && (wasOpen || !lineOpensBlock(line))) || opensParagraphInBlock(line)) ? 'p' : false
+    }
+    paragraphPrefix = leavesParagraphOpen(text, paragraphPrefix, interruptsParagraph)
+    paragraphOpen = paragraphPrefix !== false
   }
 
   for (const unclosed of stack) index.set(base + unclosed.lineIndex, base + lexer.pos)
