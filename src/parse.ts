@@ -3548,20 +3548,30 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       continue
     }
     // A quote or item line that carries paragraph text leaves a paragraph open
-    // even where it interrupts the one above (`> para` then `> more`).
-    const leavesParagraphOpen = (line: string, wasOpen: string | false, interrupted: boolean): string | false => {
-      if (isBlankLine(line) || leavesNoParagraph(line) || RE_HEADING.test(line) || RE_HR.test(line) || isLinkDefLine(line) || isTableRow(line)) return false
-      const quote = RE_BLOCKQUOTE.exec(line)
+    // even where it interrupts the one above (`> para` then `> more`). An item
+    // prefix is `-<content column>;`: a line reaching that column is read
+    // there, so a block at it closes the item's paragraph (CARVE-P0-011).
+    const leavesParagraphOpen = (line: string, wasOpen: string | false, interrupted: boolean, inItem = false): string | false => {
+      const block = inItem ? line.trimStart() : line
+      if (isBlankLine(line) || leavesNoParagraph(block) || RE_HEADING.test(block) || RE_HR.test(block) ||
+        (block === line.trimStart() && isLinkDefLine(block)) || isTableRow(block)) return false
+      const quote = RE_BLOCKQUOTE.exec(block)
       if (quote) {
         const inner = quote[1] !== undefined &&
           leavesParagraphOpen(quote[1], wasOpen && wasOpen[0] === '>' ? wasOpen.slice(1) : false, false)
         return inner && `>${inner}`
       }
-      const item = RE_TASK.exec(line)?.[3] ?? RE_UNORDERED.exec(line)?.[2] ?? RE_ORDERED.exec(line)?.[4]
-      if (wasOpen && !interrupted && (item === undefined || wasOpen[0] !== '-')) return wasOpen
+      const open = wasOpen ? RE_ITEM_PREFIX.exec(wasOpen) : null
+      if (open && /^ */.exec(line)![0].length >= Number(open[1])) {
+        const inner = leavesParagraphOpen(line.slice(Number(open[1])), wasOpen && wasOpen.slice(open[0].length), interrupted, true)
+        return inner && open[0] + inner
+      }
+      const marked = extractItemAttr(line)?.stripped ?? line
+      const item = RE_TASK.exec(marked)?.[3] ?? RE_UNORDERED.exec(marked)?.[2] ?? RE_ORDERED.exec(marked)?.[4]
+      if (wasOpen && !interrupted && (item === undefined || !(open || inItem))) return wasOpen
       if (item !== undefined) {
         const inner = leavesParagraphOpen(item, false, false)
-        return inner && `-${inner}`
+        return inner && `-${markerContentColumn(line)};${inner}`
       }
       return ((!interrupted && (wasOpen || !lineOpensBlock(line))) || opensParagraphInBlock(line)) ? 'p' : false
     }
@@ -3575,6 +3585,9 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   }
   return lines
 }
+
+// An item's prefix in the colon-body scan's paragraph state: `-<content column>;`.
+const RE_ITEM_PREFIX = /^-(\d+);/
 
 // A comment line and a block-attribute line are not paragraph text.
 function leavesNoParagraph(text: string): boolean {
