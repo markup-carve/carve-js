@@ -31,7 +31,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
-import { isAtContentColumn } from './paragraph-indent.js'
+import { hasLazySecondLine, isAtContentColumn } from './paragraph-indent.js'
 
 /**
  * The key an implicit heading reference and a heading's text are compared on:
@@ -1321,6 +1321,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       b.children[0]!.type === 'image' &&
       !isUnresolvedReference(b.children[0] as Image) &&
       isAtContentColumn(b) &&
+      !hasLazySecondLine(b) &&
       b.children[1]!.type === 'soft_break' &&
       // This `text` test is also what keeps an ESCAPED caret literal: `\^`
       // parses to an `escaped_text` node, and coalesceTextRuns never merges one

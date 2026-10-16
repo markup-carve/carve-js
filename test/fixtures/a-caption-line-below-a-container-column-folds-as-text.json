@@ -1,0 +1,52 @@
+[
+  {
+    "id": "fold-1",
+    "source": ":: t\n: > para\n^ cap\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n^ cap</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "fold-2",
+    "source": ":: t\n: ![a](x.png)\n^ cap\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd><img src=\"x.png\" alt=\"a\">\n^ cap</dd>\n</dl>"
+  },
+  {
+    "id": "fold-3",
+    "source": ":: t\n: ![a](x.png)\n ^ cap\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd><img src=\"x.png\" alt=\"a\">\n^ cap</dd>\n</dl>"
+  },
+  {
+    "id": "fold-4",
+    "source": "- ![a](x.png)\n^ cap\n",
+    "html": "<ul>\n  <li><img src=\"x.png\" alt=\"a\">\n^ cap</li>\n</ul>"
+  },
+  {
+    "id": "fold-5",
+    "source": "- ![a](x.png)\n ^ cap\n",
+    "html": "<ul>\n  <li><img src=\"x.png\" alt=\"a\">\n^ cap</li>\n</ul>"
+  },
+  {
+    "id": "fold-6",
+    "source": "- - ![a](x.png)\n  ^ cap\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><img src=\"x.png\" alt=\"a\">\n^ cap</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "fold-7",
+    "source": "1. ![a](x.png)\n  ^ cap\n",
+    "html": "<ol>\n  <li><img src=\"x.png\" alt=\"a\">\n^ cap</li>\n</ol>"
+  },
+  {
+    "id": "control-at-column-1",
+    "source": ":: t\n: ![a](x.png)\n  ^ cap\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <figure>\n      <img src=\"x.png\" alt=\"a\">\n      <figcaption>cap</figcaption>\n    </figure>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "control-at-column-2",
+    "source": "- ![a](x.png)\n  ^ cap\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <img src=\"x.png\" alt=\"a\">\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
+  },
+  {
+    "id": "control-at-column-3",
+    "source": ":: t\n: > para\n  ^ cap\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </dd>\n</dl>"
+  }
+]

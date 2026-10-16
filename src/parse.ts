@@ -90,7 +90,7 @@ import { isCarveWhitespace, trimNonNbsp, trimEndSpaceTab, trimEndNonNbsp } from 
 import { extendsGrapheme } from './grapheme-extender.js'
 import { ownValue, setOwn } from './own-property.js'
 import { codeContent } from './verbatim-payload.js'
-import { markAboveContentColumn } from './paragraph-indent.js'
+import { markAboveContentColumn, markSecondLineLazy } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
@@ -12749,7 +12749,9 @@ class ParseSession {
           // either ends the body above or reads the same at both columns.
           //
           const folded =
-            retainedBelowComment && !RE_COMMENT_LINE.test(below)
+            RE_CAPTION.test(below) && lazyState.opaque === null
+              ? LAZY_FRAME + below
+              : retainedBelowComment && !RE_COMMENT_LINE.test(below)
               ? below
               : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
                   (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
@@ -14923,7 +14925,11 @@ class ParseSession {
           const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
             lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
           let lazyLine = l
-          if (lazyState.quoteInner === null && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
+          // A caption line below the column reaches no host: it folds as text (§10 I7).
+          if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
+              lazyState.opaque === null && !quoteLazyFramed) {
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (lazyState.quoteInner === null && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = enclosingLazy || lexer.atDocumentLevel ? LAZY_FRAME + l.replace(/^[ \t]+/, '') : l
           } else if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
@@ -16181,6 +16187,7 @@ class ParseSession {
     const lines: string[] = []
     let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
+    let secondLineLazy = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
@@ -16215,6 +16222,8 @@ class ParseSession {
         !(RE_ADMONITION_CLOSE.test(ln) && holdsLiteralColonFence)
       )
         break
+      if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
+        secondLineLazy = true
       lexer.consume()
       // The frame did its work in the interruption test above; a paragraph is
       // where a framed line becomes text, so it comes off here.
@@ -16262,6 +16271,8 @@ class ParseSession {
     // thrown away two lines up, and the block-image promotion phase has no way to
     // recover it from the tree (carve-js#1553).
     if (firstLead > 0) markAboveContentColumn(paragraphNode)
+    // A caption line below the container's column reaches no host (§10 I7).
+    if (secondLineLazy) markSecondLineLazy(paragraphNode)
     return paragraphNode
   }
 
