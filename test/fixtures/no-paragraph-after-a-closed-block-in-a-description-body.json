@@ -1,0 +1,27 @@
+[
+  {
+    "id": "js-15-1",
+    "source": ":: t\n: ::: note\n   # H\nx\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<h1 id=\"H\">H</h1>\n</aside>\n</dd>\n</dl>\n<p>x</p>"
+  },
+  {
+    "id": "js-15-2",
+    "source": ":: t\n: ::: note\n      | a |\nx\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<table>\n<tbody>\n<tr><td>a</td></tr>\n</tbody>\n</table>\n</aside>\n</dd>\n</dl>\n<p>x</p>"
+  },
+  {
+    "id": "js-15-3",
+    "source": ":: t\n: ::: note\n      # H\ntail\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<h1 id=\"H\">H</h1>\n</aside>\n</dd>\n</dl>\n<p>tail</p>"
+  },
+  {
+    "id": "js-15-4",
+    "source": ":: t\n: ::: note\n      ---\ntail\n",
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<hr>\n</aside>\n</dd>\n</dl>\n<p>tail</p>"
+  },
+  {
+    "id": "js-66-1",
+    "source": "- :: t\n  : para\n   {#x}\ntail\n",
+    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para</dd>\n</dl>\n</li>\n</ul>\n<p>tail</p>"
+  }
+]
