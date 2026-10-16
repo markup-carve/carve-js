@@ -13093,6 +13093,11 @@ class ParseSession {
         (RE_CAPTION.test(ln) && !lexer.markerOpensSublist) ||
         colonFenceShapeEndsLazyContinuation(ln) ||
         (quoteTermContinuation && RE_HEADING.test(ln)) ||
+        (quoteTermContinuation && (
+          RE_HR.test(ln) || isTableRow(ln) ||
+          (leadingWhitespace(ln) === 0 && (RE_FOOTNOTE_DEF.test(ln) || isLinkDefLine(ln) || isBlockAttributeLine(ln))) ||
+          RE_COMMENT_LINE.test(ln)
+        )) ||
         (isLinkDefLine(ln.trimStart()) && !RE_FOOTNOTE_DEF.test(ln.trimStart()) &&
           /^\s*:[ \t]+>/.test(lexer.rootLines?.[lexer.lineNumber(firstLineIndex) - 1] ?? '')) ||
         (!quoteTermContinuation && startsInterruptingBlock(lexer, undefined, false))
