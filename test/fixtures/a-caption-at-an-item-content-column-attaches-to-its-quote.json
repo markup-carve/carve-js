@@ -1,0 +1,32 @@
+[
+  {
+    "id": "row-1",
+    "source": "- > para\n  ^ cap\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
+  },
+  {
+    "id": "row-2",
+    "source": "- x\n\n  > para\n  ^ cap\n",
+    "html": "<ul>\n  <li>x\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
+  },
+  {
+    "id": "row-3",
+    "source": "- > para\n  > more\n  ^ cap\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>para\nmore</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
+  },
+  {
+    "id": "row-4",
+    "source": "1. > para\n   ^ cap\n",
+    "html": "<ol>\n  <li>\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-5",
+    "source": "- - > para\n    ^ cap\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <figure>\n          <blockquote><p>para</p></blockquote>\n          <figcaption>cap</figcaption>\n        </figure>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "row-6",
+    "source": "- > para\n  ^ cap\n  tail\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap\ntail</figcaption>\n    </figure>\n  </li>\n</ul>"
+  }
+]
