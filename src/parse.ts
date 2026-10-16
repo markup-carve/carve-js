@@ -6453,7 +6453,11 @@ function trackItemLazyState(
   // `:  > | a |` / `   > + b |` ends on a table one level down. A line test
   // could answer the first two; only the quote's own tracker answers the third,
   // because a quoted table spanning two lines is one block.
-  const quotedLine = RE_BLOCKQUOTE.exec(content)
+  // A closed quoted note still owns its indented quoted body line, but open quoted prose reads it literally.
+  const quotedLine = RE_BLOCKQUOTE.exec(content) ??
+    (wasQuote !== null && !blockQuoteParagraphOpen(wasQuote) &&
+      wasQuote.hosts?.kinds.at(-1) === 'note' && indentColumns(content) < 4
+      ? RE_BLOCKQUOTE.exec(content.trimStart()) : null)
   if (quotedLine) {
     const inner: BlockQuoteLazyState = wasQuote ?? {
       mode: { kind: 'closed' },
