@@ -378,6 +378,31 @@ function sliceLines(source: string, range: { start: number; end: number }): stri
   return sourceLines(source).slice(range.start - 1, range.end).join('\n')
 }
 
+/** The physical lines inside a uniquely named, correctly paired comment region. */
+function regionLines(source: string, selected: string): { start: number; end: number } | null {
+  const seen = new Set<string>()
+  const stack: Array<{ name: string; line: number }> = []
+  let range: { start: number; end: number } | null = null
+  for (const [index, sourceLine] of sourceLines(source).entries()) {
+    const line = sourceLine.replace(/\r$/, '').trimStart()
+    const body = line.startsWith('//') ? line.slice(2).trimStart() : line
+    if (!/^#(?:end)?region\b/.test(body)) continue
+    const marker = /^#(end)?region(?:[ \t]+([A-Za-z_][\w-]*))?[ \t]*$/.exec(body)
+    if (!marker) return null
+    const name = marker[2]
+    if (marker[1]) {
+      const open = stack.pop()
+      if (!open || (name !== undefined && name !== open.name)) return null
+      if (open.name === selected) range = { start: open.line + 2, end: index }
+    } else {
+      if (!name || seen.has(name)) return null
+      seen.add(name)
+      stack.push({ name, line: index })
+    }
+  }
+  return stack.length === 0 ? range : null
+}
+
 /** Where a `@lines` slice sits in the file it was cut from. */
 interface SliceBase {
   /** Line breaks preceding the slice, counted as the lexer counts them. */
@@ -496,8 +521,8 @@ function resolveChild(
   node: Text,
 ): { source: string; id: string; base: SliceBase } | null {
   if (!state.opts.resolve) return null
-  if (d.section && d.lines) {
-    warn(state, 'include-selection-conflict', `Include "${d.path}" cannot use both #section and @lines.`, node)
+  if (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1) {
+    warn(state, 'include-selection-conflict', `Include "${d.path}" cannot combine selectors.`, node)
     return null
   }
   if (state.depth >= state.maxDepth) {
@@ -602,8 +627,13 @@ function resolveChild(
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
   }
-  if (!d.lines) return { source, id, base: { line: 0, offset: 0 } }
-  return { source: sliceLines(source, d.lines), id, base: sliceBase(source, d.lines) }
+  const range = d.region === undefined ? d.lines : regionLines(source, d.region)
+  if (d.region !== undefined && range === null) {
+    warn(state, 'include-region-invalid', `Include region "${d.region}" is missing or invalid in "${d.path}".`, node)
+    return null
+  }
+  if (!range) return { source, id, base: { line: 0, offset: 0 } }
+  return { source: sliceLines(source, range), id, base: sliceBase(source, range) }
 }
 
 /**
