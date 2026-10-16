@@ -3550,7 +3550,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     // A quote or item line that carries paragraph text leaves a paragraph open
     // even where it interrupts the one above (`> para` then `> more`).
     const leavesParagraphOpen = (line: string, wasOpen: string | false, interrupted: boolean): string | false => {
-      if (isBlankLine(line) || leavesNoParagraph(line) || RE_HEADING.test(line) || RE_HR.test(line) || isLinkDefLine(line)) return false
+      if (isBlankLine(line) || leavesNoParagraph(line) || RE_HEADING.test(line) || RE_HR.test(line) || isLinkDefLine(line) || isTableRow(line)) return false
       const quote = RE_BLOCKQUOTE.exec(line)
       if (quote) {
         const inner = quote[1] !== undefined &&
