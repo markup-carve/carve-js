@@ -12662,7 +12662,10 @@ class ParseSession {
             RE_FOOTNOTE_DEF.test(bodySourceLines.at(-1)?.trimStart() ?? ''))
         if (belowLeadColon && !retainedBelowComment && !RE_COMMENT_LINE.test(below) &&
             (RE_HR.test(below) || isTableRow(below) ||
-              (atDocumentColumn && (lineOpensBlock(below) || isBlockAttributeLine(below) ||
+              // A list marker, and a fence with no closer, are paragraph text
+              // here as anywhere (PART 9 §10 I2, I4).
+              (atDocumentColumn && ((lineOpensBlock(below) && !isListMarkerLine(below) &&
+                (!/^[`~]/.test(below) || startsInterruptingBlock(lexer, below))) || isBlockAttributeLine(below) ||
                 /^:{3,}[ \t]*$/.test(below)) &&
                 !(priorLazyDefinition && opensCodeFence(below))))) break
         const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) &&
