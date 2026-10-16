@@ -5062,6 +5062,23 @@ function retainCommentBoundary(state: ItemLazyState): void {
   state.deepest = null
 }
 
+/**
+ * The index past the closer of a matched `%%%` fence opening at `at`, or
+ * undefined. The first bare run of the same width closes it at any column.
+ * CARVE-P9-053: such a fence answers exactly as one `%%` line at the opener's column.
+ */
+function matchedCommentFenceEnd(lexer: Lexer, at: number = lexer.pos): number | undefined {
+  const opener = lexer.lineAt(at)
+  if (opener === undefined) return undefined
+  const run = commentFenceRun(opener.replace(/^[ \t]+/, ''))
+  if (run === undefined) return undefined
+  for (let j = at + 1; ; j++) {
+    const line = lexer.lineAt(j)
+    if (line === undefined) return undefined
+    if (commentFenceRun(line.replace(/^[ \t]+/, '')) === run) return j + 1
+  }
+}
+
 function retainBelowColumnComment(content: string, state: ItemLazyState, atColumn: boolean): boolean {
   if (atColumn || state.opaque !== null || state.literalColon !== undefined ||
       !RE_COMMENT_LINE.test(content.trimStart())) return false
@@ -11412,6 +11429,8 @@ class ParseSession {
     if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
     let termTextContinuation = false
+    const belowColumnCommentFence = new Set<number>()
+    let commentFenceUntil = 0
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
@@ -11491,6 +11510,9 @@ class ParseSession {
         if (lexer.hostBody === 'list' && defLineIndex === 0 && RE_FOOTNOTE_DEF.test(ln.trimStart()) && sourceLine !== undefined) {
           nestedSourceBodyColumn = indentColumns(sourceLine) + FOOTNOTE_BODY_COLUMN
         }
+        if (content !== content.trimStart() && lazyState.opaque === null && commentFenceUntil <= lexer.pos)
+          commentFenceUntil = matchedCommentFenceEnd(lexer) ?? commentFenceUntil
+        if (lexer.pos < commentFenceUntil) belowColumnCommentFence.add(bodyLines.length)
         // Past the body column a definition is term text; at it, it registers (CARVE-P0-010).
         bodyLines.push(termTextContinuation && RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && content !== content.trimStart() &&
           (RE_FOOTNOTE_DEF.test(content.trimStart()) || isLinkDefLine(content.trimStart()))
@@ -11524,6 +11546,23 @@ class ParseSession {
         bodySourceLines.push(ln)
         lexer.consume()
       } else if (
+        pendingBlanks === 0 && indentColumns(ln, bodyColumn) < bodyColumn && ln !== ln.trimStart() &&
+        (retainedBelowComment || lazyState.lazyFoldable) && lazyState.opaque === null &&
+        matchedCommentFenceEnd(lexer) !== undefined
+      ) {
+        // A matched fence below the column retains the note as a `%%` line does.
+        const end = matchedCommentFenceEnd(lexer)!
+        while (lexer.pos < end) {
+          const line = lexer.peek()!
+          belowColumnCommentFence.add(bodyLines.length)
+          bodyLines.push(line)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          bodySourceLines.push(line)
+          lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+          lexer.consume()
+        }
+        retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
+      } else if (
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
         !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
         (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
@@ -11549,8 +11588,11 @@ class ParseSession {
       // A recognized opener at or beyond the note's minimum column establishes
       // its authored column as a local base (carve#1729). The collector has
       // already removed the fixed two-column body margin.
+      // A fence taken below the column keeps that column, as a `%%` line does.
+      const rebaseEligible = belowColumnCommentFence.size === 0 ? undefined
+        : new Set(bodyLines.map((_, k) => k).filter((k) => !belowColumnCommentFence.has(k)))
       rebaseOverindentedBlocks(
-        bodyLines, undefined, -1, true, true, undefined, undefined, undefined, false,
+        bodyLines, rebaseEligible, -1, true, true, undefined, undefined, undefined, false,
         undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
         undefined, undefined, false, false, true,
       )
