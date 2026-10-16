@@ -15,3 +15,16 @@ export function markAboveContentColumn(para: Paragraph): void {
 export function isAtContentColumn(para: Paragraph): boolean {
   return !aboveContentColumn.has(para)
 }
+
+/** The paragraphs whose second line folded in from below their container's column. */
+const secondLineLazy = new WeakSet<Paragraph>()
+
+/** Record that `para`'s second line was lazy text from below its container's column. */
+export function markSecondLineLazy(para: Paragraph): void {
+  secondLineLazy.add(para)
+}
+
+/** Whether `para`'s second line folded in from below its container's column. */
+export function hasLazySecondLine(para: Paragraph): boolean {
+  return secondLineLazy.has(para)
+}
