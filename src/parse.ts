@@ -10762,8 +10762,9 @@ class ParseSession {
           (!collectsNothing || (!composed.peeled.some((one) => !one.quote) &&
             leadingWhitespace(raw.slice(composed.column)) === 0)) &&
           !lexer.declinedLinkDefLines.has(lexer.lineNumber(idx))) {
+        // A term on the marker line has no content column (CARVE-P2-028).
         noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: rawQuoteDepth,
-          termText: false })
+          termText: RE_DEFLIST_TERM.test(RE_FOOTNOTE_DEF.exec(line)![2]!) })
         inFootnoteBody = true
       }
       // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
