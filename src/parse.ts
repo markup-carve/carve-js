@@ -6089,6 +6089,12 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
+  if (atContentColumn && state.divDepth > 0 && indentColumns(content) > 0 &&
+      isBlockAttributeLine(content.trimStart())) {
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
   if (isBlankLine(content)) {
     delete state.termAfterComment
     if (state.descriptionHasTerm === false) state.inDefList = false
@@ -6196,10 +6202,18 @@ function trackItemLazyState(
   if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
       runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
       (colonBlockOpenerRun(content.slice(run!)) !== null || RE_BLOCKQUOTE.test(content.slice(run!)))) state.inDefList = false
+  if (state.inDefList === 'description' && run !== undefined && run > 0 &&
+      (isTableRow(content.slice(run)) || RE_HR.test(content.slice(run)))) {
+    state.lazyFoldable = false
+    state.inDefList = false
+    state.inTable = isTableRow(content.slice(run))
+    return
+  }
   if (state.inDefList === 'description' && state.descriptionHasTerm && state.descriptionColumn !== undefined &&
       run !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
     const text = content.slice(run)
-    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text)) {
+    // A deeper authored run can still belong to the description's inline fence paragraph.
+    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || (isBlockAttributeLine(text) && !(state.ownedAuthored && state.ownedColumn > state.descriptionColumn)) || colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text)) {
       state.ownedColumn = state.descriptionColumn
       state.ownedAuthored = false
       const inner = state.deepest = verbatimOnlyLazyState()
@@ -6367,7 +6381,7 @@ function trackItemLazyState(
       content = overIndented
       if (facts) facts = { ...facts, whitespace: 0 }
     }
-    if (RE_HEADING.test(overIndented) || isTableRow(overIndented) || RE_HR.test(overIndented)) {
+    if (RE_HEADING.test(overIndented) || isTableRow(overIndented) || RE_HR.test(overIndented) || isBlockAttributeLine(overIndented)) {
       state.inTable = isTableRow(overIndented)
       state.lazyFoldable = false
       state.inDefList = false
