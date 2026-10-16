@@ -12,7 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.12] - 2026-10-15
 
 ### Breaking
-- Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal. AST envelopes carry contract version `2.0`, so 0.1.11 readers refuse trees written by this release (#3112, markup-carve/carve#2878).
+- Empty link destinations are real links: `[text]()` and `![alt]()` parse as a link and an image with an empty URL, and a bare `[r]:` line is an empty reference definition. Escape the opening bracket to keep such text literal. AST JSON carries contract version `1.2`, which adds `resolved: true` on a link or image reference use that resolved to an empty definition, an optional root `astVersion` that `--json` writes, and `comment.form` on comments; older readers refuse trees written by this release (#3112, #3193, markup-carve/carve#2878).
 - Markdown, plain text and ANSI rendering report `table-span-flattened` for each merged table cell. Markdown also reports `table-header-row-demoted` for each header row after the first, `table-header-row-hoisted` for a header row it moves above earlier body rows, and `table-header-cell-demoted` for each header cell outside a header row. A `--strict-losses` build with such tables now fails; allow the codes with `--allow-loss` where the change is acceptable (#3119, #3158, #3159, #3144, markup-carve/carve#3202).
 - An included file whose bytes are not well-formed UTF-8 is refused as non-text instead of read with replacement characters. Re-encode such files as UTF-8. A custom resolver may return the raw bytes as `source` to get the same check (#3142, markup-carve/carve#3221).
 
@@ -21,9 +21,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - The combined bold-italic token `/*x*/` no longer opens after a letter, digit, `_` or `/`, or closes before a letter or digit, so `src/*test*/fixtures` keeps its slashes (#3151, #3154, markup-carve/carve#3217).
 - A lone surrogate in an input string becomes U+FFFD in the parser, in AST JSON ingest and in every importer, instead of reaching HTML output and heading ids (#3135, #3139, #3142, #3152, markup-carve/carve#3212).
 - An autolink or a cross-reference is atomic to editorial substitution and to the bracket scan: a `~>` inside one is no arrow, and a `]` inside a cross-reference no longer closes a label opened before it (#3168, markup-carve/carve#3244).
-- Markdown and HTML import write an unresolved cross-reference back verbatim, so `</#x~>y>` stays a cross-reference instead of gaining a `\#` and becoming text (#3183, #3182).
+- Markdown and HTML import write an unresolved cross-reference back verbatim, including one whose target differs from a converted id only in case, so `</#x~>y>` stays a cross-reference instead of gaining a `\#` and becoming text (#3183, #3182, #3189, #3188).
+- An escaped cross-reference such as `\</#id>` stays literal text instead of turning its target into a tag (#3187).
 - A `]` inside a nested link's destination no longer closes the image alt, span or link around it, so `![a [x](/u]) b](/i)` is one image (#3180, #3177).
-- An unclosed code fence in a `:::` container ends at the container's closer when it follows a comment line or a quote or list item line (#3167).
+- An unclosed code fence in a `:::` container ends at the container's closer after a comment, block attribute, quoted table row, quoted item comment, or block at an item's content column. A fence under an open quoted paragraph or lazy item text stays text until an interrupting block closes that paragraph (#3167, #3185, #3191, #3186, #3192, #3190, #3195, #3194, #3197, #3198, #3200, #3199).
+- A line after a footnote definition no longer continues its enclosing quote or list item once the definition ends (#3202, #3201).
 - A cross-reference to a heading holding a reference resolved by an empty definition shows the link text instead of the reference's source (#3160, markup-carve/carve#2878).
 - Markdown import reads a reference definition whose title wraps onto later lines, inside a block quote too, and an angle destination holding an escaped `<` or `>`, so their uses resolve (#3162, #3165, #3164, #3170, #3169, #3174, #3173).
 - Markdown import keeps a bare `[label]:` paragraph literal, or writes it as a link when a later definition resolves it, and lint no longer reports a reference to an empty definition as unresolved (#3136, #3138).
