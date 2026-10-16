@@ -12613,6 +12613,18 @@ class ParseSession {
         if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
+          indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
+          lazyState.opaque === null
+        const priorLazyDefinition = bodySourceLines.length > 1 &&
+          indentColumns(bodySourceLines.at(-1) ?? '', contentCol) < contentCol &&
+          (isLinkDefLine(bodySourceLines.at(-1)?.trimStart() ?? '') ||
+            RE_FOOTNOTE_DEF.test(bodySourceLines.at(-1)?.trimStart() ?? ''))
+        if (belowLeadColon && !retainedBelowComment && !RE_COMMENT_LINE.test(below) &&
+            (RE_HR.test(below) || isTableRow(below) ||
+              (atDocumentColumn && (lineOpensBlock(below) || isBlockAttributeLine(below) ||
+                /^:{3,}[ \t]*$/.test(below)) &&
+                !(priorLazyDefinition && opensCodeFence(below))))) break
         // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
         // THE COLUMN" (markup-carve/carve-js#2255, markup-carve/carve#2488). The
         // body ends at one of those, which is right for an opener and for the `%%`
@@ -12638,12 +12650,15 @@ class ParseSession {
         }
         const lastBodyLine = bodyLines.at(-1)?.trimStart() ?? ''
         if (atDocumentColumn && lazyState.divDepth > 0 && lazyState.opaque === null &&
+            !retainedBelowComment &&
+            !RE_COMMENT_LINE.test(below) &&
             ((colonFenceShapeEndsLazyContinuation(first) &&
               (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
               !lazyState.lazyFoldable)) break
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
           (lazyState.lazyFoldable || retainedBelowComment || belowCommentSpan ||
+            (belowLeadColon && RE_COMMENT_LINE.test(below)) ||
             (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
               (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
                 isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? '')))) &&
