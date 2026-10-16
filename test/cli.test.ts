@@ -788,7 +788,7 @@ describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
     expect(code).toBe(0)
     const json = JSON.parse(t.out)
     expect(json.type).toBe('document')
-    expect(Object.keys(json).sort()).toEqual(['children', 'srcByteLength', 'type'])
+    expect(Object.keys(json).sort()).toEqual(['astVersion', 'children', 'srcByteLength', 'type'])
     expect(json.children[0]).toMatchObject({ type: 'heading', level: 1 })
     expect(json.children[0].pos.startLine).toBe(1)
   })
@@ -1327,5 +1327,16 @@ describe('carve render includes', () => {
     const t = makeIO()
     expect(await run(['render', '--help'], t.io)).toBe(0)
     expect(t.out).toContain('--report-includes FILE')
+  })
+})
+
+describe('CLI AST contract 1.2', () => {
+  it('announces the version on bare JSON and accepts it back', async () => {
+    const encoded = makeIO({ stdin: '[t][r]\n\n[r]:\n' })
+    expect(await run(['--json'], encoded.io)).toBe(0)
+    expect(JSON.parse(encoded.out).astVersion).toBe('1.2')
+    const decoded = makeIO({ stdin: encoded.out })
+    expect(await run(['render', '--from-json', '--json'], decoded.io)).toBe(0)
+    expect(JSON.parse(decoded.out)).toEqual(JSON.parse(encoded.out))
   })
 })

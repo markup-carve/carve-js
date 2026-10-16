@@ -144,7 +144,7 @@ describe("the unknown-type check never reaches attrs.keyValues", () => {
       expect(NODE_FIELDS, field).toContain(field);
     }
     // Derived from the same schema as the field map beside it.
-    expect(WIRE_FIELDS.document).toEqual(["children", "srcByteLength", "type"]);
+    expect(WIRE_FIELDS.document).toEqual(["astVersion", "children", "srcByteLength", "type"]);
   });
 });
 

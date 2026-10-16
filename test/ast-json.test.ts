@@ -3,6 +3,7 @@ import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
 import { carveToAstJson, carveToHtml, renderHtml, AstJsonSchemaError } from '../src/index.js'
 import { renderCarve } from '../src/render-carve.js'
+import { AstEnvelopeVersionError } from '../src/ast-envelope.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('emits a root of exactly type, children and srcByteLength', () => {
@@ -354,5 +355,57 @@ describe('unknown input at the AST boundary', () => {
   it('validates an unknown object before decoding', () => {
     const input: unknown = { type: 'document', srcByteLength: 0, children: [] }
     expect(fromAstJson(input).children).toEqual([])
+  })
+})
+
+describe('AST contract 1.2 additions', () => {
+  it.each(['[t][r]\n\n[r]:\n', '![a][r]\n\n[r]:\n'])('preserves resolved empty references through JSON: %s', source => {
+    const doc = parse(source)
+    const json = toAstJson(doc)
+    const use = (json.children[0] as unknown as { children: Array<Record<string, unknown>> }).children[0]!
+    expect(use.resolved).toBe(true)
+    expect(renderCarve(fromAstJson(json))).toEqual(renderCarve(doc))
+  })
+
+  it.each(['[t][missing]', '![a][missing]'])('keeps unresolved references unresolved: %s', source => {
+    const doc = parse(source)
+    const json = toAstJson(doc)
+    const use = (json.children[0] as unknown as { children: Array<Record<string, unknown>> }).children[0]!
+    expect(use).not.toHaveProperty('resolved')
+    expect(renderCarve(fromAstJson(json))).toEqual(renderCarve(doc))
+  })
+
+  it('refuses invalid resolution markers', () => {
+    const json = toAstJson(parse('[t][r]\n\n[r]:\n'))
+    const use = (json.children[0] as unknown as { children: Array<Record<string, unknown>> }).children[0]!
+    use.resolved = false
+    expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
+    use.resolved = true
+    use.href = '/x'
+    expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
+  })
+
+  it('checks bare root versions and stays closed', () => {
+    const base = toAstJson(parse('x'))
+    for (const astVersion of ['1.0', '1.1', '1.2']) {
+      expect(() => fromAstJson({ ...base, astVersion })).not.toThrow()
+    }
+    for (const astVersion of ['1.3', '2.0']) {
+      expect(() => fromAstJson({ ...base, astVersion })).toThrow(AstEnvelopeVersionError)
+    }
+    expect(() => fromAstJson({ ...base, astVersion: '01.2' })).toThrow()
+    expect(() => fromAstJson({ ...base, extra: true })).toThrow()
+  })
+
+  it('publishes comment forms and refuses disagreement', () => {
+    for (const [source, form] of [['%%%\nx\n%%%\n', 'block'], ['a {% x %}\n', 'braced'], ['a %% x\n', 'line']]) {
+      const json = toAstJson(parse(source))
+      const node = form === 'block' ? json.children[0] : (json.children[0] as { children: unknown[] }).children[1]
+      expect(node).toMatchObject({ type: 'comment', form })
+      const invalid = structuredClone(json)
+      const comment = form === 'block' ? invalid.children[0] : (invalid.children[0] as { children: unknown[] }).children[1]
+      ;(comment as { form: string }).form = form === 'block' ? 'line' : 'block'
+      expect(() => fromAstJson(invalid)).toThrow(AstJsonSchemaError)
+    }
   })
 })

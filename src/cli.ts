@@ -15,6 +15,7 @@
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
+import { AST_CONTRACT_VERSION } from './ast-envelope.js'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
@@ -676,7 +677,7 @@ function renderDocumentTarget(
 ): RenderResult {
   switch (target) {
     case 'json':
-      return { value: JSON.stringify(toAstJson(doc), null, 2), losses: [], totalLosses: 0, truncated: false }
+      return { value: JSON.stringify({ ...toAstJson(doc), astVersion: AST_CONTRACT_VERSION }, null, 2), losses: [], totalLosses: 0, truncated: false }
     case 'html':
       // The only render option the CLI exposes; the rest of `opts` is parse
       // and profile configuration, which the caller already applied.
@@ -1141,7 +1142,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   try {
     switch (target) {
       case 'json':
-        result = { value: JSON.stringify(carveToAstJson(src, opts), null, 2), losses: [], totalLosses: 0, truncated: false }
+        result = { value: JSON.stringify({ ...carveToAstJson(src, opts), astVersion: AST_CONTRACT_VERSION }, null, 2), losses: [], totalLosses: 0, truncated: false }
         break
       case 'html':
         result = carveToHtmlWithReport(src, { ...opts, maxRenderLosses, ...(roundtrip ? { roundtrip: true } : {}) })

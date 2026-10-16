@@ -30,6 +30,12 @@ export function isResolvedEmptyReference(node: Link | Image): boolean {
   return resolvedEmptyReferences.has(node)
 }
 
+/** Record a reference the wire marks `resolved: true` (contract 1.2). */
+export function markResolvedEmptyReference(node: Link | Image): void {
+  resolvedEmptyReferences.add(node)
+  mayHaveResolvedEmptyReferences = true
+}
+
 /** Carry the runtime resolution bit from `source` onto its structural copy `copy`. */
 export function copyResolvedEmptyReferences(source: unknown, copy: unknown): void {
   const stack: Array<[unknown, unknown]> = [[source, copy]]

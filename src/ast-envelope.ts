@@ -1,14 +1,14 @@
 /**
  * The versioned AST interchange envelope (PART 12 §34, [CARVE-P12-056]).
  *
- * The tree is strict-closed and carries no version, so a reader that cannot
+ * The tree is strict-closed and may carry a version, so a reader that cannot
  * read a payload has one answer for three different problems: a corrupt tree, a
  * vocabulary this build does not know, and a document needing an extension it
  * does not implement all arrive as one validation error. The envelope is what
  * lets the reader name which one it hit.
  *
  * The tree does not move. `document` is exactly what `toAstJson` writes and
- * `fromAstJson` reads, `carve --json` still writes it bare, and an in-memory
+ * `fromAstJson` reads, `carve --json` writes it bare with astVersion, and an in-memory
  * handoff still passes it bare. This module is the storage-and-process-boundary
  * surface added beside that, not a change to it.
  */
@@ -29,7 +29,7 @@ import { hasOwnKey, ownValue } from './own-property.js'
  * removes, renames or reinterprets a field or a meaning; a minor bump adds a
  * field or a node type.
  */
-export const AST_CONTRACT_VERSION = '2.0'
+export const AST_CONTRACT_VERSION = '1.2'
 
 /** The vocabulary an envelope with no `vocabulary` is written in. */
 export const CORE_AST_VOCABULARY = 'https://markup-carve.org/ast/core'
@@ -251,25 +251,8 @@ export function fromAstEnvelope(
 
   const astVersion = ownValue(record, 'astVersion')
   if (typeof astVersion !== 'string') throw new AstEnvelopeShapeError('"astVersion" is missing')
-  if (!RE_AST_VERSION.test(astVersion)) {
-    throw new AstEnvelopeShapeError(
-      `"astVersion" is ${JSON.stringify(astVersion)}, which is not major.minor with no leading zero`,
-    )
-  }
+  checkAstVersion(astVersion)
   if (!hasOwnKey(record, 'document')) throw new AstEnvelopeShapeError('"document" is missing')
-
-  const [major, minor] = astVersion.split('.') as [string, string]
-  const [ourMajor, ourMinor] = AST_CONTRACT_VERSION.split('.') as [string, string]
-  // THE READER ACCEPTS ITS OWN VERSION OR LOWER (§34(b)). A higher minor is
-  // refused on the same terms as a higher major: the node schema is closed, so
-  // the field a minor adds is refused one level down whatever the envelope says,
-  // and a typed error naming both versions is the answer that explains itself.
-  if (
-    Number(major) > Number(ourMajor) ||
-    (Number(major) === Number(ourMajor) && Number(minor) > Number(ourMinor))
-  ) {
-    throw new AstEnvelopeVersionError(astVersion)
-  }
 
   const vocabulary = ownValue(record, 'vocabulary')
   if (vocabulary !== undefined) {
@@ -297,4 +280,19 @@ export function fromAstEnvelope(
   // additions carry, and `required` is the payload's own statement of whether
   // those additions are load-bearing.
   return fromAstJson(ownValue(record, 'document') as AstJsonDocument, options.payloadByteLength)
+}
+
+/** Validate a contract version on an envelope or bare root. */
+export function checkAstVersion(astVersion: unknown): void {
+  if (typeof astVersion !== 'string' || !RE_AST_VERSION.test(astVersion)) {
+    throw new AstEnvelopeShapeError(
+      `"astVersion" is ${JSON.stringify(astVersion)}, which is not major.minor with no leading zero`,
+    )
+  }
+  const [major, minor] = astVersion.split('.') as [string, string]
+  const [ourMajor, ourMinor] = AST_CONTRACT_VERSION.split('.') as [string, string]
+  if (Number(major) > Number(ourMajor) ||
+      (Number(major) === Number(ourMajor) && Number(minor) > Number(ourMinor))) {
+    throw new AstEnvelopeVersionError(astVersion)
+  }
 }
