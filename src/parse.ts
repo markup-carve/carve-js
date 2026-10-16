@@ -6096,7 +6096,7 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
-  if (atContentColumn && state.divDepth > 0 && indentColumns(content) > 0 &&
+  if (atContentColumn && state.divDepth > 0 && (content[0] === ' ' || content[0] === '\t') &&
       isBlockAttributeLine(content.trimStart())) {
     state.lazyFoldable = false
     state.inDefList = false
@@ -8390,6 +8390,7 @@ function rebaseOverindentedBlocks(
       const noteEndsBeforeTail = nextNoteLine !== undefined && i + 2 === lines.length &&
         !isBlankLine(nextNoteLine) &&
         !RE_ADMONITION_CLOSE.test(nextNoteLine.trimStart()) &&
+        !RE_LINE_BLOCK_OPEN.test(nextNoteLine.trimStart()) &&
         indentColumns(nextNoteLine, base + FOOTNOTE_BODY_COLUMN) < base + FOOTNOTE_BODY_COLUMN
       const runColumn = RE_FOOTNOTE_DEF.test(opener)
         ? noteEndsBeforeTail
@@ -8458,6 +8459,7 @@ function rebaseOverindentedBlocks(
     const keepsAuthoredColumn = (hostIsFootnoteBody ||
       (i + 2 === lines.length && lines[i + 1] !== undefined &&
         !RE_ADMONITION_CLOSE.test(lines[i + 1]!.trimStart()) &&
+        !RE_LINE_BLOCK_OPEN.test(lines[i + 1]!.trimStart()) &&
         indentColumns(lines[i + 1]!, base + FOOTNOTE_BODY_COLUMN) < base + FOOTNOTE_BODY_COLUMN)) &&
       RE_FOOTNOTE_DEF.test(opener) && base > 0 &&
       !foldedMarkers.has(i - 1) && !(i > 0 && /^\+[ \t]+\S/.test(lines[i - 1]!))
@@ -10364,6 +10366,7 @@ class ParseSession {
       // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
       // whole container prefix rather than over list markers alone.
       const composed = composeContainerPrefix(raw, afterTerm, openCols)
+      const inFootnoteBodyAbove = inFootnoteBody
       while (noteColumns.length &&
         (!isBlankLine(raw) && composed.column < noteColumns[noteColumns.length - 1]!.column ||
           rawQuoteDepth < noteColumns[noteColumns.length - 1]!.quotes)) noteColumns.pop()
@@ -10538,7 +10541,7 @@ class ParseSession {
       // (markup-carve/carve-js#1580).
       const foldedAbove: boolean = paragraphFoldedAbove
       const paraWasOpen =
-        paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
+        paraState !== 'no' && !(inFootnoteBodyAbove && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
       const paraAsk = paraState === 'ask'
       const paraLineAbove = paraLine
       const paraLineAbovePlusOpens = paraLinePlusOpens
@@ -14212,7 +14215,9 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
-        if (!isBlankLine(l) && lw <= baseIndent && RE_HR.test((nested.at(-1) ?? '').trimStart())) break
+        if (!isBlankLine(l) && lw <= baseIndent && lazyState.literalColon === undefined &&
+            !insideOpenFence(lazyState) &&
+            RE_HR.test((nested.at(-1) ?? '').trimStart())) break
         // Check the rebased leaf once; collection-only note text stores no continuation claim.
         if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked) {
           markerNoteClaimChecked = true
@@ -14303,8 +14308,11 @@ class ParseSession {
         if (belowItemComment && !heldCommentSpan &&
             !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
             !lazyState.commentAtColumn && lazyState.inDefList !== 'description') break
-        const belowOpenDescription = lazyState.inDefList === 'description' &&
-          isListMarkerLine(l) && lw >= contentCol && lw < contentCol + 2
+        const descriptionMarkerColumn = lazyState.inDefList === 'description' && isListMarkerLine(l)
+          ? indentColumns(l, contentCol + 2) : -1
+        const belowOpenDescription = lazyState.lazyFoldable &&
+          descriptionMarkerColumn >= contentCol && descriptionMarkerColumn < contentCol + 2 &&
+          !/^:[ \t]+%%/.test((nested.at(-1) ?? '').trimStart())
         if (lw >= contentCol && !belowOpenDescription && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
           // quote-lazy MARKER line never reaches the content-column arm, not even
@@ -14681,7 +14689,9 @@ class ParseSession {
               colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
             lazyState.lazyFoldable = false
           }
-          if (lazyState.opaque === null && lazyState.inDefList === 'description' && indentColumns(l) > contentCol &&
+          if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && !markerDescriptionInlineFence &&
+              !opensCodeFence((nested.at(-2) ?? '').trimStart()) &&
+              lazyState.inDefList === 'description' && indentColumns(l) > contentCol &&
               isBlockAttributeLine(dedented.trimStart())) {
             lazyState.lazyFoldable = false
             if (lazyState.deepest?.inDefList === 'description') lazyState.deepest.lazyFoldable = false
@@ -14852,7 +14862,9 @@ class ParseSession {
             // After a retaining comment the body owns the opener (carve#3285).
             lazyLine = lazyState.commentAtColumn && lazyState.inDefList === 'description'
               ? (flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed)
-              : RE_COMMENT_LINE.test(flushed) ? l : LAZY_FRAME + flushed
+              : RE_COMMENT_LINE.test(flushed)
+                ? lazyState.literalColon !== undefined && flushed !== l ? ' ' + flushed : l
+                : opensCodeFence(flushed) ? ' ' + flushed : LAZY_FRAME + flushed
           } else if (lazyState.commentAtColumn && lazyState.inDefList !== 'description' && !RE_COMMENT_LINE.test(l)) {
             // The comment retained this item's frame, but closed its paragraph.
             // Keep the fold explicit so a closed descendant cannot claim it.
