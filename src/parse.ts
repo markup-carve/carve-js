@@ -7206,21 +7206,10 @@ function startsInterruptingBlock(
       // how heading/quote behave at the same position.
       return RE_DEFLIST_TERM.test(ln)
     case '[':
-      // link or footnote reference definition (invisible)
-      //
-      // Flush only, for the reason the `::` arm above spells out: a definition
-      // opens at its container's CONTENT COLUMN (column 0 in every lexer, since
-      // nested content is dedented into a sub-lexer), so an indented one is
-      // below every content column and folds as lazy text - exactly as an
-      // indented heading, quote, table row or `:: term` already does. The
-      // anchor does that work for every other pattern here; RE_LINK_DEF is
-      // whitespace-tolerant on purpose (other passes need it to see a quoted or
-      // nested def) and so needs the test written out (carve-js#597).
-      // A definition rejected at its source column stays paragraph text after
-      // a container removes that indentation.
+      // A footnote body admits definitions past its rebased content column.
       return (
         invisibleArms &&
-        i === 0 &&
+        (i === 0 || lexer.inFootnoteBody) &&
         !lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
         (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
       )
@@ -7608,6 +7597,7 @@ function rebasedColonGroupEnd(
   nestedBodyLines?: Set<number>,
   usesHostMinimum = false,
   emptyHostMinimum = false,
+  preserveNestedNoteColumn = false,
 ): number {
   let end = start
   const stack = [{ width, literal: RE_LINE_BLOCK_OPEN.test(groupLineContent(lines[start]!, base)) }]
@@ -7715,7 +7705,9 @@ function rebasedColonGroupEnd(
       }
       const current = authored.at(-1)!
       const blockColumn = column > current.column && hostedColonBodyOpener(text) && childColumn < 0 ? column : current.column
-      if (rebasesHere && blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
+      if (rebasesHere && blockColumn !== base && column >= blockColumn &&
+          !(preserveNestedNoteColumn && RE_FOOTNOTE_DEF.test(text.trimStart())) &&
+          (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
         candidate = blockColumn < base
           ? ' '.repeat(base - blockColumn) + candidate
           : sliceColumns(candidate, blockColumn - base, true)
@@ -8369,6 +8361,7 @@ function rebaseOverindentedBlocks(
         !absorbingColonParagraph && (!includeSublists || typedContainer) ? markerColonNestedBody : undefined,
         (!includeSublists && descriptionItem && !RE_LINE_BLOCK_OPEN.test(opener)) || (includeSublists && typedContainer),
         !includeSublists,
+        hostIsFootnoteBody,
       )
       if (markerColonOwnsExtent && i === 0 && base === 0 && !RE_LINE_BLOCK_OPEN.test(opener)) {
         markerColonEnd = end
@@ -8385,32 +8378,17 @@ function rebaseOverindentedBlocks(
       // characters while still registering.
       RE_FOOTNOTE_DEF.test(opener)
     )) {
-      // These families own continuation/body lines.  A blank remains part of
-      // the run only when another line at the authored base follows it.
-      //
-      // A FOOTNOTE BODY HAS A COLUMN OF ITS OWN, and a line below it is not the
-      // body's (markup-carve/carve#1918). PART 0's AT OR PAST MEANS THE DEEPEST
-      // COLUMN THE LINE REACHES is written about CONTAINERS, and DEFINITION
-      // BODIES FOLLOW THE SAME CONTAINER REACH RULE names the footnote body as
-      // one of them - so a definition written strictly BETWEEN this body's
-      // column and the container's belongs to the CONTAINER, and needs an
-      // authored base of its own rather than riding along inside this run. The
-      // run used to reach every line at or past the DEFINITION's column, which
-      // swallowed exactly that band and left the line one column in, where the
-      // strict column-0 rule reads it as text - so it registered in the
-      // pre-pass and was published as characters too.
-      //
-      // The body's column is ABSOLUTE, not measured from the definition:
-      // `parseFootnoteDef` admits a continuation line at column two of the
-      // coordinate system it is reading, wherever the definition itself sits.
-      // So the floor is whichever is deeper - the block's own base, or that
-      // column. Measuring `base + 2` instead cut a nested definition's body
-      // off from it, which is what the hoisting tests caught.
-      //
-      // The other two families keep the definition's own column: a quote is
-      // reached by its marker rather than by a column, and a link definition
-      // has no body at all.
-      const runColumn = RE_FOOTNOTE_DEF.test(opener) ? Math.max(base, FOOTNOTE_BODY_COLUMN) : base
+      // A final line below the nested note's own column returns to its parent.
+      const nextNoteLine = lines[i + 1]
+      const noteEndsBeforeTail = nextNoteLine !== undefined && i + 2 === lines.length &&
+        !isBlankLine(nextNoteLine) &&
+        !RE_ADMONITION_CLOSE.test(nextNoteLine.trimStart()) &&
+        indentColumns(nextNoteLine, base + FOOTNOTE_BODY_COLUMN) < base + FOOTNOTE_BODY_COLUMN
+      const runColumn = RE_FOOTNOTE_DEF.test(opener)
+        ? noteEndsBeforeTail
+          ? base + FOOTNOTE_BODY_COLUMN
+          : Math.max(base, FOOTNOTE_BODY_COLUMN)
+        : base
       // A QUOTE IS REACHED BY ITS MARKER, so the run ends where the quote stops
       // reaching: a line that carries no marker is the quote's only as the lazy
       // continuation of an OPEN PARAGRAPH (markup-carve/carve-js#2536). The
@@ -8469,15 +8447,12 @@ function rebaseOverindentedBlocks(
       end++
     }
 
-    // A NESTED NOTE KEEPS ITS AUTHORED COLUMN. Flattening one to column zero
-    // collapses the geometry the per-marker body column measures (carve-js#1664):
-    // the run dedents by the marker's own column, but a trailing line BELOW that
-    // column cannot move with it, so it lands exactly on the note's new floor and
-    // the note claims a line PART 0 gives to the nearest surviving ancestor
-    // (markup-carve/carve#1971). Left authored, `parseFootnoteDef` measures
-    // `markerColumn + 2` and the line falls out of the note as it should.
-    // carve-rs holds the same line for the same reason (carve-rs#1573).
-    const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0 &&
+    // Preserve the written column when flattening would hand a sibling tail to this note.
+    const keepsAuthoredColumn = (hostIsFootnoteBody ||
+      (i + 2 === lines.length && lines[i + 1] !== undefined &&
+        !RE_ADMONITION_CLOSE.test(lines[i + 1]!.trimStart()) &&
+        indentColumns(lines[i + 1]!, base + FOOTNOTE_BODY_COLUMN) < base + FOOTNOTE_BODY_COLUMN)) &&
+      RE_FOOTNOTE_DEF.test(opener) && base > 0 &&
       !foldedMarkers.has(i - 1) && !(i > 0 && /^\+[ \t]+\S/.test(lines[i - 1]!))
     if (!keepsAuthoredColumn) {
       if (sourceCodeBase !== undefined) {
@@ -10104,14 +10079,9 @@ class ParseSession {
     // Carried rather than scanned backwards: a document of blank lines would make
     // a backward walk quadratic, and this pre-pass is on the parse hot path.
     let afterPreviousTerm = false
-    // Track whether we are inside a footnote body. A footnote continuation is
-    // indented, so an indented link def inside a note body must still be collected
-    // (the note's content column, not column 0) -- matching the spec oracle, which
-    // collects it structurally. Without this the strict top-level rejection below
-    // would drop it. A flush footnote opener enters the body; a non-blank line
-    // back at column 0 (a new top-level block) leaves it; blank/indented lines
-    // stay inside.
+    // Track each note's written body column across nested and quoted definitions.
     let inFootnoteBody = false
+    const noteColumns: Array<{ column: number; quotes: number }> = []
     let inlineBodyList = false
     let plusColumn: number | null = null
     let paraState: 'no' | 'yes' | 'ask' = 'no'
@@ -10387,6 +10357,10 @@ class ParseSession {
       // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
       // whole container prefix rather than over list markers alone.
       const composed = composeContainerPrefix(raw, afterTerm, openCols)
+      while (noteColumns.length &&
+        (!isBlankLine(raw) && composed.column < noteColumns[noteColumns.length - 1]!.column ||
+          rawQuoteDepth < noteColumns[noteColumns.length - 1]!.quotes)) noteColumns.pop()
+      inFootnoteBody = noteColumns.length > 0
       if (isBlankLine(raw)) {
         // A BLANK LINE ENDS EVERY OPEN BLOCK QUOTE, and everything written inside
         // one goes with it. A list item is transparent across a blank, which is
@@ -10760,10 +10734,11 @@ class ParseSession {
         // still open below it. Known outright, so the line below never has to ask.
         paraState = 'yes'
       }
-      // Maintain footnote-body context (see `inFootnoteBody` above): a flush
-      // footnote opener enters the body; a non-blank line at column 0 leaves it.
-      if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
-      else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
+      // A definition folded into visible paragraph text opens no note body.
+      if (RE_FOOTNOTE_DEF.test(line) && !collectsNothing) {
+        noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: rawQuoteDepth })
+        inFootnoteBody = true
+      }
       // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
       // HERE rather than by a scan of its own, because a scan of its own knew
       // nothing about what is opaque: it registered a definition written inside a
@@ -10801,18 +10776,15 @@ class ParseSession {
       // it, and the oracle resolves them, so `deIndented` residual whitespace must
       // NOT reject them.
       const topLevelIndentedDef =
-        contentCol === 0 && (!inFootnoteBody || behindQuotePrefix) && /^[ \t]/.test(deIndented)
+        contentCol === 0 && !inFootnoteBody && /^[ \t]/.test(deIndented)
       const rawIndent = leadingWhitespace(unquoted)
       if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
       else if (isBlankLine(raw)) plusColumn = null
       // Container ownership below matters only for a definition candidate.
       const matched = this.matchLinkDef(line)
       if (matched === null) continue
-      // Inside a footnote body the minimum is column two. After carve#1729 a
-      // recognized opener at or past it establishes an authored local base, so
-      // an over-indented link definition registers just like the exact-column
-      // spelling. A line below two still leaves the body and stays literal.
-      const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
+      // An over-indented definition still reaches its note's written body column.
+      const openColumn = inFootnoteBody ? noteColumns[noteColumns.length - 1]!.column : contentCol
       // THE COLUMN IS THE COMPOSED ONE, and it is compared against the columns the
       // line REACHED plus the ones it opened itself. `rawIndent` measures a line
       // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
@@ -10864,7 +10836,9 @@ class ParseSession {
         !composed.peeled.some((one) => one.quote) &&
         composed.depth < openCols.length &&
         openCols[composed.depth]!.quote
-      const atAnOpenContentColumn = stoppedAtQuote
+      const atAnOpenContentColumn = inFootnoteBody && !stoppedAtQuote && composed.column >= openColumn
+        ? true
+        : stoppedAtQuote
         ? reachedOuterListColumn !== null && composed.column >= reachedOuterListColumn
         : plusColumn !== null
         ? rawIndent === plusColumn
@@ -10874,7 +10848,7 @@ class ParseSession {
             : composed.peeled.some((one) => one.content === composed.column) ||
               openCols.some((entry, i) => i < composed.depth && entry.col === composed.column)
           : inFootnoteBody
-            ? composed.column >= FOOTNOTE_BODY_COLUMN
+            ? composed.column >= openColumn
             : composed.column === openColumn
       // NO EXEMPTION FOR A LINE THAT CARRIES ITS OWN PREFIX. The guard used to
       // apply only where `kept === unquoted`, which asked "does this line carry a
@@ -10893,6 +10867,9 @@ class ParseSession {
       const declines =
         topLevelIndentedDef ||
         notAtContentColumn ||
+        (inFootnoteBody && rawQuoteDepth > noteColumns[noteColumns.length - 1]!.quotes &&
+          /^[ \t]/.test(kept) &&
+          !composed.peeled.some((one) => !one.quote)) ||
         (collectsNothing && composed.peeled.some((one) => !one.quote))
       // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
       // reading the line as something other than a definition; the block parser
@@ -11358,6 +11335,7 @@ class ParseSession {
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
     let pendingBlankSources: string[] = []
+    let nestedSourceBodyColumn: number | undefined
     const noteSpanScan = newCommentSpanScan()
     const lazyState = verbatimOnlyLazyState()
     // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
@@ -11385,6 +11363,10 @@ class ParseSession {
     let retainedBelowComment = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
+      const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
+      if (lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
+          sourceLine !== undefined && !isBlankLine(sourceLine) &&
+          indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) break
       if (isBlankLine(ln)) {
         retainedBelowComment = false
         trackItemLazyState('', lazyState)
@@ -11450,6 +11432,9 @@ class ParseSession {
         const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
           ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
         const belowQuotedComment: boolean = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
+        if (lexer.hostBody === 'list' && defLineIndex === 0 && RE_FOOTNOTE_DEF.test(ln.trimStart()) && sourceLine !== undefined) {
+          nestedSourceBodyColumn = indentColumns(sourceLine) + FOOTNOTE_BODY_COLUMN
+        }
         bodyLines.push(content)
         trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, bodyColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
         retainedBelowComment = belowQuotedComment
