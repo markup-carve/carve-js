@@ -12613,6 +12613,11 @@ class ParseSession {
           lexer.consume()
           continue
         }
+        const lastBodyLine = bodyLines.at(-1)?.trimStart() ?? ''
+        if (atDocumentColumn && lazyState.divDepth > 0 && lazyState.opaque === null &&
+            ((colonFenceShapeEndsLazyContinuation(first) &&
+              (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
+              !lazyState.lazyFoldable)) break
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
           (lazyState.lazyFoldable || retainedBelowComment || belowCommentSpan ||
@@ -14675,6 +14680,11 @@ class ParseSession {
           if (isMarker && lazyState.literalColon === undefined &&
               colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
             lazyState.lazyFoldable = false
+          }
+          if (lazyState.opaque === null && lazyState.inDefList === 'description' && indentColumns(l) > contentCol &&
+              isBlockAttributeLine(dedented.trimStart())) {
+            lazyState.lazyFoldable = false
+            if (lazyState.deepest?.inDefList === 'description') lazyState.deepest.lazyFoldable = false
           }
           if (descriptionCloserAnswer === false) {
             markerDescriptionInlineFence = true
