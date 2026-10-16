@@ -3542,8 +3542,10 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       paragraphOpen = false
       continue
     }
-    paragraphOpen = !isBlankLine(text) && !leavesNoParagraph(text) && !interruptsParagraph &&
-      (paragraphOpen || !lineOpensBlock(text) || opensParagraphInBlock(text))
+    // A quote or item line that carries paragraph text leaves a paragraph open
+    // even where it interrupts the one above (`> para` then `> more`).
+    paragraphOpen = !isBlankLine(text) && !leavesNoParagraph(text) &&
+      ((!interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))) || opensParagraphInBlock(text))
   }
 
   for (const unclosed of stack) index.set(base + unclosed.lineIndex, base + lexer.pos)

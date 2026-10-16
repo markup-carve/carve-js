@@ -113,3 +113,25 @@ it('ends an unclosed fence after an attribute line at a nested container closer'
   const source = '::: outer\n:::: inner\n{.c}\n```\ncode\n:::\n::::\n:::\nafter *b*\n'
   expect(carveToHtml(source).trim()).toBe('<div class="outer">\n  <div class="inner">\n    <pre class="c"><code>code\n:::\n</code></pre>\n  </div>\n</div>\n<p>after <strong>b</strong></p>')
 })
+
+// A quote paragraph over several quoted lines is still open at the fence, so
+// the fence continues it and the colon lines below are openers (spec corpus 608).
+it.each([
+  ['> para\n> more', '  <blockquote><p>para\nmore\n<code>\ncode</code></p></blockquote>\n'],
+  ['> a\n> b\n> c\n> d', '  <blockquote><p>a\nb\nc\nd\n<code>\ncode</code></p></blockquote>\n'],
+])('keeps an unclosed fence under a multi-line quote paragraph as text', (first, block) => {
+  const source = '::: note\n' + first + '\n```\ncode\n::::\n:::\nafter *b*\n'
+  const expected = '<aside class="admonition note" aria-label="Note">\n' + block +
+    '  <div>\n    <div>\n      <p>after <strong>b</strong></p>\n    </div>\n  </div>\n</aside>\n'
+  expect(carveToHtml(source).trim()).toBe(expected.trim())
+})
+
+it('ends an unclosed fence after a quoted comment that closes the quote paragraph', () => {
+  const source = '::: note\n> para\n> %% c\n```\ncode\n::::\n:::\nafter *b*\n'
+  expect(carveToHtml(source).trim()).toBe('<aside class="admonition note" aria-label="Note">\n  <blockquote><p>para</p></blockquote>\n  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>')
+})
+
+it('ends an unclosed fence after a quoted attribute line that closes the quote paragraph', () => {
+  const source = '::: note\n> para\n> {#x}\n```\ncode\n::::\n:::\nafter *b*\n'
+  expect(carveToHtml(source).trim()).toBe('<aside class="admonition note" aria-label="Note">\n  <blockquote><p>para</p></blockquote>\n  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>')
+})
