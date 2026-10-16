@@ -7957,6 +7957,11 @@ function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers: Readon
  * and its exact-column twin parsing identically from here on.  Nothing
  * downstream needs to know a rebase happened.
  */
+function paragraphTextLine(line: string): boolean {
+  const text = line.trimStart()
+  return bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
+}
+
 function rebaseOverindentedBlocks(
   lines: string[],
   eligible?: ReadonlySet<number>,
@@ -7980,6 +7985,8 @@ function rebaseOverindentedBlocks(
   lazyParagraphFences?: ReadonlySet<number>,
   descriptionItem = false,
   stripLeftCodePrefix = false,
+  // A description or footnote body folds a marker into its open paragraph (PART 9 §10 I2).
+  foldsMarkers = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -8017,6 +8024,7 @@ function rebaseOverindentedBlocks(
   const markerColonNestedBody = new Set<number>()
   let absorbingColonParagraph = false
   let footnoteParagraphOpen = false
+  const foldedMarkers = new Set<number>()
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     if (isBlankLine(line)) { absorbingColonParagraph = false; footnoteParagraphOpen = false; ownedParagraphOpen = false; continue }
@@ -8063,6 +8071,7 @@ function rebaseOverindentedBlocks(
       if (memo === undefined) groupCloserMemos.set(base, memo = { verbatim: new Map(), comment: new Map() })
       if (!opaqueGroupCloses(group, lines, i + 1, base, takenBelowColumn, memo)) continue
     }
+    const belowOwnedChild = ownedColumn >= 0
     ownedColumn = -1
     ownedParagraphOpen = false
     // Folded note text owns deeper lines without opening a child list.
@@ -8071,6 +8080,12 @@ function rebaseOverindentedBlocks(
       continue
     }
     const markerColumn = markerContentColumn(line)
+    if (markerColumn >= 0 && foldsMarkers && !belowOwnedChild && i > 0 &&
+        (foldedMarkers.has(i - 1) || paragraphTextLine(lines[i - 1]!))) {
+      // Folded text opens no item, so a deeper line is read in the body itself.
+      foldedMarkers.add(i)
+      continue
+    }
     if (markerColumn >= 0) {
       ownedColumn = markerColumn
       const childContent = markerFreeContent(line.trimStart())
@@ -8446,7 +8461,8 @@ function rebaseOverindentedBlocks(
     // (markup-carve/carve#1971). Left authored, `parseFootnoteDef` measures
     // `markerColumn + 2` and the line falls out of the note as it should.
     // carve-rs holds the same line for the same reason (carve-rs#1573).
-    const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0
+    const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0 &&
+      !foldedMarkers.has(i - 1) && !(i > 0 && /^\+[ \t]+\S/.test(lines[i - 1]!))
     if (!keepsAuthoredColumn) {
       if (sourceCodeBase !== undefined) {
         for (let j = i; j <= end; j++) {
@@ -10080,6 +10096,7 @@ class ParseSession {
     // back at column 0 (a new top-level block) leaves it; blank/indented lines
     // stay inside.
     let inFootnoteBody = false
+    let inlineBodyList = false
     let plusColumn: number | null = null
     let paraState: 'no' | 'yes' | 'ask' = 'no'
     let paraLine = ''
@@ -10144,6 +10161,11 @@ class ParseSession {
       // reach, which is what emptied the stack and dropped that definition
       // (carve-js#649).
       const unquoted = raw.replace(/^(?:>(?: |$))+/, '')
+      const descriptionLead = sawDeflistTerm ? RE_DEFLIST_DEF.exec(unquoted)?.[2] : undefined
+      const noteLead = RE_FOOTNOTE_DEF.exec(line)?.[2]
+      if (descriptionLead !== undefined || noteLead !== undefined) {
+        inlineBodyList = markerContentColumn(descriptionLead ?? noteLead!) >= 0
+      }
       const wasPrevBlank = prevBlank
       // `isBlankLine`, not `raw.trim() === ''`: this prepass decides the same
       // `blank_line` the block lexer does, and the native trim carries the wider
@@ -10667,7 +10689,9 @@ class ParseSession {
       const open = RE_FENCE.exec(deIndented)
       const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
       const run = open ? open[2]! : rawOpen?.[1]
-      if (run) {
+      if (run && !(markerContentColumn(rawTrimmed) >= 0 && /^(?:`{3,}|~{3,})/.test(markerFreeContent(rawTrimmed)) && paraWasOpen &&
+        (inFootnoteBody || listColsBeforeMarker?.at(-1)?.kind === 'description') &&
+        !inlineBodyList && !listColsBeforeMarker?.some((entry) => entry.kind === 'list'))) {
         // The innermost depth entry the block parser really opened - a phantom
         // one from a malformed `:::note` decides nothing here. Written as a loop
         // rather than `findLast`, which the compile target does not carry.
@@ -11464,6 +11488,7 @@ class ParseSession {
       rebaseOverindentedBlocks(
         bodyLines, undefined, -1, true, true, undefined, undefined, undefined, false,
         undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
+        undefined, undefined, false, false, true,
       )
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
@@ -12497,13 +12522,15 @@ class ParseSession {
           // a verbatim region open behind it; a line INSIDE one is payload and
           // decides nothing. A line past the column belongs to the open item.
           const wasVerbatim = lazyState.opaque !== null
-          track(
+          const foldedMarker = lazyState.lazyFoldable && nestedItemColumn < 0 &&
+            markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
+          if (!foldedMarker) track(
             bodyReadsFlush ? flush : dedented,
             lineIndex,
             true,
             bodyReadsFlush ? contentCol + residual : contentCol,
           )
-          if (!wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
+          if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
             nestedItemColumn = markerContentColumn(flush)
             nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
           }
@@ -12628,7 +12655,7 @@ class ParseSession {
       // Definition entries use the same exact block extent in every container.
       rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
         undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines,
-        false, true)
+        false, true, true)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol
