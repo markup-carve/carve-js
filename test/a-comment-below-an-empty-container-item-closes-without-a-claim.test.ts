@@ -165,7 +165,7 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 1, follower 1",
     "source": "- :::: box\n  - ::: in\n    x\n%%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><p><code></code>\nTAILX</p></div></li></ul></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><pre><code></code></pre></div></li></ul><p>TAILX</p></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 1, follower 2",
@@ -185,7 +185,7 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 2, follower 1",
     "source": "- :::: box\n  - ::: in\n    x\n%% c\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><p><code></code>\nTAILX</p></div></li></ul></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><pre><code></code></pre></div></li></ul><p>TAILX</p></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 2, follower 2",
@@ -205,7 +205,7 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 3, follower 1",
     "source": "- :::: box\n  - ::: in\n    x\n %%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><p><code></code>\nTAILX</p></div></li></ul></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><pre><code></code></pre></div></li></ul><p>TAILX</p></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 3, follower 2",
@@ -225,7 +225,7 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 4, follower 1",
     "source": "- :::: box\n  - ::: in\n    x\n %% c\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><p><code></code>\nTAILX</p></div></li></ul></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p><pre><code></code></pre></div></li></ul><p>TAILX</p></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 4, follower 2",

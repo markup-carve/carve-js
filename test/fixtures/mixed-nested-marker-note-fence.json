@@ -12,22 +12,22 @@
   {
     "id": "bullet-bullet-code",
     "source": "- [^n]: text\n\n    - inner\n    %% c\n    ~~~\n   %% c\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          ~~~\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          <pre><code></code></pre>\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "bullet-bullet-raw",
     "source": "- [^n]: text\n\n    - inner\n    %% c\n    ```=html\n   %% c\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          <code>=html</code>\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          \n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "bullet-ordered-code",
     "source": "- [^n]: text\n\n    1. inner\n    %% c\n    ~~~\n   %% c\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          ~~~\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          <pre><code></code></pre>\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "bullet-ordered-raw",
     "source": "- [^n]: text\n\n    1. inner\n    %% c\n    ```=html\n   %% c\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          <code>=html</code>\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          \n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "ordered-note-code",
@@ -42,22 +42,22 @@
   {
     "id": "ordered-bullet-code",
     "source": "1. [^n]: text\n\n     - inner\n     %% c\n     ~~~\n    %% c\nafter [^n]\n",
-    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          ~~~\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          <pre><code></code></pre>\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "ordered-bullet-raw",
     "source": "1. [^n]: text\n\n     - inner\n     %% c\n     ```=html\n    %% c\nafter [^n]\n",
-    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          <code>=html</code>\n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ul>\n        <li>inner\n          \n        </li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "ordered-ordered-code",
     "source": "1. [^n]: text\n\n     1. inner\n     %% c\n     ~~~\n    %% c\nafter [^n]\n",
-    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          ~~~\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          <pre><code></code></pre>\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "ordered-ordered-raw",
     "source": "1. [^n]: text\n\n     1. inner\n     %% c\n     ```=html\n    %% c\nafter [^n]\n",
-    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          <code>=html</code>\n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ol>\n  <li></li>\n</ol>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <ol>\n        <li>inner\n          \n        </li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "bullet-note-adjacent",

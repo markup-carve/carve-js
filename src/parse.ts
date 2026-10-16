@@ -5305,6 +5305,19 @@ function fencedBlockEnd(scan: AttachedScan): number {
  * reassembled line keeps the behavior it had rather than silently losing its
  * attachment.
  */
+/** The column a source line's content starts at, past any quote markers. */
+function sourceColumn(line: string): number {
+  let prefix = 0
+  let rest = line
+  for (;;) {
+    const m = /^[ \t]*>[ \t]?/.exec(rest)
+    if (!m) break
+    prefix += m[0].length
+    rest = rest.slice(m[0].length)
+  }
+  return prefix + indentColumns(rest)
+}
+
 function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
   // THE DOCUMENT'S OWN LINES, OR THIS LEXER'S IF IT IS THE DOCUMENT. Only a
   // SUB-lexer carries `rootLines`; the root lexer's `lines` ARE the document,
@@ -13804,6 +13817,15 @@ class ParseSession {
       // `authoredBaseEligible`'s complement: that set also excludes a fence
       // body, which reached the column and carries authored indentation.
       const takenBelowColumn = new Set<number>()
+      let retainedFenceOpen = false
+      let retainedFenceItemColumn = 0
+      const followsBelowColumnComment = (): boolean => {
+        for (let k = nested.length - 1; k >= 0; k--) {
+          if (isBlankLine(nested[k]!)) continue
+          return takenBelowColumn.has(k) && RE_COMMENT_LINE.test(nested[k]!.trimStart())
+        }
+        return false
+      }
       // `nested` indices holding a `%%%` opener the tracker refused, because no
       // run of its width follows in the DOCUMENT. §28 substitutes one `%%` line
       // comment for it, and carve#1903 makes that substitution a classification
@@ -14189,6 +14211,22 @@ class ParseSession {
         const l = lexer.peek()!
         // An enclosing item already took this line as lazy text: it reached no column.
         const enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
+        // A retained fence's closer anywhere in the item closes it (R3285).
+        // The column is read from the source, since an enclosing body may hand
+        // the line over flush.
+        if (retainedFenceOpen && lazyState.opaque?.kind === 'code' && !isBlankLine(l) &&
+            sourceColumn(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? l) >= retainedFenceItemColumn &&
+            lazyState.opaque.close.test(l.replace(/^[ \t]+/, ''))) {
+          const closer = l.replace(/^[ \t]+/, '')
+          nested.push(closer)
+          nestedSourceLines.push(l)
+          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+          trackItemLazyState(closer, lazyState, () => true)
+          retainedFenceOpen = false
+          lexer.consume()
+          continue
+        }
+        if (lazyState.opaque === null) retainedFenceOpen = false
         if (hostedNoteBodyColumn !== undefined && lexer.hostBody !== null &&
             !isBlankLine(l) && indentColumns(l, hostedNoteBodyColumn) < hostedNoteBodyColumn) break
         const noteCommentEnd = markerNoteItem && !markerNoteLeft ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
@@ -14929,6 +14967,14 @@ class ParseSession {
           if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
               lazyState.opaque === null && !quoteLazyFramed) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (indentColumns(l, contentCol) < contentCol && lazyState.opaque === null &&
+              opensCodeFence(l.replace(/^[ \t]+/, '')) && followsBelowColumnComment()) {
+            // R3285: a comment below the column retains the item, and a valid
+            // fence after it opens a code block there (X1, CARVE-P0-013).
+            lazyLine = l.replace(/^[ \t]+/, '')
+            retainedFenceOpen = true
+            retainedFenceItemColumn = sourceColumn(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? l) +
+              contentCol - indentColumns(l)
           } else if (lazyState.quoteInner === null && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = enclosingLazy || lexer.atDocumentLevel ? LAZY_FRAME + l.replace(/^[ \t]+/, '') : l
