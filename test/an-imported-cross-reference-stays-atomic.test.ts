@@ -22,10 +22,18 @@ describe('imported cross-reference text', () => {
   }
 
   it('keeps text literal when the converted heading has the id', () => {
-    const source = markdownToCarve('# Intro\n\nsee </#intro> here')
-    expect(source).toContain('see </\\#intro> here')
-    expect(carveToHtml(source)).toContain('see &lt;/#intro&gt; here')
+    const source = markdownToCarve('# Intro\n\nsee </#Intro> here')
+    expect(source).toContain('see </\\#Intro> here')
+    expect(carveToHtml(source)).toContain('see &lt;/#Intro&gt; here')
     expect(htmlToCarve('<h1 id="intro">Intro</h1><p>see &lt;/#intro&gt; here</p>').value).toContain('see </\\#intro> here')
+  })
+
+  it('matches a converted id case-sensitively', () => {
+    const source = markdownToCarve('# Intro\n\nsee </#intro> here')
+    expect(source).toContain('see </#intro> here')
+    expect(carveToHtml(source)).toContain('see &lt;/#intro&gt; here')
+    expect(htmlToCarve('<h1>Intro</h1><p>see &lt;/#intro&gt; here</p>').value).toContain('see </#intro> here')
+    expect(htmlToCarve('<h1 id="Intro">Intro</h1><p>see &lt;/#intro&gt; here</p>').value).toContain('see </#intro> here')
   })
 
   it('does not promote an empty target or an escaped opener', () => {
