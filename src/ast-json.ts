@@ -1614,11 +1614,11 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   }
 
   const doc: Document = { type: 'document', children }
-  markResolvedEmptyReferenceNodes(doc)
   if (frontmatter !== undefined) doc.frontmatter = frontmatter
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
   if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
+  markResolvedEmptyReferenceNodes(doc)
 
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
   const captionTargets = renumberCaptionsIfPublished(doc)

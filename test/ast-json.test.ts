@@ -367,6 +367,16 @@ describe('AST contract 1.2 additions', () => {
     expect(renderCarve(fromAstJson(json))).toEqual(renderCarve(doc))
   })
 
+  it('restores a resolved empty reference inside a footnote body', () => {
+    const doc = parse('x[^n]\n\n[^n]: [t][r]\n\n[r]:\n')
+    const wire = JSON.stringify(toAstJson(doc))
+    expect(wire).toContain('"resolved":true')
+    expect(renderHtml(fromAstJson(JSON.parse(wire)))).toEqual(renderHtml(doc))
+    expect(JSON.stringify(toAstJson(fromAstJson(JSON.parse(wire))))).toEqual(wire)
+    // The marker becomes runtime state; none is left on a footnote body's node.
+    expect(JSON.stringify(fromAstJson(JSON.parse(wire)).footnoteDefs)).not.toContain('"resolved"')
+  })
+
   it.each(['[t][missing]', '![a][missing]'])('keeps unresolved references unresolved: %s', source => {
     const doc = parse(source)
     const json = toAstJson(doc)
