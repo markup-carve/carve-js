@@ -10755,8 +10755,12 @@ class ParseSession {
         // still open below it. Known outright, so the line below never has to ask.
         paraState = 'yes'
       }
-      // A definition folded into visible paragraph text opens no note body.
-      if (RE_FOOTNOTE_DEF.test(line) && !collectsNothing &&
+      // A definition folded into visible paragraph text opens no note body. One
+      // at its context's content column, behind no folded list marker, ends the
+      // paragraph instead (CARVE-P0-010).
+      if (RE_FOOTNOTE_DEF.test(line) &&
+          (!collectsNothing || (!composed.peeled.some((one) => !one.quote) &&
+            leadingWhitespace(raw.slice(composed.column)) === 0)) &&
           !lexer.declinedLinkDefLines.has(lexer.lineNumber(idx))) {
         noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: rawQuoteDepth,
           termText: false })
