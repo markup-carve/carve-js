@@ -28,6 +28,8 @@ import { OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fie
 import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from './ast.js'
 import { resolveTableSpans } from './table-spans.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
+import { isResolvedEmptyReference, markResolvedEmptyReference } from './reference-state.js'
+import { checkAstVersion } from './ast-envelope.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from './heading-ids.js'
 import {
@@ -85,7 +87,7 @@ export interface FootnoteDefNode {
 export type AstJsonBlock = BlockNode | FrontmatterNode | FootnoteDefNode
 
 /**
- * The document root, per PART 12 §7: three fields, nothing else.
+ * The document root, per PART 12 §7: three required fields and optional astVersion.
  *
  * All three are REQUIRED, matching `resources/ast-schema.json`. `srcByteLength`
  * was optional here while §12 makes `fromAstJson` refuse a root without it, so
@@ -96,6 +98,7 @@ export interface AstJsonDocument {
   type: 'document'
   children: AstJsonBlock[]
   srcByteLength: number
+  astVersion?: string
 }
 
 /** Schema child slots include node arrays, matrices, and runtime records. */
@@ -249,6 +252,16 @@ function definitionListsToWire<T>(node: T): T {
     if (child === undefined) continue
     const mapped = definitionListsToWire(child)
     if (mapped !== child) out = { ...(out ?? record), [field]: mapped }
+  }
+
+  if (((out ?? record)['type'] === 'link' || (out ?? record)['type'] === 'image') &&
+      typeof record['ref'] === 'string' &&
+      (record[record['type'] === 'link' ? 'href' : 'src'] === '') &&
+      isResolvedEmptyReference(record as unknown as Image)) {
+    out = { ...(out ?? record), resolved: true }
+  }
+  if ((out ?? record)['type'] === 'comment') {
+    out = { ...(out ?? record), form: record['block'] === true ? 'block' : record['delimited'] === true ? 'braced' : 'line' }
   }
 
   // A resolved crossref carries the target heading's inline content for the
@@ -820,6 +833,18 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       if (!matchesKind(record[field], kind)) {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
+    }
+    if (type === 'comment' && record.form !== undefined) {
+      if (!['block', 'line', 'braced'].includes(record.form as string) ||
+          (record.block === true) !== (record.form === 'block') ||
+          (record.delimited === true) !== (record.form === 'braced')) {
+        throw new AstJsonSchemaError('comment form disagrees with block or delimited', path)
+      }
+    }
+    if ((type === 'link' || type === 'image') && record.resolved !== undefined &&
+        (record.resolved !== true || typeof record.ref !== 'string' ||
+         record[type === 'link' ? 'href' : 'src'] !== '')) {
+      throw new AstJsonSchemaError('resolved requires an empty reference destination', path)
     }
     refuseArrayMinimums(record, type as string, path)
     if (type === 'table' && Array.isArray(record.separatorWidths)) {
@@ -1456,6 +1481,7 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
     ? input as Record<string, unknown>
     : undefined
   if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
+  if (Object.hasOwn(json, 'astVersion')) checkAstVersion(json.astVersion)
   // PART 12 §12(a), and before the depth walk for the same reason the root type
   // is: a payload that is not this format should be turned away for that, not
   // for however deep it happens to be. `in` rather than a value test - (a) is
@@ -1592,6 +1618,7 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
   if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
+  markResolvedEmptyReferenceNodes(doc)
 
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
   const captionTargets = renumberCaptionsIfPublished(doc)
@@ -1736,6 +1763,27 @@ function clearUnbackedFootnoteNumbers(
     }
     for (const value of Object.values(cur)) {
       if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
+}
+
+function markResolvedEmptyReferenceNodes(doc: Document): void {
+  const stack: unknown[] = [doc]
+  while (stack.length) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const child of value) stack.push(child)
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const node = value as Record<string, unknown>
+    if ((node.type === 'link' || node.type === 'image') && node.resolved === true) {
+      markResolvedEmptyReference(node as unknown as Image)
+      delete node.resolved
+    }
+    if (node.type === 'comment') delete node.form
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'pos' && key !== 'attrs' && child !== null && typeof child === 'object') stack.push(child)
     }
   }
 }
