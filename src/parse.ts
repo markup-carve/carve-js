@@ -11471,6 +11471,10 @@ class ParseSession {
         const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
           ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
         const belowQuotedComment = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
+        // The line reaches this body's column, so a definition on it registers
+        // here even where a nested item takes it as lazy text (CARVE-P0-020).
+        if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(content.trimStart()))
+          lexer.hostedFootnoteLines.add(lexer.lineNumber(lexer.pos))
         if (lexer.hostBody === 'list' && defLineIndex === 0 && RE_FOOTNOTE_DEF.test(ln.trimStart()) && sourceLine !== undefined) {
           nestedSourceBodyColumn = indentColumns(sourceLine) + FOOTNOTE_BODY_COLUMN
         }
