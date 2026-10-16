@@ -13084,7 +13084,13 @@ class ParseSession {
     let quoteTermContinuation = quoteTermLead
     const quoteRootLine = lexer.rootLines?.[lexer.lineNumber(firstLineIndex) - 1] ?? ''
     const quoteMarkerOffset = quoteRootLine.indexOf('>')
-    const quoteMarkerColumn = Math.max(0, quoteMarkerOffset)
+    // A quote opened on a footnote's marker line is reached at the note's body
+    // column, two past the marker, not at its own `>` (CARVE-P0-010).
+    const noteLead = /^(.*?)\[\^[^\]]+\]:[ \t]+>/.exec(quoteRootLine)
+    const quoteMarkerColumn = lexer.hostBodyRoot === 'footnote' && noteLead !== null &&
+      noteLead[0].length - 1 === quoteMarkerOffset
+      ? noteLead[1]!.length + FOOTNOTE_BODY_COLUMN
+      : Math.max(0, quoteMarkerOffset)
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
