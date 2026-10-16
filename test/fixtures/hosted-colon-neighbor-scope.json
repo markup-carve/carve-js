@@ -372,7 +372,7 @@
   {
     "id": "nested-bare-footnote-depth0",
     "source": "- :::: box\n  :::\n    [^a]: n\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>[^a]: n</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "nested-bare-reference-depth0",
@@ -382,7 +382,7 @@
   {
     "id": "nested-named-footnote-depth0",
     "source": "- :::: box\n  ::: in\n    [^a]: n\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div class=\"in\">\n        <p>[^a]: n</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div class=\"in\">\n\n      </div>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-quote-payload-depth1",
@@ -417,7 +417,7 @@
   {
     "id": "nested-bare-footnote-depth1",
     "source": "> - :::: box\n>   :::\n>     [^a]: n\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n          <p>[^a]: n</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-bare-reference-depth1",
@@ -427,7 +427,7 @@
   {
     "id": "nested-named-footnote-depth1",
     "source": "> - :::: box\n>   ::: in\n>     [^a]: n\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div class=\"in\">\n          <p>[^a]: n</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div class=\"in\">\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "literal-quote-payload-depth2",
@@ -462,7 +462,7 @@
   {
     "id": "nested-bare-footnote-depth2",
     "source": "> > - :::: box\n> >   :::\n> >     [^a]: n\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n            <p>[^a]: n</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "nested-bare-reference-depth2",
@@ -472,7 +472,7 @@
   {
     "id": "nested-named-footnote-depth2",
     "source": "> > - :::: box\n> >   ::: in\n> >     [^a]: n\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div class=\"in\">\n            <p>[^a]: n</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div class=\"in\">\n\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "literal-continuation-ordered-marker",

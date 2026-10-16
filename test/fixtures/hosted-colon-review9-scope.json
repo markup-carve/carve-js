@@ -107,7 +107,7 @@
   {
     "id": "review9-g8-definition",
     "source": "- :::\n   %%%\n    [^a]: n\n",
-    "html": "<ul>\n  <li>\n    <div>\n      <p>[^a]: n</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review9-g9",
