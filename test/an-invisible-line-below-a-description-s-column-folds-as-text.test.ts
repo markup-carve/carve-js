@@ -72,14 +72,14 @@ describe("an invisible line below a description's column folds as text", () => {
     )
   })
 
-  it('CONTROL: a real OPENER below the column still ends the body', () => {
-    // The amended clause is explicit that the bullet is about openers, so this
-    // is the half that must NOT move. A fix that folded everything below the
-    // column fails here.
+  it('CONTROL: a colon fence below the column still ends the body', () => {
+    // carve#3295 folds a heading, break, table row or quote marker below the
+    // column into the paragraph; a colon fence still ends the body (carve#2486).
     for (const indent of [' ', '  ']) {
-      for (const opener of ['> q', '# h', '| a |', '---', '::: note']) {
-        expect(html(`:: t\n:  d\n${indent}${opener}\n`).startsWith('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n')).toBe(true)
+      for (const opener of ['> q', '# h', '| a |', '---']) {
+        expect(html(`:: t\n:  d\n${indent}${opener}\n`).startsWith('<dl>\n  <dt>t</dt>\n  <dd>d\n')).toBe(true)
       }
+      expect(html(`:: t\n:  d\n${indent}::: note\n`).startsWith('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n')).toBe(true)
     }
   })
 

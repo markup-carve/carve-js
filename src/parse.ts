@@ -12626,6 +12626,33 @@ class ParseSession {
         if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        // carve#3295: below the body's column a heading, break, table row or
+        // quote marker opens nothing, so it folds into the open paragraph. In
+        // an item the line reaches the item's column and opens there, unless a
+        // quote holds the band (X2); the item hands that line over flush, so
+        // its column is read from the source.
+        const quoteHoldsBand = (): boolean => {
+          for (let k = bodyLines.length - 1; k >= 0; k--) {
+            if (!bodyLines[k]!.startsWith(LAZY_FRAME)) return RE_BLOCKQUOTE.test(bodyLines[k]!.trimStart())
+          }
+          return false
+        }
+        if ((RE_HEADING.test(below) || RE_HR.test(below) || isTableRow(below) || RE_BLOCKQUOTE.test(below)) &&
+            lazyState.opaque === null && lazyState.lazyFoldable &&
+            (atDocumentColumn
+              ? lexer.hostBody === 'list' && quoteHoldsBand() &&
+                lexer.lineStartColumn(lexer.pos) - lexer.lineStartColumn(firstLineIndex) > 0 &&
+                lexer.lineStartColumn(lexer.pos) - lexer.lineStartColumn(firstLineIndex) < contentCol
+              : indentColumns(ln, contentCol) < contentCol && (lexer.hostBody !== 'list' || quoteHoldsBand()))) {
+          lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+          const folded = LAZY_FRAME + below
+          bodyLines.push(folded)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          track(folded, undefined, false)
+          lexer.consume()
+          continue
+        }
         const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
           indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
           lazyState.opaque === null

@@ -34,6 +34,15 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence',
+  'a-definition-or-attribute-line-in-a-nested-container-leaves-no-paragraph-for-an-unmarked-line',
+  'a-line-is-read-in-the-container-whose-column-it-reaches',
+  'a-line-past-a-body-s-column-is-read-in-the-body-and-a-quote-does-not-rebase',
+  'a-quoted-item-comment-ends-the-quote-before-an-unclosed-fence',
+  'a-table-row-or-a-definition-under-a-paragraph-ends-it-before-an-unclosed-fence',
+  'an-escaped-cross-reference-spelling-stays-literal',
+  'an-item-comment-or-attribute-line-closes-the-item-s-paragraph',
+  'an-unclosed-fence-under-a-multi-line-quote-paragraph-in-a-container-opens-nothing',
   'a-continuation-on-a-span-marker-joins-the-cell-the-marker-resolves-into',
   'a-table-row-ends-a-description-body-and-a-lone-plus-folds-into-a-term',
   'a-fence-closer-below-the-authored-base-is-measured-as-its-payload',

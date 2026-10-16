@@ -22,12 +22,11 @@ const dd = '<dl>\n  <dt>t</dt>\n  <dd>body\nmore</dd>\n</dl>\n'
 
 describe("BELOW the body's column the body ends", () => {
   it('the BELOW band gives one answer at every sub-column indent', () => {
-    // This is the half that moved. Both used to fold the quote into the dd as
-    // lazy text. The body ends; the top level's STRICT COLUMN-0 rule for an
-    // indented block opener is what then makes it text rather than a quote, and
-    // that rule belongs to the surviving context, not to this band.
+    // carve#3295 moved this half back: at the top level an indented opener
+    // opens nothing, so the body does not end and the quote marker folds into
+    // its paragraph as text, as under a list item.
     let input = body + ' '.repeat(1) + '> q\n'
-    const expected = dd + '<p>&gt; q</p>'
+    const expected = '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n&gt; q</dd>\n</dl>'
     expect(carveToHtml(input)).toBe(expected)
 
     input = body + ' '.repeat(2) + '> q\n'
@@ -77,22 +76,20 @@ describe("BELOW the body's column the body ends", () => {
   })
 
   it('every block-opener kind answers the band the same way', () => {
-    // The band is stated about the column, not about the construct, so a fix
-    // wired to the blockquote pattern alone fails here.
-    //
-    // The assertion is that the opener LEFT the dd, not merely that one and two
-    // spaces agree with each other: before this clause they agreed too, both
-    // folding the opener in as lazy text, so an agreement test alone is a
-    // control rather than a proof. `</dl>` followed by a block is what moved.
+    // The band is stated about the column, not about the construct. Since
+    // carve#3295 a heading, break, table row or quote marker folds into the
+    // body's paragraph; a colon fence still ends the body (carve#2486).
     const band = (n: number, opener: string) => carveToHtml(body + ' '.repeat(n) + opener + '\n')
     for (const opener of ['> q', '# h', '| a |', '---', '::: note']) {
-      const left = dd
-      expect(band(1, opener).startsWith(left)).toBe(true)
       expect(band(2, opener)).toBe(band(1, opener))
       // CONTROL: at the column the same opener really opens, inside the dd.
-      expect(band(3, opener).startsWith(left)).toBe(false)
       expect(band(3, opener)).not.toBe(band(1, opener))
     }
+    for (const opener of ['> q', '# h', '| a |', '---']) {
+      expect(band(1, opener).startsWith('<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n')).toBe(true)
+      expect(band(1, opener).endsWith('</dd>\n</dl>')).toBe(true)
+    }
+    expect(band(1, '::: note').startsWith(dd)).toBe(true)
   })
 
   it('an INVISIBLE line is NOT an opener, so the band folds it', () => {

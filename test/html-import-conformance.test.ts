@@ -22,21 +22,7 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const withCommentForm = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(withCommentForm)
-  if (value === null || typeof value !== 'object') return value
-  const node = Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, withCommentForm(inner)]))
-  if (node.type === 'comment') node.form = node.block === true ? 'block' : node.delimited === true ? 'braced' : 'line'
-  return node
-}
-const commentFormAhead = (fixture: string) => ({
-  reason: 'contract 1.2 adds comment.form (markup-carve/carve#3261); the golden gains it when the pin moves',
-  ast: withCommentForm(JSON.parse(readFileSync(resolve(root, fixture, 'expected.ast.json'), 'utf8'))),
-})
-
 const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  ['comment-beside-dropped-element', commentFormAhead('comment-beside-dropped-element')],
-  ['table-cell-multi-line-comment', commentFormAhead('table-cell-multi-line-comment')],
 ])
 
 /**
