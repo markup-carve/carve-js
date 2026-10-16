@@ -16678,6 +16678,16 @@ class ParseSession {
           out.push(
             this.withPos({ type: 'escaped_text', value: nxt } as EscapedText, source, text, escStart, i + 2),
           )
+          if (nxt === '<' && text.startsWith('</#', i + 1)) {
+            crossrefMemo ??= { lastCloser: text.lastIndexOf('>') }
+            if (text[i + 4] !== '>' && crossrefBodyCanEnd(text, i + 4, crossrefMemo)) {
+              const end = text.indexOf('>', i + 4) + 1
+              i += 2
+              append(text.slice(i, end))
+              i = end
+              continue
+            }
+          }
           i += 2
           continue
         }

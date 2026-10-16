@@ -14,9 +14,21 @@
  * an unresolved footnote reference plus a trailing attribute stays literal.
  */
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, parse } from '../src/index.js'
 
 describe('a cross-reference with a trailing attribute block', () => {
+  it('keeps an escaped cross-reference literal through its closing bracket', () => {
+    for (const source of ['\\</#id>\n', 'x \\</#id> y\n', '\\</#x~>y>\n']) {
+      expect(carveToHtml(source)).not.toContain('class="tag"')
+      expect(carveToHtml(source)).toContain('&lt;/#')
+    }
+    const paragraph = parse('\\</#id>x y\n').children[0]!
+    expect(paragraph.type).toBe('paragraph')
+    if (paragraph.type === 'paragraph') {
+      expect(paragraph.children.map(node => [node.type, 'value' in node ? node.value : null]))
+        .toEqual([['escaped_text', '<'], ['text', '/#id>x y']])
+    }
+  })
   it('keeps the block literal when the reference does not resolve', () => {
     expect(carveToHtml('</#h>{i}\n').trim()).toBe('<p>&lt;/#h&gt;{i}</p>')
   })
