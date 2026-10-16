@@ -10094,7 +10094,7 @@ class ParseSession {
     let afterPreviousTerm = false
     // Track each note's written body column across nested and quoted definitions.
     let inFootnoteBody = false
-    const noteColumns: Array<{ column: number; quotes: number }> = []
+    const noteColumns: Array<{ column: number; quotes: number; termText: boolean }> = []
     let inlineBodyList = false
     let plusColumn: number | null = null
     let paraState: 'no' | 'yes' | 'ask' = 'no'
@@ -10375,6 +10375,10 @@ class ParseSession {
         (!isBlankLine(raw) && composed.column < noteColumns[noteColumns.length - 1]!.column ||
           rawQuoteDepth < noteColumns[noteColumns.length - 1]!.quotes)) noteColumns.pop()
       inFootnoteBody = noteColumns.length > 0
+      if (isBlankLine(raw) && inFootnoteBody) noteColumns[noteColumns.length - 1]!.termText = false
+      if (inFootnoteBody && /^[ \t]*:[ \t]+/.test(raw) &&
+          indentColumns(raw) > noteColumns[noteColumns.length - 1]!.column)
+        noteColumns[noteColumns.length - 1]!.termText = true
       if (isBlankLine(raw)) {
         // A BLANK LINE ENDS EVERY OPEN BLOCK QUOTE, and everything written inside
         // one goes with it. A list item is transparent across a blank, which is
@@ -10433,9 +10437,10 @@ class ParseSession {
           // A term keeps this spelling as text, so it registers no abbreviation.
           paraState = 'yes'
           continue
-        } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
+        } else if (term && quotes === term.quotes && col > term.col) {
           if (commentFenceRun(rest) === undefined) {
-            if (this.matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+            if (this.matchLinkDef(rest) !== null || RE_FOOTNOTE_DEF.test(rest.trimStart()))
+              lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
             paraState = 'yes'
             continue
           }
@@ -10749,8 +10754,10 @@ class ParseSession {
         paraState = 'yes'
       }
       // A definition folded into visible paragraph text opens no note body.
-      if (RE_FOOTNOTE_DEF.test(line) && !collectsNothing) {
-        noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: rawQuoteDepth })
+      if (RE_FOOTNOTE_DEF.test(line) && !collectsNothing &&
+          !lexer.declinedLinkDefLines.has(lexer.lineNumber(idx))) {
+        noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: rawQuoteDepth,
+          termText: false })
         inFootnoteBody = true
       }
       // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
@@ -10881,6 +10888,9 @@ class ParseSession {
       const declines =
         topLevelIndentedDef ||
         notAtContentColumn ||
+        (inFootnoteBody && noteColumns[noteColumns.length - 1]!.termText && composed.column > openColumn) ||
+        (inFootnoteBody && rawQuoteDepth > noteColumns[noteColumns.length - 1]!.quotes &&
+          indentColumns(raw) > openColumn) ||
         (inFootnoteBody && rawQuoteDepth > noteColumns[noteColumns.length - 1]!.quotes &&
           /^[ \t]/.test(kept) &&
           !composed.peeled.some((one) => !one.quote)) ||
@@ -11377,6 +11387,7 @@ class ParseSession {
     }
     if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
+    let termTextContinuation = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
@@ -11385,6 +11396,7 @@ class ParseSession {
           indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) break
       if (isBlankLine(ln)) {
         retainedBelowComment = false
+        termTextContinuation = false
         trackItemLazyState('', lazyState)
         pendingBlanks++
         pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -11447,13 +11459,17 @@ class ParseSession {
         pendingBlankSources = []
         const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
           ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
-        const belowQuotedComment: boolean = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
+        const belowQuotedComment = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
         if (lexer.hostBody === 'list' && defLineIndex === 0 && RE_FOOTNOTE_DEF.test(ln.trimStart()) && sourceLine !== undefined) {
           nestedSourceBodyColumn = indentColumns(sourceLine) + FOOTNOTE_BODY_COLUMN
         }
-        bodyLines.push(content)
+        bodyLines.push(termTextContinuation && RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
+          (RE_FOOTNOTE_DEF.test(content.trimStart()) || isLinkDefLine(content.trimStart()))
+          ? LAZY_FRAME + content.trimStart() : content)
+        if (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && /^:[ \t]+/.test(content.trimStart()))
+          termTextContinuation = true
         trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, bodyColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
-        retainedBelowComment = belowQuotedComment
+        retainedBelowComment = belowQuotedComment && /^[ \t]*>/.test(lexer.peek(1) ?? '')
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
         bodySourceLines.push(ln)
         lexer.consume()
