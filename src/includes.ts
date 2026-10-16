@@ -384,8 +384,8 @@ function regionLines(source: string, selected: string): { start: number; end: nu
   const stack: Array<{ name: string; line: number }> = []
   let range: { start: number; end: number } | null = null
   for (const [index, sourceLine] of sourceLines(source).entries()) {
-    const line = sourceLine.replace(/\r$/, '').trimStart()
-    const body = line.startsWith('//') ? line.slice(2).trimStart() : line
+    const line = sourceLine.replace(/\r$/, '').replace(/^[ \t]+/, '')
+    const body = line.startsWith('//') ? line.slice(2).replace(/^[ \t]+/, '') : line
     if (!/^#(?:end)?region\b/.test(body)) continue
     const marker = /^#(end)?region(?:[ \t]+([A-Za-z_][\w-]*))?[ \t]*$/.exec(body)
     if (!marker) return null
