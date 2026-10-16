@@ -33,9 +33,9 @@ describe('definition-like lines stay in their paragraph', () => {
     )
   })
 
-  it('keeps the line in the quote after a footnote definition inside a quoted list', () => {
+  it('ends the quote after a footnote definition inside a quoted list', () => {
     expect(html('> - a\n>   [^f]: u\n)\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <p>)</p>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<p>)</p>',
     )
   })
 
