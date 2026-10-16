@@ -12769,7 +12769,7 @@ class ParseSession {
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
           (lazyState.lazyFoldable || quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan ||
-            (belowLeadColon && RE_COMMENT_LINE.test(below)) ||
+            (belowLeadColon && bodyLines.length > 1 && RE_COMMENT_LINE.test(below)) ||
             (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
               (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
                 (!nestedDescriptionOpened && indentColumns(bodySourceLines.at(-1) ?? '') > contentCol &&

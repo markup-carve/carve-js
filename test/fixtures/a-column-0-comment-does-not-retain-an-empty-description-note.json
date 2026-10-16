@@ -1,0 +1,32 @@
+[
+  {
+    "id": "row-1",
+    "source": ":: t\n: ::: note\n%%%\nx\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+  },
+  {
+    "id": "row-2",
+    "source": ":: t\n: ::: note\n%%%\ntail\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>"
+  },
+  {
+    "id": "row-3",
+    "source": ":: t\n: ::: note\n%% c\nx\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+  },
+  {
+    "id": "row-4",
+    "source": ":: t\n: ::: note\n%%\nx\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+  },
+  {
+    "id": "row-5",
+    "source": "> :: t\n> : ::: note\n> %% c\n> x\n",
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <aside class=\"admonition note\" aria-label=\"Note\">\n\n      </aside>\n    </dd>\n  </dl>\n  <p>x</p>\n</blockquote>"
+  },
+  {
+    "id": "row-6",
+    "source": ":: t\n: ::: warning\n%% c\nx\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition warning\" aria-label=\"Warning\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+  }
+]
