@@ -59,6 +59,8 @@ export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   smartTypography?: SmartTypographyOption
   /** Markdown renderers with raw HTML disabled show carrier comments as text. */
   roundtrip?: boolean
+  /** `pandoc` writes simple integral citations as Pandoc's bare `@key` syntax. Defaults to `source`. */
+  citationMode?: 'source' | 'pandoc'
 }
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
@@ -1094,6 +1096,33 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext, parentDelimite
   try {
     const parts = nodes.map((node) => renderInline(node, ctx))
 
+    if (ctx.options.citationMode === 'pandoc') {
+      const adjacent = nodes.map((sibling, index) => {
+        const normalized = normalizeLegacyInline(sibling)
+        return normalized.type === 'text' ? normalized.value : parts[index]!
+      })
+      const preceding: string[] = []
+      const following: string[] = []
+      let last = ''
+      for (let i = 0; i < adjacent.length; i++) {
+        preceding[i] = last
+        if (adjacent[i]) last = adjacent[i]!.slice(-1)
+      }
+      last = ''
+      for (let i = adjacent.length - 1; i >= 0; i--) {
+        following[i] = last
+        if (adjacent[i]) last = (adjacent[i] + last).slice(0, 2)
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        const node = normalizeLegacyInline(nodes[i]!)
+        if (node.type !== 'citation_group' || node.mode !== 'integral') continue
+        if (/\S/.test(preceding[i]!) || /^[\p{L}\p{N}_:#$%&+?<>~/-]/u.test(following[i]!)
+          || /^\.[\p{L}\p{N}_:#$%&+?<>~/-]/u.test(following[i]!)) {
+          throw new TypeError('Cannot export an adjacent integral citation to Pandoc Markdown')
+        }
+      }
+    }
+
     for (let i = parts.length - 1; i >= 0; i--) {
       const part = parts[i]!
       if (normalizeLegacyInline(nodes[i]!).type === 'hard_break' && part === '\\\n') {
@@ -1204,7 +1233,7 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
 
   switch (node.type) {
     case 'text':
-      return escapeUnresolvedCrossrefs(cleanEscapedText(node))
+      return escapeUnresolvedCrossrefs(cleanEscapedText(node)).replaceAll('@', ctx.options.citationMode === 'pandoc' ? '\\@' : '@')
     case 'cell_wrap':
       return ' '
     case 'escaped_text':
@@ -1355,7 +1384,7 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       return title === undefined ? `[${renderedLabel}](${destination})` : `[${renderedLabel}](${destination} "${escapeMdTitle(title)}")`
     }
     case 'mention':
-      return `@${stripControls(node.user)}`
+      return `${ctx.options.citationMode === 'pandoc' ? '\\@' : '@'}${stripControls(node.user)}`
     case 'tag':
       return escapeText(`#${stripControls(node.name)}`)
     case 'inline_extension':
@@ -1460,6 +1489,15 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       // An unnumbered placeholder is a literal `#`, and M1f decides it like one.
       return node.n === undefined ? positionalHash() : String(node.n)
     case 'citation_group':
+      // Pandoc treats the leading + in [+@key] as prefix text, not as an
+      // integral citation. Its bare @key spelling carries that mode.
+      if (ctx.options.citationMode === 'pandoc' && node.mode === 'integral') {
+        if (node.items.length !== 1 || node.raw !== `[+@${node.items[0]?.key}]`) {
+          throw new TypeError('Cannot export this integral citation to Pandoc Markdown')
+        }
+        const key = node.items[0]!.key
+        return /^\w+$/.test(key) ? `@${key}` : `@{${key}}`
+      }
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
       return stripControls(node.raw)
     case 'comment':

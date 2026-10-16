@@ -107,9 +107,24 @@ element carrying it. The endnotes `<section role="doc-endnotes">` is a separate
 construct and is still emitted. The option is HTML-only - no other target emits
 `<section>`, and the AST has no `section` node.
 
----
+## Citation syntax in Markdown
 
-[Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
+Citation parsing is opt-in through `citations()`. With that extension enabled,
+Markdown export keeps the authored citation spelling by default. For Pandoc,
+pass `citationMode: 'pandoc'` to write a simple integral citation such as
+`[+@smith2020]` as `@smith2020`. Parenthetical citations keep their authored
+spelling. Keys with punctuation use Pandoc's braced `@{key}` form. Complex
+integral groups have no direct Pandoc spelling and cause a
+`TypeError` in this mode. Ordinary `@mentions` are escaped so Pandoc does not
+read them as citations. Pandoc still needs its own bibliography data to
+resolve citation keys; Carve citation definitions are not exported as a Pandoc
+bibliography.
+
+```js
+import { carveToMarkdown, citations } from '@markup-carve/carve'
+
+carveToMarkdown(source, { extensions: [citations()], citationMode: 'pandoc' })
+```
 
 ## Roundtrip export
 
@@ -451,3 +466,7 @@ two drop together; any other invalid marker drops alone. A dropped marker stays
 in the output as the ordinary HTML comment it is, the rest of the set restores,
 and each dropped marker or pair is reported as `carrier-marker-dropped` at the
 marker's line.
+
+---
+
+[Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
