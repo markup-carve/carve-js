@@ -167,6 +167,53 @@ describe('expandIncludes', () => {
     expect(result.html).toBe('<p>One\nTwo</p>')
   })
 
+  it('@region keeps a snippet stable when lines are inserted above it', () => {
+    const child = '// #region demo\nAlpha\nBeta\n// #endregion demo'
+    const a = expand('{{ child @region:demo }}', { child })
+    const b = expand('{{ child @region:demo }}', { child: `Inserted.\n${child}` })
+    const crlf = expand('{{ child @region:demo }}', { child: child.replaceAll('\n', '\r\n') })
+    expect(a.warnings).toEqual([])
+    expect(a.html).toBe('<p>Alpha\nBeta</p>')
+    expect(b.html).toBe(a.html)
+    expect(crlf.html).toBe(a.html)
+  })
+
+  it('@region accepts shell markers and nested distinct names', () => {
+    const child = '#region outer\nBefore.\n#region inner\nInside.\n#endregion inner\nAfter.\n#endregion outer'
+    const result = expand('{{ child @region:inner }}', { child })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toBe('<p>Inside.</p>')
+  })
+
+  it('@region ignores ordinary headings and retains nested markers in outer slices', () => {
+    const child = '# region overview\n\n// #region outer\nBefore.\n// #region inner\nInside.\n// #endregion inner\nAfter.\n// #endregion outer'
+    const result = expand('{{ child @region:outer }}', { child })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('Before.')
+    expect(result.html).toContain('Inside.')
+    expect(result.html).toContain('After.')
+    expect(result.html).toContain('#region')
+  })
+
+  it('@region rejects missing, duplicate, unmatched and conflicting selectors', () => {
+    const cases = [
+      ['// #region other\nText\n// #endregion other', 'include-region-invalid'],
+      ['// #region demo\nOne\n// #endregion demo\n// #region demo\nTwo\n// #endregion demo', 'include-region-invalid'],
+      ['// #region demo\nOne', 'include-region-invalid'],
+      ['// #region demo\nOne\n// #endregion other', 'include-region-invalid'],
+      ['// #region demo extra\nOne\n// #endregion demo', 'include-region-invalid'],
+    ] as const
+    for (const [child, rule] of cases) {
+      const result = expand('{{ child @region:demo }}', { child })
+      expect(result.warnings.map((warning) => warning.rule)).toEqual([rule])
+      expect(result.html).toContain('@region')
+    }
+    for (const directive of ['{{ child #x @region:demo }}', '{{ child @region:demo @lines:1-2 }}']) {
+      const result = expand(directive, { child: '// #region demo\nText\n// #endregion demo' })
+      expect(result.warnings.map((warning) => warning.rule)).toEqual(['include-selection-conflict'])
+    }
+  })
+
   it('@shift shifts headings and warns when clamped', () => {
     const result = expand('{{ child @shift:1 }}', { child: '# A\n\n###### B' })
     expect(result.warnings.map((w) => w.rule)).toEqual(['include-heading-clamp'])
@@ -1289,6 +1336,16 @@ describe('expandIncludes source mapping', () => {
       resolve: (path) => (path in files ? { source: files[path]!, id: path } : null),
     })
   }
+
+  it('keeps named region positions in the original file', () => {
+    const child = 'Before.\r\n// #region demo\r\n## Pick\r\n\r\nBody.\r\n// #endregion demo\r\nAfter.'
+    const r = expandWith('{{ child.crv @region:demo }}', { 'child.crv': child })
+    expect(r.warnings).toEqual([])
+    expect(r.doc.children.map((node) => [node.pos?.startLine, node.pos?.file])).toEqual([
+      [3, 'child.crv'],
+      [5, 'child.crv'],
+    ])
+  })
 
   it('attributes an included node to the file it came from', () => {
     const r = expandWith('Parent one.\n\n{{ child.crv }}\n\nParent two.\n', {

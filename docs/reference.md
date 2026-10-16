@@ -265,11 +265,14 @@ callbacks for the malformed cases `expandIncludes` warns about: an unknown or
 malformed `@option` (`include-unknown-option`) and a second `#section` name
 (`include-selection-conflict`). In both cases it returns `null`.
 
-Supported directive options are `#section`, `@lines:N-M`, and
-`@shift:N` / `@shift:auto`. A directive names at most one `#section`, which
-selects the heading subtree by explicit id or auto slug, `@lines` selects an inclusive physical line range before
-parsing, and `@shift` shifts included heading levels with clamping to
-`h1`...`h6`.
+Supported directive options are `#section`, `@lines:N-M`, `@region:name`,
+and `@shift:N` / `@shift:auto`. A directive uses at most one selection option.
+`#section` selects a heading subtree by id or slug, `@lines` selects an inclusive
+physical line range, and `@region` selects lines between matching source comment
+markers such as `// #region name` and `// #endregion name` or `#region name` and
+`#endregion name`. An invalid or missing region warns with
+`include-region-invalid` and leaves the directive literal. `@shift` moves
+included heading levels, clamped to `h1`...`h6`.
 
 `@shift:auto` derives the offset from the include site instead of stating it:
 the content is placed one level below the nearest preceding heading in the
