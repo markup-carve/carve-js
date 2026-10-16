@@ -1406,7 +1406,9 @@ const LAZY_FRAME = '\u0000L\u0000'
  * SS24 C3's lenient entry.
  */
 function stripLazyFrame(line: string): string {
-  return line.startsWith(LAZY_FRAME) ? line.slice(LAZY_FRAME.length) : line
+  // Nested collectors may frame the same line more than once.
+  while (line.startsWith(LAZY_FRAME)) line = line.slice(LAZY_FRAME.length)
+  return line
 }
 
 /** Recorded at a literal prefix strip; discard if later collection changes the text. */
@@ -11071,6 +11073,7 @@ class ParseSession {
     // marker's indent. Footnote-shaped, so it is NOT caught by the link-def arm
     // below, which excludes `[^`.
     if (
+      !line.startsWith(LAZY_FRAME) &&
       (lexer.inFootnoteBody || hostedLinkDef) &&
       RE_FOOTNOTE_DEF.test(hostedLinkDefLine.replace(/^[ \t]+/, ''))
     ) {
@@ -11087,6 +11090,7 @@ class ParseSession {
     // must not be swallowed here either. A footnote body is the exception: its
     // containers absorb residual indentation at or past their content column.
     if (
+      (!line.startsWith(LAZY_FRAME) || lexer.hostBody === 'list') &&
       (leadingWhitespace(hostedLinkDefLine) === 0 ||
         // A FOOTNOTE DEF IS NOT A LINK DEF, though `RE_LINK_DEF` matches both.
         // The flush-anchored test above missed an indented one, so without this
@@ -12606,11 +12610,16 @@ class ParseSession {
         }
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
-          (lazyState.lazyFoldable || retainedBelowComment || belowCommentSpan) &&
+          (lazyState.lazyFoldable || retainedBelowComment || belowCommentSpan ||
+            (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
+              (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
+                isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? '')))) &&
           !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
           (retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
             ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
-            !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn))
+            (indentColumns(ln, contentCol) < contentCol &&
+              (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
+              !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn)))
           && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
         ) {
           const lineIndex = lexer.pos
@@ -12636,10 +12645,12 @@ class ParseSession {
           const folded =
             retainedBelowComment && !RE_COMMENT_LINE.test(below)
               ? below
-              : atDocumentColumn &&
-            opensCodeFence(below)
-              ? ' ' + below
-              : ln
+              : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
+                  (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
+                ? LAZY_FRAME + below
+                : atDocumentColumn && opensCodeFence(below)
+                  ? ' ' + below
+                  : ln
           bodyLines.push(folded)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -12665,6 +12676,16 @@ class ParseSession {
           ? contentCol
           : indentColumns(bodySourceLines[index] ?? ''),
       )
+      if (RE_BLOCKQUOTE.test(bodyLines[0] ?? '')) {
+        for (let index = 1; index < bodyLines.length; index++) {
+          if (isBlankLine(bodyLines[index]!) || opensCodeFence(bodyLines[index]!.trimStart())) break
+          if (isLinkDefLine(bodyLines[index]!.trimStart()) &&
+              !RE_FOOTNOTE_DEF.test(bodyLines[index]!.trimStart()) &&
+              !lexer.quoteLazyLines.has(bodyLineNumbers[index]!)) {
+            bodyLines[index] = bodyLines[index]!.trimStart()
+          }
+        }
+      }
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
@@ -12769,12 +12790,16 @@ class ParseSession {
           // The term is the other place a framed line becomes text. The frame
           // kept the opener tests above from claiming it; it comes off before
           // the fold, exactly as the oracle unframes here.
+          const continuation = lexer.hostBodyRoot === 'description' &&
+            isBlockAttributeLine(next.trimStart())
+              ? stripLazyFrame(next).trimStart()
+              : stripLazyFrame(next)
           const last = parts[parts.length - 1]!
           if ('lines' in last) {
-            last.text += '\n' + stripLazyFrame(next)
+            last.text += '\n' + continuation
             last.lines.push(lexer.pos)
           } else {
-            parts.push({ lines: [lexer.pos], text: stripLazyFrame(next) })
+            parts.push({ lines: [lexer.pos], text: continuation })
           }
           lexer.consume()
         }
@@ -12959,6 +12984,11 @@ class ParseSession {
         handDown = { state: state.mode.inner, lines: prefix, depth }
       }
     }
+    const quoteTermLead = /^\s*>[ \t]+::[ \t]+/.test(lexer.lineAt(firstLineIndex) ?? '')
+    let quoteTermContinuation = quoteTermLead
+    const quoteRootLine = lexer.rootLines?.[lexer.lineNumber(firstLineIndex) - 1] ?? ''
+    const quoteMarkerOffset = quoteRootLine.indexOf('>')
+    const quoteMarkerColumn = quoteMarkerOffset < 0 ? 0 : indentColumns(quoteRootLine.slice(0, quoteMarkerOffset))
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
@@ -12966,6 +12996,7 @@ class ParseSession {
         const lineIndex = lexer.pos
         lexer.consume()
         const content = quoted
+        if (isBlankLine(content)) quoteTermContinuation = false
         // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
         // first line of a quote, at any depth, is a marker when a flush-left line
         // outside the quote follows, and that line's block is the innermost
@@ -13043,7 +13074,10 @@ class ParseSession {
         isBlankLine(ln) ||
         (RE_CAPTION.test(ln) && !lexer.markerOpensSublist) ||
         colonFenceShapeEndsLazyContinuation(ln) ||
-        startsInterruptingBlock(lexer, undefined, false)
+        (quoteTermContinuation && RE_HEADING.test(ln)) ||
+        (isLinkDefLine(ln.trimStart()) && !RE_FOOTNOTE_DEF.test(ln.trimStart()) &&
+          /^\s*:[ \t]+>/.test(lexer.rootLines?.[lexer.lineNumber(firstLineIndex) - 1] ?? '')) ||
+        (!quoteTermContinuation && startsInterruptingBlock(lexer, undefined, false))
       ) {
         break
       }
@@ -13085,7 +13119,12 @@ class ParseSession {
       // The shape-blind half of the same fact, for the consumers the two sets
       // above do not serve.
       lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
-      inner.push(isListMarkerLine(ln) ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
+      const lazyDefinition = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) ||
+        (isLinkDefLine(stripLazyFrame(ln).trimStart()) &&
+          indentColumns(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln) < quoteMarkerColumn)
+      if (lazyDefinition) lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
+      inner.push(isListMarkerLine(ln) || lazyDefinition || quoteTermContinuation
+        ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
       if (!lazyLinkDef) trackLine(ln, lineIndex)
     }
@@ -14160,6 +14199,7 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
+        if (!isBlankLine(l) && lw <= baseIndent && RE_HR.test((nested.at(-1) ?? '').trimStart())) break
         // Check the rebased leaf once; collection-only note text stores no continuation claim.
         if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked) {
           markerNoteClaimChecked = true
@@ -14250,7 +14290,9 @@ class ParseSession {
         if (belowItemComment && !heldCommentSpan &&
             !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
             !lazyState.commentAtColumn && lazyState.inDefList !== 'description') break
-        if (lw >= contentCol && !quoteLazyFramed &&
+        const belowOpenDescription = lazyState.inDefList === 'description' &&
+          isListMarkerLine(l) && lw >= contentCol && lw < contentCol + 2
+        if (lw >= contentCol && !belowOpenDescription && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
           // quote-lazy MARKER line never reaches the content-column arm, not even
           // inside an open fence, where the gate above hands the line back.
@@ -14661,13 +14703,19 @@ class ParseSession {
         } else if (
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-          (((((lazyState.lazyFoldable || commentFenceTail || fenceBoundaryTail) && (!afterNoteBody || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+          (((((lazyState.lazyFoldable ||
+            (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
+            (lazyState.deepest?.inDefList === 'description' &&
+              (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
+            commentFenceTail || fenceBoundaryTail) && (!afterNoteBody || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
             (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
             // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description'))) &&
-            (!lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+            (belowOpenDescription || (lw > baseIndent && lw < contentCol &&
+              (lazyState.deepest?.lazyFoldable !== false || lazyState.inDefList === 'description' ||
+                lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
               // A list marker indented past the base column but BELOW the content
               // column folds into what the item is still holding open, rather than
               // ending the list. Under symmetric §10 no list marker interrupts a
@@ -14722,6 +14770,8 @@ class ParseSession {
             lazyLine = l.startsWith(LAZY_FRAME)
               ? l
               : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (belowOpenDescription) {
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (lazyState.deepest?.inDefList === 'term' &&
               indentColumns(l, baseIndent + 1) > baseIndent && isListMarkerLine(l)) {
             // A band marker folds into the descendant's open term.
@@ -14751,7 +14801,8 @@ class ParseSession {
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
             // A retained marker under an open term stays text on reparse.
-            if (lazyState.inDefList === 'term' && !deflistMarkerLine(l) && lineOpensBlock(lazyLine)) lazyLine = LAZY_FRAME + lazyLine
+            if ((lazyState.inDefList === 'term' && !deflistMarkerLine(l) && lineOpensBlock(lazyLine)) ||
+                (lazyState.inDefList === 'description' && isBlockAttributeLine(lazyLine))) lazyLine = LAZY_FRAME + lazyLine
           } else if (lazyState.opaque === null && lazyState.literalColon === undefined && indentColumns(l, contentCol) < contentCol &&
               (lazyState.commentAtColumn || RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()) ||
                 lazyState.authoredColon?.depth === lazyState.divDepth) &&
@@ -14761,34 +14812,14 @@ class ParseSession {
           } else if (lazyState.commentAtColumn && lazyState.inDefList !== 'description' && lazyState.opaque === null && lazyState.literalColon === undefined &&
               indentColumns(l, contentCol) < contentCol && !RE_COMMENT_LINE.test(l)) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
-          } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
-            // A block-SHAPED line below the content column opens nothing (§24 C3:
-            // below it a marker folds as lazy item text and no other opener nests
-            // either), and it is folding here for that reason. It must not carry
-            // enough indentation to reach the SUB-list's content column on the
-            // recursive reparse, though, or it opens a list one level down -
-            // which is what `-   x` / `    - a` / `  - b` did, nesting `b` under
-            // `a` where the executable spec folds it (carve#603). One column
-            // reaches no content column at all, so the fold holds at every depth.
-            //
-            // A COMMENT ALREADY AT COLUMN 0 KEEPS IT (carve-js#1623). The column
-            // is a clamp on a line that has indentation to reduce; added to a
-            // line authored flush left it is not a clamp but source the author
-            // never wrote, and `attachDocumentOffsets` charges it back to the
-            // document - the sub-line is one character longer than its document
-            // line, the prefix goes to -1, and the span starts on the newline
-            // ENDING THE LINE ABOVE with `startColumn: 0`, below the AST schema's
-            // integer>=1. Only a DEGRADED comment fence reaches here at column 0,
-            // and only since carve-js#1607 stopped it ending the item; its `%%`
-            // spelling never took this branch at all, which is the control for
-            // the position it should have had.
-            //
-            // The exemption is the comment's alone. An unterminated code fence
-            // arrives here flush left too and NEEDS the column: without it the
-            // line opens a code block at the item's own column 0 instead of
-            // staying the paragraph's inline verbatim run (carve-js#540).
+          } else if (indentColumns(l, contentCol) < contentCol &&
+              (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()))) {
+            // A below-column opener stays text; comments keep their source column.
             const flushed = l.replace(/^[ \t]+/, '')
-            lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
+            // After a retaining comment the body owns the opener (carve#3285).
+            lazyLine = lazyState.commentAtColumn && lazyState.inDefList === 'description'
+              ? (flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed)
+              : RE_COMMENT_LINE.test(flushed) ? l : LAZY_FRAME + flushed
           } else if (lazyState.commentAtColumn && lazyState.inDefList !== 'description' && !RE_COMMENT_LINE.test(l)) {
             // The comment retained this item's frame, but closed its paragraph.
             // Keep the fold explicit so a closed descendant cannot claim it.
@@ -16001,9 +16032,10 @@ class ParseSession {
         !flattened &&
         lines.length > 0 &&
         !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
-        (((lexer.consumesHostedLinkDefs === 'all' ||
+        ((((!ln.startsWith(LAZY_FRAME) || (lexer.hostBody === 'list' &&
+          !RE_FOOTNOTE_DEF.test(stripLazyFrame(ln)))) && (lexer.consumesHostedLinkDefs === 'all' ||
           (lexer.consumesHostedLinkDefs === 'lazy' &&
-            lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
+            lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))))) &&
           this.isLinkDefLine(stripLazyFrame(ln))) ||
           startsInterruptingBlock(lexer)) &&
         !(RE_ADMONITION_CLOSE.test(ln) && holdsLiteralColonFence)
