@@ -5067,7 +5067,11 @@ function retainCommentBoundary(state: ItemLazyState): void {
  * undefined. The first bare run of the same width closes it at any column.
  * CARVE-P9-053: such a fence answers exactly as one `%%` line at the opener's column.
  */
-function matchedCommentFenceEnd(lexer: Lexer, at: number = lexer.pos): number | undefined {
+function matchedCommentFenceEnd(
+  lexer: Lexer,
+  at: number = lexer.pos,
+  endsContainer: (line: string) => boolean = () => false,
+): number | undefined {
   const opener = lexer.lineAt(at)
   if (opener === undefined) return undefined
   const run = commentFenceRun(opener.replace(/^[ \t]+/, ''))
@@ -5076,6 +5080,7 @@ function matchedCommentFenceEnd(lexer: Lexer, at: number = lexer.pos): number | 
     const line = lexer.lineAt(j)
     if (line === undefined) return undefined
     if (commentFenceRun(line.replace(/^[ \t]+/, '')) === run) return j + 1
+    if (endsContainer(line)) return undefined
   }
 }
 
@@ -12744,6 +12749,23 @@ class ParseSession {
                 /^:{3,}[ \t]*$/.test(below)) &&
                 !(priorLazyDefinition && opensCodeFence(below))))) break
         // At document column 0 a definition is a document-level interrupter (CARVE-P0-010).
+        // A matched fence an enclosing item took from below its column answers
+        // as the `%%` line it would be there: it retains the body (CARVE-P9-053).
+        if (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) && lazyState.opaque === null &&
+            (lazyState.lazyFoldable || retainedBelowComment) && commentFenceRun(below) !== undefined) {
+          const end = matchedCommentFenceEnd(lexer)
+          if (end !== undefined) {
+            while (lexer.pos < end) {
+              const line = lexer.peek()!
+              bodyLines.push(line)
+              bodySourceLines.push(line)
+              bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+              lexer.consume()
+            }
+            retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
+            continue
+          }
+        }
         const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
           RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol
         // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
@@ -14263,6 +14285,31 @@ class ParseSession {
         const l = lexer.peek()!
         // An enclosing item already took this line as lazy text: it reached no column.
         const enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
+        // Below the column, under a held description or term, a matched fence
+        // answers as its `%%` twin (CARVE-P9-053), so it takes the twin's path.
+        if (lazyState.inDefList && pendingBlanks === 0 && lazyState.opaque === null && !isBlankLine(l) &&
+            indentColumns(l, contentCol) < contentCol && indentColumns(l) > baseIndent) {
+          // A sibling marker ends this item before any closer it could reach.
+          const end = matchedCommentFenceEnd(lexer, lexer.pos, (line) =>
+            indentColumns(line) <= baseIndent && isListMarkerLine(line))
+          if (end !== undefined) {
+            const before = { ...lazyState }
+            const indent = indentColumns(l)
+            while (lexer.pos < end) {
+              const line = lexer.peek()!
+              takenBelowColumn.add(nested.length)
+              nested.push(sliceColumns(line, Math.min(indent, indentColumns(line)), true))
+              nestedSourceLines.push(line)
+              nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+              lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+              lexer.consume()
+            }
+            Object.assign(lazyState, before)
+            trackItemLazyState('%%', lazyState, () => true, false)
+            if (lazyState.inDefList === 'description') retainCommentBoundary(lazyState)
+            continue
+          }
+        }
         // A retained fence's closer anywhere in the item closes it (R3285).
         // The column is read from the source, since an enclosing body may hand
         // the line over flush.
