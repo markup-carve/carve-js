@@ -7536,6 +7536,7 @@ function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
       continue
     }
     if (isBlankLine(next) || RE_CAPTION.test(next) ||
+        (leadingWhitespace(next) > 0 && isLinkDefLine(next.trimStart())) ||
         colonFenceShapeEndsLazyContinuation(next) ||
         startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
     demoteQuotedColonCandidates(state)
@@ -8471,7 +8472,8 @@ function rebaseOverindentedBlocks(
           else if (!blockQuoteParagraphOpen(quoted)) break
           // An unmarked opener at the run's own column interrupts the quote
           // and is a rebase group of its own, with its own payload and closer.
-          else if (leadingWhitespace(local) === 0 && (lineOpensItemBlock(local) || RE_CAPTION.test(local))) break
+          else if ((leadingWhitespace(local) === 0 && (lineOpensItemBlock(local) || RE_CAPTION.test(local))) ||
+            (leadingWhitespace(local) > 0 && isLinkDefLine(local.trimStart()))) break
           else trackBlockQuoteLazyState(local, quoted, () => true, () => true, undefined, undefined, false)
         }
         end = j

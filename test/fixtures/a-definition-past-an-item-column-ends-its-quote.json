@@ -1,0 +1,37 @@
+[
+  {
+    "id": "row-1",
+    "source": "[r][] [^p] [^c] [^d]\n\n1. > para\n     more\n     [r]: /u\n     tail\n",
+    "html": "<p><a href=\"/u\">r</a> [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <blockquote><p>para\nmore</p></blockquote>\n    tail\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-2",
+    "source": "[r][] [^p] [^c] [^d]\n\n1. > para\n      [r]: /u\n     tail\n",
+    "html": "<p><a href=\"/u\">r</a> [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n    tail\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-3",
+    "source": "[r][] [^p] [^c] [^d]\n\n1. > para\n     more\n      [r]: /u\n     tail\n",
+    "html": "<p><a href=\"/u\">r</a> [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <blockquote><p>para\nmore</p></blockquote>\n    tail\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-4",
+    "source": "1. > para\n     [r]: /u\n     tail\n",
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n    tail\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-5",
+    "source": "1. > para\n      [r]: /u\n     tail\n",
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n    tail\n  </li>\n</ol>"
+  },
+  {
+    "id": "row-6",
+    "source": "- > para\n   [r]: /u\n   tail\n",
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "id": "row-7",
+    "source": "- > para\n  > more\n   [r]: /u\n   tail\n",
+    "html": "<ul>\n  <li>\n    <blockquote><p>para\nmore</p></blockquote>\n    tail\n  </li>\n</ul>"
+  }
+]
