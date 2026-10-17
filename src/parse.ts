@@ -14953,7 +14953,10 @@ class ParseSession {
             (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
             (lazyState.deepest?.inDefList === 'description' &&
               (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
-            commentFenceTail || fenceBoundaryTail) && (!afterNoteBody || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+            commentFenceTail || fenceBoundaryTail ||
+            // An ancestor already admitted this follower after the invisible comment.
+            (lazyState.invisibleAtColumn && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+              RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()))) && (!afterNoteBody || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
             (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
             // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
@@ -15180,8 +15183,18 @@ class ParseSession {
 
       if (commentPayloadCandidates) {
         const closedComments = commentBlockSpans([content, ...nested])
+        const nestedItemColumn = markerContentColumn(content, terminatorFree)
+        let scanned = 0
+        let opener = -1
         for (const [index, payload] of commentPayloadCandidates) {
-          if (closedComments[index + 1]) nested[index] = LAZY_FRAME + stripLazyFrame(payload)
+          if (!closedComments[index + 1]) continue
+          while (scanned < index) {
+            if (commentFenceRun(nested[scanned]!)) opener = scanned
+            scanned++
+          }
+          // The nested item's parser hides a fence at its own content column.
+          if (opener >= 0 && nestedItemColumn === indentColumns(nested[opener]!)) continue
+          nested[index] = LAZY_FRAME + stripLazyFrame(payload)
         }
       }
 
