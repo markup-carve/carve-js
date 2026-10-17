@@ -39,6 +39,9 @@ describe('delimited table fences', () => {
   it('leaves unmarked and malformed fences as code', () => {
     expect(parse('```csv\na,b\n```\n').children[0]?.type).toBe('code_block')
     expect(parse('{table}\n```csv\n"bad\n```\n').children[0]?.type).toBe('code_block')
+    for (const body of ['a"b,c', '"a" ,b']) {
+      expect(parse(`{table}\n\`\`\`csv\n${body}\n\`\`\`\n`).children[0]?.type).toBe('code_block')
+    }
   })
 
   it('keeps the source form across AST JSON', () => {
