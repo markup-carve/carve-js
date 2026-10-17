@@ -15061,7 +15061,9 @@ class ParseSession {
             ((lazyState.inDefList === 'term' &&
               (!isListMarkerLine(l) || (indentColumns(l, baseIndent + 1) > baseIndent &&
                 !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))) ||
-              deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
+              deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')) ||
+              // An unclosed `%%%` is a `%%` line (CARVE-P9-053).
+              isRetainableLineComment(lexer, l))
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
             // A retained marker under an open term stays text on reparse.
@@ -15192,12 +15194,22 @@ class ParseSession {
             if (commentFenceRun(nested[scanned]!)) opener = scanned
             scanned++
           }
-          // The nested item's parser hides a fence at its own content column.
-          if (opener >= 0 && nestedItemColumn === indentColumns(nested[opener]!)) continue
+          // A nested item or description hides a fence at its own body column.
+          const openerColumn = opener >= 0 ? indentColumns(nested[opener]!) : -1
+          let descriptionColumn: number | undefined
+          if (opener >= 0 && RE_DEFLIST_TERM.test(content)) {
+            for (let at = opener - 1; at >= 0; at--) {
+              const description = RE_DEFLIST_DEF.exec(nested[at]!)
+              if (description) {
+                descriptionColumn = deflistContentCol(description[1]!)
+                break
+              }
+            }
+          }
+          if (openerColumn === nestedItemColumn || openerColumn === descriptionColumn) continue
           nested[index] = LAZY_FRAME + stripLazyFrame(payload)
         }
       }
-
       // Preserve the existing extent of a fence-shaped descendant body span.
       // The parent tracker can leave its paragraph open after a child marker,
       // even though that child's body has already reached a fence run.
