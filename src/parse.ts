@@ -6238,6 +6238,13 @@ function trackItemLazyState(
   const run = authoredFenceWhitespace ?? facts?.whitespace
   // A tab opener reports its run in characters; ownership compares columns.
   const runColumns = authoredFenceColumns ?? run
+  if (state.inDefList === 'description' && state.descriptionHasTerm &&
+      run !== undefined && runColumns !== undefined && runColumns > 0 &&
+      RE_HEADING.test(content.slice(run))) {
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
   if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
       runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
       (colonBlockOpenerRun(content.slice(run!)) !== null || RE_BLOCKQUOTE.test(content.slice(run!)))) state.inDefList = false
