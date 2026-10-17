@@ -1905,7 +1905,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const consumed = ['aligns', 'valigns', 'widths']
   const hasBodyMetadata = ['body-rows', 'body-header-rows', 'body-header-cols'].some(key => node.attrs?.keyValues?.[key] !== undefined)
-  if (!hasBodyMetadata || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
+  if (!hasBodyMetadata || node.rowGroups || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
   let tableAttrs: Attrs | undefined = node.attrs ? {
     ...node.attrs,
     keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !consumed.includes(key))),

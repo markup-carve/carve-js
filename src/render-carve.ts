@@ -4,6 +4,7 @@ import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table-display-width.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
+import { delimitedSource } from './delimited-table.js'
 import type {
   Attrs,
   BlockNode,
@@ -3372,6 +3373,15 @@ class CarveRenderSession {
   }
 
   private renderTableWithColumns(node: Table, ctx: CarveContext): string {
+    const delimited = delimitedSource(node)
+    if (delimited !== null && node.sourceFormat) {
+      const attrs = tableSourceAttrs(node)
+      const keyValues = { ...(attrs?.keyValues ?? {}), table: '' }
+      const sourceAttrs = renderBlockAttrs({ ...(attrs ?? {}), keyValues })
+      const fence = safeFence(delimited, 3)
+      const body = `${fence}${node.sourceFormat}\n${this.protectVerbatim(delimited)}${delimited === '' ? '' : '\n'}${fence}`
+      return `${sourceAttrs}\n${body}${node.caption === undefined ? '' : this.captionLine(node.caption, ctx)}`
+    }
     const attrs = renderBlockAttrs(tableSourceAttrs(node))
     const body = this.renderTable(node, ctx)
     return attrs ? `${attrs}\n${body}` : body

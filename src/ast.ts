@@ -295,6 +295,8 @@ export interface Table extends BaseNode {
    * the canonical writer reproduces it ([CARVE-P11-066]).
    */
   separatorWidths?: number[]
+  /** Authored CSV or TSV fence form; absent means a pipe table. */
+  sourceFormat?: 'csv' | 'tsv'
   rows: TableRow[]
 }
 

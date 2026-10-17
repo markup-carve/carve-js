@@ -67,7 +67,8 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, Document, Heading, Table } from './ast.js'
+import { delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
 import { inspectColonFences } from './colon-fences.js'
 import { resolveTableSpans } from './table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
@@ -515,6 +516,29 @@ export function lintCarve(
   const slugOpts = headingIdSlugOpts(opts)
   const foldId = caseOnlyKey
   const out: LintWarning[] = []
+
+  walkDocument(doc, (node) => {
+    const isMarkedCode = node.type === 'code_block' &&
+      (node as unknown as CodeBlock).attrs?.keyValues?.table === ''
+    const isMarkedFigure = node.type === 'figure' &&
+      (node as { attrs?: Attrs }).attrs?.keyValues?.table === '' &&
+      (node as { target?: { type?: string } }).target?.type === 'code_block'
+    if (isMarkedCode || isMarkedFigure) {
+      const code = (isMarkedCode ? node : (node as { target: CodeBlock }).target) as CodeBlock
+      if (code.lang !== 'csv' && code.lang !== 'tsv') return
+      if (parseDelimitedRows(code.content, code.lang === 'csv' ? ',' : '\t') !== null) return
+      out.push({ ...locate(code, toUtf16), rule: 'delimited-table-malformed',
+        message: 'This marked CSV/TSV fence has malformed quoting, so it remains a code block.' })
+      return
+    }
+    if (node.type !== 'table') return
+    const table = node as unknown as Table
+    if (!table.sourceFormat || !table.pos) return
+    const widths = delimitedRecordWidths(table)
+    if (!widths?.length || !widths.some(width => width > widths[0]!)) return
+    out.push({ ...locate(table, toUtf16), rule: 'delimited-table-wide-row',
+      message: 'A CSV/TSV record has more fields than the first record; the table keeps the extra columns.' })
+  })
 
   walkDocument(doc, (node) => {
     if (node.type !== 'link_reference_definition' || node.href !== '') return
