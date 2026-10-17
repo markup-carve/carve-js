@@ -83,6 +83,7 @@ function renderPass(
     options: opts,
     smartTypography: normalizeSmartTypography(opts.smartTypography),
     listDepth: 0,
+    indentBase: 0,
     blockQuoteDepth: 0,
     ordered: [],
     blockDepth: 0,
@@ -103,6 +104,8 @@ interface AnsiContext {
   options: AnsiRenderOptions
   smartTypography: SmartTypographyOption
   listDepth: number
+  /** List depth whose indentation an enclosing continuation-block prefix already wrote (PART 11 §10h2). */
+  indentBase: number
   blockQuoteDepth: number
   ordered: number[]
   blockDepth: number
@@ -359,7 +362,7 @@ function renderList(node: List, ctx: AnsiContext): string {
   if (node.ordered) ctx.ordered[ctx.listDepth] = node.start ?? 1
   const out = node.items
     .map((item) => {
-      const indent = '  '.repeat(ctx.listDepth - 1)
+      const indent = '  '.repeat(ctx.listDepth - 1 - ctx.indentBase)
       let marker: string
       if (node.ordered) {
         const n = ctx.ordered[ctx.listDepth] ?? 1
@@ -370,7 +373,23 @@ function renderList(node: List, ctx: AnsiContext): string {
       } else {
         marker = style('•', FG_CYAN)
       }
-      return `${indent}${marker} ${trimNonNbsp(renderBlocks(item.children, ctx))}\n`
+      const [first, ...rest] = item.children
+      let content = first ? renderBlocks([first], ctx) : ''
+      for (const block of rest) {
+        if (block.type === 'list') {
+          content += renderBlocks([block], ctx)
+          continue
+        }
+        // PART 11 §10h2: a continuation block sits at the item's content column.
+        const base = ctx.indentBase
+        ctx.indentBase = ctx.listDepth
+        try {
+          content += prefixLines(renderBlocks([block], ctx), '  '.repeat(ctx.listDepth - base))
+        } finally {
+          ctx.indentBase = base
+        }
+      }
+      return `${indent}${marker} ${trimNonNbsp(content)}\n`
     })
     .join('')
   ctx.listDepth--
