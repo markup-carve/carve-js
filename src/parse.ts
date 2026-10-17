@@ -25,7 +25,7 @@ import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
 import { resolveSpanGrid } from './table-spans.js'
-import { delimitedTable } from './delimited-table.js'
+import { delimitedTable, setDelimitedPayloadLines } from './delimited-table.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -11337,6 +11337,7 @@ class ParseSession {
     const label = labelRaw ? labelRaw.slice(1, -1) : undefined
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
+    const payloadPositions: { offset: number; line: number; column: number; text: string }[] = []
     let lastPayloadLineIndex = -1
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
@@ -11355,7 +11356,17 @@ class ParseSession {
       // Below-column payload carries host alignment, not code indentation.
       const body = folded ? stripLazyFrame(ln).replace(/^[ \t]+/, '') : stripLazyFrame(ln)
       // Strip the common indent of the opening fence (Djot rule)
-      lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
+      const payload = body.slice(Math.min(indent, leadingWhitespace(body)))
+      lines.push(payload)
+      if (lexer.hasDocumentOffsets && ln.endsWith(payload)) {
+        const prefixWidth = [...ln.slice(0, ln.length - payload.length)].length
+        payloadPositions.push({
+          offset: lexer.lineOffset(lastPayloadLineIndex) + prefixWidth,
+          line: lexer.lineNumber(lastPayloadLineIndex),
+          column: lexer.lineStartColumn(lastPayloadLineIndex) + prefixWidth,
+          text: payload,
+        })
+      }
     }
     const fenceEndIndex = lexer.pos
     // CARVE-P12-064: `content` is the payload's LITERAL text. Every line carries
@@ -11367,6 +11378,9 @@ class ParseSession {
       lastPayloadLineIndex < 0 ||
       lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
     const cb: CodeBlock = { type: 'code_block', content: codeContent(lines, terminated) }
+    if ((lang === 'csv' || lang === 'tsv') && payloadPositions.length === lines.length) {
+      setDelimitedPayloadLines(cb, payloadPositions)
+    }
     if (lang) cb.lang = lang
     if (header !== undefined) cb.header = header
     if (label !== undefined) cb.label = label

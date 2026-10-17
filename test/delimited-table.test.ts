@@ -5,6 +5,21 @@ const withoutSourceLocations = (value: unknown): unknown => JSON.parse(JSON.stri
   key === 'pos' || key === 'srcByteLength' ? undefined : entry))
 
 describe('delimited table fences', () => {
+  it('places source-backed CSV rows, fields, and text', () => {
+    const source = '{table}\n```csv\nα,"b,c"\n"d\ne",f\n```\n'
+    const table = parse(source, { positions: true }).children[0]
+    expect(table?.type).toBe('table')
+    if (table?.type !== 'table') return
+    const slice = (pos: typeof table.pos): string | undefined => pos?.startOffset !== undefined && pos.endOffset !== undefined
+      ? [...source].slice(pos.startOffset, pos.endOffset).join('') : undefined
+    expect(slice(table.rows[0]?.pos)).toBe('α,"b,c"')
+    expect(slice(table.rows[0]?.cells[0]?.pos)).toBe('α')
+    expect(slice(table.rows[0]?.cells[1]?.pos)).toBe('"b,c"')
+    expect(slice(table.rows[0]?.cells[1]?.children?.[0]?.pos)).toBe('b,c')
+    expect(slice(table.rows[1]?.pos)).toBe('"d\ne",f')
+    expect(slice(table.rows[1]?.cells[0]?.children?.[0]?.pos)).toBe('d\ne')
+  })
+
   it('renders CSV as an ordinary captioned table and keeps the source form', () => {
     const source = '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n'
     expect(parse(source).children[0]?.type).toBe('table')

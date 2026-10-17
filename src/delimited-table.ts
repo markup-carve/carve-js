@@ -1,12 +1,22 @@
-import type { Attrs, CodeBlock, Table, TableCell, TableRow } from './ast.js'
+import type { Attrs, CodeBlock, Position, Table, TableCell, TableRow } from './ast.js'
 
 const sourceRecordWidths = new WeakMap<Table, number[]>()
+interface PayloadLine { offset: number; line: number; column: number; text: string }
+const payloadLines = new WeakMap<CodeBlock, PayloadLine[]>()
+
+export function setDelimitedPayloadLines(code: CodeBlock, lines: PayloadLine[]): void {
+  payloadLines.set(code, lines)
+}
 
 export function delimitedRecordWidths(table: Table): readonly number[] | undefined {
   return sourceRecordWidths.get(table)
 }
 
-export function parseDelimitedRows(source: string, separator: ',' | '\t'): string[][] | null {
+export function parseDelimitedRows(
+  source: string, separator: ',' | '\t',
+  onField?: (start: number, end: number, quoted: boolean, escaped: boolean) => void,
+  onRow?: (start: number, end: number) => void,
+): string[][] | null {
   if (source === '') return []
   const rows: string[][] = []
   let row: string[] = []
@@ -14,17 +24,27 @@ export function parseDelimitedRows(source: string, separator: ',' | '\t'): strin
   let quoted = false
   let closed = false
   let atStart = true
-  const finishField = (): void => {
+  let fieldStart = 0
+  let rowStart = 0
+  let wasQuoted = false
+  let escaped = false
+  const finishField = (end: number): void => {
     row.push(field)
+    onField?.(fieldStart, end, wasQuoted, escaped)
     field = ''
     quoted = false
     closed = false
     atStart = true
+    fieldStart = end + 1
+    wasQuoted = false
+    escaped = false
   }
-  const finishRow = (): void => {
-    finishField()
+  const finishRow = (end: number): void => {
+    finishField(end)
     rows.push(row)
+    onRow?.(rowStart, end)
     row = []
+    rowStart = end + 1
   }
   for (let i = 0; i < source.length; i++) {
     const ch = source[i]
@@ -32,6 +52,7 @@ export function parseDelimitedRows(source: string, separator: ',' | '\t'): strin
       if (ch === '"') {
         if (source[i + 1] === '"') {
           field += '"'
+          escaped = true
           i++
         } else {
           quoted = false
@@ -40,12 +61,13 @@ export function parseDelimitedRows(source: string, separator: ',' | '\t'): strin
       } else field += ch
       continue
     }
-    if (ch === separator) finishField()
-    else if (ch === '\n') finishRow()
+    if (ch === separator) finishField(i)
+    else if (ch === '\n') finishRow(i)
     else if (ch === '"') {
       if (!atStart || closed) return null
       quoted = true
       atStart = false
+      wasQuoted = true
     } else {
       if (closed) return null
       field += ch
@@ -53,7 +75,7 @@ export function parseDelimitedRows(source: string, separator: ',' | '\t'): strin
     }
   }
   if (quoted) return null
-  if (source.at(-1) !== '\n') finishRow()
+  if (source.at(-1) !== '\n') finishRow(source.length)
   return rows
 }
 
@@ -67,22 +89,64 @@ function rowCount(raw: string | undefined): number | undefined {
 
 export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   if (code.lang !== 'csv' && code.lang !== 'tsv') return null
-  const data = parseDelimitedRows(code.content, code.lang === 'csv' ? ',' : '\t')
+  const fieldRanges: { start: number; end: number; textStart: number; textEnd: number; textPlaceable: boolean }[][] = []
+  const rowRanges: { start: number; end: number }[] = []
+  let fields: (typeof fieldRanges)[number] = []
+  const data = parseDelimitedRows(
+    code.content, code.lang === 'csv' ? ',' : '\t',
+    (start, end, quoted, escaped) => fields.push({
+      start, end, textStart: start + Number(quoted), textEnd: end - Number(quoted),
+      textPlaceable: !escaped,
+    }),
+    (start, end) => { fieldRanges.push(fields); fields = []; rowRanges.push({ start, end }) },
+  )
   if (data === null) return null
+  const lines = payloadLines.get(code)
+  const point = (index: number): { line: number; column: number; offset: number } | undefined => {
+    if (!lines) return undefined
+    let cursor = 0
+    for (const line of lines) {
+      const end = cursor + line.text.length
+      if (index <= end) {
+        const prefix = line.text.slice(0, index - cursor)
+        const width = [...prefix].length
+        return { line: line.line, column: line.column + width, offset: line.offset + width }
+      }
+      cursor = end + 1
+    }
+    return undefined
+  }
+  const position = (start: number, end: number): Position | undefined => {
+    const a = point(start)
+    const b = point(end)
+    return a && b ? {
+      startLine: a.line, endLine: b.line,
+      startColumn: a.column, endColumn: b.column,
+      startOffset: a.offset, endOffset: b.offset,
+    } : undefined
+  }
   const width = data.reduce((max, row) => Math.max(max, row.length), 0)
   const declared = attrs.keyValues?.['header-rows']
   const footDeclared = attrs.keyValues?.['footer-rows']
   const footRows = rowCount(footDeclared) ?? 0
   const defaultHeaders = Math.min(1, Math.max(0, data.length - footRows))
   const headerRows = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
-  const rows: TableRow[] = data.map((row, index) => ({
-    type: 'table_row',
-    cells: Array.from({ length: width }, (_, column): TableCell => ({
-      type: 'table_cell',
-      header: index < headerRows,
-      children: [{ type: 'text', value: row[column] ?? '' }],
-    })),
-  }))
+  const rows: TableRow[] = data.map((row, index) => {
+    const rowRange = rowRanges[index]
+    const rowPos = rowRange ? position(rowRange.start, rowRange.end) : undefined
+    return { type: 'table_row',
+    ...(rowPos ? { pos: rowPos } : {}),
+    cells: Array.from({ length: width }, (_, column): TableCell => {
+      const range = fieldRanges[index]?.[column]
+      const textPos = range?.textPlaceable ? position(range.textStart, range.textEnd) : undefined
+      const cellPos = range ? position(range.start, range.end) : undefined
+      return {
+        type: 'table_cell', header: index < headerRows,
+        children: [{ type: 'text', value: row[column] ?? '', ...(textPos ? { pos: textPos } : {}) }],
+        ...(cellPos ? { pos: cellPos } : {}),
+      }
+    }),
+  }})
   const keyValues = { ...attrs.keyValues }
   delete keyValues.table
   const tableAttrs: Attrs = { ...attrs, keyValues }
