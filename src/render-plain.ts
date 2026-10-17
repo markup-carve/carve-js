@@ -71,6 +71,7 @@ function renderPass(
     options: opts,
     smartTypography: normalizeSmartTypography(opts.smartTypography),
     listDepth: 0,
+    indentBase: 0,
     blockDepth: 0,
     inlineDepth: 0,
     // This target expands a crossref label exactly as the other three do, so it
@@ -95,6 +96,8 @@ interface PlainContext {
   options: PlainTextRenderOptions
   smartTypography: SmartTypographyOption
   listDepth: number
+  /** List depth whose indentation an enclosing continuation-block prefix already wrote (PART 11 §10h2). */
+  indentBase: number
   blockDepth: number
   inlineDepth: number
   /** Per-render derived-text expansion budget (DoS guard). */
@@ -228,19 +231,40 @@ function renderList(node: List, ctx: PlainContext): string {
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
-  const indent = '  '.repeat(ctx.listDepth - 1)
+  const indent = '  '.repeat(ctx.listDepth - 1 - ctx.indentBase)
+  const column = '  '.repeat(ctx.listDepth - ctx.indentBase)
   for (const item of node.items) {
     out += indent + (node.ordered ? `${counter}. ` : '- ')
     counter++
-    let content = trimNonNbsp(renderBlocks(item.children, ctx))
-    if (node.tight) {
-      const nestedIndent = '  '.repeat(ctx.listDepth)
-      content = content.replace(new RegExp(`\\n\\n(?=${nestedIndent}(?:-|\\d+[.)]) )`, 'g'), '\n')
+    const [first, ...rest] = item.children
+    let content = first ? renderBlocks([first], ctx) : ''
+    for (const block of rest) {
+      if (block.type === 'list') {
+        // A tight item keeps its sublist directly under the line above it.
+        if (node.tight && content.endsWith('\n\n')) content = content.slice(0, -1)
+        content += renderBlocks([block], ctx)
+        continue
+      }
+      // PART 11 §10h2: a continuation block sits at the item's content column.
+      const base = ctx.indentBase
+      ctx.indentBase = ctx.listDepth
+      try {
+        content += prefixNonEmptyLines(renderBlocks([block], ctx), column)
+      } finally {
+        ctx.indentBase = base
+      }
     }
-    out += `${content}\n`
+    out += `${trimNonNbsp(content)}\n`
   }
   ctx.listDepth--
   return `${out}\n`
+}
+
+function prefixNonEmptyLines(content: string, prefix: string): string {
+  return content
+    .split('\n')
+    .map((line) => (line === '' ? line : `${prefix}${line}`))
+    .join('\n')
 }
 
 function renderDefinitionList(items: DefinitionItem[], ctx: PlainContext, trailingBlank: boolean): string {
