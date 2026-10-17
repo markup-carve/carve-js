@@ -87,4 +87,14 @@ describe('delimited table fences', () => {
     expect(rules('{table}\n``` csv\na,b\n1,2,3\n```\n')).toContain('delimited-table-wide-row')
     expect(rules('{table}\n```csv\na,b\n1,2\n`````\n^ x,y,z\n')).toEqual([])
   })
+
+  it('keeps repeated blank records and trailing field spaces through formatting', () => {
+    for (const source of [
+      '{table}\n```csv\na\n\n\nb\n```\n',
+      '{table}\n```csv\na,b \n```\n',
+      '{table}\n```tsv\na\tb\t\n```\n',
+    ]) {
+      expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    }
+  })
 })

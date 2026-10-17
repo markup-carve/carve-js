@@ -3379,7 +3379,7 @@ class CarveRenderSession {
       const keyValues = { ...(attrs?.keyValues ?? {}), table: '' }
       const sourceAttrs = renderBlockAttrs({ ...(attrs ?? {}), keyValues })
       const fence = safeFence(delimited, 3)
-      const body = `${fence}${node.sourceFormat}\n${delimited}${delimited === '' ? '' : '\n'}${fence}`
+      const body = `${fence}${node.sourceFormat}\n${this.protectVerbatim(delimited)}${delimited === '' ? '' : '\n'}${fence}`
       return `${sourceAttrs}\n${body}${node.caption === undefined ? '' : this.captionLine(node.caption, ctx)}`
     }
     const attrs = renderBlockAttrs(tableSourceAttrs(node))
