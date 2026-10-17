@@ -117,8 +117,8 @@ export function delimitedSource(table: Table): string | null {
       if (value.includes('\r')) return null
       fields.push(quote(value))
     }
-    lines.push(fields.join(separator))
+    const line = fields.join(separator)
+    lines.push(line === '' ? '""' : line)
   }
-  const source = lines.join('\n')
-  return source === '' && lines.length > 0 ? '""' : source
+  return lines.join('\n')
 }

@@ -916,7 +916,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
           if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], cellCtx))
           return trimNonNbsp(renderCellBlocks(cell.blocks, cellCtx))
         }),
-      )
+      ).replace(/[\r\n]/g, ' ')
     })
     const rendered = `| ${cells.join(' | ')} |`
     // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
