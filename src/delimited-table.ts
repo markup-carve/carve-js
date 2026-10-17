@@ -133,20 +133,23 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   const headerRows = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
   const rows: TableRow[] = data.map((row, index) => {
     const rowRange = rowRanges[index]
-    const rowPos = rowRange ? position(rowRange.start, rowRange.end) : undefined
-    return { type: 'table_row',
-    ...(rowPos ? { pos: rowPos } : {}),
-    cells: Array.from({ length: width }, (_, column): TableCell => {
-      const range = fieldRanges[index]?.[column]
-      const textPos = range?.textPlaceable ? position(range.textStart, range.textEnd) : undefined
-      const cellPos = range ? position(range.start, range.end) : undefined
-      return {
-        type: 'table_cell', header: index < headerRows,
-        children: [{ type: 'text', value: row[column] ?? '', ...(textPos ? { pos: textPos } : {}) }],
-        ...(cellPos ? { pos: cellPos } : {}),
-      }
-    }),
-  }})
+    const emptyRecord = rowRange !== undefined && rowRange.start === rowRange.end
+    const rowPos = rowRange && !emptyRecord ? position(rowRange.start, rowRange.end) : undefined
+    return {
+      type: 'table_row',
+      ...(rowPos ? { pos: rowPos } : {}),
+      cells: Array.from({ length: width }, (_, column): TableCell => {
+        const range = fieldRanges[index]?.[column]
+        const textPos = !emptyRecord && range?.textPlaceable ? position(range.textStart, range.textEnd) : undefined
+        const cellPos = !emptyRecord && range ? position(range.start, range.end) : undefined
+        return {
+          type: 'table_cell', header: index < headerRows,
+          children: [{ type: 'text', value: row[column] ?? '', ...(textPos ? { pos: textPos } : {}) }],
+          ...(cellPos ? { pos: cellPos } : {}),
+        }
+      }),
+    }
+  })
   const keyValues = { ...attrs.keyValues }
   delete keyValues.table
   const tableAttrs: Attrs = { ...attrs, keyValues }

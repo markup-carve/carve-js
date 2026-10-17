@@ -20,6 +20,15 @@ describe('delimited table fences', () => {
     expect(slice(table.rows[1]?.cells[0]?.children?.[0]?.pos)).toBe('d\ne')
   })
 
+  it('does not place an empty CSV record on its line terminator', () => {
+    const table = parse('{table}\n```csv\na\n\n```\n', { positions: true }).children[0]
+    expect(table?.type).toBe('table')
+    if (table?.type !== 'table') return
+    expect(table.rows[1]?.pos).toBeUndefined()
+    expect(table.rows[1]?.cells[0]?.pos).toBeUndefined()
+    expect(table.rows[1]?.cells[0]?.children?.[0]?.pos).toBeUndefined()
+  })
+
   it('renders CSV as an ordinary captioned table and keeps the source form', () => {
     const source = '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n'
     expect(parse(source).children[0]?.type).toBe('table')
