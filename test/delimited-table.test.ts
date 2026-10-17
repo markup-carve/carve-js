@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, parse, renderCarve } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, lintCarve, parse, renderCarve } from '../src/index.js'
 
 describe('delimited table fences', () => {
   it('renders CSV as an ordinary captioned table and keeps the source form', () => {
@@ -58,6 +58,30 @@ describe('delimited table fences', () => {
 
   it('keeps derived header metadata when body rows are declared', () => {
     const source = '{table body-rows=1,1}\n```csv\nh\na\nb\n```\n'
+    const table = parse(source).children[0]
+    expect(table?.attrs?.keyValues?.['header-rows']).toBeUndefined()
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
+  it('keeps the default header with an invalid footer count', () => {
+    const source = '{table footer-rows=x}\n```csv\nh\na\n```\n'
+    expect(carveToHtml(source)).toContain('<th scope="col">h</th>')
+  })
+
+  it('keeps a bare footer count and the caption span', () => {
+    const source = '{table footer-rows}\n```csv\nh\nfoot\n```\n^ Caption\n'
+    const table = parse(source, { positions: true }).children[0]
+    expect(table?.type).toBe('table')
+    expect(table?.pos?.endLine).toBe(6)
+    expect(carveToCarve(source)).toContain('```csv')
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
+  it('reports malformed quotes and records wider than the first', () => {
+    const rules = (source: string): string[] => lintCarve(source)
+      .map(warning => warning.rule).filter(rule => rule.startsWith('delimited-table-'))
+    expect(rules('{table}\n```csv\n"bad\n```\n')).toContain('delimited-table-malformed')
+    expect(rules('{table}\n```csv\na,b\n1\n2,3,4\n```\n')).toContain('delimited-table-wide-row')
+    expect(rules('{table}\n```csv\na,b\n1,2\n```\n')).toEqual([])
   })
 })

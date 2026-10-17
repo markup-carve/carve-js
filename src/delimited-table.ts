@@ -51,17 +51,24 @@ export function parseDelimitedRows(source: string, separator: ',' | '\t'): strin
   return rows
 }
 
+function rowCount(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  if (raw.trim() === '') return 1
+  if (!/^\d+$/.test(raw.trim())) return undefined
+  const count = Number(raw.trim())
+  return Number.isSafeInteger(count) ? count : undefined
+}
+
 export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   if (code.lang !== 'csv' && code.lang !== 'tsv') return null
   const data = parseDelimitedRows(code.content, code.lang === 'csv' ? ',' : '\t')
   if (data === null) return null
-  const width = Math.max(0, ...data.map(row => row.length))
+  const width = data.reduce((max, row) => Math.max(max, row.length), 0)
   const declared = attrs.keyValues?.['header-rows']
   const footDeclared = attrs.keyValues?.['footer-rows']
-  const footRows = footDeclared === undefined ? 0 : footDeclared === '' ? 1 : Number(footDeclared)
-  const headerRows = declared === undefined
-    ? Math.min(1, Math.max(0, data.length - footRows))
-    : declared === '' ? 1 : Number(declared)
+  const footRows = rowCount(footDeclared) ?? 0
+  const defaultHeaders = Math.min(1, Math.max(0, data.length - footRows))
+  const headerRows = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
   const rows: TableRow[] = data.map((row, index) => ({
     type: 'table_row',
     cells: Array.from({ length: width }, (_, column): TableCell => ({
@@ -74,17 +81,18 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   delete keyValues.table
   const tableAttrs: Attrs = { ...attrs, keyValues }
   if (attrs.order) tableAttrs.order = attrs.order.filter(key => key !== 'table')
-  return { type: 'table', sourceFormat: code.lang, rows, attrs: tableAttrs, ...(code.pos ? { pos: code.pos } : {}) }
+  const hasAttrs = tableAttrs.id !== undefined || (tableAttrs.classes?.length ?? 0) > 0 || Object.keys(keyValues).length > 0
+  return { type: 'table', sourceFormat: code.lang, rows,
+    ...(hasAttrs ? { attrs: tableAttrs } : {}), ...(code.pos ? { pos: code.pos } : {}) }
 }
 
 export function delimitedSource(table: Table): string | null {
   const separator = table.sourceFormat === 'csv' ? ',' : table.sourceFormat === 'tsv' ? '\t' : null
   if (!separator) return null
   const declared = table.attrs?.keyValues?.['header-rows']
-  const footer = Number(table.attrs?.keyValues?.['footer-rows'] ?? 0)
-  const expectedHeaders = declared === undefined
-    ? Math.min(1, Math.max(0, table.rows.length - (Number.isFinite(footer) ? footer : 0)))
-    : declared === '' ? 1 : Number(declared)
+  const footer = rowCount(table.attrs?.keyValues?.['footer-rows']) ?? 0
+  const defaultHeaders = Math.min(1, Math.max(0, table.rows.length - footer))
+  const expectedHeaders = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
   if (!Number.isInteger(expectedHeaders) || expectedHeaders < 0) return null
   const quote = (value: string): string =>
     value.includes(separator) || value.includes('"') || value.includes('\n')
@@ -96,7 +104,9 @@ export function delimitedSource(table: Table): string | null {
     for (const cell of row.cells) {
       if (cell.span || cell.blocks || cell.attrs || cell.align || cell.valign ||
           cell.header !== (rowIndex < expectedHeaders) || cell.children?.some(child => child.type !== 'text')) return null
-      fields.push(quote(cell.children?.map(child => child.type === 'text' ? child.value : '').join('') ?? ''))
+      const value = cell.children?.map(child => child.type === 'text' ? child.value : '').join('') ?? ''
+      if (value.includes('\r')) return null
+      fields.push(quote(value))
     }
     lines.push(fields.join(separator))
   }

@@ -2260,7 +2260,6 @@ function deriveTableMetadata(table: Table): void {
     ['footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols'].some(key => table.attrs?.keyValues?.[key] !== undefined)
     ? { ...table.attrs, keyValues: { ...(table.attrs?.keyValues ?? {}), 'header-rows': String(table.rows.filter((row) => row.cells[0]?.header).length) } }
     : table.attrs
-  if (attrs !== table.attrs && attrs) table.attrs = attrs
   const rowGroups = tableRowGroupsFromAttrs(attrs, table.rows.length)
   if (rowGroups) table.rowGroups = rowGroups
 }
@@ -11037,7 +11036,10 @@ class ParseSession {
         if (candidate && node.attrs?.keyValues?.table === '') {
           const table = delimitedTable(candidate, node.attrs)
           if (table) {
-            if (node.type === 'figure') table.caption = node.caption
+            if (node.type === 'figure') {
+              table.caption = node.caption
+              if (node.pos) table.pos = node.pos
+            }
             node = table
           }
         }

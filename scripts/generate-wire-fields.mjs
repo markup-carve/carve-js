@@ -19,6 +19,12 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function wireFieldsSource(schema) {
+  // The CSV/TSV table draft adds this field before the coordinated spec pin.
+  // Once the pin includes it, the overlay has no effect.
+  if (schema.$defs?.table?.properties?.sourceFormat === undefined) {
+    schema = structuredClone(schema);
+    schema.$defs.table.properties.sourceFormat = { enum: ['csv', 'tsv'] };
+  }
   const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
