@@ -14277,6 +14277,7 @@ class ParseSession {
       let markerNoteClaimChecked = false
       let markerNoteLeft = false
       let noteBodyLast = false
+      let markerNoteItemParagraphOpen = false
       let noteInlineFenceOpen = false
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
@@ -14382,6 +14383,7 @@ class ParseSession {
         if (resumesMarkerDescriptionParagraph) lazyState.lazyFoldable = true
         if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
         if (isBlankLine(l)) {
+          markerNoteItemParagraphOpen = false
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
           pendingBlankTexts.push(l)
@@ -14505,7 +14507,7 @@ class ParseSession {
             if (leadingWhitespace(text) === 0 && claim.lazyFoldable && !claim.inFootnoteBody &&
                 !opensCodeFence(text) && !isListMarkerLine(text) && !definition) definitionClaim = false
           }
-          if (definitionClaim && !commentFenceTail && !fenceBoundaryTail && (!claim.lazyFoldable || claimLines.every(text => isBlankLine(text) ||
+          if (definitionClaim && !markerNoteItemParagraphOpen && !commentFenceTail && !fenceBoundaryTail && (!claim.lazyFoldable || claimLines.every(text => isBlankLine(text) ||
               (leadingWhitespace(text) > 0 && !lineOpensItemBlock(text.trimStart()))))) break
         }
         // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
@@ -14576,6 +14578,7 @@ class ParseSession {
           // quote-lazy MARKER line never reaches the content-column arm, not even
           // inside an open fence, where the gate above hands the line back.
           !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
+          markerNoteItemParagraphOpen = false
           let strippedPrefix: number | undefined
           const placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
           if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null && RE_FOOTNOTE_DEF.test(placed.trimStart()))
@@ -14945,6 +14948,12 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (markerNoteItem && indentColumns(l, markerNoteFloor) < markerNoteFloor &&
+              RE_CAPTION.test(trackedContent.trimStart()) && lazyState.opaque === null) {
+            lazyState.inFootnoteBody = false
+            lazyState.lazyFoldable = true
+            markerNoteItemParagraphOpen = true
+          }
           if (isMarker && lazyState.literalColon === undefined &&
               colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
             lazyState.lazyFoldable = false
@@ -15016,7 +15025,7 @@ class ParseSession {
             commentFenceTail || fenceBoundaryTail ||
             // An ancestor already admitted this follower after the invisible comment.
             (lazyState.invisibleAtColumn && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-              RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()))) && (!afterNoteBody || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+              RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()))) && (!afterNoteBody || markerNoteItemParagraphOpen || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
             (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
             // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
@@ -15074,6 +15083,7 @@ class ParseSession {
           if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
               lazyState.opaque === null && !quoteLazyFramed) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
+            if (markerNoteItem) markerNoteItemParagraphOpen = true
           } else if (indentColumns(l, contentCol) < contentCol && lazyState.opaque === null &&
               opensCodeFence(l.replace(/^[ \t]+/, '')) && followsBelowColumnComment()) {
             // R3285: a comment below the column retains the item, and a valid
