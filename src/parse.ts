@@ -11437,6 +11437,7 @@ class ParseSession {
     }
     if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
+    const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
     let termTextContinuation = false
     const belowColumnCommentFence = new Set<number>()
     let commentFenceUntil = 0
@@ -11574,7 +11575,7 @@ class ParseSession {
       } else if (
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
         !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
-        (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
+        (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
         (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
           !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
       ) {
