@@ -6238,6 +6238,13 @@ function trackItemLazyState(
   const run = authoredFenceWhitespace ?? facts?.whitespace
   // A tab opener reports its run in characters; ownership compares columns.
   const runColumns = authoredFenceColumns ?? run
+  if (state.inDefList === 'description' && state.descriptionHasTerm &&
+      run !== undefined && runColumns !== undefined && runColumns > 0 &&
+      RE_HEADING.test(content.slice(run))) {
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
   if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
       runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
       (colonBlockOpenerRun(content.slice(run!)) !== null || RE_BLOCKQUOTE.test(content.slice(run!)))) state.inDefList = false
@@ -7536,6 +7543,7 @@ function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
       continue
     }
     if (isBlankLine(next) || RE_CAPTION.test(next) ||
+        (leadingWhitespace(next) > 0 && isLinkDefLine(next.trimStart())) ||
         colonFenceShapeEndsLazyContinuation(next) ||
         startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
     demoteQuotedColonCandidates(state)
@@ -8471,7 +8479,8 @@ function rebaseOverindentedBlocks(
           else if (!blockQuoteParagraphOpen(quoted)) break
           // An unmarked opener at the run's own column interrupts the quote
           // and is a rebase group of its own, with its own payload and closer.
-          else if (leadingWhitespace(local) === 0 && (lineOpensItemBlock(local) || RE_CAPTION.test(local))) break
+          else if ((leadingWhitespace(local) === 0 && (lineOpensItemBlock(local) || RE_CAPTION.test(local))) ||
+            (leadingWhitespace(local) > 0 && isLinkDefLine(local.trimStart()))) break
           else trackBlockQuoteLazyState(local, quoted, () => true, () => true, undefined, undefined, false)
         }
         end = j
@@ -11428,6 +11437,7 @@ class ParseSession {
     }
     if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
+    const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
     let termTextContinuation = false
     const belowColumnCommentFence = new Set<number>()
     let commentFenceUntil = 0
@@ -11565,7 +11575,7 @@ class ParseSession {
       } else if (
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
         !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
-        (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
+        (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
         (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
           !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
       ) {
@@ -15061,7 +15071,9 @@ class ParseSession {
             ((lazyState.inDefList === 'term' &&
               (!isListMarkerLine(l) || (indentColumns(l, baseIndent + 1) > baseIndent &&
                 !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))) ||
-              deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
+              deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')) ||
+              // An unclosed `%%%` is a `%%` line (CARVE-P9-053).
+              isRetainableLineComment(lexer, l))
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
             // A retained marker under an open term stays text on reparse.
@@ -15192,12 +15204,22 @@ class ParseSession {
             if (commentFenceRun(nested[scanned]!)) opener = scanned
             scanned++
           }
-          // The nested item's parser hides a fence at its own content column.
-          if (opener >= 0 && nestedItemColumn === indentColumns(nested[opener]!)) continue
+          // A nested item or description hides a fence at its own body column.
+          const openerColumn = opener >= 0 ? indentColumns(nested[opener]!) : -1
+          let descriptionColumn: number | undefined
+          if (opener >= 0 && RE_DEFLIST_TERM.test(content)) {
+            for (let at = opener - 1; at >= 0; at--) {
+              const description = RE_DEFLIST_DEF.exec(nested[at]!)
+              if (description) {
+                descriptionColumn = deflistContentCol(description[1]!)
+                break
+              }
+            }
+          }
+          if (openerColumn === nestedItemColumn || openerColumn === descriptionColumn) continue
           nested[index] = LAZY_FRAME + stripLazyFrame(payload)
         }
       }
-
       // Preserve the existing extent of a fence-shaped descendant body span.
       // The parent tracker can leave its paragraph open after a child marker,
       // even though that child's body has already reached a fence run.
