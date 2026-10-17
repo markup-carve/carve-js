@@ -3376,7 +3376,7 @@ class CarveRenderSession {
     const delimited = delimitedSource(node)
     if (delimited !== null && node.sourceFormat) {
       const attrs = tableSourceAttrs(node)
-      const keyValues: Record<string, string> = { ...(attrs?.keyValues ?? {}), table: '' }
+      const keyValues: Record<string, string> = { ...(attrs?.keyValues ?? {}) }
       const groups = node.rowGroups
       const implicitHeader = Math.min(1, Math.max(0, node.rows.length - (groups?.footRows ?? 0)))
       const ordinaryBody = groups?.bodies.length === 0 || (groups?.bodies.length === 1 &&
@@ -3389,7 +3389,7 @@ class CarveRenderSession {
       const sourceAttrs = renderBlockAttrs({ ...(attrs ?? {}), keyValues })
       const fence = safeFence(delimited, 3)
       const body = `${fence}${node.sourceFormat}\n${this.protectVerbatim(delimited)}${delimited === '' ? '' : '\n'}${fence}`
-      return `${sourceAttrs}\n${body}${node.caption === undefined ? '' : this.captionLine(node.caption, ctx)}`
+      return `${sourceAttrs ? `${sourceAttrs}\n` : ''}{table}\n${body}${node.caption === undefined ? '' : this.captionLine(node.caption, ctx)}`
     }
     const attrs = renderBlockAttrs(tableSourceAttrs(node))
     const body = this.renderTable(node, ctx)

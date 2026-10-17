@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, lintCarve, parse, renderCarve } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, carveToMarkdown, fromAstJson, lintCarve, parse, renderCarve } from '../src/index.js'
+
+const withoutSourceLocations = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, entry) =>
+  key === 'pos' || key === 'srcByteLength' ? undefined : entry))
 
 describe('delimited table fences', () => {
   it('renders CSV as an ordinary captioned table and keeps the source form', () => {
@@ -10,7 +13,7 @@ describe('delimited table fences', () => {
     expect(html).toContain('>Pear, green</td>')
     expect(html).toContain('<th scope="col"')
     const canonical = carveToCarve(source)
-    expect(canonical).toContain('```csv')
+    expect(canonical).toBe('{aligns=left,right,right}\n{table}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n')
     expect(carveToHtml(canonical)).toBe(html)
   })
 
@@ -20,12 +23,14 @@ describe('delimited table fences', () => {
     expect(html).toContain('<td>^</td><td>&lt;x&gt;</td>')
     expect(html).not.toContain('<th')
     expect(carveToCarve(source)).toContain('```tsv')
-    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
+    expect(carveToCarve(source)).toBe('{header-rows=0}\n{table}\n```tsv\nA\tB\n^\t<x>\n```\n')
+    expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
   })
 
   it('retains a quoted newline in one CSV cell', () => {
     const source = '{table}\n```csv\nName,Note\nA,"one\ntwo"\n```\n'
     expect(carveToHtml(source)).toContain('<td>one\ntwo</td>')
+    expect(carveToMarkdown(source)).toContain('| A | one two |')
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
@@ -35,12 +40,12 @@ describe('delimited table fences', () => {
     expect(html).toContain('<thead>')
     expect(html).toContain('<tfoot>')
     expect(html).toContain('<th scope="col">Item</th>')
-    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
+    expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
   })
 
   it('uses no implicit header when the footer owns the only row', () => {
     const source = '{table footer-rows=1}\n```csv\nonly\n```\n'
-    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
+    expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
   })
 
   it('leaves unmarked and malformed fences as code', () => {
@@ -106,5 +111,6 @@ describe('delimited table fences', () => {
     ]) {
       expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
     }
+    expect(carveToCarve('{table}\n```csv\na\n\n```\n')).toContain('```csv\na\n""\n```')
   })
 })
