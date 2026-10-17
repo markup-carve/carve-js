@@ -17,6 +17,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - An included file whose bytes are not well-formed UTF-8 is refused as non-text instead of read with replacement characters. Re-encode such files as UTF-8. A custom resolver may return the raw bytes as `source` to get the same check (#3142, markup-carve/carve#3221).
 
 ### Fixes
+- CSV and TSV fenced tables now parse and render, keep each written record on one row, and carry source positions for rows, cells and text. Empty records have no invented spans (#3163, #3226, #3227, #3228, #3229, markup-carve/carve#3239).
+- Plain text and ANSI output write list continuation blocks at the item content column (#3225).
 - An emphasis or braced opener followed by a combining mark, spacing mark, variation selector or zero-width joiner is text, so a keycap emoji such as `*️⃣` keeps its star. The writer and every importer drop a span whose text starts with such a character and report `structure-unspellable` (#3134, #3141, #3153, #3149, #3146, #3150, markup-carve/carve#3209).
 - The combined bold-italic token `/*x*/` no longer opens after a letter, digit, `_` or `/`, or closes before a letter or digit, so `src/*test*/fixtures` keeps its slashes (#3151, #3154, markup-carve/carve#3217).
 - A lone surrogate in an input string becomes U+FFFD in the parser, in AST JSON ingest and in every importer, instead of reaching HTML output and heading ids (#3135, #3139, #3142, #3152, markup-carve/carve#3212).
