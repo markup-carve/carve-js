@@ -20,6 +20,7 @@ describe('delimited table fences', () => {
     expect(html).toContain('<td>^</td><td>&lt;x&gt;</td>')
     expect(html).not.toContain('<th')
     expect(carveToCarve(source)).toContain('```tsv')
+    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
   })
 
   it('retains a quoted newline in one CSV cell', () => {
@@ -34,6 +35,12 @@ describe('delimited table fences', () => {
     expect(html).toContain('<thead>')
     expect(html).toContain('<tfoot>')
     expect(html).toContain('<th scope="col">Item</th>')
+    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
+  })
+
+  it('uses no implicit header when the footer owns the only row', () => {
+    const source = '{table footer-rows=1}\n```csv\nonly\n```\n'
+    expect(carveToAstJson(carveToCarve(source))).toEqual(carveToAstJson(source))
   })
 
   it('leaves unmarked and malformed fences as code', () => {
