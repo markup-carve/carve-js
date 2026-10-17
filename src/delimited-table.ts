@@ -1,5 +1,11 @@
 import type { Attrs, CodeBlock, Table, TableCell, TableRow } from './ast.js'
 
+const sourceRecordWidths = new WeakMap<Table, number[]>()
+
+export function delimitedRecordWidths(table: Table): readonly number[] | undefined {
+  return sourceRecordWidths.get(table)
+}
+
 export function parseDelimitedRows(source: string, separator: ',' | '\t'): string[][] | null {
   if (source === '') return []
   const rows: string[][] = []
@@ -82,8 +88,10 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   const tableAttrs: Attrs = { ...attrs, keyValues }
   if (attrs.order) tableAttrs.order = attrs.order.filter(key => key !== 'table')
   const hasAttrs = tableAttrs.id !== undefined || (tableAttrs.classes?.length ?? 0) > 0 || Object.keys(keyValues).length > 0
-  return { type: 'table', sourceFormat: code.lang, rows,
+  const table: Table = { type: 'table', sourceFormat: code.lang, rows,
     ...(hasAttrs ? { attrs: tableAttrs } : {}), ...(code.pos ? { pos: code.pos } : {}) }
+  sourceRecordWidths.set(table, data.map(row => row.length))
+  return table
 }
 
 export function delimitedSource(table: Table): string | null {

@@ -68,7 +68,7 @@ import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
 import type { Attrs, BlockNode, CodeBlock, Document, Heading, Table } from './ast.js'
-import { parseDelimitedRows } from './delimited-table.js'
+import { delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
 import { inspectColonFences } from './colon-fences.js'
 import { resolveTableSpans } from './table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
@@ -534,19 +534,8 @@ export function lintCarve(
     if (node.type !== 'table') return
     const table = node as unknown as Table
     if (!table.sourceFormat || !table.pos) return
-    const segment = source.slice(toUtf16(table.pos.startOffset ?? 0), toUtf16(table.pos.endOffset ?? table.pos.startOffset ?? 0))
-      .replace(/\r\n?|\n/g, '\n')
-    const lines = segment.split('\n')
-    const opener = lines.findIndex(line => /^\s*([`~]{3,})(csv|tsv)(?:\s|$)/.test(line))
-    if (opener < 0) return
-    const body = lines.slice(opener + 1).join('\n')
-    const fence = lines[opener]!.trimStart().match(/^([`~]{3,})/)?.[1]
-    if (!fence) return
-    const close = body.split('\n').findIndex(line => line.trim() === fence)
-    if (close < 0) return
-    const payload = body.split('\n').slice(0, close).join('\n')
-    const records = parseDelimitedRows(payload === '' ? '' : `${payload}\n`, table.sourceFormat === 'csv' ? ',' : '\t')
-    if (!records?.length || !records.some(row => row.length > records[0]!.length)) return
+    const widths = delimitedRecordWidths(table)
+    if (!widths?.length || !widths.some(width => width > widths[0]!)) return
     out.push({ ...locate(table, toUtf16), rule: 'delimited-table-wide-row',
       message: 'A CSV/TSV record has more fields than the first record; the table keeps the extra columns.' })
   })

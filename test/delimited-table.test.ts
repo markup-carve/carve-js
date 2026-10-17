@@ -83,5 +83,8 @@ describe('delimited table fences', () => {
     expect(rules('{table}\n```csv\n"bad\n```\n')).toContain('delimited-table-malformed')
     expect(rules('{table}\n```csv\na,b\n1\n2,3,4\n```\n')).toContain('delimited-table-wide-row')
     expect(rules('{table}\n```csv\na,b\n1,2\n```\n')).toEqual([])
+    expect(rules('> {table}\n> ```csv\n> "x,y",b\n> 1,2,3\n> ```\n')).toContain('delimited-table-wide-row')
+    expect(rules('{table}\n``` csv\na,b\n1,2,3\n```\n')).toContain('delimited-table-wide-row')
+    expect(rules('{table}\n```csv\na,b\n1,2\n`````\n^ x,y,z\n')).toEqual([])
   })
 })
