@@ -14295,10 +14295,13 @@ class ParseSession {
           if (end !== undefined) {
             const before = { ...lazyState }
             const indent = indentColumns(l)
+            const opener = lexer.pos
             while (lexer.pos < end) {
               const line = lexer.peek()!
               takenBelowColumn.add(nested.length)
-              nested.push(sliceColumns(line, Math.min(indent, indentColumns(line)), true))
+              const stripped = sliceColumns(line, Math.min(indent, indentColumns(line)), true)
+              nested.push(lazyState.inDefList === 'term' && lexer.pos === opener
+                ? ' ' + stripped : stripped)
               nestedSourceLines.push(line)
               nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
               lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
@@ -15018,7 +15021,8 @@ class ParseSession {
             // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-              (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description'))) &&
+              (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description' ||
+                (opensCodeFence(l.trimStart()) && followsBelowColumnComment())))) &&
             (belowOpenDescription || (lw > baseIndent && lw < contentCol &&
               (lazyState.deepest?.lazyFoldable !== false || lazyState.inDefList === 'description' ||
                 lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
@@ -15064,6 +15068,7 @@ class ParseSession {
           const commentState = belowItemComment && lazyState.literalColon === undefined && (lazyState.deepest != null || lazyState.authoredColon?.column === 0) && lazyState.opaque === null ? {...lazyState} : undefined
           const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
             lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
+          const termComment = lazyState.inDefList === 'term' && isRetainableLineComment(lexer, l)
           let lazyLine = l
           // A caption line below the column reaches no host: it folds as text (§10 I7).
           if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
@@ -15123,6 +15128,7 @@ class ParseSession {
               isRetainableLineComment(lexer, l))
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
+            if (lazyState.inDefList === 'term' && isRetainableLineComment(lexer, l)) lazyLine = ' ' + lazyLine
             // A retained marker under an open term stays text on reparse.
             if ((lazyState.inDefList === 'term' && !deflistMarkerLine(l) && lineOpensBlock(lazyLine)) ||
                 (lazyState.inDefList === 'description' && isBlockAttributeLine(lazyLine))) lazyLine = LAZY_FRAME + lazyLine
@@ -15186,7 +15192,7 @@ class ParseSession {
             Object.assign(lazyState, belowDescendantComment.state)
             belowDescendantComment = undefined
           }
-          if (retainedComment || (lazyState.inDefList === 'description' && isRetainableLineComment(lexer, l))) {
+          if (retainedComment || termComment || (lazyState.inDefList === 'description' && isRetainableLineComment(lexer, l))) {
             retainCommentBoundary(lazyState)
           }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
