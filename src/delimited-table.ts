@@ -89,6 +89,7 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
 export function delimitedSource(table: Table): string | null {
   const separator = table.sourceFormat === 'csv' ? ',' : table.sourceFormat === 'tsv' ? '\t' : null
   if (!separator) return null
+  if (table.shortCaption || table.separatorWidths || table.rows.some(row => row.continuationLines)) return null
   const declared = table.attrs?.keyValues?.['header-rows']
   const footer = rowCount(table.attrs?.keyValues?.['footer-rows']) ?? 0
   const defaultHeaders = Math.min(1, Math.max(0, table.rows.length - footer))
@@ -102,7 +103,7 @@ export function delimitedSource(table: Table): string | null {
     if (row.attrs) return null
     const fields: string[] = []
     for (const cell of row.cells) {
-      if (cell.span || cell.blocks || cell.attrs || cell.align || cell.valign ||
+      if (cell.span || 'colspan' in cell || 'rowspan' in cell || cell.blocks || cell.attrs || cell.align || cell.valign ||
           cell.header !== (rowIndex < expectedHeaders) || cell.children?.some(child => child.type !== 'text')) return null
       const value = cell.children?.map(child => child.type === 'text' ? child.value : '').join('') ?? ''
       if (value.includes('\r')) return null
