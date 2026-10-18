@@ -9731,12 +9731,12 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
-  private attachedCaptionLines = new Set<number>()
+  private captionLineScopes: Set<number>[] = []
   private measuringAttachedBlock = false
 
   private recordAttachedCaption(lexer: Lexer, index: number): void {
     if (!this.probingLazyParagraph && !this.measuringAttachedBlock) {
-      this.attachedCaptionLines.add(lexer.lineNumber(index))
+      this.captionLineScopes.at(-1)?.add(lexer.lineNumber(index))
     }
   }
   // Cache successful lexical matches; container ownership is checked at each use.
@@ -9873,7 +9873,15 @@ class ParseSession {
     return {
       get inLinkLabel() { return session.linkLabelDepth > 0 },
       parseInlines: (t) => this.withMatcherRequest(() => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs)),
-      parseBlocks: (s) => this.withMatcherRequest(() => this.parseBlockSource(s, opts, lexer)),
+      parseBlocks: (s) => this.withMatcherRequest(() => {
+        const outerScopes = this.captionLineScopes
+        this.captionLineScopes = []
+        try {
+          return this.parseBlockSource(s, opts, lexer)
+        } finally {
+          this.captionLineScopes = outerScopes
+        }
+      }),
       linkDefs: lexer.linkDefs,
       abbrDefs: lexer.abbrDefs,
     }
@@ -15973,31 +15981,38 @@ class ParseSession {
         return sub
       }
       const carry: PendingAttrCarry = { attrs: null }
-      const children = this.parseBlocks(
-        mkSub([itemLead, ...leadLines], itemStartLineIndex, [
-          lexer.lineNumber(itemStartLineIndex),
-          ...nestedLineNumbers.slice(0, leadLines.length),
-        ]),
-        0,
-        blockLines.length > 0 ? carry : undefined,
-      )
-      if (blockLines.length > 0) {
-        children.push(
-          ...this.parseBlocks(
-            mkSub(
-              blockLines,
-              itemStartLineIndex + 1 + firstBlockIdx,
-              nestedLineNumbers.slice(firstBlockIdx),
-              firstBlockIdx,
-            ),
-            0,
-            carry,
-          ),
+      const captionLines = new Set<number>()
+      this.captionLineScopes.push(captionLines)
+      let children: BlockNode[] = []
+      try {
+        children = this.parseBlocks(
+          mkSub([itemLead, ...leadLines], itemStartLineIndex, [
+            lexer.lineNumber(itemStartLineIndex),
+            ...nestedLineNumbers.slice(0, leadLines.length),
+          ]),
+          0,
+          blockLines.length > 0 ? carry : undefined,
         )
+        if (blockLines.length > 0) {
+          children.push(
+            ...this.parseBlocks(
+              mkSub(
+                blockLines,
+                itemStartLineIndex + 1 + firstBlockIdx,
+                nestedLineNumbers.slice(firstBlockIdx),
+                firstBlockIdx,
+              ),
+              0,
+              carry,
+            ),
+          )
+        }
+      } finally {
+        this.captionLineScopes.pop()
       }
 
       if (captionAfterBlankLines.length > 0) {
-        if (captionAfterBlankLines.some(line => !this.attachedCaptionLines.has(line))) loose = true
+        if (captionAfterBlankLines.some(line => !captionLines.has(line))) loose = true
       }
 
       const item: ListItem = { type: 'list_item', children }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, parse } from '../src/index.js'
+import { carveToHtml, parse, type CarveExtension } from '../src/index.js'
 
 describe('caption inside a list item', () => {
   it('keeps the list tight with one blank before the caption', () => {
@@ -50,6 +50,41 @@ describe('caption inside a list item', () => {
     expect(list?.type).toBe('list')
     if (list?.type === 'list') expect(list.tight).toBe(false)
     expect(carveToHtml(input)).toContain('<p>^ cap</p>')
+  })
+
+  it('ignores captions in a declined extension parse', () => {
+    const extension: CarveExtension = {
+      name: 'caption-peek',
+      matchBlock(lines, start, ctx) {
+        if (lines[start] !== '@@peek') return null
+        ctx.parseBlocks('x\n\n| a |\n^ cap')
+        return null
+      },
+    }
+    const input = '@@peek\n\n- text\n\n  ^ cap\n- c\n'
+    const list = parse(input, { extensions: [extension] }).children[1]
+    expect(list?.type).toBe('list')
+    if (list?.type === 'list') expect(list.tight).toBe(false)
+    expect(carveToHtml(input, { extensions: [extension] })).toContain('<p>^ cap</p>')
+  })
+
+  it('keeps captions in an accepted extension parse', () => {
+    const extension: CarveExtension = {
+      name: 'caption-wrap',
+      matchBlock(lines, start, ctx) {
+        if (lines[start] !== '@@wrap') return null
+        const end = lines.indexOf('@@end', start + 1)
+        if (end < 0) return null
+        return {
+          node: { type: 'block_quote', children: ctx.parseBlocks(lines.slice(start + 1, end).join('\n')) },
+          linesConsumed: end - start + 1,
+        }
+      },
+    }
+    const input = '@@wrap\n- | a |\n\n  ^ cap\n- c\n@@end\n'
+    const html = carveToHtml(input, { extensions: [extension] })
+    expect(html).toContain('<caption>cap</caption>')
+    expect(html).toContain('<li>c</li>')
   })
 
   it.each([
