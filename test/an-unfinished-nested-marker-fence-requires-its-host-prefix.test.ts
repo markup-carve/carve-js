@@ -28,6 +28,21 @@ it('continues the outer-item paragraph after a three-level fence ends', () => {
   ].join('\n'))
 })
 
+it('does not lend a new outer-item fence the old nested fence claim', () => {
+  const source = ['- - ```', '  ```', 'tail'].join('\n')
+  expect(carveToHtml(source)).toBe([
+    '<ul>', '  <li>', '    <ul>', '      <li>',
+    '        <pre><code></code></pre>', '      </li>', '    </ul>',
+    '    <pre><code></code></pre>', '  </li>', '</ul>', '<p>tail</p>',
+  ].join('\n'))
+})
+
+it('continues the quoted outer-item paragraph after a nested fence', () => {
+  const source = ['> - - - ```', '>   tail', '> tail'].join('\n')
+  expect(carveToHtml(source)).toContain('      tail\ntail\n    </li>')
+  expect(carveToHtml(source)).not.toContain('<p>tail</p>')
+})
+
 it('keeps payload that supplies the enclosing item prefix', () => {
   const source = ['- - ```', '    x'].join('\n')
   expect(carveToHtml(source)).toContain('<pre><code>x</code></pre>')
@@ -39,7 +54,7 @@ it('keeps a terminated nested marker fence and its payload', () => {
   expect(carveToHtml(source)).toContain('</dl>\n<p>tail</p>')
 })
 
-it("keeps the outer body fence after - - ```", () => {
+it("ends the outer body fence at its host after - - ```", () => {
   const source = [
     "- - ```",
     "  ```",
@@ -53,13 +68,14 @@ it("keeps the outer body fence after - - ```", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - - ```", () => {
+it("ends the outer body fence at its host after - - - ```", () => {
   const source = [
     "- - - ```",
     "  ```",
@@ -77,9 +93,10 @@ it("keeps the outer body fence after - - - ```", () => {
     "        </ul>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -131,7 +148,7 @@ it("ends the deepest fence before middle item text with ```", () => {
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - ~~~", () => {
+it("ends the outer body fence at its host after - - ~~~", () => {
   const source = [
     "- - ~~~",
     "  ~~~",
@@ -145,13 +162,14 @@ it("keeps the outer body fence after - - ~~~", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - - ~~~", () => {
+it("ends the outer body fence at its host after - - - ~~~", () => {
   const source = [
     "- - - ~~~",
     "  ~~~",
@@ -169,9 +187,10 @@ it("keeps the outer body fence after - - - ~~~", () => {
     "        </ul>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -223,7 +242,7 @@ it("ends the deepest fence before middle item text with ~~~", () => {
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - ``` x", () => {
+it("ends the outer body fence at its host after - - ``` x", () => {
   const source = [
     "- - ``` x",
     "  ```",
@@ -237,13 +256,14 @@ it("keeps the outer body fence after - - ``` x", () => {
     "        <pre><code class=\"language-x\"></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - - ``` x", () => {
+it("ends the outer body fence at its host after - - - ``` x", () => {
   const source = [
     "- - - ``` x",
     "  ```",
@@ -261,9 +281,10 @@ it("keeps the outer body fence after - - - ``` x", () => {
     "        </ul>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -315,7 +336,7 @@ it("ends the deepest fence before middle item text with ``` x", () => {
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - ````", () => {
+it("ends the outer body fence at its host after - - ````", () => {
   const source = [
     "- - ````",
     "  ````",
@@ -329,13 +350,14 @@ it("keeps the outer body fence after - - ````", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 
-it("keeps the outer body fence after - - - ````", () => {
+it("ends the outer body fence at its host after - - - ````", () => {
   const source = [
     "- - - ````",
     "  ````",
@@ -353,9 +375,10 @@ it("keeps the outer body fence after - - - ````", () => {
     "        </ul>",
     "      </li>",
     "    </ul>",
-    "    <pre><code>tail</code></pre>",
+    "    <pre><code></code></pre>",
     "  </li>",
     "</ul>",
+    "<p>tail</p>",
   ].join('\n'))
 })
 

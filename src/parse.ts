@@ -15245,7 +15245,8 @@ class ParseSession {
           lazyState.opaque?.kind === 'code' &&
           pendingBlanks === 0 &&
           indentColumns(l, contentCol) < contentCol &&
-          (((descendantLeadFence !== null || descriptionMarkerFence) && leadFence === null && descendantOpaque === null) ||
+          // A prior nested marker fence grants no claim to a later fence in this item.
+          ((descriptionMarkerFence && leadFence === null && descendantOpaque === null) ||
             lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
         ) {
