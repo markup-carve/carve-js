@@ -43,6 +43,12 @@ it('continues the quoted outer-item paragraph after a nested fence', () => {
   expect(carveToHtml(source)).not.toContain('<p>tail</p>')
 })
 
+it('continues the outer-item paragraph through quote padding', () => {
+  const source = ['>  - - - ```', '>    tail', '>  tail'].join('\n')
+  expect(carveToHtml(source)).toContain('      tail\ntail\n    </li>')
+  expect(carveToHtml(source)).not.toContain('<p>tail</p>')
+})
+
 it('keeps payload that supplies the enclosing item prefix', () => {
   const source = ['- - ```', '    x'].join('\n')
   expect(carveToHtml(source)).toContain('<pre><code>x</code></pre>')
