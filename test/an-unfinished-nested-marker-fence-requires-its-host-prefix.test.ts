@@ -19,6 +19,15 @@ it('leaves an unprefixed tail outside a nested list marker fence', () => {
   ].join('\n'))
 })
 
+it('continues the outer-item paragraph after a three-level fence ends', () => {
+  const source = ['- - - ```', '  tail', 'tail'].join('\n')
+  expect(carveToHtml(source)).toBe([
+    '<ul>', '  <li>', '    <ul>', '      <li>', '        <ul>', '          <li>',
+    '            <pre><code></code></pre>', '          </li>', '        </ul>',
+    '      </li>', '    </ul>', '    tail', 'tail', '  </li>', '</ul>',
+  ].join('\n'))
+})
+
 it('keeps payload that supplies the enclosing item prefix', () => {
   const source = ['- - ```', '    x'].join('\n')
   expect(carveToHtml(source)).toContain('<pre><code>x</code></pre>')
