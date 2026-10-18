@@ -9431,6 +9431,7 @@ export function parseContainerLabelInlines(label: string): InlineNode[] {
 }
 
 interface InlineSource {
+  rejectInitialComment?: boolean
   baseOffset: number
   startLine: number
   startColumn: number
@@ -16473,6 +16474,18 @@ class ParseSession {
             }
           })
         : undefined
+    let rejectInitialComment = false
+    if (text.startsWith('{%') && !lines[0]!.includes('%}') && lines.length > 1) {
+      const openerColumn = lexer.lineStartColumn(startLineIndex) + firstLead
+      for (let i = 1; i < lines.length; i++) {
+        const lead = lines[i]!.match(/^[ \t]+/)?.[0].length ?? 0
+        if (lexer.lineStartColumn(startLineIndex + i) + lead <= openerColumn) {
+          rejectInitialComment = true
+          break
+        }
+        if (lines[i]!.includes('%}')) break
+      }
+    }
     const paragraphNode: Paragraph = {
       type: 'paragraph',
       children: this.skipParagraphInlines && !this.inMatcherRequest ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
@@ -16480,6 +16493,7 @@ class ParseSession {
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),
         startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
+        rejectInitialComment,
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
@@ -17348,7 +17362,7 @@ class ParseSession {
       // an opener in the content is ordinary text, and an opener with no closer
       // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
       // text and scanning resumes after the closer.
-      if (c === '{' && text[i + 1] === '%' && !extendsGrapheme(text, i + 2)) {
+      if (c === '{' && text[i + 1] === '%' && !(i === 0 && source.rejectInitialComment) && !extendsGrapheme(text, i + 2)) {
         const close = this.delimitedCommentClose(text, i + 2)
         if (close !== -1) {
           flush()

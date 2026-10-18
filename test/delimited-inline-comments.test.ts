@@ -42,6 +42,13 @@ describe('delimited inline comments (PART 9 §21a)', () => {
     )
   })
 
+  it('keeps a block-position run literal when a continuation is unindented', () => {
+    expect(carveToHtml('> {%\n> c\n> %}').trim()).toBe('<blockquote><p>{%\nc\n%}</p></blockquote>')
+    expect(carveToHtml('{%\n*x*\n%}').trim()).toBe('<p>{%\n<strong>x</strong>\n%}</p>')
+    expect(carveToHtml('{%\n  c\n  %}').trim()).toBe('<p></p>')
+    expect(carveToHtml('> {%\n>   c\n>   %}').trim()).toBe('<blockquote><p></p></blockquote>')
+  })
+
   it('honors an escaped opener', () => {
     expect(carveToHtml('a \\{% not a comment %} b').trim()).toBe(
       '<p>a {% not a comment %} b</p>',
