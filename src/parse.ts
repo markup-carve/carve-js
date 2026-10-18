@@ -4737,6 +4737,8 @@ function verbatimOpener(line: string): string | null {
   return null
 }
 
+// Recognition is separate from interruption: a list marker recognized here
+// can still fold into a paragraph under PART 9 §10 I2.
 function lineOpensBlock(line: string): boolean {
   const first = line.charCodeAt(0)
   switch (first) {
@@ -4760,15 +4762,13 @@ function lineOpensBlock(line: string): boolean {
     case 95:
       return RE_HR.test(line)
     case 45: case 42:
-      return RE_HR.test(line) || RE_TASK.test(line) || RE_UNORDERED.test(line) ||
-        extractItemAttr(line) !== null
+      return RE_HR.test(line) || isListMarkerLine(line)
     default:
       // List markers alone allow indentation and decimal/letter prefixes.
       if (first === 32 || first === 9 || first === 46 ||
           (first >= 48 && first <= 57) || (first >= 65 && first <= 90) ||
           (first >= 97 && first <= 122)) {
-        return RE_TASK.test(line) || RE_UNORDERED.test(line) ||
-          RE_ORDERED.test(line) || extractItemAttr(line) !== null
+        return isListMarkerLine(line)
       }
       return false
   }
