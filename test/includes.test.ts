@@ -167,8 +167,60 @@ describe('expandIncludes', () => {
     expect(result.html).toBe('<p>One\nTwo</p>')
   })
 
+  it('includes source code regions without parsing their payload', () => {
+    const child = "import http from 'node:http'\n\n// #region start\nconst server = http.createServer(handler)\nserver.listen(3000)\n// #endregion start"
+    const result = expand('{{ src/server.js@region:start @code:js }}', { 'src/server.js': child })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toBe('<pre><code class="language-js">const server = http.createServer(handler)\nserver.listen(3000)\n</code></pre>')
+    expect(expand('{.diff}\n{{ src/server.js@region:start @code:js }}', { 'src/server.js': child }).html)
+      .toBe('<pre class="diff"><code class="language-js">const server = http.createServer(handler)\nserver.listen(3000)\n</code></pre>')
+  })
+
+  it('recognizes each code region marker form', () => {
+    for (const [open, close] of [
+      ['#region demo', '#endregion demo'], ['// #region demo', '// #endregion demo'],
+      ['-- #region demo', '-- #endregion demo'], ['/* #region demo */', '/* #endregion demo */'],
+      ['<!-- #region demo -->', '<!-- #endregion demo -->'], ['%% #region demo', '%% #endregion demo'],
+    ]) {
+      const result = expand('{{ child @region:demo @code }}', { child: `${open}\nBody.\n${close}` })
+      expect(result.warnings).toEqual([])
+      expect(result.html).toBe('<pre><code>Body.\n</code></pre>')
+    }
+  })
+
+  it('keeps code payload literal and widens a flatten fence', () => {
+    const result = expand('{{ child @code:md }}', { child: '*x*\n{{ other.crv }}\n```\nlast' })
+    expect(result.html).toContain('*x*\n{{ other.crv }}\n```\nlast\n')
+    expect(result.dependencies).toHaveLength(1)
+    expect(result.carve).toContain('````md')
+  })
+
+  it('normalizes physical line endings and handles empty code regions', () => {
+    expect(expand('{{ child @code }}', { child: '\uFEFFa()\r\nb()\rc()\r\n' }).doc.children[0])
+      .toMatchObject({ type: 'code_block', content: 'a()\nb()\nc()\n' })
+    expect(expand('{{ child @lines:2-2 @code }}', { child: 'one\r\ntwo\rthree' }).doc.children[0])
+      .toMatchObject({ type: 'code_block', content: 'two\n', pos: { startLine: 2 } })
+    expect(expand('{{ child @region:demo @code }}', { child: '%% #region demo\n%% #endregion demo' }).doc.children[0])
+      .toMatchObject({ type: 'code_block', content: '' })
+  })
+
+  it('rejects invalid region forms and code include options', () => {
+    for (const child of ['#region demo', '// #region demo', '{% #region demo %}', '%% #Region demo', '%%% #region demo']) {
+      expect(expand('{{ child @region:demo }}', { child }).warnings.map(w => w.rule)).toEqual(['include-region-invalid'])
+    }
+    for (const child of ['// #Region demo', '/* #region demo\nBody\n*/']) {
+      expect(expand('{{ child @region:demo @code }}', { child }).warnings.map(w => w.rule)).toEqual(['include-region-invalid'])
+    }
+    expect(expand('{{ child #x @code }}', { child: 'x' }).warnings.map(w => w.rule)).toEqual(['include-selection-conflict'])
+    expect(expand('{{ child @code:=html }}', { child: 'x' }).warnings.map(w => w.rule)).toEqual(['include-unknown-option'])
+    expect(expand('{{ child @shift }}', { child: 'x' }).warnings.map(w => w.rule)).toEqual(['include-unknown-option'])
+    expect(expand('See {{ child @code }}.', { child: 'x' }).warnings.map(w => w.rule)).toEqual(['include-block-in-inline'])
+    expect(expand('{{ child @code:c# }}', { child: 'x' }).html).toContain('language-c#')
+    expect(expand('{{ child @shift:2 @code:md }}', { child: 'x' }).warnings).toEqual([])
+  })
+
   it('@region keeps a snippet stable when lines are inserted above it', () => {
-    const child = '// #region demo\nAlpha\nBeta\n// #endregion demo'
+    const child = '%% #region demo\nAlpha\nBeta\n%% #endregion demo'
     const a = expand('{{ child @region:demo }}', { child })
     const b = expand('{{ child @region:demo }}', { child: `Inserted.\n${child}` })
     const crlf = expand('{{ child @region:demo }}', { child: child.replaceAll('\n', '\r\n') })
@@ -179,41 +231,41 @@ describe('expandIncludes', () => {
   })
 
   it('@region accepts shell markers and nested distinct names', () => {
-    const child = '#region outer\nBefore.\n#region inner\nInside.\n#endregion inner\nAfter.\n#endregion outer'
+    const child = '%% #region outer\nBefore.\n%% #region inner\nInside.\n%% #endregion inner\nAfter.\n%% #endregion outer'
     const result = expand('{{ child @region:inner }}', { child })
     expect(result.warnings).toEqual([])
     expect(result.html).toBe('<p>Inside.</p>')
   })
 
   it('@region ignores ordinary headings and retains nested markers in outer slices', () => {
-    const child = '# region overview\n\n// #region outer\nBefore.\n// #region inner\nInside.\n// #endregion inner\nAfter.\n// #endregion outer'
+    const child = '# region overview\n\n%% #region outer\nBefore.\n%% #region inner\nInside.\n%% #endregion inner\nAfter.\n%% #endregion outer'
     const result = expand('{{ child @region:outer }}', { child })
     expect(result.warnings).toEqual([])
     expect(result.html).toContain('Before.')
     expect(result.html).toContain('Inside.')
     expect(result.html).toContain('After.')
-    expect(result.html).toContain('#region')
+    expect(result.html).not.toContain('#region')
   })
 
   it('@region allows only spaces and tabs around the comment marker', () => {
-    const tabbed = expand('{{ child @region:demo }}', { child: '\t  //\t#region demo\nBody.\n  #endregion demo' })
+    const tabbed = expand('{{ child @region:demo }}', { child: '\t  %%\t#region demo\nBody.\n  %% #endregion demo' })
     expect(tabbed.warnings).toEqual([])
     expect(tabbed.html).toBe('<p>Body.</p>')
     for (const space of ['\u00a0', '\u3000', '\f', '\v']) {
-      const before = expand('{{ child @region:demo }}', { child: `${space}// #region demo\nBody.\n// #endregion demo` })
+      const before = expand('{{ child @region:demo }}', { child: `${space}%% #region demo\nBody.\n%% #endregion demo` })
       expect(before.warnings.map((warning) => warning.rule)).toEqual(['include-region-invalid'])
-      const after = expand('{{ child @region:demo }}', { child: `//${space}#region demo\nBody.\n// #endregion demo` })
+      const after = expand('{{ child @region:demo }}', { child: `%%${space}#region demo\nBody.\n%% #endregion demo` })
       expect(after.warnings.map((warning) => warning.rule)).toEqual(['include-region-invalid'])
     }
   })
 
   it('@region rejects missing, duplicate, unmatched and conflicting selectors', () => {
     const cases = [
-      ['// #region other\nText\n// #endregion other', 'include-region-invalid'],
-      ['// #region demo\nOne\n// #endregion demo\n// #region demo\nTwo\n// #endregion demo', 'include-region-invalid'],
-      ['// #region demo\nOne', 'include-region-invalid'],
-      ['// #region demo\nOne\n// #endregion other', 'include-region-invalid'],
-      ['// #region demo extra\nOne\n// #endregion demo', 'include-region-invalid'],
+      ['%% #region other\nText\n%% #endregion other', 'include-region-invalid'],
+      ['%% #region demo\nOne\n%% #endregion demo\n%% #region demo\nTwo\n%% #endregion demo', 'include-region-invalid'],
+      ['%% #region demo\nOne', 'include-region-invalid'],
+      ['%% #region demo\nOne\n%% #endregion other', 'include-region-invalid'],
+      ['%% #region demo extra\nOne\n%% #endregion demo', 'include-region-invalid'],
     ] as const
     for (const [child, rule] of cases) {
       const result = expand('{{ child @region:demo }}', { child })
@@ -221,7 +273,7 @@ describe('expandIncludes', () => {
       expect(result.html).toContain('@region')
     }
     for (const directive of ['{{ child #x @region:demo }}', '{{ child @region:demo @lines:1-2 }}']) {
-      const result = expand(directive, { child: '// #region demo\nText\n// #endregion demo' })
+      const result = expand(directive, { child: '%% #region demo\nText\n%% #endregion demo' })
       expect(result.warnings.map((warning) => warning.rule)).toEqual(['include-selection-conflict'])
     }
   })
@@ -1350,7 +1402,7 @@ describe('expandIncludes source mapping', () => {
   }
 
   it('keeps named region positions in the original file', () => {
-    const child = 'Before.\r\n// #region demo\r\n## Pick\r\n\r\nBody.\r\n// #endregion demo\r\nAfter.'
+    const child = 'Before.\r\n%% #region demo\r\n## Pick\r\n\r\nBody.\r\n%% #endregion demo\r\nAfter.'
     const r = expandWith('{{ child.crv @region:demo }}', { 'child.crv': child })
     expect(r.warnings).toEqual([])
     expect(r.doc.children.map((node) => [node.pos?.startLine, node.pos?.file])).toEqual([

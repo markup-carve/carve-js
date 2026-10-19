@@ -15,6 +15,7 @@ export interface Directive {
   section?: string
   lines?: { start: number; end: number }
   region?: string
+  code?: { lang?: string }
   /** Literal signed offset, or "auto" to derive it from the include site. */
   shift: number | 'auto'
 }
@@ -60,7 +61,7 @@ const FIRST_PAIR_BODY = body(String.raw`.*?`)
 
 export const DIRECTIVE_SCAN_RE = new RegExp(`(?:${QUOTE_AWARE_BODY})|(?:${FIRST_PAIR_BODY})`, 'g')
 const DIRECTIVE_FULL_RE = new RegExp(`^(?:${QUOTE_AWARE_BODY})$`)
-const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
+const OPTION_RE = /^@([A-Za-z_][\w-]*):([^@}\s]+)$/
 const SECTION_TOKEN_RE = /^#\w[\w-]*$/
 /** Loose directive shape: one whole-paragraph token, valid options or not. */
 export const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
@@ -96,6 +97,7 @@ export function parseDirective(
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
   let region: string | undefined
+  let code: Directive['code']
   let shift: number | 'auto' = 0
   const rest = trimSpaces(m[5] ?? '')
   if (rest) {
@@ -105,6 +107,10 @@ export function parseDirective(
       if (section !== undefined && SECTION_TOKEN_RE.test(part)) {
         onSecondSection?.(part)
         return null
+      }
+      if (part === '@code') {
+        code = {}
+        continue
       }
       const opt = OPTION_RE.exec(part)
       const invalid = (): null => {
@@ -123,6 +129,9 @@ export function parseDirective(
       } else if (key === 'region') {
         if (!/^[A-Za-z_][\w-]*$/.test(value!)) return invalid()
         region = value
+      } else if (key === 'code') {
+        if (!/^[A-Za-z0-9_+#./-]+$/.test(value!)) return invalid()
+        code = { lang: value! }
       } else if (key === 'shift') {
         // Spec I8: a signed integer or the literal "auto", never both forms.
         if (value === 'auto') shift = 'auto'
@@ -137,6 +146,7 @@ export function parseDirective(
   if (section !== undefined) directive.section = section
   if (lines !== undefined) directive.lines = lines
   if (region !== undefined) directive.region = region
+  if (code !== undefined) directive.code = code
   return directive
 }
 
