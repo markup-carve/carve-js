@@ -27,6 +27,9 @@ trailing line endings. When the imported text matches and no known loss was
 reported, `literal-text-verified` records preserved/exact evidence. All other
 inputs retain the dropped/fallback `fidelity-unverified` warning.
 
+BBCode reports each dropped phpBB quote `user_id` as
+`bbcode-quote-user-id-dropped`, dropped/exact, at the quote's source line.
+
 Markdown adds the construct-level losses it can prove beside that row. A table
 body row whose every cell is blank is kept as a row of empty cells (`| | |`).
 An all-blank header with no column alignment is the scaffolding the Markdown

@@ -36,6 +36,38 @@ describe('shared migration result', () => {
     })
   })
 
+  it('reports dropped phpBB quote user IDs at their source lines', () => {
+    const source = 'intro\r\n[quote="alice" post_id=12 time=1700000000 user_id=3]q[/quote]\n[quote=user_id=4]r[/quote]'
+    const result = migrateBbcode(source)
+    expect(result.report.diagnostics.filter(row => row.code === 'bbcode-quote-user-id-dropped')).toEqual([
+      expect.objectContaining({ path: 'line:2', fidelity: 'dropped', confidence: 'exact', severity: 'warning' }),
+      expect.objectContaining({ path: 'line:3', fidelity: 'dropped', confidence: 'exact', severity: 'warning' }),
+    ])
+  })
+
+  it('does not report user IDs in author names or literal BBCode content', () => {
+    for (const source of [
+      '[quote="Bob user_id=7"]x[/quote]',
+      '[code][quote=user_id=7]x[/quote][/code]',
+      '[c][quote=user_id=7]x[/icode]',
+      '[noparse][quote=user_id=7]x[/quote][/noparse]',
+    ]) {
+      expect(migrateBbcode(source).report.diagnostics.some(row => row.code === 'bbcode-quote-user-id-dropped'), source).toBe(false)
+    }
+  })
+
+  it('reports dropped user IDs inside links and images that the converter parses', () => {
+    for (const source of [
+      '[url=https://example.test][quote="alice" user_id=3]q[/quote][/url]',
+      '[url][quote="alice" user_id=3]q[/quote][/url]',
+      '[img][quote="alice" user_id=3]q[/quote][/img]',
+    ]) {
+      expect(migrateBbcode(source).report.diagnostics).toContainEqual(expect.objectContaining({
+        code: 'bbcode-quote-user-id-dropped', path: 'line:1',
+      }))
+    }
+  })
+
   it('uses the shared four-state fidelity vocabulary', () => {
     const outcomes = [
       migrateHtml('<section><p>x</p></section>').report.diagnostics,

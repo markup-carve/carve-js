@@ -318,6 +318,15 @@ describe('carve migrate — the other importers', () => {
     expect(t.out).toContain('*bold* and /em/')
   })
 
+  it('writes dropped quote user IDs to the BBCode migration report', async () => {
+    const t = makeIO({ stdin: '[quote="alice" post_id=12 user_id=3]q[/quote]' })
+    expect(await run(['migrate', '--from', 'bbcode', '--report', 'report.json'], t.io)).toBe(0)
+    expect(t.out).toContain('^ alice #12')
+    expect(JSON.parse(t.files['report.json']!).diagnostics).toContainEqual(expect.objectContaining({
+      code: 'bbcode-quote-user-id-dropped', path: 'line:1', fidelity: 'dropped', confidence: 'exact',
+    }))
+  })
+
   it('converts Djot with --from djot', async () => {
     const t = makeIO({ stdin: '_em_ and ~sub~\n' })
     const code = await run(['migrate', '--from', 'djot'], t.io)
