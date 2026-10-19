@@ -35,16 +35,15 @@ describe('a fence run that dedents out of a child keeps the outer item tight', (
     )
   })
 
-  // Without the blank the two runs fold into the child's paragraph as an inline
-  // verbatim span, so the item still holds one paragraph and no block.
-  it('a run absorbed into the child paragraph keeps it tight too', () => {
+  // PART 9 §17 L1 / L1a (#3267): the folded run leaves tail as the outer
+  // item's blank-separated second paragraph, even with a sub-list between.
+  it('a run absorbed into the child paragraph leaves tail as a second paragraph, so the outer item is loose', () => {
     expect(carveToHtml('- outer\n  - head\n    ```\n    a\n   ```\n\n  tail\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
     )
   })
 
-  // CONTROLS. Every assertion above is a tight reading, so a pass that latched
-  // every run would satisfy them all. These are what a too-wide fix breaks.
+  // Controls for paragraphs that already loosen the outer item.
   it.each([
     ["the item's own second paragraph", '- outer\n  - head\n\n  one\n\n  two\n'],
     ['a plain paragraph below the child', '- outer\n  - head\n\n  tail\n'],
