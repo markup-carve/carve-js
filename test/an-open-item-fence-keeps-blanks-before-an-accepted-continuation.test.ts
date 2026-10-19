@@ -14,11 +14,14 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
     { lead: '- 1. ```', body: '', marker: '  +', follower: '> q', blanks: 1, code: true },
     { lead: '1. - ```', body: '     x\n', marker: '   +', follower: 'tail', blanks: 2, code: true },
     { lead: '- - - ```', body: '', marker: '    +', follower: 'tail', blanks: 1, code: true },
-    { lead: '- - - ```', body: '      x\n', marker: '    +', follower: '> q', blanks: 2, code: true },
+    { lead: '- - - ```', body: '      x\n', marker: '    +', follower: 'tail', blanks: 0, code: true },
+    { lead: '- - - ```', body: '      x\n', marker: '    +', follower: 'tail', blanks: 2, code: true },
+    { lead: '- - - - ```', body: '        x\n', marker: '      +', follower: 'tail', blanks: 0, code: true },
     { lead: '- ```=html', body: '', marker: '+', follower: 'tail', blanks: 2, code: false },
     { lead: '- - ```=html', body: '    x\n', marker: '  +', follower: '> q', blanks: 1, code: false },
     { lead: '10. - ```=html', body: '', marker: '    +', follower: '> q', blanks: 2, code: false },
-    { lead: '- - - ```=html', body: '      x\n', marker: '    +', follower: '> q', blanks: 2, code: false },
+    { lead: '- - - ```=html', body: '      x\n', marker: '    +', follower: 'tail', blanks: 2, code: false },
+    { lead: '- - - ```=html', body: '      x\n', marker: '    +', follower: 'tail', blanks: 0, code: false },
     { lead: '- - ```', body: '', marker: '  +', follower: '## heading', blanks: 2, code: true },
     { lead: '- - ```', body: '', marker: '  +', follower: '| a |\n| - |\n| b |', blanks: 1, code: true },
     { lead: '- - ```=html', body: '', marker: '  +', follower: '~~~\ncode\n~~~', blanks: 2, code: false },
@@ -37,6 +40,12 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
             : follower.startsWith('|') ? '<table>'
               : follower.startsWith('~~~') ? '<pre><code>code\n</code></pre>' : '<hr>'
       expect(html).toContain(attached)
+      if (lead.startsWith('- - - ')) {
+        const followerAt = html.indexOf(attached)
+        const leafOpen = html.lastIndexOf('<li', followerAt)
+        expect(leafOpen).toBeGreaterThan(-1)
+        expect(followerAt).toBeLessThan(html.indexOf('</li>', leafOpen))
+      }
     })
   }
 })
