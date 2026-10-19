@@ -131,7 +131,7 @@ export function parseDirective(
         region = value
       } else if (key === 'code') {
         if (!/^[A-Za-z0-9_+#./-]+$/.test(value!)) return invalid()
-        code = { lang: value }
+        code = { lang: value! }
       } else if (key === 'shift') {
         // Spec I8: a signed integer or the literal "auto", never both forms.
         if (value === 'auto') shift = 'auto'
