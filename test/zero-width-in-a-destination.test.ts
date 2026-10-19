@@ -270,40 +270,33 @@ describe('the canonical writer does not percent-encode a BOM', () => {
   })
 })
 
-describe('the Markdown migrator encodes a BOM as URL data', () => {
-  /*
-   * A BOM remains inside the destination during tokenization. URL encoding
-   * preserves its UTF-8 bytes without treating it as a title separator.
-   */
-  it('encodes a leading BOM in an inline destination', () => {
+describe('the Markdown migrator keeps a BOM as URL data', () => {
+  // A BOM stays inside the destination and is kept literally.
+  it('keeps a leading BOM in an inline destination', () => {
     expect(markdownToCarve(`[x](${BOM}https://e.com/)\n`)).toContain(
-      `[x](%EF%BB%BFhttps://e.com/)`,
+      `[x](${BOM}https://e.com/)`,
     )
   })
 
-  it('encodes a BOM in the middle of an inline destination', () => {
+  it('keeps a BOM in the middle of an inline destination', () => {
     expect(markdownToCarve(`[x](https://e${BOM}.com/)\n`)).toContain(
-      `[x](https://e%EF%BB%BF.com/)`,
+      `[x](https://e${BOM}.com/)`,
     )
   })
 
-  it('encodes a BOM in a reference definition destination', () => {
+  it('keeps a BOM in a reference definition destination', () => {
     expect(markdownToCarve(`[r]: ${BOM}https://e.com/\n`)).toContain(
-      `[r]: %EF%BB%BFhttps://e.com/`,
+      `[r]: ${BOM}https://e.com/`,
     )
   })
 
   it('splits destination from title at whitespace, so the URL half is decoded as one', () => {
-    // The split point is where the two halves stop being decoded the same way:
-    // an entity in the destination becomes its character, an entity in what
-    // follows is only decoded inside a quoted title. Cutting at the BOM put the
-    // rest of the URL on the title side, where `&amp;` was left as written and
-    // the migrated link pointed somewhere the Markdown source did not.
+    // A BOM stays in the destination while entities are decoded.
     expect(markdownToCarve(`[x](https://e${BOM}.com/?a&amp;b)\n`)).toContain(
-      `https://e%EF%BB%BF.com/?a&b`,
+      `https://e${BOM}.com/?a&b`,
     )
     expect(markdownToCarve(`[r]: https://e${BOM}.com/?a&amp;b\n`)).toContain(
-      `https://e%EF%BB%BF.com/?a&b`,
+      `https://e${BOM}.com/?a&b`,
     )
   })
 

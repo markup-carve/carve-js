@@ -3,6 +3,7 @@ import { renderCarve } from './render-carve.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { renderHtml } from './render-html.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import { encodeMarkdownFragment } from './markdown-destination-encoding.js'
 
 /** A case-only Markdown anchor may name a heading, but never an arbitrary HTML id. */
 export function headingFragmentAliases(source: string): Map<string, string | null> {
@@ -79,7 +80,7 @@ export function rewriteSameFileHeadingLinks(
       if (match && match !== fragment) {
         const destination = node.href
         const written = authored.get(destination) ?? destination
-        const to = encodeURIComponent(match)
+        const to = encodeMarkdownFragment(match)
         node.href = `#${to}`
         rewritten.push([node, destination])
         fixups.push({ destination: written, from: written.slice(1), to })

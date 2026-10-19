@@ -1,5 +1,6 @@
 import { freeMarkerSerial } from './marker-serial.js'
 import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
+import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
@@ -532,10 +533,7 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   // carries it literally, balanced or not, so encoding changed the address the
   // Markdown writer had emitted verbatim. Same ruling as the Djot side,
   // carve#2854.
-  const encoded = decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, (char) => {
-    const point = char.codePointAt(0)!
-    return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-  })
+  const encoded = decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, encodeMarkdownDestinationCharacter)
   recordAuthoredDestination(encoded, restored)
   return encoded.replace(/[()]/g, '\\$&')
 }

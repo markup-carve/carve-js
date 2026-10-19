@@ -5,6 +5,7 @@ import type { MigrationDiagnostic } from './migration.js'
 import { orderedTaskMarkerIsUnspellable } from './markdown-migrate.js'
 import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
 
 interface Assessment {
   diagnostics: MigrationDiagnostic[]
@@ -18,10 +19,7 @@ const encodeDestination = (destination: string): string => destination.replace(/
   return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
 })
 
-const encodeWrittenDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, char => {
-  const point = char.codePointAt(0)!
-  return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-})
+const encodeWrittenDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, encodeMarkdownDestinationCharacter)
 
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
