@@ -9,6 +9,25 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-19
+
+### Fixes
+- Carve includes recognize only `%% #region` markers; bare and code-style markers no longer select a region in a Carve file (#3239; markup-carve/carve#3319).
+- Nested fences and quotes keep their proper content and end at the right container; an attached caption no longer loosens its list (#3230, #3235, #3262; markup-carve/carve#3305, markup-carve/carve#3364).
+- A caption after a `+`-attached code, raw or plain `::: figure` fence stays with that fence. A fence-looking line folded into a child item's paragraph no longer keeps the list tight, and a fence run folded into a child paragraph loosens the outer item (#3268, #3269, #3271; markup-carve/carve#3369, markup-carve/carve#3370, #3267).
+- Include selection keeps a code block's final blank line, a later line's BOM, and source positions; a leading BOM no longer hides a region marker (#3246, #3258, #3261; markup-carve/carve#3348, markup-carve/carve#3358, markup-carve/carve#3359).
+- A repeated include option is the `include-duplicate-option` warning, a malformed option value is reported once, and a mid-line directive's warning points at its own column (#3255, #3258, #3259; markup-carve/carve#3351).
+- Formatting keeps region markers beside definitions and other blocks, preserving the selected content; migration reports the authored fragment (#3251, #3260; markup-carve/carve#3330, markup-carve/carve#3350, markup-carve/carve#3356).
+- Markdown migration keeps a link or image destination's brackets and non-ASCII characters as written, and recognizes a lone image as a block image (#3265, #3266, #3270; markup-carve/carve#3378).
+- BBCode migration reads quote attribution fields consistently and reports dropped fields as `bbcode-quote-field-dropped` (#3238, #3243, #3263; markup-carve/carve#3341, markup-carve/carve#3357).
+- Table alignment measures written escapes, and a CSV or TSV code include with `{table}` renders as a table (#3242, #3247; markup-carve/carve#3335).
+
+### Added
+- Code-block includes can select files or regions, and `selectIncludeRegion` exposes the same region lookup to hosts (#3239, #3241; markup-carve/carve#3320).
+- `carve lint --include-root` checks included content; `lintIncludes` is available to library callers (#3252; markup-carve/carve#3339).
+- Lint warns on near misses of consumed attribute keys with `consumed-key-near-miss` (#3232).
+- Markdown migration rewrites unambiguous case-only heading fragments and reports them as `link-fragment-case-rewritten` (#3245, #3248; markup-carve/carve#3323).
+
 ## [0.1.12] - 2026-10-15
 
 ### Breaking
