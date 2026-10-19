@@ -2,6 +2,7 @@ import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdirSync, mkdt
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, posix } from 'node:path'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
+import { headingFragmentAliases, matchingHeadingFragment } from './markdown-heading-fragments.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
 interface LinkCheck { target: string; status: 'rewritten' | 'valid' | 'unresolved'; reason?: string }
@@ -70,7 +71,7 @@ function htmlUrls(html: string): RawUrl[] {
   return urls
 }
 
-function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, sources: Set<string>): { href: string; check: LinkCheck } | null {
+function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, aliases: Map<string, Map<string, string | null>>, sources: Set<string>): { href: string; check: LinkCheck } | null {
   if (/^[a-z][a-z\d+.-]*:/i.test(destination) || destination.startsWith('//')) return null
   if (destination.startsWith('/')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'site-root path needs route mapping' } }
   const match = /^([^?#]*)(\?[^#]*)?(?:#(.*))?$/.exec(destination)
@@ -84,10 +85,11 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
   const mapped = /\.(md|markdown)$/i.test(target) ? target.replace(/\.(md|markdown)$/i, '.crv') : target
   if (!outputs.has(mapped) || (mapped !== target && !sources.has(target))) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'target missing from output' } }
   if (fragment && !ids.has(mapped)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'asset fragment needs site check' } }
-  if (fragment && !ids.get(mapped)?.has(fragment)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
+  const resolved = fragment ? matchingHeadingFragment(fragment, ids.get(mapped)!, aliases.get(mapped) ?? new Map()) : undefined
+  if (fragment && !resolved) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
   if (mapped !== target && pathname && !/\.(md|markdown)$/i.test(match[1]!)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'encoded extension needs manual rewrite' } }
   const newPath = pathname && mapped !== target ? match[1]!.replace(/\.(md|markdown)$/i, '.crv') : match[1]!
-  const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${match[3]}`}`
+  const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${!fragment || resolved === fragment ? match[3] : encodeURIComponent(resolved!)}`}`
   return { href, check: { target: destination, status: href === destination ? 'valid' : 'rewritten' } }
 }
 
@@ -95,9 +97,12 @@ function checkLinks(temporary: string, files: Array<{ source: string; output: st
   const outputs = new Set([...files.map((file) => file.output), ...assets])
   const sources = new Set(files.map((file) => file.source))
   const ids = new Map<string, Set<string>>()
+  const aliases = new Map<string, Map<string, string | null>>()
   for (const file of files) {
-    const html = carveToHtml(readFileSync(join(temporary, file.output), 'utf8'))
+    const source = readFileSync(join(temporary, file.output), 'utf8')
+    const html = carveToHtml(source)
     ids.set(file.output, htmlIds(html))
+    aliases.set(file.output, headingFragmentAliases(source))
   }
   const broken: string[] = []
   for (const file of files) {
@@ -112,13 +117,13 @@ function checkLinks(temporary: string, files: Array<{ source: string; output: st
       if ((node.type === 'raw_inline' || node.type === 'raw_block') && node.format === 'html' && typeof node.content === 'string') {
         for (const url of htmlUrls(node.content)) {
           if (url.manual) { links.push({ target: url.target, status: 'unresolved', reason: 'raw HTML srcset needs manual review' }); continue }
-          const result = inspectDestination(url.target, file.source, outputs, ids, sources)
+          const result = inspectDestination(url.target, file.source, outputs, ids, aliases, sources)
           if (result) links.push(result.check.status === 'rewritten' ? { target: url.target, status: 'unresolved', reason: 'raw HTML link needs manual rewrite' } : result.check)
         }
       }
       const key = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : null
       if (key && typeof node[key] === 'string' && node[key]) {
-        const result = inspectDestination(node[key], file.source, outputs, ids, sources)
+        const result = inspectDestination(node[key], file.source, outputs, ids, aliases, sources)
         if (result) {
           if (result.check.status === 'rewritten' && node.ref) {
             links.push({ target: node[key], status: 'unresolved', reason: 'reference link needs manual rewrite' })
@@ -260,7 +265,7 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
         assets.push(entry.path)
       } else {
         // Decoded as single-file migration does: ill-formed bytes become U+FFFD (CARVE-P0-023).
-        const result = migrateMarkdown(read.bytes.toString('utf8'))
+        const result = migrateMarkdown(read.bytes.toString('utf8'), { rewriteHeadingFragments: false })
         writeFileSync(out, result.value, { flag: 'wx' })
         files.push({ source: entry.path, output: destination, diagnostics: result.report.diagnostics })
       }

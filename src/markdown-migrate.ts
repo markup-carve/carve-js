@@ -13,6 +13,7 @@ import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolink
 import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './imported-crossrefs.js'
+import { rewriteSameFileHeadingLinks } from './markdown-heading-fragments.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -5982,6 +5983,7 @@ export function markdownToCarve(
 export function markdownToCarveWithLosses(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
+  rewriteHeadingFragments = true,
 ): { value: string; losses: MarkdownImportLoss[] } {
   markdown = replaceLoneSurrogates(markdown)
   const losses: MarkdownImportLoss[] = []
@@ -6036,9 +6038,10 @@ export function markdownToCarveWithLosses(
     }
     if (importedCrossrefIds === null && markdown.includes('</#')) {
       importedCrossrefIds = convertedIds(value)
-      try { return markdownToCarveWithLosses(markdown, dialect) }
+      try { return markdownToCarveWithLosses(markdown, dialect, rewriteHeadingFragments) }
       finally { importedCrossrefIds = null }
     }
+    if (rewriteHeadingFragments && value.includes('](#')) value = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }))
     return { value, losses }
   } finally {
     inlineCarriersEnabled = false
