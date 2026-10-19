@@ -13739,6 +13739,36 @@ class ParseSession {
     return { lines, lineNumbers, startLineIndex }
   }
 
+  private collectAttachedListBlock(
+    lexer: Lexer,
+    isBoundary: (line: string) => boolean,
+    baseIndent: number,
+    endAtFoldedDefinition = true,
+  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition)
+    const first = attached.lines[0]
+    const last = attached.lines.at(-1)
+    const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
+    const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
+    const closedCode = codeMarker !== null && last !== undefined && fenceCloseRe(codeMarker).test(last)
+    const colon = first === undefined ? null : colonBlockOpenerRun(first)
+    const closedColon = colon !== null && /^:{3,} figure(?:[ \t]|$)/.test(first!) &&
+      last !== undefined && RE_ADMONITION_CLOSE.exec(last)?.[1]?.length === colon
+    if (codeMarker !== null && !closedCode) {
+      while (!lexer.eof() && !isBlankLine(lexer.peek()!)) {
+        attached.lines.push(lexer.peek()!)
+        attached.lineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+      }
+    }
+    if ((closedCode || closedColon) && lexer.peek() !== undefined && RE_CAPTION.test(lexer.peek()!)) {
+      attached.lines.push(lexer.peek()!)
+      attached.lineNumbers.push(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+    }
+    return attached
+  }
+
   private parseList(lexer: Lexer): List {
     const first = lexer.peek()!
     const baseIndent = indentColumns(first)
@@ -13896,7 +13926,7 @@ class ParseSession {
           lines: attached,
           lineNumbers: attachedLineNumbers,
           startLineIndex: attachedStartLineIndex,
-        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent, false)
+        } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
         // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
         // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
         // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -13911,7 +13941,7 @@ class ParseSession {
         while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
           const plusLineIndex = lexer.pos
           lexer.consume()
-          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent, false)
+          const more = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
           // An empty result is the column gate's refusal as well as an exhausted
           // boundary set, and a second marker that attaches nothing ends the run
           // either way (markup-carve/carve#1814).
@@ -14510,11 +14540,7 @@ class ParseSession {
           // two of the kinds and for no boundary but the marker, so a blank
           // severed a code fence from its opener and a colon fence severed on
           // every boundary there is.
-          const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
-            lexer,
-            isItemAttachBoundary,
-            baseIndent,
-          )
+          const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent)
           for (let k = 0; k < attachedLines.length; k++) {
             nested.push(attachedLines[k]!)
             nestedSourceLines.push(attachedLines[k])
@@ -15818,7 +15844,15 @@ class ParseSession {
             continue
           }
         }
-        const fence = RE_FENCE.exec(line)
+        const fenceCandidate = RE_FENCE.exec(line)
+        const foldedFence = fenceCandidate !== null && k > 0 &&
+          ((itemParagraphFences.has(k - 1) && subListColumnAt(k - 1) > 0 &&
+            indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)) ||
+            (k === 1 && subListColumnAt(0) > 0 &&
+              indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
+              bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content)))) &&
+          !codeCloserPossible(closers, fenceCandidate[2]!, k)
+        const fence = foldedFence ? null : fenceCandidate
         const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
         const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
         let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
