@@ -47,6 +47,38 @@ describe('Markdown construct assessment', () => {
     expect(fragment.some(row => row.code === 'fidelity-unverified')).toBe(false)
   })
 
+  it('assesses a lone image as a block image', () => {
+    const result = migrateMarkdown('![x](/ü.png)\n')
+    expect(result.value).toBe('![x](/%C3%BC.png)\n')
+    expect(result.report.diagnostics.map(row => [row.code, row.path])).toEqual([
+      ['markdown-paragraph', 'line:1'], ['markdown-image', 'line:1'],
+    ])
+    for (const source of ['![x](/u.png "T")', '![x][r]\n\n[r]: /u.png']) {
+      expect(rows(source).some(row => row.code === 'fidelity-unverified'), source).toBe(false)
+    }
+  })
+
+  it('keeps images with other paragraph content inside a paragraph', () => {
+    for (const source of ['![x](/u.png)\n![y](/v.png)', 'a ![x](/u.png)']) {
+      expect(rows(source).some(row => row.code === 'fidelity-unverified'), source).toBe(false)
+    }
+  })
+
+  it('keeps destination brackets in explicit links and images', () => {
+    const source = '[a](/x[y]) and ![b](/p[q].png)'
+    const result = migrateMarkdown(source)
+    expect(result.value).toBe(source)
+    expect(result.report.diagnostics.map(row => [row.code, row.path])).toEqual([
+      ['markdown-paragraph', 'line:1'], ['markdown-link', 'line:1'], ['markdown-image', 'line:1'],
+    ])
+    expect(rows('[a][r]\n\n[r]: /x[y]').some(row => row.code === 'fidelity-unverified')).toBe(false)
+    expect(rows('![a][r]\n\n[r]: /x[y].png').some(row => row.code === 'fidelity-unverified')).toBe(false)
+  })
+
+  it('assesses a bare URL containing brackets against its rendered href', () => {
+    expect(rows('see https://e.com/a[b]c').some(row => row.code === 'fidelity-unverified')).toBe(false)
+  })
+
   it('does not classify markers in fenced code as tasks or emphasis', () => {
     const diagnostics = rows('```\r\n1. [x] **code**\r\n```\r\n\r\n**text**')
     expect(diagnostics.map(row => [row.code, row.path])).toEqual([
