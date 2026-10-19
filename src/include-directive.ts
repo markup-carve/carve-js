@@ -88,6 +88,7 @@ export function parseDirective(
   raw: string,
   onInvalidOption?: (part: string) => void,
   onSecondSection?: (part: string) => void,
+  onRepeatedOption?: (part: string) => void,
 ): Directive | null {
   const m = DIRECTIVE_FULL_RE.exec(raw)
   if (!m) return null
@@ -99,6 +100,16 @@ export function parseDirective(
   let region: string | undefined
   let code: Directive['code']
   let shift: number | 'auto' = 0
+  const seen = new Set<string>()
+  // Spec I1: a key given twice is an error, never "last one wins".
+  const first = (key: string, part: string): boolean => {
+    if (!seen.has(key)) {
+      seen.add(key)
+      return true
+    }
+    onRepeatedOption?.(part)
+    return false
+  }
   const rest = trimSpaces(m[5] ?? '')
   if (rest) {
     // An option needs no whitespace before its `@` either (carve#2773).
@@ -109,6 +120,7 @@ export function parseDirective(
         return null
       }
       if (part === '@code') {
+        if (!first('code', part)) return null
         code = {}
         continue
       }
@@ -126,17 +138,20 @@ export function parseDirective(
         if (!lm) return invalid()
         lines = { start: Number(lm[1]), end: Number(lm[2]) }
         if (lines.end < lines.start) return invalid()
+        if (!first(key, part)) return null
       } else if (key === 'region') {
         if (!/^[A-Za-z_][\w-]*$/.test(value!)) return invalid()
+        if (!first(key, part)) return null
         region = value
       } else if (key === 'code') {
         if (!/^[A-Za-z0-9_+#./-]+$/.test(value!)) return invalid()
+        if (!first(key, part)) return null
         code = { lang: value! }
       } else if (key === 'shift') {
         // Spec I8: a signed integer or the literal "auto", never both forms.
-        if (value === 'auto') shift = 'auto'
-        else if (!/^[+-]?\d+$/.test(value!)) return invalid()
-        else shift = Number(value)
+        if (value !== 'auto' && !/^[+-]?\d+$/.test(value!)) return invalid()
+        if (!first(key, part)) return null
+        shift = value === 'auto' ? 'auto' : Number(value)
       } else {
         return invalid()
       }

@@ -260,21 +260,26 @@ up with a warning about it.
 For a token a host already holds, `isDirectiveShape` and `parseDirective` answer
 without a document. The scan regexes stay internal: matching source text with a
 pattern is exactly what disagrees with the engine about a fenced token.
-`parseDirective(raw, onInvalidOption, onSecondSection)` takes two optional
-callbacks for the malformed cases `expandIncludes` warns about: an unknown or
-malformed `@option` (`include-unknown-option`) and a second `#section` name
-(`include-selection-conflict`). In both cases it returns `null`.
+`parseDirective(raw, onInvalidOption, onSecondSection, onRepeatedOption)` takes
+three optional callbacks for the malformed cases `expandIncludes` warns about:
+an unknown or malformed `@option` (`include-unknown-option`), a second
+`#section` name (`include-selection-conflict`) and an option key given twice,
+such as `@code:js @code:py` (`include-duplicate-option`). In each case it
+returns `null`.
 
 Supported directive options are `#section`, `@lines:N-M`, `@region:name`,
-`@code` / `@code:lang`, and `@shift:N` / `@shift:auto`. A directive uses at
-most one selection option. `#section` selects a heading subtree by id or slug,
+`@code` / `@code:lang`, and `@shift:N` / `@shift:auto`, each at most once. A
+directive uses at most one selection option. `#section` selects a heading subtree by id or slug,
 `@lines` selects an inclusive physical line range, and `@region` selects lines
 between matching markers. In a Carve include, only `%% #region name` and
 `%% #endregion name` are markers, and the selected content is parsed as Carve.
 In a code include, bare `#region`, `//`, `--`, `/* */`, `<!-- -->`, and `%%`
 comment forms are recognized. Marker keywords are case-sensitive. Invalid or
 missing regions warn with `include-region-invalid` and leave the directive
-literal.
+literal. A file's leading U+FEFF is skipped before markers are matched, so a
+marker on line 1 still counts. An `@lines` range that starts past the last line
+warns with `include-lines-out-of-range` and leaves the directive literal; one
+that starts inside the file and ends past it is clamped.
 
 `selectIncludeRegion(source, name, mode)` answers the same question for a host,
 with `mode` `'carve'` or `'code'`: `{ ok: true, start, end }` gives the 1-based,
