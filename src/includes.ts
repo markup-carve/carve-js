@@ -378,6 +378,27 @@ function sliceLines(source: string, range: { start: number; end: number }): stri
   return sourceLines(source).slice(range.start - 1, range.end).join('\n')
 }
 
+/** Which marker set a region lookup uses: a Carve include, or a `@code` include (spec I1b). */
+export type IncludeRegionMode = 'carve' | 'code'
+
+/**
+ * A region lookup's answer. `start` and `end` are the 1-based, inclusive lines
+ * of the selected content; the opening marker is on `start - 1`, and an empty
+ * region has `end === start - 1`.
+ */
+export type IncludeRegionResult =
+  | { ok: true; start: number; end: number }
+  | { ok: false; rule: 'include-region-invalid' }
+
+/**
+ * Resolve `@region:name` in a file's text exactly as `expandIncludes` does, so a
+ * host (an editor jumping to a region) follows the engine's marker rules.
+ */
+export function selectIncludeRegion(source: string, name: string, mode: IncludeRegionMode): IncludeRegionResult {
+  const range = regionLines(source, name, mode === 'code')
+  return range ? { ok: true, ...range } : { ok: false, rule: 'include-region-invalid' }
+}
+
 /** The physical lines inside a uniquely named, correctly paired comment region. */
 function regionLines(source: string, selected: string, code: boolean): { start: number; end: number } | null {
   const seen = new Set<string>()
