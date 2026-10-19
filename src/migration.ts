@@ -10,6 +10,7 @@ import {
 import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
 import { assessMarkdown } from './markdown-assessment.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { fragmentFixupDiagnostic } from './markdown-heading-fragments.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
@@ -91,8 +92,10 @@ export function migrateMarkdown(
 ): MigrationResult {
   const result = markdownToCarveWithLosses(source, options.dialect, options.rewriteHeadingFragments ?? true)
   const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
-  const assessment = supportedDialect ? assessMarkdown(source, result.value) : { complete: false, diagnostics: [] }
-  const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
+  const unfixed = result.unfixed ?? result.value
+  const fixups = (result.fixups ?? []).map(fragmentFixupDiagnostic)
+  const assessment = supportedDialect ? assessMarkdown(source, unfixed) : { complete: false, diagnostics: [] }
+  const fallback = assessed(source, unfixed, 'markdown', result.losses.map(loss => {
     const path = loss.line === undefined ? undefined : `line:${loss.line}`
     return {
       code: loss.code,
@@ -112,13 +115,15 @@ export function migrateMarkdown(
       ...(path ? { path } : {}),
     }
   }), supportedDialect)
+  fallback.value = result.value
   if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') {
     fallback.report.diagnostics[0].path = 'line:1'
     return fallback
   }
   if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
-    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: assessment.diagnostics } }
+    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: [...assessment.diagnostics, ...fixups] } }
   }
+  fallback.report.diagnostics.push(...fixups)
   return fallback
 }
 

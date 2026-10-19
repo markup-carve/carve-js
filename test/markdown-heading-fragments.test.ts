@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { markdownToCarve } from '../src/markdown-migrate.js'
+import { migrateMarkdown } from '../src/migration.js'
 
 it('rewrites a lowercase same-file heading fragment', () => {
   expect(markdownToCarve('# Install Steps\n\n[steps](#install-steps)')).toBe('# Install Steps\n\n[steps](#Install-Steps)')
@@ -36,4 +37,29 @@ it('keeps a zero-padded heading number available for case-only matching', () => 
 
 it('matches Unicode lowercase fragments as whole strings', () => {
   expect(markdownToCarve('# ΟΔΟΣ\n\n[street](#οδος)')).toContain('#%CE%9F%CE%94%CE%9F%CE%A3')
+})
+
+it('reports a same-file rewrite as a fixup beside a complete assessment', () => {
+  const result = migrateMarkdown('# Install Steps\n\nSee [steps](#install-steps).\n')
+  expect(result.value).toBe('# Install Steps\n\nSee [steps](#Install-Steps).\n')
+  expect(result.report.diagnostics.map(row => row.code)).toEqual(['markdown-atx-heading', 'markdown-paragraph', 'markdown-link', 'link-fragment-case-rewritten'])
+  expect(result.report.diagnostics.at(-1)).toEqual({
+    code: 'link-fragment-case-rewritten',
+    message: 'Rewrote link fragment #install-steps to #Install-Steps, the one heading id it matches without regard to case.',
+    severity: 'info',
+    fidelity: 'normalized',
+    confidence: 'inferred',
+    path: 'link:#install-steps',
+  })
+})
+
+it('reports no fixup for an ambiguous or exact fragment', () => {
+  const ambiguous = migrateMarkdown('# Twin\n\n# twin\n\n[x](#TWIN)\n')
+  const exact = migrateMarkdown('# Install Steps\n\n[x](#Install-Steps)\n')
+  for (const result of [ambiguous, exact]) expect(result.report.diagnostics.some(row => row.code === 'link-fragment-case-rewritten')).toBe(false)
+})
+
+it('names the encoded fragments in a Unicode fixup', () => {
+  const result = migrateMarkdown('# ΟΔΟΣ\n\n[street](#οδος)\n')
+  expect(result.report.diagnostics.at(-1)?.message).toBe('Rewrote link fragment #%CE%BF%CE%B4%CE%BF%CF%82 to #%CE%9F%CE%94%CE%9F%CE%A3, the one heading id it matches without regard to case.')
 })

@@ -42,6 +42,36 @@ it('refuses destination collisions without leaving an output', () => {
   expect(() => readFileSync(join(root, 'output', 'migration-report.json'))).toThrow()
 })
 
+it('rewrites a case-only cross-file fragment and reports it as a fixup', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'a.md'), '# Guide\n\nSee [steps](b.md#install-steps), [same](b.md#Install-Steps) and [whole](b.md).\n')
+  writeFileSync(join(source, 'b.md'), '# Install Steps\n\nRun it.\n\n# Twin\n\n# twin\n')
+  writeFileSync(join(source, 'c.md'), '[twin](b.md#TWIN) [none](b.md#nothing)\n')
+  const output = join(root, 'output')
+  const report = JSON.parse(readFileSync(migrateMarkdownDirectory(source, output).report, 'utf8'))
+  expect(readFileSync(join(output, 'a.crv'), 'utf8')).toBe('# Guide\n\nSee [steps](b.crv#Install-Steps), [same](b.crv#Install-Steps) and [whole](b.crv).\n')
+  const a = report.files.find((file: { source: string }) => file.source === 'a.md')
+  expect(a.links).toContainEqual({ target: 'b.md#install-steps', status: 'rewritten' })
+  expect(a.diagnostics.filter((row: { code: string }) => row.code === 'link-fragment-case-rewritten')).toEqual([{
+    code: 'link-fragment-case-rewritten',
+    message: 'Rewrote link fragment #install-steps to #Install-Steps, the one heading id it matches without regard to case.',
+    severity: 'info',
+    fidelity: 'normalized',
+    confidence: 'inferred',
+    path: 'link:b.md#install-steps',
+  }])
+  const c = report.files.find((file: { source: string }) => file.source === 'c.md')
+  expect(c.links).toEqual([
+    { target: 'b.md#TWIN', status: 'unresolved', reason: 'fragment missing from target' },
+    { target: 'b.md#nothing', status: 'unresolved', reason: 'fragment missing from target' },
+  ])
+  expect(c.diagnostics.some((row: { code: string }) => row.code === 'link-fragment-case-rewritten')).toBe(false)
+  expect(report.review).toEqual(['c.md'])
+})
+
 it('rewrites verified document links and reports missing files, fragments, and assets', () => {
   const root = mkdtempSync(join(tmpdir(), 'carve-links-'))
   roots.push(root)
