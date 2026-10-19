@@ -32,8 +32,8 @@ describe('Markdown construct assessment', () => {
       ['markdown-paragraph', 'line:1', 'preserved'],
       ['markdown-link', 'line:1', 'preserved'],
     ])
-    expect(explicit.value).toBe('See [a](/%C3%BC).')
-    expect(migrateMarkdown('See [a](/ü).\n').value).toBe('See [a](/%C3%BC).\n')
+    expect(explicit.value).toBe('See [a](/ü).')
+    expect(migrateMarkdown('See [a](/ü).\n').value).toBe('See [a](/ü).\n')
 
     const reference = rows('See [a][r].\n\n[r]: /ü\n')
     expect(reference).toContainEqual(expect.objectContaining({ code: 'markdown-reference-link' }))
@@ -49,7 +49,7 @@ describe('Markdown construct assessment', () => {
 
   it('assesses a lone image as a block image', () => {
     const result = migrateMarkdown('![x](/ü.png)\n')
-    expect(result.value).toBe('![x](/%C3%BC.png)\n')
+    expect(result.value).toBe('![x](/ü.png)\n')
     expect(result.report.diagnostics.map(row => [row.code, row.path])).toEqual([
       ['markdown-paragraph', 'line:1'], ['markdown-image', 'line:1'],
     ])

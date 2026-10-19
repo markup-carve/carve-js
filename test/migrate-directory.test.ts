@@ -81,11 +81,11 @@ it('names a cross-file fragment as the link wrote it, not percent-encoded (CARVE
   writeFileSync(join(source, 'b.md'), '# Über Uns\n\nRun it.\n')
   const output = join(root, 'output')
   const report = JSON.parse(readFileSync(migrateMarkdownDirectory(source, output).report, 'utf8'))
-  expect(readFileSync(join(output, 'a.crv'), 'utf8')).toBe('See [b](b.crv#%C3%9Cber-Uns).\n')
+  expect(readFileSync(join(output, 'a.crv'), 'utf8')).toBe('See [b](b.crv#Über-Uns).\n')
   const a = report.files.find((file: { source: string }) => file.source === 'a.md')
   expect(a.diagnostics.filter((row: { code: string }) => row.code === 'link-fragment-case-rewritten')).toEqual([{
     code: 'link-fragment-case-rewritten',
-    message: 'Rewrote link fragment #über-uns to #%C3%9Cber-Uns, the one heading id it matches without regard to case.',
+    message: 'Rewrote link fragment #über-uns to #Über-Uns, the one heading id it matches without regard to case.',
     severity: 'info',
     fidelity: 'normalized',
     confidence: 'inferred',

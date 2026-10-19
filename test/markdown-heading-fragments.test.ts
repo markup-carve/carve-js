@@ -36,7 +36,7 @@ it('keeps a zero-padded heading number available for case-only matching', () => 
 })
 
 it('matches Unicode lowercase fragments as whole strings', () => {
-  expect(markdownToCarve('# ΟΔΟΣ\n\n[street](#οδος)')).toContain('#%CE%9F%CE%94%CE%9F%CE%A3')
+  expect(markdownToCarve('# ΟΔΟΣ\n\n[street](#οδος)')).toContain('#ΟΔΟΣ')
 })
 
 it('reports a same-file rewrite as a fixup beside a complete assessment', () => {
@@ -55,14 +55,14 @@ it('reports a same-file rewrite as a fixup beside a complete assessment', () => 
 
 it('names the fragment as the link wrote it, not percent-encoded (CARVE-P2-031)', () => {
   const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns).\n')
-  expect(result.value).toBe('# Über Uns\n\nSee [a](#%C3%9Cber-Uns).\n')
+  expect(result.value).toBe('# Über Uns\n\nSee [a](#Über-Uns).\n')
   expect(result.report.diagnostics).toEqual([
     expect.objectContaining({ code: 'markdown-atx-heading', path: 'line:1' }),
     expect.objectContaining({ code: 'markdown-paragraph', path: 'line:3' }),
     expect.objectContaining({ code: 'markdown-link', path: 'line:3' }),
     {
       code: 'link-fragment-case-rewritten',
-      message: 'Rewrote link fragment #über-uns to #%C3%9Cber-Uns, the one heading id it matches without regard to case.',
+      message: 'Rewrote link fragment #über-uns to #Über-Uns, the one heading id it matches without regard to case.',
       severity: 'info',
       fidelity: 'normalized',
       confidence: 'inferred',
@@ -73,7 +73,7 @@ it('names the fragment as the link wrote it, not percent-encoded (CARVE-P2-031)'
 
 it('falls back to the encoded fragment when two spellings encode alike', () => {
   const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns) and [b](#%C3%BCber-uns).\n')
-  expect(result.report.diagnostics.filter(row => row.code === 'link-fragment-case-rewritten').map(row => row.path)).toEqual(['link:#%C3%BCber-uns', 'link:#%C3%BCber-uns'])
+  expect(result.report.diagnostics.filter(row => row.code === 'link-fragment-case-rewritten').map(row => row.path)).toEqual(['link:#über-uns', 'link:#%C3%BCber-uns'])
 })
 
 it('reports no fixup for an ambiguous or exact fragment', () => {
@@ -84,5 +84,5 @@ it('reports no fixup for an ambiguous or exact fragment', () => {
 
 it('names the authored fragment and the encoded rewrite in a Unicode fixup', () => {
   const result = migrateMarkdown('# ΟΔΟΣ\n\n[street](#οδος)\n')
-  expect(result.report.diagnostics.at(-1)?.message).toBe('Rewrote link fragment #οδος to #%CE%9F%CE%94%CE%9F%CE%A3, the one heading id it matches without regard to case.')
+  expect(result.report.diagnostics.at(-1)?.message).toBe('Rewrote link fragment #οδος to #ΟΔΟΣ, the one heading id it matches without regard to case.')
 })

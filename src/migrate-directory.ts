@@ -5,6 +5,7 @@ import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
 import type { AuthoredDestinations } from './markdown-migrate.js'
 import { migrateMarkdownWithDestinations } from './migration.js'
 import { fragmentFixupDiagnostic, headingFragmentAliases, matchingHeadingFragment, type FragmentFixup } from './markdown-heading-fragments.js'
+import { encodeMarkdownFragment } from './markdown-destination-encoding.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
 interface LinkCheck { target: string; status: 'rewritten' | 'valid' | 'unresolved'; reason?: string }
@@ -91,7 +92,7 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
   if (fragment && !resolved) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
   if (mapped !== target && pathname && !/\.(md|markdown)$/i.test(match[1]!)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'encoded extension needs manual rewrite' } }
   const newPath = pathname && mapped !== target ? match[1]!.replace(/\.(md|markdown)$/i, '.crv') : match[1]!
-  const recased = fragment && resolved !== fragment ? encodeURIComponent(resolved!) : undefined
+  const recased = fragment && resolved !== fragment ? encodeMarkdownFragment(resolved!) : undefined
   const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${recased ?? match[3]}`}`
   const check: LinkCheck = { target: destination, status: href === destination ? 'valid' : 'rewritten' }
   if (recased === undefined) return { href, check }
