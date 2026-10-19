@@ -1103,6 +1103,7 @@ export function lintCarve(
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
+  collectRegionMarkerWarnings(source, doc, unrendered, verbatimLines, out)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out, toUtf16)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
@@ -1732,6 +1733,35 @@ function collectSemanticAttributeWarnings(
  */
 function whitespaceKey(label: string): string {
   return normalizeRefLabel(label)
+}
+
+/** Source-comment region lines in Carve prose look like working include markers. */
+function collectRegionMarkerWarnings(source: string, doc: Document, skip: ReadonlySet<number>, verbatim: ReadonlySet<number>, out: LintWarning[]): void {
+  const hidden = new Set(skip)
+  const protectedLines = new Set(verbatim)
+  for (const n of collectCommentLines(doc, true)) protectedLines.add(n)
+  const front = doc.frontmatter?.pos
+  if (front) for (let n = front.startLine; n <= front.endLine; n++) { hidden.add(n); protectedLines.add(n) }
+  walkDocument(doc, (node) => {
+    if (node.type !== 'math_block') return
+    const pos = (node as Positioned).pos
+    if (pos) for (let n = pos.startLine; n <= (pos.endLine ?? pos.startLine); n++) { hidden.add(n); protectedLines.add(n) }
+  })
+  let offset = 0
+  for (const [index, line] of source.split(/\r\n|[\r\n]/).entries()) {
+    const number = index + 1
+    if (!hidden.has(number) || (!protectedLines.has(number) && /^[ \t]*%%(?!%)[ \t]*#(?:end)?region(?![A-Za-z0-9_])/i.test(line))) {
+      const marker = /^[ \t]*(?:(?:\/\/|--|\/\*|<!--)[ \t]*|)(?:#(?:end)?region)(?![A-Za-z0-9_])/i.exec(line)
+      const percent = /^[ \t]*%%(?!%)[ \t]*#(?:end)?region(?![A-Za-z0-9_])/i.exec(line)
+      if (marker || (percent && !/^[ \t]*%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/.test(line))) {
+        const column = line.search(/[^ \t]/) + 1
+        out.push({ line: number, column, start: offset + column - 1, end: offset + line.length,
+          rule: 'region-marker-renders-as-text',
+          message: 'This line renders as text and is not a region marker for a Carve include. Use "%% #region name".' })
+      }
+    }
+    offset += line.length + (source.slice(offset + line.length).startsWith('\r\n') ? 2 : 1)
+  }
 }
 
 /**

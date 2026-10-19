@@ -369,7 +369,7 @@ function warn(
 }
 
 function sourceLines(source: string): string[] {
-  const lines = source.split(/\n/)
+  const lines = source.split(/\r\n|[\r\n]/)
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines
 }
@@ -379,15 +379,23 @@ function sliceLines(source: string, range: { start: number; end: number }): stri
 }
 
 /** The physical lines inside a uniquely named, correctly paired comment region. */
-function regionLines(source: string, selected: string): { start: number; end: number } | null {
+function regionLines(source: string, selected: string, code: boolean): { start: number; end: number } | null {
   const seen = new Set<string>()
   const stack: Array<{ name: string; line: number }> = []
   let range: { start: number; end: number } | null = null
   for (const [index, sourceLine] of sourceLines(source).entries()) {
-    const line = sourceLine.replace(/\r$/, '').replace(/^[ \t]+/, '')
-    const body = line.startsWith('//') ? line.slice(2).replace(/^[ \t]+/, '') : line
-    if (!/^#(?:end)?region\b/.test(body)) continue
-    const marker = /^#(end)?region(?:[ \t]+([A-Za-z_][\w-]*))?[ \t]*$/.exec(body)
+    const line = sourceLine.replace(/^[ \t]*/, '')
+    let body: string
+    let closer = ''
+    if (line.startsWith('%%') && !line.startsWith('%%%')) body = line.slice(2)
+    else if (!code) continue
+    else if (line.startsWith('//') || line.startsWith('--')) body = line.slice(2)
+    else if (line.startsWith('/*')) { body = line.slice(2); closer = String.raw`\*/` }
+    else if (line.startsWith('<!--')) { body = line.slice(4); closer = '-->' }
+    else body = line
+    body = body.replace(/^[ \t]*/, '')
+    if (!/^#(?:end)?region(?![A-Za-z0-9_])/.test(body)) continue
+    const marker = new RegExp(`^#(end)?region(?:[ \t]+([A-Za-z_][\\w-]*))?[ \t]*${closer}[ \t]*$`).exec(body)
     if (!marker) return null
     const name = marker[2]
     if (marker[1]) {
@@ -421,10 +429,16 @@ interface SliceBase {
  * is the space the positions being rebased are measured in.
  */
 function sliceBase(source: string, range: { start: number; end: number }): SliceBase {
-  const before = sourceLines(source).slice(0, range.start - 1)
-  if (before.length === 0) return { line: 0, offset: 0 }
-  const prefix = `${before.join('\n')}\n`
-  return { line: prefix.match(/\r\n|[\r\n]/g)?.length ?? 0, offset: codepoints(prefix) }
+  if (range.start <= 1) return { line: 0, offset: 0 }
+  const breaks = /\r\n|[\r\n]/g
+  let match: RegExpExecArray | null
+  let line = 0
+  let end = 0
+  while (line < range.start - 1 && (match = breaks.exec(source))) {
+    line++
+    end = match.index + match[0].length
+  }
+  return { line, offset: codepoints(source.slice(0, end)) }
 }
 
 /**
@@ -521,7 +535,7 @@ function resolveChild(
   node: Text,
 ): { source: string; id: string; base: SliceBase } | null {
   if (!state.opts.resolve) return null
-  if (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1) {
+  if (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1 || (d.code !== undefined && d.section !== undefined)) {
     warn(state, 'include-selection-conflict', `Include "${d.path}" cannot combine selectors.`, node)
     return null
   }
@@ -627,7 +641,7 @@ function resolveChild(
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
   }
-  const range = d.region === undefined ? d.lines : regionLines(source, d.region)
+  const range = d.region === undefined ? d.lines : regionLines(source, d.region, d.code !== undefined)
   if (d.region !== undefined && range === null) {
     warn(state, 'include-region-invalid', `Include region "${d.region}" is missing or invalid in "${d.path}".`, node)
     return null
@@ -858,6 +872,17 @@ function expandChild(
 ): { doc: Document; file: string; reach: IncludeSite[] } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
+  if (d.code !== undefined) {
+    const lines = sourceLines(resolved.source.replace(/^\uFEFF/, ''))
+    const content = lines.length ? `${lines.join('\n')}\n` : ''
+    const startLine = resolved.base.line + 1
+    const child: Document = {
+      type: 'document',
+      children: [{ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
+        pos: { startLine, endLine: startLine + Math.max(0, lines.length - 1), startColumn: 1, endColumn: 1, file: resolved.id } }],
+    }
+    return { doc: child, file: resolved.id, reach: [...state.sites, site] }
+  }
   const child = parseChild(resolved.source, state)
   // Before anything reads a position: selection, renames, nested expansion and
   // every warning below measure against the child's own file, not the slice.
@@ -1459,6 +1484,7 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
     if (d) {
       const site = siteOf(new RunText(block.children as RunNode[]), 0, source.length, state)
       const merged = includeChild(d, state, text, site, (child, file, reach) => {
+        if (d.code !== undefined && child.children[0] && block.attrs) child.children[0].attrs = block.attrs
         mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
       }, unwrapped)

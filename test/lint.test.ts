@@ -800,3 +800,19 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
     expect(w.map((x) => x.rule)).toEqual([RULE])
   })
 })
+
+describe('region markers rendered as text', () => {
+  it('warns for source comment forms and mixed-case Carve comments', () => {
+    for (const line of ['#region demo', '#endregion', '// #region demo', '-- #region demo', '/* #region demo */', '<!-- #region demo -->', '%% #Region demo', '%% #ENDREGION']) {
+      const warnings = lintCarve(line).filter(w => w.rule === 'region-marker-renders-as-text')
+      expect(warnings, line).toHaveLength(1)
+      expect(warnings[0]!.message).toContain('%% #region name')
+    }
+  })
+
+  it('skips correct Carve markers and verbatim content', () => {
+    expect(rules('%% #region demo\nBody.\n%% #endregion demo')).not.toContain('region-marker-renders-as-text')
+    expect(rules('```txt\n#region demo\n```')).not.toContain('region-marker-renders-as-text')
+    expect(rules('%%%\n#region demo\n%%%')).not.toContain('region-marker-renders-as-text')
+  })
+})
