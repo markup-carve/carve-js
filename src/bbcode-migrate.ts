@@ -737,7 +737,7 @@ function convertCode(text: string): string {
  * Forums spell it every way there is: a bare username, `name="user"`,
  * `id="9" name="user" date="..."`, or a leading bare `"9"` post id.
  */
-function formatAttribution(attribution: string, onDroppedUserId?: () => void): string {
+function formatAttribution(attribution: string, onDroppedField?: (field: string, unnamed?: boolean) => void): string {
   let remaining = attribution.trim()
   let id: string | null = null
   let name: string | null = null
@@ -785,8 +785,8 @@ function formatAttribution(attribution: string, onDroppedUserId?: () => void): s
     remaining = remaining.replace(namedTime[0], '')
   }
 
-  remaining = remaining.replace(/\buser_id=(?:"[^"]*"|'[^']*'|\S+)/gi, () => {
-    onDroppedUserId?.()
+  remaining = remaining.replace(/\b(user_id)=(?:"[^"]*"|'[^']*'|\S+)/gi, (_whole, field: string) => {
+    onDroppedField?.(field)
     return ''
   })
 
@@ -802,6 +802,19 @@ function formatAttribution(attribution: string, onDroppedUserId?: () => void): s
     id = vbId[2]!
   }
   if (name === null && remaining !== '') name = remaining
+  else if (remaining !== '' && onDroppedField) {
+    // An explicit `name=` wins, so whatever else is left is dropped.
+    let rest = remaining
+    if (quotedName !== null && rest.startsWith(quotedName)) {
+      onDroppedField(quotedName, true)
+      rest = rest.slice(quotedName.length)
+    }
+    const unnamed = rest.replace(/\b([A-Za-z_][\w-]*)=(?:"[^"]*"|'[^']*'|\S+)/g, (_whole, field: string) => {
+      onDroppedField(field)
+      return ''
+    }).trim()
+    if (unnamed !== '') onDroppedField(unnamed, true)
+  }
 
   let out = name ?? ''
   if (datetime !== null) out += ` (${datetime})`
@@ -841,6 +854,9 @@ function convertQuotes(text: string): string {
     openTag.lastIndex = i
     const open = openTag.exec(text)
     if (open) {
+      const dropped: DroppedQuoteField[] = []
+      if (open[1]) formatAttribution(open[1], (field, unnamed = false) => dropped.push({ field, unnamed }))
+      quoteFieldDrops.push({ attribution: open[1] ?? '', dropped })
       contents.push('')
       authors.push(open[1] ?? null)
       top++
@@ -1176,29 +1192,49 @@ function cleanup(text: string): string {
 /** Spans dropped by the current conversion because their content starts with an extender. */
 let extenderLeadingSpans = 0
 
-type BbcodeLoss = { code: 'structure-unspellable' | 'bbcode-quote-user-id-dropped'; message: string; line?: number }
+type BbcodeLoss = { code: 'structure-unspellable' | 'bbcode-quote-field-dropped'; message: string; line?: number }
 
-function droppedQuoteUserIds(source: string): BbcodeLoss[] {
-  const normalized = source.replace(/\r\n?/g, '\n')
-  let visible = normalized
+type DroppedQuoteField = { field: string; unnamed: boolean }
+
+/** Every opening tag convertQuotes saw, in order, with the attribution fields it dropped. */
+let quoteFieldDrops: Array<{ attribution: string; dropped: DroppedQuoteField[] }> = []
+
+/**
+ * Locate convertQuotes' drops in the source. Earlier passes escape or rewrite
+ * the attribute text, so the drops come from the converter and only the lines
+ * from this scan; each converted tag is matched to the next source tag with the
+ * same attribution once backslashes are ignored.
+ */
+function droppedQuoteFields(source: string): BbcodeLoss[] {
+  let visible = source.replace(/\r\n?/g, '\n')
   const mask = (span: string): string => span.replace(/[^\n]/g, ' ')
   visible = visible.replace(/\[code(?:=[^\]]*)?\][\s\S]*?\[\/code\]/gi, mask)
   visible = visible.replace(/\[(?:c|icode)\][\s\S]*?\[\/(?:c|icode)\]/gi, mask)
   visible = visible.replace(/\[noparse\][\s\S]*?\[\/noparse\]/gi, mask)
   const losses: BbcodeLoss[] = []
   const quoteTag = /\[quote(?:[= ]([^\]]*))?\]/gi
+  const unescaped = (attribution: string): string => attribution.replace(/\\/g, '')
+  const tags: Array<{ line: number; attribution: string }> = []
   let line = 1
   let scanned = 0
   for (const match of visible.matchAll(quoteTag)) {
     for (let at = scanned; at < match.index; at++) if (visible[at] === '\n') line++
     scanned = match.index
-    if (!match[1]) continue
-    let dropped = false
-    formatAttribution(match[1], () => { dropped = true })
-    if (dropped) losses.push({
-      code: 'bbcode-quote-user-id-dropped',
-      message: 'The BBCode quote user_id cannot be represented in Carve and was dropped.',
-      line,
+    tags.push({ line, attribution: unescaped(match[1] ?? '') })
+  }
+  let next = 0
+  for (const { attribution, dropped } of quoteFieldDrops) {
+    const wanted = unescaped(attribution)
+    let found = next
+    while (found < tags.length && tags[found]!.attribution !== wanted) found++
+    const at = found < tags.length ? found : Math.min(next, tags.length - 1)
+    if (found < tags.length) next = found + 1
+    for (const { field, unnamed } of dropped) losses.push({
+      code: 'bbcode-quote-field-dropped',
+      message: unnamed
+        ? `Dropped the unnamed quote attribution text "${field}", which an explicit name= replaced.`
+        : `Dropped the quote attribution field ${field}.`,
+      line: tags[at]?.line ?? 1,
     })
   }
   return losses
@@ -1208,12 +1244,13 @@ function droppedQuoteUserIds(source: string): BbcodeLoss[] {
 export function bbcodeToCarveWithLosses(bbcode: string): { value: string; losses: BbcodeLoss[] } {
   const value = bbcodeToCarve(bbcode)
   const losses: BbcodeLoss[] = Array.from({ length: extenderLeadingSpans }, () => ({ code: 'structure-unspellable', message: EXTENDER_LEADING_SPAN_UNSPELLABLE }))
-  losses.push(...droppedQuoteUserIds(bbcode))
+  losses.push(...droppedQuoteFields(bbcode))
   return { value, losses }
 }
 
 export function bbcodeToCarve(bbcode: string): string {
   extenderLeadingSpans = 0
+  quoteFieldDrops = []
   const inputBytes = UTF8_ENCODER.encode(bbcode).byteLength
   if (inputBytes > BBCODE_MAX_INPUT_LENGTH) {
     throw new BbcodeInputTooLargeError(inputBytes)
