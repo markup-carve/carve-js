@@ -9731,6 +9731,14 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  private captionLineScopes: Set<number>[] = []
+  private measuringAttachedBlock = false
+
+  private recordAttachedCaption(lexer: Lexer, index: number): void {
+    if (!this.probingLazyParagraph && !this.measuringAttachedBlock) {
+      this.captionLineScopes.at(-1)?.add(lexer.lineNumber(index))
+    }
+  }
   // Cache successful lexical matches; container ownership is checked at each use.
   private linkDefMatches: Map<string, LinkDefMatch> | undefined
 
@@ -9865,7 +9873,15 @@ class ParseSession {
     return {
       get inLinkLabel() { return session.linkLabelDepth > 0 },
       parseInlines: (t) => this.withMatcherRequest(() => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs)),
-      parseBlocks: (s) => this.withMatcherRequest(() => this.parseBlockSource(s, opts, lexer)),
+      parseBlocks: (s) => this.withMatcherRequest(() => {
+        const outerScopes = this.captionLineScopes
+        this.captionLineScopes = []
+        try {
+          return this.parseBlockSource(s, opts, lexer)
+        } finally {
+          this.captionLineScopes = outerScopes
+        }
+      }),
       linkDefs: lexer.linkDefs,
       abbrDefs: lexer.abbrDefs,
     }
@@ -11272,6 +11288,7 @@ class ParseSession {
     const para: Paragraph = { type: 'paragraph', children: inline }
     // §4: a caption attaches across at most one blank line.
     if (cap && blanks <= 1) {
+      this.recordAttachedCaption(lexer, lexer.pos + la)
       for (let i = 0; i <= la; i++) lexer.consume()
       // The block loop spans the FIGURE, so the equation paragraph it wraps would
       // otherwise have no position of its own (PART 12 §4). The equation occupies
@@ -11394,6 +11411,7 @@ class ParseSession {
       // §4: a caption attaches only when it immediately follows the block
       // or is separated by at most ONE blank line.
       if (cap && lookahead <= 1) {
+        this.recordAttachedCaption(lexer, lexer.pos + lookahead)
         for (let i = 0; i <= lookahead; i++) lexer.consume()
         // The block loop spans the FIGURE, so the fence it wraps would otherwise
         // have no position of its own (PART 12 §4). It ends where the caption
@@ -11751,6 +11769,7 @@ class ParseSession {
         // §4: a caption attaches only when it immediately follows the block
         // or is separated by at most ONE blank line.
         if (cap && lookahead <= 1) {
+          this.recordAttachedCaption(lexer, lexer.pos + lookahead)
           for (let i = 0; i <= lookahead; i++) lexer.consume()
           group.caption = this.parseCaptionInline(lexer, cap[1]!)
         }
@@ -12222,6 +12241,7 @@ class ParseSession {
       const cap = RE_CAPTION.exec(next)
       // §4: adjacent, or across at most ONE blank line.
       if (cap && lookahead <= 1) {
+        this.recordAttachedCaption(lexer, lexer.pos + lookahead)
         for (let i = 0; i <= lookahead; i++) lexer.consume()
         // The TARGET keeps its own span, as every other caption host's does.
         // Wrapping without this left a captioned fenced quote as the one block
@@ -13397,6 +13417,7 @@ class ParseSession {
       // §4: a caption attaches only when it immediately follows the block
       // or is separated by at most ONE blank line.
       if (cap && lookahead <= 1) {
+        this.recordAttachedCaption(lexer, lexer.pos + lookahead)
         for (let i = 0; i <= lookahead; i++) lexer.consume()
         attachBlockPos(lexer, bq, firstLineIndex, quoteEndIndex)
         return {
@@ -13428,6 +13449,7 @@ class ParseSession {
       // §4: a caption attaches only when it immediately follows the block
       // or is separated by at most ONE blank line.
       if (cap && lookahead <= 1) {
+        this.recordAttachedCaption(lexer, lexer.pos + lookahead)
         for (let i = 0; i <= lookahead; i++) lexer.consume()
         // The block loop attaches a span to whatever this returns, so a figure
         // gets one and its TARGET would be left without - PART 12 section 4 wants
@@ -13547,7 +13569,9 @@ class ParseSession {
     // to know where a block ENDS, and an extension block ends where the core
     // parser's fallback for those same lines ends.
     const matchers = this.activeMatchers
+    const wasMeasuring = this.measuringAttachedBlock
     this.activeMatchers = []
+    this.measuringAttachedBlock = true
     try {
       // A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO, and so is
       // whatever INVISIBLE construct sits between them. Only `parseBlocks` owns a
@@ -13569,6 +13593,7 @@ class ParseSession {
       return endAtFoldedDefinition ? Math.max(1, this.foldedAttachedDefinitionEnd(lines, end, probe)) : end
     } finally {
       this.activeMatchers = matchers
+      this.measuringAttachedBlock = wasMeasuring
     }
   }
 
@@ -15813,6 +15838,7 @@ class ParseSession {
         k = last
       }
       for (let j = 0; j <= markerNoteRunEnd; j++) inFootnoteRun[j] = true
+      const captionAfterBlankLines: number[] = []
       for (let k = 0; k < nested.length; k++) {
         if (inFence[k + 1]!) continue
         if (inFootnoteRun[k]!) continue
@@ -15870,6 +15896,12 @@ class ParseSession {
           break
         }
         if (j >= nested.length) continue
+        // Delay this decision until the blocks are parsed. A line that looks
+        // like a caption host may be paragraph text or an uncapturable block.
+        if (j === k + 1 && RE_CAPTION.test(nested[j]!)) {
+          captionAfterBlankLines.push(nestedLineNumbers[j]!)
+          continue
+        }
         // A blank followed by content the item's SUB-LIST consumes does not
         // loosen THIS item: that content belongs to the sub-list, whose looseness
         // is decided by its own recursive parse. Counting it here wrongly
@@ -15949,27 +15981,38 @@ class ParseSession {
         return sub
       }
       const carry: PendingAttrCarry = { attrs: null }
-      const children = this.parseBlocks(
-        mkSub([itemLead, ...leadLines], itemStartLineIndex, [
-          lexer.lineNumber(itemStartLineIndex),
-          ...nestedLineNumbers.slice(0, leadLines.length),
-        ]),
-        0,
-        blockLines.length > 0 ? carry : undefined,
-      )
-      if (blockLines.length > 0) {
-        children.push(
-          ...this.parseBlocks(
-            mkSub(
-              blockLines,
-              itemStartLineIndex + 1 + firstBlockIdx,
-              nestedLineNumbers.slice(firstBlockIdx),
-              firstBlockIdx,
-            ),
-            0,
-            carry,
-          ),
+      const captionLines = new Set<number>()
+      this.captionLineScopes.push(captionLines)
+      let children: BlockNode[] = []
+      try {
+        children = this.parseBlocks(
+          mkSub([itemLead, ...leadLines], itemStartLineIndex, [
+            lexer.lineNumber(itemStartLineIndex),
+            ...nestedLineNumbers.slice(0, leadLines.length),
+          ]),
+          0,
+          blockLines.length > 0 ? carry : undefined,
         )
+        if (blockLines.length > 0) {
+          children.push(
+            ...this.parseBlocks(
+              mkSub(
+                blockLines,
+                itemStartLineIndex + 1 + firstBlockIdx,
+                nestedLineNumbers.slice(firstBlockIdx),
+                firstBlockIdx,
+              ),
+              0,
+              carry,
+            ),
+          )
+        }
+      } finally {
+        this.captionLineScopes.pop()
+      }
+
+      if (captionAfterBlankLines.length > 0) {
+        if (captionAfterBlankLines.some(line => !captionLines.has(line))) loose = true
       }
 
       const item: ListItem = { type: 'list_item', children }
@@ -16323,6 +16366,7 @@ class ParseSession {
       // §4: a caption attaches only when it immediately follows the block
       // or is separated by at most ONE blank line.
       if (cap && lookahead <= 1) {
+        this.recordAttachedCaption(lexer, lexer.pos + lookahead)
         for (let i = 0; i <= lookahead; i++) lexer.consume()
         table.caption = this.parseCaptionInline(lexer, cap[1]!)
       }
