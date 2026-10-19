@@ -580,8 +580,7 @@ export function carveToHtml(
   const fast = tryFastHtml(source, opts)
   if (fast !== undefined) return fast
   const exts: CarveExtension[] = opts.extensions ?? []
-  // POSITIONS ARE FORCED ON, and a caller's `positions: false` is overridden
-  // rather than honored. Two things here read them:
+  // Two HTML features read source positions:
   //
   // - `sourceLine` rendering stamps each block with the line it starts on.
   // - resolution applies the strict column-0 figure rule from the image's own
@@ -590,11 +589,14 @@ export function carveToHtml(
   //   call just parsed. Without the force, ` ![a](p.png)` over ` ^ cap` renders
   //   a `figure` where the default path renders a paragraph (carve-js#1263).
   //
+  // Keep positions for extensions and reports, which may inspect the tree.
+  // Otherwise the HTML-only path can omit them when the source has no image.
   // Extensions are forwarded to the parse so their matchers add syntax.
   const parseOpts: ParseOptions = {
     ...opts,
     extensions: exts,
-    positions: true,
+    positions: opts.positions === true || opts.sourceLine === true || source.includes('![') ||
+      exts.length !== 0 || opts.profile !== undefined || opts.onRenderLoss !== undefined,
   }
   // With no transform/profile capable of inserting new ids, resolution can
   // seed the renderer namespace during its existing mandatory AST walk. Public
@@ -665,10 +667,10 @@ export interface RenderDocumentOptions extends RenderOptions, ProfileOptions {
  *   `matchBlock` are parse-stage: an extension that adds syntax has already
  *   had its chance by the time a document reaches this function, and passing
  *   it here only reaches its transform and renderer hooks.
- * - **Parse with `positions: true`**, which is what the string entry points
- *   force. Resolution reads a block image's own `startColumn` for the strict
- *   column-0 figure rule and promotes when there is no position to consult,
- *   so a positionless tree resolves to a different document.
+ * - **Parse with `positions: true`** when the source contains an image.
+ *   `carveToHtml` does this automatically. Resolution reads a block image's
+ *   `startColumn` for the strict column-0 figure rule. With no position, it
+ *   promotes the image and resolves to a different document.
  *
  * The document is transformed IN PLACE, exactly as the string entry points
  * transform the tree they just parsed - a `beforeRender` hook that shifts
