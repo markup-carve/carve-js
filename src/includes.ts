@@ -685,7 +685,7 @@ function resolveChild(
     warn(state, 'include-budget', spentMessage('include-budget', d.path), node)
     return null
   }
-  if (d.lines && d.lines.start > sourceLines(source).length) {
+  if (d.lines && d.lines.start > sourceLines(source.replace(/^\uFEFF/, '')).length) {
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
   }

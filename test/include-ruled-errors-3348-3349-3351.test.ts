@@ -39,6 +39,11 @@ describe('an include line range past the end of the file', () => {
     expect(r.deps).toEqual([{ id: 'two.txt', resolved: true }])
   })
 
+  it('counts no line for a file holding only its byte order mark', () => {
+    const r = expand('{{ bom.txt @lines:1-1 @code }}', { 'bom.txt': '\uFEFF' })
+    expect(r.warnings).toEqual(['include-lines-out-of-range'])
+  })
+
   it('clamps a range that starts inside the file', () => {
     const r = expand('{{ two.txt @lines:2-9 @code }}', files)
     expect(r.warnings).toEqual([])
