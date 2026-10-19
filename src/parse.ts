@@ -134,6 +134,8 @@ export interface ParseOptions {
    * intentionally not serialized into the AST.
    */
   onUnclosedContainer?: (container: UnclosedContainer) => void
+  onUnclosedCodeFence?: (fence: UnclosedCodeFence) => void
+  onRefusedContinuationMarker?: (marker: RefusedContinuationMarker) => void
   /** Reports a recognized container whose malformed metadata was dropped. */
   onInvalidContainerMetadata?: (container: UnclosedContainer) => void
   /**
@@ -166,6 +168,21 @@ export interface UnclosedContainer {
   startOffset: number
   endOffset: number
   fenceWidth: number
+}
+
+export interface UnclosedCodeFence {
+  line: number
+  column: number
+  marker: string
+  endLine: number
+  reason: 'document' | 'container' | 'continuation'
+}
+
+export interface RefusedContinuationMarker {
+  line: number
+  column: number
+  host: 'list item' | 'definition description'
+  reason: 'blank' | 'document'
 }
 
 // Content must carry at least one non-ASCII-whitespace character, mirroring
@@ -1317,6 +1334,28 @@ class Lexer {
     if (seen?.has(key)) return
     seen?.add(key)
     this.parseOptions.onUnclosedContainer?.(container)
+  }
+
+  reportUnclosedCodeFence(start: number, marker: string, indent: number): void {
+    if (!this.parseOptions.onUnclosedCodeFence) return
+    const line = this.lineNumber(start)
+    const endLine = this.lineNumber(this.pos)
+    const rootLine = this.rootLines?.[endLine - 1]
+    const reason = this.attachmentBoundaries.has(endLine) && rootLine?.trim() === '+'
+      ? 'continuation' : endLine > this.documentLineCount ? 'document' : 'container'
+    this.parseOptions.onUnclosedCodeFence({ line, column: this.lineStartColumn(start) + indent,
+      marker, endLine, reason })
+  }
+
+  reportRefusedContinuationMarker(lineIndex: number, column: number, host: RefusedContinuationMarker['host']): void {
+    const line = this.lineNumber(lineIndex)
+    const next = this.rootLines?.[line] ?? (this.rootLines ? undefined : this.peek())
+    if (next !== undefined && !isBlankLine(next)) return
+    const physical = this.rootLines?.[line - 1]
+    const plus = physical?.indexOf('+') ?? -1
+    this.parseOptions.onRefusedContinuationMarker?.({ line,
+      column: plus >= 0 ? [...physical!.slice(0, plus)].length + 1 : column,
+      host, reason: next === undefined ? 'document' : 'blank' })
   }
 
   /**
@@ -2594,17 +2633,20 @@ function attachBlockPos(
 // Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
 // renderer emits it only when FORMAT matches the output (html).
 function parseRawBlock(lexer: Lexer): RawBlock {
+  const start = lexer.pos
   const m = RE_RAW_FENCE.exec(lexer.consume())!
   const marker = m[1]!
   const format = m[2]!
   const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
   let lastPayloadLineIndex = -1
+  let closed = false
   while (!lexer.eof()) {
     if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
     const ln = lexer.peek()!
     if (closeRe.test(ln)) {
       lexer.consume()
+      closed = true
       break
     }
     lastPayloadLineIndex = lexer.pos
@@ -2617,6 +2659,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     // collector frames its folded lines exactly as it does a code fence's.
     lines.push(stripLazyFrame(ln))
   }
+  if (!closed) lexer.reportUnclosedCodeFence(start, marker, 0)
   const terminated = !lexer.documentLacksFinalBreak || lastPayloadLineIndex < 0 || lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
   return { type: 'raw_block', format, content: codeContent(lines, terminated) }
 }
@@ -11389,12 +11432,14 @@ class ParseSession {
     const lines: string[] = []
     const payloadPositions: { offset: number; line: number; column: number; text: string }[] = []
     let lastPayloadLineIndex = -1
+    let closed = false
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       const folded = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       if (!folded && closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
+        closed = true
         break
       }
       lastPayloadLineIndex = lexer.pos
@@ -11418,6 +11463,7 @@ class ParseSession {
         })
       }
     }
+    if (!closed) lexer.reportUnclosedCodeFence(fenceStartIndex, marker, indent)
     const fenceEndIndex = lexer.pos
     // CARVE-P12-064: `content` is the payload's LITERAL text. Every line carries
     // its own break, so a zero-line payload is `""` whether the fence closed or
@@ -12502,6 +12548,8 @@ class ParseSession {
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
+        lexer.reportRefusedContinuationMarker(firstLineIndex,
+          lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description')
         const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
@@ -12570,6 +12618,7 @@ class ParseSession {
         if (/^\+[ \t]*$/.test(ln)) {
           const plusLineIndex = lexer.pos
           lexer.consume()
+          lexer.reportRefusedContinuationMarker(plusLineIndex, 1, 'definition description')
           // ...AND THE DESCRIPTION ENDS WHERE A COMMENT ENDS IT. Same shape as
           // the footnote body (markup-carve/carve#1814): a `+` the gate refuses
           // is an ordinary invisible line at document column 0, and a `<dd>` ends
@@ -13921,12 +13970,16 @@ class ParseSession {
 
       if (isContinuationMarker(content) &&
         (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || firstItemAttachBoundary(lexer.peek()!))) {
+        lexer.reportRefusedContinuationMarker(itemStartLineIndex,
+          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item')
         // The marker line is still consumed and contributes nothing; the item
         // carries an EMPTY lead from here, exactly as a comment on that line
         // would leave it. `contentCol` is already measured off the marker, so
         // the column the body is collected at does not move.
         content = ''
       } else if (isContinuationMarker(content)) {
+        lexer.reportRefusedContinuationMarker(itemStartLineIndex,
+          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item')
         // The attached block is a block: a boundary line inside a fence it opened
         // is that fence's body, not a boundary (see the indented loop's note on
         // carve#975 and corpus category 279). Without this the opener came out an
@@ -13951,6 +14004,7 @@ class ParseSession {
         while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
           const plusLineIndex = lexer.pos
           lexer.consume()
+          lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
           const more = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
           // An empty result is the column gate's refusal as well as an exhausted
           // boundary set, and a second marker that attaches nothing ends the run
@@ -14541,7 +14595,9 @@ class ParseSession {
         if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
           continuationFenceBreaks.add(nested.length)
           const plusLineNumber = lexer.lineNumber(lexer.pos)
+          const plusLineIndex = lexer.pos
           lexer.consume()
+          lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
           const rootFollower = (lexer.rootLines ?? lexer.lines)[plusLineNumber]
           const detachedFollower = pendingBlanks > 0 && lazyState.opaque?.kind === 'code' &&
             lexer.peek() === undefined && rootFollower !== undefined &&
