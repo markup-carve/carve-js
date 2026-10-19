@@ -147,6 +147,25 @@ function locate(
   }
 }
 
+// One edit or one adjacent swap: `tabel`, `tables`, `lose`. Two edits would take `close` for `loose`.
+function nearConsumedKey(word: string, key: string): boolean {
+  if (word === key) return false
+  if (word.toLowerCase() === key) return true
+  if (Math.abs(word.length - key.length) > 1) return false
+  const d = Array.from({ length: word.length + 1 }, (_, i) =>
+    Array.from({ length: key.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)))
+  for (let i = 1; i <= word.length; i++) {
+    for (let j = 1; j <= key.length; j++) {
+      const cost = word[i - 1] === key[j - 1] ? 0 : 1
+      d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost)
+      if (i > 1 && j > 1 && word[i - 1] === key[j - 2] && word[i - 2] === key[j - 1]) {
+        d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1)
+      }
+    }
+  }
+  return d[word.length]![key.length]! <= 1
+}
+
 function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) => void): void {
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -516,6 +535,21 @@ export function lintCarve(
   const slugOpts = headingIdSlugOpts(opts)
   const foldId = caseOnlyKey
   const out: LintWarning[] = []
+
+  walkDocument(doc, (node) => {
+    const code = node.type === 'code_block' ? node as unknown as CodeBlock
+      : node.type === 'figure' && (node as { target?: { type?: string } }).target?.type === 'code_block'
+        ? (node as { target: CodeBlock }).target : undefined
+    const key = code && (code.lang === 'csv' || code.lang === 'tsv') ? 'table'
+      : node.type === 'list' || node.type === 'definition_list' ? 'loose' : undefined
+    if (!key) return
+    const attrs = (node as { attrs?: Attrs }).attrs
+    for (const [word, value] of Object.entries(attrs?.keyValues ?? {})) {
+      if (value !== '' || !nearConsumedKey(word, key)) continue
+      out.push({ ...locate(node as Positioned, toUtf16), rule: 'consumed-key-near-miss',
+        message: `"${word}" is not a consumed key here; did you mean {${key}}?` })
+    }
+  })
 
   walkDocument(doc, (node) => {
     const isMarkedCode = node.type === 'code_block' &&
