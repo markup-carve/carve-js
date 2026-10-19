@@ -19,12 +19,16 @@ describe('borrowed HTML layout', () => {
     expect(tryFastHtml(source, {})).toBe(authoritative(source))
   })
 
-  it('accepts Unicode plain paragraphs while preserving fallback for Unicode syntax', () => {
+  it('accepts Unicode letters in supported blocks and inline markup', () => {
     for (const text of ['café', 'e\u0301', '中文', 'العربية', '“quoted” 😀', '𝒜 ١ ① ©', 'a & b']) {
       const source = `${text}\n\n${text}\n`
       expect(tryFastHtml(source, {}), text).toBe(authoritative(source))
     }
-    for (const text of ['- café', '1. 中文', 'café\n\n---', 'é*bold*', '# café', '`😀`', '[é](/x)', 'a\u00a0b', 'a\u2028b', '\ufeffcafé', 'a\u202eb', 'é\u200db', 'é\u0085b']) {
+    for (const text of ['- café', '1. 中文', 'café\n\n---', 'é*bold*', '# café', '[é](/x)', 'Café *bold*', '東京 [link](/x)']) {
+      const source = `${text}\n`
+      expect(tryFastHtml(source, {}), text).toBe(authoritative(source))
+    }
+    for (const text of ['`😀`', '*a*\uFE0F\u20E3', 'e\u0301 *bold*', '“q” *b*', '© *b*', 'a\u00a0b', 'a\u2028b', '\ufeffcafé', 'a\u202eb', 'é\u200db', 'é\u0085b']) {
       const source = `${text}\n`
       expect(tryFastHtml(source, {}), text).toBeUndefined()
       expect(carveToHtml(source), text).toBe(authoritative(source))
@@ -214,11 +218,14 @@ describe('borrowed HTML layout', () => {
     // Corpus 589-32 adds a blank first row promoted to an empty header row.
     // The newer spec pin adds 108-security-hardening-12 to the accepted set.
     // Corpus 617 adds an unmarked CSV fence that stays on the code path.
-    expect(accepted).toBe(73)
+    // The Unicode headings in corpus 15-5 and 119 take the borrowed route.
+    expect(accepted).toBe(75)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-4.crv',
+      '15-heading-ids-5.crv',
+      '119-trojan-source-heading-ids-are-nfc-normalized-and-strip-invisible-controls.crv',
     ]))
   })
 
