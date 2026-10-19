@@ -18,6 +18,11 @@ const encodeDestination = (destination: string): string => destination.replace(/
   return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
 })
 
+const encodeWrittenDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, char => {
+  const point = char.codePointAt(0)!
+  return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
+})
+
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
 
@@ -85,14 +90,14 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
         emit(image ? 'image' : 'link', line)
         const title = match[4] === undefined ? '' : ` title="${escape(match[4])}"`
-        const encodedHref = escape(encodeDestination(href))
+        const encodedHref = escape(encodeWrittenDestination(href))
         result += image ? `<img src="${encodedHref}" alt="${escape(match[2]!)}"${title}>` : `<a href="${encodedHref}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
         const definition = definitions.get(labelKey(match[3] || match[2]!))!
         emit('reference-link', line, 'normalized')
         const title = definition.title === undefined ? '' : ` title="${escape(definition.title)}"`
-        const href = encodeDestination(definition.destination)
+        const href = encodeWrittenDestination(definition.destination)
         result += match[1] === '!' ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
@@ -209,7 +214,10 @@ export function assessMarkdown(source: string, value: string): Assessment {
       while (i < input.length && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
       emit('paragraph', n)
       if (body.some(text => /\|/.test(text)) || body.some(text => /\t/.test(text))) complete = false
-      html += `<p>${inline(body.join('\n').trim(), n)}</p>\n`
+      const beforeInline = diagnostics.length
+      const content = inline(body.join('\n').trim(), n)
+      const loneImage = diagnostics.slice(beforeInline).some(row => row.code === 'markdown-image' || row.code === 'markdown-reference-link') && /^<img\b[^>]*>$/.test(content)
+      html += loneImage ? `${content}\n` : `<p>${content}</p>\n`
     }
     return html
   }
