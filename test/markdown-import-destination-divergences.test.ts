@@ -31,6 +31,14 @@ describe('Markdown destination divergences', () => {
     expect(result.report.diagnostics.every(({ confidence, severity }) => confidence === 'exact' && severity === 'info')).toBe(true)
   })
 
+  it.each([
+    ['[foo<https://example.com/?search=](uri)>'],
+    ['a [b <https://e.com/]> c'],
+    ['<https://e.com/a[b> c](/u)'],
+  ])('keeps a bracketed autolink in angle form: %s', (source) => {
+    expect(migrateMarkdown(source + '\n').value).toBe(source + '\n')
+  })
+
   it('keeps destination entities unverified', () => {
     const result = migrateMarkdown('[a](/x&amp;y)\n')
     expect(result.value).toBe('[a](/x&y)\n')

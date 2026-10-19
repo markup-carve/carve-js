@@ -44,7 +44,7 @@ import {
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, EXTENDER_LEADING_SPAN_UNSPELLABLE, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { extendsGrapheme } from './grapheme-extender.js'
-import { opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
+import { opensFrontmatter, parse, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
@@ -2341,7 +2341,7 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    if (!(table && body.includes('|')) && !/[\\`]/.test(body) && rawBracketRunCloses(body)) return protect(match)
+    if (!(table && body.includes('|')) && !/[\\`]/.test(body)) return protect(match)
     return protect(writeLiteralAutolink(body))
   })
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match =>
