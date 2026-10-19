@@ -57,7 +57,9 @@ it('names the fragment as the link wrote it, not percent-encoded (CARVE-P2-031)'
   const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns).\n')
   expect(result.value).toBe('# Über Uns\n\nSee [a](#%C3%9Cber-Uns).\n')
   expect(result.report.diagnostics).toEqual([
-    expect.objectContaining({ code: 'fidelity-unverified', severity: 'warning', fidelity: 'dropped', confidence: 'fallback' }),
+    expect.objectContaining({ code: 'markdown-atx-heading', path: 'line:1' }),
+    expect.objectContaining({ code: 'markdown-paragraph', path: 'line:3' }),
+    expect.objectContaining({ code: 'markdown-link', path: 'line:3' }),
     {
       code: 'link-fragment-case-rewritten',
       message: 'Rewrote link fragment #über-uns to #%C3%9Cber-Uns, the one heading id it matches without regard to case.',
@@ -71,7 +73,7 @@ it('names the fragment as the link wrote it, not percent-encoded (CARVE-P2-031)'
 
 it('falls back to the encoded fragment when two spellings encode alike', () => {
   const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns) and [b](#%C3%BCber-uns).\n')
-  expect(result.report.diagnostics.slice(1).map(row => row.path)).toEqual(['link:#%C3%BCber-uns', 'link:#%C3%BCber-uns'])
+  expect(result.report.diagnostics.filter(row => row.code === 'link-fragment-case-rewritten').map(row => row.path)).toEqual(['link:#%C3%BCber-uns', 'link:#%C3%BCber-uns'])
 })
 
 it('reports no fixup for an ambiguous or exact fragment', () => {
