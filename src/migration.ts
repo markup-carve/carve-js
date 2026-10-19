@@ -87,9 +87,9 @@ function assessed(
 
 export function migrateMarkdown(
   source: string,
-  options: { dialect?: MarkdownDialect } = {},
+  options: { dialect?: MarkdownDialect; rewriteHeadingFragments?: boolean } = {},
 ): MigrationResult {
-  const result = markdownToCarveWithLosses(source, options.dialect)
+  const result = markdownToCarveWithLosses(source, options.dialect, options.rewriteHeadingFragments ?? true)
   const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
   const assessment = supportedDialect ? assessMarkdown(source, result.value) : { complete: false, diagnostics: [] }
   const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
