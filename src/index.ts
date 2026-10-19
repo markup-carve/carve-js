@@ -227,6 +227,7 @@ export {
 } from './migration.js'
 export {
   lintCarve,
+  lintIncludes,
   formatLintWarnings,
   type LintWarning,
   type LintPlatform,
@@ -303,6 +304,7 @@ export {
   type IncludeDependency,
   type IncludeOptions,
   type IncludeResult,
+  type IncludedContent,
   type IncludeSite,
   type IncludeWarning,
   type IncludeResolver,

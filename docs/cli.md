@@ -117,6 +117,21 @@ this engine does not implement. It exits non-zero when it reports anything, so i
 works as a CI gate. The same checks surface live in editors
 through [carve-lsp](https://github.com/markup-carve/carve-lsp).
 
+`carve lint --include-root DIR` also lints what a document pulls in through
+`{{ ... }}`, under the same containment and limits as `carve render`. Every rule
+runs on each Carve-mode include, and a `{table}` csv or tsv code include gets the
+`delimited-table-*` rules. A finding in an included file names that file relative
+to the root and the directive that reached it:
+
+```txt
+data/plans.csv:3:1 delimited-table-malformed — This marked CSV/TSV record has malformed quoting, so the include remains a code block. (included from doc.crv:2:1)
+```
+
+A failed include (missing file, cycle, invalid region) is reported at its
+directive under its `include-*` rule. Without `--include-root`, lint never reads
+an include target; the root is not inferred from the input path. The API takes
+the same thing as `lintCarve(source, { includes: { resolve, sourcePath } })`.
+
 `carve portability` answers a different question: not "is this right in Carve"
 but "does it mean the same thing in Djot" - for a document that has to survive
 both readers. It renders with both engines and reports the first place they
