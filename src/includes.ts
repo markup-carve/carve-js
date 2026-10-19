@@ -894,7 +894,8 @@ function expandChild(
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   if (d.code !== undefined) {
-    const lines = sourceLines(resolved.source.replace(/^\uFEFF/, ''))
+    // Only the FILE's leading U+FEFF is not content (I1c); one opening a later selected line is.
+    const lines = sourceLines(resolved.base.line === 0 ? resolved.source.replace(/^\uFEFF/, '') : resolved.source)
     const content = lines.length ? `${lines.join('\n')}\n` : ''
     const startLine = resolved.base.line + 1
     const child: Document = {

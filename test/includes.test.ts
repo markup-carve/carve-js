@@ -204,6 +204,16 @@ describe('expandIncludes', () => {
       .toMatchObject({ type: 'code_block', content: '' })
   })
 
+  it('drops only the file\'s leading U+FEFF from a code payload', () => {
+    const code = (entry: string, child: string) => expand(entry, { child }).doc.children[0]
+    expect(code('{{ child @lines:1-2 @code }}', '\uFEFFfirst\nsecond\nthird\n'))
+      .toMatchObject({ type: 'code_block', content: 'first\nsecond\n' })
+    expect(code('{{ child @lines:2-3 @code }}', 'first\n\uFEFFsecond\nthird\n'))
+      .toMatchObject({ type: 'code_block', content: '\uFEFFsecond\nthird\n' })
+    expect(code('{{ child @region:demo @code }}', '// #region demo\n\uFEFFx()\n// #endregion demo\n'))
+      .toMatchObject({ type: 'code_block', content: '\uFEFFx()\n' })
+  })
+
   it('rejects invalid region forms and code include options', () => {
     for (const child of ['#region demo', '// #region demo', '{% #region demo %}', '%% #Region demo', '%%% #region demo']) {
       expect(expand('{{ child @region:demo }}', { child }).warnings.map(w => w.rule)).toEqual(['include-region-invalid'])
