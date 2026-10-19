@@ -2,6 +2,8 @@ import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdirSync, mkdt
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, posix } from 'node:path'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
+import type { AuthoredDestinations } from './markdown-migrate.js'
+import { migrateMarkdownWithDestinations } from './migration.js'
 import { fragmentFixupDiagnostic, headingFragmentAliases, matchingHeadingFragment, type FragmentFixup } from './markdown-heading-fragments.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
@@ -71,7 +73,7 @@ function htmlUrls(html: string): RawUrl[] {
   return urls
 }
 
-function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, aliases: Map<string, Map<string, string | null>>, sources: Set<string>): { href: string; check: LinkCheck; fixup?: FragmentFixup } | null {
+function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, aliases: Map<string, Map<string, string | null>>, sources: Set<string>, authored: AuthoredDestinations = new Map()): { href: string; check: LinkCheck; fixup?: FragmentFixup } | null {
   if (/^[a-z][a-z\d+.-]*:/i.test(destination) || destination.startsWith('//')) return null
   if (destination.startsWith('/')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'site-root path needs route mapping' } }
   const match = /^([^?#]*)(\?[^#]*)?(?:#(.*))?$/.exec(destination)
@@ -92,10 +94,14 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
   const recased = fragment && resolved !== fragment ? encodeURIComponent(resolved!) : undefined
   const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${recased ?? match[3]}`}`
   const check: LinkCheck = { target: destination, status: href === destination ? 'valid' : 'rewritten' }
-  return recased === undefined ? { href, check } : { href, check, fixup: { destination, from: match[3]!, to: recased } }
+  if (recased === undefined) return { href, check }
+  // CARVE-P2-031: the row names the destination as the Markdown link wrote it.
+  const written = authored.get(destination) ?? destination
+  const hash = written.indexOf('#')
+  return { href, check, fixup: { destination: written, from: hash === -1 ? match[3]! : written.slice(hash + 1), to: recased } }
 }
 
-function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: object[]; links?: LinkCheck[] }>, assets: string[]): string[] {
+function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: object[]; links?: LinkCheck[] }>, assets: string[], authored: Map<string, AuthoredDestinations> = new Map()): string[] {
   const outputs = new Set([...files.map((file) => file.output), ...assets])
   const sources = new Set(files.map((file) => file.source))
   const ids = new Map<string, Set<string>>()
@@ -125,7 +131,7 @@ function checkLinks(temporary: string, files: Array<{ source: string; output: st
       }
       const key = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : null
       if (key && typeof node[key] === 'string' && node[key]) {
-        const result = inspectDestination(node[key], file.source, outputs, ids, aliases, sources)
+        const result = inspectDestination(node[key], file.source, outputs, ids, aliases, sources, authored.get(file.source))
         if (result) {
           if (result.check.status === 'rewritten' && node.ref) {
             links.push({ target: node[key], status: 'unresolved', reason: 'reference link needs manual rewrite' })
@@ -251,6 +257,7 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
   const files: Array<{ source: string; output: string; diagnostics: ReturnType<typeof migrateMarkdown>['report']['diagnostics']; links?: LinkCheck[] }> = []
   const assets: string[] = []
   const skipped: string[] = []
+  const authored = new Map<string, AuthoredDestinations>()
   const destinations = new Set(['migration-report.json'])
   try {
     for (const entry of entries) {
@@ -268,12 +275,13 @@ export function migrateMarkdownDirectory(source: string, target: string): { file
         assets.push(entry.path)
       } else {
         // Decoded as single-file migration does: ill-formed bytes become U+FFFD (CARVE-P0-023).
-        const result = migrateMarkdown(read.bytes.toString('utf8'), { rewriteHeadingFragments: false })
+        const result = migrateMarkdownWithDestinations(read.bytes.toString('utf8'), { rewriteHeadingFragments: false })
         writeFileSync(out, result.value, { flag: 'wx' })
         files.push({ source: entry.path, output: destination, diagnostics: result.report.diagnostics })
+        authored.set(entry.path, result.authored)
       }
     }
-    const broken = new Set(checkLinks(temporary, files, assets))
+    const broken = new Set(checkLinks(temporary, files, assets, authored))
     const review = files.filter((file) => broken.has(file.source) || file.diagnostics.some((diagnostic) => diagnostic.fidelity === 'degraded' || diagnostic.fidelity === 'dropped')).map((file) => file.source)
     writeFileSync(join(temporary, 'migration-report.json'), JSON.stringify({ schemaVersion: 1, sourceFormat: 'markdown', files, assets, skipped, review }, null, 2) + '\n')
     placeOutput(temporary, outputRoot)

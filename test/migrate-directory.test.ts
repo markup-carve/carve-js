@@ -72,6 +72,27 @@ it('rewrites a case-only cross-file fragment and reports it as a fixup', () => {
   expect(report.review).toEqual(['c.md'])
 })
 
+it('names a cross-file fragment as the link wrote it, not percent-encoded (CARVE-P2-031)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'carve-migrate-'))
+  roots.push(root)
+  const source = join(root, 'source')
+  mkdirSync(source)
+  writeFileSync(join(source, 'a.md'), 'See [b](b.md#über-uns).\n')
+  writeFileSync(join(source, 'b.md'), '# Über Uns\n\nRun it.\n')
+  const output = join(root, 'output')
+  const report = JSON.parse(readFileSync(migrateMarkdownDirectory(source, output).report, 'utf8'))
+  expect(readFileSync(join(output, 'a.crv'), 'utf8')).toBe('See [b](b.crv#%C3%9Cber-Uns).\n')
+  const a = report.files.find((file: { source: string }) => file.source === 'a.md')
+  expect(a.diagnostics.filter((row: { code: string }) => row.code === 'link-fragment-case-rewritten')).toEqual([{
+    code: 'link-fragment-case-rewritten',
+    message: 'Rewrote link fragment #über-uns to #%C3%9Cber-Uns, the one heading id it matches without regard to case.',
+    severity: 'info',
+    fidelity: 'normalized',
+    confidence: 'inferred',
+    path: 'link:b.md#über-uns',
+  }])
+})
+
 it('rewrites verified document links and reports missing files, fragments, and assets', () => {
   const root = mkdtempSync(join(tmpdir(), 'carve-links-'))
   roots.push(root)

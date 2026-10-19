@@ -53,13 +53,34 @@ it('reports a same-file rewrite as a fixup beside a complete assessment', () => 
   })
 })
 
+it('names the fragment as the link wrote it, not percent-encoded (CARVE-P2-031)', () => {
+  const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns).\n')
+  expect(result.value).toBe('# Über Uns\n\nSee [a](#%C3%9Cber-Uns).\n')
+  expect(result.report.diagnostics).toEqual([
+    expect.objectContaining({ code: 'fidelity-unverified', severity: 'warning', fidelity: 'dropped', confidence: 'fallback' }),
+    {
+      code: 'link-fragment-case-rewritten',
+      message: 'Rewrote link fragment #über-uns to #%C3%9Cber-Uns, the one heading id it matches without regard to case.',
+      severity: 'info',
+      fidelity: 'normalized',
+      confidence: 'inferred',
+      path: 'link:#über-uns',
+    },
+  ])
+})
+
+it('falls back to the encoded fragment when two spellings encode alike', () => {
+  const result = migrateMarkdown('# Über Uns\n\nSee [a](#über-uns) and [b](#%C3%BCber-uns).\n')
+  expect(result.report.diagnostics.slice(1).map(row => row.path)).toEqual(['link:#%C3%BCber-uns', 'link:#%C3%BCber-uns'])
+})
+
 it('reports no fixup for an ambiguous or exact fragment', () => {
   const ambiguous = migrateMarkdown('# Twin\n\n# twin\n\n[x](#TWIN)\n')
   const exact = migrateMarkdown('# Install Steps\n\n[x](#Install-Steps)\n')
   for (const result of [ambiguous, exact]) expect(result.report.diagnostics.some(row => row.code === 'link-fragment-case-rewritten')).toBe(false)
 })
 
-it('names the encoded fragments in a Unicode fixup', () => {
+it('names the authored fragment and the encoded rewrite in a Unicode fixup', () => {
   const result = migrateMarkdown('# ΟΔΟΣ\n\n[street](#οδος)\n')
-  expect(result.report.diagnostics.at(-1)?.message).toBe('Rewrote link fragment #%CE%BF%CE%B4%CE%BF%CF%82 to #%CE%9F%CE%94%CE%9F%CE%A3, the one heading id it matches without regard to case.')
+  expect(result.report.diagnostics.at(-1)?.message).toBe('Rewrote link fragment #οδος to #%CE%9F%CE%94%CE%9F%CE%A3, the one heading id it matches without regard to case.')
 })

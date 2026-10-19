@@ -532,11 +532,28 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   // carries it literally, balanced or not, so encoding changed the address the
   // Markdown writer had emitted verbatim. Same ruling as the Djot side,
   // carve#2854.
-  return decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, (char) => {
+  const encoded = decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, (char) => {
     const point = char.codePointAt(0)!
     return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-  }).replace(/[()]/g, '\\$&')
+  })
+  recordAuthoredDestination(encoded, restored)
+  return encoded.replace(/[()]/g, '\\$&')
 }
+
+/**
+ * CARVE-P2-031: the destination each converted link had in the Markdown source,
+ * keyed by the destination the conversion wrote. `null` marks two spellings,
+ * where the encoded form is reported because the link cannot be told apart.
+ */
+let authoredDestinations = new Map<string, string | null>()
+
+function recordAuthoredDestination(encoded: string, authored: string): void {
+  const known = authoredDestinations.get(encoded)
+  authoredDestinations.set(encoded, known === undefined || known === authored ? authored : null)
+}
+
+/** The destinations a conversion changed, mapped back to the spelling the author wrote. */
+export type AuthoredDestinations = ReadonlyMap<string, string>
 
 /** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
 const RE_QUOTED_TITLE = /^(\s*)(["'])([\s\S]*)\2(\s*)$/
@@ -5984,9 +6001,13 @@ export function markdownToCarveWithLosses(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
   rewriteHeadingFragments = true,
-): { value: string; losses: MarkdownImportLoss[]; unfixed?: string; fixups?: FragmentFixup[] } {
+): { value: string; losses: MarkdownImportLoss[]; unfixed?: string; fixups?: FragmentFixup[]; authored?: AuthoredDestinations } {
   markdown = replaceLoneSurrogates(markdown)
   const losses: MarkdownImportLoss[] = []
+  const outerAuthored = authoredDestinations
+  authoredDestinations = new Map()
+  const authored = (): AuthoredDestinations =>
+    new Map([...authoredDestinations].filter((entry): entry is [string, string] => entry[1] !== null && entry[1] !== entry[0]))
   importLosses = losses
   const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
   let emptyDestinationKey: string | undefined
@@ -6042,11 +6063,12 @@ export function markdownToCarveWithLosses(
       finally { importedCrossrefIds = null }
     }
     if (rewriteHeadingFragments && value.includes('](#')) {
-      const rewritten = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }))
-      if (rewritten.fixups.length > 0) return { value: rewritten.value, losses, unfixed: rewritten.unfixed, fixups: rewritten.fixups }
+      const rewritten = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }), authored())
+      if (rewritten.fixups.length > 0) return { value: rewritten.value, losses, unfixed: rewritten.unfixed, fixups: rewritten.fixups, authored: authored() }
     }
-    return { value, losses }
+    return { value, losses, authored: authored() }
   } finally {
+    authoredDestinations = outerAuthored
     inlineCarriersEnabled = false
     inlineCarriersDamaged = false
     carrierSlots = []
