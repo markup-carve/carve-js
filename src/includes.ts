@@ -1189,6 +1189,9 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
       case 'heading_ref':
         follow(node, 'target', byTarget.get(crossrefKey(node['target'] as string)), '')
         break
+      case 'table_cell_ref':
+        follow(node, 'target', exact.get(node['target'] as string), '')
+        break
       case 'link':
       case 'link_reference_definition':
         follow(node, 'href', fragment(node['href'] as string), '#')
@@ -1236,7 +1239,12 @@ function assignRenamedIds(state: State): void {
     const next = nextFree(pending.base, taken)
     taken.add(next)
     pending.attrs.id = next
-    for (const ref of pending.refs) ref.node[ref.key] = `${ref.prefix}${next}`
+    for (const ref of pending.refs) {
+      ref.node[ref.key] = `${ref.prefix}${next}`
+      if (ref.node['type'] === 'table_cell_ref' && typeof ref.node['source'] === 'string') {
+        ref.node['source'] = ref.node['source'].replace(`@{#${pending.base}[`, `@{#${next}[`)
+      }
+    }
     if (pending.warning) pending.warning.message = `Id "${pending.base}" was renamed to "${next}".`
   }
 }

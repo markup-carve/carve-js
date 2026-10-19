@@ -1,4 +1,5 @@
 import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { resolveTableCellRefs, tableCellRefFallback } from './table-cell-ref.js'
 import { normalizeRefLabel } from './label-key.js'
 import { renderLinkReferenceDefinition } from './render-carve.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
@@ -49,6 +50,7 @@ export interface PlainTextRenderOptions extends RenderLossSinkOptions {
  */
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  resolveTableCellRefs(ast)
   hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f: a definition whose own expansion this render emits loses its
   // line, and the lines come before the occurrences that decide it. So when the
@@ -409,6 +411,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'table_cell_ref':
+      return stripControls(node.value ?? tableCellRefFallback(node))
     case 'escaped_text':
       return node.value
     case 'emphasis':

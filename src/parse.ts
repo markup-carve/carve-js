@@ -40,6 +40,7 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  TableCellRef,
   CaptionNumber,
   CitationGroup,
   Comment,
@@ -95,6 +96,31 @@ import { markAboveContentColumn, markSecondLineLazy } from './paragraph-indent.j
 import { normalizeRefLabel } from './label-key.js'
 import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
+
+const TABLE_CELL_REF_SOURCE = /^@\{#([A-Za-z0-9_][A-Za-z0-9_-]*)\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\}$/
+
+function tableCellRefEnd(text: string, start: number): number {
+  let quoted = false
+  for (let i = start + 3; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue }
+    if (text[i] === '"') { quoted = !quoted; continue }
+    if (!quoted && text[i] === '}') return i + 1
+  }
+  return -1
+}
+
+export function parseTableCellRefSource(source: string): TableCellRef | null {
+  const match = TABLE_CELL_REF_SOURCE.exec(source)
+  if (!match) return null
+  const selector = (raw: string): number | string => raw[0] === '"'
+    ? raw.slice(1, -1).replace(/\\(["\\])/g, '$1')
+    : Number(raw)
+  const row = selector(match[2]!)
+  const column = selector(match[3]!)
+  if (!Number.isSafeInteger(row) && typeof row === 'number') return null
+  if (!Number.isSafeInteger(column) && typeof column === 'number') return null
+  return { type: 'table_cell_ref', target: match[1]!, row, column, source }
+}
 
 export interface ParseOptions {
   /**
@@ -7142,6 +7168,14 @@ export function splitTableRowSpans(
       i++
       continue
     }
+    if (openRun === 0 && ch === '@' && line.startsWith('@{#', i)) {
+      const end = tableCellRefEnd(line, i)
+      if (end > i && end <= scanEnd && parseTableCellRefSource(line.slice(i, end))) {
+        buf += line.slice(i, end)
+        i = end - 1
+        continue
+      }
+    }
     if (ch === '|' && openRun === 0) {
       cells.push({ text: buf, start: cellStart })
       buf = ''
@@ -8919,6 +8953,13 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       j++
       continue
     }
+    if (ch === '@' && s.startsWith('@{#', j)) {
+      const end = tableCellRefEnd(s, j)
+      if (end > j && parseTableCellRefSource(s.slice(j, end))) {
+        j = end - 1
+        continue
+      }
+    }
     // A `[` or `]` inside a verbatim span is literal text. An unclosed run
     // swallows every later `]` for a label opened before it.
     if (ch === '`') {
@@ -8993,6 +9034,14 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
         budget -= spanEnd - j
         j = spanEnd - 1
         continue
+      }
+      if (ch === '@' && s.startsWith('@{#', j)) {
+        const end = tableCellRefEnd(s, j)
+        if (end > j && parseTableCellRefSource(s.slice(j, end))) {
+          budget -= end - j
+          j = end - 1
+          continue
+        }
       }
       const inImageAlt = imageDepth[imageDepth.length - 1] ?? false
       const commentEnd = opaqueEnd(j, inImageAlt)
@@ -17377,6 +17426,15 @@ class ParseSession {
               continue
             }
           }
+          if (nxt === '@' && text.startsWith('@{#', i + 1)) {
+            const end = tableCellRefEnd(text, i + 1)
+            if (end !== -1) {
+              i += 2
+              append(text.slice(i, end))
+              i = end
+              continue
+            }
+          }
           i += 2
           continue
         }
@@ -18021,6 +18079,19 @@ class ParseSession {
 
       }
 
+      // A table-cell selector is parsed before mention recognition. Its value is
+      // filled only after the assembled document has been resolved.
+      if (c === '@' && rest.startsWith('@{#')) {
+        const end = tableCellRefEnd(text, i)
+        if (end !== -1) {
+          const sourceText = text.slice(i, end)
+          const parsed = parseTableCellRefSource(sourceText)
+          flush()
+          out.push(this.withPos(parsed ?? { type: 'text', value: sourceText } as Text, source, text, i, end))
+          i = end
+          continue
+        }
+      }
       // Mention
       if (c === '@' && (i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!))) {
         const m = RE_MENTION.exec(rest)

@@ -30,7 +30,7 @@ import { resolveTableSpans } from './table-spans.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
 import { isResolvedEmptyReference, markResolvedEmptyReference } from './reference-state.js'
 import { checkAstVersion } from './ast-envelope.js'
-import { MAX_NESTING_DEPTH } from './parse.js'
+import { MAX_NESTING_DEPTH, parseTableCellRefSource } from './parse.js'
 import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from './heading-ids.js'
 import {
   entriesFromWire,
@@ -839,6 +839,12 @@ function refuseSchemaViolations(node: unknown, path: string): void {
           (record.block === true) !== (record.form === 'block') ||
           (record.delimited === true) !== (record.form === 'braced')) {
         throw new AstJsonSchemaError('comment form disagrees with block or delimited', path)
+      }
+    }
+    if (type === 'table_cell_ref') {
+      const source = typeof record.source === 'string' ? parseTableCellRefSource(record.source) : null
+      if (!source || source.target !== record.target || source.row !== record.row || source.column !== record.column) {
+        throw new AstJsonSchemaError('table_cell_ref source disagrees with target or selectors', path)
       }
     }
     if ((type === 'link' || type === 'image') && record.resolved !== undefined &&

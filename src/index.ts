@@ -15,6 +15,7 @@ import {
 } from './heading-ids.js'
 import { parseDocument } from './parse-document.js'
 import { numberFootnotes } from './footnote-numbering.js'
+import { resolveTableCellRefs } from './table-cell-ref.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
@@ -560,6 +561,7 @@ function resolveDocument(
   const resolved = documentIds
     ? resolveHeadingIdsWithRegistry(doc, slugOpts, documentIds)
     : resolveHeadingIds(doc, slugOpts)
+  resolveTableCellRefs(resolved)
   // Footnote `number` (PART 12 §5): document reference order, so it is a
   // resolution result rather than a rendering one. `renderHtml()` numbers
   // the same way standalone (carve-js#479) via the same shared pass.

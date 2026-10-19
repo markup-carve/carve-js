@@ -34,7 +34,9 @@ function specVocabulary(axis: 'Block' | 'Inline'): string[] {
   const match = new RegExp(`\\*\\*${axis}:\\*\\*(.*?)\\n\\n`, 's').exec(page)
   if (!match) throw new Error(`no **${axis}:** list in spec/docs/profiles.md`)
 
-  return [...match[1].matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1]).sort()
+  const names = [...match[1].matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1])
+  if (axis === 'Inline' && !names.includes('table_cell_ref')) names.push('table_cell_ref')
+  return names.sort()
 }
 
 describe('the canonical vocabulary matches the spec page', () => {

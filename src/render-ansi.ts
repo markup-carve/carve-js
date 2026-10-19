@@ -1,4 +1,5 @@
 import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { resolveTableCellRefs, tableCellRefFallback } from './table-cell-ref.js'
 import { normalizeRefLabel } from './label-key.js'
 import { renderLinkReferenceDefinition } from './render-carve.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
@@ -63,6 +64,7 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  resolveTableCellRefs(ast)
   hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
   // lines come before the occurrences that decide whether they survive, so a
@@ -544,6 +546,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'table_cell_ref':
+      return node.attrs?.keyValues?.code === '' && node.value !== undefined
+        ? style(stripControls(node.value), FG_BRIGHT_YELLOW)
+        : stripControls(node.value ?? tableCellRefFallback(node))
     case 'escaped_text':
       return node.value
     case 'emphasis':

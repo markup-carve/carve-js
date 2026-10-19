@@ -126,6 +126,7 @@ export const DOCUMENT_ID_CHILD_FIELDS = {
   symbol: NO_CHILDREN,
   table: ["caption", "rows", "shortCaption"],
   table_cell: ["blocks", "children"],
+  table_cell_ref: NO_CHILDREN,
   table_row: ["cells"],
   tag: NO_CHILDREN,
   text: NO_CHILDREN,

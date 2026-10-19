@@ -1,5 +1,6 @@
 import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
 import { hydrateResolvedEmptyReferences } from './reference-state.js'
+import { resolveTableCellRefs, tableCellRefFallback } from './table-cell-ref.js'
 import { normalizeRefLabel } from './label-key.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
@@ -86,6 +87,7 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
  */
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
+  resolveTableCellRefs(ast)
   hydrateResolvedEmptyReferences(ast)
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
@@ -1205,6 +1207,9 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'text':
       return escapeUnresolvedCrossrefs(cleanEscapedText(node))
+    case 'table_cell_ref':
+      if (node.value === undefined) return escapeText(tableCellRefFallback(node))
+      return node.attrs?.keyValues?.code === '' ? renderCode(stripControls(node.value)) : escapeText(node.value)
     case 'cell_wrap':
       return ' '
     case 'escaped_text':

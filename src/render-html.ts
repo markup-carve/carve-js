@@ -1,5 +1,6 @@
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { withResolvedEmptyReferenceDefinitions } from './reference-state.js'
+import { resolveTableCellRefs, tableCellRefFallback } from './table-cell-ref.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -612,6 +613,7 @@ export function renderHtml(
   opts: RenderOptions = {},
   seededDocumentIds?: DocumentIdRegistry,
 ): string {
+  resolveTableCellRefs(ast)
   return withResolvedEmptyReferenceDefinitions(ast, () => renderHtmlImpl(ast, opts, seededDocumentIds))
 }
 
@@ -1903,7 +1905,7 @@ function emptyContinuation(cell: TableCell): TableCell {
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
-  const consumed = ['aligns', 'valigns', 'widths']
+  const consumed = ['aligns', 'valigns', 'widths', 'row-key']
   const hasBodyMetadata = ['body-rows', 'body-header-rows', 'body-header-cols'].some(key => node.attrs?.keyValues?.[key] !== undefined)
   if (!hasBodyMetadata || node.rowGroups || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
   let tableAttrs: Attrs | undefined = node.attrs ? {
@@ -2465,6 +2467,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)
+    case 'table_cell_ref': {
+      if (node.value === undefined) return escapeHtml(tableCellRefFallback(node))
+      const attrs = stripKeyValue(node.attrs, 'code')
+      const body = escapeHtml(node.value)
+      if (node.attrs?.keyValues?.code === '') return `<code${renderAttrs(attrs)}>${body}</code>`
+      return attrs ? `<span${renderAttrs(attrs)}>${body}</span>` : body
+    }
     case 'cell_wrap':
       return ' '
     case 'escaped_text':

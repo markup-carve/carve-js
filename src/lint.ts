@@ -72,6 +72,7 @@ import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } f
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './colon-fences.js'
 import { resolveTableSpans } from './table-spans.js'
+import { resolveTableCellRefs } from './table-cell-ref.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {
@@ -608,6 +609,14 @@ export function lintCarve(
   const slugOpts = headingIdSlugOpts(opts)
   const foldId = caseOnlyKey
   const out: LintWarning[] = []
+  resolveTableCellRefs(doc, (ref, reason) => {
+    out.push({
+      ...locate(ref, toUtf16),
+      rule: 'unresolved-table-cell-ref',
+      message: `Table cell reference ${ref.source} could not resolve: ${reason}.`,
+      data: { target: ref.target, row: ref.row, column: ref.column, reason },
+    })
+  })
 
   walkDocument(doc, (node) => {
     const code = node.type === 'code_block' ? node as unknown as CodeBlock

@@ -4732,6 +4732,8 @@ class CarveRenderSession {
     switch (node.type) {
       case 'text':
         return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
+      case 'table_cell_ref':
+        return withAttrs(node.source)
       case 'escaped_text':
         // The author escaped this character; the writer says so again. No
         // minimal/conservative decision applies - the node IS the decision.

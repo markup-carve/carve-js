@@ -858,6 +858,15 @@ export interface CrossRef extends BaseNode {
   resolvedText?: InlineNode[]
 }
 
+export interface TableCellRef extends BaseNode {
+  type: 'table_cell_ref'
+  target: string
+  row: number | string
+  column: number | string
+  source: string
+  value?: string
+}
+
 /**
  * Caption number placeholder (the bare `#` in `^ Figure #: …`). Emitted
  * only in caption context; `resolve()` fills `n` with the assigned number.
@@ -1049,6 +1058,7 @@ export type InlineNode =
   | SymbolInline
   | AutoLink
   | CrossRef
+  | TableCellRef
   | CaptionNumber
   | CitationGroup
   | Mention

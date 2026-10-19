@@ -134,6 +134,7 @@ export const CANONICAL_INLINE_TYPES = [
   'citation_group',
   'critic_comment',
   'heading_ref',
+  'table_cell_ref',
   'substitution',
 ] as const
 

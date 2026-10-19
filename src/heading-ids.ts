@@ -453,6 +453,9 @@ export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOpti
         out += '\u00a0'
         break
       case 'text':
+      case 'table_cell_ref':
+        out += n.type === 'table_cell_ref' ? (n.value ?? n.source) : n.value
+        break
       case 'code':
       // The escape is authoring syntax; the heading still contains the
       // character, and the id has always been slugified from what the reader

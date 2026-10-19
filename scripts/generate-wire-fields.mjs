@@ -25,6 +25,31 @@ export function wireFieldsSource(schema) {
     schema = structuredClone(schema);
     schema.$defs.table.properties.sourceFormat = { enum: ['csv', 'tsv'] };
   }
+  // The spec PR for table projections precedes the coordinated submodule pin.
+  // The overlay disappears once that pin provides the same node definition.
+  if (schema.$defs?.table_cell_ref === undefined) {
+    schema = structuredClone(schema);
+    schema.$defs.table_cell_ref = {
+      type: 'object',
+      required: ['type', 'target', 'row', 'column', 'source'],
+      properties: {
+        type: { const: 'table_cell_ref' },
+        target: { type: 'string', pattern: '^[A-Za-z0-9_][A-Za-z0-9_-]*$' },
+        row: { oneOf: [{ type: 'integer', minimum: 1 }, { type: 'string' }] },
+        column: { oneOf: [{ type: 'integer', minimum: 1 }, { type: 'string' }] },
+        source: { type: 'string' },
+        value: { type: 'string' },
+        attrs: { $ref: '#/$defs/attrs' },
+        pos: { $ref: '#/$defs/pos' },
+      },
+      additionalProperties: false,
+    };
+    schema.$defs.inlineNode.properties.type.enum.push('table_cell_ref');
+    schema.$defs.inlineNode.allOf.push({
+      if: { properties: { type: { const: 'table_cell_ref' } }, required: ['type'] },
+      then: { $ref: '#/$defs/table_cell_ref' },
+    });
+  }
   const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
