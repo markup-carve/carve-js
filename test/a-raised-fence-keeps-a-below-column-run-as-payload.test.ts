@@ -264,7 +264,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a closer at the outer column, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n  ```\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
     ],
     [
       'a closer at the outer column, trailing line at the child column',
@@ -279,7 +279,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a closer one column above the outer, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n   ```\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
     ],
     [
       'a closer one column above the outer, trailing line at the child column',

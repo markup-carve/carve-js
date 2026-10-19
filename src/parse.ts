@@ -15808,6 +15808,8 @@ class ParseSession {
       }> = []
       let openOpaque = 0
       let opaqueIdx = -1
+      // Rebasing can make a child paragraph's closing inline run look like an outer fence.
+      let foldedChildRun: string | null = null
       const enter = (entry: { opaque: boolean }, k: number): void => {
         if (!entry.opaque) return
         if (openOpaque === 0) opaqueIdx = k
@@ -15822,6 +15824,8 @@ class ParseSession {
       }
       for (let k = 0; k < fenceLines.length; k++) {
         const line = fenceLines[k]!
+        if (isBlankLine(line)) foldedChildRun = null
+        const subCol = k > 0 ? subListColumnAt(k - 1) : -1
         const inner = open[open.length - 1]
         if (inner !== undefined && inner.kind !== 'colon') {
           const closed =
@@ -15848,7 +15852,19 @@ class ParseSession {
             continue
           }
         }
+        const childRun = RE_FENCE.exec(line.trimStart())
+        if (childRun && k > 1 && subCol > 0 &&
+            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
+            !isBlankLine(fenceLines[k - 1]!) &&
+            (indentColumns(beforeRebase[k - 2]!, subCol) >= subCol ||
+              isListMarkerLine(beforeRebase[k - 2]!.trimStart())))
+          foldedChildRun = childRun[2]!
         const fenceCandidate = RE_FENCE.exec(line)
+        if (fenceCandidate && foldedChildRun === fenceCandidate[2] && subCol > 0 &&
+            indentColumns(beforeRebase[k - 1]!, subCol) < subCol) {
+          foldedChildRun = null
+          continue
+        }
         const foldedFence = fenceCandidate !== null && k > 0 &&
           ((itemParagraphFences.has(k - 1) && subListColumnAt(k - 1) > 0 &&
             indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)) ||
