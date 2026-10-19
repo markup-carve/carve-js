@@ -253,8 +253,8 @@ Parse with `positions: true` for the offsets to be usable. `start` and `end`
 count CODEPOINTS, the unit every `pos` on the tree uses, so a site is cut out
 of a buffer the same way any other node is - `[...source].slice(start, end)`,
 not `source.slice(start, end)`, which drifts by one per astral character ahead
-of the token. `line` and `column` locate the inline node the token starts in -
-the same anchor `expandIncludes` attributes its warnings to, so a site matches
+of the token. `line` and `column` locate the token's first character - the
+same anchor `expandIncludes` attributes its warnings to, so a site matches
 up with a warning about it.
 
 For a token a host already holds, `isDirectiveShape` and `parseDirective` answer
