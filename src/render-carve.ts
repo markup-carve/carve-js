@@ -524,6 +524,60 @@ function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
   return after.startLine === before.endLine + 1
 }
 
+// CARVE-P11-073: a `%%` line that I1b reads as a region marker.
+const REGION_MARKER = /^[ \t]*#(?:end)?region(?![A-Za-z0-9_])/
+
+function isRegionMarker(block: BlockNode): boolean {
+  return block.type === 'comment' && !block.block && block.delimited !== true && REGION_MARKER.test(block.content)
+}
+
+// A block a following `%%` line cannot continue, whatever the writer spells it as.
+const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>(['paragraph', 'image', 'heading', 'code_block', 'thematic_break', 'comment'])
+
+/**
+ * CARVE-P11-073: a region marker and its sibling keep the blank line, or its
+ * absence, the author wrote. `rendered` is the later block as written, whose
+ * leading attribute lines sit between the two without being part of its `pos`.
+ */
+function regionMarkerAdjacent(previous: BlockNode, block: BlockNode, rendered: string): boolean {
+  if (!isRegionMarker(previous) && !isRegionMarker(block)) return false
+  if (!CLOSED_BEFORE_A_MARKER.has(previous.type)) return false
+  const before = previous.pos
+  const after = block.pos
+  if (!before || !after) return false
+  return after.startLine === before.endLine + 1 + leadingAttributeLines(block, rendered)
+}
+
+/** The attribute lines the writer put above `block`; only a paragraph's own text can also open with `{`. */
+function leadingAttributeLines(block: BlockNode, rendered: string): number {
+  if (block.type === 'paragraph') return renderAttrs(block.attrs) !== '' && rendered.startsWith('{') ? 1 : 0
+  let count = 0
+  for (const line of rendered.split('\n')) {
+    if (!line.startsWith('{')) break
+    count++
+  }
+  return count
+}
+
+/**
+ * CARVE-P11-073: a region marker the reader kept in a list item from at or left
+ * of the item's marker column (X1) goes back to that column, not the content column.
+ */
+function regionMarkerAtItemMarkerColumn(
+  block: BlockNode,
+  previous: BlockNode | null,
+  previousMoved: boolean,
+  item: ListItem,
+): boolean {
+  if (previous === null || !isRegionMarker(block)) return false
+  if (previous.type !== 'paragraph' && previous.type !== 'image' && !previousMoved) return false
+  const at = block.pos
+  const before = previous.pos
+  const host = item.pos
+  if (!at || !before || !host || at.startColumn === undefined || host.startColumn === undefined) return false
+  return at.startLine === before.endLine + 1 && at.startColumn <= host.startColumn
+}
+
 function hostsCaption(block: BlockNode): boolean {
   if (block.type === 'block_quote') return block.fenced === true || block.children.length > 0
   // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
@@ -3025,7 +3079,7 @@ class CarveRenderSession {
     return rendered
   }
 
-  private renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
+  private renderBlocks(blocks: BlockNode[], ctx: CarveContext, item?: ListItem): string {
     if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     ctx.blockDepth++
     const previousHost = ctx.afterCaptionHost
@@ -3036,9 +3090,15 @@ class CarveRenderSession {
       let previousList: List | null = null
       let listSeparated = false
       let previousBlock: BlockNode | null = null
+      let previousMoved = false
       for (const block of blocks) {
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
-        const rendered = this.renderBlock(block, ctx)
+        let rendered = this.renderBlock(block, ctx)
+        const moved: boolean =
+          item !== undefined &&
+          spellsSomething(rendered) &&
+          regionMarkerAtItemMarkerColumn(block, previousBlock, previousMoved, item)
+        if (moved) rendered = this.atMarkerColumn(rendered)
         ctx.afterCaptionHost = hostsCaption(block)
         if (block.type === 'list') {
           listSeparated = previousList !== null && listsWouldMerge(previousList, block)
@@ -3059,7 +3119,11 @@ class CarveRenderSession {
           // writer to the author's layout. Adjacency is read from `pos`, so a
           // blank line the author DID write survives, and a tree with no
           // positions falls back to the separator every other block gets.
-          if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
+          if (
+            previousBlock !== null &&
+            parts.length > 0 &&
+            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text))
+          ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0) {
             // §11 N1a's boundary, written as a SENTINEL rather than as four
@@ -3073,6 +3137,7 @@ class CarveRenderSession {
             parts.push(text)
           }
           previousBlock = block
+          previousMoved = moved
         }
       }
       return parts.join('\n\n')
@@ -3601,7 +3666,7 @@ class CarveRenderSession {
     // them with a single newline so the re-parse stays tight. Using the generic
     // blank-line join here would loosen a tight item that has more than one child
     // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
-    if (!tight) return this.renderBlocks(item.children, ctx)
+    if (!tight) return this.renderBlocks(item.children, ctx, item)
     if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     ctx.blockDepth++
     try {
@@ -3620,6 +3685,7 @@ class CarveRenderSession {
       // condition under which a later bullet written there joins it instead of
       // opening below the paragraph above it. See `needsABlankLineAbove`.
       let aSubListAlreadyOpened = false
+      let movedMarker: BlockNode | null = null
       item.children.forEach((b, i) => {
         const previous = item.children[i - 1]
         const next = item.children[i + 1]
@@ -3718,6 +3784,12 @@ class CarveRenderSession {
             previousEmitted = b
             return
           }
+        }
+        if (regionMarkerAtItemMarkerColumn(b, previousEmitted, movedMarker === previousEmitted, item)) {
+          parts.push(this.atMarkerColumn(rendered))
+          previousEmitted = b
+          movedMarker = b
+          return
         }
         parts.push(rendered)
         previousEmitted = b
