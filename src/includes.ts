@@ -385,7 +385,23 @@ function sourceLines(source: string): string[] {
 }
 
 function sliceLines(source: string, range: { start: number; end: number }): string {
-  return sourceLines(source).slice(range.start - 1, range.end).join('\n')
+  const lines = sourceLineSpans(source)
+  if (range.end < range.start) return ''
+  const first = lines[range.start - 1]
+  const last = lines[Math.min(range.end, lines.length) - 1]
+  return first && last ? source.slice(first.start, last.end) : ''
+}
+
+function sourceLineSpans(source: string): Array<{ start: number; end: number; text: string }> {
+  const spans: Array<{ start: number; end: number; text: string }> = []
+  const breaks = /\r\n|[\r\n]/g
+  let start = 0
+  for (const match of source.matchAll(breaks)) {
+    spans.push({ start, end: match.index, text: source.slice(start, match.index) })
+    start = match.index + match[0].length
+  }
+  if (start < source.length) spans.push({ start, end: source.length, text: source.slice(start) })
+  return spans
 }
 
 /** Which marker set a region lookup uses: a Carve include, or a `@code` include (spec I1b). */
@@ -930,14 +946,24 @@ function expandChild(
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   if (d.code !== undefined) {
-    // Only the FILE's leading U+FEFF is not content (I1c); one opening a later selected line is.
-    const lines = sourceLines(resolved.base.line === 0 ? resolved.source.replace(/^\uFEFF/, '') : resolved.source)
-    const content = lines.length ? `${lines.join('\n')}\n` : ''
-    const startLine = resolved.base.line + 1
+    const spans = sourceLineSpans(resolved.full)
+    const range = d.region === undefined ? d.lines : regionLines(resolved.full, d.region, true)!
+    const selected = range ? spans.slice(range.start - 1, range.end) : spans
+    const lines = selected.map((span, index) => index === 0 && span.start === 0 ? span.text.replace(/^\uFEFF/, '') : span.text)
+    const content = resolved.full === '\uFEFF' ? '' : lines.map(line => `${line}\n`).join('')
+    const first = selected[0]
+    const last = selected[selected.length - 1]
+    const emptyStart = range ? spans[range.start - 1]?.start ?? resolved.full.length : 0
+    const startOffset = first ? codepoints(resolved.full.slice(0, first.start)) + (first.start === 0 && resolved.full.startsWith('\uFEFF') ? 1 : 0) : codepoints(resolved.full.slice(0, emptyStart)) + (!range && resolved.full === '\uFEFF' ? 1 : 0)
+    const endOffset = last ? codepoints(resolved.full.slice(0, last.end)) : startOffset
+    const startLine = range?.start ?? 1
+    const endLine = last ? (range ? range.start + selected.length - 1 : selected.length) : startLine
+    const startColumn = first?.start === 0 && resolved.full.startsWith('\uFEFF') || !first && resolved.full === '\uFEFF' ? 2 : 1
+    const endColumn = last ? 1 + codepoints(last.text) : startColumn
     const child: Document = {
       type: 'document',
       children: [{ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
-        pos: { startLine, endLine: startLine + Math.max(0, lines.length - 1), startColumn: 1, endColumn: 1, file: resolved.id } }],
+        pos: { startLine, endLine, startColumn, endColumn, startOffset, endOffset, file: resolved.id } }],
     }
     return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
   }
