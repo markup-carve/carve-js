@@ -16,8 +16,9 @@ describe('lint corpus parity', () => {
       '- ![a](i)\n  ^ cap\n  ```\n  b\n y\n  ```\n',
     ]) {
       const warnings = lintCarve(source)
-      expect(warnings.map((warning) => warning.rule)).toEqual(['fence-delimiter-indentation'])
-      expect(warnings[0]!.line).toBe(source.split('\n').length - 1)
+      const existing = warnings.filter(warning => warning.rule !== 'unclosed-code-fence')
+      expect(existing.map((warning) => warning.rule)).toEqual(['fence-delimiter-indentation'])
+      expect(existing[0]!.line).toBe(source.split('\n').length - 1)
     }
   })
 
@@ -27,6 +28,7 @@ describe('lint corpus parity', () => {
     ['581', '> - ::: box\n>   - ::: |\n>     ```\n>     :::\n>    ```\n>    :::bad\n>    :::\n- tail\n', ['1:5 unclosed-container-fence', '5:6 list-item-block-overindented']],
     ['581-3', '> - ::: box\n>   -   ::: |\n>       ```\n>       :::\n>     ```\n>     :::\n>     :::bad\n>     :::\n- tail\n', ['1:5 unclosed-container-fence', '5:7 list-item-block-overindented']],
   ])('reports the box a code fence swallows the closer of: %s', (_row, source, expected) => {
-    expect(lintCarve(source).map((warning) => `${warning.line}:${warning.column} ${warning.rule}`).sort()).toEqual(expected)
+    expect(lintCarve(source).filter(warning => warning.rule !== 'unclosed-code-fence')
+      .map((warning) => `${warning.line}:${warning.column} ${warning.rule}`).sort()).toEqual(expected)
   })
 })

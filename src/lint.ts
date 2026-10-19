@@ -42,6 +42,8 @@ import {
   TABLE_ALIGNMENT_MARKERS,
   type DanglingBlockAttributes,
   type UnclosedContainer,
+  type UnclosedCodeFence,
+  type RefusedContinuationMarker,
 } from './parse.js'
 import { normalizeRefLabel } from './label-key.js'
 import {
@@ -592,11 +594,15 @@ export function lintCarve(
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
+  const unclosedCodeFences: UnclosedCodeFence[] = []
+  const refusedContinuationMarkers: RefusedContinuationMarker[] = []
   const invalidContainerMetadata: UnclosedContainer[] = []
   const danglingBlockAttributes: DanglingBlockAttributes[] = []
   const doc = parse(source, {
     positions: true,
     onUnclosedContainer: (container) => unclosedContainers.push(container),
+    onUnclosedCodeFence: (fence) => unclosedCodeFences.push(fence),
+    onRefusedContinuationMarker: (marker) => refusedContinuationMarkers.push(marker),
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
@@ -729,6 +735,42 @@ export function lintCarve(
       start: container.startOffset,
       end: container.endOffset,
     })
+  }
+
+  const sourceLines = source.split(/\r\n|\n|\r/)
+  const lineOffsets: number[] = []
+  let offset = 0
+  for (const line of sourceLines) {
+    lineOffsets.push(offset)
+    offset += line.length + (source.slice(offset + line.length).startsWith('\r\n') ? 2 : 1)
+  }
+  const sourceOffset = (line: number, column: number): number =>
+    lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
+  const seenFence = new Set<string>()
+  for (const fence of unclosedCodeFences) {
+    const key = `${fence.line}:${fence.column}`
+    if (seenFence.has(key)) continue
+    seenFence.add(key)
+    const start = sourceOffset(fence.line, fence.column)
+    const ending = fence.reason === 'document' ? 'it runs to the end of the document'
+      : fence.reason === 'continuation' ? `a continuation marker on line ${fence.endLine} ends it`
+        : `it ends at the end of its container on line ${fence.endLine}`
+    out.push({ line: fence.line, column: fence.column, start, end: start + fence.marker.length,
+      rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
+  }
+  const seenMarker = new Set<string>()
+  for (const marker of refusedContinuationMarkers) {
+    const key = `${marker.line}:${marker.column}`
+    if (seenMarker.has(key)) continue
+    seenMarker.add(key)
+    const start = sourceOffset(marker.line, marker.column)
+    const following = marker.reason === 'blank' ? 'a blank line' : 'the end of the document'
+    const remedy = marker.reason === 'blank'
+      ? 'Delete the blank line to attach the next block, or delete the +.'
+      : 'Add a block after the +, or delete the +.'
+    out.push({ line: marker.line, column: marker.column, start, end: start + 1,
+      rule: 'continuation-marker-refused',
+      message: `This + attaches nothing: ${following} follows it, so the marker is refused and the ${marker.host} ends here. ${remedy}` })
   }
 
   // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause
