@@ -6006,8 +6006,11 @@ export function markdownToCarveWithLosses(
   const losses: MarkdownImportLoss[] = []
   const outerAuthored = authoredDestinations
   authoredDestinations = new Map()
-  const authored = (): AuthoredDestinations =>
-    new Map([...authoredDestinations].filter((entry): entry is [string, string] => entry[1] !== null && entry[1] !== entry[0]))
+  // Present only when some destination changed, so a plain result keeps its shape.
+  const authored = (): { authored?: AuthoredDestinations } => {
+    const map = new Map([...authoredDestinations].filter((entry): entry is [string, string] => entry[1] !== null && entry[1] !== entry[0]))
+    return map.size > 0 ? { authored: map } : {}
+  }
   importLosses = losses
   const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
   let emptyDestinationKey: string | undefined
@@ -6063,10 +6066,10 @@ export function markdownToCarveWithLosses(
       finally { importedCrossrefIds = null }
     }
     if (rewriteHeadingFragments && value.includes('](#')) {
-      const rewritten = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }), authored())
-      if (rewritten.fixups.length > 0) return { value: rewritten.value, losses, unfixed: rewritten.unfixed, fixups: rewritten.fixups, authored: authored() }
+      const rewritten = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }), authored().authored)
+      if (rewritten.fixups.length > 0) return { value: rewritten.value, losses, unfixed: rewritten.unfixed, fixups: rewritten.fixups, ...authored() }
     }
-    return { value, losses, authored: authored() }
+    return { value, losses, ...authored() }
   } finally {
     authoredDestinations = outerAuthored
     inlineCarriersEnabled = false
