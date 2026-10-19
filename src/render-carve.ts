@@ -532,7 +532,7 @@ function isRegionMarker(block: BlockNode): boolean {
 }
 
 // A block a following `%%` line cannot continue, whatever the writer spells it as.
-const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>(['paragraph', 'heading', 'code_block', 'thematic_break', 'comment'])
+const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>(['paragraph', 'image', 'heading', 'code_block', 'thematic_break', 'comment'])
 
 /**
  * CARVE-P11-073: a region marker and its sibling keep the blank line, or its
