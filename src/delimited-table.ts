@@ -16,6 +16,7 @@ export function parseDelimitedRows(
   source: string, separator: ',' | '\t',
   onField?: (start: number, end: number, quoted: boolean, escaped: boolean) => void,
   onRow?: (start: number, end: number) => void,
+  onMalformed?: (start: number) => void,
 ): string[][] | null {
   if (source === '') return []
   const rows: string[][] = []
@@ -64,19 +65,36 @@ export function parseDelimitedRows(
     if (ch === separator) finishField(i)
     else if (ch === '\n') finishRow(i)
     else if (ch === '"') {
-      if (!atStart || closed) return null
+      if (!atStart || closed) { onMalformed?.(rowStart); return null }
       quoted = true
       atStart = false
       wasQuoted = true
     } else {
-      if (closed) return null
+      if (closed) { onMalformed?.(rowStart); return null }
       field += ch
       atStart = false
     }
   }
-  if (quoted) return null
+  if (quoted) { onMalformed?.(rowStart); return null }
   if (source.at(-1) !== '\n') finishRow(source.length)
   return rows
+}
+
+export function delimitedRecordLocations(source: string, separator: ',' | '\t'): { rows: { line: number; fields: number }[]; malformedLine?: number } {
+  const rows: { line: number; fields: number }[] = []
+  // Record starts only move forward, so the line count is carried rather than recounted.
+  let counted = 0
+  let line = 1
+  const lineAt = (offset: number): number => {
+    for (; counted < offset; counted++) if (source[counted] === '\n') line++
+    return line
+  }
+  let malformedLine: number | undefined
+  const parsed = parseDelimitedRows(source, separator, undefined, (start) => {
+    rows.push({ line: lineAt(start), fields: 0 })
+  }, (start) => { malformedLine = lineAt(start) })
+  if (parsed) parsed.forEach((row, index) => { rows[index]!.fields = row.length })
+  return { rows, ...(malformedLine === undefined ? {} : { malformedLine }) }
 }
 
 function rowCount(raw: string | undefined): number | undefined {

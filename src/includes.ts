@@ -1,5 +1,7 @@
 import type {
   BlockNode,
+  CodeBlock,
+  Table,
   Document,
   Heading,
   HeadingLevel,
@@ -169,7 +171,13 @@ export interface IncludeUnresolved {
   denial?: IncludeDenial
 }
 
+export type IncludedContent =
+  | { mode: 'carve'; file: string; fileSource: string; includedBy: IncludeSite[]; source: string; firstLine: number; lines?: { start: number; end: number } }
+  | { mode: 'code'; file: string; fileSource: string; includedBy: IncludeSite[]; block: CodeBlock | Table; payload: string }
+
 export interface IncludeOptions {
+  /** Report every accepted include in `IncludeResult.included`, in directive order (lint reads it). */
+  collectIncluded?: boolean
   /** Resolve an include path to source text. Return null for an unresolvable path. */
   resolve?: (path: string, ctx: IncludeContext) => IncludeResolved | IncludeUnresolved | null
   /** Identity of the root document, passed to the first resolver call as context. */
@@ -221,6 +229,7 @@ export interface IncludeDependency {
 }
 
 export interface IncludeResult {
+  included?: IncludedContent[]
   doc: Document
   warnings: IncludeWarning[]
   /**
@@ -262,6 +271,7 @@ export type IncludeResolver = (
 
 
 interface State {
+  included?: IncludedContent[]
   opts: IncludeOptions
   warnings: IncludeWarning[]
   maxDepth: number
@@ -554,7 +564,7 @@ function resolveChild(
   d: Directive,
   state: State,
   node: Text,
-): { source: string; id: string; base: SliceBase } | null {
+): { source: string; id: string; base: SliceBase; full: string } | null {
   if (!state.opts.resolve) return null
   if (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1 || (d.code !== undefined && d.section !== undefined)) {
     warn(state, 'include-selection-conflict', `Include "${d.path}" cannot combine selectors.`, node)
@@ -667,8 +677,8 @@ function resolveChild(
     warn(state, 'include-region-invalid', `Include region "${d.region}" is missing or invalid in "${d.path}".`, node)
     return null
   }
-  if (!range) return { source, id, base: { line: 0, offset: 0 } }
-  return { source: sliceLines(source, range), id, base: sliceBase(source, range) }
+  if (!range) return { source, id, base: { line: 0, offset: 0 }, full: source }
+  return { source: sliceLines(source, range), id, base: sliceBase(source, range), full: source }
 }
 
 /**
@@ -858,9 +868,18 @@ function includeChild<T>(
   inline = false,
 ): T | null {
   const snap = beginReservations(state)
+  const slot = state.included?.length
+  if (state.included) state.included.push(undefined as unknown as IncludedContent)
   const expanded = expandChild(d, state, node, site, inline)
   const merged = expanded === null ? null : merge(expanded.doc, expanded.file, expanded.reach)
-  if (merged === null) rollbackReservations(state, snap)
+  if (merged === null) {
+    rollbackReservations(state, snap)
+    if (slot !== undefined) state.included!.length = slot
+  } else if (slot !== undefined && expanded) {
+    state.included![slot] = expanded.mode === 'code'
+      ? { mode: 'code', file: expanded.file, fileSource: expanded.full, includedBy: expanded.reach, block: expanded.doc.children[0] as CodeBlock | Table, payload: expanded.source }
+      : { mode: 'carve', file: expanded.file, fileSource: expanded.full, includedBy: expanded.reach, source: expanded.source, firstLine: expanded.firstLine, ...(expanded.lines ? { lines: expanded.lines } : {}) }
+  }
   return merged
 }
 
@@ -890,7 +909,7 @@ function expandChild(
   node: Text,
   site: IncludeSite,
   inline: boolean,
-): { doc: Document; file: string; reach: IncludeSite[] } | null {
+): { doc: Document; file: string; reach: IncludeSite[]; mode: 'code' | 'carve'; source: string; full: string; firstLine: number; lines?: { start: number; end: number } } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   if (d.code !== undefined) {
@@ -903,7 +922,7 @@ function expandChild(
       children: [{ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
         pos: { startLine, endLine: startLine + Math.max(0, lines.length - 1), startColumn: 1, endColumn: 1, file: resolved.id } }],
     }
-    return { doc: child, file: resolved.id, reach: [...state.sites, site] }
+    return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
   }
   const child = parseChild(resolved.source, state)
   // Before anything reads a position: selection, renames, nested expansion and
@@ -913,6 +932,7 @@ function expandChild(
   // not be resolved (no budget charge) and must not move section boundaries.
   // The child as read on its own: what a name and a crossref resolve against.
   const asRead = headingIdsAsRead(child)
+  let lines: { start: number; end: number } | undefined
   if (d.section) {
     const selected = selectFragment(child, d.section, asRead)
     if (!selected) {
@@ -925,6 +945,9 @@ function expandChild(
       return null
     }
     child.children = selected
+    const first = selected[0]?.pos
+    const last = selected[selected.length - 1]?.pos
+    if (first && last) lines = { start: first.startLine, end: last.endLine }
   }
   // Everything from here on operates on the child's own content, so warnings
   // it raises name the child rather than the document that included it.
@@ -976,7 +999,7 @@ function expandChild(
   stampSourceFile(child, resolved.id)
   state.file = outerFile
   state.sites.pop()
-  return { doc: child, file: resolved.id, reach }
+  return { doc: child, file: resolved.id, reach, mode: 'carve', source: resolved.source, full: resolved.full, firstLine: resolved.base.line, ...(lines ? { lines } : {}) }
 }
 
 /**
@@ -1644,6 +1667,7 @@ export function expandsForTarget(target: string): boolean {
 export function expandIncludes(doc: Document, source: string, options: IncludeOptions = {}): IncludeResult {
   const state: State = {
     opts: options,
+    ...(options.collectIncluded ? { included: [] } : {}),
     warnings: [],
     maxDepth: options.maxDepth ?? 16,
     maxBytes: options.maxBytes ?? Math.max(MIN_BUDGET, 8 * utf8ByteLength(source)),
@@ -1686,6 +1710,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
   }
   return {
     doc,
+    ...(state.included ? { included: state.included } : {}),
     warnings: state.warnings,
     suppressedWarnings: state.suppressedWarnings,
     dependencies: [...state.dependencies].map(([id, dependency]) => ({ id, ...dependency })),

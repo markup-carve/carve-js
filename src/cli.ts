@@ -16,7 +16,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { AST_CONTRACT_VERSION } from './ast-envelope.js'
-import { dirname, join, resolve as resolvePath } from 'node:path'
+import { dirname, join, relative, sep, resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { fileSystemResolver } from './includes-fs.js'
@@ -25,6 +25,8 @@ import {
   djotMigrationWarnings,
   formatMigrationWarnings,
   lintCarve,
+  lintIncludes,
+  type LintWarning,
   citations,
   type LintPlatform,
   KNOWN_LINT_PLATFORMS,
@@ -237,6 +239,7 @@ exits 1 if anything is reported, 0 if clean.
 
   lint options:
         --json       Emit semantic lint findings as structured JSON
+        --include-root <dir>  Expand and lint includes within this root
         --from-djot  Also flag valid Carve whose meaning differs from Djot
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
@@ -1487,10 +1490,12 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let platforms: LintPlatform[]
   let citationsEnabled: boolean
   let json: boolean
+  let includeRoot: string | undefined
   try {
     const parsed = parseArgs({
       args,
       options: {
+        'include-root': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
         'from-djot': { type: 'boolean' },
         portable: { type: 'boolean' },
@@ -1510,6 +1515,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     fromDjot = parsed.values['from-djot'] ?? false
     portable = parsed.values.portable ?? false
     json = parsed.values.json ?? false
+    includeRoot = parsed.values['include-root']
     // An unknown name is REFUSED here rather than silently ignored: on the API
     // an unknown host is a typed mistake the compiler catches, but a CLI flag
     // has no such reader, and a misspelt `--platform gihub` that reports
@@ -1532,14 +1538,44 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     return 2
   }
 
+  let includeResolver: ReturnType<typeof fileSystemResolver> | undefined
+  if (includeRoot !== undefined) {
+    try { includeResolver = fileSystemResolver(absoluteRoot(includeRoot)) }
+    catch { io.writeErr(`carve lint: cannot use include root ${includeRoot}\n`); return 2 }
+  }
+  const display = (id: string): string => {
+    if (!includeRoot) return id
+    const path = relative(realpathSync(absoluteRoot(includeRoot)), id)
+    return path === '..' || path.startsWith(`..${sep}`) ? id : path.split(sep).join('/')
+  }
+  const childFindings = (src: string, file?: string): LintWarning[] => {
+    if (!includeResolver) return []
+    const extensions = citationsEnabled ? [citations()] : []
+    const lintOne = (text: string): LintWarning[] => [
+      ...djotMigrationWarnings(text).filter(w => fromDjot || w.category === 'carve-breakage').map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '', start: w.start, end: w.end })),
+      ...lintCarve(text, { portable, platforms, extensions }),
+    ]
+    return lintIncludes(src, { portable, platforms, extensions, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne)
+  }
+  const showChild = (warning: LintWarning, file: string): void => {
+    const childFile = warning.file ? display(warning.file) : file
+    const chain = warning.includedBy?.map((site, index) => `${index === 0 ? file : display(site.file ?? '')}:${site.line}:${site.column}`).join(' > ')
+    io.write(`${formatLintWarnings([warning], childFile)}${chain ? ` (included from ${chain})` : ''}\n`)
+  }
+  const childJson = (warning: LintWarning, file: string): Record<string, unknown> => ({ ...warning, file: warning.file ? display(warning.file) : file, ...(warning.includedBy ? { includedBy: warning.includedBy.map((site, index) => ({ file: index === 0 ? file : display(site.file ?? ''), line: site.line, column: site.column })) } : {}) })
+
   if (positionals.length === 0) {
     const src = await io.readStdin()
     if (json) {
       const warnings = jsonLintWarnings(src, '<stdin>', fromDjot, portable, platforms, citationsEnabled)
-      io.write(JSON.stringify(warnings, null, 2) + '\n')
-      return warnings.length > 0 ? 1 : 0
+      const children = childFindings(src)
+      io.write(JSON.stringify([...warnings, ...children.map(w => childJson(w, '<stdin>'))], null, 2) + '\n')
+      return warnings.length + children.length > 0 ? 1 : 0
     }
-    return reportLint(src, '<stdin>', io, fromDjot, portable, platforms, citationsEnabled) > 0 ? 1 : 0
+    const count = reportLint(src, '<stdin>', io, fromDjot, portable, platforms, citationsEnabled)
+    const children = childFindings(src)
+    children.forEach(w => showChild(w, '<stdin>'))
+    return count + children.length > 0 ? 1 : 0
   }
 
   let total = 0
@@ -1556,10 +1592,14 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     }
     if (json) {
       const warnings = jsonLintWarnings(src, file, fromDjot, portable, platforms, citationsEnabled)
-      total += warnings.length
-      jsonWarnings.push(...warnings)
+      const children = childFindings(src, file)
+      total += warnings.length + children.length
+      jsonWarnings.push(...warnings, ...children.map(w => childJson(w, file)))
     } else {
       total += reportLint(src, file, io, fromDjot, portable, platforms, citationsEnabled)
+      const children = childFindings(src, file)
+      children.forEach(w => showChild(w, file))
+      total += children.length
     }
   }
   if (json) io.write(JSON.stringify(jsonWarnings, null, 2) + '\n')

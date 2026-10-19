@@ -68,12 +68,17 @@ import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
 import type { Attrs, BlockNode, CodeBlock, Document, Heading, Table } from './ast.js'
-import { delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
+import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
+import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './colon-fences.js'
 import { resolveTableSpans } from './table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {
+  /** Present only for a finding outside the top-level document; coordinates are in this file. */
+  file?: string
+  /** Directive chain that reached this file, top-level first. */
+  includedBy?: IncludeSite[]
   /** 1-based line number. */
   line: number
   /** 1-based column number. */
@@ -486,9 +491,77 @@ function collectDefinitionLabels(doc: Document): string[] {
   return labels
 }
 
+export interface LintOptions {
+  asciiHeadingIds?: AsciiHeadingIdMode
+  lowercaseHeadingIds?: boolean
+  portable?: boolean
+  platforms?: readonly LintPlatform[]
+  extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
+  includes?: { resolve: IncludeResolver; sourcePath?: string; maxDepth?: number; maxBytes?: number; maxResolverCalls?: number } | undefined
+}
+
+/** Maps a 1-based line and codepoint column in `text` to a UTF-16 offset; past the end clamps to its length. */
+function utf16Locator(text: string): (line: number, column: number) => number {
+  const starts = [0]
+  for (const match of text.matchAll(/\r\n|[\r\n]/g)) starts.push(match.index + match[0].length)
+  return (line, column) => {
+    let index = starts[line - 1] ?? text.length
+    for (let step = 1; step < column && index < text.length; step++) index += (text.codePointAt(index) ?? 0) > 0xffff ? 2 : 1
+    return index
+  }
+}
+
+export function lintIncludes(source: string, options: LintOptions, lintOne: (source: string) => LintWarning[]): LintWarning[] {
+  if (!options.includes) return []
+  const { resolve, sourcePath, maxDepth, maxBytes, maxResolverCalls } = options.includes
+  const extensions = options.extensions as CarveExtension[] | undefined
+  const doc = parseDocument(source, { positions: true, ...(extensions ? { extensions } : {}) })
+  const result = expandIncludes(doc, source, { resolve, ...(sourcePath ? { sourcePath } : {}), ...(extensions ? { extensions } : {}), ...(maxDepth !== undefined ? { maxDepth } : {}), ...(maxBytes !== undefined ? { maxBytes } : {}), ...(maxResolverCalls !== undefined ? { maxResolverCalls } : {}), collectIncluded: true })
+  const findings: LintWarning[] = []
+  const locators = new Map<string, (line: number, column: number) => number>()
+  for (const entry of result.included ?? []) {
+    const locate = locators.get(entry.fileSource) ?? utf16Locator(entry.fileSource)
+    locators.set(entry.fileSource, locate)
+    if (entry.mode === 'carve') {
+      for (const finding of lintOne(entry.source)) {
+        const line = finding.line + entry.firstLine
+        if (entry.lines && (line < entry.lines.start || line > entry.lines.end)) continue
+        const start = locate(line, finding.column)
+        findings.push({ ...finding, line, start, end: start + finding.end - finding.start, file: entry.file, includedBy: entry.includedBy })
+      }
+    } else {
+      const block = entry.block
+      const format = block.type === 'table' ? block.sourceFormat : block.attrs?.keyValues?.table === '' ? block.lang : undefined
+      if (format !== 'csv' && format !== 'tsv') continue
+      const { rows, malformedLine } = delimitedRecordLocations(entry.payload, format === 'csv' ? ',' : '\t')
+      const at = (payloadLine: number): number => (block.pos?.startLine ?? 1) + payloadLine - 1
+      const span = (fileLine: number): Pick<LintWarning, 'start' | 'end'> => ({ start: locate(fileLine, 1), end: locate(fileLine + 1, 1) })
+      if (malformedLine !== undefined) {
+        findings.push({ rule: 'delimited-table-malformed', message: 'This marked CSV/TSV record has malformed quoting, so the include remains a code block.', file: entry.file, includedBy: entry.includedBy, line: at(malformedLine), column: 1, ...span(at(malformedLine)) })
+        continue
+      }
+      const wide = rows.findIndex((row) => row.fields > rows[0]!.fields)
+      if (wide > 0) findings.push({ rule: 'delimited-table-wide-row', message: 'A CSV/TSV record has more fields than the first record; the table keeps the extra columns.', file: entry.file, includedBy: entry.includedBy, line: at(rows[wide]!.line), column: 1, ...span(at(rows[wide]!.line)) })
+    }
+  }
+  for (const warning of result.warnings) {
+    if (warning.rule === 'include-id-rename' || warning.rule === 'include-footnote-rename' || warning.rule === 'include-heading-clamp') continue
+    findings.push({ rule: warning.rule, message: warning.message, line: warning.line, column: warning.column, start: warning.start, end: warning.end, ...(warning.includedBy ? { file: warning.file, includedBy: warning.includedBy } : {}) })
+  }
+  const seen = new Set<string>()
+  return findings.filter((finding) => {
+    if (!finding.includedBy) return true
+    const key = `${finding.file}\0${finding.line}\0${finding.column}\0${finding.rule}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function lintCarve(
   source: string,
   opts: {
+    includes?: LintOptions['includes']
     asciiHeadingIds?: AsciiHeadingIdMode
     lowercaseHeadingIds?: boolean
     /** Deprecated compatibility option; blockquote marker spacing is now core syntax. */
@@ -1123,7 +1196,7 @@ export function lintCarve(
   collectContainedPlacementMarkers(doc, toUtf16, out, opts.extensions?.some((ext) => ext.name === 'citations') ?? false)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
-  return out
+  return opts.includes ? [...out, ...lintIncludes(source, opts, (src) => lintCarve(src, { ...opts, includes: undefined }))] : out
 }
 
 /**
