@@ -7574,8 +7574,11 @@ function opaqueGroupCloses(
   base: number,
   folded: ReadonlySet<number> | undefined,
   memo: GroupCloserMemo,
+  containerColumn = 0,
 ): boolean {
-  const cached = group.belowBaseCloses ? memo.comment.get(group.run) : memo.verbatim.get(group.char)
+  const cached = containerColumn === 0
+    ? group.belowBaseCloses ? memo.comment.get(group.run) : memo.verbatim.get(group.char)
+    : undefined
   if (group.belowBaseCloses) {
     if (cached !== undefined && from >= (cached as number)) return false
   } else {
@@ -7586,6 +7589,8 @@ function opaqueGroupCloses(
   for (let k = from; k < lines.length; k++) {
     const line = lines[k]!
     if (isBlankLine(line)) continue
+    // CARVE-P0-014: a below-column run is searched past, never matched.
+    if (indentColumns(line, containerColumn) < containerColumn) continue
     if (!group.belowBaseCloses && !closerReachesBase(k, folded)) continue
     const content = groupLineContent(line, base)
     if (group.closes(content)) return true
@@ -7594,8 +7599,10 @@ function opaqueGroupCloses(
       if (run !== null && run[1]![0] === group.char) maxRun = Math.max(maxRun, run[1]!.length)
     }
   }
-  if (group.belowBaseCloses) memo.comment.set(group.run, from)
-  else memo.verbatim.set(group.char, { from, maxRun })
+  if (containerColumn === 0) {
+    if (group.belowBaseCloses) memo.comment.set(group.run, from)
+    else memo.verbatim.set(group.char, { from, maxRun })
+  }
 
   return false
 }
@@ -8193,10 +8200,19 @@ function rebaseOverindentedBlocks(
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
     if (ownedColumn >= 0 && base >= ownedColumn) {
+      if (lineOpensItemBlock(line.trimStart()) || RE_COMMENT_LINE.test(line.trimStart()) ||
+          isBlockAttributeLine(line.trimStart())) {
+        const group = opensCodeFence(line.trimStart()) ? opaqueGroupCloser(line.trimStart()) : null
+        let memo = groupCloserMemos.get(base)
+        if (memo === undefined) groupCloserMemos.set(base, memo = { verbatim: new Map(), comment: new Map() })
+        if (group === null || opaqueGroupCloses(group, lines, i + 1, base, takenBelowColumn, memo, ownedColumn)) ownedParagraphOpen = false
+      }
+      continue
+    }
+    if (ownedColumn >= 0 && RE_COMMENT_LINE.test(line) && commentFenceRun(line) === undefined) {
       ownedParagraphOpen = false
       continue
     }
-    if (ownedColumn >= 0 && RE_COMMENT_LINE.test(line) && commentFenceRun(line) === undefined) continue
     if (childColonWidth !== null && ownedColumn >= 0) {
       const close = RE_ADMONITION_CLOSE.exec(line.trimStart())
       if (close?.[1]?.length === childColonWidth || (lineOpensItemBlock(line.trimStart()) && !opensCodeFence(line.trimStart()) && !RE_COMMENT_LINE.test(line.trimStart()))) childColonWidth = null
@@ -15925,12 +15941,36 @@ class ParseSession {
       // no consumer and repeats the prefix walk at every nesting level.
       const fenceLines = hasBlank ? [content, ...nested] : []
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
+      const foldedCloserChar = (line: string): string | null => {
+        const content = line.startsWith(LAZY_FRAME + '>') ? line.slice(LAZY_FRAME.length + 1) : line.trimStart()
+        return RE_FENCE_CLOSER.exec(content)?.[1]?.[0] ?? null
+      }
+      // Record lazy runs once, so each child opener can ask whether a folded
+      // closer follows it without rescanning the rest of the item.
+      const lazyClosersAhead: number[] = new Array(fenceLines.length).fill(0)
+      let lazyCloserMask = 0
+      for (let index = fenceLines.length - 1; index > 0; index--) {
+        if (lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!)) {
+          const char = foldedCloserChar(fenceLines[index]!)
+          if (char === '`') lazyCloserMask |= 1
+          else if (char === '~') lazyCloserMask |= 2
+        }
+        lazyClosersAhead[index - 1] = lazyCloserMask
+      }
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
       // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
       // blank inside that code loosened the item.
-      const closerLines = fenceLines.map((line, index) => index === 0 ? line :
-        line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0))
+      const closerLines = fenceLines.map((line, index) => {
+        if (index === 0) return line
+        const childColumn = subListColumnAt(index - 1)
+        const lazyFenceLine = lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!) &&
+          foldedCloserChar(line) !== null
+        if (lazyFenceLine || (RE_FENCE_CLOSER.test(line.trimStart()) &&
+            childColumn > 0 && beforeRebase[index - 1] !== undefined &&
+            indentColumns(beforeRebase[index - 1]!, childColumn) < childColumn)) return ''
+        return line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0)
+      })
       const closers = buildCloserIndex(closerLines)
       const open: Array<{
         kind: 'code' | 'comment' | 'colon'
@@ -15991,15 +16031,22 @@ class ParseSession {
             (indentColumns(beforeRebase[k - 2]!, subCol) >= subCol ||
               isListMarkerLine(beforeRebase[k - 2]!.trimStart())))
           foldedChildRun = childRun[2]!
-        const fenceCandidate = RE_FENCE.exec(line)
+        const belowChildColumn = k > 0 && subCol > 0 &&
+          beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, subCol) < subCol
+        const candidate = RE_FENCE.exec(line)
+        const lazyChildRun: boolean = belowChildColumn && foldedChildRun !== null && candidate !== null &&
+          candidate[2]![0] === foldedChildRun[0] && candidate[2]!.length <= foldedChildRun.length
+        const fenceCandidate: RegExpExecArray | null = lazyChildRun ? null : candidate
         if (fenceCandidate && foldedChildRun === fenceCandidate[2] && subCol > 0 &&
             indentColumns(beforeRebase[k - 1]!, subCol) < subCol) {
           foldedChildRun = null
           continue
         }
         const foldedFence = fenceCandidate !== null && k > 0 &&
-          ((itemParagraphFences.has(k - 1) && subListColumnAt(k - 1) > 0 &&
-            indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)) ||
+          ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
+            ? beforeRebase[k - 1] !== undefined &&
+              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
+            : ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0)) ||
             (k === 1 && subListColumnAt(0) > 0 &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content)))) &&
