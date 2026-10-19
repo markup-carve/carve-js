@@ -414,7 +414,8 @@ function regionLines(source: string, selected: string, code: boolean): { start: 
   const seen = new Set<string>()
   const stack: Array<{ name: string; line: number }> = []
   let range: { start: number; end: number } | null = null
-  for (const [index, sourceLine] of sourceLines(source).entries()) {
+  // I1b: the file's leading U+FEFF is not content, so it cannot hide a line-1 marker.
+  for (const [index, sourceLine] of sourceLines(source.replace(/^\uFEFF/, '')).entries()) {
     const line = sourceLine.replace(/^[ \t]*/, '')
     let body: string
     let closer = ''
@@ -684,7 +685,7 @@ function resolveChild(
     warn(state, 'include-budget', spentMessage('include-budget', d.path), node)
     return null
   }
-  if (d.lines && d.lines.start > sourceLines(source).length) {
+  if (d.lines && d.lines.start > sourceLines(source.replace(/^\uFEFF/, '')).length) {
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
   }
@@ -1374,6 +1375,7 @@ function expandRun(nodes: RunNode[], state: State): InlineNode[] {
     const d = parseDirective(raw, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
       (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, anchor),
+      (part) => warn(state, 'include-duplicate-option', `Include option "${part}" repeats an option given earlier.`, anchor),
     )
     if (!d) continue
     let blockInInline = false
@@ -1560,6 +1562,11 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
         if (!single) return
         reported = true
         warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, text)
+      },
+      (part) => {
+        if (!single) return
+        reported = true
+        warn(state, 'include-duplicate-option', `Include option "${part}" repeats an option given earlier.`, text)
       },
     )
     if (d) {
