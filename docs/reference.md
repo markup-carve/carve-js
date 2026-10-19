@@ -276,6 +276,13 @@ comment forms are recognized. Marker keywords are case-sensitive. Invalid or
 missing regions warn with `include-region-invalid` and leave the directive
 literal.
 
+`selectIncludeRegion(source, name, mode)` answers the same question for a host,
+with `mode` `'carve'` or `'code'`: `{ ok: true, start, end }` gives the 1-based,
+inclusive content lines (the opening marker is on `start - 1`), and
+`{ ok: false, rule: 'include-region-invalid' }` a region the expander would
+refuse. An editor jumping to a region calls it instead of copying the marker
+rules.
+
 `@code` emits one unparsed code block. `@code:lang` sets its fence language;
 without a language, none is inferred. It works with `@lines` or `@region`, but
 not `#section`. A block attribute line above the directive applies to the code
