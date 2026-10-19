@@ -818,6 +818,7 @@ export const layoutWork = {
 
 class Lexer {
   attachmentBoundaries: Set<number>
+  consumedContinuationLines: Set<number>
   /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
   quoteChainEndsInPlus: Map<number, Map<number, number>>
   prefixMemoLines?: boolean[]
@@ -1129,6 +1130,7 @@ class Lexer {
     inherited?: Lexer,
   ) {
     this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
+    this.consumedContinuationLines = inherited?.consumedContinuationLines ?? new Set()
     this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
@@ -11030,6 +11032,10 @@ class ParseSession {
     let pendingAt: number | null = null
     while (!lexer.eof()) {
       const line = lexer.peek()!
+      if (lexer.rootLines === undefined && lexer.consumedContinuationLines.has(lexer.lineNumber(lexer.pos))) {
+        lexer.consume()
+        continue
+      }
       if (isBlankLine(line)) {
         // Blank lines do NOT reset pending block attributes (§15 reach).
         lexer.consume()
@@ -14497,6 +14503,24 @@ class ParseSession {
         if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
         if (isBlankLine(l)) {
           markerNoteItemParagraphOpen = false
+          let afterBlanks = 1
+          while (lexer.peek(afterBlanks) !== undefined && isBlankLine(lexer.peek(afterBlanks)!)) afterBlanks++
+          const rootLines = lexer.rootLines ?? lexer.lines
+          const markerLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
+          const sourceMarker = rootLines[markerLineNumber - 1]
+          const follower = rootLines[markerLineNumber]
+          if (lazyState.opaque?.kind === 'code' &&
+              sourceMarker !== undefined && indentColumns(sourceMarker) > baseIndent &&
+              isContinuationMarker(sourceMarker) && follower !== undefined &&
+              !isBlankLine(follower) && indentColumns(follower) === 0) {
+            if (lexer.peek(afterBlanks) === undefined) lexer.consumedContinuationLines.add(markerLineNumber)
+            nested.push(sliceColumns(l, contentCol, true))
+            nestedSourceLines.push(l)
+            nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+            bufferedBlanks.add(nested.length)
+            lexer.consume()
+            continue
+          }
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
           pendingBlankTexts.push(l)
@@ -14518,6 +14542,23 @@ class ParseSession {
           continuationFenceBreaks.add(nested.length)
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           lexer.consume()
+          const rootFollower = (lexer.rootLines ?? lexer.lines)[plusLineNumber]
+          const detachedFollower = pendingBlanks > 0 && lazyState.opaque?.kind === 'code' &&
+            lexer.peek() === undefined && rootFollower !== undefined &&
+            !isBlankLine(rootFollower) && indentColumns(rootFollower) === 0
+          // An accepted marker leaves its buffered blanks in the open fence.
+          if (pendingBlanks > 0 && ((lexer.peek() !== undefined && !isBlankLine(lexer.peek()!)) || detachedFollower) &&
+              (lazyState.opaque !== null ||
+                (descendantOpaque !== null && !descendantOpaque.markerLine))) {
+            for (let k = 0; k < pendingBlankTexts.length; k++) {
+              if (pendingNoteComments.has(k)) noteCommentLines.add(nested.length)
+              else bufferedBlanks.add(nested.length + 1)
+              nestedSourceLines.push(pendingBlankTexts[k])
+              nested.push(sliceColumns(pendingBlankTexts[k] ?? '', contentCol, true))
+              nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
+              trackItemLazyState('', lazyState)
+            }
+          }
           pendingBlanks = 0
           pendingBlankLineNumbers = []
           pendingBlankTexts = []
@@ -14530,6 +14571,14 @@ class ParseSession {
           // first-block form above. Nothing is attached from another column, and
           // the marker line itself is still consumed, so the candidate falls
           // through to the ordinary rules on the next turn of this loop.
+          if (detachedFollower && attachesAtDocumentColumnZero(lexer)) {
+            lexer.consumedContinuationLines.add(plusLineNumber + 1)
+            lexer.attachmentBoundaries.add(plusLineNumber + 1)
+            nested.push(rootFollower)
+            nestedSourceLines.push(rootFollower)
+            nestedLineNumbers.push(plusLineNumber + 1)
+            continue
+          }
           if (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
           lexer.attachmentBoundaries.add(plusLineNumber)
           plusSeparators.add(nested.length)
