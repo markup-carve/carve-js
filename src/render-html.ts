@@ -153,8 +153,8 @@ export interface RenderOptions extends RenderLossSinkOptions {
   /**
    * Stamp each block element with `data-source-line="{n}"` (the
    * 1-based source line it starts on). Requires the AST to carry positions,
-   * which a parse does by default; `carveToHtml` forces them on regardless of
-   * the `positions` option, so this works there whatever the caller passed.
+   * which a parse does by default; `carveToHtml` retains them when `sourceLine`
+   * is enabled, even if the caller passes `positions: false`.
    * Off by default so canonical output is unchanged. Intended for editor
    * integrations that map rendered blocks back to source lines.
    */
