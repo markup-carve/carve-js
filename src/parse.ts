@@ -424,6 +424,11 @@ const RE_ADMONITION_OPEN = {
   },
 }
 
+function isFigureGroupOpener(line: string, inFigureGroup: boolean): boolean {
+  const match = RE_VALID_ADMONITION_OPEN.exec(line)
+  return match !== null && match[2] === 'figure' && match[3] === undefined && match[4] === undefined && !inFigureGroup
+}
+
 // The closer takes the OPENER's trailing run (`TRAILING_WS`), not `\s`. This is
 // the pair carve-js#805 names: carve-js#794 / carve-js#798 narrowed
 // `RE_ADMONITION_OPEN` above to `[ \t]*$` and left this one wide, so a mark that
@@ -11753,8 +11758,7 @@ class ParseSession {
     // design). A bare opener inside an OPEN group's body is demoted the same way:
     // groups do not nest, which is what `inFigureGroup` carries through the
     // recursion.
-    const isFigureGroup =
-      !invalidMetadata && kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
+    const isFigureGroup = isFigureGroupOpener(open, lexer.inFigureGroup)
     // The opener carries an optional quoted title only (grammar
     // quoted_title; PART 9 §12). The quotes delimit the title and are
     // stripped (not part of the rendered text); an explicitly empty `""`
@@ -13752,7 +13756,7 @@ class ParseSession {
     const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
     const closedCode = codeMarker !== null && last !== undefined && fenceCloseRe(codeMarker).test(last)
     const colon = first === undefined ? null : colonBlockOpenerRun(first)
-    const closedColon = colon !== null && /^:{3,} figure(?:[ \t]|$)/.test(first!) &&
+    const closedColon = colon !== null && isFigureGroupOpener(first!, lexer.inFigureGroup) &&
       last !== undefined && RE_ADMONITION_CLOSE.exec(last)?.[1]?.length === colon
     if (codeMarker !== null && !closedCode) {
       while (!lexer.eof() && !isBlankLine(lexer.peek()!)) {

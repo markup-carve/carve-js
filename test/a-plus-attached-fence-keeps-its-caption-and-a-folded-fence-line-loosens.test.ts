@@ -43,6 +43,18 @@ describe('an attached fence keeps its caption', () => {
     expect(html).toContain('</li>\n</ul>\n<p>^ cap\n- c</p>')
   })
 
+  it.each([
+    ['label', '::: figure [label]', '<p class="div-label">label</p>'],
+    ['title', '::: figure "t"', '<p class="admonition-title">t</p>'],
+  ])('a figure fence with a %s leaves the caption outside the list', (_kind, opener, metadata) => {
+    const html = carveToHtml(`- x\n+\n${opener}\nhi\n:::\n^ cap\n- c\n`)
+    expect(html).toContain('<div class="figure">')
+    expect(html).toContain(metadata)
+    expect(html).toContain('<p>hi</p>')
+    expect(html).toContain('</li>\n</ul>\n<p>^ cap\n- c</p>')
+    expect(html).not.toContain('<figcaption>')
+  })
+
   it('an unclosed attached fence consumes the remaining lines', () => {
     const html = carveToHtml('- x\n+\n```\nx\n^ cap\n- c\n')
     expect(html).toContain('<pre><code>x\n^ cap\n- c\n</code></pre>')
