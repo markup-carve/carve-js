@@ -1534,13 +1534,33 @@ function mergeFootnotes(
   })
 }
 
+function scansAsOneDirective(source: string): boolean {
+  const m = new RegExp(DIRECTIVE_SCAN_RE.source).exec(source)
+  return m !== null && m.index === 0 && m[0].length === source.length
+}
+
 function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): BlockNode[] {
   const source = directiveSource(block.children)
   if (source !== null) {
     const text = block.children.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: source } as Text)
-    const d = parseDirective(source, (part) =>
-      warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
-      (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, text),
+    // Only a paragraph that is ONE directive reports here; with two (`{{ a
+    // @bad:x }} {{ b }}`) the full-match reading spans both, so the inline
+    // scan reports and expands each one instead.
+    const shaped = DIRECTIVE_SHAPE_RE.test(source.trim())
+    const single = shaped || scansAsOneDirective(source)
+    let reported = false
+    const d = parseDirective(
+      source,
+      (part) => {
+        if (!single) return
+        reported = true
+        warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text)
+      },
+      (part) => {
+        if (!single) return
+        reported = true
+        warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, text)
+      },
     )
     if (d) {
       const site = siteOf(new RunText(block.children as RunNode[]), 0, source.length, state)
@@ -1558,8 +1578,9 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
       return merged ?? [block]
     }
     // A whole-paragraph directive that failed to parse was already reported
-    // here; skip the inline scan so it is not warned about twice.
-    if (DIRECTIVE_SHAPE_RE.test(source.trim())) return [block]
+    // here; skip the inline scan so it is not warned about twice. The shape
+    // test alone misses an option value holding a brace (`@code:j{s`).
+    if (reported || shaped) return [block]
   }
   block.children = expandInlines(block.children, state)
   return [block]
