@@ -46,7 +46,7 @@ describe('table cell references', () => {
 
   it('recomputes an ingested value and rejects inconsistent source fields', () => {
     const wire = carveToAstJson('{#s}\n|= K |= V |\n| Q2 | 150 |\n\n@{#s["Q2"]["V"]}')
-    const ref = (wire.children.at(-1) as { children: Array<Record<string, unknown>> }).children[0]!
+    const ref = (wire.children.at(-1) as unknown as { children: Array<Record<string, unknown>> }).children[0]!
     ref.value = 'forged'
     expect(renderHtml(fromAstJson(wire))).toContain('<p>150</p>')
     ref.row = 'Q1'
