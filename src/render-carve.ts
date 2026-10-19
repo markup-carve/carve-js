@@ -570,7 +570,7 @@ function regionMarkerAtItemMarkerColumn(
   item: ListItem,
 ): boolean {
   if (previous === null || !isRegionMarker(block)) return false
-  if (previous.type !== 'paragraph' && !previousMoved) return false
+  if (previous.type !== 'paragraph' && previous.type !== 'image' && !previousMoved) return false
   const at = block.pos
   const before = previous.pos
   const host = item.pos
