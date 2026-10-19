@@ -84,7 +84,18 @@ const files = readdirSync(vectorDir)
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>()
+const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>([
+  [
+    'i01b-region-host-renders-no-marker',
+    [
+      {
+        field: 'fmt',
+        value: '# Project\n\nIntro.\n\n%% #region requirements\n- PHP 8.3 or later\n- Composer 2.7\n%% #endregion requirements\n\nMore text.\n',
+        reason: 'CARVE-P11-073 keeps region markers on their lines (carve#3330)',
+      },
+    ],
+  ],
+])
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
