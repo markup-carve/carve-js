@@ -26,8 +26,8 @@ describe('fmt keeps a region marker on its line (CARVE-P11-073)', () => {
     ['- x\n  - y\n%% #endregion r\n', '- x\n  - y\n  %% #endregion r\n'],
     // Below a list the closer cannot be written adjacent: it would join the item.
     ['- a\n\n%% #endregion r\n', '- a\n\n%% #endregion r\n'],
-    // An empty item spelled `- +` would attach the marker below it.
-    ['- [ref]: /url\n%% #region r\n\nSee [it][ref].\n', '- +\n\n%% #region r\n\nSee [it][ref].\n\n[ref]: /url\n'],
+    // A definition above a marker is not hoisted past it, so the item keeps it.
+    ['- [ref]: /url\n%% #region r\n\nSee [it][ref].\n', '- [ref]: /url\n\n%% #region r\n\nSee [it][ref].\n'],
   ])('%j keeps its reading', (source, expected) => {
     const written = carveToCarve(source)
     expect(written).toBe(expected)

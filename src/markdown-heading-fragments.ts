@@ -48,7 +48,12 @@ export function fragmentFixupDiagnostic(fixup: FragmentFixup): { code: string; m
 }
 
 /** `unfixed` is the same rendering with the original fragments, so assessment sees only the conversion. */
-export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: string) => void): { value: string; unfixed: string; fixups: FragmentFixup[] } {
+/** `authored` maps a converted destination back to the one the Markdown link wrote (CARVE-P2-031). */
+export function rewriteSameFileHeadingLinks(
+  source: string,
+  onLoss: (message: string) => void,
+  authored: ReadonlyMap<string, string> = new Map(),
+): { value: string; unfixed: string; fixups: FragmentFixup[] } {
   const fixups: FragmentFixup[] = []
   if (!source.includes('](#')) return { value: source, unfixed: source, fixups }
   const document = parse(source)
@@ -73,10 +78,11 @@ export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: st
       const match = fragment && matchingHeadingFragment(fragment, exact, aliases)
       if (match && match !== fragment) {
         const destination = node.href
+        const written = authored.get(destination) ?? destination
         const to = encodeURIComponent(match)
         node.href = `#${to}`
         rewritten.push([node, destination])
-        fixups.push({ destination, from: destination.slice(1), to })
+        fixups.push({ destination: written, from: written.slice(1), to })
       }
     }
     for (const [key, child] of Object.entries(node)) {

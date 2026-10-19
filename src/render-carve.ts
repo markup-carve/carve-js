@@ -532,7 +532,47 @@ function isRegionMarker(block: BlockNode): boolean {
 }
 
 // A block a following `%%` line cannot continue, whatever the writer spells it as.
-const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>(['paragraph', 'image', 'heading', 'code_block', 'thematic_break', 'comment'])
+const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>([
+  'paragraph',
+  'image',
+  'heading',
+  'code_block',
+  'thematic_break',
+  'comment',
+  'table',
+  'div',
+  'admonition',
+  'link_reference_definition',
+])
+
+function closedBeforeAMarker(block: BlockNode): boolean {
+  if (block.type === 'block_quote') return block.fenced === true
+  return CLOSED_BEFORE_A_MARKER.has(block.type)
+}
+
+/** The start line of the last region marker anywhere in the tree, footnote bodies included. */
+function lastRegionMarkerLine(ast: Document): number | undefined {
+  let last: number | undefined
+  const stack: unknown[] = [ast.children, ast.footnoteDefs]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const entry of value) stack.push(entry)
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const node = value as BlockNode
+    if (node.type === 'comment' && isRegionMarker(node)) {
+      const line = node.pos?.startLine
+      if (line !== undefined && (last === undefined || line > last)) last = line
+      continue
+    }
+    for (const [key, field] of Object.entries(value)) {
+      if (key !== 'pos' && field !== null && typeof field === 'object') stack.push(field)
+    }
+  }
+  return last
+}
 
 /**
  * CARVE-P11-073: a region marker and its sibling keep the blank line, or its
@@ -541,7 +581,7 @@ const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>(['paragraph', 'image',
  */
 function regionMarkerAdjacent(previous: BlockNode, block: BlockNode, rendered: string): boolean {
   if (!isRegionMarker(previous) && !isRegionMarker(block)) return false
-  if (!CLOSED_BEFORE_A_MARKER.has(previous.type)) return false
+  if (!closedBeforeAMarker(previous)) return false
   const before = previous.pos
   const after = block.pos
   if (!before || !after) return false
@@ -2612,6 +2652,7 @@ class CarveRenderSession {
       const line = pos?.startLine
       if (line !== undefined && !this.footnoteDefsByLine.has(line)) this.footnoteDefsByLine.set(line, label)
     }
+    this.lastRegionMarker = lastRegionMarkerLine(ast)
     if (needsStringMarkers) {
       // Probe assembled token families with markers absent from authored fields.
       this.sentinels = shortSentinelTokens(treeSentinelNonces(ast), SENTINEL_COUNT)
@@ -3157,6 +3198,14 @@ class CarveRenderSession {
    * prose, the block itself for the strings a block writes directly.
    */
   private renderBlock(node: BlockNode, ctx: CarveContext): string {
+    const footnote = this.footnotePlaceholders.get(node as unknown as object)
+    if (footnote !== undefined) {
+      if (this.footnotesWrittenInPlace.has(footnote)) return ''
+      const blocks = ownValue(this.documentFootnoteDefs, footnote)
+      if (blocks === undefined) return ''
+      this.footnotesWrittenInPlace.add(footnote)
+      return this.renderOneFootnoteDef(footnote, blocks, ctx)
+    }
     const previous = this.escapeUnit
     this.escapeUnit = node as unknown as object
     // THE FLAG DESCRIBES THIS NODE, NOT ITS SUBTREE. A host sets it once and
@@ -3637,7 +3686,7 @@ class CarveRenderSession {
     // The definition's retained source position is the only record of what
     // occupied the item, so put it back there just as definitionInGap puts one
     // back between two surviving children.
-    if (ctx.listDepth > 1 && item.children.length === 0) {
+    if ((ctx.listDepth > 1 || this.staysAboveAMarker(item.pos?.startLine)) && item.children.length === 0) {
       const from = item.pos?.startLine
       const to = item.pos?.endLine
       if (from !== undefined && to !== undefined) {
@@ -4241,13 +4290,30 @@ class CarveRenderSession {
     type Piece = { at: number | undefined; text: string }
     const body: BlockNode[] = []
     const hoisted: BlockNode[] = []
+    // CARVE-P11-073 (c): a definition with a region marker below it stays among
+    // the blocks, where the author wrote it, so no region gains or loses it.
+    const inPlace: BlockNode[] = []
 
     for (const child of ast.children) {
       if (HOISTED_DEFINITION_TYPES.has(child.type)) {
-        hoisted.push(child)
+        if (this.staysAboveAMarker(child.pos?.startLine)) inPlace.push(child)
+        else hoisted.push(child)
         continue
       }
       body.push(child)
+    }
+    for (const label of Object.keys(ast.footnoteDefs ?? {})) {
+      const pos = ownValue(ast.footnoteDefPos, label)
+      if (!this.staysAboveAMarker(pos?.startLine)) continue
+      const placeholder = { type: 'raw_block', format: '', content: '', pos } as unknown as BlockNode
+      this.footnotePlaceholders.set(placeholder as unknown as object, label)
+      inPlace.push(placeholder)
+    }
+    inPlace.sort((a, b) => a.pos!.startLine - b.pos!.startLine)
+    for (const definition of inPlace) {
+      const line = definition.pos!.startLine
+      const at = body.findIndex((block) => block.pos !== undefined && block.pos.startLine > line)
+      body.splice(at === -1 ? body.length : at, 0, definition)
     }
 
     // THE BODY IS RENDERED FIRST, whatever the output order. A definition written
@@ -5378,6 +5444,16 @@ class CarveRenderSession {
   private footnoteDefsByLine = new Map<number, string>()
 
   private footnotesWrittenInPlace = new Set<string>()
+
+  /** CARVE-P11-073 (c): the last region marker's line; a definition above it is not hoisted past it. */
+  private lastRegionMarker: number | undefined
+
+  /** Stand-ins for footnote definitions written in place among the body's blocks. */
+  private footnotePlaceholders = new WeakMap<object, string>()
+
+  private staysAboveAMarker(line: number | undefined): boolean {
+    return line !== undefined && this.lastRegionMarker !== undefined && line < this.lastRegionMarker
+  }
 
   /** The document's footnote bodies, so a description can write one back. */
   private documentFootnoteDefs: Record<string, BlockNode[]> | undefined

@@ -7,7 +7,7 @@ import {
   type HtmlImportMode,
   type HtmlImportOptions,
 } from './html-import.js'
-import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
+import { markdownToCarveWithLosses, type AuthoredDestinations, type MarkdownDialect } from './markdown-migrate.js'
 import { assessMarkdown } from './markdown-assessment.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { fragmentFixupDiagnostic } from './markdown-heading-fragments.js'
@@ -90,7 +90,17 @@ export function migrateMarkdown(
   source: string,
   options: { dialect?: MarkdownDialect; rewriteHeadingFragments?: boolean } = {},
 ): MigrationResult {
+  const { value, report } = migrateMarkdownWithDestinations(source, options)
+  return { value, report }
+}
+
+/** `migrateMarkdown`, plus each changed destination's authored spelling for a directory's link pass. */
+export function migrateMarkdownWithDestinations(
+  source: string,
+  options: { dialect?: MarkdownDialect; rewriteHeadingFragments?: boolean } = {},
+): MigrationResult & { authored: AuthoredDestinations } {
   const result = markdownToCarveWithLosses(source, options.dialect, options.rewriteHeadingFragments ?? true)
+  const authored = result.authored ?? new Map<string, string>()
   const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
   const unfixed = result.unfixed ?? result.value
   const fixups = (result.fixups ?? []).map(fragmentFixupDiagnostic)
@@ -118,13 +128,13 @@ export function migrateMarkdown(
   fallback.value = result.value
   if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') {
     fallback.report.diagnostics[0].path = 'line:1'
-    return fallback
+    return { ...fallback, authored }
   }
   if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
-    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: [...assessment.diagnostics, ...fixups] } }
+    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: [...assessment.diagnostics, ...fixups] }, authored }
   }
   fallback.report.diagnostics.push(...fixups)
-  return fallback
+  return { ...fallback, authored }
 }
 
 export function migrateDjot(source: string): MigrationResult {
