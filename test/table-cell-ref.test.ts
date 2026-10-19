@@ -65,4 +65,24 @@ describe('table cell references', () => {
     expect(renderHtml(resolve(result.doc))).toContain('<p>150</p>')
     expect(renderCarve(result.doc)).toContain('@{#sales-2["Q2"]["Revenue"]}')
   })
+
+  it('projects before heading ids and cross-reference labels are resolved', () => {
+    const source = '{#s}\n|= K |= V |\n| Q2 | 150 |\n\n# Rev @{#s["Q2"]["V"]}\n\nSee </#Rev-150>.'
+    const html = carveToHtml(source)
+    expect(html).toContain('id="Rev-150"')
+    expect(html).toContain('href="#Rev-150">Rev 150</a>')
+  })
+
+  it('uses the chosen smart typography in projected values', () => {
+    const source = '{#s}\n|= K |= V |\n| Q2 | Year\'s |\n\n@{#s["Q2"]["V"]}'
+    expect(carveToHtml(source, { smartTypography: false })).toContain('<p>Year\'s</p>')
+  })
+
+  it('rejects markup in every named row key and reports malformed selectors', () => {
+    const table = '{#s}\n|= K |= V |\n| *Q2* | 150 |\n\n@{#s["Q2"]["V"]}'
+    expect(carveToHtml(table)).toContain('<p>@{#s["Q2"]["V"]}</p>')
+    expect(lintCarve('@{#s[0][1]}')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rule: 'malformed-table-cell-ref' }),
+    ]))
+  })
 })

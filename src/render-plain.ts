@@ -50,7 +50,7 @@ export interface PlainTextRenderOptions extends RenderLossSinkOptions {
  */
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
-  resolveTableCellRefs(ast)
+  resolveTableCellRefs(ast, undefined, opts.smartTypography)
   hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f: a definition whose own expansion this render emits loses its
   // line, and the lines come before the occurrences that decide it. So when the

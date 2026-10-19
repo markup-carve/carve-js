@@ -67,7 +67,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, CodeBlock, Document, Heading, Table } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, Document, Heading, Position, Table } from './ast.js'
 import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './colon-fences.js'
@@ -595,11 +595,13 @@ export function lintCarve(
   const unclosedContainers: UnclosedContainer[] = []
   const invalidContainerMetadata: UnclosedContainer[] = []
   const danglingBlockAttributes: DanglingBlockAttributes[] = []
+  const malformedTableCellRefs: Array<{ source: string; pos?: Position }> = []
   const doc = parse(source, {
     positions: true,
     onUnclosedContainer: (container) => unclosedContainers.push(container),
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
+    onMalformedTableCellRef: (source, pos) => malformedTableCellRefs.push({ source, ...(pos ? { pos } : {}) }),
   })
   // The AST carries codepoint positions over line-ending-normalized text; a
   // LintWarning reports UTF-16 into the source the caller passed, so a JS
@@ -609,6 +611,14 @@ export function lintCarve(
   const slugOpts = headingIdSlugOpts(opts)
   const foldId = caseOnlyKey
   const out: LintWarning[] = []
+  for (const malformed of malformedTableCellRefs) {
+    out.push({
+      ...locate(malformed, toUtf16),
+      rule: 'malformed-table-cell-ref',
+      message: `Table cell reference ${malformed.source} has a malformed selector.`,
+      data: { source: malformed.source, reason: 'malformed selector' },
+    })
+  }
   resolveTableCellRefs(doc, (ref, reason) => {
     out.push({
       ...locate(ref, toUtf16),

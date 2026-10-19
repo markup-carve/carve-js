@@ -1,6 +1,7 @@
 import type { Attrs, Document, InlineNode, Table, TableCell, TableCellRef } from './ast.js'
 import { inlineText } from './heading-ids.js'
 import { resolveTableSpans } from './table-spans.js'
+import type { SmartTypographyOption } from './smart-typography-mode.js'
 
 function attributeSource(attrs: Attrs | undefined): string {
   if (!attrs) return ''
@@ -48,9 +49,10 @@ function nodes(root: object): object[] {
   return found
 }
 
-function gridFor(table: Table): Array<Array<TableCell | undefined>> {
+function gridFor(table: Table): { grid: Array<Array<TableCell | undefined>>; spans: ReturnType<typeof resolveTableSpans> } {
   const grid: Array<Array<TableCell | undefined>> = table.rows.map(() => [])
-  for (const [r, row] of resolveTableSpans(table.rows).entries()) {
+  const spans = resolveTableSpans(table.rows)
+  for (const [r, row] of spans.entries()) {
     for (const [c, entry] of row.entries()) {
       if (entry.skip) continue
       for (let dr = 0; dr < entry.rowspan; dr++) {
@@ -60,11 +62,11 @@ function gridFor(table: Table): Array<Array<TableCell | undefined>> {
       }
     }
   }
-  return grid
+  return { grid, spans }
 }
 
 /** Resolve read-only table projections on the assembled tree. Safe to rerun. */
-export function resolveTableCellRefs(document: Document, onDiagnostic?: (ref: TableCellRef, reason: string) => void): Document {
+export function resolveTableCellRefs(document: Document, onDiagnostic?: (ref: TableCellRef, reason: string) => void, typography?: SmartTypographyOption): Document {
   const all = nodes(document)
   const tables = new Map<string, Table>()
   for (const node of all) {
@@ -73,9 +75,11 @@ export function resolveTableCellRefs(document: Document, onDiagnostic?: (ref: Ta
       tables.set(table.attrs.id, table)
     }
   }
-  const grids = new Map<Table, Array<Array<TableCell | undefined>>>()
+  const grids = new Map<Table, ReturnType<typeof gridFor>>()
+  const keysByTable = new Map<Table, Map<string, number> | undefined>()
   const values = new Map<TableCell, string | undefined>()
   const active = new Set<TableCell>()
+  const diagnosed = new WeakSet<TableCellRef>()
   const valueOf = (cell: TableCell | undefined): string | undefined => {
     if (!cell || cell.blocks || !cell.children) return undefined
     if (active.has(cell)) return undefined
@@ -90,17 +94,24 @@ export function resolveTableCellRefs(document: Document, onDiagnostic?: (ref: Ta
       else ref.value = resolved
       if (ref.value === undefined) valid = false
     }
-    const result = valid ? inlineText(cell.children) : undefined
+    const result = valid ? inlineText(cell.children, typography) : undefined
     active.delete(cell)
     values.set(cell, result)
     return result
   }
   const resolve = (ref: TableCellRef): string | undefined => {
-    const fail = (reason: string): undefined => { onDiagnostic?.(ref, reason); return undefined }
+    const fail = (reason: string): undefined => {
+      if (!diagnosed.has(ref)) {
+        diagnosed.add(ref)
+        onDiagnostic?.(ref, reason)
+      }
+      return undefined
+    }
     const table = tables.get(ref.target)
     if (!table) return fail('table id is absent')
-    let grid = grids.get(table)
-    if (!grid) { grid = gridFor(table); grids.set(table, grid) }
+    let tableGrid = grids.get(table)
+    if (!tableGrid) { tableGrid = gridFor(table); grids.set(table, tableGrid) }
+    const { grid, spans } = tableGrid
     const head = table.rowGroups?.headRows ?? table.rows.findIndex(row => !row.cells.every(cell => cell.header))
     const headRows = head < 0 ? table.rows.length : head
     const footRows = table.rowGroups?.footRows ?? 0
@@ -119,17 +130,23 @@ export function resolveTableCellRefs(document: Document, onDiagnostic?: (ref: Ta
       const keyName = table.attrs?.keyValues?.['row-key']
       const keyCol = keyName === undefined ? 0 : columnName(keyName)
       if (keyCol === undefined) return fail('row-key column is absent or ambiguous')
-      const keys: string[] = []
-      for (let r = headRows; r < bodyEnd; r++) {
-        const cell = grid[r]?.[keyCol]
-        const span = cell && resolveTableSpans(table.rows)[r]?.find(entry => entry.cell === cell)
-        const key = cell && span?.rowspan === 1 && span.colspan === 1 ? valueOf(cell) : undefined
-        if (!key || keys.includes(key)) return fail('row keys are empty, duplicate or spanned')
-        keys.push(key)
+      let keys = keysByTable.get(table)
+      if (!keysByTable.has(table)) {
+        keys = new Map<string, number>()
+        for (let r = headRows; r < bodyEnd; r++) {
+          const cell = grid[r]?.[keyCol]
+          const span = cell && spans[r]?.find(entry => entry.cell === cell)
+          const plain = cell?.children?.every(node => node.type === 'text' || node.type === 'escaped_text' || node.type === 'smart_punctuation') ?? false
+          const key = cell && plain && span?.rowspan === 1 && span.colspan === 1 ? valueOf(cell) : undefined
+          if (!key || keys.has(key)) { keys = undefined; break }
+          keys.set(key, r)
+        }
+        keysByTable.set(table, keys)
       }
-      const found = keys.indexOf(ref.row)
-      if (found < 0) return fail('row key is absent')
-      row = headRows + found
+      if (!keys) return fail('row keys are empty, duplicate, spanned or contain markup')
+      const found = keys.get(ref.row)
+      if (found === undefined) return fail('row key is absent')
+      row = found
     }
     if (row < headRows || row >= bodyEnd) return fail('body row is out of range')
     const cell = grid[row]?.[col]

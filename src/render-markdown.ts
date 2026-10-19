@@ -87,7 +87,7 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
  */
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
-  resolveTableCellRefs(ast)
+  resolveTableCellRefs(ast, undefined, opts.smartTypography)
   hydrateResolvedEmptyReferences(ast)
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.

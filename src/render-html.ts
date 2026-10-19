@@ -613,7 +613,7 @@ export function renderHtml(
   opts: RenderOptions = {},
   seededDocumentIds?: DocumentIdRegistry,
 ): string {
-  resolveTableCellRefs(ast)
+  resolveTableCellRefs(ast, undefined, opts.smartTypography)
   return withResolvedEmptyReferenceDefinitions(ast, () => renderHtmlImpl(ast, opts, seededDocumentIds))
 }
 

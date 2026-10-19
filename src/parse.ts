@@ -99,12 +99,43 @@ export { normalizeRefLabel } from './label-key.js'
 
 const TABLE_CELL_REF_SOURCE = /^@\{#([A-Za-z0-9_][A-Za-z0-9_-]*)\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\}$/
 
+let cellRefEndText: string | undefined
+let cellRefNextQuote: Int32Array
+let cellRefNextClose: Int32Array
+
 function tableCellRefEnd(text: string, start: number): number {
+  if (text !== cellRefEndText) {
+    cellRefEndText = text
+    const quotes = new Int32Array(text.length + 1)
+    const closes = new Int32Array(text.length + 1)
+    const escaped = new Uint8Array(text.length)
+    let slashes = 0
+    for (let i = 0; i < text.length; i++) {
+      escaped[i] = slashes % 2
+      slashes = text[i] === '\\' ? slashes + 1 : 0
+    }
+    quotes[text.length] = text.length
+    closes[text.length] = text.length
+    for (let i = text.length - 1; i >= 0; i--) {
+      quotes[i] = text[i] === '"' && !escaped[i] ? i : quotes[i + 1]!
+      closes[i] = text[i] === '}' && !escaped[i] ? i : closes[i + 1]!
+    }
+    cellRefNextQuote = quotes
+    cellRefNextClose = closes
+  }
   let quoted = false
-  for (let i = start + 3; i < text.length; i++) {
-    if (text[i] === '\\') { i++; continue }
-    if (text[i] === '"') { quoted = !quoted; continue }
-    if (!quoted && text[i] === '}') return i + 1
+  for (let i = start + 3; i < text.length;) {
+    const quote = cellRefNextQuote[i]!
+    const close = cellRefNextClose[i]!
+    if (close < quote) {
+      if (!quoted) return close + 1
+      i = close + 1
+    } else if (quote < text.length) {
+      quoted = !quoted
+      i = quote + 1
+    } else {
+      break
+    }
   }
   return -1
 }
@@ -123,6 +154,7 @@ export function parseTableCellRefSource(source: string): TableCellRef | null {
 }
 
 export interface ParseOptions {
+  onMalformedTableCellRef?: (source: string, pos?: Position) => void
   /**
    * Record source positions on the returned tree. Default true. Set false for
    * a smaller tree to serialize or compare. Internal spans needed for source
@@ -9857,6 +9889,7 @@ class ParseSession {
    */
   private activeDocument: string | null = null
   private recordPositions = true
+  private onMalformedTableCellRef: ParseOptions['onMalformedTableCellRef']
 
   // A definition pre-pass probe parses a source fragment through the block layer.
   // Matchers remain active during that parse, but its own definition scan must not
@@ -9869,6 +9902,7 @@ class ParseSession {
   private skipParagraphInlines = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
+    this.onMalformedTableCellRef = opts.onMalformedTableCellRef
     const sourceByteLength = utf8ByteLength(source)
     this.recordPositions = opts.positions !== false
     this.newlineIndexCache.clear()
@@ -18087,7 +18121,9 @@ class ParseSession {
           const sourceText = text.slice(i, end)
           const parsed = parseTableCellRefSource(sourceText)
           flush()
-          out.push(this.withPos(parsed ?? { type: 'text', value: sourceText } as Text, source, text, i, end))
+          const node = this.withPos(parsed ?? { type: 'text', value: sourceText } as Text, source, text, i, end)
+          out.push(node)
+          if (!parsed) this.onMalformedTableCellRef?.(sourceText, node.pos)
           i = end
           continue
         }

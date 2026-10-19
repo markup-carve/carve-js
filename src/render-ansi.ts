@@ -64,7 +64,7 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
-  resolveTableCellRefs(ast)
+  resolveTableCellRefs(ast, undefined, opts.smartTypography)
   hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
   // lines come before the occurrences that decide whether they survive, so a

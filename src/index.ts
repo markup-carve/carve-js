@@ -544,7 +544,7 @@ export function renderAnsiWithReport(
  */
 export function resolve(
   doc: Document,
-  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean; smartTypography?: RenderOptions['smartTypography'] } = {},
 ): Document {
   const registry = new DocumentIdRegistry()
   const resolved = resolveDocument(doc, opts, registry)
@@ -554,14 +554,14 @@ export function resolve(
 
 function resolveDocument(
   doc: Document,
-  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean },
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean; smartTypography?: RenderOptions['smartTypography'] },
   documentIds?: DocumentIdRegistry,
 ): Document {
   const slugOpts = headingIdSlugOpts(opts)
+  resolveTableCellRefs(doc, undefined, opts.smartTypography)
   const resolved = documentIds
     ? resolveHeadingIdsWithRegistry(doc, slugOpts, documentIds)
     : resolveHeadingIds(doc, slugOpts)
-  resolveTableCellRefs(resolved)
   // Footnote `number` (PART 12 §5): document reference order, so it is a
   // resolution result rather than a rendering one. `renderHtml()` numbers
   // the same way standalone (carve-js#479) via the same shared pass.
@@ -609,6 +609,7 @@ export function carveToHtml(
     resolveDocument(parse(source, parseOpts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+      smartTypography: opts.smartTypography,
     }, documentIds),
     exts,
     opts,
@@ -703,6 +704,7 @@ export function renderDocument(doc: Document, opts: RenderDocumentOptions = {}):
     resolveDocument(doc, {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+      smartTypography: opts.smartTypography,
     }, documentIds),
     exts,
     opts,
