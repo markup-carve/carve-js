@@ -5684,10 +5684,24 @@ function markerLineState(content: string, memo?: Map<number, number>): {
 } {
   const bottom = markerLineBottomBlock(content, memo)
   const quote = markerLineQuoteState(content, memo)
+  const fenceShaped = RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) ||
+    colonFenceShapeEndsLazyContinuation(bottom)
+  let hasNestedQuote = false
+  if (fenceShaped && quote === null) {
+    const prefix = content.slice(0, content.length - bottom.length)
+    if (prefix.includes('>')) {
+      for (let at = 0; at < prefix.length;) {
+        const quoted = quotePrefixLength(prefix, at, prefix.length)
+        if (quoted > 0) { hasNestedQuote = true; break }
+        const marker = markerPrefixLength(prefix, at, prefix.length)
+        if (marker === 0) break
+        at += marker
+      }
+    }
+  }
 
   return {
-    leavesParagraphOpen: quote !== null &&
-      (RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) || colonFenceShapeEndsLazyContinuation(bottom))
+    leavesParagraphOpen: (quote !== null || hasNestedQuote) && fenceShaped
       ? false : bottomBlockLeavesParagraphOpen(bottom),
     endsOnTableRow: quote === null && isTableRow(bottom),
     // A bare `+` at the bottom of the marker line is the CONTINUATION MARKER
@@ -14200,6 +14214,7 @@ class ParseSession {
       // Indices in `nested` that hold a `+`-injected blank separator. These keep
       // the attached block parsing standalone but never loosen the list (Bug B).
       const plusSeparators = new Set<number>()
+      const continuationFenceBreaks = new Set<number>()
       // Track whether the item's collected content currently ends in an open
       // paragraph (family-D lazy continuation). The lead text opens one.
       // ONE WALK for the three questions the lead line answers.
@@ -14466,6 +14481,7 @@ class ParseSession {
         // injects a blank separator so the block parses on its own; the
         // compact-list rule above then keeps the item tight.
         if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
+          continuationFenceBreaks.add(nested.length)
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           lexer.consume()
           pendingBlanks = 0
@@ -15417,10 +15433,18 @@ class ParseSession {
         const leadFrame = markerFenceAt(content, 0, leadMemo)
         let frameBase: number | null = leadFrame.base
         let markerFence: DescendantOpaque | null = leadFrame.close === null ? null : { close: leadFrame.close, base: leadFrame.base }
+        let replacementMarkerFence = false
         let bodyFence: (DescendantOpaque & { owner: number | null }) | null = null
         let commentOpen = commentFenceRun(markerLineBottomBlock(content, leadMemo))
+        const leadHasNoQuote = !content.slice(0, content.length - markerLineBottomBlock(content, leadMemo).length).includes('>')
         if (commentOpen !== undefined && !commentClosers.has(commentOpen)) commentOpen = undefined
         for (let bodyIndex = 0; bodyIndex < nested.length; bodyIndex++) {
+          if (continuationFenceBreaks.has(bodyIndex)) {
+            frameBase = null
+            markerFence = null
+            replacementMarkerFence = false
+            bodyFence = null
+          }
           const bodyLine = nested[bodyIndex]!
           if (isBlankLine(bodyLine)) continue
           const column = indentColumns(bodyLine)
@@ -15433,8 +15457,13 @@ class ParseSession {
           // A shallower line loses evidence of which descendant still owns the block.
           if (frameBase !== null && column < frameBase) frameBase = null
           let markerCloser = false
+          let endedMarkerFenceOnMarker = false
           if (markerFence !== null) {
-            if (column < markerFence.base) markerFence = null
+            if (column < markerFence.base) {
+              endedMarkerFenceOnMarker = isListMarkerLine(bodyLine) &&
+                leadHasNoQuote
+              markerFence = null
+            }
             else if (column === markerFence.base && markerFence.close.test(opener)) {
               markerFence = null
               markerCloser = true
@@ -15461,6 +15490,7 @@ class ParseSession {
             const frame = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
             frameBase = frame.base
             markerFence = frame.close === null ? null : { close: frame.close, base: frame.base }
+            replacementMarkerFence = endedMarkerFenceOnMarker
           }
           const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
           if (fence !== null) {
@@ -15468,7 +15498,11 @@ class ParseSession {
             bodyFence = { close: fenceCloseRe(marker), base: column, owner: frameBase !== null && frameBase > 0 && frameBase <= column ? frameBase : null }
           }
         }
-        trailingDescendantFence = bodyFence !== null
+        if (continuationFenceBreaks.has(nested.length)) {
+          markerFence = null
+          bodyFence = null
+        }
+        trailingDescendantFence = bodyFence !== null || (markerFence !== null && !replacementMarkerFence)
       }
 
       // A block opener may be authored past the canonical item-body column.  The

@@ -202,7 +202,7 @@ it('keeps a marker-shaped fence line in descendant code payload', () => {
   const source = '- - ```\n    - ```\n\ntail\n'
   for (const positions of [false, true]) {
     const html = renderHtml(parse(source, { positions }))
-    expect(html.match(/<code>([\s\S]*?)<\/code>/)?.[1]).toBe('- ```\n')
+    expect(html.match(/<code>([\s\S]*?)<\/code>/)?.[1]).toBe('- ```\n\n')
     expect(normalized(html)).toBe('<ul><li><ul><li><pre><code>- ```\n</code></pre></li></ul></li></ul><p>tail</p>')
   }
 })

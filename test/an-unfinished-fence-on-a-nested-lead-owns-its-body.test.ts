@@ -73,9 +73,9 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
     )
   })
 
-  it("a blank before an outside body stays outside the nested fence", () => {
+  it("a blank before an outside body stays in the nested fence", () => {
     expect(carveToHtml("- - ``` x\n\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
