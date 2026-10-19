@@ -123,9 +123,11 @@ export function tryFastHtmlWithStats(source: string, opts: Options): FastHtmlRes
 function eligibleText(source: string): boolean {
   if (!/[^\x00-\x7f]|[\0\t\v\f\r]/.test(source)) return true
   if (/[\0\t\v\f\r]/.test(source)) return false
-  // Unicode is admitted only without syntax that uses ASCII marker flanking.
-  return !/[*\/`\[\]{}^\\<>_~!@$=#'":%+|]|(?:^|\n)(?:[ .-]|[A-Za-z0-9]+[.)] )/.test(source) &&
-    !/[^\x00-\x7f\p{L}\p{M}\p{N}\p{P}\p{S}]/u.test(source)
+  const hasMarkers = /[*\/`\[\]{}^\\<>_~!@$=#'":%+|]|(?:^|\n)(?:[ .-]|[A-Za-z0-9]+[.)] )/.test(source)
+  // Combining marks can make an ASCII delimiter part of a larger character.
+  // Punctuation and symbols also stay on the AST route when markers are present.
+  if (hasMarkers) return !/[^\x00-\x7f\p{L}\p{N}]/u.test(source)
+  return !/[^\x00-\x7f\p{L}\p{M}\p{N}\p{P}\p{S}]/u.test(source)
 }
 
 function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): true | undefined {
