@@ -3973,19 +3973,22 @@ class CarveRenderSession {
     })
     if (this.alignTables && rowSlots.length > 0) {
       const widths: number[] = []
-      for (const slot of rowSlots) {
-        slot.cells.forEach((cell, index) => {
-          widths[index] = Math.max(widths[index] ?? 0, tableDisplayWidth(cell))
+      // [CARVE-P11-071] measures the segment as written: escapes still sit
+      // behind their sentinels here (`\ ` is one placeholder until normalize).
+      const written = rowSlots.map(slot => slot.cells.map(cell => this.writtenCellWidth(cell)))
+      rowSlots.forEach((slot, row) => {
+        slot.cells.forEach((_cell, index) => {
+          widths[index] = Math.max(widths[index] ?? 0, written[row]![index]!)
         })
-      }
+      })
       const separatorCells = separator?.slice(1, -1).split('|')
       separatorCells?.forEach((cell, index) => {
         widths[index] = Math.max(widths[index] ?? 0, tableDisplayWidth(cell))
       })
-      for (const slot of rowSlots) {
+      rowSlots.forEach((slot, row) => {
         rows[slot.index] = `${slot.marker}${slot.cells.map((cell, index) =>
-          cell + ' '.repeat(widths[index]! - tableDisplayWidth(cell))).join('|')}|${slot.attrs}`
-      }
+          cell + ' '.repeat(widths[index]! - written[row]![index]!)).join('|')}|${slot.attrs}`
+      })
       if (separatorCells) {
         separator = `|${separatorCells.map((cell, index) =>
           cell + ' '.repeat(widths[index]! - tableDisplayWidth(cell))).join('|')}|`
@@ -4002,6 +4005,18 @@ class CarveRenderSession {
       if (!(error instanceof RangeError) || node.separatorWidths === undefined) throw error
       throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', node)
     }
+  }
+
+  /**
+   * The display width of a cell segment once `normalize` has written it. The
+   * segment is resolved between two pipes, as it sits on its line, so no
+   * line-start or line-end rule fires that would not fire in place.
+   */
+  private writtenCellWidth(cell: string): number {
+    if (!this.sentinels.some(sentinel => cell.includes(sentinel))) return tableDisplayWidth(cell)
+    const nbsp = this.sentinels[3]!
+    const resolved = this.restoreVerbatim(`|${cell.split(nbsp).join('\\ ')}|`)
+    return tableDisplayWidth(resolved.slice(1, -1))
   }
 
   private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true, alignIsColonSpelled = false): string {
