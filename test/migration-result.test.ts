@@ -57,16 +57,59 @@ describe('shared migration result', () => {
     expect(result.report.diagnostics[1]!.message).toBe('Dropped the quote attribution field user_id.')
   })
 
+  it('replays every spec bbcode-quote-attribution fixture with its messages', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../spec/tests/importer-fidelity/manifest.json', import.meta.url), 'utf8')) as {
+      cases: Array<{ id: string; input: string; expected: { output: string; diagnostics: Array<Record<string, string>> } }>
+    }
+    const fixtures = manifest.cases.filter(item => item.id.startsWith('bbcode-quote-attribution-'))
+    expect(fixtures.length).toBeGreaterThan(0)
+    for (const fixture of fixtures) {
+      const result = migrateBbcode(fixture.input)
+      expect(result.value, fixture.id).toBe(fixture.expected.output)
+      expect(result.report.diagnostics.map(({ message, ...row }, index) => ({
+        ...row, ...(fixture.expected.diagnostics[index]?.message !== undefined ? { message } : {}),
+      })), fixture.id).toEqual(fixture.expected.diagnostics)
+    }
+  })
+
+  it('reports quoted text and adjacent bare words separately in source order', () => {
+    const diagnostics = migrateBbcode('[quote="bob" name="alice" foo=bar name="carol" stray words]q[/quote]').report.diagnostics
+      .filter(row => row.code === 'bbcode-quote-field-dropped')
+    expect(diagnostics.map(row => row.message)).toEqual([
+      'Dropped the unnamed quote attribution text "bob", which an explicit name= replaced.',
+      'Dropped the quote attribution field foo.',
+      'Dropped the quote attribution field name.',
+      'Dropped the unnamed quote attribution text "stray words", which an explicit name= replaced.',
+    ])
+  })
+
+  it('omits a consumed vBulletin suffix from the last dropped text run', () => {
+    const dropped = (input: string): string[] => migrateBbcode(input).report.diagnostics
+      .filter(row => row.code === 'bbcode-quote-field-dropped')
+      .map(row => row.message)
+    expect(dropped('[quote="bob" name="alice" foo=bar stray;123]q[/quote]')).toEqual([
+      'Dropped the unnamed quote attribution text "bob", which an explicit name= replaced.',
+      'Dropped the quote attribution field foo.',
+      'Dropped the unnamed quote attribution text "stray", which an explicit name= replaced.',
+    ])
+    expect(dropped('[quote="bob" name="alice" ;123]q[/quote]')).toEqual([
+      'Dropped the unnamed quote attribution text "bob", which an explicit name= replaced.',
+    ])
+  })
+
   it('reports every other attribution field an explicit name= leaves behind', () => {
     expect(migrateBbcode('[quote=id="9" name="user" foo=bar]q[/quote]\n\n[quote="alice" name="bob"]r[/quote]').report.diagnostics.slice(1)).toEqual([
       expect.objectContaining({ code: 'bbcode-quote-field-dropped', path: 'line:1', message: 'Dropped the quote attribution field foo.' }),
       expect.objectContaining({ code: 'bbcode-quote-field-dropped', path: 'line:3', message: expect.stringContaining('"alice"') }),
     ])
-    // A field the converter keeps as attribution text is not dropped.
-    expect(migrateBbcode('[quote="alice" foo=bar]q[/quote]').report.diagnostics.some(row => row.code === 'bbcode-quote-field-dropped')).toBe(false)
-    // The space form reaches convertQuotes escaped, so name= does not match there and only user_id goes.
+    // An unknown field is dropped without a name= too.
+    expect(migrateBbcode('[quote="alice" foo=bar]q[/quote]').report.diagnostics.filter(row => row.code === 'bbcode-quote-field-dropped')).toEqual([
+      expect.objectContaining({ message: 'Dropped the quote attribution field foo.' }),
+    ])
+    // The space opener reads its fields; the drops come in source order.
     expect(migrateBbcode('[quote name="user" user_id=4 extra]q[/quote]').report.diagnostics.filter(row => row.code === 'bbcode-quote-field-dropped')).toEqual([
       expect.objectContaining({ message: 'Dropped the quote attribution field user_id.' }),
+      expect.objectContaining({ message: 'Dropped the unnamed quote attribution text "extra", which an explicit name= replaced.' }),
     ])
   })
 

@@ -144,6 +144,9 @@ function escapePlainBbcodeText(bbcode: string): string {
   text = text.replace(/\[(?:c|icode)\][\s\S]*?\[\/(?:c|icode)\]/gi, protect)
   text = text.replace(/\[url\][\s\S]*?\[\/url\]/gi, protect)
   text = text.replace(/\[img(?:=[^\]]*)?\][\s\S]*?\[\/img\]/gi, protect)
+  // A quote opener with its fields after a space (`[quote name="bob"]`) is a tag
+  // too; the pattern below only sees `[tag=...]`.
+  text = text.replace(/\[quote [^\]]*\]/gi, protect)
   text = text.replace(/\[\/?[a-z][a-z0-9]*(?:=[^\]]*)?\]/gi, protect)
   // `[*]` is the list-item tag and the pattern above cannot see it - that one
   // needs a letter after the bracket. Left unprotected, two on a line read as a
@@ -665,7 +668,8 @@ function asLaterPassesLeaveIt(text: string): { copy: string; origin: number[] } 
     for (let k = from; k < to; k++) origin.push(k)
     copy += text.slice(from, to)
   }
-  for (const m of text.matchAll(/\[(\/?)(\*|[a-z][a-z0-9]*)(=[^\]\n]*)?\]/gi)) {
+  // A quote opener also takes its fields after a space (`[quote name="bob"]`).
+  for (const m of text.matchAll(/\[(\/?)(\*|[a-z][a-z0-9]*)(=[^\]\n]*|(?<=\[quote) [^\]\n]*)?\]/gi)) {
     const at = m.index!
     if (text[at - 1] === '\\') continue
     const [whole, slash, name, value] = m as unknown as [string, string, string, string | undefined]
@@ -731,96 +735,138 @@ function convertCode(text: string): string {
   )
 }
 
+type AttributionPart =
+  | { kind: 'field'; key: string; value: string; index: number }
+  | { kind: 'text'; text: string; quoted: boolean; index: number }
+
+/** ASCII whitespace only, so every engine splits an attribution at the same places. */
+const isAttributionSpace = (char: string): boolean => char === ' ' || char === '\t' || char === '\n' || char === '\r' || char === '\f'
+
+/** Split an attribution into `key=value` fields, quoted texts and bare words (carve#3341). */
+function attributionParts(attribution: string): AttributionPart[] {
+  const parts: AttributionPart[] = []
+  const runEnd = (from: number): number => {
+    let at = from
+    while (at < attribution.length && !isAttributionSpace(attribution[at]!)) at++
+    return at
+  }
+  const quotedEnd = (from: number): number => {
+    const quote = attribution[from]
+    return quote === '"' || quote === "'" ? attribution.indexOf(quote, from + 1) : -1
+  }
+  let i = 0
+  while (i < attribution.length) {
+    if (isAttributionSpace(attribution[i]!)) {
+      i++
+      continue
+    }
+    const index = parts.length
+    const key = /^[A-Za-z_][A-Za-z0-9_-]*=/.exec(attribution.slice(i))
+    if (key) {
+      const from = i + key[0].length
+      const close = quotedEnd(from)
+      const to = close === -1 ? runEnd(from) : close
+      parts.push({ kind: 'field', key: key[0].slice(0, -1), value: close === -1 ? attribution.slice(from, to) : attribution.slice(from + 1, to), index })
+      i = close === -1 ? to : close + 1
+      continue
+    }
+    const close = quotedEnd(i)
+    if (close !== -1) {
+      parts.push({ kind: 'text', text: attribution.slice(i + 1, close), quoted: true, index })
+      i = close + 1
+      continue
+    }
+    const to = runEnd(i)
+    parts.push({ kind: 'text', text: attribution.slice(i, to), quoted: false, index })
+    i = to
+  }
+  return parts
+}
+
+const ASCII_DIGITS = /^[0-9]+$/
+
 /**
- * Parse quote attribution into `name (datetime) #id`.
- *
- * Forums spell it every way there is: a bare username, `name="user"`,
- * `id="9" name="user" date="..."`, or a leading bare `"9"` post id.
+ * Read a quote attribution into its `name (date) #id` caption and the parts it
+ * drops, in source order. docs/format-bridges.md, "BBCode quote attribution
+ * reading", is the contract.
  */
-function formatAttribution(attribution: string, onDroppedField?: (field: string, unnamed?: boolean) => void): string {
-  let remaining = attribution.trim()
+function readAttribution(attribution: string): { caption: string; dropped: DroppedQuoteField[] } {
+  const parts = attributionParts(attribution)
+  const drops: Array<DroppedQuoteField & { index: number }> = []
+  const drop = (part: AttributionPart & { kind: 'field' }): void => {
+    drops.push({ field: part.key, unnamed: false, index: part.index })
+  }
+  const first: Partial<Record<'name' | 'post_id' | 'id' | 'date' | 'time', AttributionPart & { kind: 'field' }>> = {}
+  const texts: Array<AttributionPart & { kind: 'text' }> = []
+  for (const part of parts) {
+    if (part.kind === 'text') {
+      if (part.text !== '') texts.push(part)
+      continue
+    }
+    const key = part.key.toLowerCase()
+    const kind = key === 'author' ? 'name' : key
+    const known = kind === 'name' || kind === 'post_id' || kind === 'id' || kind === 'date' || kind === 'time'
+    const usable = part.value !== '' && (kind !== 'post_id' && kind !== 'id' || ASCII_DIGITS.test(part.value))
+    if (!known || !usable || first[kind] !== undefined) drop(part)
+    else first[kind] = part
+  }
+
   let id: string | null = null
-  let name: string | null = null
-  let datetime: string | null = null
+  const leadingId = texts[0]?.quoted && texts[0].index === 0 && ASCII_DIGITS.test(texts[0].text) ? texts.shift()! : null
+  if (first.post_id) {
+    id = first.post_id.value
+    if (first.id) drop(first.id)
+  } else if (first.id) {
+    id = first.id.value
+  } else if (leadingId) {
+    id = leadingId.text
+  }
+  // A leading `"9"` that a field outranks is reported under the field it stands for.
+  if (leadingId && (first.post_id || first.id)) drops.push({ field: 'id', unnamed: false, index: leadingId.index })
 
-  let quotedName: string | null = null
-  const leadingId = /^["'](\d+)["']/.exec(remaining)
-  if (leadingId) {
-    id = leadingId[1]!
-    remaining = remaining.slice(leadingId[0].length).trim()
-  } else {
-    // A quoted name is taken whole first, so a field spelled inside it stays name text.
-    const leadingQuote = /^(["'])(.*?)\1(?=\s|$)/.exec(remaining)
-    if (leadingQuote) {
-      quotedName = leadingQuote[2]!
-      remaining = remaining.slice(leadingQuote[0].length)
+  let text = texts.map(part => part.text).join(' ')
+  const vbulletin = id === null ? /^([\s\S]+);([0-9]+)$/.exec(text) : null
+  if (vbulletin) {
+    text = vbulletin[1]!
+    id = vbulletin[2]!
+  }
+
+  const name = first.name?.value ?? text
+  if (first.name) {
+    const textDrops: Array<{ field: string; index: number }> = []
+    let previous: (AttributionPart & { kind: 'text' }) | null = null
+    for (const part of texts) {
+      const last = textDrops[textDrops.length - 1]
+      if (!part.quoted && previous && !previous.quoted && previous.index + 1 === part.index && last) {
+        last.field += ` ${part.text}`
+      } else {
+        textDrops.push({ field: part.text, index: part.index })
+      }
+      previous = part
     }
-    const namedId = /\b(?:post_id|id)=["']?(\d+)["']?/i.exec(remaining)
-    if (namedId) {
-      id = namedId[1]!
-      remaining = remaining.replace(namedId[0], '')
+    if (vbulletin && textDrops.length > 0) {
+      const last = textDrops[textDrops.length - 1]!
+      last.field = last.field.slice(0, -vbulletin[2]!.length - 1)
+    }
+    for (const part of textDrops) {
+      if (part.field !== '') drops.push({ field: part.field, unnamed: true, index: part.index })
     }
   }
 
-  const namedName = /\bname=["']([^"']+)["']/i.exec(remaining)
-  if (namedName) {
-    name = namedName[1]!
-    remaining = remaining.replace(namedName[0], '')
-  }
-
-  const namedDate = /\bdate=["']([^"']+)["']/i.exec(remaining)
-  if (namedDate) {
-    datetime = namedDate[1]!
-    remaining = remaining.replace(namedDate[0], '')
-  }
-
-  // phpBB stores `time` as Unix seconds, quoted or not; other forums write a clock time.
-  const namedTime = /\btime=(?:["']([^"']+)["']|(\d+)(?=\s|$))/i.exec(remaining)
-  if (namedTime) {
-    const value = namedTime[1] ?? namedTime[2]!
-    const unix = /^\d{9,11}$/.test(value) ? new Date(Number(value) * 1000) : null
-    // An explicit date wins over a Unix time; the time then stays as written beside it.
-    if (datetime === null && unix !== null && Number.isFinite(unix.getTime())) datetime = unix.toISOString().slice(0, 10)
-    else datetime = datetime !== null ? `${datetime} ${value}` : value
-    remaining = remaining.replace(namedTime[0], '')
-  }
-
-  remaining = remaining.replace(/\b(user_id)=(?:"[^"]*"|'[^']*'|\S+)/gi, (_whole, field: string) => {
-    onDroppedField?.(field)
-    return ''
-  })
-
-  remaining = remaining.trim()
-  if (quotedName !== null) remaining = remaining === '' ? quotedName : `${quotedName} ${remaining}`
-  else if (remaining.length >= 2 && ((remaining.startsWith('"') && remaining.endsWith('"')) ||
-      (remaining.startsWith("'") && remaining.endsWith("'")))) {
-    remaining = remaining.slice(1, -1)
-  }
-  const vbId = /^(.+);(\d+)$/.exec(remaining)
-  if (vbId && id === null) {
-    remaining = vbId[1]!
-    id = vbId[2]!
-  }
-  if (name === null && remaining !== '') name = remaining
-  else if (remaining !== '' && onDroppedField) {
-    // An explicit `name=` wins, so whatever else is left is dropped.
-    let rest = remaining
-    if (quotedName !== null && rest.startsWith(quotedName)) {
-      onDroppedField(quotedName, true)
-      rest = rest.slice(quotedName.length)
+  let date = first.date?.value ?? null
+  if (first.time) {
+    const time = first.time.value
+    if (/^[0-9]{9,11}$/.test(time)) {
+      if (first.date) drop(first.date)
+      date = new Date(Number(time) * 1000).toISOString().slice(0, 10)
+    } else {
+      date = date !== null ? `${date} ${time}` : time
     }
-    const unnamed = rest.replace(/\b([A-Za-z_][\w-]*)=(?:"[^"]*"|'[^']*'|\S+)/g, (_whole, field: string) => {
-      onDroppedField(field)
-      return ''
-    }).trim()
-    if (unnamed !== '') onDroppedField(unnamed, true)
   }
 
-  let out = name ?? ''
-  if (datetime !== null) out += ` (${datetime})`
-  if (id !== null) out += ` #${id}`
-
-  return out.trim()
+  const caption = [name, date !== null ? `(${date})` : '', id !== null ? `#${id}` : ''].filter(part => part !== '').join(' ')
+  drops.sort((a, b) => a.index - b.index)
+  return { caption, dropped: drops.map(({ field, unnamed }) => ({ field, unnamed })) }
 }
 
 function formatAsBlockquote(content: string, author: string | null): string {
@@ -831,7 +877,8 @@ function formatAsBlockquote(content: string, author: string | null): string {
     .join('\n')
 
   let out = `\n\n${quoted}\n`
-  if (author !== null && author !== '') out += `^ ${formatAttribution(author)}\n`
+  const caption = author === null ? '' : readAttribution(author).caption
+  if (caption !== '') out += `^ ${caption}\n`
 
   return `${out}\n`
 }
@@ -854,9 +901,7 @@ function convertQuotes(text: string): string {
     openTag.lastIndex = i
     const open = openTag.exec(text)
     if (open) {
-      const dropped: DroppedQuoteField[] = []
-      if (open[1]) formatAttribution(open[1], (field, unnamed = false) => dropped.push({ field, unnamed }))
-      quoteFieldDrops.push({ attribution: open[1] ?? '', dropped })
+      quoteFieldDrops.push({ attribution: open[1] ?? '', dropped: open[1] ? readAttribution(open[1]).dropped : [] })
       contents.push('')
       authors.push(open[1] ?? null)
       top++

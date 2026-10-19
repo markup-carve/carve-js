@@ -83,10 +83,26 @@ describe('bbcodeToCarve — quotes', () => {
     expect(bbcodeToCarve('[quote="Bob user_id=7" user_id=7]x[/quote]')).toBe('> x\n^ Bob user_id=7\n')
   })
 
-  it('keeps an explicit date when a Unix time follows it', () => {
+  it('takes the date from a Unix time over an explicit date', () => {
     expect(bbcodeToCarve('[quote="Alice" date="2024-01-01" time=1700000000]x[/quote]')).toBe(
-      '> x\n^ Alice (2024-01-01 1700000000)\n',
+      '> x\n^ Alice (2023-11-14)\n',
     )
+  })
+
+  it('reads the fields after a space opener, quoted or not', () => {
+    expect(bbcodeToCarve('[quote name="bob" date="2020-01-01" id=7]c[/quote]')).toBe('> c\n^ bob (2020-01-01) #7\n')
+    expect(bbcodeToCarve('[quote name=bob date=2020-01-01]c[/quote]')).toBe('> c\n^ bob (2020-01-01)\n')
+    expect(bbcodeToCarve('[quote author=alice post_id=3]c[/quote]')).toBe('> c\n^ alice #3\n')
+  })
+
+  it('writes no caption line when no attribution part is left', () => {
+    expect(bbcodeToCarve('[quote user_id=9]y[/quote]')).toBe('> y\n')
+    expect(bbcodeToCarve('[quote foo=bar]y[/quote]')).toBe('> y\n')
+  })
+
+  it('drops an unknown field and the gap it leaves', () => {
+    expect(bbcodeToCarve('[quote="alice" post_id=12 time=1700000000 user_id=3 foo=bar]q3[/quote]')).toBe('> q3\n^ alice (2023-11-14) #12\n')
+    expect(bbcodeToCarve('[quote=Bob   Smith]x[/quote]')).toBe('> x\n^ Bob Smith\n')
   })
 
   it('nests without recursing, and drops a stray closer', () => {
