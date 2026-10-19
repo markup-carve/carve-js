@@ -97,17 +97,19 @@ import { normalizeRefLabel } from './label-key.js'
 import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue, scanDestination, RE_LINK_REST, RE_EMPTY_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
-const TABLE_CELL_REF_SOURCE = /^@\{#([A-Za-z0-9_][A-Za-z0-9_-]*)\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\n])*")\]\}$/
+const TABLE_CELL_REF_SOURCE = /^@\{#([A-Za-z0-9_][A-Za-z0-9_-]*)\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\r\n])*")\]\[((?:[1-9][0-9]*)|"(?:\\["\\]|[^"\\\r\n])*")\]\}$/
 
 let cellRefEndText: string | undefined
 let cellRefNextQuote: Int32Array
 let cellRefNextClose: Int32Array
+let cellRefNextLine: Int32Array
 
 function tableCellRefEnd(text: string, start: number): number {
   if (text !== cellRefEndText) {
     cellRefEndText = text
     const quotes = new Int32Array(text.length + 1)
     const closes = new Int32Array(text.length + 1)
+    const lines = new Int32Array(text.length + 1)
     const escaped = new Uint8Array(text.length)
     let slashes = 0
     for (let i = 0; i < text.length; i++) {
@@ -116,17 +118,21 @@ function tableCellRefEnd(text: string, start: number): number {
     }
     quotes[text.length] = text.length
     closes[text.length] = text.length
+    lines[text.length] = text.length
     for (let i = text.length - 1; i >= 0; i--) {
       quotes[i] = text[i] === '"' && !escaped[i] ? i : quotes[i + 1]!
       closes[i] = text[i] === '}' && !escaped[i] ? i : closes[i + 1]!
+      lines[i] = text[i] === '\n' || text[i] === '\r' ? i : lines[i + 1]!
     }
     cellRefNextQuote = quotes
     cellRefNextClose = closes
+    cellRefNextLine = lines
   }
   let quoted = false
   for (let i = start + 3; i < text.length;) {
     const quote = cellRefNextQuote[i]!
     const close = cellRefNextClose[i]!
+    if (cellRefNextLine[i]! < Math.min(quote, close)) return -1
     if (close < quote) {
       if (!quoted) return close + 1
       i = close + 1

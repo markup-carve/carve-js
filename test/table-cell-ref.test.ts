@@ -105,4 +105,8 @@ describe('table cell references', () => {
       expect.objectContaining({ rule: 'malformed-table-cell-ref' }),
     ]))
   })
+
+  it('stops malformed quoted selectors at a line break', () => {
+    expect(carveToHtml('see @{#t["a\nb _x_ "]} done')).toContain('<u>x</u>')
+  })
 })
