@@ -17,7 +17,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { replaceLoneSurrogates } from './well-formed.js'
 import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
-import { parse, normalizeRefLabel } from './parse.js'
+import { markedDelimitedTable, parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
 import { forEachChildBlockList } from './block-children.js'
 import { DocumentIdRegistry, visitDocumentIds } from './document-ids.js'
@@ -1506,7 +1506,11 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
     if (d) {
       const site = siteOf(new RunText(block.children as RunNode[]), 0, source.length, state)
       const merged = includeChild(d, state, text, site, (child, file, reach) => {
-        if (d.code !== undefined && child.children[0] && block.attrs) child.children[0].attrs = block.attrs
+        const code = child.children[0]
+        if (d.code !== undefined && code?.type === 'code_block' && block.attrs) {
+          code.attrs = block.attrs
+          child.children[0] = markedDelimitedTable(code) ?? code
+        }
         mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
       }, unwrapped)

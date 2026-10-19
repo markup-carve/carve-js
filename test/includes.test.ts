@@ -176,6 +176,29 @@ describe('expandIncludes', () => {
       .toBe('<pre class="diff"><code class="language-js">const server = http.createServer(handler)\nserver.listen(3000)\n</code></pre>')
   })
 
+  it('converts a {table} csv/tsv code include exactly as an authored fence', () => {
+    const fence = '```'
+    for (const [attr, lang, data] of [
+      ['{table}', 'csv', 'Plan,Seats,Price\nStarter,1,"$0"\nTeam,10,"$49, billed yearly"\n'],
+      ['{table}', 'tsv', 'Name\tRole\nAda\tEngineer\n'],
+      ['{table}', 'csv', 'a,b\n"bad\n'],
+      ['{table header-rows=0}', 'csv', 'a,b\n1,2\n'],
+      ['{#t .wide table footer-rows=1}', 'csv', 'a,b\n1,2\n3,4\n'],
+    ] as const) {
+      const authored = renderHtml(resolve(parse(`${attr}\n${fence}${lang}\n${data}${fence}\n`)))
+      const result = expand(`${attr}\n{{ data.${lang} @code:${lang} }}`, { [`data.${lang}`]: data })
+      expect(result.warnings).toEqual([])
+      expect(result.html).toBe(authored)
+    }
+    expect(expand('{table}\n{{ data.csv @code:csv }}', { 'data.csv': 'a,b\n1,2\n' }).html).toContain('<table>')
+    expect(expand('{table}\n{{ data.csv @code:csv }}', { 'data.csv': 'a,b\n"bad\n' }).html)
+      .toBe('<pre table=""><code class="language-csv">a,b\n"bad\n</code></pre>')
+    // The payload is never read as Carve (I1c, I9), so a directive in a field stays text.
+    const literal = expand('{table}\n{{ data.csv @code:csv }}', { 'data.csv': 'a,b\n1,{{ child }}\n', child: 'X' })
+    expect(literal.html).toContain('<td>{{ child }}</td>')
+    expect(literal.dependencies.map(d => d.id)).toEqual(['data.csv'])
+  })
+
   it('recognizes each code region marker form', () => {
     for (const [open, close] of [
       ['#region demo', '#endregion demo'], ['// #region demo', '// #endregion demo'],

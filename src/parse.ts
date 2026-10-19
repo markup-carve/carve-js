@@ -2253,6 +2253,14 @@ function consumeLooseKey(node: BlockNode): void {
   node.loose = true
 }
 
+/** A `{table}`-marked csv/tsv code block outside the parser (a code include, I1c), converted as an authored fence is. */
+export function markedDelimitedTable(code: CodeBlock): Table | null {
+  if (code.attrs?.keyValues?.table !== '') return null
+  const table = delimitedTable(code, code.attrs)
+  if (table) deriveTableMetadata(table)
+  return table
+}
+
 function deriveTableMetadata(table: Table): void {
   const columns = tableColumnsFromAttrs(table.attrs)
   if (columns) table.columns = columns
