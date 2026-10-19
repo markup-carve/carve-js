@@ -20,6 +20,13 @@ const encodeDestination = (destination: string): string => destination.replace(/
 })
 
 const encodeWrittenDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, encodeMarkdownDestinationCharacter)
+const definitionPattern = /^ {0,3}\[([^\]\n]+)\]:[ \t]+(<(?:\\[!-~]|[^<>\\\n])*>|(?:\\[!-~]|[^ ()\\\t\n])+)(?:[ \t]+"([^"\n]*)")?[ \t]*$/
+const inlineDestinationPattern = /^(!?)\[([^\]\n]*)\]\((<(?:\\[!-~]|[^<>\\\n])*>|(?:\\[!-~]|[^ ()\\\t\n])+)(?:[ \t]+"([^"\n]*)")?\)/
+const destinationValue = (token: string): string | undefined => {
+  const raw = token.startsWith('<') ? token.slice(1, -1) : token
+  if (/&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.test(raw)) return undefined
+  return raw.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '$1')
+}
 
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
@@ -51,8 +58,12 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const definitions = new Map<string, { destination: string; title: string | undefined }>()
   const labelKey = (label: string): string => label.trim().replace(/[ \t\n]+/g, ' ').toLowerCase()
   for (const line of lines) {
-    const definition = /^ {0,3}\[([^\]\n]+)\]:[ \t]+(\S+)(?:[ \t]+"([^"\n]*)")?[ \t]*$/.exec(line)
-    if (definition && !definitions.has(labelKey(definition[1]!))) definitions.set(labelKey(definition[1]!), { destination: definition[2]!, title: definition[3] })
+    const definition = definitionPattern.exec(line)
+    if (definition && !definitions.has(labelKey(definition[1]!))) {
+      const destination = destinationValue(definition[2]!)
+      if (destination !== undefined) definitions.set(labelKey(definition[1]!), { destination, title: definition[3] })
+      else complete = false
+    }
   }
   const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`): void => {
     diagnostics.push({ code, message: construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`, severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
@@ -82,9 +93,10 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if ((match = /^&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.exec(rest))) {
         if (domValue(domChildren(parseFragment(match[0]))?.[0]) !== match[0]) emit('entity', line, 'normalized')
         result += match[0]; i += match[0].length
-      } else if ((match = /^(!?)\[([^\]\n]*)\]\(([^ ()\n]+)(?:[ \t]+"([^"\n]*)")?\)/.exec(rest))) {
+      } else if ((match = inlineDestinationPattern.exec(rest))) {
         const image = match[1] === '!'
-        const href = match[3]!
+        const href = destinationValue(match[3]!)
+        if (href === undefined) { complete = false; return result + escape(rest) }
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
         emit(image ? 'image' : 'link', line)
         const title = match[4] === undefined ? '' : ` title="${escape(match[4])}"`
@@ -100,7 +112,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`
-        result += `<a href="${escape(href)}">${escape(label)}</a>`; i += match[0].length
+        result += `<a href="${escape(encodeWrittenDestination(href))}">${escape(label)}</a>`; i += match[0].length
       } else if ((match = /^(\*\*|__|~~|\*|_)([^\n]+?)\1/.exec(rest)) && !match[2]!.includes(match[1]![0]!)) {
         const kind = match[1] === '~~' ? 'strikethrough' : match[1]!.length === 2 ? 'strong' : 'emphasis'
         if ((match[1]!.includes('_') && /[\p{L}\p{N}]/u.test(text[i - 1] ?? '')) || /^\s|\s$/.test(match[2]!)) complete = false
@@ -128,7 +140,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       const line = input[i]!, n = first + i
       let match: RegExpExecArray | null
       if (line.trim() === '') { i++; continue }
-      if (/^ {0,3}\[[^\]\n]+\]:[ \t]+\S+(?:[ \t]+"[^"\n]*")?[ \t]*$/.test(line)) { emit('reference-definition', n, 'normalized'); i++; continue }
+      if (definitionPattern.test(line)) { emit('reference-definition', n, 'normalized'); i++; continue }
       if ((match = /^ {0,3}(`{3,}|~{3,})([^`]*)$/.exec(line))) {
         const fence = match[1]!, info = match[2]!.trim(); const body: string[] = []; i++
         while (i < input.length && !(new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`)).test(input[i]!)) body.push(input[i++]!)

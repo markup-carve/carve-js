@@ -1710,7 +1710,7 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    let href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    let href = hrefPrefix + body.replace(bare ? /[\\[\]`|]/g : table ? /[\\`|]/g : /[\\`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
     if (bare) href = href.replace(/[^\x21-\x7e]|["<>`^{|}]/gu, char => {
       const point = char.codePointAt(0)!
       return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
