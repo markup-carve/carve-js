@@ -737,7 +737,7 @@ function convertCode(text: string): string {
  * Forums spell it every way there is: a bare username, `name="user"`,
  * `id="9" name="user" date="..."`, or a leading bare `"9"` post id.
  */
-function formatAttribution(attribution: string): string {
+function formatAttribution(attribution: string, onDroppedUserId?: () => void): string {
   let remaining = attribution.trim()
   let id: string | null = null
   let name: string | null = null
@@ -785,7 +785,10 @@ function formatAttribution(attribution: string): string {
     remaining = remaining.replace(namedTime[0], '')
   }
 
-  remaining = remaining.replace(/\buser_id=(?:"[^"]*"|'[^']*'|\S+)/gi, '')
+  remaining = remaining.replace(/\buser_id=(?:"[^"]*"|'[^']*'|\S+)/gi, () => {
+    onDroppedUserId?.()
+    return ''
+  })
 
   remaining = remaining.trim()
   if (quotedName !== null) remaining = remaining === '' ? quotedName : `${quotedName} ${remaining}`
@@ -1173,10 +1176,39 @@ function cleanup(text: string): string {
 /** Spans dropped by the current conversion because their content starts with an extender. */
 let extenderLeadingSpans = 0
 
+type BbcodeLoss = { code: 'structure-unspellable' | 'bbcode-quote-user-id-dropped'; message: string; line?: number }
+
+function droppedQuoteUserIds(source: string): BbcodeLoss[] {
+  const normalized = source.replace(/\r\n?/g, '\n')
+  let visible = normalized
+  const mask = (span: string): string => span.replace(/[^\n]/g, ' ')
+  visible = visible.replace(/\[code(?:=[^\]]*)?\][\s\S]*?\[\/code\]/gi, mask)
+  visible = visible.replace(/\[(?:c|icode)\][\s\S]*?\[\/(?:c|icode)\]/gi, mask)
+  visible = visible.replace(/\[noparse\][\s\S]*?\[\/noparse\]/gi, mask)
+  const losses: BbcodeLoss[] = []
+  const quoteTag = /\[quote(?:[= ]([^\]]*))?\]/gi
+  let line = 1
+  let scanned = 0
+  for (const match of visible.matchAll(quoteTag)) {
+    for (let at = scanned; at < match.index; at++) if (visible[at] === '\n') line++
+    scanned = match.index
+    if (!match[1]) continue
+    let dropped = false
+    formatAttribution(match[1], () => { dropped = true })
+    if (dropped) losses.push({
+      code: 'bbcode-quote-user-id-dropped',
+      message: 'The BBCode quote user_id cannot be represented in Carve and was dropped.',
+      line,
+    })
+  }
+  return losses
+}
+
 /** `bbcodeToCarve` with the losses it can name, for `migrateBbcode`. */
-export function bbcodeToCarveWithLosses(bbcode: string): { value: string; losses: Array<{ code: 'structure-unspellable'; message: string }> } {
+export function bbcodeToCarveWithLosses(bbcode: string): { value: string; losses: BbcodeLoss[] } {
   const value = bbcodeToCarve(bbcode)
-  const losses = Array.from({ length: extenderLeadingSpans }, () => ({ code: 'structure-unspellable' as const, message: EXTENDER_LEADING_SPAN_UNSPELLABLE }))
+  const losses: BbcodeLoss[] = Array.from({ length: extenderLeadingSpans }, () => ({ code: 'structure-unspellable', message: EXTENDER_LEADING_SPAN_UNSPELLABLE }))
+  losses.push(...droppedQuoteUserIds(bbcode))
   return { value, losses }
 }
 

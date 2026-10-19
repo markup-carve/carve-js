@@ -136,5 +136,8 @@ export function migrateDjot(source: string): MigrationResult {
 
 export function migrateBbcode(source: string): MigrationResult {
   const imported = bbcodeToCarveWithLosses(source)
-  return assessed(source, imported.value, 'bbcode', imported.losses.map(loss => ({ code: loss.code, message: loss.message, severity: 'warning', fidelity: 'dropped', confidence: 'exact' })))
+  return assessed(source, imported.value, 'bbcode', imported.losses.map(loss => ({
+    code: loss.code, message: loss.message, severity: 'warning', fidelity: 'dropped', confidence: 'exact',
+    ...(loss.line === undefined ? {} : { path: `line:${loss.line}` }),
+  })))
 }
