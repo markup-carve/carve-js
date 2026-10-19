@@ -323,7 +323,7 @@ describe('carve migrate — the other importers', () => {
     expect(await run(['migrate', '--from', 'bbcode', '--report', 'report.json'], t.io)).toBe(0)
     expect(t.out).toContain('^ alice #12')
     expect(JSON.parse(t.files['report.json']!).diagnostics).toContainEqual(expect.objectContaining({
-      code: 'bbcode-quote-user-id-dropped', path: 'line:1', fidelity: 'dropped', confidence: 'exact',
+      code: 'bbcode-quote-field-dropped', path: 'line:1', fidelity: 'dropped', confidence: 'exact',
     }))
   })
 

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { migrateBbcode, migrateDjot, migrateHtml, migrateMarkdown } from '../src/index.js'
 
@@ -39,9 +40,39 @@ describe('shared migration result', () => {
   it('reports dropped phpBB quote user IDs at their source lines', () => {
     const source = 'intro\r\n[quote="alice" post_id=12 time=1700000000 user_id=3]q[/quote]\n[quote=user_id=4]r[/quote]'
     const result = migrateBbcode(source)
-    expect(result.report.diagnostics.filter(row => row.code === 'bbcode-quote-user-id-dropped')).toEqual([
+    expect(result.report.diagnostics.filter(row => row.code === 'bbcode-quote-field-dropped')).toEqual([
       expect.objectContaining({ path: 'line:2', fidelity: 'dropped', confidence: 'exact', severity: 'warning' }),
       expect.objectContaining({ path: 'line:3', fidelity: 'dropped', confidence: 'exact', severity: 'warning' }),
+    ])
+  })
+
+  it('replays the spec bbcode-quote-field-dropped fixture, the row after fidelity-unverified', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../spec/tests/importer-fidelity/manifest.json', import.meta.url), 'utf8')) as {
+      cases: Array<{ id: string; input: string; expected: { output: string; diagnostics: Array<Record<string, string>> } }>
+    }
+    const fixture = manifest.cases.find(item => item.id === 'bbcode-quote-field-dropped')!
+    const result = migrateBbcode(fixture.input)
+    expect(result.value).toBe(fixture.expected.output)
+    expect(result.report.diagnostics.map(({ message: _message, ...row }) => row)).toEqual(fixture.expected.diagnostics)
+    expect(result.report.diagnostics[1]!.message).toBe('Dropped the quote attribution field user_id.')
+  })
+
+  it('reports every other attribution field an explicit name= leaves behind', () => {
+    expect(migrateBbcode('[quote=id="9" name="user" foo=bar]q[/quote]\n\n[quote="alice" name="bob"]r[/quote]').report.diagnostics.slice(1)).toEqual([
+      expect.objectContaining({ code: 'bbcode-quote-field-dropped', path: 'line:1', message: 'Dropped the quote attribution field foo.' }),
+      expect.objectContaining({ code: 'bbcode-quote-field-dropped', path: 'line:3', message: expect.stringContaining('"alice"') }),
+    ])
+    // A field the converter keeps as attribution text is not dropped.
+    expect(migrateBbcode('[quote="alice" foo=bar]q[/quote]').report.diagnostics.some(row => row.code === 'bbcode-quote-field-dropped')).toBe(false)
+    // The space form reaches convertQuotes escaped, so name= does not match there and only user_id goes.
+    expect(migrateBbcode('[quote name="user" user_id=4 extra]q[/quote]').report.diagnostics.filter(row => row.code === 'bbcode-quote-field-dropped')).toEqual([
+      expect.objectContaining({ message: 'Dropped the quote attribution field user_id.' }),
+    ])
+  })
+
+  it('keeps the source line when an earlier pass swallows a quote tag', () => {
+    expect(migrateBbcode('[url=https://x/[quote]]l[/url]\n[quote="b" user_id=3]q[/quote]').report.diagnostics.filter(row => row.code === 'bbcode-quote-field-dropped')).toEqual([
+      expect.objectContaining({ path: 'line:2' }),
     ])
   })
 
@@ -52,7 +83,7 @@ describe('shared migration result', () => {
       '[c][quote=user_id=7]x[/icode]',
       '[noparse][quote=user_id=7]x[/quote][/noparse]',
     ]) {
-      expect(migrateBbcode(source).report.diagnostics.some(row => row.code === 'bbcode-quote-user-id-dropped'), source).toBe(false)
+      expect(migrateBbcode(source).report.diagnostics.some(row => row.code === 'bbcode-quote-field-dropped'), source).toBe(false)
     }
   })
 
@@ -63,7 +94,7 @@ describe('shared migration result', () => {
       '[img][quote="alice" user_id=3]q[/quote][/img]',
     ]) {
       expect(migrateBbcode(source).report.diagnostics).toContainEqual(expect.objectContaining({
-        code: 'bbcode-quote-user-id-dropped', path: 'line:1',
+        code: 'bbcode-quote-field-dropped', path: 'line:1',
       }))
     }
   })
