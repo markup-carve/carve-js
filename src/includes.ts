@@ -512,6 +512,22 @@ function runAnchor(run: RunText, offset: number): Text {
   return run.nodes.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: '' } as Text)
 }
 
+/**
+ * The anchor a directive's warnings and site report: the text node it starts
+ * in, moved to the directive's own column, since a mid-line directive does not
+ * start where its text node does.
+ */
+function directiveAnchor(run: RunText, from: number, to: number): Text {
+  const node = runAnchor(run, from)
+  const p = node.pos
+  const start = absoluteAt(run, from)
+  // The last character of the token, not the position after it: there may be
+  // no node covering `to`, and a closing "}" is one codepoint either way.
+  const last = absoluteAt(run, to - 1)
+  if (p?.startOffset === undefined || p.startColumn === undefined || start === undefined || last === undefined) return node
+  return { ...node, pos: { ...p, startColumn: p.startColumn + (start - p.startOffset), startOffset: start, endOffset: last + 1 } }
+}
+
 /** Locate a directive in the file currently being expanded. */
 function siteOf(run: RunText, from: number, to: number, state: State): IncludeSite {
   const span = siteSpan(run, from, to)
@@ -1354,7 +1370,7 @@ function expandRun(nodes: RunNode[], state: State): InlineNode[] {
       re.lastIndex = m.index + 1
       continue
     }
-    const anchor = runAnchor(run, m.index)
+    const anchor = directiveAnchor(run, m.index, m.index + raw.length)
     const d = parseDirective(raw, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
       (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, anchor),
@@ -1732,7 +1748,7 @@ export interface DirectiveSite {
    */
   block: boolean
   /**
-   * Line and column of the inline node the token starts in - the same anchor
+   * Line and column of the token's first character - the same anchor
    * {@link expandIncludes} attributes its warnings to, so a host can match a
    * site against a warning it already has.
    */
@@ -1769,13 +1785,8 @@ function absoluteAt(run: RunText, index: number): number | undefined {
 }
 
 function siteSpan(run: RunText, from: number, to: number): Pick<DirectiveSite, 'line' | 'column' | 'start' | 'end'> {
-  const at = locate(runAnchor(run, from))
-  const start = absoluteAt(run, from)
-  // The last character of the token, not the position after it: there may be
-  // no node covering `to`, and a closing "}" is one codepoint either way.
-  const last = absoluteAt(run, to - 1)
-  if (start === undefined || last === undefined) return at
-  return { line: at.line, column: at.column, start, end: last + 1 }
+  const at = locate(directiveAnchor(run, from, to))
+  return { line: at.line, column: at.column, start: at.start, end: at.end }
 }
 
 function collectRun(nodes: RunNode[], sites: DirectiveSite[]): void {
