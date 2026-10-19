@@ -13,6 +13,11 @@ interface Assessment {
 
 const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+const encodeDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}\[\]]/gu, char => {
+  const point = char.codePointAt(0)!
+  return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
+})
+
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
 
@@ -67,10 +72,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if (bare?.start === i) {
         const body = text.slice(bare.start, bare.end)
-        const href = (bare.prefix + body).replace(/[^\x21-\x7e]|["<>\\`^{|}\[\]]/gu, char => {
-          const point = char.codePointAt(0)!
-          return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-        })
+        const href = encodeDestination(bare.prefix + body)
         emit('bare-autolink', line, 'normalized')
         result += `<a href="${escape(href)}">${escape(body)}</a>`
         i = bare.end
@@ -83,13 +85,15 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
         emit(image ? 'image' : 'link', line)
         const title = match[4] === undefined ? '' : ` title="${escape(match[4])}"`
-        result += image ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
+        const encodedHref = escape(encodeDestination(href))
+        result += image ? `<img src="${encodedHref}" alt="${escape(match[2]!)}"${title}>` : `<a href="${encodedHref}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
         const definition = definitions.get(labelKey(match[3] || match[2]!))!
         emit('reference-link', line, 'normalized')
         const title = definition.title === undefined ? '' : ` title="${escape(definition.title)}"`
-        result += match[1] === '!' ? `<img src="${escape(definition.destination)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(definition.destination)}"${title}>${inline(match[2]!, line, true)}</a>`
+        const href = encodeDestination(definition.destination)
+        result += match[1] === '!' ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`

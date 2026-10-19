@@ -26,6 +26,27 @@ describe('Markdown construct assessment', () => {
     }
   })
 
+  it('assesses encoded destinations in links, references, and fragments', () => {
+    const explicit = migrateMarkdown('See [a](/ü).')
+    expect(explicit.report.diagnostics.map(row => [row.code, row.path, row.fidelity])).toEqual([
+      ['markdown-paragraph', 'line:1', 'preserved'],
+      ['markdown-link', 'line:1', 'preserved'],
+    ])
+    expect(explicit.value).toBe('See [a](/%C3%BC).')
+    expect(migrateMarkdown('See [a](/ü).\n').value).toBe('See [a](/%C3%BC).\n')
+
+    const reference = rows('See [a][r].\n\n[r]: /ü\n')
+    expect(reference).toContainEqual(expect.objectContaining({ code: 'markdown-reference-link' }))
+    expect(reference.some(row => row.code === 'fidelity-unverified')).toBe(false)
+
+    const fragment = rows('# Über Uns\n\nSee [a](#über-uns).\n')
+    expect(fragment).toContainEqual(expect.objectContaining({ code: 'markdown-atx-heading', path: 'line:1' }))
+    expect(fragment).toContainEqual(expect.objectContaining({ code: 'markdown-paragraph', path: 'line:3' }))
+    expect(fragment).toContainEqual(expect.objectContaining({ code: 'markdown-link', path: 'line:3' }))
+    expect(fragment).toContainEqual(expect.objectContaining({ code: 'link-fragment-case-rewritten' }))
+    expect(fragment.some(row => row.code === 'fidelity-unverified')).toBe(false)
+  })
+
   it('does not classify markers in fenced code as tasks or emphasis', () => {
     const diagnostics = rows('```\r\n1. [x] **code**\r\n```\r\n\r\n**text**')
     expect(diagnostics.map(row => [row.code, row.path])).toEqual([

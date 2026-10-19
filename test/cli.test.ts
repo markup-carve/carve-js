@@ -226,6 +226,11 @@ describe('migration literal-text evidence', () => {
   })
 })
 
+it('passes the Markdown loss check for a rewritten Unicode heading fragment', async () => {
+  const t = makeIO({ stdin: '# Über Uns\n\nSee [a](#über-uns).\n' })
+  expect(await run(['migrate', '--from', 'markdown', '--check-loss'], t.io)).toBe(0)
+})
+
 describe('carve migrate — HTML import', () => {
   it('writes Carve plus a machine-readable loss report', async () => {
     const t = makeIO({ stdin: '<p onclick="x()">Hello</p>' })
