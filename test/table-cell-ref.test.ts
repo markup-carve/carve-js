@@ -73,9 +73,29 @@ describe('table cell references', () => {
     expect(html).toContain('href="#Rev-150">Rev 150</a>')
   })
 
+  it('refreshes projected text copied into cross-reference labels on rerender', () => {
+    const source = '{#s}\n|= K |= V |\n| Q2 | 1\'5 |\n\n# Rev @{#s["Q2"]["V"]}\n\nSee </#Rev-1-5>.'
+    const doc = resolve(parse(source))
+    const html = renderHtml(doc, { smartTypography: false })
+    expect(html).toContain('Rev 1\'5')
+    expect(html).toContain('href="#Rev-1-5"')
+  })
+
   it('uses the chosen smart typography in projected values', () => {
     const source = '{#s}\n|= K |= V |\n| Q2 | Year\'s |\n\n@{#s["Q2"]["V"]}'
     expect(carveToHtml(source, { smartTypography: false })).toContain('<p>Year\'s</p>')
+  })
+
+  it('matches selector names against authored text with smart typography enabled', () => {
+    const source = '{#s}\n|= K |= Year\'s |\n| Bob\'s | 150 |\n\n@{#s["Bob\'s"]["Year\'s"]}'
+    expect(carveToHtml(source)).toContain('<p>150</p>')
+  })
+
+  it('rejects duplicate table ids and skips intermediate header rows', () => {
+    const duplicate = '{#s}\n|= K |= V |\n| Q1 | 111 |\n\n{#s}\n|= K |= V |\n| Q2 | 222 |\n\n@{#s[1][2]}'
+    expect(carveToHtml(duplicate)).toContain('<p>@{#s[1][2]}</p>')
+    const grouped = '{#s}\n|= K |= V |\n| Q1 | 111 |\n|= Group |= Header |\n| Q2 | 222 |\n\n@{#s[2][2]} @{#s[3][2]}'
+    expect(carveToHtml(grouped)).toContain('<p>222 @{#s[3][2]}</p>')
   })
 
   it('rejects markup in every named row key and reports malformed selectors', () => {
