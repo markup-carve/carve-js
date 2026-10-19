@@ -34,8 +34,23 @@ export function matchingHeadingFragment(fragment: string, exact: ReadonlySet<str
   return aliases.get(fragment.toLowerCase()) ?? undefined
 }
 
-export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: string) => void): string {
-  if (!source.includes('](#')) return source
+export interface FragmentFixup { destination: string; from: string; to: string }
+
+export function fragmentFixupDiagnostic(fixup: FragmentFixup): { code: string; message: string; severity: 'info'; fidelity: 'normalized'; confidence: 'inferred'; path: string } {
+  return {
+    code: 'link-fragment-case-rewritten',
+    message: `Rewrote link fragment #${fixup.from} to #${fixup.to}, the one heading id it matches without regard to case.`,
+    severity: 'info',
+    fidelity: 'normalized',
+    confidence: 'inferred',
+    path: `link:${fixup.destination}`,
+  }
+}
+
+/** `unfixed` is the same rendering with the original fragments, so assessment sees only the conversion. */
+export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: string) => void): { value: string; unfixed: string; fixups: FragmentFixup[] } {
+  const fixups: FragmentFixup[] = []
+  if (!source.includes('](#')) return { value: source, unfixed: source, fixups }
   const document = parse(source)
   const resolved = resolveHeadingIds(parse(source))
   const exact = new Set<string>()
@@ -48,7 +63,7 @@ export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: st
     }
   }
   const aliases = headingFragmentAliases(source)
-  let changed = false
+  const rewritten: Array<[Record<string, unknown>, string]> = []
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
@@ -56,7 +71,13 @@ export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: st
       let fragment: string
       try { fragment = decodeURIComponent(node.href.slice(1)) } catch { fragment = '' }
       const match = fragment && matchingHeadingFragment(fragment, exact, aliases)
-      if (match && match !== fragment) { node.href = `#${encodeURIComponent(match)}`; changed = true }
+      if (match && match !== fragment) {
+        const destination = node.href
+        const to = encodeURIComponent(match)
+        node.href = `#${to}`
+        rewritten.push([node, destination])
+        fixups.push({ destination, from: destination.slice(1), to })
+      }
     }
     for (const [key, child] of Object.entries(node)) {
       if (key === 'attrs' || key === 'position') continue
@@ -65,7 +86,9 @@ export function rewriteSameFileHeadingLinks(source: string, onLoss: (message: st
     }
   }
   visit(document)
-  if (!changed) return source
-  const result = renderCarve(document, { onRenderLoss: loss => onLoss(loss.message) })
-  return source.endsWith('\n') ? result : result.replace(/\n$/, '')
+  if (rewritten.length === 0) return { value: source, unfixed: source, fixups }
+  const trim = (result: string): string => source.endsWith('\n') ? result : result.replace(/\n$/, '')
+  const value = trim(renderCarve(document, { onRenderLoss: loss => onLoss(loss.message) }))
+  for (const [node, destination] of rewritten) node.href = destination
+  return { value, unfixed: trim(renderCarve(document)), fixups }
 }

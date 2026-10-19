@@ -2,7 +2,7 @@ import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdirSync, mkdt
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, posix } from 'node:path'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
-import { headingFragmentAliases, matchingHeadingFragment } from './markdown-heading-fragments.js'
+import { fragmentFixupDiagnostic, headingFragmentAliases, matchingHeadingFragment, type FragmentFixup } from './markdown-heading-fragments.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
 interface LinkCheck { target: string; status: 'rewritten' | 'valid' | 'unresolved'; reason?: string }
@@ -71,7 +71,7 @@ function htmlUrls(html: string): RawUrl[] {
   return urls
 }
 
-function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, aliases: Map<string, Map<string, string | null>>, sources: Set<string>): { href: string; check: LinkCheck } | null {
+function inspectDestination(destination: string, source: string, outputs: Set<string>, ids: Map<string, Set<string>>, aliases: Map<string, Map<string, string | null>>, sources: Set<string>): { href: string; check: LinkCheck; fixup?: FragmentFixup } | null {
   if (/^[a-z][a-z\d+.-]*:/i.test(destination) || destination.startsWith('//')) return null
   if (destination.startsWith('/')) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'site-root path needs route mapping' } }
   const match = /^([^?#]*)(\?[^#]*)?(?:#(.*))?$/.exec(destination)
@@ -89,11 +89,13 @@ function inspectDestination(destination: string, source: string, outputs: Set<st
   if (fragment && !resolved) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'fragment missing from target' } }
   if (mapped !== target && pathname && !/\.(md|markdown)$/i.test(match[1]!)) return { href: destination, check: { target: destination, status: 'unresolved', reason: 'encoded extension needs manual rewrite' } }
   const newPath = pathname && mapped !== target ? match[1]!.replace(/\.(md|markdown)$/i, '.crv') : match[1]!
-  const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${!fragment || resolved === fragment ? match[3] : encodeURIComponent(resolved!)}`}`
-  return { href, check: { target: destination, status: href === destination ? 'valid' : 'rewritten' } }
+  const recased = fragment && resolved !== fragment ? encodeURIComponent(resolved!) : undefined
+  const href = `${newPath}${match[2] ?? ''}${match[3] === undefined ? '' : `#${recased ?? match[3]}`}`
+  const check: LinkCheck = { target: destination, status: href === destination ? 'valid' : 'rewritten' }
+  return recased === undefined ? { href, check } : { href, check, fixup: { destination, from: match[3]!, to: recased } }
 }
 
-function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: unknown[]; links?: LinkCheck[] }>, assets: string[]): string[] {
+function checkLinks(temporary: string, files: Array<{ source: string; output: string; diagnostics: object[]; links?: LinkCheck[] }>, assets: string[]): string[] {
   const outputs = new Set([...files.map((file) => file.output), ...assets])
   const sources = new Set(files.map((file) => file.source))
   const ids = new Map<string, Set<string>>()
@@ -129,6 +131,7 @@ function checkLinks(temporary: string, files: Array<{ source: string; output: st
             links.push({ target: node[key], status: 'unresolved', reason: 'reference link needs manual rewrite' })
           } else {
             links.push(result.check)
+            if (result.fixup) file.diagnostics.push(fragmentFixupDiagnostic(result.fixup))
             if (result.href !== node[key]) { node[key] = result.href; changed = true }
           }
         }

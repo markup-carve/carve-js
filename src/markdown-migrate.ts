@@ -13,7 +13,7 @@ import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolink
 import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './imported-crossrefs.js'
-import { rewriteSameFileHeadingLinks } from './markdown-heading-fragments.js'
+import { rewriteSameFileHeadingLinks, type FragmentFixup } from './markdown-heading-fragments.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -5984,7 +5984,7 @@ export function markdownToCarveWithLosses(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
   rewriteHeadingFragments = true,
-): { value: string; losses: MarkdownImportLoss[] } {
+): { value: string; losses: MarkdownImportLoss[]; unfixed?: string; fixups?: FragmentFixup[] } {
   markdown = replaceLoneSurrogates(markdown)
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
@@ -6041,7 +6041,10 @@ export function markdownToCarveWithLosses(
       try { return markdownToCarveWithLosses(markdown, dialect, rewriteHeadingFragments) }
       finally { importedCrossrefIds = null }
     }
-    if (rewriteHeadingFragments && value.includes('](#')) value = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }))
+    if (rewriteHeadingFragments && value.includes('](#')) {
+      const rewritten = rewriteSameFileHeadingLinks(value, message => losses.push({ code: 'structure-unspellable', message }))
+      if (rewritten.fixups.length > 0) return { value: rewritten.value, losses, unfixed: rewritten.unfixed, fixups: rewritten.fixups }
+    }
     return { value, losses }
   } finally {
     inlineCarriersEnabled = false
