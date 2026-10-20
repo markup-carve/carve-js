@@ -4944,7 +4944,7 @@ type ItemOpaqueState =
  * Tracking it here as well moved nothing over 1968 corpus documents and 13776
  * generated shapes.
  */
-interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean }
+interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean; holder?: number }
 
 interface ItemLazyState {
   retainedMarker?: boolean
@@ -9845,6 +9845,7 @@ class ParseSession {
 
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
   private markerFenceMemos = new WeakMap<Map<number, number>, Map<number, { offset: number; column: number; close: RegExp | null }>>()
+  private markerFenceHolderColumns = new WeakMap<readonly string[], Map<number, number>>()
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
   private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
@@ -9886,6 +9887,7 @@ class ParseSession {
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
     this.markerFenceMemos = new WeakMap()
+    this.markerFenceHolderColumns = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -12632,6 +12634,12 @@ class ParseSession {
         const ln = lexer.peek()!
         // Form B: `+` pull-left continuation.
         if (/^\+[ \t]*$/.test(ln)) {
+          const follower = lexer.peek(1)
+          if (lazyState.opaque?.kind === 'code' &&
+              (follower === undefined || isBlankLine(follower) || indentColumns(follower) !== 0)) {
+            lexer.consume()
+            continue
+          }
           const plusLineIndex = lexer.pos
           lexer.consume()
           lexer.reportRefusedContinuationMarker(plusLineIndex, 1, 'definition description')
@@ -14391,10 +14399,36 @@ class ParseSession {
         ? RE_FENCE.exec(descendantLead) ?? RE_RAW_FENCE.exec(descendantLead) : null
       if (descendantLeadFence) {
         lazyState.lazyFoldable = false
+        const root = lexer.rootLines ?? lexer.lines
+        const lineNumber = lexer.lineNumber(itemStartLineIndex)
+        const cache = lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)
+          ? this.markerFenceHolderColumns.get(root) : undefined
+        let holderColumn = cache?.get(lineNumber)
+        if (holderColumn === undefined) {
+          let at = 0
+          let holder = 0
+          const bound = prefixWalkBound(content)
+          while (at < bound) {
+            const quote = quotePrefixLength(content, at, bound)
+            if (quote > 0) { at += quote; continue }
+            const marker = markerPrefixLength(content, at, bound)
+            if (marker === 0) break
+            holder = at
+            at += marker
+          }
+          holderColumn = contentCol
+          for (const char of content.slice(0, holder)) holderColumn = char === '\t' ? holderColumn + 4 - holderColumn % 4 : holderColumn + 1
+          if (lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)) {
+            const columns = cache ?? new Map<number, number>()
+            columns.set(lineNumber, holderColumn)
+            if (!cache) this.markerFenceHolderColumns.set(root, columns)
+          }
+        }
         descendantOpaque = {
           close: fenceCloseRe(RE_FENCE.test(descendantLead) ? descendantLeadFence[2]! : descendantLeadFence[1]!),
           base: lazyState.ownedColumn,
           markerLine: true,
+          holder: holderColumn,
         }
       }
       const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
@@ -14471,6 +14505,18 @@ class ParseSession {
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
       let hostedNoteBodyColumn: number | undefined
+      let acceptedPlusLine = -1
+      const refusedPlus = (offset: number): boolean => {
+        const line = lexer.peek(offset)
+        if (lexer.lineNumber(lexer.pos + offset) === acceptedPlusLine + 1 ||
+            line === undefined || !isContinuationMarker(line)) return false
+        const held = lazyState.opaque?.kind === 'code' && indentColumns(line, baseIndent + 1) === baseIndent ||
+          descendantOpaque?.markerLine === true && indentColumns(line) === descendantOpaque.holder
+        if (!held) return false
+        const rootLines = lexer.rootLines ?? lexer.lines
+        const candidate = rootLines[lexer.lineNumber(lexer.pos + offset)] ?? lexer.peek(offset + 1)
+        return candidate === undefined || isBlankLine(candidate) || indentColumns(candidate) !== 0
+      }
       while (!lexer.eof()) {
         const l = lexer.peek()!
         // An enclosing item already took this line as lazy text: it reached no column.
@@ -14574,7 +14620,12 @@ class ParseSession {
         if (isBlankLine(l)) {
           markerNoteItemParagraphOpen = false
           let afterBlanks = 1
-          while (lexer.peek(afterBlanks) !== undefined && isBlankLine(lexer.peek(afterBlanks)!)) afterBlanks++
+          while (true) {
+            const next = lexer.peek(afterBlanks)
+            if (next === undefined) break
+            if (isBlankLine(next) || refusedPlus(afterBlanks)) { afterBlanks++; continue }
+            break
+          }
           const rootLines = lexer.rootLines ?? lexer.lines
           const markerLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
           const sourceMarker = rootLines[markerLineNumber - 1]
@@ -14608,13 +14659,29 @@ class ParseSession {
         // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
         // injects a blank separator so the block parses on its own; the
         // compact-list rule above then keeps the item tight.
-        if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
+        if (isContinuationMarker(l) && (indentColumns(l, baseIndent + 1) === baseIndent || refusedPlus(0))) {
+          const rootLines = lexer.rootLines ?? lexer.lines
+          const rootFollower = rootLines[lexer.lineNumber(lexer.pos)]
+          if (refusedPlus(0)) {
+            const plusLineIndex = lexer.pos
+            if (lexer.peek(1) === undefined) {
+              for (let lineNumber = lexer.lineNumber(lexer.pos) + 1;
+                lineNumber <= rootLines.length && isBlankLine(rootLines[lineNumber - 1]!); lineNumber++) {
+                nested.push('')
+                nestedSourceLines.push('')
+                nestedLineNumbers.push(lineNumber)
+              }
+            }
+            lexer.consume()
+            lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
+            continue
+          }
           continuationFenceBreaks.add(nested.length)
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           const plusLineIndex = lexer.pos
           lexer.consume()
           lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
-          const rootFollower = (lexer.rootLines ?? lexer.lines)[plusLineNumber]
+          acceptedPlusLine = plusLineNumber
           const detachedFollower = lazyState.opaque?.kind === 'code' &&
             lexer.peek() === undefined && rootFollower !== undefined &&
             !isBlankLine(rootFollower) && indentColumns(rootFollower) === 0 &&
@@ -14644,6 +14711,21 @@ class ParseSession {
           // first-block form above. Nothing is attached from another column, and
           // the marker line itself is still consumed, so the candidate falls
           // through to the ordinary rules on the next turn of this loop.
+          const closesMarkerColon = leadColon !== null && (RE_DIV_OPEN.test(content) || RE_ADMONITION_OPEN.test(content)) &&
+              (leadColonAwaitingBody || lazyState.divDepth > 0) &&
+              attachesAtDocumentColumnZero(lexer) &&
+              ((lexer.peek() !== undefined && !isBlankLine(lexer.peek()!)) || detachedFollower)
+          if (closesMarkerColon) {
+            nested.push(':'.repeat(leadColon))
+            nestedSourceLines.push(undefined)
+            nestedLineNumbers.push(plusLineNumber)
+            trackItemLazyState(':'.repeat(leadColon), lazyState)
+            if (detachedFollower) {
+              nested.push('')
+              nestedSourceLines.push(undefined)
+              nestedLineNumbers.push(plusLineNumber)
+            }
+          }
           if (detachedFollower && attachesAtDocumentColumnZero(lexer)) {
             const rootLines = lexer.rootLines ?? lexer.lines
             let limit = rootLines.length - plusLineNumber
