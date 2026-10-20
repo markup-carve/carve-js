@@ -120,7 +120,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`
-        result += `<a href="${escape(encodeWrittenDestination(href))}">${escape(label)}</a>`; i += match[0].length
+        const encodedHref = tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href)
+        result += `<a href="${escape(encodedHref)}">${escape(label)}</a>`; i += match[0].length
       } else if ((match = /^(\*\*|__|~~|\*|_)([^\n]+?)\1/.exec(rest)) && !match[2]!.includes(match[1]![0]!)) {
         const kind = match[1] === '~~' ? 'strikethrough' : match[1]!.length === 2 ? 'strong' : 'emphasis'
         if ((match[1]!.includes('_') && /[\p{L}\p{N}]/u.test(text[i - 1] ?? '')) || /^\s|\s$/.test(match[2]!)) complete = false

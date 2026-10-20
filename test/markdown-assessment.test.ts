@@ -191,3 +191,14 @@ it('assesses preserved emphasis inside an explicit protocol link label', () => {
   expect(diagnostics).not.toContainEqual(expect.objectContaining({ code: 'fidelity-unverified' }))
   expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'markdown-emphasis', fidelity: 'preserved', confidence: 'exact' }))
 })
+
+it('assesses a table autolink whose destination holds an escaped pipe', () => {
+  const diagnostics = rows('| <https://example.com/a\\|b> | z |\n|---|---|\n')
+  expect(diagnostics.map(row => [row.code, row.fidelity])).toEqual([
+    ['markdown-table', 'preserved'],
+    ['markdown-table-row', 'preserved'],
+    ['markdown-table-cell', 'preserved'],
+    ['markdown-autolink', 'normalized'],
+    ['markdown-table-cell', 'preserved'],
+  ])
+})
