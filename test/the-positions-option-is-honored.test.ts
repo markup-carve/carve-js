@@ -129,6 +129,22 @@ describe('ParseOptions.positions', () => {
       expect(parse(source, { positions: false })).toEqual(positioned)
     }
   })
+
+  it('places adjacent list item text at its source columns', () => {
+    expect(parse('- alpha\n- beta\n').children[0]).toMatchObject({
+      type: 'list',
+      items: [
+        {
+          pos: { startLine: 1, endLine: 1, startColumn: 1, endColumn: 8, startOffset: 0, endOffset: 7 },
+          children: [{ children: [{ pos: { startLine: 1, endLine: 1, startColumn: 3, endColumn: 8, startOffset: 2, endOffset: 7 } }] }],
+        },
+        {
+          pos: { startLine: 2, endLine: 2, startColumn: 1, endColumn: 7, startOffset: 8, endOffset: 14 },
+          children: [{ children: [{ pos: { startLine: 2, endLine: 2, startColumn: 3, endColumn: 7, startOffset: 10, endOffset: 14 } }] }],
+        },
+      ],
+    })
+  })
 })
 
 describe('the entry points that read positions force them back on', () => {
