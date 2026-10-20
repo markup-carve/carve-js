@@ -5,6 +5,21 @@ import { assessMarkdown } from '../src/markdown-assessment.js'
 const rows = (source: string) => migrateMarkdown(source).report.diagnostics
 
 describe('Markdown construct assessment', () => {
+  it.each([
+    ['a | b', 'a | b', ['markdown-paragraph'], ['line:1'], ['preserved']],
+    ['[c](/a|b)', '[c](/a|b)', ['markdown-paragraph', 'markdown-link'], ['line:1', 'line:1'], ['preserved', 'preserved']],
+    ['a [b <https://e.com/]> c', 'a [b <https://e.com/]> c', ['markdown-paragraph', 'markdown-autolink'], ['line:1', 'line:1'], ['preserved', 'normalized']],
+    ['| h |\n| --- |\n| [a](/x\\|y) z |', '|= h |\n| [a](/x%7Cy) z |', ['markdown-table', 'markdown-table-row', 'markdown-table-cell', 'markdown-table-row', 'markdown-table-cell', 'markdown-link'], ['line:1', 'line:1', 'line:1', 'line:3', 'line:3', 'line:3'], ['preserved', 'preserved', 'preserved', 'preserved', 'preserved', 'preserved']],
+  ])('assesses unambiguous pipes and brackets: %s', (source, value, codes, paths, fidelities) => {
+    const result = migrateMarkdown(source)
+    expect(result.value).toBe(value)
+    expect(result.report.diagnostics.map(row => row.code)).toEqual(codes)
+    expect(result.report.diagnostics.map(row => row.path)).toEqual(paths)
+    expect(result.report.diagnostics.map(row => [row.severity, row.fidelity, row.confidence])).toEqual(
+      fidelities.map(fidelity => ['info', fidelity, 'exact']),
+    )
+  })
+
   it('assesses ordinary construct families at their original lines', () => {
     for (const [source, code, fidelity] of [
       ['# heading', 'markdown-atx-heading', 'preserved'],
