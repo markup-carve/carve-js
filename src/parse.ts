@@ -14001,14 +14001,21 @@ class ParseSession {
       // continuation lines to collect. Parse its one-line body as an ordinary
       // nested block stream, while the next loop iteration owns the sibling.
       const nextLine = lexer.peek(1)
-      if (!this.recordPositions && this.activeMatchers.length === 0 && !la &&
+      if ((!this.recordPositions || leadOrigin !== undefined) && this.activeMatchers.length === 0 && !la &&
           content.length > 0 && !RE_FIRST_BLOCK_MARKER.test(content) &&
           nextLine !== undefined && indentColumns(nextLine, baseIndent + 1) === baseIndent &&
           matchListMarker(nextLine, isTask, isOrdered) !== null &&
           (isOrdered ? orderedContinues(nextLine, orderedKind, orderedDelim) : unorderedMarkerChar(nextLine) === firstMarkerChar)) {
         lexer.consume()
-        const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)])
+        const origins = this.recordPositions && leadOrigin
+          ? new Map<number, StrippedLineOrigin>([[0, leadOrigin]]) : undefined
+        const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)], origins)
+        if (this.recordPositions) {
+          sub.markerOpensSublist = true
+          sub.hostBody = 'list'
+        }
         const item: ListItem = { type: 'list_item', children: this.parseBlocks(sub, 0) }
+        if (this.recordPositions) attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
         if (checked !== undefined) item.checked = checked
         if (taskState !== undefined) item.taskState = taskState
         items.push(item)
