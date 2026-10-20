@@ -757,7 +757,8 @@ const markerContent = (line: string): string => line.replace(/^(?:[-*+]|\d+[.)])
 function swallowedByALazyLine(aboveRendered: string, rendered: string): boolean {
   const first = rendered.split('\n')[0] ?? ''
   if (first.trim() === '') return false
-  if (PARAGRAPH_INTERRUPTERS.some((opener) => opener.test(first))) return false
+  // A setext underline cannot be lazy text, so a rule leaves the item above it alone.
+  if (THEMATIC_BREAK_LINE.test(first) || PARAGRAPH_INTERRUPTERS.some((opener) => opener.test(first))) return false
   const tail = lastNonBlankLine(aboveRendered).replace(/^[ \t]+/, '')
   if (BARE_MARKER.test(tail) || THEMATIC_BREAK_LINE.test(tail)) return false
   const text = markerContent(tail)
