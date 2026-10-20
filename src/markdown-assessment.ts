@@ -83,7 +83,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if (bare?.start === i) {
         const body = text.slice(bare.start, bare.end)
-        const href = encodeDestination(bare.prefix + body)
+        const href = tableCell ? encodeDestination(bare.prefix + body).replace(/\|/g, '%7C') : encodeDestination(bare.prefix + body)
         emit('bare-autolink', line, 'normalized')
         result += `<a href="${escape(href)}">${escape(body)}</a>`
         i = bare.end
@@ -119,7 +119,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         result += match[1] === '!' ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
-        emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`
+        emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') || label.startsWith('mailto:') ? label : `mailto:${label}`
         const encodedHref = tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href)
         result += `<a href="${escape(encodedHref)}">${escape(label)}</a>`; i += match[0].length
       } else if ((match = /^(\*\*|__|~~|\*|_)([^\n]+?)\1/.exec(rest)) && !match[2]!.includes(match[1]![0]!)) {
@@ -131,6 +131,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('hard-break', line, 'normalized'); result += '<br>\n'; line++; i += match[0].length
       } else if (rest[0] === '\n') {
         emit('soft-break', line); result += '\n'; line++; i++
+      } else if (/^<(?:https?:\/\/|mailto:)[^<>\n]*>/.test(rest)) {
+        result += '&lt;'; i++
       } else if ((match = /^<(?:!--[\s\S]*?--|\/?[A-Za-z][^<>]*|\?[\s\S]*?\?)>/.exec(rest))) {
         if (/^<\/?(?:section|h[1-6]|input)\b/i.test(match[0])) complete = false
         emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
@@ -178,7 +180,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
               let end = column
               while (row[end] === '\\') end++
               const slashes = end - column
-              cell += '\\'.repeat(row[end] === '|' ? Math.floor(slashes / 2) : slashes)
+              cell += '\\'.repeat(row[end] === '|' ? (slashes % 2 === 1 ? slashes - 1 : Math.floor(slashes / 2)) : slashes)
               if (row[end] === '|' && slashes % 2 === 1) { cell += '|'; column = end }
               else column = end - 1
             }
