@@ -1216,6 +1216,7 @@ export function lintCarve(
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
   const termFoldLines = collectTermFoldWarnings(source, doc, out)
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
+  collectOrderedListSplitWarnings(source, doc, out)
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectRegionMarkerWarnings(source, doc, unrendered, verbatimLines, out)
@@ -1322,7 +1323,11 @@ interface LintItemColumn {
   legacyAttributeColumn?: number
   markerLineDeepestColumn?: number
   quoteDepth: number
+  paragraphLines: Set<number>
+  textStarts: Set<string>
 }
+
+const LINT_MARKER_SHAPED = /^(?:[-+*](?: +\[[ xX\-_>?]\])?|(?:\([0-9A-Za-z]+\)|[0-9A-Za-z]+[.)]|\.))(?=[ \t])/
 
 /**
  * A block opener indented past a term's marker folds into the term as text,
@@ -1520,12 +1525,27 @@ function collectListItemIndentWarnings(
       deepestMarkerColumn += visualIndent(nested[1]!).column + width
       rest = rest.slice(nested[0].length)
     }
+    const textStarts = new Set<string>()
+    for (const child of (node.children as BlockNode[] | undefined) ?? []) {
+      if (child.type !== 'paragraph') continue
+      walkDocument({ children: [child] } as Document, (inline) => {
+        const at = (inline as Positioned).pos
+        if (inline.type === 'text' && at) textStarts.add(`${at.startLine}:${at.startColumn}`)
+      })
+    }
     items.push({
       startLine: pos.startLine,
       endLine: pos.endLine ?? pos.startLine,
       baseColumn,
       contentColumn: baseColumn + bareWidth,
       quoteDepth: (markerLine.slice(0, markerOffset).match(/>/g) ?? []).length,
+      paragraphLines: new Set(((node.children as BlockNode[] | undefined) ?? [])
+        .filter((child) => child.type === 'paragraph' && child.pos)
+        .flatMap((child) => Array.from(
+          { length: Math.max(0, (child.pos!.endLine ?? child.pos!.startLine) - child.pos!.startLine) },
+          (_, index) => child.pos!.startLine + index + 1,
+        ))),
+      textStarts,
       ...(deepestMarkerColumn > baseColumn + bareWidth
         ? { markerLineDeepestColumn: deepestMarkerColumn }
         : {}),
@@ -1563,6 +1583,25 @@ function collectListItemIndentWarnings(
     if (termFoldLines.has(lineNo)) continue
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    if (containing && containing.paragraphLines.has(lineNo) &&
+        LINT_MARKER_SHAPED.test(authored.rest) && !_unrendered.has(lineNo)) {
+      const markerColumn = Array.from(lines[index]!.slice(0, authored.chars)).length + 1
+      const host = active.filter((item) => item.paragraphLines.has(lineNo) &&
+        item.textStarts.has(`${lineNo}:${markerColumn}`) &&
+        item.baseColumn < authored.column && authored.column < item.contentColumn)
+        .sort((a, b) => b.contentColumn - a.contentColumn)[0]
+      if (host) {
+        const start = (starts[index] ?? 0) + authored.chars
+        out.push({
+          line: lineNo,
+          column: markerColumn,
+          rule: 'list-marker-below-content-column',
+          message: `This list marker starts at column ${authored.column}, below the list item's content column ${host.contentColumn}, so it folds into the item's paragraph as text. Indent it to column ${host.contentColumn} to nest it under the item, or start it at column ${host.baseColumn} to begin a new item at the item's own level.`,
+          start,
+          end: start + (LINT_MARKER_SHAPED.exec(authored.rest)?.[0].length ?? 1),
+        })
+      }
+    }
     const kind = /^>(?: |$)/.test(authored.rest) ? '>' : isTableRow(authored.rest) ? '|' : undefined
     const blockFirst = kind === undefined ? undefined : blockRuns.get(`${kind}:${lineNo}`)
       ?.filter((block) => block.column >= (owner?.contentColumn ?? 0))
@@ -1681,6 +1720,51 @@ function collectListItemIndentWarnings(
       : { item, kind: groupKind, column: authored.column, line: lineNo }
   }
   return reported
+}
+
+function collectOrderedListSplitWarnings(source: string, doc: Document, out: LintWarning[]): void {
+  const lines = source.split(/\r\n?|\n/)
+  const starts: number[] = []
+  for (let offset = 0, i = 0; i < lines.length; i++) {
+    starts[i] = offset
+    offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
+  }
+  const firstMarker = (node: Record<string, unknown>): { line: number; column: number; visual: number; start: number } | undefined => {
+    const item = (node.items as Array<Positioned> | undefined)?.[0]
+    const line = item?.pos?.startLine
+    if (!line) return undefined
+    const sourceLine = lines[line - 1] ?? ''
+    const match = /^(?:[ \t]*> ?)*[ \t]*(\([0-9A-Za-z]+\)|[0-9A-Za-z]+[.)]|\.)(?=[ \t])/.exec(sourceLine)
+    if (!match) return undefined
+    const start = match[0].length - match[1]!.length
+    let visual = 0
+    for (const char of sourceLine.slice(0, start)) visual = char === '\t' ? Math.floor(visual / 4 + 1) * 4 : visual + 1
+    return { line, column: Array.from(sourceLine.slice(0, start)).length + 1, visual, start: (starts[line - 1] ?? 0) + start }
+  }
+  walkSiblingBlocks(doc, (previous, current) => {
+    if (previous.type !== 'list' || current.type !== 'list' ||
+        previous.ordered !== true || current.ordered !== true ||
+        previous.bareMarker || current.bareMarker ||
+        previous.olType !== current.olType || previous.delim !== current.delim) return
+    const before = previous as unknown as { start?: number; items: unknown[]; pos?: Positioned['pos']; olType?: string }
+    const after = current as unknown as { start?: number; pos?: Positioned['pos'] }
+    if (before.start === undefined || after.start !== before.start + before.items.length) return
+    const previousEnd = before.pos?.endLine
+    const nextLine = after.pos?.startLine
+    if (!previousEnd || !nextLine || lines.slice(previousEnd, nextLine - 1)
+      .some((line) => line.replace(/^(?:[ \t]*> ?)+/, '').trim() !== '')) return
+    const first = firstMarker(previous)
+    const second = firstMarker(current)
+    if (!first || !second || first.visual === second.visual) return
+    out.push({
+      line: second.line,
+      column: second.column,
+      start: second.start,
+      end: second.start + 1,
+      rule: 'ordered-list-split-by-indent',
+      message: `This ordered list continues the numbering of the list above (${before.start}, then ${after.start}), but its marker starts at column ${second.visual} and the list above starts at column ${first.visual}, so they are two lists. Start the markers at the same column${before.olType ? '.' : `, or write {start=${before.start}} on the line above and use the auto-numbered . marker.`}`,
+    })
+  })
 }
 
 /**
