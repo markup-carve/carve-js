@@ -16,6 +16,7 @@ describe('a refused continuation marker below an open verbatim fence', () => {
   it('keeps the source line of a following paragraph', () => {
     const tail = parse('- ```\n  x\n+\n\ntail\n').children.at(-1)
     expect(tail?.type).toBe('paragraph')
+    if (tail?.type !== 'paragraph' || tail.pos === undefined) throw new Error('expected a positioned paragraph')
     expect(tail?.pos.startLine).toBe(5)
   })
 
