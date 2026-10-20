@@ -740,9 +740,6 @@ const THEMATIC_BREAK_LINE = /^(-+|\*+|_+)[ \t]*$/
 /** A line's content with one list marker taken off, for the line a nested list ends on. */
 const markerContent = (line: string): string => line.replace(/^(?:[-*+]|\d+[.)]) +/, '')
 
-/** The blocks whose Markdown spelling opens with plain text, so a reader can take them lazily. */
-const SWALLOWED_BY_A_LAZY_LINE = new Set(['paragraph', 'table', 'definition_list'])
-
 /**
  * Whether the block below is read as more text of the block above because no
  * blank line separates them and its own spelling opens with plain text.
@@ -757,8 +754,11 @@ const SWALLOWED_BY_A_LAZY_LINE = new Set(['paragraph', 'table', 'definition_list
  * The tail has to be able to TAKE lazy text, which a bare marker and a heading
  * cannot, so those pairs stay glued and the item stays tight.
  */
-function swallowedByALazyLine(aboveRendered: string, below: BlockNode): boolean {
-  if (!SWALLOWED_BY_A_LAZY_LINE.has(below.type)) return false
+function swallowedByALazyLine(aboveRendered: string, rendered: string): boolean {
+  const first = rendered.split('\n')[0] ?? ''
+  if (first.trim() === '') return false
+  // A setext underline cannot be lazy text, so a rule leaves the item above it alone.
+  if (THEMATIC_BREAK_LINE.test(first) || PARAGRAPH_INTERRUPTERS.some((opener) => opener.test(first))) return false
   const tail = lastNonBlankLine(aboveRendered).replace(/^[ \t]+/, '')
   if (BARE_MARKER.test(tail) || THEMATIC_BREAK_LINE.test(tail)) return false
   const text = markerContent(tail)
@@ -784,7 +784,7 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
       // child below opens a construct of its own under it.
       if (tight && out.endsWith('\n\n') && separatorCanGo(rendered, above, aboveRendered)) {
         out = out.slice(0, -1)
-      } else if (out.endsWith('\n') && !out.endsWith('\n\n') && swallowedByALazyLine(out, child)) {
+      } else if (out.endsWith('\n') && !out.endsWith('\n\n') && swallowedByALazyLine(out, rendered)) {
         out += '\n'
       }
       out += rendered
