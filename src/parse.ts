@@ -14015,7 +14015,7 @@ class ParseSession {
       const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
       const markerAtColumnZero = !/^[ \t]/.test(lexer.rootLines?.[lexer.lineNumber(itemStartLineIndex) - 1] ?? line)
       const followsTableRow = /^[ \t]*\|/.test((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 2] ?? '')
-      if (markerAtColumnZero && /^(?:(?:[-*] |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) &&
+      if (markerAtColumnZero && /^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) &&
           lexer.peek() !== undefined && attachesAtDocumentColumnZero(lexer) &&
           !isBlankLine(lexer.peek()!) && !firstItemAttachBoundary(lexer.peek()!)) {
         const attached = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
