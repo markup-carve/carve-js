@@ -11782,14 +11782,16 @@ class ParseSession {
       // A fence taken below the column keeps that column, as a `%%` line does.
       const rebaseEligible = belowColumnCommentFence.size === 0 ? undefined
         : new Set(bodyLines.map((_, k) => k).filter((k) => !belowColumnCommentFence.has(k)))
-      rebaseOverindentedBlocks(
-        bodyLines, rebaseEligible, -1, true, true, undefined, undefined, undefined, false,
-        undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
-        undefined, undefined, false, false, true,
-      )
-      restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
-        index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
-      )
+      if (bodyLines.length !== 1 || !/^[A-Za-z][A-Za-z0-9 .]*$/.test(bodyLines[0]!)) {
+        rebaseOverindentedBlocks(
+          bodyLines, rebaseEligible, -1, true, true, undefined, undefined, undefined, false,
+          undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
+          undefined, undefined, false, false, true,
+        )
+        restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
+          index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
+        )
+      }
       const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.inFootnoteBody = true
