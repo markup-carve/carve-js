@@ -13,6 +13,7 @@ export type RenderLossCode =
   | 'table-header-row-demoted'
   | 'table-header-row-hoisted'
   | 'table-header-cell-demoted'
+  | 'list-tightness-lost'
 
 export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
@@ -35,6 +36,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'table-header-row-demoted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'table-header-row-hoisted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'table-header-cell-demoted'; target: 'markdown'; nodeType: 'block' })
+  | (RenderLossBase & { code: 'list-tightness-lost'; target: 'carve'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T

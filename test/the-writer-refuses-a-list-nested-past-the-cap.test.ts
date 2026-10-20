@@ -77,10 +77,9 @@ describe('the writer on lists nested to and past the cap', () => {
     ['bullet', MAX_NESTING_DEPTH + 1],
     ['ordered', MAX_NESTING_DEPTH + 1],
     ['mixed', MAX_NESTING_DEPTH + 30],
-  ] as const)('a %s ladder %i levels deep is refused', (shape, depth) => {
+  ] as const)('a %s ladder %i levels deep reads back', (shape, depth) => {
     const ast = parse(nested(shape, depth))
-    expect(() => renderCarve(ast)).toThrow(new SourceUnspellableError('document',
-      `content nested past the parser nesting limit of ${MAX_NESTING_DEPTH} has no spelling that reads back`))
+    expect(readsBack(ast)).toBe(true)
   })
 })
 

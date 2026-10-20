@@ -42,10 +42,10 @@ export function renderCarveWithConversionReport(
     if (diagnostics.length < maxDiagnostics) diagnostics.push(entry)
   }
   const preservedHeaderCells = new WeakSet<object>()
-  const stack: Array<{ value: unknown; inlineOnly: boolean }> = [{ value: ast, inlineOnly: false }]
+  const stack: Array<{ value: unknown; inlineOnly: boolean; listDepth: number; hosted: boolean }> = [{ value: ast, inlineOnly: false, listDepth: 0, hosted: false }]
   while (stack.length) {
-    const { value, inlineOnly } = stack.pop()!
-    if (Array.isArray(value)) { for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], inlineOnly }); continue }
+    const { value, inlineOnly, listDepth, hosted } = stack.pop()!
+    if (Array.isArray(value)) { for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], inlineOnly, listDepth, hosted }); continue }
     if (!value || typeof value !== 'object') continue
     const node = value as Record<string, unknown>
     const type = node.type
@@ -63,6 +63,14 @@ export function renderCarveWithConversionReport(
       }
     }
     if (type === 'paragraph' && Array.isArray(node.children) && node.children.length === 1 && ['image', 'comment'].includes((node.children[0] as { type?: string }).type ?? '')) report('structure-unspellable', 'Carve source spells the paragraph content as a block')
+    if (type === 'list' && node.tight === true && Array.isArray(node.items)) {
+      for (const item of node.items as Array<{ children?: Array<{ type?: string }>; pos?: Position }>) {
+        if (listDepth === 0 && !hosted) continue
+        if (!Array.isArray(item.children) || !item.children.some((child, index) => index > 0 && child.type === 'paragraph' && (item.children?.[index - 1]?.type === 'block_quote' || item.children?.[index - 1]?.type === 'list'))) continue
+        const itemPos = wirePos(item.pos)
+        add({ code: 'structure-unspellable', node: 'list_item', message: 'Carve source writes this nested tight item loose to preserve its blocks', ...(itemPos ? { pos: itemPos } : {}) })
+      }
+    }
     if ((type === 'figure' || type === 'table') && node.shortCaption !== undefined) report('field-unspellable', 'Carve source cannot spell a short caption', 'shortCaption')
     if (type === 'figure' && (node.target as { type?: string } | undefined)?.type === 'table') report('structure-unspellable', 'Carve source cannot spell a figure wrapper around a table')
     if (type === 'table' && tableNeedsDelimiterHeader(node as unknown as Table)) {
@@ -100,7 +108,7 @@ export function renderCarveWithConversionReport(
     if (type === 'math' && node.number !== undefined) report('field-unspellable', 'Carve source cannot spell an equation number', 'number')
     for (const [key, child] of Object.entries(node)) {
       if (key === 'pos' || key === 'attrs' || key === 'payload' || key === 'shortCaption') continue
-      stack.push({ value: child, inlineOnly: type === 'table_cell' && node.span !== undefined ? false : inlineOnly || (type === 'table_cell' && (key === 'children' || key === 'blocks')) })
+      stack.push({ value: child, inlineOnly: type === 'table_cell' && node.span !== undefined ? false : inlineOnly || (type === 'table_cell' && (key === 'children' || key === 'blocks')), listDepth: listDepth + (type === 'list' ? 1 : 0), hosted: hosted || (type === 'definition_list' && key === 'items') || (type === 'document' && key === 'footnoteDefs') })
     }
   }
   let output: string | undefined

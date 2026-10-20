@@ -22,14 +22,16 @@ export function tightDjotDefinitionDescriptions(source: string): string {
     const line = node.pos.startLine - 2, marker = /\{loose\}[ \t]*$/.exec(lines[line]!)
     if (marker) edits.push({ start: offsets[line]! + marker.index, end: offsets[line]! + marker.index + marker[0].length, value: '%%' })
   }
-  const clearGap = (before: BlockNode['pos'], after: BlockNode['pos'], boundary = false): void => {
+  const clearGap = (before: BlockNode['pos'], after: BlockNode['pos'], boundary = false, ownerPrefix = ''): void => {
     if (!before || !after || after.startOffset === undefined) return
     const prefix = lines[after.startLine - 1]!.slice(0, sourceOffset(after.startOffset) - offsets[after.startLine - 1]!)
+    const markerAtOwner = ownerPrefix.replace(/^(?:> ?)+/, '').length === 0
     let inserted = false
     for (let line = before.endLine - 1; line < after.startLine - 1; line++) if (/^[ \t>]*$/.test(lines[line]!)) {
-      edits.push({ start: offsets[line]!, end: offsets[line]! + lines[line]!.length + Number(line + 1 < lines.length), value: boundary && !inserted ? prefix + '+\n' : '' })
+      edits.push({ start: offsets[line]!, end: offsets[line]! + lines[line]!.length + Number(line + 1 < lines.length), value: boundary && !inserted ? markerAtOwner ? ownerPrefix + '+\n' : (ownerPrefix.match(/^(?:> ?)+/)?.[0].trimEnd() ?? '') + '\n' : '' })
       inserted = true
     }
+    if (boundary && inserted && markerAtOwner && prefix !== ownerPrefix) edits.push({ start: offsets[after.startLine - 1]!, end: sourceOffset(after.startOffset), value: ownerPrefix })
   }
   const hasParagraphGap = (node: Extract<BlockNode, { type: 'list' }>): boolean => {
     let previous: BlockNode | undefined
@@ -61,7 +63,10 @@ export function tightDjotDefinitionDescriptions(source: string): string {
     if (node.type === 'list' && !tight && node.items.every(item => item.children.every(child => ['definition_list', 'paragraph', 'comment'].includes(child.type))) && node.items.some(item => item.children.some(child => child.type === 'definition_list')) && !hasParagraphGap(node)) {
       tight = true
       clearLoose(node)
-      for (const item of node.items) for (let i = 1; i < item.children.length; i++) clearGap(item.children[i - 1]!.pos, item.children[i]!.pos, item.children[i - 1]!.type === 'definition_list')
+      for (const item of node.items) for (let i = 1; i < item.children.length; i++) {
+        const ownerPrefix = item.pos?.startOffset === undefined ? '' : lines[item.pos.startLine - 1]!.slice(0, sourceOffset(item.pos.startOffset) - offsets[item.pos.startLine - 1]!)
+        clearGap(item.children[i - 1]!.pos, item.children[i]!.pos, item.children[i - 1]!.type === 'definition_list', ownerPrefix)
+      }
       for (let i = 1; i < node.items.length; i++) clearGap(node.items[i - 1]!.pos, node.items[i]!.pos)
     }
     if (node.type === 'definition_list' && tight) {
