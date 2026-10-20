@@ -248,6 +248,9 @@ function balancedLabelMatcher(
   return { test: (line) => exec(line) !== null, exec }
 }
 
+const RE_BACKTICK_FENCE_CLOSE_3 = new RegExp('^`{3,}' + FENCE_TRAILING_WS)
+const RE_TILDE_FENCE_CLOSE_3 = new RegExp('^~{3,}' + FENCE_TRAILING_WS)
+
 /**
  * The closer for a code fence opened with `marker`: the same character, at
  * least as long, and nothing after it but the trailing run above.
@@ -263,6 +266,7 @@ function balancedLabelMatcher(
  * separator, because no content follows a closer's marker.
  */
 function fenceCloseRe(marker: string): RegExp {
+  if (marker.length === 3) return marker[0] === '`' ? RE_BACKTICK_FENCE_CLOSE_3 : RE_TILDE_FENCE_CLOSE_3
   return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
