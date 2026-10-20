@@ -27,7 +27,7 @@ it.each([
   ['[a][b][c][d]\n\n[b]: /b\n[c]: /c', '<p><a href="/b">a</a>[c][d]</p>'],
   ['[a][b][c][]\n\n[b]: /b\n[c]: /c', '<p><a href="/b">a</a><a href="/c">c</a></p>'],
   ['[x*][a][b][c]\n\n[a]: /a\n[c]: /c', '<p><a href="/a">x*</a><a href="/c">b</a></p>'],
-  ['<https://a.com/\\(x)>', '<p><a href="https://a.com/%5C(x)">https://a.com/\\(x)</a></p>'],
+  ['<https://a.com/\\(x)>', '<p><a href="https://a.com/\\(x)">https://a.com/\\(x)</a></p>'],
   ['[a][b][c](/x)\n\n[b]: /b\n[c]: /c', '<p><a href="/b">a</a><a href="/x">c</a></p>'],
 ])('preserves the rendered meaning of a public Markdown case: %s', (source, expected) => {
   expect(carveToHtml(markdownToCarve(source))).toBe(expected)

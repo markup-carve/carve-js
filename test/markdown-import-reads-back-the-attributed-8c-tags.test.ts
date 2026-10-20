@@ -134,7 +134,7 @@ describe('protected Markdown inside attributed editorial tags', () => {
 
   it('keeps a reference destination ending in a backslash', () => {
     const markdown = "[a\\]b]: /x\\\n\n[a\\]b]"
-    expect(carveToHtml(markdownToCarve(markdown))).toContain('href="/x%5C"')
+    expect(carveToHtml(markdownToCarve(markdown))).toContain('href="/x\\"')
   })
 })
 

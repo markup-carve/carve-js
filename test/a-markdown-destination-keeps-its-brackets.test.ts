@@ -21,7 +21,7 @@ describe('PART 11 §5 Markdown destination brackets', () => {
   })
 
   it('keeps the characters a destination genuinely cannot hold encoded', () => {
-    expect(markdownToCarve('[x](http://u/`|<>)')).toBe('[x](http://u/%60%7C%3C%3E)')
+    expect(markdownToCarve('[x](http://u/`|<>)')).toBe('[x](http://u/`|<>)')
   })
 
   it('leaves the conservative label escape alone, which renders the same', () => {

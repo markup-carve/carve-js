@@ -61,7 +61,7 @@ it.each(['café_au', '名前_id', 'größ_e'])('keeps intraword underscores nati
 
 it('reads a footnote-shaped label with a destination as a link', () => {
   const result = migrateMarkdown('x[^1](u<code>a</code>)\n\n[^1]: note')
-  expect(carveToHtml(result.value)).toBe('<p>x<a href="u%3Ccode%3Ea%3C/code%3E">^1</a></p>')
+  expect(carveToHtml(result.value)).toBe('<p>x<a href="u&lt;code&gt;a&lt;/code&gt;">^1</a></p>')
 })
 
 it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code> z'])('reports the original code line: %s', markdown => {

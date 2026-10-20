@@ -51,6 +51,7 @@ import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentin
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
+import { escapeDestinationStructure } from './markdown-destination-encoding.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
@@ -2048,31 +2049,8 @@ export function escapeImageAlt(text: string, inTable = false): string {
     .replace(/(\n[ \t]*(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.)))([.)])(?=[ \t])/g, '$1\\$2')
 }
 
-/**
- * Backslash-escape exactly the characters the destination scan would otherwise
- * read differently: a parenthesis with no partner, and a backslash sitting in
- * front of one of the three escapable characters. Balanced parentheses are
- * left alone -- they re-parse as themselves, and escaping them would be churn
- * against the minimal-escaping rule in PART 11 section 4.
- */
 function escapeDestinationEscapes(text: string): string {
-  const openers: number[] = []
-  const unbalanced = new Set<number>()
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '(') openers.push(i)
-    else if (text[i] === ')') {
-      if (openers.length > 0) openers.pop()
-      else unbalanced.add(i)
-    }
-  }
-  for (const i of openers) unbalanced.add(i)
-  let out = ''
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!
-    const escapable = ch === '\\' && (text[i + 1] === '(' || text[i + 1] === ')' || text[i + 1] === '\\')
-    out += unbalanced.has(i) || escapable ? `\\${ch}` : ch
-  }
-  return out
+  return escapeDestinationStructure(text)
 }
 
 function escapeDestination(text: string): string {
