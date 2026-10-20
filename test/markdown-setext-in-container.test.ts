@@ -162,7 +162,7 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
 
   it('leaves an underline with no paragraph line above it in the quote', () => {
     // CommonMark reads: <blockquote>\n<p>===</p>\n</blockquote>
-    expect(markdownToCarve('>\n> ===\n')).toBe('>\n> ===\n')
+    expect(markdownToCarve('>\n> ===\n')).toBe('> ===\n')
   })
 
   it('leaves a line that is not all `=` or all `-`', () => {
@@ -214,7 +214,7 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
   it('moves a link reference definition out of a quote', () => {
     // CommonMark reads: <blockquote>\n<p>===</p>\n</blockquote> - the
     // definition is consumed and the `===` is a paragraph of its own.
-    expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> \n> ===\n\n[a]: /x\n')
+    expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> ===\n\n[a]: /x\n')
     expect(carveToHtml(markdownToCarve('> [a]: /x\n> ===\n'))).toContain('<blockquote>')
   })
 

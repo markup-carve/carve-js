@@ -59,11 +59,10 @@ describe('marker padding collapses where the item carries its content along', ()
     expect(carveToHtml(out)).toMatch(/<li><p>a<\/p>[\s\S]*<p>b<\/p>/)
   })
 
-  it('keeps it where the next block is left of that column', () => {
-    // `b` is outside the item, and nothing moves it, so collapsing would pull
-    // it in. cmark-gfm: <ul><li>a</li></ul><p>b</p>.
+  it('collapses it where the next block is left of that column, which stays outside', () => {
+    // `b` is outside the item and goes to column 0. cmark-gfm: <ul><li>a</li></ul><p>b</p>.
     const out = markdownToCarve(lines('-' + sp(2) + 'a', '', sp(2) + 'b'))
-    expect(out).toBe(lines('-' + sp(2) + 'a', '', sp(2) + 'b'))
+    expect(out).toBe(lines('- a', '', 'b'))
     expect(carveToHtml(out)).toMatch(/<\/ul>[\s\S]*<p>b<\/p>/)
   })
 })

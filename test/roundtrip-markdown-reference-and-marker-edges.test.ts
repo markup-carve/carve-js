@@ -46,7 +46,7 @@ describe('Markdown import: abbreviations (CARVE-P11-033 T1)', () => {
 
   it('keeps an abbr whose title no definition gives its text', () => {
     expect(migrateMarkdown('*[HTML]: Hyper Text\n\n<abbr title="Other">HTML</abbr>\n').value)
-      .toBe('*[HTML]: Hyper Text\n\n[HTML]{abbr="Other"}\n')
+      .toBe('*[HTML]: Hyper Text\n\n[HTML]{abbr=Other}\n')
   })
 
   it('keeps an abbr when the document defines nothing', () => {

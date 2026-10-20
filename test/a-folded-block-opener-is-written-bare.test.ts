@@ -88,8 +88,8 @@ describe('a folded block opener is written bare', () => {
   it('keeps the escape on a line that stays paragraph text', () => {
     // No underline, so no fold: the marker does stand at the start of a line
     // there and the escape is load-bearing. The control the change must not move.
-    expect(markdownToCarve(`foo\n${sp(4)}# bar\n`)).toBe('foo\n    \\# bar\n')
-    expect(markdownToCarve(`foo\n${sp(4)}1. bar\n`)).toBe('foo\n    1\\. bar\n')
-    expect(markdownToCarve(`foo\n${sp(4)}> bar\n`)).toBe('foo\n    \\> bar\n')
+    expect(markdownToCarve(`foo\n${sp(4)}# bar\n`)).toBe('foo\n\\# bar\n')
+    expect(markdownToCarve(`foo\n${sp(4)}1. bar\n`)).toBe('foo\n1\\. bar\n')
+    expect(markdownToCarve(`foo\n${sp(4)}> bar\n`)).toBe('foo\n\\> bar\n')
   })
 })

@@ -39,9 +39,9 @@ describe('the character goes, and the loss is recorded', () => {
     expect(convert('a &amp; b\n').losses).toEqual([])
   })
 
-  it('leaves whitespace the author wrote as indentation alone', () => {
+  it('drops paragraph indent slack the author wrote without a loss', () => {
     const { value, losses } = convert('  a &amp; b\n')
-    expect(value).toBe('  a & b\n')
+    expect(value).toBe('a & b\n')
     expect(losses).toEqual([])
   })
 

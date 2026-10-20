@@ -181,6 +181,7 @@ export function extractReferenceDefinitions(
   sourceLines: number[]
   references: EmptyDestinationReferences
   definitions: string[]
+  definitionContainers: boolean[]
   discardedEmptyDefinitions: Array<{ line: number; label: string }>
   /** Input line indices this pass read as HTML BLOCK content. */
   htmlLines: Set<number>
@@ -200,6 +201,7 @@ export function extractReferenceDefinitions(
   const authoredDefinitions = new Set<string>()
   const labels = new Map<string, string>()
   const definitions: string[] = []
+  const definitionContainers: boolean[] = []
   const discardedEmptyDefinitions: Array<{ line: number; label: string }> = []
   const inline = new Map<string, string>()
   const tableInline = new Map<string, string>()
@@ -534,7 +536,7 @@ export function extractReferenceDefinitions(
         const nextNonblank = lines[nextNonblankFrom(i + 1)]
         const isItem = (entry: string | undefined) => entry !== undefined &&
           /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)/.test(entry.slice(quotePrefix.length))
-        if (!opensItem && kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
+        if (!opensItem && leadingSpaces(line) < 2 && kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
           keep(line, ...continued)
           canStart = true
           continue
@@ -566,7 +568,10 @@ export function extractReferenceDefinitions(
           const canonical = `carve-import-reference-${nextSerial++}`
           inline.set(canonical, `${target}${title}`)
           sourceLabels.set(key, canonical)
-        } else if (!authoredRepeated && !wrappedDestinationTitle) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        } else if (!authoredRepeated && !wrappedDestinationTitle) {
+          definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+          definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
+        }
         if (opensItem) {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
@@ -622,7 +627,10 @@ export function extractReferenceDefinitions(
           : decodeLinkTitle(definition[1]!, decodeEntity)
         labels.set(key, canonicalLabel)
         sourceLabels.set(key, canonicalLabel)
-        if (raw === '') definitions.push(`[${canonicalLabel}]:`)
+        if (raw === '') {
+          definitions.push(`[${canonicalLabel}]:`)
+          definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
+        }
       }
       defined.add(key)
       authoredDefinitions.add(authoredKey)
@@ -650,6 +658,7 @@ export function extractReferenceDefinitions(
     sourceLines: keptSource,
     references: { empty, titled, defined, labels, inline, tableInline, sourceLabels, footnotes, titleWrap },
     definitions,
+    definitionContainers,
     discardedEmptyDefinitions,
     htmlLines,
     taskHtmlLines,

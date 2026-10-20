@@ -54,7 +54,7 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 
   it('converts emphasis nested inside ***bold italic***', () => {
-    expect(conv('***outer _inner_ end***')).toBe('{/{*outer {/inner/} end*}/}')
+    expect(conv('***outer _inner_ end***')).toBe('{/*outer {/inner/} end*/}')
   })
 
   it('converts Markdown ~~strike~~ to Carve ~strike~', () => {
@@ -267,14 +267,12 @@ describe('markdownToCarve — multiline paragraph inline mapping', () => {
     expect(carveToHtml(carve)).toContain('<tr><td>*a</td><td>b</td></tr>')
   })
 
-  it('preserves line count and leading whitespace in a multiline paragraph', () => {
+  it('preserves line count and uses the writer whitespace in a multiline paragraph', () => {
     const md = '  a **b\n    c** d\n\t*e\n\tf*'
     const carve = conv(md)
-    expect(carve).toBe('  a *b\n    c* d\n\t/e\n\tf/')
+    expect(carve).toBe('a *b\nc* d\n/e\nf/')
     expect(carve.split('\n')).toHaveLength(md.split('\n').length)
-    expect(carve.split('\n').map((line) => line.match(/^[ \t]*/)?.[0])).toEqual(
-      md.split('\n').map((line) => line.match(/^[ \t]*/)?.[0]),
-    )
+    expect(carve.split('\n').map((line) => line.match(/^[ \t]*/)?.[0])).toEqual(['', '', '', ''])
   })
 })
 
@@ -722,7 +720,7 @@ describe('markdownToCarve — HTML entities', () => {
     expect(carveToHtml(conv('[x](u "a &quot;q&quot;")'))).toBe(
       '<p><a href="u" title="a &quot;q&quot;">x</a></p>',
     )
-    expect(conv("[x](u 'a &#39;q&#39;')")).toBe("[x](u 'a \\'q\\'')")
+    expect(conv("[x](u 'a &#39;q&#39;')")).toBe('[x](u "a \'q\'")')
   })
 
   it('does not backslash-escape a decoded delimiter inside a destination', () => {
@@ -753,8 +751,8 @@ describe('markdownToCarve — HTML entities', () => {
   })
 
   // Whitespace that was already there is not the decode's doing.
-  it('leaves an indented line alone', () => {
-    expect(conv('  a &amp; b')).toBe('  a & b')
+  it('removes paragraph indent slack around a decoded entity', () => {
+    expect(conv('  a &amp; b')).toBe('a & b')
   })
 
   // Accented Latin letters are the entities non-English Markdown actually
@@ -871,7 +869,7 @@ describe('markdownToCarve — code protection edge cases', () => {
   })
 
   it('does not close a code span on the suffix of a longer inner run', () => {
-    expect(conv('``a ``` *b*``')).toBe('``a ``` *b*``')
+    expect(conv('``a ``` *b*``')).toBe('````a ``` *b*````')
   })
 
   it('leaves literal placeholder-looking text intact', () => {

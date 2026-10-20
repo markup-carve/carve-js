@@ -40,7 +40,8 @@ describe('a raw span that would end a content line in whitespace (markup-carve/c
 
   it('names a loss the engine really takes', () => {
     const { value } = migrateMarkdown('<a href="foo  \nbar">\n')
-    expect(value).toContain('foo  \n')
+    expect(value).toContain('foo\nbar')
+    expect(value).not.toContain('foo  ')
     expect(JSON.stringify(parse(value))).toContain('<a href=\\"foo\\nbar\\">')
   })
 

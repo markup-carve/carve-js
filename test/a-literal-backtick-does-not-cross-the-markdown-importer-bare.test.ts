@@ -71,9 +71,9 @@ describe('a literal backtick and a literal attribute brace do not cross the Mark
     )
   })
 
-  it('leaves a matched DOUBLE run and a span holding a backtick alone', () => {
+  it('uses the writer fence for a matched double run holding a backtick', () => {
     const md = 'a ' + BT + BT + ' x ' + BT + ' y ' + BT + BT + ' b'
-    expect(markdownToCarve(md).trim()).toBe(md)
+    expect(markdownToCarve(md).trim()).toBe('a ``x ` y`` b')
     expect(html(markdownToCarve(md))).toBe('<p>a <code>x ' + BT + ' y</code> b</p>')
   })
 

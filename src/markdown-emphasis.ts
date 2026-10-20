@@ -1,5 +1,6 @@
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { extendsGrapheme } from './grapheme-extender.js'
+import { emphasisNeedsBraces, renderForcedEmphasis } from './render-carve.js'
 
 interface Run {
   start: number
@@ -17,7 +18,6 @@ interface Run {
 interface Pair { open: number; close: number; width: number; kind: '*' | '/' | '~' }
 
 const protectedDepths = new WeakMap<readonly string[], Map<string, number>>()
-
 export function recordMarkdownProtectedDepth(spans: readonly string[], token: string, depth: number): void {
   let depths = protectedDepths.get(spans)
   if (!depths) protectedDepths.set(spans, depths = new Map())
@@ -178,14 +178,20 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number }
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number; scopeLink: boolean }
   const output: string[] = []
   const stack: Frame[] = []
   const active = new Map<string, number>()
   let flattened = false
   const hostPeaks = protectedDepths.get(protectedSpans)
   const protectedToken = /\x00P(\d+)\x00/y
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
+  const scopedLinkLabel = /\[(\x00P\d+\x00)\/([^\[\]\n]*)\/\](\x00P\d+\x00)/y
+  const tokenAt = (at: number): RegExpExecArray | null => {
+    if (source[at] !== '\x00') return null
+    protectedToken.lastIndex = at
+    return protectedToken.exec(source)
+  }
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0, scopeLink: false }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -197,7 +203,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
+          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0, scopeLink: false }
         frame.repeated = (active.get(pair.kind) ?? 0) > 0
         // `hostDepth` is the inline nesting this text already sits under - a
         // link label is converted on its own, so its own levels are not here.
@@ -207,6 +213,18 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       } else {
         const ch = source[frame.i++]!
         const at = frame.i - 1
+        if (ch === '[' && frame.kind === '/' && source[frame.i] === '\x00') {
+          scopedLinkLabel.lastIndex = at
+          const label = scopedLinkLabel.exec(source)
+          if (label) {
+            const written = `[${label[1]}${renderForcedEmphasis('/', label[2]!)}]${label[3]}`
+            output.push(written)
+            frame.scopeLink = true
+            record('[', label[3]!.at(-1) ?? ']')
+            frame.i = scopedLinkLabel.lastIndex
+            continue
+          }
+        }
         if (ch === '\0' && hostPeaks) {
           protectedToken.lastIndex = at
           const token = protectedToken.exec(source)
@@ -234,10 +252,39 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
     if (extenderLeading) onFlatten('extender')
     else if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
-      const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => (/[*_]/.test(source[i] ?? '') || pair.kind === '~' && source[i] === '~') && !claimed.has(i))
+      const besideLiteral = (/[*_]/.test(source[pair.open - 1] ?? '') || pair.kind === '~' && source[pair.open - 1] === '~') && !claimed.has(pair.open - 1) && source[pair.open - 2] !== '\\'
       const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
       const beforeExtender = extendsGrapheme(leadingText(source.slice(pair.close + pair.width, pair.close + pair.width + 40)), 0)
-      const braced = beforeExtender || (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const bodyStart = pair.open + pair.width
+      const afterSource = pair.close + pair.width
+      const nextToken = tokenAt(afterSource)
+      const nextValue = nextToken ? protectedSpans[Number(nextToken[1])] ?? '' : ''
+      const nextSpelled = nextValue.startsWith('\\') ? nextValue[1] ?? '' : source[afterSource] === '\\' ? source[afterSource + 1] ?? '' : neighbor(afterSource, false)
+      const beforeWindow = source.slice(Math.max(0, pair.open - 20), pair.open)
+      const tokenClose = beforeWindow.lastIndexOf('\x00')
+      const tokenOpen = beforeWindow.lastIndexOf('\x00', tokenClose - 1)
+      const beforeAt = pair.open - beforeWindow.length + tokenOpen
+      const beforeCandidate = tokenAt(beforeAt)
+      const beforeToken = beforeCandidate && beforeAt + beforeCandidate[0].length === pair.open ? beforeCandidate : null
+      const beforeValue = beforeToken ? protectedSpans[Number(beforeToken[1])] ?? '' : ''
+      const beforeSpelled = frame.parent && claimed.has(pair.open - 1) ? frame.parent
+        : beforeValue.startsWith('\\') || source[pair.open - 2] === '\\' ? '\\' : neighbor(pair.open - 1, true)
+      const afterSpelled = frame.parent && claimed.has(afterSource) ? frame.parent : nextSpelled
+      const bodyToken = tokenAt(bodyStart)
+      const bodyValue = bodyToken && bodyStart + bodyToken[0].length === pair.close ? protectedSpans[Number(bodyToken[1])] ?? '' : ''
+      // renderEmphasis braces a span when its rendered link label owns a delimiter.
+      const scopedBoundary = frame.scopeLink || protectOutput !== undefined || beforeExtender
+      // renderEmphasis braces adjacent or nested delimiters that could join.
+      const delimiterCollision = besideSlash || frame.repeated ||
+        frame.kind === '*' && strong || frame.kind === '/' && italic || frame.kind === '~' && strike ||
+        frame.kind === '~' && frame.literalTilde
+      // renderEmphasis braces delimiters beside word characters or literal openers.
+      const wordBoundary = intraword || besideLiteral && (pair.kind === '*' || source[pair.open] === '_')
+      // renderEmphasis braces content that starts with its delimiter or an italic strong opener.
+      const bodyBoundary = pair.kind === '/' && first === '*' || pair.kind === '*' &&
+        (source[pair.close - 2] === '\\' && source[pair.close - 1] === '*' || bodyValue.endsWith('\\*'))
+      const braced = emphasisNeedsBraces(pair.kind, first + last, beforeSpelled, afterSpelled,
+        scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary)
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
