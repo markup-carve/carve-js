@@ -17464,7 +17464,7 @@ class ParseSession {
     if (inlineDepth >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
-    if (this.activeMatchers.length === 0 && text.length <= 64 && /^[A-Za-z0-9]+$/.test(text)) {
+    if (this.activeMatchers.length === 0 && !source.cellWraps && text.length <= 64 && /^[A-Za-z0-9 ]+$/.test(text)) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
     if (this.inlinePairFrameDepth === 0) {
