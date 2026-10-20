@@ -23,9 +23,18 @@ describe('list-marker-below-content-column vectors', () => {
     ['tab indent', '100. c\n\t- d\n', 2, 2],
     ['task item', '10. c\n   - [ ] d\n', 2, 4],
     ['alpha marker', '10. c\n   a. d\n', 2, 4],
+    ['after a blank, CRLF', '10. c\r\n\r\n   - d\r\n', 3, 4],
+    ['after a blank, block quote', '> 10. c\n>\n>    - d\n', 3, 6],
+    ['after a blank, tab indent', '100. c\n\n\t- d\n', 3, 2],
+    ['after a blank, alpha marker', '10. c\n\n   a. d\n', 3, 4],
   ])('%s', (_name, source, line, column) => {
     expect(findings(source as string)).toMatchObject([{ line, column }])
   })
+
+  it.each(['10. c\n\n   `a\n   - d`\n', '10. c\n\n   %% x\n   - d\n', '1. a\n\n 2. b\n'])
+    ('ignores an after-blank line that is no detached list', source => {
+      expect(findings(source)).toEqual([])
+    })
 
   it.each(['10. c\n\t- d\n', '> 10. c\n> \t- d\n', '10. c\n   `a\n   - d`\n', 'x[^a]\n\n[^a]: note\n   - d\n', ':: term\n: description\n   - d\n'])
     ('ignores a line outside the item content-column gap', source => {
