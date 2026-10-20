@@ -7440,8 +7440,8 @@ function readCaptionText(
     const next = lexer.peek()!
     if (isBlankLine(next) || RE_CAPTION.test(next)) break
     if (startsInterruptingBlock(lexer)) break
-    text += '\n' + next
-    // A continuation line is appended whole, so its origin is its own start.
+    text += '\n' + stripLazyFrame(next)
+    // Only the internal lazy frame is removed; the source line starts here.
     anchors?.push({
       offset: lexer.lineOffset(lexer.pos),
       column: lexer.lineStartColumn(lexer.pos),
@@ -14473,6 +14473,11 @@ class ParseSession {
           : walkContainerPrefix(content, this.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
         ownedAuthored: false,
       }
+      // X2: track an authored quote's paragraph without changing the item's block state.
+      let authoredQuoteClaim: BlockQuoteLazyState | null = null
+      let authoredQuoteParagraphOpen = false
+      let authoredQuoteHostColumn = contentCol
+      let captionParagraphClaim = false
       // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
       // The lead line never went through `trackItemLazyState`, so `- ``` ` left
       // the tracker believing the item held an open paragraph, and every line
@@ -14987,8 +14992,17 @@ class ParseSession {
         // written to exercise exactly that state, so it is not carried here as a
         // condition that cannot fire.
         if (nested.length === 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) delete lazyState.literalColon
+        const quoteParagraphMarker = pendingBlanks === 0 && lw > baseIndent && isListMarkerLine(l) &&
+          !captionParagraphClaim && (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen) &&
+          !RE_BLOCKQUOTE.test(l.trimStart())
+        const captionParagraphMarker = pendingBlanks === 0 && lw > baseIndent && isListMarkerLine(l) &&
+          captionParagraphClaim
+        const captionParagraphFollower = captionParagraphClaim && pendingBlanks === 0 &&
+          indentColumns(l, contentCol + 1) > contentCol &&
+          lineOpensItemBlock(l.trimStart())
         const quoteLazyFramed =
-          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+          (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) || quoteParagraphMarker ||
+            captionParagraphMarker || captionParagraphFollower) &&
           // Code, comment and established literal bodies keep their placement.
           // Lazy text in an ordinary colon body retains its paragraph frame.
           lazyState.opaque === null && lazyState.literalColon === undefined
@@ -15170,6 +15184,7 @@ class ParseSession {
           }
           let tabOpenerColumns: number | undefined
           let tabOpenerText: string | undefined
+          let unindented = dedented
           if (lazyState.opaque?.kind === 'code') {
             if (tabFenceSourceColumn !== undefined && tabFenceOpenerIndex !== undefined &&
                 dedented.includes('\t') && dedented.slice(0, leadingWhitespace(dedented)).includes('\t')) {
@@ -15195,6 +15210,7 @@ class ParseSession {
             }
           } else {
             const trimmed = dedented.trimStart()
+            unindented = trimmed
             const descriptionLead = RE_DEFLIST_DEF.exec(trimmed)
             const bottom = descendantOpaque === null && lazyState.deepest?.opaque?.kind !== 'code' &&
               (trimmed.includes('`') || trimmed.includes('~')) &&
@@ -15335,6 +15351,13 @@ class ParseSession {
           closedDescendantFence = false
           openedLaterNoteFence = false
           const wasMarkerDescriptionCode = markerDescriptionCodeTracked && lazyState.opaque?.kind === 'code'
+          const claimHostColumn = lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined
+            ? contentCol + lazyState.descriptionColumn : contentCol
+          const hadQuoteParagraph = insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen
+          const itemOwnsQuote = !lazyState.inFootnoteBody && nestedNoteBodyColumn === undefined &&
+            (authoredQuoteClaim !== null || lazyState.quoteInner === null && lazyState.ownedColumn < 0 && !insideOpenFence(lazyState) &&
+              !lazyState.inlineFenceParagraph && descendantOpaque === null)
+          const atItemColumn = lw === contentCol && placed[0] !== ' ' && placed[0] !== '\t'
           if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
@@ -15379,6 +15402,45 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (atItemColumn && RE_CAPTION.test(trackedContent)) {
+            captionParagraphClaim = hadQuoteParagraph
+            lazyState.quoteInner = null
+            authoredQuoteClaim = null
+            authoredQuoteParagraphOpen = false
+          }
+          if (followsBlank) {
+            captionParagraphClaim = false
+            authoredQuoteClaim = null
+            authoredQuoteParagraphOpen = false
+          }
+          const authoredQuote = itemOwnsQuote && trackedContent === dedented &&
+            !RE_BLOCKQUOTE.test(dedented) && RE_BLOCKQUOTE.test(unindented)
+          if (authoredQuote) {
+            captionParagraphClaim = false
+            if (authoredQuoteClaim !== null && authoredQuoteHostColumn === claimHostColumn) {
+              const quoted = RE_BLOCKQUOTE.exec(unindented)!
+              trackBlockQuoteLazyState(quoted[1] ?? '', authoredQuoteClaim, () => true, () => true)
+            } else authoredQuoteClaim = markerLineQuoteState(unindented)
+            authoredQuoteParagraphOpen = authoredQuoteClaim !== null && blockQuoteParagraphOpen(authoredQuoteClaim)
+            authoredQuoteHostColumn = claimHostColumn
+            lazyState.lazyFoldable = authoredQuoteParagraphOpen
+          }
+          else if (authoredQuoteClaim !== null) {
+            const quoted = RE_BLOCKQUOTE.exec(trackedContent)
+            if (quoted) {
+              trackBlockQuoteLazyState(quoted[1] ?? '', authoredQuoteClaim, () => true, () => true)
+              authoredQuoteParagraphOpen = blockQuoteParagraphOpen(authoredQuoteClaim)
+            }
+            else if (!lazyState.lazyFoldable || indentColumns(l) === authoredQuoteHostColumn &&
+                !isListMarkerLine(l) &&
+                (lineOpensBlock(unindented) || RE_COMMENT_LINE.test(unindented))) {
+              authoredQuoteClaim = null
+              authoredQuoteParagraphOpen = false
+            }
+          }
+          if (captionParagraphClaim && (RE_COMMENT_LINE.test(unindented) ||
+              (atItemColumn && !RE_CAPTION.test(trackedContent) && !isListMarkerLine(l) &&
+                (lineOpensBlock(unindented) || isBlockAttributeLine(unindented))))) captionParagraphClaim = false
           if (markerNoteItem && indentColumns(l, markerNoteFloor) < markerNoteFloor &&
               RE_CAPTION.test(trackedContent.trimStart()) && lazyState.opaque === null) {
             lazyState.inFootnoteBody = false
@@ -15449,7 +15511,7 @@ class ParseSession {
         } else if (
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-          (((((lazyState.lazyFoldable ||
+          (((((lazyState.lazyFoldable || captionParagraphClaim ||
             (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
             (lazyState.deepest?.inDefList === 'description' &&
               (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
@@ -15463,7 +15525,7 @@ class ParseSession {
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description' ||
                 (opensCodeFence(l.trimStart()) && followsBelowColumnComment())))) &&
-            (belowOpenDescription || (lw > baseIndent && lw < contentCol &&
+            (quoteParagraphMarker || captionParagraphMarker || belowOpenDescription || (lw > baseIndent && lw < contentCol &&
               (lazyState.deepest?.lazyFoldable !== false || lazyState.inDefList === 'description' ||
                 lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
               // A list marker indented past the base column but BELOW the content
@@ -15528,6 +15590,8 @@ class ParseSession {
             lazyLine = enclosingLazy || lexer.atDocumentLevel ? LAZY_FRAME + l.replace(/^[ \t]+/, '') : l
           } else if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = l.replace(/^[ \t]+/, '')
+          } else if (captionParagraphFollower) {
+            lazyLine = LAZY_FRAME + sliceColumns(l, contentCol, true)
           } else if (quoteLazyFramed) {
             // Stripped WHOLE and framed. Its indentation inside the quote body
             // means nothing, and the frame - not a leftover column of indent - is
