@@ -8,6 +8,13 @@
 
 const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 
+function isDestinationWhitespace(char: string): boolean {
+  const code = char.charCodeAt(0)
+  return code <= 32
+    ? code === 32 || (code >= 9 && code <= 13)
+    : code > 127 && RE_DESTINATION_WHITESPACE.test(char)
+}
+
 /**
  * Read a destination out of a link or image tail, starting at the `(`.
  *
@@ -43,7 +50,7 @@ export function scanDestination(tail: string, open = 0): { dest: string; end: nu
     else if (c === ')') {
       if (depth === 0) break
       depth--
-    } else if (RE_DESTINATION_WHITESPACE.test(c)) {
+    } else if (isDestinationWhitespace(c)) {
       if (depth > 0) return null
       break
     }
@@ -90,7 +97,7 @@ export function destinationSlotEnds(text: string): Map<number, number> {
     else if (c === '(') {
       const close = stops[i + 1]!
       stops[i] = text[close] === ')' ? stops[close + 1]! : -1
-    } else if (c === ')' || RE_DESTINATION_WHITESPACE.test(c)) stops[i] = i
+    } else if (c === ')' || isDestinationWhitespace(c)) stops[i] = i
     else stops[i] = stops[i + 1]!
   }
   const found = new Map<number, number>()
