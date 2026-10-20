@@ -9921,6 +9921,7 @@ class ParseSession {
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
       .at(-1) ?? this.activeQuoteCharacters
+    this.quoteGlyphHasNul = this.activeQuoteCharacters.some((glyph) => glyph.includes('\0'))
     // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
     // is a heading, not literal text. Only here in the root entry -- nested
     // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
@@ -12078,7 +12079,7 @@ class ParseSession {
         this.inLineBlock = outerLineBlock
       }
       // Source NULs were replaced before block parsing; these are generated gaps.
-      restoreVerseGaps(parsed)
+      if (joined.includes('\0') || this.activeMatchers.length || this.quoteGlyphHasNul) restoreVerseGaps(parsed)
       if (terminalCommentGuard) {
         const removeGuard = (nodes: InlineNode[]): boolean => {
           for (let index = 0; index < nodes.length; index++) {
@@ -17328,6 +17329,7 @@ class ParseSession {
   private quoteScopeDepth = 0
 
   private activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
+  private quoteGlyphHasNul = false
 
   private smartToken(
     text: string,
