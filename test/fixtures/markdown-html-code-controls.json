@@ -2210,7 +2210,7 @@
     "attributes": [
       {
         "tag": "a",
-        "href": "u%3Ccode%3Ea%3C/code%3E"
+        "href": "u<code>a</code>"
       }
     ],
     "nativeHtml": "<p>x<a href=\"u%3Ccode%3Ea%3C/code%3E\">^1</a></p>\n"
@@ -2244,7 +2244,7 @@
     "attributes": [
       {
         "tag": "a",
-        "href": "u%3Ccode%3Ea%3C/code%3E"
+        "href": "u<code>a</code>"
       }
     ],
     "nativeHtml": "<p><a href=\"u%3Ccode%3Ea%3C/code%3E\">x</a></p>\n"
@@ -2343,7 +2343,7 @@
     "attributes": [
       {
         "tag": "a",
-        "href": "u%3Ccode%3Ea%3C/code%3E"
+        "href": "u<code>a</code>"
       }
     ],
     "nativeHtml": "<p><a href=\"u%3Ccode%3Ea%3C/code%3E\">x</a></p>\n"
@@ -2360,7 +2360,7 @@
     "attributes": [
       {
         "tag": "img",
-        "src": "u%3Ccode%3Ea%3C/code%3E",
+        "src": "u<code>a</code>",
         "alt": "i"
       }
     ],

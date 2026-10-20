@@ -21,9 +21,9 @@ it.each([
   ['[x](/f&ouml;&ouml; "f&ouml;&ouml;")', '<p><a href="/föö" title="föö">x</a></p>'],
   ['[x]\n\n[x]: /f&ouml;&ouml;', '<p><a href="/föö">x</a></p>'],
   ['[ΑΓΩ]: /φου\n\n[αγω]', '<p><a href="/φου">αγω</a></p>'],
-  ['[x](foo\\bar)', '<p><a href="foo%5Cbar">x</a></p>'],
+  ['[x](foo\\bar)', '<p><a href="foo\\bar">x</a></p>'],
   ['[x](foo%20b&auml;)', '<p><a href="foo%20bä">x</a></p>'],
-  ['[x]("title")', '<p><a href="%22title%22">x</a></p>'],
+  ['[x]("title")', '<p><a href="&quot;title&quot;">x</a></p>'],
 
   ['[foo](</a b>)\n\n[foo]: /r', '<p><a href="/a%20b">foo</a></p>'],
   ['[foo](not a link)\n\n[foo]: /r', '<p><a href="/r">foo</a>(not a link)</p>'],

@@ -6,6 +6,7 @@ import { orderedTaskMarkerIsUnspellable } from './markdown-migrate.js'
 import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
+import { scanDestination } from './link-destination.js'
 
 interface Assessment {
   diagnostics: MigrationDiagnostic[]
@@ -14,12 +15,8 @@ interface Assessment {
 
 const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-const encodeDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}\[\]]/gu, char => {
-  const point = char.codePointAt(0)!
-  return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-})
-
-const encodeWrittenDestination = (destination: string): string => destination.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, encodeMarkdownDestinationCharacter)
+const encodeDestination = (destination: string): string => destination.replace(/[\p{White_Space}\p{Cc}]/gu, encodeMarkdownDestinationCharacter)
+const encodeWrittenDestination = encodeDestination
 const definitionPattern = /^ {0,3}\[([^\]\n]+)\]:[ \t]+(<(?:\\[!-~]|[^<>\\\n])*>|(?:\\[!-~]|[^ ()\\\t\n])+)(?:[ \t]+"([^"\n]*)")?[ \t]*$/
 const inlineDestinationPattern = /^(!?)\[([^\]\n]*)\]\((<(?:\\[!-~]|[^<>\\\n])*>|(?:\\[!-~]|[^ ()\\\t\n])+)(?:[ \t]+"([^"\n]*)")?\)/
 const destinationValue = (token: string): string | undefined => {
@@ -93,6 +90,17 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if ((match = /^&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.exec(rest))) {
         if (domValue(domChildren(parseFragment(match[0]))?.[0]) !== match[0]) emit('entity', line, 'normalized')
         result += match[0]; i += match[0].length
+      } else if ((match = /^(!?)\[([^\]\n]*)\]\(/.exec(rest)) && (() => {
+        const scanned = scanDestination(rest, match![0].length - 1)
+        if (scanned === null || rest[match![0].length] === '<' || !scanned.dest.includes('(') || rest[scanned.end] !== ')') return false
+        const href = scanned.dest
+        emit(match![1] === '!' ? 'image' : 'link', line)
+        const encodedHref = escape(encodeWrittenDestination(href))
+        result += match![1] === '!' ? `<img src="${encodedHref}" alt="${escape(match![2]!)}">` : `<a href="${encodedHref}">${inline(match![2]!, line, true)}</a>`
+        i += scanned.end + 1
+        return true
+      })()) {
+        continue
       } else if ((match = inlineDestinationPattern.exec(rest))) {
         const image = match[1] === '!'
         const href = destinationValue(match[3]!)

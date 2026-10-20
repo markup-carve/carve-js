@@ -1,6 +1,6 @@
 import { freeMarkerSerial } from './marker-serial.js'
 import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
-import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
+import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './markdown-destination-encoding.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
@@ -520,7 +520,7 @@ function decodeHtmlEntitiesRaw(s: string): string {
 }
 
 /** Decode a Markdown URL and escape it for a Carve destination. */
-function writeMarkdownDestination(url: string, protectedSpans: readonly string[] = []): string {
+function writeMarkdownDestination(url: string, protectedSpans: readonly string[] = [], inTable = false): string {
   let restored = url
   for (let pass = 0; pass <= protectedSpans.length; pass++) {
     const next = restored.replace(/\x00P(\d+)\x00/g, (token, index: string) => protectedSpans[Number(index)] ?? token)
@@ -533,9 +533,9 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   // carries it literally, balanced or not, so encoding changed the address the
   // Markdown writer had emitted verbatim. Same ruling as the Djot side,
   // carve#2854.
-  const encoded = decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, encodeMarkdownDestinationCharacter)
+  const encoded = writeMarkdownDestinationValue(decoded, inTable)
   recordAuthoredDestination(encoded, restored)
-  return encoded.replace(/[()]/g, '\\$&')
+  return encoded
 }
 
 /**
@@ -1704,17 +1704,14 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  function writeLiteralAutolink(body: string, hrefPrefix = '', bare = false): string {
+  function writeLiteralAutolink(body: string, hrefPrefix = '', _bare = false): string {
     for (let pass = 0; pass < protectedSpans.length; pass++) {
       const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
       if (restored === body) break
       body = restored
     }
-    let href = hrefPrefix + body.replace(bare ? /[\\[\]`|]/g : table ? /[\\`|]/g : /[\\`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
-    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`^{|}]/gu, char => {
-      const point = char.codePointAt(0)!
-      return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-    })
+    const raw = (hrefPrefix + body).replace(/[\p{White_Space}\p{Cc}]/gu, encodeMarkdownDestinationCharacter)
+    const href = table ? raw.replace(/\\\|/g, '\\%7C').replace(/\|/g, '%7C') : raw
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
       { type: 'link', href, children: [{ type: 'text', value: body }] },
     ] }] }).replace(/\n$/, '')
@@ -1916,9 +1913,7 @@ function convertInline(
     // and this whole construct is protected from the later decode pass, so it
     // happens here or not at all. `&amp;` in a query string is the canonical
     // case: left literal, the migrated link points somewhere else.
-    const enc = writeMarkdownDestination(url, protectedSpans).replace(/[<> \t"`]/g, char =>
-      '%' + char.charCodeAt(0).toString(16).toUpperCase(),
-    )
+    const enc = writeMarkdownDestination(url, protectedSpans, table)
     let title = decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')
     if (table) {
       const quoted = RE_QUOTED_TITLE.exec(title)
@@ -2271,7 +2266,7 @@ function convertInline(
   line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
     referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
       ? match
-      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest), match),
+      : protect(head + writeMarkdownDestination(dest, protectedSpans, table) + decodeEntitiesInTitle(rest), match),
   )
 
   let codeWritten = ''
@@ -2341,7 +2336,7 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    if (!(table && body.includes('|')) && !/[\\`]/.test(body)) return protect(match)
+    if (!/["\\`{}|^\p{Cf}\p{Cc}\p{White_Space}]/u.test(body)) return protect(match)
     return protect(writeLiteralAutolink(body))
   })
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match =>

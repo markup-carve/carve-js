@@ -53,7 +53,7 @@ describe('a Markdown link or image with an empty destination', () => {
 
 describe('a Markdown link whose destination is not empty', () => {
   it.each([
-    ["a quoted destination after a space", "[u]( \"t\")", "[u](%22t%22)"],
+    ["a quoted destination after a space", "[u]( \"t\")", '[u]("t")'],
     ["spaces around a destination", "[k]( /u )", "[k](/u)"],
     ["a definition interrupting a paragraph", "text\n[p]: <>", "text\n\\[p]: <>"],
     ["a definition in a fence", "[c]\n\n```\n\n[c]: <>\n```", "[c]\n\n```\n\n[c]: <>\n```"],

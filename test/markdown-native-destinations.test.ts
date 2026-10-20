@@ -31,7 +31,7 @@ it.each(['[a](<a\\\nb>)\n---', '[a]( <a\\\nb>)\n---', '> [a](<a\\\n> b>)\n> ---'
   const written = markdownToCarve(source)
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
-    expect(html).toContain('<a href="a%5C%0Ab">a</a>')
+    expect(html).toContain('<a href="a\\%0Ab">a</a>')
     expect(html).toMatch(/<h2(?: [^>]*)?><a /)
   }
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.confidence === 'exact' && row.fidelity === 'dropped')).toHaveLength(0)
@@ -41,7 +41,7 @@ it.each(['> [a](<a\\\n> b>)\n> ---\n> tail', '- [a](<a\\\n  b>)\n  ---\n  tail']
   const written = markdownToCarve(source)
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
-    expect(html).toContain('<a href="a%5C%0Ab">a</a>')
+    expect(html).toContain('<a href="a\\%0Ab">a</a>')
     expect(html).toContain('tail')
     expect(html.match(/<h2(?: |>)/g)).toHaveLength(1)
   }
@@ -58,8 +58,8 @@ it.each(['<http://x/[a>](<b\\\nc>)\n---', '[o [r] p](<a\\\nb>)\n---\n\n[r]: /u']
 
 it('keeps spaces in a lazy quote continuation inside a heading', () => {
   const written = markdownToCarve('> [a](<a\\\n   b>)\n> ---')
-  expect(carveToHtml(written)).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
-  expect(carveToHtml(carveToCarve(written))).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
+  expect(carveToHtml(written)).toContain('<a href="a\\%0A%20%20%20b">a</a>')
+  expect(carveToHtml(carveToCarve(written))).toContain('<a href="a\\%0A%20%20%20b">a</a>')
 })
 
 it.each(['https://example.com/', 'www.example.com/'])('keeps a bare URL inside one setext heading: %s', url => {
@@ -86,7 +86,7 @@ it('keeps lazy indentation after a soft line in a folded heading', () => {
   const written = markdownToCarve('> first\n> [a](<a\\\n   b>)\n> ---\n> tail')
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
-    expect(html).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
+    expect(html).toContain('<a href="a\\%0A%20%20%20b">a</a>')
     expect(html).toContain('<p>tail</p>')
   }
 })
@@ -95,7 +95,7 @@ it('keeps malformed angle email text and its code span before a destination head
   const written = markdownToCarve('x <a`@b.> http://x.y/`[k](<p\\\nq>)\n===')
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
-    expect(html).toContain('x &lt;a<code>@b.&gt; http://x.y/</code><a href="p%5C%0Aq">k</a>')
+    expect(html).toContain('x &lt;a<code>@b.&gt; http://x.y/</code><a href="p\\%0Aq">k</a>')
     expect(html.match(/<h1(?: |>)/g)).toHaveLength(1)
     expect(html).not.toContain('<p>')
   }
@@ -105,7 +105,7 @@ it('keeps lazy indentation in a later list paragraph heading', () => {
   const written = markdownToCarve('- x\n\n  [a](<a\\\n b>)\n  ---')
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
-    expect(html).toContain('<a href="a%5C%0A%20b">a</a>')
+    expect(html).toContain('<a href="a\\%0A%20b">a</a>')
     expect(html).toContain('<h2')
   }
 })
