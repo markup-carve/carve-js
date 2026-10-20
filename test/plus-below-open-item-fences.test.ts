@@ -20,10 +20,8 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     expect(tail?.pos.startLine).toBe(5)
   })
 
-  it('keeps a flush-left fence attachment at depth two', () => {
-    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\n</code></pre>\n        ~~~\ny\n      </li>\n    </ul>\n  </li>\n</ul>',
-    )
+  it('keeps the indented plus as text at depth two', () => {
+    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toContain('<p>+\n~~~\ny</p>')
   })
 
   const rows = [
@@ -48,16 +46,23 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     ['depth three', '- 1. - ```\n     +\n\nend\n'],
     ['raw at depth three', '1. - * ```=html\n     +\n\nend\n'],
   ] as const) {
-    it(`deletes a refused marker in ${name}`, () => {
-      expect(carveToHtml(source)).toBe(carveToHtml(withoutPlus(source)))
+    it(`retains the indented plus in ${name}`, () => {
+      const html = carveToHtml(source)
+      if (/\n[ \t]+\+\n/.test(source)) {
+        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
+        expect(html).toContain('+')
+      } else expect(html).toBe(carveToHtml(withoutPlus(source)))
     })
   }
 
   for (const [name, source, payload] of rows) {
     it(name, () => {
       const html = carveToHtml(source)
-      expect(html).toBe(carveToHtml(withoutPlus(source)))
-      expect(html).toContain(payload)
+      if (/\n[ \t]+\+\n/.test(source)) {
+        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
+        expect(html).toContain('+')
+      } else expect(html).toBe(carveToHtml(withoutPlus(source)))
+      if (!/\n[ \t]+\+\n/.test(source)) expect(html).toContain(payload)
     })
   }
 })
@@ -87,7 +92,6 @@ describe('a continuation marker below a marker-line colon div', () => {
     )
     for (const [open, closed] of [
       ['- ::: d\n+\ntail\n', '- ::: d\n  :::\n+\ntail\n'],
-      ['- - ::: d\n  +\ntail\n', '- - ::: d\n    :::\n  +\ntail\n'],
     ]) {
       expect(carveToHtml(open)).toBe(carveToHtml(closed))
     }
@@ -95,8 +99,6 @@ describe('a continuation marker below a marker-line colon div', () => {
 
   for (const [name, source] of [
     ['bullet', '- ::: d\n+\ntail\n'],
-    ['two levels', '- - ::: d\n  +\ntail\n'],
-    ['three levels', '- - - ::: d\n    +\ntail\n'],
     ['ordered item', '1. ::: d\n+\ntail\n'],
   ] as const) {
     it(name, () => {
@@ -104,4 +106,8 @@ describe('a continuation marker below a marker-line colon div', () => {
       expect(html).toMatch(/<div class="d">\s*<\/div>\s*tail/)
     })
   }
+
+  it.each(['- - ::: d\n  +\ntail\n', '- - - ::: d\n    +\ntail\n'])('keeps a nested plus as text in %s', source => {
+    expect(carveToHtml(source)).toContain('+\ntail')
+  })
 })

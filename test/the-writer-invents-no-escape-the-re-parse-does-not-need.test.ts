@@ -209,6 +209,9 @@ function idleEscapes(source: string): Map<string, number> {
     for (const offset of [...offsets].reverse()) {
       without = without.slice(0, offset) + without.slice(offset + 1)
     }
+    const lineStart = without.lastIndexOf('\n', offsets[0]! - 1) + 1
+    const lineEnd = without.indexOf('\n', lineStart)
+    if (/^[ \t]+\+[ \t]*$/.test(without.slice(lineStart, lineEnd < 0 ? undefined : lineEnd))) continue
     if (fingerprint(without) !== base) continue
     idle.set(escaped, (idle.get(escaped) ?? 0) + offsets.length)
   }

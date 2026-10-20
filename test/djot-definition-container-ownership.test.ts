@@ -32,3 +32,20 @@ test('joining description paragraphs does not invent an attributed span', () => 
   expect(html).not.toContain('<span')
   expect(html.replace(/\s+/g, ' ')).toContain('[x ]{.c}')
 })
+
+test('a nested item keeps its paragraph outside the description', () => {
+  const source = '- - : term\n    \n      d\n    \n    para'
+  const migrated = migrateDjot(source)
+  const html = carveToHtml(migrated.value)
+  expect(html).toContain('<dd>d</dd>')
+  expect(html).toContain('<p>para</p>')
+  expect(html).not.toContain('<dd>d\n+\npara</dd>')
+})
+
+test('a quoted nested item keeps its paragraph in the same quote', () => {
+  const source = '> - - : term\n>\n>       d\n>\n>     para'
+  const html = carveToHtml(migrateDjot(source).value)
+  expect(html).toContain('<dd>d</dd>')
+  expect(html).toContain('<p>para</p>')
+  expect(html).not.toContain('</blockquote>\n<blockquote>')
+})

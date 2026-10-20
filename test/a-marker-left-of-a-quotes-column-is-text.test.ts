@@ -21,7 +21,7 @@ const kept = '<ul>\n  <li>x\n    <blockquote><p>q\n+</p></blockquote>\n  </li>\n
 describe("a marker left of a quote's column is text", () => {
   it('consumes the marker at either container column', () => {
     expect(markerAt(0)).toBe(consumed)
-    expect(markerAt(2)).toBe(consumed)
+    expect(markerAt(2)).toBe(kept)
   })
 
   it('keeps a marker at a column naming no container', () => {

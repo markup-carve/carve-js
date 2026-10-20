@@ -57,6 +57,39 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
 }
 
+function nestedTightItemLosesTightness(item: ListItem): boolean {
+  return item.children.some((child, index) => {
+    const previous = item.children[index - 1]
+    return index > 0 && child.type === 'paragraph' && !(child.children.length === 1 &&
+      (child.children[0]?.type === 'text' || child.children[0]?.type === 'escaped_text') && child.children[0].value === '+') &&
+      (previous?.type === 'block_quote' || previous?.type === 'list' && previous.items.at(-1)?.children.length !== 0)
+  })
+}
+
+function reportNestedTightItemLosses(ast: Document, opts: CarveRenderOptions): void {
+  if (opts.onRenderLoss === undefined) return
+  const visit = (blocks: BlockNode[], depth: number, hosted = false): void => {
+    for (const block of blocks) {
+      if (block.type === 'list') {
+        for (const item of block.items) {
+          if ((depth > 0 || hosted) && block.tight && nestedTightItemLosesTightness(item)) opts.onRenderLoss?.({
+            code: 'list-tightness-lost', target: 'carve', nodeType: 'block',
+            message: 'Wrote a nested list item loose to preserve its blocks',
+            ...(item.pos ? { pos: item.pos } : {}),
+          })
+          visit(item.children, depth + 1, hosted)
+        }
+      } else if (block.type === 'definition_list') {
+        for (const entry of block.items) for (const definition of entry.definitions) visit(definition, depth, true)
+      } else if ('children' in block && Array.isArray(block.children)) {
+        visit(block.children as BlockNode[], depth, hosted)
+      }
+    }
+  }
+  visit(ast.children, 0)
+  for (const blocks of Object.values(ast.footnoteDefs ?? {})) visit(blocks, 0, true)
+}
+
 /**
  * The writer's recursion bound, and it must sit ABOVE the parser's.
  *
@@ -2581,6 +2614,7 @@ function lastBoundary(node: InlineNode | undefined): string {
 class CarveRenderSession {
   private renderedVerbatimTail = false
   private alignTables = false
+  private indentedHostDepth = 0
 
   private refusedSpans: SourceUnspellableError[] = []
 
@@ -2600,6 +2634,7 @@ class CarveRenderSession {
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
     reportRubyLosses(ast, opts)
+    reportNestedTightItemLosses(ast, opts)
     ast = withCellHardBreaksFlattened(ast)
     ast = withTextAsOneRun(ast)
     // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -3533,7 +3568,7 @@ class CarveRenderSession {
             ? `${prefix.trimEnd()}${itemAttrs} `
             : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
         }
-        let content = trimNonNbsp(this.renderListItem(item, ctx, node.tight))
+        let content = trimNonNbsp(this.renderListItem(item, ctx, node.tight && !(this.itemNeedsIndentedBlocks(ctx) && nestedTightItemLosesTightness(item))))
         const lines = content ? content.split('\n') : ['']
         // THE FIRST LINE CARRIES THE TAG TOO - only the loop below used to take it
         // off. An item whose FIRST child goes to the marker column opens with the
@@ -3657,6 +3692,10 @@ class CarveRenderSession {
     }
   }
 
+  private itemNeedsIndentedBlocks(ctx: CarveContext): boolean {
+    return ctx.listDepth > 1 || this.indentedHostDepth > 0
+  }
+
   private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
     // A definition collected from the ONLY line of an item leaves no child
     // behind.  Do not spell that empty item with `+`: at nested marker depth the
@@ -3729,6 +3768,7 @@ class CarveRenderSession {
           }
         }
         let rendered = this.renderBlock(b, ctx)
+        if (b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx)) rendered = '\\+'
         if (rendered.length === 0) return
         // `guardThematicBreakLines` protects a paragraph continuation that is
         // semantically an em dash by giving it one leading space.  Inside a list
@@ -3742,6 +3782,17 @@ class CarveRenderSession {
           rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `)
         }
         if (b.type === 'list') {
+          if (tight && next?.type === 'code_block' && next.content.startsWith('\n') &&
+              b.items.at(-1)?.children.at(-1)?.type === 'code_block') {
+            const lines = rendered.split('\n')
+            if (/^[ \t]*(`{3,}|~{3,})$/.test(lines.at(-1) ?? '')) {
+              lines.pop()
+              const fenceLines = lines.flatMap((line, index) => /^[ \t]*(`{3,}|~{3,})$/.test(line) ? [index] : [])
+              const opener = fenceLines.at(-1) ?? -1
+              if (opener > 0) lines.splice(opener, 0, '')
+              rendered = lines.join('\n')
+            }
+          }
           if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
           } else if (
@@ -3759,6 +3810,11 @@ class CarveRenderSession {
           previousEmitted = b
           return
         }
+        if (this.itemNeedsIndentedBlocks(ctx) && b.type === 'block_quote' && previousEmitted?.type === 'block_quote') {
+          parts.push('', rendered)
+          previousEmitted = b
+          return
+        }
         if (
           previousAtMarkerColumn ||
           (next !== undefined && adjacentBlocksMerge(b, next)) ||
@@ -3768,6 +3824,13 @@ class CarveRenderSession {
             FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
             !opensWithAnAttributeLine(rendered))
         ) {
+          if (this.itemNeedsIndentedBlocks(ctx)) {
+            if (b.type === 'comment' || b.type === 'code_block' || previousEmitted?.type === 'comment' || previousEmitted?.type === 'code_block') parts.push(rendered)
+            else parts.push('', rendered)
+            previousAtMarkerColumn = false
+            previousEmitted = b
+            return
+          }
           // PART 11 §7e: a block that OPENS the item is written on the marker
           // line, with the `+` on the line below it. The latch still goes up, so
           // the block under it lands at the marker column behind its own marker.
@@ -3927,7 +3990,12 @@ class CarveRenderSession {
         this.descriptionBody = true
         let written: string
         try {
-          written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)))
+          this.indentedHostDepth++
+          try {
+            written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)))
+          } finally {
+            this.indentedHostDepth--
+          }
         } finally {
           this.descriptionBody = outerDescriptionBody
         }
@@ -4217,8 +4285,14 @@ class CarveRenderSession {
 
   private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
     // Footnote continuations need their body indentation to remain owned.
-    const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
-      .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
+    this.indentedHostDepth++
+    let rawBody: string
+    try {
+      rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+        .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
+    } finally {
+      this.indentedHostDepth--
+    }
     for (const line of rawBody.split('\n')) {
       const match = new RegExp(`^${this.sentinels[6]}g(\\d+)${this.sentinels[6]}>`).exec(line.replace(/^[ \t]*/, ''))
       if (match) {

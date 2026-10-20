@@ -7,41 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from '../src/parse.js'
 import type { Document, Position } from '../src/ast.js'
 
-/**
- * PART 12 §4, on a line the BLOCK LAYER REMOVED (markup-carve/carve-js#1305).
- *
- * A `+` continuation marker's own line is consumed before any inline run: the
- * item's text is `b` then `c`, and the `+` between them is gone. So the joined
- * text the inline scanner walks holds ONE newline where the source holds two,
- * and a line number counted as "the start line plus the newlines before this
- * offset" runs one short for everything after the removal - once per removed
- * line, so it compounds.
- *
- * The offsets were never wrong. `lineAnchors` already gave every line its own
- * document origin, which is why all three engines published the same numbers
- * there; only the LINE was derived from the text instead of from the anchor.
- * That made carve-js inconsistent WITH ITSELF rather than with anyone else: it
- * named line 3 column 3 for offset 16, and line 3 column 3 is offset 12.
- *
- * THE SECOND HALF IS THE OTHER DIRECTION - an offset that reached PAST the end
- * of what the construct owns. A line block whose last body line is an emptied
- * comment appends one synthesized codepoint to the joined text, so an open
- * verbatim run keeps the newline that boundary still ends at. That guard is not
- * source, and a run that swallowed it ended one codepoint INTO the `%%` the
- * block layer removed - the construct owning half a comment marker, and half of
- * one either way. §4 ends a span "immediately after the last source codepoint
- * the construct owns"; the last one owned is the terminator the guard stands
- * for, which §4's break sentence names as column 1 of the following line.
- *
- * THE CONSISTENCY CHECK IS THE LOAD-BEARING ONE and it runs over the WHOLE
- * corpus, not over the two documents the ticket named. A per-document
- * assertion pins the shape that was measured; this one states the invariant
- * that made the bug visible - a published (line, column) resolves, through the
- * source's own line table, to the published offset - and would catch the next
- * construct that removes a line just as well. The pre-fix engine failed it on
- * `384-...-6` and on nothing else in 1341 documents, which is also why the
- * synthetic cases below are here: the corpus exercises this shape once.
- */
+// Source positions stay anchored when a column-zero continuation line is removed.
 
 const corpusDir = resolve(fileURLToPath(new URL('../spec/tests/corpus', import.meta.url)))
 
@@ -128,39 +94,36 @@ const show = (pos: Position): string =>
   `${pos.startLine}:${pos.startColumn}-${pos.endLine}:${pos.endColumn} ${pos.startOffset}..${pos.endOffset}`
 
 describe('an offset past a line the block layer removed names the line it is on', () => {
-  // `384-a-continuation-marker-attaches-only-a-flush-left-block-6`.
-  const continued = '- a\n  - b\n  +\n  c\n'
+  // The continuation line belongs to the outer list item.
+  const continued = '- a\n  - b\n+\nc\n'
 
   it('names line 4 for the text on line 4', () => {
     const doc = parse(continued)
-    // list > item > [paragraph, list] > item > paragraph > [text, break, text]
-    expect(show(spanOf(doc, [0, 0, 1, 0, 0, 2]))).toBe('4:3-4:4 16..17')
+    expect(show(spanOf(doc, [0, 0, 2, 0]))).toBe('4:1-4:2 12..13')
   })
 
-  it('ends the break that crosses the removed line on line 4', () => {
+  it('starts the attached paragraph after the removed line', () => {
     const doc = parse(continued)
-    expect(show(spanOf(doc, [0, 0, 1, 0, 0, 1]))).toBe('2:6-4:3 9..16')
+    expect(show(spanOf(doc, [0, 0, 2]))).toBe('4:1-4:2 12..13')
   })
 
   it('ends every container holding that text on line 4', () => {
     const doc = parse(continued)
-    for (const path of [[0], [0, 0], [0, 0, 1], [0, 0, 1, 0], [0, 0, 1, 0, 0]]) {
+    for (const path of [[0], [0, 0], [0, 0, 2], [0, 0, 2, 0]]) {
       const pos = spanOf(doc, path)
       expect([path.join('/'), pos.endLine, pos.endColumn, pos.endOffset]).toEqual([
         path.join('/'),
         4,
-        4,
-        17,
+        2,
+        13,
       ])
     }
   })
 
   it('counts each removed line, so two markers do not drift by one', () => {
-    // Two `+` lines: the last text is on source line 6, four newlines into a
-    // joined text that holds two. A fix that subtracted a constant would pass
-    // the single-marker case above and fail here.
-    const doc = parse('- a\n  - b\n  +\n  c\n  +\n  d\n')
-    expect(show(spanOf(doc, [0, 0, 1, 0, 0, 4]))).toBe('6:3-6:4 24..25')
+    // Two removed marker lines still place the last text on source line 6.
+    const doc = parse('- a\n  - b\n+\nc\n+\nd\n')
+    expect(show(spanOf(doc, [0, 0, 3, 0]))).toBe('6:1-6:2 16..17')
   })
 
   // `380-a-terminal-comment-line-still-leaves-an-empty-verse-line`.

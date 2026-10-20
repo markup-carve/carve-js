@@ -150,7 +150,8 @@ rows as `table-header-row-demoted`, a header row moved above earlier body rows
 as `table-header-row-hoisted`, and each header cell in a row that is not a
 header row as `table-header-cell-demoted`. Moving a table caption into a paragraph
 does not emit a render loss. Render-loss reports do not assess every semantic
-change.
+change. A nested tight item whose blocks cannot be written tight without an
+indented `+` is written loose and reports `list-tightness-lost`.
 
 Use the separate preservation assessment when caption placement or other table
 structure matters:

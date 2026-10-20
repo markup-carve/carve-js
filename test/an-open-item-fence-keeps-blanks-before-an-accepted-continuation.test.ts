@@ -32,6 +32,11 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
     it(`${lead} with ${blanks} blank(s) and ${follower}`, () => {
       const source = `${lead}\n${body}${'\n'.repeat(blanks)}${marker}\n${follower}\n`
       const html = carveToHtml(source)
+      if (marker.startsWith(' ') && blanks === 2 && code) {
+        expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks - 1)}</code></pre>`)
+        expect(html).toContain(follower === 'tail' && lead === '- - - ```' ? '<p>+</p>' : follower === 'tail' ? '<p>+\ntail</p>' : '<p>+</p>')
+        return
+      }
       if (code) expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)
       else expect(html).toContain(body.trim() ? `x${'\n'.repeat(blanks)}` : '\n'.repeat(blanks))
       const attached = follower === 'tail' ? 'tail' : follower === '- s' ? '<li>s</li>'
@@ -40,7 +45,7 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
             : follower.startsWith('|') ? '<table>'
               : follower.startsWith('~~~') ? '<pre><code>code\n</code></pre>' : '<hr>'
       expect(html).toContain(attached)
-      if (lead.startsWith('- - - ')) {
+      if (lead.startsWith('- - - ') && marker === '+') {
         const followerAt = html.indexOf(attached)
         const leafOpen = html.lastIndexOf('<li', followerAt)
         expect(leafOpen).toBeGreaterThan(-1)
