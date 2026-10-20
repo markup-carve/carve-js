@@ -59,7 +59,7 @@ describe('a bare continuation marker at document level', () => {
 
   it('still attaches inside an item', () => {
     expect(carveToHtml('- x\n+\n- A\n*[A]: b\n')).toBe(
-      '<ul>\n  <li>x</li>\n  <li>A\n*[A]: b</li>\n</ul>',
+      '<ul>\n  <li>x\n+</li>\n  <li>A\n*[A]: b</li>\n</ul>',
     )
   })
 

@@ -763,14 +763,21 @@ export function lintCarve(
     const key = `${marker.line}:${marker.column}`
     if (seenMarker.has(key)) continue
     seenMarker.add(key)
-    const start = sourceOffset(marker.line, marker.column)
-    const following = marker.reason === 'blank' ? 'a blank line' : 'the end of the document'
-    const remedy = marker.reason === 'blank'
-      ? 'Delete the blank line to attach the next block, or delete the +.'
-      : 'Add a block after the +, or delete the +.'
+    const sourceLine = sourceLines[marker.line - 1] ?? ''
+    const plus = sourceLine.lastIndexOf('+')
+    const start = plus < 0 ? sourceOffset(marker.line, marker.column) : lineOffsets[marker.line - 1]! + plus
+    const reasons: Record<typeof marker.reason, string> = {
+      blank: 'a blank line follows it',
+      document: 'it reaches the end of the document',
+      sibling: 'the next list item is a sibling',
+      left: 'the next block starts left of its column',
+      right: 'the next block starts right of its column',
+      'wrong-column': 'its column names no open container',
+      'fence-payload': 'an open fence takes it as payload',
+    }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
-      message: `This + attaches nothing: ${following} follows it, so the marker is refused and the ${marker.host} ends here. ${remedy}` })
+      message: `This + attaches nothing because ${reasons[marker.reason]}. ${marker.firstBlock ? 'The item stays empty.' : `It remains text in the ${marker.host}.`}` })
   }
 
   // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause

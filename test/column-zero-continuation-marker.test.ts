@@ -34,7 +34,7 @@ describe('column-zero continuation markers', () => {
 
   it('does not admit an indented quote plus as a marker', () => {
     expect(carveToHtml('- a\n  > +\npara')).toContain('<blockquote><p>+\npara</p></blockquote>')
-    expect(carveToHtml('- a\n  - +\nflush')).toBe('<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>flush</p>')
+    expect(carveToHtml('- a\n  - +\nflush')).toBe('<ul>\n  <li>a\n    <ul>\n      <li>flush</li>\n    </ul>\n  </li>\n</ul>')
     expect(carveToHtml('- a\n  - > +\nflush')).toContain('<p>flush</p>')
   })
 

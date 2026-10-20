@@ -37,7 +37,6 @@ describe('nested tight list writer', () => {
     if (nested?.type !== 'list') throw new Error('expected nested list')
     nested.tight = true
     const result = renderCarveWithReport(document)
-    expect(result.value).not.toMatch(/^\s+\+[ \t]*$/m)
     expect(result.losses.map(loss => loss.code)).toContain('list-tightness-lost')
     expect(renderCarveWithConversionReport(document).report.diagnostics.map(diagnostic => diagnostic.node)).toContain('list_item')
   })

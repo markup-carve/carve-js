@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it('keeps an indented plus as nested description text', () => {
-  expect(carveToHtml('- :: t\n  : d\n  +\n  > q')).toBe('<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d\n+</dd>\n    </dl>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>')
+it('attaches a quote at the nested description marker column', () => {
+  expect(carveToHtml('- :: t\n  : d\n  +\n  > q')).toBe('<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>d</p>\n        <blockquote><p>q</p></blockquote>\n      </dd>\n    </dl>\n  </li>\n</ul>')
 })
 
 it('still attaches a quote that begins at document column zero', () => {

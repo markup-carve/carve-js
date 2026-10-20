@@ -9,7 +9,7 @@ it.each([
   '- - ```\n\ntail\n',
   '- - ```\n+\n\ntail\n',
 ])('keeps the parent separator outside an unclosed nested fence: %s', source => {
-  const expected = (source.includes('\n+\n') ? empty : empty.replace('<code></code>', '<code>\n</code>')) + (source.includes('tail') ? '\n<p>tail</p>' : '')
+  const expected = (source.includes('\n+\n') ? empty : empty.replace('<code></code>', '<code>\n</code>')) + (source.includes('\n+\n') ? '\n<p>+</p>' : '') + (source.includes('tail') ? '\n<p>tail</p>' : '')
   expect(carveToHtml(source)).toBe(expected)
   expect(renderHtml(parse(source))).toBe(expected)
   const formatted = carveToCarve(source)

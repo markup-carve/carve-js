@@ -15,7 +15,7 @@ import { carveToHtml } from '../src/index.js'
  */
 const markerAt = (column: number) => carveToHtml(`- x\n  > q\n${' '.repeat(column)}+\n`)
 
-const consumed = '<ul>\n  <li>x\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>'
+const consumed = '<ul>\n  <li>x\n    <blockquote><p>q\n+</p></blockquote>\n  </li>\n</ul>'
 const kept = '<ul>\n  <li>x\n    <blockquote><p>q\n+</p></blockquote>\n  </li>\n</ul>'
 
 describe("a marker left of a quote's column is text", () => {

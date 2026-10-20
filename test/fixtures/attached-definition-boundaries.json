@@ -145,51 +145,51 @@
   },
   {
     "source": "- a\n+\n- inner\n[r]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner</li>\n</ul>\n<p>See <a href=\"/url\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner</li>\n</ul>\n<p>See <a href=\"/url\">r</a>, [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n [r]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n[^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- a\n+\n- inner\n [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[^n]: note</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[^n]: note</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n  [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- a\n+\n- inner\n   [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner</li>\n</ul>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- a\n+\n- inner\n[r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n  [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n   [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]]: /url</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n[r]: /url\n [r]: /again\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner</li>\n</ul>\n<p>[r]: /again</p>\n<p>See <a href=\"/url\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner</li>\n</ul>\n<p>[r]: /again</p>\n<p>See <a href=\"/url\">r</a>, [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n- inner\n [r]: /url\n [r]: /again\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<ul>\n  <li>a</li>\n  <li>inner\n[r]: /url\n[r]: /again</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
+    "html": "<ul>\n  <li>a\n+</li>\n  <li>inner\n[r]: /url\n[r]: /again</li>\n</ul>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": "- a\n+\n:: term\n[r]: /url\n\nSee [r][], [r\\]][], and [^n].\n",

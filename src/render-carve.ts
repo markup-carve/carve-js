@@ -135,6 +135,7 @@ interface CarveContext {
   blockDepth: number
   inlineDepth: number
   listDepth: number
+  quoteDepth: number
   atItemContentColumn: boolean
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
@@ -3149,6 +3150,7 @@ class CarveRenderSession {
         blockDepth: 0,
         inlineDepth: 0,
         listDepth: 0,
+        quoteDepth: 0,
         atItemContentColumn: false,
         lineBlockDepth: 0,
         inlineNoteDepth: 0,
@@ -3395,7 +3397,10 @@ class CarveRenderSession {
           const body = this.renderColonFenceBody(node.children, ctx)
           return withAttrs(`${fence} >\n${body}\n${fence}`)
         }
-        const inner = this.renderHostedBlocks(node.children, ctx)
+        ctx.quoteDepth++
+        let inner: string
+        try { inner = this.renderHostedBlocks(node.children, ctx) }
+        finally { ctx.quoteDepth-- }
         const body = canonicalQuoteBodyLines(inner.split('\n'))
           .map((line) => (line === '' ? '>' : `> ${line}`))
           .join('\n')
@@ -3605,34 +3610,53 @@ class CarveRenderSession {
             ? `${prefix.trimEnd()}${itemAttrs} `
             : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
         }
-        let content = trimNonNbsp(this.renderListItem(item, ctx, node.tight && !(this.itemNeedsIndentedBlocks(ctx) && nestedTightItemLosesTightness(item))))
-        const lines = content ? content.split('\n') : ['']
-        // THE FIRST LINE CARRIES THE TAG TOO - only the loop below used to take it
-        // off. An item whose FIRST child goes to the marker column opens with the
-        // continuation marker, so the tag shipped as a literal private-use
-        // character and the item came back holding it (carve-js#1681). Nothing to
-        // strip it TO here: the item's own marker already owns this line, and
-        // `- +` is where §17 L3 puts the marker for an item with nothing before it.
-        const first = foldEmptyItemBody((lines.shift() ?? '').replace(this.markerColumnTag(), ''), lines[0])
-        out += `${indent}${prefix}${first.first}\n`
-        const continuation = ' '.repeat(continuationWidth)
-        // An EMPTY continuation line stays empty. Indenting it produces a line of
-        // nothing but spaces, which the writer must never emit - the blank line
-        // inside a fenced block in a list item was the one place it did (corpus
-        // 75-list-nesting-and-looseness-5). The content is unchanged either way,
-        // since the reader strips the item's columns back off.
-        for (const line of lines) {
-          if (line.startsWith(this.markerColumnTag())) {
-            // The continuation marker and the block it attaches sit at the ITEM's
-            // marker column, not at its content column: §17 L3 puts the marker at
-            // "the current container's MARKER COLUMN" and attaches the following
-            // block "with no marker prefix or indentation". Indenting either into
-            // the item is what made the attached paragraph fold (carve#861).
-            out += `${indent}${line.slice(this.markerColumnTag().length)}\n`
-            continue
+        const needsReadback = node.tight && (
+          this.itemNeedsIndentedBlocks(ctx) &&
+            (nestedTightItemLosesTightness(item) || item.children.some((child, index) =>
+              index > 0 && child.type === 'paragraph' && item.children[index - 1]?.type === 'paragraph')) ||
+          item.children.some((child, index) => index > 0 &&
+            ((child.type === 'code_block' || child.type === 'figure') && item.children[index - 1]?.type === 'list' ||
+              child.type === 'block_quote' && item.children[index - 1]?.type === 'block_quote')))
+        const spellItem = (body: string): string => {
+          const lines = body ? trimNonNbsp(body).split('\n') : ['']
+          const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
+          let source = `${indent}${prefix}${first || '+'}\n`
+          const continuation = ' '.repeat(continuationWidth)
+          for (const line of lines) {
+            source += line.startsWith(this.markerColumnTag())
+              ? `${indent}${line.slice(this.markerColumnTag().length)}\n`
+              : line ? `${indent}${continuation}${line}\n` : '\n'
           }
-          out += line ? `${indent}${continuation}${line}\n` : '\n'
+          return source
         }
+        const readsBack = (source: string): boolean => {
+          let nested = source
+          for (let depth = 1; depth < ctx.listDepth; depth++)
+            nested = '- parent\n' + nested.split('\n').map(line => line ? `  ${line}` : '').join('\n')
+          const wrapped = ctx.quoteDepth === 0 ? nested : nested.split('\n').map(line =>
+            line ? `${'> '.repeat(ctx.quoteDepth)}${line}` : '>'.repeat(ctx.quoteDepth)).join('\n')
+          try {
+            let blocks = parse(wrapped).children
+            for (let depth = 0; depth < ctx.quoteDepth; depth++) {
+              const quote = blocks[0]
+              if (quote?.type !== 'block_quote') return false
+              blocks = quote.children
+            }
+            let inner: BlockNode | undefined = blocks[0]
+            for (let depth = 1; depth < ctx.listDepth; depth++)
+              inner = inner?.type === 'list' ? inner.items[0]?.children.find(block => block.type === 'list') : undefined
+            return inner?.type === 'list' && inner.tight === node.tight &&
+              stableJson(inner.items[0]) === stableJson(item)
+          } catch {
+            return false
+          }
+        }
+        let itemSource = spellItem(this.renderListItem(item, ctx, node.tight))
+        if (needsReadback && !readsBack(itemSource)) {
+          const relative = spellItem(this.renderListItem(item, ctx, true, true))
+          itemSource = readsBack(relative) ? relative : spellItem(this.renderListItem(item, ctx, false))
+        }
+        out += itemSource
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
       return trimEndNonNbsp(out)
@@ -3718,12 +3742,12 @@ class CarveRenderSession {
       .join('\n')
   }
 
-  private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus = false): string {
     // A list item is a prefix/indent host: its fences start over at `:::`.
     const outerFenceDepth = ctx.colonFenceDepth
     ctx.colonFenceDepth = 0
     try {
-      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight), true)
+      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight, relativePlus), true)
     } finally {
       ctx.colonFenceDepth = outerFenceDepth
     }
@@ -3733,7 +3757,7 @@ class CarveRenderSession {
     return ctx.listDepth > 1 || this.indentedHostDepth > 0
   }
 
-  private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus: boolean): string {
     // A definition collected from the ONLY line of an item leaves no child
     // behind.  Do not spell that empty item with `+`: at nested marker depth the
     // marker attaches the outer item's following block to the empty INNER item.
@@ -3863,6 +3887,7 @@ class CarveRenderSession {
         ) {
           if (this.itemNeedsIndentedBlocks(ctx)) {
             if (b.type === 'comment' || b.type === 'code_block' || previousEmitted?.type === 'comment' || previousEmitted?.type === 'code_block') parts.push(rendered)
+            else if (relativePlus) parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
             else parts.push('', rendered)
             previousAtMarkerColumn = false
             previousEmitted = b

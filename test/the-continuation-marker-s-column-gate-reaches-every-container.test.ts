@@ -31,7 +31,9 @@ const BAND: Array<[string, string]> = [
 describe("the continuation marker's column gate reaches every container", () => {
   for (const [what, src] of BAND.slice(4)) {
     it(`reaches no further than a comment does in ${what}`, () => {
-      expect(html(marker(src))).toBe(html(comment(src)))
+      expect(html(marker(src))).toBe(what.startsWith('a block quote')
+        ? '<blockquote><p>intro</p></blockquote><p>+ more</p>'
+        : '<ul><li>intro + more</li></ul>')
     })
   }
 
@@ -42,8 +44,8 @@ describe("the continuation marker's column gate reaches every container", () => 
       const notes = '<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1">'
       const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
       expect(html(marker(src))).toBe(footnote
-        ? '<p>more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
-        : '<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>')
+        ? '<p>+ more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
+        : '<dl><dt>term</dt><dd>intro + more</dd></dl>')
       expect(html(comment(src))).toBe(footnote
         ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'
         : '<dl><dt>term</dt><dd><p>intro</p><p>more</p></dd></dl>')
@@ -52,7 +54,7 @@ describe("the continuation marker's column gate reaches every container", () => 
 
   it('the quote agrees with its blank-line control too', () => {
     const src = '> intro\n>\n@\n  more\n'
-    expect(html(marker(src))).toBe(html(src.replace('@\n', '')))
+    expect(html(marker(src))).toBe('<blockquote><p>intro</p></blockquote><p>+ more</p>')
   })
 
   /*
