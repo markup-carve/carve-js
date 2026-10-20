@@ -133,7 +133,7 @@ export function migrateMarkdownWithDestinations(
   if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
     return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: [...assessment.diagnostics, ...fixups] }, authored }
   }
-  fallback.report.diagnostics.push(...fixups)
+  fallback.report.diagnostics.push(...assessment.diagnostics.filter(row => row.code === 'markdown-table-extra-cells'), ...fixups)
   return { ...fallback, authored }
 }
 

@@ -205,7 +205,10 @@ export function assessMarkdown(source: string, value: string): Assessment {
           const rows: string[] = []
           while (i < input.length && input[i]!.trim() && input[i]!.includes('|')) {
             const row = cells(input[i]!), location = first + i
-            if (row.length > headers.length) complete = false
+            if (row.length > headers.length) {
+              complete = false
+              if (row.slice(headers.length).some(cell => cell !== '')) diagnostics.push({ code: 'markdown-table-extra-cells', message: 'GFM ignores body cells beyond the header width; their content was omitted', severity: 'warning', fidelity: 'dropped', confidence: 'exact', path: `line:${location}` })
+            }
             emit('table-row', location)
             rows.push(`<tr>${headers.map((_, column) => cellHtml(row[column] ?? '', column, 'td', location)).join('')}</tr>\n`)
             i++
