@@ -1748,7 +1748,9 @@ function collectOrderedListSplitWarnings(source: string, doc: Document, out: Lin
         previous.olType !== current.olType || previous.delim !== current.delim) return
     const before = previous as unknown as { start?: number; items: unknown[]; pos?: Positioned['pos']; olType?: string }
     const after = current as unknown as { start?: number; pos?: Positioned['pos'] }
-    if (before.start === undefined || after.start !== before.start + before.items.length) return
+    const firstStart = before.start ?? 1
+    const nextStart = after.start ?? 1
+    if (nextStart !== firstStart + before.items.length) return
     const previousEnd = before.pos?.endLine
     const nextLine = after.pos?.startLine
     if (!previousEnd || !nextLine || lines.slice(previousEnd, nextLine - 1)
@@ -1762,7 +1764,7 @@ function collectOrderedListSplitWarnings(source: string, doc: Document, out: Lin
       start: second.start,
       end: second.start + 1,
       rule: 'ordered-list-split-by-indent',
-      message: `This ordered list continues the numbering of the list above (${before.start}, then ${after.start}), but its marker starts at column ${second.visual} and the list above starts at column ${first.visual}, so they are two lists. Start the markers at the same column${before.olType ? '.' : `, or write {start=${before.start}} on the line above and use the auto-numbered . marker.`}`,
+      message: `This ordered list continues the numbering of the list above (${firstStart}, then ${nextStart}), but its marker starts at column ${second.visual} and the list above starts at column ${first.visual}, so they are two lists. Start the markers at the same column${before.olType ? '.' : `, or write {start=${firstStart}} on the line above and use the auto-numbered . marker.`}`,
     })
   })
 }
