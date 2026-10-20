@@ -65,7 +65,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`): void => {
     diagnostics.push({ code, message: construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`, severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
   }
-  const inline = (text: string, line: number, linkLabel = false): string => {
+  const inline = (text: string, line: number, linkLabel = false, tableCell = false): string => {
     let result = ''
     const bareLinks = linkLabel ? [] : markdownBareLinks(text)
     let bareAt = 0
@@ -95,7 +95,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (scanned === null || rest[match![0].length] === '<' || !scanned.dest.includes('(') || rest[scanned.end] !== ')') return false
         const href = scanned.dest
         emit(match![1] === '!' ? 'image' : 'link', line)
-        const encodedHref = escape(encodeWrittenDestination(href))
+        const encodedHref = escape(tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href))
         result += match![1] === '!' ? `<img src="${encodedHref}" alt="${escape(match![2]!)}">` : `<a href="${encodedHref}">${inline(match![2]!, line, true)}</a>`
         i += scanned.end + 1
         return true
@@ -108,7 +108,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
         emit(image ? 'image' : 'link', line)
         const title = match[4] === undefined ? '' : ` title="${escape(match[4])}"`
-        const encodedHref = escape(encodeWrittenDestination(href))
+        const encodedHref = escape(tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href))
         result += image ? `<img src="${encodedHref}" alt="${escape(match[2]!)}"${title}>` : `<a href="${encodedHref}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
@@ -125,7 +125,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         const kind = match[1] === '~~' ? 'strikethrough' : match[1]!.length === 2 ? 'strong' : 'emphasis'
         if ((match[1]!.includes('_') && /[\p{L}\p{N}]/u.test(text[i - 1] ?? '')) || /^\s|\s$/.test(match[2]!)) complete = false
         emit(kind, line); const tag = kind === 'strong' ? 'strong' : kind === 'emphasis' ? 'em' : 's'
-        result += `<${tag}>${inline(match[2]!, line, linkLabel)}</${tag}>`; i += match[0].length
+        result += `<${tag}>${inline(match[2]!, line, linkLabel, tableCell)}</${tag}>`; i += match[0].length
       } else if ((match = /^(?: {2,}|\\)\n/.exec(rest))) {
         emit('hard-break', line, 'normalized'); result += '<br>\n'; line++; i += match[0].length
       } else if (rest[0] === '\n') {
@@ -135,7 +135,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else {
         const char = rest[0]!
-        if ('*_`[\\<'.includes(char) || rest.startsWith('~~') || (!linkLabel && (i === 0 || !/[A-Za-z]/.test(text[i - 1]!)) && /^(?:https?|ftp):\/\//i.test(rest)) || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
+        if ('*_`\\<'.includes(char) || rest.startsWith('~~') || (!linkLabel && (i === 0 || !/[A-Za-z]/.test(text[i - 1]!)) && /^(?:https?|ftp):\/\//i.test(rest)) || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
         result += escape(char); i++
       }
     }
@@ -168,7 +168,27 @@ export function assessMarkdown(source: string, value: string): Assessment {
         html += `<h${match[1]!.length}>${inline(body, n)}</h${match[1]!.length}>\n`; i++; continue
       }
       if (i + 1 < input.length && line.includes('|')) {
-        const cells = (row: string): string[] => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim())
+        const cells = (row: string): string[] => {
+          const parts: string[] = []
+          let cell = ''
+          for (let column = 0; column < row.length; column++) {
+            const char = row[column]!
+            if (char === '\\') {
+              let end = column
+              while (row[end] === '\\') end++
+              const slashes = end - column
+              cell += '\\'.repeat(row[end] === '|' ? Math.floor(slashes / 2) : slashes)
+              if (row[end] === '|' && slashes % 2 === 1) { cell += '|'; column = end }
+              else column = end - 1
+            }
+            else if (char === '|') { parts.push(cell.trim()); cell = '' }
+            else cell += char
+          }
+          parts.push(cell.trim())
+          if (parts[0] === '') parts.shift()
+          if (parts.at(-1) === '') parts.pop()
+          return parts
+        }
         const separators = cells(input[i + 1]!)
         const headers = cells(line)
         if (separators.length === headers.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
@@ -177,14 +197,14 @@ export function assessMarkdown(source: string, value: string): Assessment {
             emit('table-cell', row)
             const separator = separators[column]!
             const align = separator.startsWith(':') && separator.endsWith(':') ? 'center' : separator.endsWith(':') ? 'right' : separator.startsWith(':') ? 'left' : ''
-            return `<${tag}${align ? ` style="text-align: ${align};"` : ''}>${inline(body, row)}</${tag}>`
+            return `<${tag}${align ? ` style="text-align: ${align};"` : ''}>${inline(body, row, false, true)}</${tag}>`
           }
           html += `<table>\n<thead>\n<tr>${headers.map((cell, column) => cellHtml(cell, column, 'th', n)).join('')}</tr>\n</thead>\n`
           i += 2
           const rows: string[] = []
           while (i < input.length && input[i]!.trim() && input[i]!.includes('|')) {
             const row = cells(input[i]!), location = first + i
-            if (row.length > headers.length || input[i]!.includes('\\|')) complete = false
+            if (row.length > headers.length) complete = false
             emit('table-row', location)
             rows.push(`<tr>${headers.map((_, column) => cellHtml(row[column] ?? '', column, 'td', location)).join('')}</tr>\n`)
             i++
@@ -231,7 +251,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       const body: string[] = [line]; i++
       while (i < input.length && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
       emit('paragraph', n)
-      if (body.some(text => /\|/.test(text)) || body.some(text => /\t/.test(text))) complete = false
+      if (body.some(text => /\t/.test(text))) complete = false
       const beforeInline = diagnostics.length
       const content = inline(body.join('\n').trim(), n)
       const loneImage = diagnostics.slice(beforeInline).some(row => row.code === 'markdown-image' || row.code === 'markdown-reference-link') && /^<img\b[^>]*>$/.test(content)
