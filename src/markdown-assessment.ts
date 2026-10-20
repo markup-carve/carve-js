@@ -180,8 +180,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
               let end = column
               while (row[end] === '\\') end++
               const slashes = end - column
-              cell += '\\'.repeat(row[end] === '|' ? (slashes % 2 === 1 ? slashes - 1 : Math.floor(slashes / 2)) : slashes)
-              if (row[end] === '|' && slashes % 2 === 1) { cell += '|'; column = end }
+              cell += '\\'.repeat(row[end] === '|' ? slashes - 1 : slashes)
+              if (row[end] === '|') { cell += '|'; column = end }
               else column = end - 1
             }
             else if (char === '|') { parts.push(cell.trim()); cell = '' }
