@@ -13,7 +13,7 @@ describe('a quoted Markdown definition with a destination whose title wraps', ()
     ['lazy continuation', '> [r]: /u "a\nb"\n>\n> [t][r]\n', '> [t](/u "a\n> b")'],
     ['nested quote', '> > [r]: /u "a\n> > b"\n> >\n> > [t][r]\n', '> > [t](/u "a\n> > b")'],
     ['title on its own line', '> [r]: /u\n> "a\n> b"\n>\n> [t][r]\n', '> [t](/u "a\n> b")'],
-    ['angle destination', "> [r]: <a b> 'a\n> b'\n>\n> [t][r]\n", "> [t](a%20b 'a\n> b')"],
+    ['angle destination', "> [r]: <a b> 'a\n> b'\n>\n> [t][r]\n", '> [t](a%20b "a\n> b")'],
   ])('becomes titled inline links: %s', (_name, source, expected) => {
     const carve = markdownToCarve(source)
     expect(body(carve)).toBe(expected)

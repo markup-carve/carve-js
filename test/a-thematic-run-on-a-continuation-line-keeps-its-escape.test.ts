@@ -44,7 +44,7 @@ describe('a thematic run on a continuation line keeps its escape', () => {
 
   it.each(thematic)('escapes %s, and the import is then a fmt fixed point', (_name, marker, escaped) => {
     const out = markdownToCarve(continued(marker))
-    expect(out).toBe(`foo\n    ${escaped}\n`)
+    expect(out).toBe(`foo\n${escaped}\n`)
     // `fmt` dedents the continuation line, so the fixed point is stated per line
     // with the leading columns off: what must not move is the MARKER.
     const trim = (src: string): string => src.split('\n').map((line) => line.trim()).join('\n')
@@ -60,33 +60,33 @@ describe('a thematic run on a continuation line keeps its escape', () => {
 
   it('leaves a lone pipe bare, which is no table without a delimiter row', () => {
     // carve#2256 names this one explicitly: the escape would guard nothing.
-    expect(markdownToCarve(continued('| bar'))).toBe('foo\n    | bar\n')
+    expect(markdownToCarve(continued('| bar'))).toBe('foo\n| bar\n')
   })
 
   it('escapes a full pipe row, which IS a table row at column 0', () => {
     // The other side of the same rule, and it was already right.
-    expect(markdownToCarve(continued('| a | b |'))).toBe('foo\n    \\| a | b |\n')
+    expect(markdownToCarve(continued('| a | b |'))).toBe('foo\n\\| a | b |\n')
   })
 
   it('leaves a tilde fence bare, which interrupts no paragraph in Carve', () => {
-    expect(markdownToCarve(continued('~~~'))).toBe('foo\n    ~~~\n')
+    expect(markdownToCarve(continued('~~~'))).toBe('foo\n~~~\n')
     expect(carveToHtml('foo\n~~~\n').trim()).toBe('<p>foo\n~~~</p>')
   })
 
   it('leaves an equals line bare, which opens nothing at column 0', () => {
-    expect(markdownToCarve(continued('=== '))).toBe('foo\n    === \n')
+    expect(markdownToCarve(continued('=== '))).toBe('foo\n===\n')
   })
 
   it('keeps the escape every other marker already carried', () => {
     // All structural at column 0, so they were right by the rule rather than by
     // accident. They pass on both sides of reverting this change.
-    expect(markdownToCarve(continued('# bar'))).toBe('foo\n    \\# bar\n')
-    expect(markdownToCarve(continued('- bar'))).toBe('foo\n    \\- bar\n')
-    expect(markdownToCarve(continued('> bar'))).toBe('foo\n    \\> bar\n')
-    expect(markdownToCarve(continued('+ bar'))).toBe('foo\n    \\+ bar\n')
-    expect(markdownToCarve(continued('1. bar'))).toBe('foo\n    1\\. bar\n')
-    expect(markdownToCarve(continued('* bar'))).toBe('foo\n    \\* bar\n')
-    expect(markdownToCarve(continued('[r]: /u'))).toBe('foo\n    \\[r]: /u\n')
+    expect(markdownToCarve(continued('# bar'))).toBe('foo\n\\# bar\n')
+    expect(markdownToCarve(continued('- bar'))).toBe('foo\n\\- bar\n')
+    expect(markdownToCarve(continued('> bar'))).toBe('foo\n\\> bar\n')
+    expect(markdownToCarve(continued('+ bar'))).toBe('foo\n\\+ bar\n')
+    expect(markdownToCarve(continued('1. bar'))).toBe('foo\n1\\. bar\n')
+    expect(markdownToCarve(continued('* bar'))).toBe('foo\n\\* bar\n')
+    expect(markdownToCarve(continued('[r]: /u'))).toBe('foo\n\\[r]: /u\n')
   })
 
   it('writes the folded heading with the spelling carve#2244 ruled', () => {

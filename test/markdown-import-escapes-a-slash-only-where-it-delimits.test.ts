@@ -7,7 +7,7 @@ const html = (carve: string) => carveToHtml(carve).trim()
 describe('Markdown import escapes a slash only where it could delimit emphasis', () => {
   it.each([
     ['*usr/local*', '/usr/local/', '<p><em>usr/local</em></p>'],
-    ['*a/b* and *italic **bold***', '/a/b/ and {/italic *bold*/}', '<p><em>a/b</em> and <em>italic <strong>bold</strong></em></p>'],
+    ['*a/b* and *italic **bold***', '/a/b/ and /italic *bold*/', '<p><em>a/b</em> and <em>italic <strong>bold</strong></em></p>'],
     ['a/b *x* c/d', 'a/b /x/ c/d', '<p>a/b <em>x</em> c/d</p>'],
     ['*x* 1/2 and/or', '/x/ 1/2 and/or', '<p><em>x</em> 1/2 and/or</p>'],
     ['*x* a / b', '/x/ a / b', '<p><em>x</em> a / b</p>'],

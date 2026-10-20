@@ -1382,7 +1382,20 @@ function neighborsForceBraces(delim: string, prevChar: string, nextChar: string)
   )
 }
 
-function renderForcedEmphasis(delim: string, content: string): string {
+export function emphasisNeedsBraces(delim: string, content: string, prevChar: string, nextChar: string, forced = false, closeDelim = delim): boolean {
+  return forced ||
+    neighborsForceBraces(delim, prevChar, nextChar) ||
+    content.startsWith(delim) ||
+    content.endsWith(closeDelim) ||
+    // A bare opener may not be followed, nor a closer preceded, by `ws`
+    // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
+    // also puts the closer at the start of the next line (carve-js#1786).
+    /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
+    // A leading `*` would form the combined bold-italic opener.
+    (delim === '/' && content.startsWith('*') && !extendsGrapheme(content, 1))
+}
+
+export function renderForcedEmphasis(delim: string, content: string): string {
   return `{${delim}${content}${delim}}`
 }
 
@@ -1393,16 +1406,7 @@ function renderEmphasis(
   nextChar: string,
   closeDelim: string = delim,
 ): string {
-  const needsForced =
-    neighborsForceBraces(delim, prevChar, nextChar) ||
-    content.startsWith(delim) ||
-    content.endsWith(closeDelim) ||
-    // A bare opener may not be followed, nor a closer preceded, by `ws`
-    // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
-    // also puts the closer at the start of the next line (carve-js#1786).
-    /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
-    // A leading `*` would form the combined bold-italic opener.
-    (delim === '/' && content.startsWith('*') && !extendsGrapheme(content, 1))
+  const needsForced = emphasisNeedsBraces(delim, content, prevChar, nextChar, false, closeDelim)
   return needsForced
     ? `{${delim}${content}${closeDelim}}`
     : `${delim}${content}${closeDelim}`
@@ -1429,13 +1433,34 @@ function renderEmphasis(
  * rest: that nothing needs to be written after the span, and that every line
  * of the content survives whole-document normalization and the block layer.
  */
-function codeSpanFence(content: string): string {
+export function codeSpanFence(content: string): string {
   // A short absent run keeps multiline inline code below block-fence width.
   if (/[\r\n]/.test(content)) {
     const widths = new Set(Array.from(content.matchAll(/`+/g), match => match[0].length))
     for (const width of [1, 2]) if (!widths.has(width)) return '`'.repeat(width)
   }
   return safeFence(content, 1)
+}
+
+export function codeSpanNeedsPad(content: string): boolean {
+  return content.startsWith('`') || content.endsWith('`') ||
+    (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
+}
+
+export function listContinuationWidth(prefix: string, ordered: boolean): number {
+  return ordered ? prefix.length : 2
+}
+
+export function foldEmptyItemBody(first: string, next: string | undefined, generatedPlaceholder = false): { first: string; consumeNext: boolean } {
+  if (generatedPlaceholder && first === '+' && next?.trim()) {
+    return { first: next.trimStart(), consumeNext: true }
+  }
+  return { first: first || '+', consumeNext: false }
+}
+
+export function spellCodeSpan(content: string): string {
+  const fence = codeSpanFence(content)
+  return codeSpanNeedsPad(content) ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
 function unclosedVerbatimSpells(content: string): boolean {
@@ -1579,7 +1604,7 @@ function isLanguageTag(value: string): boolean {
  * non-punctuation character the reader keeps the backslash literal, so
  * doubling it would write content back that the re-parse then discards.
  */
-function escapeQuotedValue(value: string, separators: string): string {
+export function escapeQuotedValue(value: string, separators: string): string {
   let out = ''
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]!
@@ -1593,7 +1618,7 @@ function escapeQuotedValue(value: string, separators: string): string {
   return out
 }
 
-function quoteAttrValue(value: string, force: boolean = false, markers: string = ''): string {
+export function quoteAttrValue(value: string, force: boolean = false, markers: string = ''): string {
   // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
   // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
@@ -1711,8 +1736,20 @@ function guardLeadingBom(text: string): string {
 /** Mirrors `dropTrailingWhitespace` in `src/parse.ts`: strip unconditionally
  * (markup-carve/carve#1027). Escaped-space handling lives in `normalize`.
  */
-function dropTrailingWs(line: string): string {
+export function dropTrailingWs(line: string): string {
   return trimEndSpaceTab(line)
+}
+
+export function paragraphLineText(line: string): string {
+  let at = 0
+  while (line[at] === ' ' || line[at] === '\t') at++
+  return line.slice(at)
+}
+
+export function canonicalQuoteBodyLines(lines: readonly string[]): string[] {
+  let first = 0
+  while (first < lines.length - 1 && lines[first] === '') first++
+  return lines.slice(first)
 }
 
 /**
@@ -2092,7 +2129,7 @@ function escapeDestination(text: string): string {
     .replace(/\p{White_Space}/gu, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
 }
 
-function escapeQuoted(text: string): string {
+export function escapeQuoted(text: string): string {
   return escapeQuotedValue(text, '"')
 }
 
@@ -3286,13 +3323,14 @@ class CarveRenderSession {
         return withAttrs(headingBody)
       }
       case 'paragraph': {
+        const rendered = this.renderInlines(
+          node.children,
+          ctx,
+          attrs === '' && ctx.paragraphStartsAfterCaptionHost,
+          ctx.lineBlockDepth > 0,
+        )
         const text = guardThematicBreakLines(
-          this.renderInlines(
-            node.children,
-            ctx,
-            attrs === '' && ctx.paragraphStartsAfterCaptionHost,
-            ctx.lineBlockDepth > 0,
-          ),
+          ctx.lineBlockDepth === 0 ? paragraphLineText(rendered) : rendered,
           ctx.lineBlockDepth > 0,
         )
         // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
@@ -3358,8 +3396,7 @@ class CarveRenderSession {
           return withAttrs(`${fence} >\n${body}\n${fence}`)
         }
         const inner = this.renderHostedBlocks(node.children, ctx)
-        const body = inner
-          .split('\n')
+        const body = canonicalQuoteBodyLines(inner.split('\n'))
           .map((line) => (line === '' ? '>' : `> ${line}`))
           .join('\n')
         return withAttrs(body)
@@ -3561,7 +3598,7 @@ class CarveRenderSession {
         } else {
           prefix = `${bullet} `
         }
-        const continuationWidth = node.ordered ? prefix.length : 2
+        const continuationWidth = listContinuationWidth(prefix, node.ordered)
         const itemAttrs = renderAttrs(item.attrs)
         if (itemAttrs) {
           prefix = node.ordered
@@ -3576,8 +3613,8 @@ class CarveRenderSession {
         // character and the item came back holding it (carve-js#1681). Nothing to
         // strip it TO here: the item's own marker already owns this line, and
         // `- +` is where §17 L3 puts the marker for an item with nothing before it.
-        const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
-        out += `${indent}${prefix}${first || '+'}\n`
+        const first = foldEmptyItemBody((lines.shift() ?? '').replace(this.markerColumnTag(), ''), lines[0])
+        out += `${indent}${prefix}${first.first}\n`
         const continuation = ' '.repeat(continuationWidth)
         // An EMPTY continuation line stays empty. Indenting it produces a line of
         // nothing but spaces, which the writer must never emit - the blank line
@@ -5091,10 +5128,7 @@ class CarveRenderSession {
     // Description markers stay at the content column and need a fence run to remain inline.
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
     const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
-    const needsPad =
-      content.startsWith('`') ||
-      content.endsWith('`') ||
-      (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
+    const needsPad = codeSpanNeedsPad(content)
     // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
     // writer refuses it instead of emitting the nearest form (carve-js#1344).
     // Same throw path as the empty `raw_inline`, and the same sentence: the

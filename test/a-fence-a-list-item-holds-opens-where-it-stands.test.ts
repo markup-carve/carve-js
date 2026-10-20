@@ -173,7 +173,7 @@ describe('a fence a list item holds', () => {
       // Four columns in, the run opens nothing, and a tilde fence interrupts
       // no paragraph in Carve, so an escape there would spell a construct the
       // source does not hold (carve#2244, carve-js#2020).
-      expect(markdownToCarve(lines('a', sp(4) + tilde))).toBe(lines('a', sp(4) + tilde))
+      expect(markdownToCarve(lines('a', sp(4) + tilde))).toBe(lines('a', tilde))
     })
   })
 })
