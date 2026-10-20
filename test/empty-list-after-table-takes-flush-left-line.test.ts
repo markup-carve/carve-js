@@ -6,13 +6,13 @@ const table = '<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>
 describe('empty list item after a table', () => {
   it('takes the flush-left line after a first-block marker', () => {
     expect(carveToHtml('| a | b |\n  - +\nline two\n')).toBe(
-      `${table}\n<ul>\n  <li>line two</li>\n</ul>`,
+      '<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n<ul>\n  <li>line two</li>\n</ul>',
     )
   })
 
   it('leaves an indented line outside the item', () => {
     expect(carveToHtml('| a | b |\n  - +\n  line two\n')).toBe(
-      `${table}\n<ul>\n  <li></li>\n</ul>\n<p>line two</p>`,
+      `${table}\n<ul>\n  <li>line two</li>\n</ul>`,
     )
   })
 })

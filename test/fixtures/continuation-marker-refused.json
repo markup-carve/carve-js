@@ -103,7 +103,7 @@
       "description": "The nested item's marker column.",
       "source": "- a\n  - b\n  +\n\npara\n",
       "expected": {
-        "findings": []
+        "findings": [{ "line": 3, "column": 3, "includes": ["blank line"] }]
       }
     },
     {
@@ -159,7 +159,7 @@
       "description": "A line that is not flush-left follows the plus.",
       "source": "- a\n+\n  x\n",
       "expected": {
-        "findings": []
+        "findings": [{ "line": 2, "column": 1, "includes": ["right"] }]
       }
     },
     {
@@ -175,7 +175,7 @@
       "description": "A plus inside the fence's content column is payload.",
       "source": "- ```\n  +\n\n  x\n  ```\n",
       "expected": {
-        "findings": []
+        "findings": [{ "line": 2, "column": 3, "includes": ["payload"] }]
       }
     }
   ]

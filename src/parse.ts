@@ -181,8 +181,9 @@ export interface UnclosedCodeFence {
 export interface RefusedContinuationMarker {
   line: number
   column: number
-  host: 'list item' | 'definition description'
-  reason: 'blank' | 'document'
+  host: 'document' | 'list item' | 'definition description' | 'footnote' | 'block quote'
+  reason: 'blank' | 'document' | 'sibling' | 'left' | 'right' | 'wrong-column' | 'fence-payload'
+  firstBlock?: boolean
 }
 
 // Content must carry at least one non-ASCII-whitespace character, mirroring
@@ -432,6 +433,20 @@ function isPhysicalContinuationMarker(line: string): boolean {
 
 function isStackedFirstBlockQuoteMarker(line: string): boolean {
   return /^[ \t]*(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> ?)+\+[ \t]*$/.test(line.replace(/^(?:> ?)+/, ''))
+}
+
+function firstBlockOpenerContent(line: string): boolean {
+  if (!endsInPlus(line)) return false
+  let rest = line.trimStart()
+  for (let depth = 0; depth < 8; depth++) {
+    if (isContinuationMarker(rest)) return true
+    const marker = taskMatch(rest) ?? unorderedMatch(rest) ?? orderedMatch(rest)
+    if (marker !== null) { rest = marker.at(-1) ?? ''; continue }
+    const quote = quotedLineText(rest, false)
+    if (quote !== null) { rest = quote; continue }
+    return false
+  }
+  return false
 }
 
 const RE_BLOCKQUOTE = /^>(?:(?: |(?=(?:> ?)*\+[ \t]*$))(.*)|[\t][ \t]*|)$/
@@ -830,6 +845,9 @@ export const layoutWork = {
   fenceCandidateLines: 0,
   attachmentColonLines: 0,
   geometryEntries: 0,
+  markerLinesClassified: 0,
+  markerStackEntriesExamined: 0,
+  markerFollowerProbes: 0,
   reset(): void {
     this.gate = 0
     this.strip = 0
@@ -841,6 +859,9 @@ export const layoutWork = {
     this.fenceCandidateLines = 0
     this.attachmentColonLines = 0
     this.geometryEntries = 0
+    this.markerLinesClassified = 0
+    this.markerStackEntriesExamined = 0
+    this.markerFollowerProbes = 0
   },
   get total(): number {
     return this.gate + this.strip + this.seam
@@ -848,6 +869,7 @@ export const layoutWork = {
 }
 
 class Lexer {
+  interruptRefusedSiblingPlusLine = -1
   attachmentBoundaries: Set<number>
   consumedContinuationLines: Set<number>
   /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
@@ -952,6 +974,7 @@ class Lexer {
   inFootnoteBody = false
   /** The body whose content column owns this nested parse. */
   hostBody: 'list' | 'description' | 'footnote' | null = null
+  hostMarkerColumn: number | undefined
   /**
    * The body this lexer IS, where `hostBody` is the body it is somewhere inside.
    *
@@ -1361,15 +1384,17 @@ class Lexer {
       marker, endLine, reason })
   }
 
-  reportRefusedContinuationMarker(lineIndex: number, column: number, host: RefusedContinuationMarker['host']): void {
+  reportRefusedContinuationMarker(lineIndex: number, column: number, host: RefusedContinuationMarker['host'], reason?: RefusedContinuationMarker['reason'], firstBlock = false): void {
     const line = this.lineNumber(lineIndex)
     const next = this.rootLines?.[line] ?? (this.rootLines ? undefined : this.peek())
-    if (next !== undefined && !isBlankLine(next)) return
+    if (reason === undefined && next !== undefined && !isBlankLine(next)) return
     const physical = this.rootLines?.[line - 1]
-    const plus = physical?.indexOf('+') ?? -1
+    const plus = physical?.lastIndexOf('+') ?? -1
+    let visual = 1
+    if (plus >= 0) for (const char of physical!.slice(0, plus)) visual += char === '\t' ? 4 - (visual - 1) % 4 : 1
     this.parseOptions.onRefusedContinuationMarker?.({ line,
-      column: plus >= 0 ? [...physical!.slice(0, plus)].length + 1 : column,
-      host, reason: next === undefined ? 'document' : 'blank' })
+      column: plus >= 0 ? visual : column,
+      host, reason: reason ?? (next === undefined ? 'document' : 'blank'), firstBlock })
   }
 
   /**
@@ -1516,6 +1541,7 @@ function nestedSubLexer(
   sub.inFigureGroup = parent.inFigureGroup
   sub.inFootnoteBody = parent.inFootnoteBody
   sub.hostBody = parent.hostBody
+  sub.hostMarkerColumn = parent.hostMarkerColumn
   sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
   if (contiguous) {
     const origin = parent.contiguousOrigin
@@ -2542,6 +2568,8 @@ const EMPTIED_CONTAINER_MARKUP: Record<string, RegExp> = {
   list_item: /^[ \t]*(?:[-+*]|[0-9]+[.)]|[A-Za-z]+[.)]|\.)[ \t]*/,
 }
 
+const authoredLineOffsets = new WeakMap<readonly string[], number[]>()
+
 function attachBlockPos(
   lexer: Lexer,
   node: { pos?: Position },
@@ -2582,6 +2610,21 @@ function attachBlockPos(
     }
   }
   if (type === 'list' || type === 'list_item') {
+    const physical = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
+    if (physical !== undefined && physical.includes('\t') && node.pos.startColumn === 0 &&
+        (unorderedMatch(physical.trimStart()) !== null || taskMatch(physical.trimStart()) !== null)) {
+      const marker = leadingWhitespace(physical)
+      const root = lexer.rootLines ?? lexer.lines
+      let offsets = authoredLineOffsets.get(root)
+      if (offsets === undefined) {
+        offsets = [0]
+        for (const sourceLine of root) offsets.push(offsets.at(-1)! + [...sourceLine].length + 1)
+        authoredLineOffsets.set(root, offsets)
+      }
+      node.pos.startColumn = [...physical.slice(0, marker)].length + 1
+      node.pos.startOffset = offsets[node.pos.startLine - 1]! + [...physical.slice(0, marker)].length
+      return
+    }
     const startLine = lexer.lineAt(startLineIndex) ?? ''
     const leadChars = leadingWhitespace(startLine)
     const documentLine = leadChars > 0 ? (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1] : undefined
@@ -5406,19 +5449,203 @@ function fencedBlockEnd(scan: AttachedScan): number {
  * attachment.
  */
 /** The column a source line's content starts at, past any quote markers. */
-function sourceColumn(line: string): number {
-  let prefix = 0
-  let rest = line
-  for (;;) {
-    const m = /^[ \t]*>[ \t]?/.exec(rest)
-    if (!m) break
-    prefix += m[0].length
-    rest = rest.slice(m[0].length)
-  }
-  return prefix + indentColumns(rest)
+function sourceQuotePrefixEnd(line: string, start: number): number {
+  let end = start
+  while (line[end] === ' ' || line[end] === '\t') end++
+  if (line[end] !== '>') return -1
+  end++
+  if (line[end] === ' ' || line[end] === '\t') end++
+  return end
 }
 
-function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
+function quotePrefixDepth(line: string): number {
+  let depth = 0
+  for (let offset = 0, end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) {
+    depth++
+    offset = end
+  }
+  return depth
+}
+
+function sourceQuoteBody(line: string): string {
+  let offset = 0
+  for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
+  const body = line.slice(offset)
+  return body.slice(leadingWhitespace(body))
+}
+
+function sourceColumn(line: string, quoteLevels = Infinity): number {
+  let column = 0
+  let offset = 0
+  for (let level = 0; level < quoteLevels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) {
+      if (quoteLevels !== Infinity) return Infinity
+      break
+    }
+    for (; offset < end; offset++) column += line[offset] === '\t' ? 4 - column % 4 : 1
+  }
+  while (line[offset] === ' ' || line[offset] === '\t') {
+    column += line[offset] === '\t' ? 4 - column % 4 : 1
+    offset++
+  }
+  return column
+}
+
+function sourceQuoteLocalColumn(line: string, levels: number): number {
+  let offset = 0
+  for (let level = 0; level < levels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) return Infinity
+    offset = end
+  }
+  return indentColumns(line.slice(offset))
+}
+
+function quoteIndentHasTab(line: string, levels: number): boolean {
+  let offset = 0
+  for (let level = 0; level < levels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) return false
+    offset = end
+  }
+  const body = line.slice(offset)
+  return body.slice(0, leadingWhitespace(body)).includes('\t')
+}
+
+function quoteBodyColumn(line: string, levels: number): number {
+  let column = 0
+  let offset = 0
+  for (let level = 0; level < levels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) return Infinity
+    for (; offset < end; offset++) column += line[offset] === '\t' ? 4 - column % 4 : 1
+  }
+  return column
+}
+
+function sourceColumnAt(line: string, offset: number): number {
+  let column = 0
+  for (let index = 0; index < offset; index++)
+    column += line[index] === '\t' ? 4 - column % 4 : 1
+  return column
+}
+
+type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean }
+type MarkerDecision = { owner?: OpenMarker; reason?: RefusedContinuationMarker['reason']; blockedByInnerList?: boolean; unprefixedQuoteFollower?: boolean }
+
+class OpenMarkerClassifier {
+  private stack: OpenMarker[] = []
+  private decisions = new Map<number, MarkerDecision>()
+  private scanned = 0
+
+  constructor(private readonly lines: readonly string[]) {}
+
+  get(index: number): MarkerDecision {
+    while (this.scanned <= index && this.scanned < this.lines.length) this.step(this.scanned++)
+    return this.decisions.get(index) ?? {}
+  }
+
+  private step(index: number): void {
+    const line = this.lines[index]!
+    const depth = quotePrefixDepth(line)
+    const column = sourceColumn(line)
+    const localColumn = depth > 0 ? sourceQuoteLocalColumn(line, depth) : column
+    const useLocalColumn = depth > 0 && quoteIndentHasTab(line, depth)
+    const markerColumn = useLocalColumn ? localColumn : column
+    const body = sourceQuoteBody(line)
+    if (isContinuationMarker(body)) {
+      layoutWork.markerLinesClassified += Number(layoutWork.on)
+      let owner: OpenMarker | undefined
+      const deepestQuote = this.stack.reduce((deepest, entry) => entry.kind === 'quote'
+        ? Math.max(deepest, entry.quoteDepth) : deepest, 0)
+      const blockedByInnerList = depth > 0 && this.stack.some(entry => entry.kind === 'list' && entry.quoteDepth >= depth)
+      for (let at = this.stack.length - 1; at >= 0; at--) {
+        layoutWork.markerStackEntriesExamined += Number(layoutWork.on)
+        const entry = this.stack[at]!
+        if ((useLocalColumn ? entry.localColumn : entry.column) === markerColumn &&
+            entry.quoteDepth === depth && (depth === 0 || depth >= deepestQuote)) { owner = entry; break }
+      }
+      const follower = this.lines[index + 1]
+      if (follower !== undefined) layoutWork.markerFollowerProbes += Number(layoutWork.on)
+      const followerColumn = follower === undefined ? Infinity : useLocalColumn
+        ? sourceQuoteLocalColumn(follower, depth) : sourceColumn(follower, depth)
+      const followerBody = follower === undefined ? '' : sourceQuoteBody(follower)
+      const sibling = follower !== undefined && followerColumn === markerColumn &&
+        (unorderedMatch(followerBody) !== null || orderedMatch(followerBody) !== null)
+      const unprefixedQuoteFollower = depth === 0 && owner?.kind === 'description' && sibling &&
+        this.stack.some(entry => entry.kind === 'quote' && entry.quoteDepth > 0)
+      const reason: MarkerDecision['reason'] = owner === undefined ? 'wrong-column'
+        : follower === undefined ? 'document'
+          : isBlankLine(followerBody) ? 'blank'
+            : followerColumn < markerColumn ? 'left'
+              : followerColumn > markerColumn ? 'right'
+                : sibling && owner.kind === 'list' ? 'sibling' : undefined
+      this.decisions.set(index, { ...(owner ? { owner } : {}), ...(reason ? { reason } : {}),
+        ...(blockedByInnerList ? { blockedByInnerList } : {}), ...(unprefixedQuoteFollower ? { unprefixedQuoteFollower } : {}) })
+      return
+    }
+    if (isBlankLine(line)) return
+    this.stack = this.stack.filter(entry => entry.kind !== 'quote')
+    while (this.stack.length && (this.stack.at(-1)!.quoteDepth > depth ||
+      this.stack.at(-1)!.quoteDepth === depth && this.stack.at(-1)!.column >= column)) this.stack.pop()
+    for (let level = 1; level <= depth; level++) {
+      const quoteColumn = quoteBodyColumn(line, level)
+      this.stack.push({ kind: 'quote', column: quoteColumn, localColumn: 0, quoteDepth: level,
+        contentColumn: quoteColumn, firstBlock: false })
+    }
+    let inner = body
+    let innerColumn = column
+    let innerLocalColumn = localColumn
+    let innerDepth = depth
+    for (let level = 0; level < 32; level++) {
+      const marker = taskMatch(inner) ?? unorderedMatch(inner) ?? orderedMatch(inner)
+      if (marker !== null) {
+        const content = marker.at(-1) ?? ''
+        const width = inner.length - content.length
+        this.stack.push({ kind: 'list', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth,
+          contentColumn: innerColumn + width, firstBlock: isContinuationMarker(content) })
+        innerColumn += width
+        innerLocalColumn += width
+        inner = content.trimStart()
+        continue
+      }
+      const quoted = quotedLineText(inner, false)
+      if (quoted !== null) {
+        innerDepth++
+        innerColumn += inner.length - quoted.length
+        innerLocalColumn = indentColumns(quoted)
+        this.stack.push({ kind: 'quote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth,
+          contentColumn: innerColumn, firstBlock: isContinuationMarker(quoted) })
+        inner = quoted.trimStart()
+        continue
+      }
+      if (inner.startsWith('[^') && inner.includes(']:'))
+        this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
+      else if (inner.startsWith(': '))
+        this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
+      break
+    }
+  }
+}
+
+const markerClassifiers = new WeakMap<readonly string[], OpenMarkerClassifier>()
+
+function markerDecision(lexer: Lexer, lineIndex: number): MarkerDecision {
+  const root = lexer.rootLines ?? lexer.lines
+  let classifier = markerClassifiers.get(root)
+  if (classifier === undefined) markerClassifiers.set(root, classifier = new OpenMarkerClassifier(root))
+  return classifier.get(lexer.lineNumber(lineIndex) - 1)
+}
+
+function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quoteLevels = Infinity, firstBlock = false): boolean {
+  if (lexer.pos > 0) {
+    const marker = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+    if (marker !== undefined && isContinuationMarker(sourceQuoteBody(marker)) && !firstBlock) {
+      const decision = markerDecision(lexer, lexer.pos - 1)
+      if (decision.reason !== undefined && decision.reason !== 'wrong-column') return false
+    }
+  }
   // THE DOCUMENT'S OWN LINES, OR THIS LEXER'S IF IT IS THE DOCUMENT. Only a
   // SUB-lexer carries `rootLines`; the root lexer's `lines` ARE the document,
   // and reading the absence as "cannot answer" made the gate return true for
@@ -5428,14 +5655,13 @@ function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
-  if (/^[ \t]+>/.test(line)) return false
-  let rest = line
-  for (;;) {
-    const m = /^[ \t]*>[ \t]?/.exec(rest)
-    if (!m) break
-    rest = rest.slice(m[0].length)
+  if (quoteLevels === Infinity) {
+    let offset = 0
+    for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
+    return indentColumns(line.slice(offset)) === markerColumn
   }
-  return leadingWhitespace(rest) === 0
+  const column = sourceColumn(line, quoteLevels)
+  return column === markerColumn || firstBlock && sourceColumn(line, 0) === 0 && !isListMarkerLine(line)
 }
 
 /**
@@ -11112,6 +11338,7 @@ class ParseSession {
 
   private parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry): BlockNode[] {
     const out: BlockNode[] = []
+    const listMarkerColumns = new Set<number>()
     // Leading block-attribute lines (grammar PART 9 §15) accumulate here
     // and attach to the next block. They float across blank lines; a
     // dangling run with no following block is dropped -- unless a `carry` says
@@ -11144,6 +11371,12 @@ class ParseSession {
         continue
       }
 
+      const sibling = lexer.peek(1)
+      if (out.at(-1)?.type === 'list' && isContinuationMarker(line) && sibling !== undefined &&
+          isListMarkerLine(sibling) && indentColumns(line) === indentColumns(sibling) &&
+          listMarkerColumns.has(indentColumns(line))) {
+        lexer.interruptRefusedSiblingPlusLine = lexer.pos
+      }
       let node = this.parseBlock(lexer)
       // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
       // `pending` floats PAST anything that renders nothing and attaches to the
@@ -11209,6 +11442,7 @@ class ParseSession {
           }
         }
         out.push(node)
+        if (node.type === 'list') listMarkerColumns.add(indentColumns(line))
       }
       // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
       // pending for the next block (A2a, above).
@@ -11467,8 +11701,12 @@ class ParseSession {
     const fenceStartIndex = lexer.pos
     const open = lexer.consume()
     const m = RE_FENCE.exec(open)!
-    const indent = m[1]!.length
     const marker = m[2]!
+    const fenceSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(fenceStartIndex) - 1] ?? open
+    let fenceColumn = 0
+    for (const char of fenceSource.slice(0, fenceSource.indexOf(marker)))
+      fenceColumn += char === '\t' ? 4 - fenceColumn % 4 : 1
+    const indent = m[1]!.length
     const lang = m[3] || undefined
     // Header is the quoted group (with or without a language); label is the
     // bracketed group from whichever alternative matched. Strip the delimiters.
@@ -11489,6 +11727,12 @@ class ParseSession {
         lexer.consume()
         closed = true
         break
+      }
+      const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+      if (isContinuationMarker(ln) && sourceColumn(physical) === fenceColumn &&
+          (isPhysicalContinuationMarker(physical) || isContinuationMarker(physical.trimStart()))) {
+        lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
+          lexer.hostBody === 'list' ? 'list item' : 'document', 'fence-payload')
       }
       lastPayloadLineIndex = lexer.pos
       lexer.consume()
@@ -11643,7 +11887,16 @@ class ParseSession {
       // use); the attached block ends at a blank line, another `+`, or the next
       // footnote definition - unless a fence this block opened is still open, in
       // which case all three are body text (corpus category 279).
-      if (isContinuationMarker(ln) && isPhysicalContinuationMarker(sourceLine ?? ln)) {
+      const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
+      const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
+      if (pendingBlanks === 0 && noteMarkerLine &&
+          (isPhysicalContinuationMarker(sourceLine ?? ln) || noteMarker?.owner?.kind === 'footnote' && noteMarker.reason === undefined) &&
+          sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] ?? '', quotePrefixDepth(sourceLine ?? ln)) ===
+            sourceColumn(sourceLine ?? ln) &&
+          !(sourceLine !== undefined && quotePrefixDepth(sourceLine) > 0 &&
+            sourceColumn(sourceLine) === quoteBodyColumn(sourceLine, quotePrefixDepth(sourceLine)) &&
+            quotePrefixDepth((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] ?? '') > quotePrefixDepth(sourceLine)) &&
+          !isBlankLine((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)])) {
         const plusLineNumber = lexer.lineNumber(lexer.pos)
         lexer.consume()
         pendingBlanks = 0
@@ -11657,10 +11910,14 @@ class ParseSession {
         // own continuation branch would otherwise claim the following line before
         // any extent is measured. The `+` is consumed either way, so the
         // enclosing parse resumes on the line the marker did not take.
-        if (!attachesAtDocumentColumnZero(lexer)) break
+        if (!attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine ?? ln), quotePrefixDepth(sourceLine ?? ln))) break
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
           lexer,
           (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
+          0,
+          true,
+          sourceColumn(sourceLine ?? ln),
+          quotePrefixDepth(sourceLine ?? ln),
         )
         if (attached.length > 0) {
           bodyLines.push('')
@@ -12665,7 +12922,18 @@ class ParseSession {
         if (lexer.eof()) break
         const ln = lexer.peek()!
         // Form B: `+` pull-left continuation.
-        if (isContinuationMarker(ln) && isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln)) {
+        const descriptionPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        const descriptionFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
+        const descriptionDecision = isContinuationMarker(ln) ? markerDecision(lexer, lexer.pos) : undefined
+        if (descriptionDecision?.owner?.kind === 'description' && descriptionDecision.reason !== undefined)
+          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'definition description', descriptionDecision.reason)
+        if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description' &&
+            descriptionDecision.reason === undefined && !descriptionDecision.unprefixedQuoteFollower &&
+            descriptionFollower !== undefined && !isBlankLine(descriptionFollower) &&
+            !(quotePrefixDepth(descriptionPlus) > 0 &&
+              sourceColumn(descriptionPlus) === quoteBodyColumn(descriptionPlus, quotePrefixDepth(descriptionPlus)) &&
+              quotePrefixDepth(descriptionFollower) > quotePrefixDepth(descriptionPlus)) &&
+            sourceColumn(descriptionFollower, quotePrefixDepth(descriptionPlus)) === sourceColumn(descriptionPlus)) {
           const follower = lexer.peek(1)
           if (lazyState.opaque?.kind === 'code' &&
               (follower === undefined || isBlankLine(follower) || indentColumns(follower) !== 0)) {
@@ -12682,10 +12950,14 @@ class ParseSession {
           // claim the following line. A block quote does NOT end at a comment
           // there, so it does not end at a refused marker either - that is each
           // container's invisible-line rule, not a second column rule.
-          if (!attachesAtDocumentColumnZero(lexer)) break
+          if (!attachesAtDocumentColumnZero(lexer, sourceColumn(descriptionPlus), quotePrefixDepth(descriptionPlus))) break
           const { lines: attached, lineNumbers: attachedLineNumbers } = parseSession.collectAttachedBlock(
             lexer,
             isDefBodyBoundary,
+            0,
+            true,
+            sourceColumn(descriptionPlus),
+            quotePrefixDepth(descriptionPlus),
           )
           if (attached.length > 0) {
             bodyBaseEligible.add(bodyLines.length)
@@ -13378,6 +13650,13 @@ class ParseSession {
       noteLead[0].length - 1 === quoteMarkerOffset
       ? noteLead[1]!.length + FOOTNOTE_BODY_COLUMN
       : Math.max(0, quoteMarkerOffset)
+    const localQuoteDepth = quotePrefixDepth(lexer.lineAt(firstLineIndex) ?? '')
+    const localQuoteOffset = lexer.hasDocumentOffsets ? lexer.lineStartColumn(firstLineIndex) - 1 : -1
+    const physicalQuoteColumn = localQuoteOffset >= 0
+      ? sourceColumnAt(quoteRootLine, localQuoteOffset)
+      : Math.max(quoteMarkerColumn,
+        sourceColumn(quoteRootLine, Math.max(0, quotePrefixDepth(quoteRootLine) - localQuoteDepth)))
+    let emptyFirstBlockMarker = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
@@ -13386,20 +13665,34 @@ class ParseSession {
         lexer.consume()
         const content = quoted
         if (isBlankLine(content)) quoteTermContinuation = false
+        const markerSourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1]
+        const precedingSourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 2]
+        const quoteMarkerIsWrongColumn = isContinuationMarker(content.trimStart()) &&
+          markerSourceLine !== undefined && precedingSourceLine !== undefined &&
+          quotePrefixDepth(precedingSourceLine) >= quotePrefixDepth(markerSourceLine) &&
+          markerDecision(lexer, lineIndex).reason === 'wrong-column'
         // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
         // first line of a quote, at any depth, is a marker when a flush-left line
         // outside the quote follows, and that line's block is the innermost
         // quote's body. Before a blank, a quoted line or the end it stays text.
-        if (endsInPlus(content) &&
+        if (endsInPlus(content) && !quoteMarkerIsWrongColumn &&
             (isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln) ||
               lineIndex === firstLineIndex && isStackedFirstBlockQuoteMarker(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln)) &&
             this.opensFirstBlockQuote(lexer, lineIndex, content, lineIndex === firstLineIndex ? 0 : -1, () => {
           trackUntracked()
           return openQuoteDepth(state)
         })) {
+          const stackedSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ln
+          const stackedDepth = quotePrefixDepth(stackedSource)
+          const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ''
+          const followerColumn = sourceColumn(followerSource, stackedDepth)
           const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
             lexer,
             (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+            0,
+            true,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : 0,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : Infinity,
           )
           if (/^\+[ \t]*$/.test(content)) {
             if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
@@ -13425,6 +13718,10 @@ class ParseSession {
           handDown = null
           continue
         }
+        if (lineIndex === firstLineIndex && endsInPlus(content) &&
+            isStackedFirstBlockQuoteMarker(markerSourceLine ?? ln) &&
+            lexer.peek() !== undefined && !isListMarkerLine(lexer.peek()!.trimStart()) &&
+            quotedLineText(lexer.peek()!, lexer.lineTerminatorFree(lexer.pos)) === null) emptyFirstBlockMarker = true
         if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
         inner.push(content)
         untracked.push([content, lineIndex])
@@ -13438,11 +13735,42 @@ class ParseSession {
       // block's lines (up to a blank line or a further `+`) and
       // splice them into the quote body behind a blank-line separator, so they
       // parse as their own block instead of folding into the quoted paragraph.
-      if (isContinuationMarker(ln) && isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln)) {
+      const physicalPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+      const quoteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
+      const quotePlusDecision = quoteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
+      const quotePlusDepth = quotePrefixDepth(physicalPlus)
+      const quotePlusColumn = sourceColumn(physicalPlus)
+      const quoteFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
+      let quotePlusBody = physicalPlus
+      let quoteFollowerBody = quoteFollower ?? ''
+      for (let depth = 0; depth < quotePlusDepth; depth++) {
+        quotePlusBody = quotedLineText(quotePlusBody, false) ?? ''
+        quoteFollowerBody = quotedLineText(quoteFollowerBody, false) ?? quoteFollowerBody
+      }
+      if (quoteMarkerLine &&
+          quotePlusDecision?.reason !== 'sibling' &&
+          !(quotePlusDepth === 0 && quotePrefixDepth(quoteRootLine) > 1 &&
+            quotePlusColumn > quoteMarkerColumn) &&
+          !(quotePlusColumn > 0 && quotePlusDecision?.reason === 'wrong-column' &&
+            isListMarkerLine((quoteFollower ?? '').trimStart())) &&
+          !(quotePlusDepth > 0 && quotePlusDepth < quotePrefixDepth(quoteRootLine) &&
+            quotePlusDecision?.reason === 'wrong-column' && quotePlusDecision.blockedByInnerList) &&
+          isContinuationMarker(quotePlusBody.trimStart()) &&
+          (quotePlusColumn === physicalQuoteColumn || quotePlusDecision?.owner?.kind === 'list' &&
+            quotePlusDecision.owner.column === quotePlusColumn && quotePlusDecision.reason === undefined) &&
+          quoteFollower !== undefined &&
+          !isBlankLine(quoteFollowerBody) &&
+          (quotePlusDepth === 0 || quotePrefixDepth(quoteFollower) === quotePlusDepth ||
+            quotePlusColumn > quoteBodyColumn(physicalPlus, quotePlusDepth)) &&
+          sourceColumn(quoteFollower, quotePlusDepth) === quotePlusColumn) {
         lexer.consume()
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
           lexer,
           (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+          0,
+          true,
+          quotePlusColumn,
+          quotePlusDepth,
         )
         if (attached.length > 0) {
           lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
@@ -13543,6 +13871,13 @@ class ParseSession {
     subLexer.inFootnoteBody = false
     subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
     const children = this.parseBlocks(subLexer, 0)
+    if (emptyFirstBlockMarker && children[0]?.type === 'paragraph') {
+      const parts = children[0].children
+      if (parts[0]?.type === 'text' && /^\+[ \t]*$/.test(parts[0].value)) {
+        parts.splice(0, parts[1]?.type === 'soft_break' ? 2 : 1)
+        if (parts.length === 0) children.shift()
+      }
+    }
     const bq: BlockQuote = { type: 'block_quote', children }
     const quoteEndIndex = lexer.pos
     // §4d: a quote built out of nothing but structural-only `>` lines is not a
@@ -13757,9 +14092,15 @@ class ParseSession {
     readOpenDepth: () => number,
   ): boolean {
     const next = lexer.peek()
-    if (next === undefined || isBlankLine(next) || quotedLineText(next, lexer.lineTerminatorFree(lexer.pos)) !== null) return false
+    const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ''
+    const nextQuoted = next === undefined ? null : quotedLineText(next, lexer.lineTerminatorFree(lexer.pos))
+    if (next === undefined || isBlankLine(next) || isListMarkerLine(next.trimStart()) ||
+        nextQuoted !== null && isBlankLine(nextQuoted) ||
+        nextQuoted !== null &&
+        !isStackedFirstBlockQuoteMarker(sourceLine)) return false
     const lineNumber = lexer.lineNumber(lineIndex)
     let chain = lexer.quoteChainEndsInPlus.get(lineNumber)
+    if (chain !== undefined && chain.size === 0 && endsInPlus(content)) chain = undefined
     // A probe that parsed a nested quote first measured a shorter chain.
     if (chain !== undefined && chain.size > 0 && !chain.has(content.length) && content.length > Math.max(...chain.keys())) chain = undefined
     if (chain === undefined) {
@@ -13776,7 +14117,9 @@ class ParseSession {
     const levels = chain.get(content.length)
     if (levels === undefined) return false
     if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
-    return attachesAtDocumentColumnZero(lexer)
+    return isStackedFirstBlockQuoteMarker(sourceLine)
+      ? attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), quotePrefixDepth(sourceLine), true)
+      : attachesAtDocumentColumnZero(lexer)
   }
 
   private collectAttachedBlock(
@@ -13784,6 +14127,9 @@ class ParseSession {
     isBoundary: (line: string) => boolean,
     contentColumn = 0,
     endAtFoldedDefinition = true,
+    markerColumn = 0,
+    quoteLevels = Infinity,
+    acceptFirstNonList = false,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
@@ -13797,7 +14143,7 @@ class ParseSession {
     // treats an EMPTY result as "the marker attached nothing" and lets its own
     // ordinary rules have the line, which is exactly what the clause's comment
     // spelling does.
-    if (!attachesAtDocumentColumnZero(lexer)) {
+    if (!attachesAtDocumentColumnZero(lexer, markerColumn, quoteLevels)) {
       return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
     }
     const scans = lexer.attachmentScans ??= new Map()
@@ -13842,7 +14188,9 @@ class ParseSession {
         const firstFlushLeft = take === 0 && contentColumn > 0 &&
           indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate) &&
           !lineOpensBlock(candidate)
-        if (isBoundary(candidate) && !firstFlushLeft) break
+        const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
+          !isContinuationMarker(candidate) && !isListMarkerLine(candidate)
+        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
@@ -13866,8 +14214,10 @@ class ParseSession {
     isBoundary: (line: string) => boolean,
     baseIndent: number,
     endAtFoldedDefinition = true,
+    markerColumn = 0,
+    quoteLevels = Infinity,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
-    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition)
+    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, markerColumn, quoteLevels, true)
     const first = attached.lines[0]
     const last = attached.lines.at(-1)
     const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
@@ -14033,6 +14383,7 @@ class ParseSession {
         if (this.recordPositions) {
           sub.markerOpensSublist = true
           sub.hostBody = 'list'
+          sub.hostMarkerColumn = sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line)
         }
         const item: ListItem = { type: 'list_item', children: this.parseBlocks(sub, 0) }
         if (this.recordPositions) attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
@@ -14055,15 +14406,21 @@ class ParseSession {
       const contentCol = isTask
         ? baseIndent + 2
         : baseIndent + (mline.length - leadingWhitespace(mline) - markerContentLength)
+      const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line
+      const itemMarkerColumn = sourceColumn(itemSource)
+      const itemQuoteDepth = quotePrefixDepth(itemSource)
       lexer.consume()
 
       const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
-      const markerAtColumnZero = !/^[ \t]/.test(lexer.rootLines?.[lexer.lineNumber(itemStartLineIndex) - 1] ?? line)
-      const followsTableRow = /^[ \t]*\|/.test((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 2] ?? '')
-      if (markerAtColumnZero && /^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) &&
-          lexer.peek() !== undefined && attachesAtDocumentColumnZero(lexer) &&
-          !isBlankLine(lexer.peek()!) && !firstItemAttachBoundary(lexer.peek()!)) {
-        const attached = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
+      const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+      const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
+      const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
+        (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth)) &&
+        !isListMarkerLine((lexer.peek() ?? '').trimStart())
+      if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
+          isStackedFirstBlockQuoteMarker(itemSource)) &&
+          !firstItemAttachBoundary(lexer.peek()!)) {
+        const attached = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
         const lines = [content, ...attached.lines]
         const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
         const sub = nestedSubLexer(lexer, lines, itemStartLineIndex, numbers)
@@ -14086,17 +14443,17 @@ class ParseSession {
         continue
       }
       if (firstBlockMarker &&
-        (!(markerAtColumnZero || followsTableRow) || !attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || firstItemAttachBoundary(lexer.peek()!))) {
+        (!firstBlockEligible || firstItemAttachBoundary(lexer.peek()!))) {
+        const reason: RefusedContinuationMarker['reason'] = firstBlockSource === undefined ? 'document'
+          : isBlankLine(firstBlockSource) ? 'blank'
+            : isListMarkerLine((lexer.peek() ?? '').trimStart()) ? 'sibling'
+              : firstBlockColumn > itemMarkerColumn ? 'right' : 'left'
         lexer.reportRefusedContinuationMarker(itemStartLineIndex,
-          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item')
-        // The marker line is still consumed and contributes nothing; the item
-        // carries an EMPTY lead from here, exactly as a comment on that line
-        // would leave it. `contentCol` is already measured off the marker, so
-        // the column the body is collected at does not move.
+          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', reason, true)
         content = ''
       } else if (firstBlockMarker) {
         lexer.reportRefusedContinuationMarker(itemStartLineIndex,
-          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item')
+          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', undefined, true)
         // The attached block is a block: a boundary line inside a fence it opened
         // is that fence's body, not a boundary (see the indented loop's note on
         // carve#975 and corpus category 279). Without this the opener came out an
@@ -14106,7 +14463,7 @@ class ParseSession {
           lines: attached,
           lineNumbers: attachedLineNumbers,
           startLineIndex: attachedStartLineIndex,
-        } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
+        } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
         // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
         // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
         // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -14426,7 +14783,8 @@ class ParseSession {
       // the attached block parsing standalone but never loosen the list (Bug B).
       const plusSeparators = new Set<number>()
       const continuationFenceBreaks = new Set<number>()
-      let descendantFenceMarkerBlanks = 0
+      let authoredDescendantFenceBlanks = 0
+      const descendantFenceBlankLines = new Set<number>()
       // Track whether the item's collected content currently ends in an open
       // paragraph (family-D lazy continuation). The lead text opens one.
       // ONE WALK for the three questions the lead line answers.
@@ -14614,6 +14972,39 @@ class ParseSession {
       }
       while (!lexer.eof()) {
         const l = lexer.peek()!
+        const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+        const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
+        if (currentSource !== undefined && endsInPlus(currentSource) &&
+            quotePrefixDepth(currentSource) > 0 && quotePrefixDepth(currentSource) < itemQuoteDepth &&
+            afterCurrent !== undefined && quotePrefixDepth(afterCurrent) === quotePrefixDepth(currentSource) &&
+            markerDecision(lexer, lexer.pos).reason === undefined &&
+            (isPhysicalContinuationMarker(currentSource) || isContinuationMarker(currentSource.trimStart()))) break
+        const precedingLine = nestedLineNumbers.at(-1)
+        const precedingSource = precedingLine === undefined ? undefined :
+          (lexer.rootLines ?? lexer.lines)[precedingLine - 1] ?? nestedSourceLines.at(-1)
+        let precedingBody = precedingSource ?? ''
+        for (let depth = 0; depth < itemQuoteDepth; depth++) precedingBody = quotedLineText(precedingBody, false) ?? ''
+        const precedingMarker = precedingSource === undefined ? null :
+          taskMatch(precedingBody.trimStart()) ?? unorderedMatch(precedingBody.trimStart()) ?? orderedMatch(precedingBody.trimStart())
+        const precedingContent = precedingMarker?.at(-1)
+        const physicalFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+        if (pendingBlanks === 0 && precedingSource !== undefined && precedingContent !== undefined &&
+            firstBlockOpenerContent(precedingContent) && physicalFollower !== undefined &&
+            sourceColumn(precedingSource) > itemMarkerColumn &&
+            sourceColumn(physicalFollower, itemQuoteDepth) > itemMarkerColumn &&
+            sourceColumn(physicalFollower, itemQuoteDepth) < itemMarkerColumn + contentCol - baseIndent) break
+        if (pendingBlanks === 0 && precedingSource !== undefined && precedingContent !== undefined &&
+            firstBlockOpenerContent(precedingContent) && sourceColumn(precedingSource) > itemMarkerColumn &&
+            physicalFollower !== undefined && sourceColumn(physicalFollower, itemQuoteDepth) ===
+              quoteBodyColumn(precedingSource, itemQuoteDepth) &&
+            !isListMarkerLine(l.trimStart()) && !isBlankLine(l)) {
+          const pulled = this.collectAttachedListBlock(lexer, isItemAttachBoundary, 0, false,
+            quoteBodyColumn(precedingSource, itemQuoteDepth), itemQuoteDepth)
+          nested.push(...pulled.lines)
+          nestedSourceLines.push(...pulled.lines)
+          nestedLineNumbers.push(...pulled.lineNumbers)
+          continue
+        }
         // An enclosing item already took this line as lazy text: it reached no column.
         const enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
         // Below the column, under a held description or term, a matched fence
@@ -14728,7 +15119,7 @@ class ParseSession {
           if (lazyState.opaque?.kind === 'code' &&
               sourceMarker !== undefined && indentColumns(sourceMarker) === 0 &&
               isContinuationMarker(sourceMarker) && follower !== undefined &&
-              !isBlankLine(follower) && indentColumns(follower) === 0) {
+              !isBlankLine(follower) && indentColumns(follower) === 0 && !isListMarkerLine(follower)) {
             if (lexer.peek(afterBlanks) === undefined) lexer.consumedContinuationLines.add(markerLineNumber)
             nested.push(sliceColumns(l, contentCol, true))
             nestedSourceLines.push(l)
@@ -14754,37 +15145,47 @@ class ParseSession {
         // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
         // injects a blank separator so the block parses on its own; the
         // compact-list rule above then keeps the item tight.
-        if (baseIndent === 0 && isContinuationMarker(l) &&
-            isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? l) &&
-            (indentColumns(l) === 0 || refusedPlus(0))) {
+        const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
+        const classifiedMarker = isContinuationMarker(l.slice(leadingWhitespace(l))) ? markerDecision(lexer, lexer.pos) : undefined
+        const plusColumn = sourceColumn(markerSource)
+        const classifiedListOwner = classifiedMarker?.owner?.kind === 'list' &&
+          classifiedMarker.owner.column === plusColumn && classifiedMarker.reason === undefined
+        const listPlusOwner = isContinuationMarker(l.slice(leadingWhitespace(l))) &&
+          isContinuationMarker(sourceQuoteBody(markerSource)) &&
+          (baseIndent === 0 && !quoteIndentHasTab(markerSource, itemQuoteDepth) || classifiedListOwner) &&
+          quotePrefixDepth(markerSource) === itemQuoteDepth &&
+          (plusColumn === itemMarkerColumn || plusColumn === contentCol && classifiedListOwner &&
+            RE_FOOTNOTE_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()) ||
+            plusColumn === contentCol + 1 && classifiedListOwner &&
+              RE_DEFLIST_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()))
+        const candidate = listPlusOwner ? (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] : undefined
+        let follower = candidate ?? ''
+        for (let depth = 0; depth < itemQuoteDepth; depth++) follower = quotedLineText(follower, false) ?? follower
+        const followerColumn = candidate === undefined ? Infinity : sourceColumn(candidate, itemQuoteDepth)
+        const listPlusReason: RefusedContinuationMarker['reason'] | null = !listPlusOwner ? null
+          : candidate === undefined ? 'document'
+            : isBlankLine(follower) ? 'blank'
+              : followerColumn < plusColumn ? 'left'
+                : followerColumn > plusColumn || itemQuoteDepth > 0 && quotePrefixDepth(candidate) > itemQuoteDepth &&
+                  plusColumn === quoteBodyColumn(markerSource, itemQuoteDepth) ? 'right'
+                  : classifiedMarker?.reason === 'sibling' || isListMarkerLine(follower.trimStart()) ? 'sibling' : null
+        if (listPlusReason !== null) lexer.reportRefusedContinuationMarker(lexer.pos, baseIndent + 1, 'list item', listPlusReason)
+        if (listPlusReason === 'sibling' &&
+            (pendingBlanks > 0 || !lazyState.lazyFoldable || lazyState.opaque?.kind === 'code' || descendantOpaque !== null)) break
+        if (listPlusOwner && listPlusReason === null) {
           const rootLines = lexer.rootLines ?? lexer.lines
           const rootFollower = rootLines[lexer.lineNumber(lexer.pos)]
-          if (refusedPlus(0)) {
-            const plusLineIndex = lexer.pos
-            if (lexer.peek(1) === undefined && !/^(?:> ?)+\+/.test(rootLines[lexer.lineNumber(lexer.pos) - 1] ?? '')) {
-              for (let lineNumber = lexer.lineNumber(lexer.pos) + 1;
-                lineNumber <= rootLines.length && isBlankLine(rootLines[lineNumber - 1]!); lineNumber++) {
-                nested.push('')
-                nestedSourceLines.push('')
-                nestedLineNumbers.push(lineNumber)
-              }
-            }
-            lexer.consume()
-            lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
-            continue
-          }
           continuationFenceBreaks.add(nested.length)
+          if (descendantOpaque !== null || lazyState.opaque?.kind === 'code' ||
+              lazyState.deepest?.opaque?.kind === 'code') {
+            authoredDescendantFenceBlanks = pendingBlanks
+            for (const lineNumber of pendingBlankLineNumbers) descendantFenceBlankLines.add(lineNumber)
+          }
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           const plusLineIndex = lexer.pos
           lexer.consume()
           lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
           acceptedPlusLine = plusLineNumber
-          if (isPhysicalContinuationMarker(rootLines[plusLineNumber - 1] ?? '') &&
-              /^(?:[ \t]*(?:[-*] |[0-9]+[.)] ))+(`{3,}|~{3,})/.test([...nested].reverse().find(line => !isBlankLine(line)) ?? '')) {
-            const follower = rootLines[plusLineNumber] ?? ''
-            descendantFenceMarkerBlanks = pendingBlanks + (isBlankLine(follower) ? 0 : 1) +
-              (isListMarkerLine(follower.replace(/^(?:> ?)+/, '')) ? 1 : 0)
-          }
           const detachedFollower = lazyState.opaque?.kind === 'code' &&
             lexer.peek() === undefined && rootFollower !== undefined &&
             !isBlankLine(rootFollower) && indentColumns(rootFollower) === 0 &&
@@ -14792,7 +15193,7 @@ class ParseSession {
           // An accepted marker leaves its buffered blanks in the open fence.
           if (pendingBlanks > 0 && ((lexer.peek() !== undefined && !isBlankLine(lexer.peek()!)) || detachedFollower) &&
               (lazyState.opaque !== null ||
-                (descendantOpaque !== null && !descendantOpaque.markerLine))) {
+                descendantOpaque !== null)) {
             for (let k = 0; k < pendingBlankTexts.length; k++) {
               if (pendingNoteComments.has(k)) noteCommentLines.add(nested.length)
               else bufferedBlanks.add(nested.length + 1)
@@ -14829,7 +15230,7 @@ class ParseSession {
               nestedLineNumbers.push(plusLineNumber)
             }
           }
-          if (detachedFollower && attachesAtDocumentColumnZero(lexer)) {
+          if (detachedFollower && attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth)) {
             const rootLines = lexer.rootLines ?? lexer.lines
             let limit = rootLines.length - plusLineNumber
             for (let k = 1; k < limit; k++) {
@@ -14849,7 +15250,7 @@ class ParseSession {
             }
             continue
           }
-          if (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
+          if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
           lexer.attachmentBoundaries.add(plusLineNumber)
           plusSeparators.add(nested.length)
           nested.push('')
@@ -14863,15 +15264,22 @@ class ParseSession {
           // two of the kinds and for no boundary but the marker, so a blank
           // severed a code fence from its opener and a colon fence severed on
           // every boundary there is.
-          const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent)
+          const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, true, plusColumn, itemQuoteDepth)
+          if (descendantOpaque === null && !nested.some(line => isListMarkerLine(line.trimStart())) &&
+              attachedLines[0] !== undefined &&
+              (RE_FENCE.test(attachedLines[0]) || RE_RAW_FENCE.test(attachedLines[0]))) {
+            authoredDescendantFenceBlanks = 0
+          }
           for (let k = 0; k < attachedLines.length; k++) {
-            nested.push(attachedLines[k]!)
+            const attachedLine = plusColumn > contentCol
+              ? sliceColumns(attachedLines[k]!, plusColumn, true) : attachedLines[k]!
+            nested.push(attachedLine)
             nestedSourceLines.push(attachedLines[k])
             nestedLineNumbers.push(attachedLineNumbers[k]!)
             // The attached block's lines are the item's, so the item's own
             // tracker sees them: what they leave open decides how a later
             // dedented line folds.
-            trackItemLazyState(attachedLines[k]!, lazyState)
+            trackItemLazyState(attachedLine, lazyState)
             if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           }
           if (
@@ -15044,7 +15452,12 @@ class ParseSession {
               // interrupt), so the sub-list nesting path must recognize it
               // directly to keep nesting.
               extractItemAttr(l) !== null)
-          if (isMarker) subListMarkers.add(nested.length)
+          const precedingSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
+          const followsOwnedNoteMarker = precedingSource !== undefined &&
+            isContinuationMarker(sourceQuoteBody(precedingSource)) &&
+            markerDecision(lexer, lexer.pos - 1).owner?.kind === 'footnote' &&
+            markerDecision(lexer, lexer.pos - 1).reason === undefined
+          if (isMarker && !followsOwnedNoteMarker) subListMarkers.add(nested.length)
           // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
           // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
           // leading whitespace is alignment under the quoted item, not source the
@@ -16291,6 +16704,7 @@ class ParseSession {
         if (inFence[k + 1]!) continue
         if (inFootnoteRun[k]!) continue
         if (authoredBlockBlanks.has(k)) continue
+        if (descendantFenceBlankLines.has(nestedLineNumbers[k]!)) continue
         if (!isBlankLine(nested[k])) continue
         // A `+`-injected separator never loosens, even when the block it attaches
         // is a plain paragraph -- it keeps the item tight like a `+`-attached
@@ -16426,6 +16840,7 @@ class ParseSession {
         // I2 says.
         sub.markerOpensSublist = true
         sub.hostBody = 'list'
+        sub.hostMarkerColumn = itemMarkerColumn
         return sub
       }
       const carry: PendingAttrCarry = { attrs: null }
@@ -16459,18 +16874,22 @@ class ParseSession {
         this.captionLineScopes.pop()
       }
 
-      if (descendantFenceMarkerBlanks > 0) {
+      if (authoredDescendantFenceBlanks > 0) {
         let blocks = children
         for (;;) {
           const list = [...blocks].reverse().find(block => block.type === 'list') as List | undefined
           if (!list) break
           blocks = list.items.at(-1)?.children ?? []
         }
-        const code = blocks.at(-1)
+        const code = [...blocks].reverse().find(block => block.type === 'code_block')
         if (code?.type === 'code_block') {
-          const repeatedMarker = /(?:^|\n)\+\n$/.test(code.content)
-          if (repeatedMarker) code.content = code.content.replace(/\+\n$/, '')
-          code.content += '\n'.repeat(Math.max(0, descendantFenceMarkerBlanks - Number(repeatedMarker)))
+          let trailing = 0
+          while (code.content[code.content.length - trailing - 1] === '\n') trailing++
+          const body = code.content.slice(0, code.content.length - trailing)
+          const blanks = trailing - Number(body.length > 0)
+          const missing = authoredDescendantFenceBlanks - blanks
+          if (missing > 0) code.content += '\n'.repeat(missing)
+          else if (missing < 0) code.content = code.content.slice(0, missing)
         }
       }
 
@@ -16946,6 +17365,8 @@ class ParseSession {
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
+      if (lines.length === 1 && startLineIndex === lexer.interruptRefusedSiblingPlusLine &&
+          isListMarkerLine(ln)) break
       // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
       // list, quote, table, fence, thematic break, admonition/div) interrupts
       // an open paragraph with no blank line before it, at the top level AND
@@ -16979,6 +17400,12 @@ class ParseSession {
         break
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
         secondLineLazy = true
+      const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+      if (lexer.hostMarkerColumn !== undefined && sourceColumn(physical) === lexer.hostMarkerColumn && isContinuationMarker(ln) &&
+          (isPhysicalContinuationMarker(physical) || isContinuationMarker(physical.trimStart()))) {
+        lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
+          lexer.hostBody === 'list' ? 'list item' : 'document', 'wrong-column')
+      }
       lexer.consume()
       // The frame did its work in the interruption test above; a paragraph is
       // where a framed line becomes text, so it comes off here.

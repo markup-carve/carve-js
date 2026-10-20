@@ -44,6 +44,7 @@ const IMPLEMENTED = new Set([
   'a-fence-run-that-dedents-out-of-a-child-keeps-the-outer-item-tight',
   'a-lazily-folded-fence-opener-line-does-not-keep-a-list-tight',
   'a-refused-marker-leaves-an-open-fence-s-blank-payload',
+  'a-refused-plus-without-the-inner-quote-prefix-renders-as-text',
   'an-indented-plus-below-a-nested-fence-stays-content-at-every-depth',
   'generated-container-documents',
   'a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence',
@@ -1037,6 +1038,10 @@ const IMPLEMENTED = new Set([
   'the-combined-bold-italic-token-does-not-open-inside-an-open-bare-italic-or-bold',
   // ARRIVED WITH THIS PIN BUMP (spec ae67c6c3).
   'csv-and-tsv-table-bodies',
+  'a-continuation-marker-uses-its-container-column',
+  'a-first-block-marker-on-an-indented-opener-reads-two-columns',
+  'a-refused-continuation-plus-remains-text',
+  'a-task-item-takes-a-first-block-continuation-marker-after-its-checkbox',
 ])
 
 /**

@@ -15,7 +15,9 @@ describe('continuation-marker-refused vectors', () => {
     })
   })
 
-  it('does not mistake a nested lexer boundary for document EOF', () => {
-    expect(lintCarve('* * +\n x\n').filter(w => w.rule === 'continuation-marker-refused')).toEqual([])
+  it('reports an unattached stacked first-block marker', () => {
+    expect(lintCarve('* * +\n x\n').filter(w => w.rule === 'continuation-marker-refused')).toEqual([
+      expect.objectContaining({ line: 1, column: 5, message: expect.stringContaining('item stays empty') }),
+    ])
   })
 })

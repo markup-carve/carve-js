@@ -23,6 +23,7 @@ const htmlTree = (html: string): unknown => {
 
 // Native HTML comes from layout.mjs and html.mjs at spec 3bf1fc98d56012d2a5096c7ff9ee2544028aad34.
 // Rows the carve#3295 fold moved were re-rendered at spec c841b089.
+// Rows the carve#3421 continuation rulings moved were re-rendered at spec f619b320.
 it.each(controls)('preserves multiline verbatim payloads across render and format paths: $source', ({ source, html }) => {
   const expected = htmlTree(html)
   expect(htmlTree(carveToHtml(source))).toEqual(expected)

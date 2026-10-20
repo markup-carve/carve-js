@@ -35,7 +35,7 @@ const cases: Array<[string, string, string]> = [
   [
     'a quote below a quote, item in a blockquote',
     '> - > q\n>\n>   > b\n> Z\n',
-    '> - > q\n> +\n> > b\n> > Z\n',
+    '> - > q\n>\n>   > b\n>   > Z\n',
   ],
   [
     'a quote below a quote, item in a div',

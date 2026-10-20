@@ -51,7 +51,10 @@ describe('a refused continuation marker below an open verbatim fence', () => {
       if (/\n[ \t]+\+\n/.test(source)) {
         expect(html).not.toBe(carveToHtml(withoutPlus(source)))
         expect(html).toContain('+')
-      } else expect(html).toBe(carveToHtml(withoutPlus(source)))
+      } else {
+        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
+        expect(html).toContain('<p>+')
+      }
     })
   }
 
@@ -61,8 +64,11 @@ describe('a refused continuation marker below an open verbatim fence', () => {
       if (/\n[ \t]+\+\n/.test(source)) {
         expect(html).not.toBe(carveToHtml(withoutPlus(source)))
         expect(html).toContain('+')
-      } else expect(html).toBe(carveToHtml(withoutPlus(source)))
-      if (!/\n[ \t]+\+\n/.test(source)) expect(html).toContain(payload)
+      } else {
+        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
+        expect(html).toContain('<p>+')
+      }
+      if (/\n[ \t]+\+\n/.test(source)) expect(html).toContain(payload)
     })
   }
 })
