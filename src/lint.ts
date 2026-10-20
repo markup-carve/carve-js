@@ -1217,6 +1217,10 @@ export function lintCarve(
   const termFoldLines = collectTermFoldWarnings(source, doc, out)
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
   collectOrderedListSplitWarnings(source, doc, out)
+  const splitLines = new Set(out.filter((w) => w.rule === 'ordered-list-split-by-indent').map((w) => w.line))
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i]!.rule === 'list-marker-below-content-column' && splitLines.has(out[i]!.line)) out.splice(i, 1)
+  }
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectRegionMarkerWarnings(source, doc, unrendered, verbatimLines, out)
@@ -1583,6 +1587,30 @@ function collectListItemIndentWarnings(
     if (termFoldLines.has(lineNo)) continue
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    if (!containing && index > 0 && !_unrendered.has(lineNo) && LINT_MARKER_SHAPED.test(authored.rest) &&
+        blockView(lines[index - 1]!, owner?.quoteDepth ?? 0).rest.trim() === '') {
+      const opened = items.filter((item) => item.startLine === lineNo)
+        .sort((a, b) => a.baseColumn - b.baseColumn)[0]
+      const host = opened && items.filter((item) =>
+        item.startLine < lineNo && item.quoteDepth === opened.quoteDepth &&
+        item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn &&
+        lines.slice(item.endLine, index).every((between) =>
+          blockView(between, item.quoteDepth).rest.trim() === ''))
+        .sort((a, b) => b.contentColumn - a.contentColumn)[0]
+      if (host) {
+        const start = (starts[index] ?? 0) + authored.chars
+        out.push({
+          line: lineNo,
+          column: Array.from(lines[index]!.slice(0, authored.chars)).length + 1,
+          rule: 'list-marker-below-content-column',
+          message: `This list marker starts at column ${authored.column} after a blank line, below the content column ${host.contentColumn} of the list item above, so it starts a separate list instead of nesting. Indent it to column ${host.contentColumn} to nest it under the item, or start it at column ${host.baseColumn} to put it at the item's own level.`,
+          start,
+          end: start + (LINT_MARKER_SHAPED.exec(authored.rest)?.[0].length ?? 1),
+        })
+        reported.add(lineNo)
+        continue
+      }
+    }
     if (containing && containing.paragraphLines.has(lineNo) &&
         LINT_MARKER_SHAPED.test(authored.rest) && !_unrendered.has(lineNo)) {
       const markerColumn = Array.from(lines[index]!.slice(0, authored.chars)).length + 1
