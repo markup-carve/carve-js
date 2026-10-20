@@ -105,6 +105,30 @@ describe('ParseOptions.positions', () => {
     stripPositionFields(positioned)
     expect(suppressed).toEqual(positioned)
   })
+
+  it('keeps adjacent list items identical when positions are omitted', () => {
+    const sources = [
+      '- a [link](https://example.com)\n- b\n',
+      '1. a\n2. b\n',
+      '- [ ] a\n- [x] b\n',
+      '- - nested\n- sibling\n',
+      '- ::: note\n- sibling\n',
+      '- a\n* b\n',
+      '1. a\n2) b\n',
+      '- [ ] a\n- b\n',
+      '- a\n- - -\n',
+      '-   a\n- b\n',
+      '-\ta\n- b\n',
+      '- a\n  - b\n',
+      '- a {.x}\n- b\n',
+      '- a\n- b\n- c\n',
+    ]
+    for (const source of sources) {
+      const positioned = parse(source)
+      stripPositionFields(positioned)
+      expect(parse(source, { positions: false })).toEqual(positioned)
+    }
+  })
 })
 
 describe('the entry points that read positions force them back on', () => {

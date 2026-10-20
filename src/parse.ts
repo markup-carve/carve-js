@@ -13997,6 +13997,24 @@ class ParseSession {
       const leadOrigin = terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
       const itemAttrs = la ? la.attrs : undefined
 
+      // A plain lead followed immediately by a compatible sibling has no
+      // continuation lines to collect. Parse its one-line body as an ordinary
+      // nested block stream, while the next loop iteration owns the sibling.
+      const nextLine = lexer.peek(1)
+      if (!this.recordPositions && this.activeMatchers.length === 0 && !la &&
+          content.length > 0 && !RE_FIRST_BLOCK_MARKER.test(content) &&
+          nextLine !== undefined && indentColumns(nextLine, baseIndent + 1) === baseIndent &&
+          matchListMarker(nextLine, isTask, isOrdered) !== null &&
+          (isOrdered ? orderedContinues(nextLine, orderedKind, orderedDelim) : unorderedMarkerChar(nextLine) === firstMarkerChar)) {
+        lexer.consume()
+        const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)])
+        const item: ListItem = { type: 'list_item', children: this.parseBlocks(sub, 0) }
+        if (checked !== undefined) item.checked = checked
+        if (taskState !== undefined) item.taskState = taskState
+        items.push(item)
+        continue
+      }
+
       // item (continuation paragraphs or nested lists). Visual content column:
       // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
       // `{...}` block is item metadata and contributes zero, so changing a class
