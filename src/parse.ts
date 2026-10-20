@@ -7151,14 +7151,27 @@ function openVerbatimRun(text: string, from = 0): number {
  * Split a table row into cells, reporting where each one STARTS in the line.
  *
  * The start index is what lets a cell carry a real span (PART 12 section 4)
- * instead of none. The cell TEXT is still built character by character, because
- * `\|` is two source characters for one content character - so the text is not
- * always a verbatim slice even though its start always is.
+ * instead of none. Rows with escapes or verbatim spans need a character scan;
+ * ordinary rows can slice cells directly from the source.
  */
 export function splitTableRowSpans(
   line: string,
   carried?: readonly number[],
 ): Array<{ text: string; start: number }> {
+  if (carried === undefined && !line.includes('\\') && !line.includes('`')) {
+    const cells: Array<{ text: string; start: number }> = []
+    const begin = line[0] === '|' || line[0] === '+' ? 1 : 0
+    const bodyEnd = trimEndSpaceTab(line).length
+    const scanEnd = bodyEnd > begin && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
+    let start = begin
+    for (let pipe = line.indexOf('|', start); pipe !== -1 && pipe < scanEnd; pipe = line.indexOf('|', start)) {
+      cells.push({ text: line.slice(start, pipe), start })
+      start = pipe + 1
+    }
+    const last = line.slice(start, scanEnd)
+    if (scanEnd < line.length || trimStructural(last) !== '') cells.push({ text: last, start })
+    return cells
+  }
   const cells: Array<{ text: string; start: number }> = []
   let buf = ''
   let cellIndex = 0
