@@ -162,6 +162,14 @@ describe('Markdown construct assessment', () => {
     expect(assessMarkdown('**strong**', 'wrong').complete).toBe(false)
     expect(assessMarkdown('a  b', 'a b').complete).toBe(false)
   })
+
+  it('reports a body cell past the header width as dropped', () => {
+    expect(rows('| h |\n| --- |\n| x | extra |').map(row => [row.code, row.fidelity, row.path])).toEqual([
+      ['fidelity-unverified', 'dropped', undefined],
+      ['markdown-table-extra-cells', 'dropped', 'line:3'],
+    ])
+    expect(rows('| h |\n| --- |\n| x | |').map(row => row.code)).toEqual(['fidelity-unverified'])
+  })
 })
 
 // Native cmark-gfm autolink output contains a link for every protocol spelling here.
