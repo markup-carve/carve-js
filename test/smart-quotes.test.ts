@@ -30,6 +30,12 @@ describe('smartQuotes locale extension', () => {
       .toContain('[[Hello]] ‚bye‘')
   })
 
+  it('restores a custom NUL quote glyph inside a line block', () => {
+    const options = { extensions: [smartQuotes({ openDoubleQuote: 'a\0b' })] }
+    const ast = JSON.stringify(carveToAstJson('::: |\nsay "hi"\n:::', options))
+    expect(ast).toContain('a\u00a0b')
+  })
+
   it('keeps apostrophes locale-independent', () => {
     const options = { extensions: [smartQuotes({ locale: 'de' })] }
     expect(carveToHtml("don't and the '70s and 'linked'", options))
