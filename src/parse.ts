@@ -17252,7 +17252,17 @@ class ParseSession {
         // first item (carve-js#1938); a later sibling sub-list brings its own
         // column (carve-js#1951).
         const subCol = subListColumnAt(k)
-        if (subCol >= 0 && indentColumns(beforeRebase[j]!, subCol) >= subCol) continue
+        // A tab is measured from the authored source column. Rebasing the line
+        // to the item body resets its tab stop, so its local width can make an
+        // outer paragraph appear to reach the sub-list's content column.
+        const sourceSubColumn = itemMarkerColumn + contentCol - baseIndent + subCol
+        const reachesSubList = (at: number): boolean => {
+          const source = nestedSourceLines[at]
+          return source?.includes('\t')
+            ? sourceColumn(source, itemQuoteDepth) >= sourceSubColumn
+            : indentColumns(beforeRebase[at]!, subCol) >= subCol
+        }
+        if (subCol >= 0 && reachesSubList(j)) continue
         // AN INVISIBLE BLOCK THE SUB-LIST HOLDS MAKES THE BLANK THE SUB-LIST'S
         // TOO (markup-carve/carve-js#2243). The skip above looks past a comment to
         // find the paragraph §17 L1 asks for, and looking past one the CHILD holds
@@ -17265,7 +17275,7 @@ class ParseSession {
         // Asked of the line the blank's own sequence resumes at, which the walk
         // above already visited, so an item without a blank pays nothing.
         if (resumesAt >= 0 && resumesAt !== j && subCol >= 0 &&
-          indentColumns(beforeRebase[resumesAt]!, subCol) >= subCol) continue
+          reachesSubList(resumesAt)) continue
         // `j` can no longer be an invisible line (skipped above), so this is the
         // plain "is the next visible thing a paragraph" test it always was.
         //
