@@ -15454,11 +15454,12 @@ class ParseSession {
         // written to exercise exactly that state, so it is not carried here as a
         // condition that cannot fire.
         if (nested.length === 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) delete lazyState.literalColon
-        const quoteParagraphMarker = pendingBlanks === 0 && lw > baseIndent && isListMarkerLine(l) &&
+        const quoteParagraphMarker = pendingBlanks === 0 && lw > baseIndent &&
           !captionParagraphClaim && (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen) &&
+          isListMarkerLine(l) &&
           !RE_BLOCKQUOTE.test(l.trimStart())
-        const captionParagraphMarker = pendingBlanks === 0 && lw > baseIndent && isListMarkerLine(l) &&
-          captionParagraphClaim
+        const captionParagraphMarker = pendingBlanks === 0 && lw > baseIndent && captionParagraphClaim &&
+          isListMarkerLine(l)
         const captionParagraphFollower = captionParagraphClaim && pendingBlanks === 0 &&
           indentColumns(l, contentCol + 1) > contentCol &&
           lineOpensItemBlock(l.trimStart())
@@ -15818,14 +15819,18 @@ class ParseSession {
           closedDescendantFence = false
           openedLaterNoteFence = false
           const wasMarkerDescriptionCode = markerDescriptionCodeTracked && lazyState.opaque?.kind === 'code'
-          const claimHostColumn = lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined
-            ? contentCol + lazyState.descriptionColumn : contentCol
-          const hadQuoteParagraph = insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen
-          const itemOwnsQuote = !lazyState.inFootnoteBody && nestedNoteBodyColumn === undefined &&
+          const atItemColumn = lw === contentCol && placed[0] !== ' ' && placed[0] !== '\t'
+          const captionAtItemColumn = atItemColumn && RE_CAPTION.test(trackedContent)
+          const hadQuoteParagraph = captionAtItemColumn &&
+            (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen)
+          const authoredQuoteLead = unindented[0] === '>' && trackedContent === dedented &&
+            !RE_BLOCKQUOTE.test(dedented) && RE_BLOCKQUOTE.test(unindented)
+          const itemOwnsQuote = authoredQuoteLead && !lazyState.inFootnoteBody && nestedNoteBodyColumn === undefined &&
             (authoredQuoteClaim !== null || lazyState.quoteInner === null && lazyState.ownedColumn < 0 && !insideOpenFence(lazyState) &&
               !lazyState.inlineFenceParagraph && descendantOpaque === null)
-          const atItemColumn = lw === contentCol && placed[0] !== ' ' && placed[0] !== '\t'
-          if (!insideOpenQuoteParagraph(lazyState) && authoredQuoteClaim === null &&
+          const claimHostColumn = itemOwnsQuote && lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined
+            ? contentCol + lazyState.descriptionColumn : contentCol
+          if (lazyState.quoteInner !== null && !insideOpenQuoteParagraph(lazyState) && authoredQuoteClaim === null &&
               !RE_BLOCKQUOTE.test(unindented) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && !quoteParagraphMarker) {
             lazyState.quoteInner = null
@@ -15874,7 +15879,7 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
-          if (atItemColumn && RE_CAPTION.test(trackedContent)) {
+          if (captionAtItemColumn) {
             captionParagraphClaim = hadQuoteParagraph
             lazyState.quoteInner = null
             authoredQuoteClaim = null
@@ -15885,8 +15890,7 @@ class ParseSession {
             authoredQuoteClaim = null
             authoredQuoteParagraphOpen = false
           }
-          const authoredQuote = itemOwnsQuote && trackedContent === dedented &&
-            !RE_BLOCKQUOTE.test(dedented) && RE_BLOCKQUOTE.test(unindented)
+          const authoredQuote = itemOwnsQuote
           if (authoredQuote) {
             captionParagraphClaim = false
             if (authoredQuoteClaim !== null && authoredQuoteHostColumn === claimHostColumn) {
