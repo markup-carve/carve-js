@@ -9,9 +9,18 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-## [0.1.13] - 2026-10-19
+## [0.1.13] - 2026-10-21
 
 ### Fixes
+- Nested items keep their owner across open fences, lazy quote lines, and relative continuation markers. Blank lines before an accepted marker stay inside the fence (#3279, #3281, #3282, #3285, #3289, #3291, #3338, #3340).
+- Description terms, footnote bodies, and quoted paragraphs stop at their authored columns. Openers that leave a child return to the surviving list or description owner (#3344, #3345, #3346, #3347, #3350, #3351, #3353, #3354, #3360, #3364, #3365, #3366).
+- Stacked task items, nested quotes, and tabbed followers retain their source columns and list owners after a footnote or description closes (#3370, #3371, #3372, #3373, #3374, #3375, #3376, #3377, #3378, #3381, #3382, #3386).
+- List looseness follows the item that owns each folded fence, unclosed inline span, or blank-separated block. Quoted definitions and descriptions no longer keep closed child items alive (#3397, #3399, #3407, #3410, #3413, #3414, #3420, #3423, #3424).
+- AST positions follow authored source boundaries for nested lists, carried closers, admonitions, and interior literal payload newlines; plain HTML conversion omits positions it cannot justify (#3280, #3343, #3394, #3404, #3419).
+- Lint reports unclosed fences, refused continuation markers, ordered-list column traps, dropped table cells, and markers below an item's content column; it does not warn on a `+` consumed by an open fence (#3284, #3298, #3300, #3305, #3311, #3363, #3389).
+- HTML and Markdown import preserve Unicode letters in borrowed layouts, autolink fallback brackets, destination characters, escaped table pipes, and unlinked bracket text. Table and autolink loss reports cover the affected shapes (#3274, #3275, #3286, #3288, #3296, #3304, #3308).
+- Markdown import keeps blanks below nested lists, non-interrupting markers, nested container lines, and quoted tilde fences. Its output uses the canonical Carve writer (#3316, #3336, #3349, #3352, #3383, #3405, #3428).
+- The writer escapes a lone continuation marker that would attach below a sub-list, lays out dedent-ended nested fences canonically, and keeps a guarded em-dash line as text in a loose list (#3367, #3406, #3427).
 - Carve includes recognize only `%% #region` markers; bare and code-style markers no longer select a region in a Carve file (#3239; markup-carve/carve#3319).
 - Nested fences and quotes keep their proper content and end at the right container; an attached caption no longer loosens its list (#3230, #3235, #3262; markup-carve/carve#3305, markup-carve/carve#3364).
 - A caption after a `+`-attached code, raw or plain `::: figure` fence stays with that fence. A fence-looking line folded into a child item's paragraph no longer keeps the list tight, and a fence run folded into a child paragraph loosens the outer item (#3268, #3269, #3271; markup-carve/carve#3369, markup-carve/carve#3370, #3267).
@@ -27,6 +36,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `carve lint --include-root` checks included content; `lintIncludes` is available to library callers (#3252; markup-carve/carve#3339).
 - Lint warns on near misses of consumed attribute keys with `consumed-key-near-miss` (#3232).
 - Markdown migration rewrites unambiguous case-only heading fragments and reports them as `link-fragment-case-rewritten` (#3245, #3248; markup-carve/carve#3323).
+
+### Performance
+- Adjacent list items, links, short text, table rows, fence closers, line-block gaps, footnotes, and ordinary list lines avoid repeated parser scans (#3292, #3293, #3294, #3297, #3301, #3307, #3313, #3315, #3348).
+
+### Internal
+- Parser lexer, list state, bracket and inline scanners, table handlers, and core sessions moved into smaller modules without changing the public parse API (#3384, #3385, #3387, #3390, #3391, #3398, #3400, #3416, #3426).
 
 ## [0.1.12] - 2026-10-15
 
