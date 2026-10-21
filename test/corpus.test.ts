@@ -1048,6 +1048,7 @@ const IMPLEMENTED = new Set([
   'a-first-block-marker-on-an-indented-opener-reads-two-columns',
   'a-refused-continuation-plus-remains-text',
   'a-task-item-takes-a-first-block-continuation-marker-after-its-checkbox',
+  'a-lazy-colon-shaped-line-in-a-quote-paragraph-keeps-no-indentation',
 ])
 
 /**
