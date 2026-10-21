@@ -45,8 +45,8 @@ import {
 import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, EXTENDER_LEADING_SPAN_UNSPELLABLE, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { extendsGrapheme } from './grapheme-extender.js'
 import { opensFrontmatter, parse, rawImageBracketRunCloses } from './parse.js'
-import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, canonicalQuoteBodyLines, dropTrailingWs, emphasisNeedsBraces, escapeQuoted, escapeSpanMarkerPayload, foldEmptyItemBody, listContinuationWidth, padCell, paragraphLineText, quoteAttrValue, renderCarve, spellCodeSpan } from './render-carve.js'
-import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
+import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, canonicalQuoteBodyLines, dropTrailingWs, emphasisNeedsBraces, escapeQuoted, escapeSpanMarkerPayload, foldEmptyItemBody, listContinuationWidth, padCell, paragraphLineText, quoteAttrValue, renderCarve, spellCodeSpan, trimHeadingText } from './render-carve.js'
+import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -3826,6 +3826,7 @@ function isParagraphRunLine(
 type PrefixedInlineLine = {
   prefix: string
   text: string
+  hadLeadingTab?: boolean | undefined
   // Continues the paragraph above lazily or from four columns past its
   // container, so it cannot be the delimiter row of a table.
   continued?: boolean | undefined
@@ -3900,8 +3901,52 @@ type OpenList = {
   restart?: boolean
 }
 
-type EmissionStack = { listDepth: number; quoteDepth: number; prefix: string; afterCode?: boolean }
-type EmissionKind = 'paragraph' | 'marker' | 'verbatim' | 'blank' | 'separator'
+type EmissionHost = { kind: 'list' | 'quote'; markerColumn: number; contentColumn: number }
+type EmissionStack = { listDepth: number; quoteDepth: number; prefix: string; hosts?: readonly EmissionHost[]; afterCode?: boolean }
+type EmissionKind = 'paragraph' | 'marker' | 'verbatim' | 'blank' | 'separator' | 'heading' | 'break' | 'definition'
+
+function stripOptionalQuoteIndent(line: string): string {
+  let at = 0
+  while (at < 3 && (line[at] === ' ' || line[at] === '\t')) at++
+  return at > 0 && line[at] === '>' ? line.slice(at) : line
+}
+
+function isSolidMarkerRun(text: string): boolean {
+  return text.length >= 3 && [...text].every(char => '-*_'.includes(char))
+}
+
+function isSolidThematic(text: string): boolean {
+  return isSolidMarkerRun(text) && RE_MD_THEMATIC.test(text)
+}
+
+function isAsciiAlphanumeric(char: string | undefined): boolean {
+  if (char === undefined) return false
+  const code = char.charCodeAt(0)
+  return code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122
+}
+
+/** Tokens in a rendered chain of list and quote hosts. */
+const RE_EMISSION_HOST = /(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+|[ \t]+)/g
+
+/** A reference title using single quotes after a destination. */
+const RE_SINGLE_QUOTED_DEFINITION = /^(\[[^\[\]\\\n]+\]:[ \t]*(?:<[^>\n]*>|\S+)[ \t]+)'([^'&\\\n]*)'$/
+
+/** Space slack that a list marker may relinquish. */
+const RE_FREE_MARKER_PADDING = /^ {2,4}(?=\S)/
+
+function emissionHosts(prefix: string): EmissionHost[] {
+  const hosts: EmissionHost[] = []
+  let column = 0
+  for (const token of prefix.matchAll(RE_EMISSION_HOST)) {
+    const marker = token[0]
+    if (marker.startsWith('>') || RE_ITEM_LINE.test(marker)) {
+      hosts.push({ kind: marker.startsWith('>') ? 'quote' : 'list', markerColumn: column,
+        contentColumn: column + columnWidth(marker) })
+    }
+    column += columnWidth(marker)
+  }
+  return hosts
+}
 
 /** Assemble a line while its body and container context are still separate. */
 function emitContainerLine(
@@ -3911,7 +3956,7 @@ function emitContainerLine(
   marker?: { lead: string; text: string; tail: string; paddingFree: boolean; ordered: boolean },
 ): { line: string; continuationWidth: number } {
   if (kind === 'marker' && marker !== undefined) {
-    const pad = marker.paddingFree ? (/^ {2,4}(?=\S)/.exec(marker.tail)?.[0].length ?? 1) : 1
+    const pad = marker.paddingFree ? (RE_FREE_MARKER_PADDING.exec(marker.tail)?.[0].length ?? 1) : 1
     return {
       line: marker.lead + marker.text + marker.tail.slice(pad - 1),
       continuationWidth: listContinuationWidth(marker.text + ' ', marker.ordered) - pad,
@@ -3919,8 +3964,22 @@ function emitContainerLine(
   }
   if (kind === 'separator') return { line: stack.prefix, continuationWidth: 0 }
   if (kind === 'blank') return { line: stack.quoteDepth > 0 ? stack.prefix.trimEnd() : stack.prefix, continuationWidth: 0 }
+  if (kind === 'heading') {
+    const heading = RE_MD_HEADING_OPENER.exec(body)
+    if (heading) return { line: `${heading[0].trimEnd()} ${trimHeadingText(body.slice(heading[0].length))}`, continuationWidth: 0 }
+  }
+  if (kind === 'break' && RE_MD_THEMATIC.test(body)) {
+    const marker = RE_MD_THEMATIC.exec(body)?.[1] as '-' | '*' | '_' | undefined
+    return { line: thematicBreakSpelling(marker, null), continuationWidth: 0 }
+  }
+  if (kind === 'definition' && stack.quoteDepth > 0) {
+    const match = RE_SINGLE_QUOTED_DEFINITION.exec(body)
+    if (match) return { line: `${match[1]}"${escapeQuoted(match[2]!)}"`, continuationWidth: 0 }
+  }
   // The writer drops paragraph slack at the document edge and after quoted code.
-  if (kind === 'paragraph' && stack.listDepth === 0 && (stack.quoteDepth === 0 || stack.afterCode))
+  const atHostContent = stack.hosts !== undefined && stack.hosts.every(host =>
+    host.markerColumn < host.contentColumn && host.contentColumn <= columnWidth(stack.prefix))
+  if (kind === 'paragraph' && (atHostContent || stack.listDepth === 0 && (stack.quoteDepth === 0 || stack.afterCode)))
     return { line: paragraphLineText(body), continuationWidth: 0 }
   return { line: body, continuationWidth: 0 }
 }
@@ -3998,7 +4057,7 @@ class ListMarkers {
    * `outer` is how far the marker line itself moves, `shift` how far the lines
    * the item holds do.
    */
-  write(line: string, paddingIsFree = false, paragraphOpen = false, paragraphColumn = 0): { line: string; separate: boolean; outer: number; shift: number } {
+  write(line: string, paddingIsFree = false, nestedPaddingIsFree = false, paragraphOpen = false, paragraphColumn = 0): { line: string; separate: boolean; outer: number; shift: number } {
     if (!opensInterruptingItem(line, paragraphOpen, paragraphColumn)) return { line, separate: false, outer: 0, shift: 0 }
     const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
     if (!m) return { line, separate: false, outer: 0, shift: 0 }
@@ -4033,20 +4092,35 @@ class ListMarkers {
     }
     const content = columnWidth(RE_LIST_MARKER.exec(line)?.[0] ?? m[0])
     const own = RE_LIST_MARKER.exec(line)?.[0].length ?? m[0].length
+    const nested = nestedItemsOnLine(line, own)
+    let nestedLine = respellNestedBullets(line, own)
+    if (nestedPaddingIsFree) for (const inner of [...nested].reverse()) {
+      const sourceMarker = line.slice(inner.marker, inner.end).trimEnd()
+      const start = inner.marker + sourceMarker.length
+      const tail = nestedLine.slice(start)
+      nestedLine = nestedLine.slice(0, inner.marker) + emitContainerLine('', 'marker', {
+        listDepth: this.open.length + 1, quoteDepth: 0, prefix: '',
+      }, { lead: '', text: nestedLine.slice(inner.marker, start), tail, paddingFree: true, ordered: inner.number !== undefined }).line
+    }
     const emitted = emitContainerLine('', 'marker', { listDepth: this.open.length, quoteDepth: 0, prefix: '' }, {
-      lead: m[1]!, text: marker, tail: respellNestedBullets(line, own).slice(m[0].length),
+      lead: m[1]!, text: marker, tail: nestedLine.slice(m[0].length),
       paddingFree: paddingIsFree, ordered: m[3] !== undefined,
     })
     const shift = outer + emitted.continuationWidth - (m[0].length - m[1]!.length)
     this.open.push({ col, content, shift, outer, kind, bullet, next })
     // Items the first line nests (`- - a`) are written as they are, and move
     // with this one.
-    for (const inner of nestedItemsOnLine(line, own)) {
+    let nestedShrink = 0
+    for (const inner of nested) {
+      const sourceMarker = line.slice(inner.marker, inner.end).trimEnd()
+      const pad = inner.end - inner.marker - sourceMarker.length
+      const innerOuter = shift - nestedShrink
+      if (nestedPaddingIsFree) nestedShrink += Math.max(0, pad - 1)
       this.open.push({
         col: inner.col,
         content: inner.content,
-        shift,
-        outer: shift,
+        shift: shift - nestedShrink,
+        outer: innerOuter,
         kind: inner.kind,
         bullet: inner.bullet === '+' ? '-' : (inner.bullet ?? ''),
         next: inner.number === undefined ? 0 : Number(inner.number) + 1,
@@ -4106,6 +4180,18 @@ function nestedItemsOnLine(
     })
     at += m[0].length
   }
+}
+
+function nestedMarkerPaddingIsFree(first: string, following: ReadonlySet<number>): boolean {
+  const own = RE_LIST_MARKER.exec(first)?.[0].length ?? 0
+  let shrink = 0
+  for (const item of nestedItemsOnLine(first, own)) {
+    const marker = first.slice(item.marker, item.end).trimEnd()
+    shrink += Math.max(0, item.end - item.marker - marker.length - 1)
+    if (shrink === 0) continue
+    for (let col = item.content - shrink; col < item.content; col++) if (following.has(col)) return false
+  }
+  return true
 }
 
 /**
@@ -4349,9 +4435,22 @@ function restorePrefixedInlineRun(
   const modellable = held.every(
     (part) => !RE_LIST_MARKER.test(part.body) && !/^[ \t]/.test(part.body),
   )
-  if (!modellable) return run.map((part, idx) => part.prefix + emitContainerLine(converted[idx] ?? '', 'verbatim', {
-    listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(part.prefix), prefix: part.prefix,
-  }).line)
+  if (!modellable) return run.map((part, idx) => {
+    const line = converted[idx] ?? ''
+    const quoted = peelQuoteMarkers(line)
+    const source = peelQuoteMarkers(part.text)
+    if (RE_LIST_MARKER.test(part.prefix) && quoted.marker !== '' && source.marker !== '' &&
+      indentColumns(source.body) < 4 &&
+      isAsciiAlphanumeric(source.body.trimStart()[0])) {
+      const prefix = part.prefix + quoted.marker
+      return prefix + emitContainerLine(quoted.body, 'paragraph', {
+        listDepth: 1, quoteDepth: quoteDepth(prefix), prefix, hosts: emissionHosts(prefix),
+      }).line
+    }
+    return part.prefix + emitContainerLine(line, 'verbatim', {
+      listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(part.prefix), prefix: part.prefix,
+    }).line
+  })
 
   const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`)
   const inTable = containerTableRows(run)
@@ -4369,10 +4468,18 @@ function restorePrefixedInlineRun(
         sourceItem(peelQuoteMarkers(opener.slice(0, prefix.length)).body) !== null) out.push(opener.trimEnd() + ' +')
     return prefix
   }
+  let activeFence: { marker: string; width: number } | null = null
   for (let idx = 0; idx < run.length; idx++) {
     const part = run[idx]!
     const line = converted[idx] ?? ''
-    if (inTable[idx]) {
+    const sourceFence = RE_MD_FENCE_LINE.exec(held[idx]!.body)
+    const closesFence = activeFence !== null && sourceFence !== null &&
+      sourceFence[2]![0] === activeFence.marker && sourceFence[2]!.length >= activeFence.width && sourceFence[3]!.trim() === ''
+    const opensFence = activeFence === null && sourceFence !== null && fenceRunIsAFence(sourceFence[2]!, sourceFence[3]!)
+    const insideFence = activeFence !== null || opensFence
+    if (opensFence) activeFence = { marker: sourceFence![2]![0]!, width: sourceFence![2]!.length }
+    else if (closesFence) activeFence = null
+    if (inTable[idx] && !insideFence) {
       // The same rows the document-level table branch writes: a native `|=`
       // header in place of the header and delimiter rows, then each body row
       // rebuilt, so a table a container holds is canonical too.
@@ -4428,9 +4535,40 @@ function restorePrefixedInlineRun(
     const { marker } = held[idx]!
     const body = line.startsWith(marker) ? line.slice(marker.length) : peelQuoteMarkers(line).body
     const kept = line.slice(0, line.length - body.length)
-
-    out.push(openingPrefix(part.prefix + kept) + emitContainerLine(isStandardTableRow(body) ? keepPipeRowLiteral(body) : body, 'paragraph', {
-      listDepth: 1, quoteDepth: quoteDepth(part.prefix) + quoteDepth(kept), prefix: part.prefix + kept,
+    const sourceBody = held[idx]!.body
+    const kind: EmissionKind = insideFence || body === '' || isMarkdownFenceLine(body) ? 'verbatim'
+      : RE_CARVE_HEADING_OPENER.test(sourceBody) && RE_CARVE_HEADING_OPENER.test(body) ? 'heading'
+      : isSolidThematic(sourceBody.trim()) && isSolidMarkerRun(body.trim()) ? 'break' : 'paragraph'
+    let writtenBody = !insideFence && isStandardTableRow(body) ? keepPipeRowLiteral(body) : body
+    const nestedQuote = peelQuoteMarkers(writtenBody)
+    const previousHeld = held[idx - 1]
+    const previousQuote = previousHeld === undefined ? null : peelQuoteMarkers(previousHeld.body)
+    const quotedHeading = !insideFence && previousHeld !== undefined && quoteDepth(marker) > 0 &&
+      previousHeld.marker === marker && RE_CARVE_HEADING_OPENER.test(previousHeld.body) &&
+      columnWidth(run[idx - 1]!.prefix) === columnWidth(part.prefix)
+    const nestedHeading = !insideFence && previousQuote !== null && previousQuote.marker !== '' &&
+      previousQuote.marker === nestedQuote.marker && RE_CARVE_HEADING_OPENER.test(previousQuote.body) &&
+      part.prefix === run[idx - 1]?.prefix && columnWidth(previousHeld!.marker) === columnWidth(marker)
+    if (quotedHeading || nestedHeading) {
+      const prefix = quotedHeading ? part.prefix + marker : part.prefix + kept + nestedQuote.marker
+      out.push(emitContainerLine('', 'blank', {
+        listDepth: 1, quoteDepth: quoteDepth(prefix), prefix, hosts: emissionHosts(prefix),
+      }).line)
+    }
+    if (kind === 'paragraph' && (RE_LIST_MARKER.test(part.text) || RE_LIST_MARKER.test(part.prefix))) {
+      const nested = peelQuoteMarkers(writtenBody)
+      if (nested.marker !== '' && isAsciiAlphanumeric(nested.body.trimStart()[0])) {
+        writtenBody = nested.marker + emitContainerLine(nested.body, 'paragraph', {
+          listDepth: 1, quoteDepth: quoteDepth(part.prefix) + quoteDepth(nested.marker),
+          prefix: part.prefix + kept + nested.marker,
+          hosts: emissionHosts(part.prefix + kept + nested.marker),
+        }).line
+      }
+    }
+    out.push(openingPrefix(part.prefix + kept) + emitContainerLine(writtenBody, kind, {
+      listDepth: RE_LIST_MARKER.test(kept) ? 1 : 0,
+      quoteDepth: quoteDepth(part.prefix) + quoteDepth(kept), prefix: part.prefix + kept,
+      hosts: emissionHosts(part.prefix + kept),
     }).line)
   }
   return out
@@ -4687,7 +4825,7 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
  * `text` instead, a tab after a quoted item's marker lost the columns the
  * quote marker stood in, and five columns of padding read as three.
  */
-function quotedLine(line: string, contentCol: number, nestedIndent = contentCol > 0 ? 3 : 1): { prefix: string; text: string } | null {
+function quotedLine(line: string, contentCol: number, nestedIndent = contentCol > 0 ? 3 : 1): { prefix: string; text: string; hadLeadingTab: boolean } | null {
   let rest = stripColumns(line, contentCol)
   const slack = /^[ \t]{1,3}(?=>)/.exec(rest)?.[0] ?? ''
   let col = advanceColumns(contentCol, slack)
@@ -4702,7 +4840,8 @@ function quotedLine(line: string, contentCol: number, nestedIndent = contentCol 
     prefix += '> '
   }
   if (prefix === '') return null
-  return { prefix, text: rest.includes('\t') ? expandItemLead(rest, col) : rest }
+  return { prefix, text: rest.includes('\t') ? expandItemLead(rest, col) : rest,
+    hadLeadingTab: rest.slice(0, rest.indexOf('\t')).trim() === '' && rest.includes('\t') }
 }
 
 /** `col` advanced over `text`, a tab reaching the next four-column stop. */
@@ -4721,7 +4860,7 @@ function expandItemLead(text: string, col: number): string {
     col = advanceColumns(col, ws)
     return ' '.repeat(col - from)
   }
-  const indent = /^[ \t]*/.exec(text)![0]
+  const indent = text.slice(0, text.length - text.trimStart().length)
   let out = spaces(indent)
   let at = indent.length
   for (;;) {
@@ -4799,7 +4938,7 @@ function collectBlockquoteInlineRun(
 } {
   const pad = ' '.repeat(contentCol)
   const strip = (line: string): string =>
-    stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
+    stripOptionalQuoteIndent(stripColumns(line, contentCol))
   const run: PrefixedInlineLine[] = []
   let end = start
   // The open fence's quote prefix, closer, and the content column of the item
@@ -4968,8 +5107,17 @@ function collectBlockquoteInlineRun(
   const afterCode = contentCol === 0 && priorQuote !== null && priorBody !== null &&
     (indentColumns(priorBody.body) >= 4 || RE_MD_FENCE_LINE.exec(priorBody.body.trimStart())?.[3]?.trim() === '')
   const quoteEnds = end === lines.length || quotedLine(lines[end]!, contentCol) === null
+  const last = run.at(-1)
+  const lastMarkerItem = last === undefined ? null : quotedItemLead(last.text)
+  let next = end
+  while (next < lines.length && quotedLine(lines[next]!, contentCol)?.text.trim() === '') next++
+  const resumed = next < lines.length ? quotedLine(lines[next]!, contentCol) : null
+  const resumedIndent = resumed === null ? 0 : indentColumns(resumed.text)
+  const paddingFreeAtBlank = lastMarkerItem !== null && last !== undefined && resumed?.prefix === last.prefix &&
+    (resumedIndent >= columnWidth(lastMarkerItem.lead) ||
+      !resumed.hadLeadingTab && resumedIndent < 4 && isAsciiAlphanumeric(resumed.text.trimStart()[0]))
   return {
-    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode), dialect), markers, quoteEnds), dialect)
+    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l)),
@@ -5114,6 +5262,12 @@ function respellQuotedBlocks(
   quoteEnds: boolean,
 ): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
+  const indentsByPrefix = new Map<string, Set<number>>()
+  for (const part of run) {
+    let columns = indentsByPrefix.get(part.prefix)
+    if (columns === undefined) indentsByPrefix.set(part.prefix, columns = new Set())
+    if (part.text.trim() !== '') columns.add(indentColumns(part.text))
+  }
   // The open fence's closer, or null outside one, and the content column of
   // the item whose own line opened it (0 for none).
   let closer: RegExp | null = null
@@ -5158,7 +5312,9 @@ function respellQuotedBlocks(
       continue
     }
     if (closer !== null) {
-      out.push(moved(part))
+      const carried = moved(part)
+      out.push(closerCol > 0 && carried.text.trim() === '' && columnWidth(carried.text) === closerCol
+        ? { ...carried, text: stripColumns(carried.text, closerCol) } : carried)
       if (closer.test(stripColumns(part.text, closerCol))) {
         closer = null
         afterFence = true
@@ -5246,9 +5402,15 @@ function respellQuotedBlocks(
       const next = run[at]
       paddingIsFree = next === undefined
         ? quoteEnds
-        : next.prefix !== part.prefix || (RE_ITEM_LINE.test(next.text) && indentColumns(next.text) <= markerCol + 3)
+        : next.prefix !== part.prefix || opensParagraph(part.text.replace(RE_LIST_MARKER, '')) &&
+          indentColumns(next.text) < content && !next.continued ||
+          (RE_ITEM_LINE.test(next.text) && indentColumns(next.text) <= markerCol + 3)
     }
-    const written = asText ? { line: part.text, separate: false, outer: 0 } : list.write(nestedEmptyPlusItem(part.text), paddingIsFree || ordered !== null && quoteDepth(part.prefix) > 0, quoteParagraphOpen, holder?.content ?? 0)
+    const written = asText ? { line: part.text, separate: false, outer: 0 } : list.write(
+      nestedEmptyPlusItem(part.text), paddingIsFree || ordered !== null && quoteDepth(part.prefix) > 0,
+      nestedMarkerPaddingIsFree(part.text, indentsByPrefix.get(part.prefix) ?? new Set()),
+      quoteParagraphOpen, holder?.content ?? 0,
+    )
     let text = moveIndent(written.line, markerCol, markerCol + written.outer)
     if (asText || !RE_LIST_MARKER.test(part.text)) {
       // A quote run holds no blank line, so an unmarked paragraph line under an
@@ -5326,6 +5488,29 @@ function respellQuotedBlocks(
     // it only in its spaced form. A quote an ITEM of this run holds reaches no
     // other respelling at all (carve-js#2035).
     if (!asText) text = respellHeldQuoteMarkers(text)
+    if (!asText) {
+      const indent = text.slice(0, text.length - text.trimStart().length)
+      const body = text.slice(indent.length)
+      const sourceBody = part.text.trimStart()
+      const kind: EmissionKind | null = isSolidThematic(sourceBody.trim()) && isSolidMarkerRun(body.trim()) ? 'break'
+        : RE_CARVE_HEADING_OPENER.test(sourceBody) && RE_CARVE_HEADING_OPENER.test(body) ? 'heading' : null
+      if (kind !== null) text = indent + emitContainerLine(body, kind, {
+        listDepth: list.itemAt(markerCol) === undefined ? 0 : 1,
+        quoteDepth: quoteDepth(part.prefix), prefix: part.prefix + indent,
+        hosts: emissionHosts(part.prefix + indent),
+      }).line
+    }
+    const paragraphBody = text.trimStart()
+    const paragraphText = !opensAtTheContentColumn(paragraphBody) && !RE_LIST_MARKER.test(paragraphBody) &&
+      !isMarkdownFenceLine(paragraphBody) && !'<[|]'.includes(paragraphBody[0] ?? '')
+    const outsideItem = list.itemAt(markerCol) === undefined && (list.itemAt(Infinity) === undefined || prev === undefined)
+    if (outsideItem && !part.hadLeadingTab && indentColumns(text) > 0 && indentColumns(text) < 4 &&
+      paragraphText && !part.continued) {
+      text = emitContainerLine(text, 'paragraph', {
+        listDepth: 0, quoteDepth: quoteDepth(part.prefix), prefix: part.prefix,
+        hosts: emissionHosts(part.prefix),
+      }).line
+    }
     if (leavesList) separate(part.prefix)
     leavesList = false
     // `fmt` sets a block in a quote apart from the paragraph above it with an
@@ -5705,7 +5890,7 @@ function collectListInlineRun(
       run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
-      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, lazyQuote: true, nativeContinuationIndent: /^[ \t]*/.exec(text)![0], source: end })
+      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, lazyQuote: true, nativeContinuationIndent: text.slice(0, text.length - text.trimStart().length), source: end })
     } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed), source: end })
     // A later line the item holds, at the column the quote opens at. As text
     // the marker is escaped above, so a `>` arriving here is structural.
@@ -5907,7 +6092,7 @@ function containerHtmlBlockAt(
   start: number,
   listCols: readonly number[],
 ): { prefix: string; lines: string[]; end: number } | null {
-  const stripLeadingQuoteIndent = (line: string): string => line.replace(/^[ \t]{1,3}(?=>)/, '')
+  const stripLeadingQuoteIndent = stripOptionalQuoteIndent
   const quoted = blockquotePrefix(stripLeadingQuoteIndent(lines[start]!))
   const collect = (
     prefix: string,
@@ -5973,7 +6158,7 @@ function quotedIndentedCodeAt(
   contentCol: number,
 ): { prefix: string; lines: string[]; end: number } | null {
   const held = (line: string): string =>
-    stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
+    stripOptionalQuoteIndent(stripColumns(line, contentCol))
   const head = blockquotePrefix(held(lines[start]!))
   if (!head || !RE_MD_INDENTED_CODE.test(head.text)) return null
 
@@ -6307,12 +6492,13 @@ function writeItemRun(
   paragraphColumn = 0,
 ): { lines: string[]; separate: boolean } {
   const first = syntheticEmpty ? run.lines[0]! : nestedEmptyPlusItem(run.lines[0]!)
-  const written = markers.write(first, paddingIsFree, paragraphOpen, paragraphColumn)
+  const followingColumns = new Set(run.lines.slice(1).filter(line => line.trim() !== '').map(indentColumns))
+  const written = markers.write(first, paddingIsFree, nestedMarkerPaddingIsFree(first, followingColumns), paragraphOpen, paragraphColumn)
   const markerCol = indentColumns(first)
   const content = columnWidth(RE_LIST_MARKER.exec(first)?.[0] ?? '')
   const result = [
       moveIndent(written.line, markerCol, markerCol + written.outer),
-      ...run.lines.slice(1).map((line) => moveIndent(line, content, content + written.shift)),
+      ...run.lines.slice(1).map((line) => moveIndent(line, content, content + markers.shiftAt(indentColumns(line)))),
     ]
   const placeholder = RE_EMPTY_ITEM_PLACEHOLDER.exec(result[0] ?? '')
   if (foldPlaceholder && placeholder && result[1]?.trim()) {
@@ -7350,8 +7536,32 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const contained = containerHtmlBlockAt(lines, i, listCols)
     if (contained) {
       const fence = '`'.repeat(Math.max(3, longestBacktickRun(contained.lines.join('\n')) + 1))
+      const prefix = contained.prefix.includes('>') ? contained.prefix
+        : ' '.repeat(Math.max(0, contentCol + listMarkers.shiftAt(contentCol)))
       for (const emitted of [`${fence}=html`, ...contained.lines, fence]) {
-        out.push(emitted === '' ? contained.prefix.trimEnd() : contained.prefix + emitted)
+        out.push(emitted === '' ? prefix.trimEnd() : prefix + emitContainerLine(emitted, 'verbatim', {
+          listDepth: listCols.length, quoteDepth: quoteDepth(prefix), prefix,
+          hosts: emissionHosts(prefix),
+        }).line)
+      }
+      const nextQuote = contained.prefix.includes('>') && lines[contained.end + 1] !== undefined
+        ? blockquotePrefix(stripOptionalQuoteIndent(stripColumns(lines[contained.end + 1]!, contentCol)))
+        : null
+      const nextRawBlock = nextQuote !== null
+        ? containerHtmlBlockAt(lines, contained.end + 1, listCols) : null
+      const currentQuote = blockquotePrefix(stripOptionalQuoteIndent(stripColumns(lines[i]!, contentCol)))
+      const quotedItem = currentQuote !== null && quotedItemColumn(
+        line => stripOptionalQuoteIndent(stripColumns(line, contentCol)), lines, i, currentQuote.prefix,
+      ) > 0
+      const adjacentItemRawBlock = nextRawBlock !== null && nextQuote?.prefix === currentQuote?.prefix &&
+        (listCols.length > 0 || quotedItem)
+      if (nextQuote !== null && nextQuote.text.trim() !== '' && !adjacentItemRawBlock) {
+        const separatorPrefix = quoteDepth(nextQuote.prefix) < quoteDepth(contained.prefix)
+          ? nextQuote.prefix : contained.prefix
+        out.push(emitContainerLine('', 'separator', {
+          listDepth: listCols.length, quoteDepth: quoteDepth(separatorPrefix),
+          prefix: separatorPrefix.trimEnd(), hosts: emissionHosts(separatorPrefix),
+        }).line)
       }
       i = contained.end
       if (markdown.endsWith('\n') && i >= lines.length - 2) terminalHtmlBlock = true
@@ -7374,7 +7584,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       // A block after the code in the same quote, or in one nested or around
       // it, is set apart from it by an empty line of the outer quote.
-      const after = quotedCode.end < lines.length ? blockquotePrefix(stripColumns(lines[quotedCode.end]!, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')) : null
+      const after = quotedCode.end < lines.length ? blockquotePrefix(stripOptionalQuoteIndent(stripColumns(lines[quotedCode.end]!, contentCol))) : null
       if (after !== null && after.text.trim() !== '') {
         const outer = ' '.repeat(contentCol) + (after.prefix.length < quotedCode.prefix.length - contentCol ? after.prefix : quotedCode.prefix.slice(contentCol))
         out.push(outer.trimEnd())
@@ -7579,7 +7789,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const quotedBody = (text: string | undefined): string =>
         peelQuoteMarkers(stripColumns(text ?? '', contentCol).trimStart()).body.trim()
       const quotedTable = [quotedBody(line), quotedBody(lines[i + 1])].some((body) => RE_TABLE_DELIMITER.test(body) && body.includes('-'))
-      out.push(pipeText ? keepPipeRowLiteral(written) : quotedTable ? written : keepPipeRowsLiteral(written))
+      out.push(RE_MD_THEMATIC.test(held) ? containerPad + emitContainerLine(held.trim(), 'break', {
+        listDepth: listCols.length, quoteDepth: 0, prefix: containerPad, hosts: emissionHosts(containerPad),
+      }).line : pipeText ? keepPipeRowLiteral(written) : quotedTable ? written : keepPipeRowsLiteral(written))
       itemParagraph = indentColumns(line) >= contentCol && (pipeText || opensParagraph(held))
       const quote = indentColumns(line) >= contentCol ? openQuoteParagraph(held) : null
       if (quote !== null) itemQuote = { prefix: quote, col: contentCol }
@@ -7903,7 +8115,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     while (out.length > 0 && out.at(-1)!.trim() === '') out.pop()
     for (const [index, definition] of removed.definitions.entries()) {
       if (out.length > 0) out.push('')
-      out.push(convertInline(definition, dialect, false, false, undefined, true, false, false, undefined, false,
+      out.push(convertInline(emitContainerLine(definition, 'definition', {
+        listDepth: 0, quoteDepth: removed.definitionContainers[index] ? 1 : 0, prefix: '', hosts: [],
+      }).line, dialect, false, false, undefined, true, false, false, undefined, false,
         false, false, false, removed.definitionContainers[index]))
     }
     if (markdown.endsWith('\n')) out.push('')
