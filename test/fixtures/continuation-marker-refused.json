@@ -148,10 +148,18 @@
     },
     {
       "name": "footnote-body",
-      "description": "In a footnote body the plus is ordinary text.",
+      "description": "A plus after a footnote with a blank follower is refused and retained as text.",
       "source": "x[^a]\n\n[^a]: note\n+\n\npara\n",
       "expected": {
-        "findings": []
+        "findings": [
+          {
+            "line": 4,
+            "column": 1,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
       }
     },
     {

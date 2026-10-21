@@ -202,8 +202,13 @@ describe('relative continuation marker columns', () => {
     expect(html).toContain('<dd>detail\n&gt; quote\n+\n* [x] done</dd>')
   })
 
-  it.each(['a\n+\nb', '- a\n  +\n  x', '- foo\n  - [ ] task\n    +\n    text'])('keeps ordinary plus text free of marker warnings in %s', input => {
-    expect(lintCarve(input).filter(warning => warning.rule === 'continuation-marker-refused')).toHaveLength(0)
+  it.each([
+    ['a\n+\nb', []],
+    ['- a\n  +\n  x', [[2, 3]]],
+    ['- foo\n  - [ ] task\n    +\n    text', [[3, 5]]],
+  ] as const)('keeps the plus literal and reports any unowned marker in %s', (input, expected) => {
+    expect(lintCarve(input).filter(warning => warning.rule === 'continuation-marker-refused')
+      .map(warning => [warning.line, warning.column])).toEqual(expected)
   })
 
   it.each([
