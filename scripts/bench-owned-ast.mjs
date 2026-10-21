@@ -47,7 +47,7 @@ if (command === '--worker') {
   const baseline = await import(pathToFileURL(entries.baseline))
   const candidate = await import(pathToFileURL(entries.candidate))
   const buildHash = entry => createHash('sha256').update(Buffer.concat(
-    ['index.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js']
+    ['index.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'parse-inline-session.js', 'parse-block-scan-core.js', 'parse-block-boundaries.js', 'parse-inline-core.js', 'parse-item-core.js', 'parse-table-cells.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js']
       .map(name => resolve(dirname(entry), name)).filter(existsSync).map(path => readFileSync(path)))).digest('hex')
   const builds = Object.fromEntries(Object.entries(entries).map(([reader, entry]) => [reader, buildHash(entry)]))
   const results = []
