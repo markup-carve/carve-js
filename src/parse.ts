@@ -8419,6 +8419,8 @@ function rebaseOverindentedBlocks(
   foldsMarkers = false,
   authoredOpeners?: ReadonlySet<number>,
   hostOwnedBlockStarts?: ReadonlySet<number>,
+  termSourceLines?: readonly (string | undefined)[],
+  termHostContentColumn = -1,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -8635,8 +8637,22 @@ function rebaseOverindentedBlocks(
       // (carve#2411). Only a list marker still interrupts it (§24 C4).
       let termOpen = RE_DEFLIST_TERM.test(opener)
       let termFloorText = false
+      let foldedSeparator = false
+      let returnedSeparator = false
+      const sourceTermHostColumn = termSourceLines?.[i] === undefined
+        ? authoredBase : sourceColumn(termSourceLines[i]!)
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
+        if (foldedSeparator && RE_DEFLIST_TERM.test(candidate.trimStart()) &&
+            (sourceLines?.[j] === undefined || sourceColumn(sourceLines[j]!) >= termHostContentColumn)) break
+        if (candidate.startsWith(LAZY_FRAME) && RE_DEFLIST_DEF.test(stripLazyFrame(candidate).trimStart())) {
+          returnedSeparator = true
+          if (sourceLines?.[j] !== undefined && sourceColumn(sourceLines[j]!) === termHostContentColumn)
+            foldedSeparator = true
+        }
+        if (termOpen && returnedSeparator && authoredOpeners?.has(j) && termSourceLines?.[j] !== undefined &&
+            sourceColumn(termSourceLines[j]!) > sourceTermHostColumn &&
+            lineOpensItemBlock(candidate.trimStart())) break
         if (isBlankLine(candidate)) {
           descriptionFenceClaimsBelow = false
           if (termFloorText) break
@@ -13521,7 +13537,7 @@ class ParseSession {
       // Definition entries use the same exact block extent in every container.
       rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
         undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines,
-        false, true, true, authoredOpeners)
+        false, true, true, authoredOpeners, undefined, bodySourceLines)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol
@@ -15569,6 +15585,12 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
+        if (!isBlankLine(l) && lw === baseIndent && lexer.hostBody === 'list' &&
+            (lineOpensItemBlock(l.trimStart()) || deflistMarkerLine(stripLazyFrame(l))) &&
+            sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) ===
+              lexer.lineStartColumn(itemStartLineIndex) - 1 + baseIndent &&
+            (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term') &&
+            lazyState.opaque === null && !insideOpenFence(lazyState)) break
         if (lexer.hostBody === 'description' && pendingBlanks === 0 && lw < contentCol &&
             lazyState.opaque === null && RE_DEFLIST_TERM.test(l.trimStart())) break
         if (!/^[ \t]/.test(l) &&
@@ -16794,6 +16816,8 @@ class ParseSession {
             ...Array.from(continuationFenceBreaks, (index) => index + (leadOwnsExtent ? 2 : 1)),
             ...Array.from(subListMarkers, (index) => index + (leadOwnsExtent ? 1 : 0)),
           ]),
+          undefined,
+          contentCol,
         )
         : new Set<number>()
       if (leadOwnsExtent) {
