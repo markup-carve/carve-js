@@ -73,6 +73,7 @@ describe('what the run leaves alone', () => {
 
   it('still strips a trailing comment marker, which was already a run', () => {
     expect(label(carveToHtml(':::[a b %% c]\nbody\n:::\n'))).toBe('a b')
+    expect(label(carveToHtml(':::[a b %% c]\nbody\n:::\n', { positions: false }))).toBe('a b')
   })
 })
 
