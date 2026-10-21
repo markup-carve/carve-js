@@ -5116,13 +5116,41 @@ function collectBlockquoteInlineRun(
   const paddingFreeAtBlank = lastMarkerItem !== null && last !== undefined && resumed?.prefix === last.prefix &&
     (resumedIndent >= columnWidth(lastMarkerItem.lead) ||
       !resumed.hadLeadingTab && resumedIndent < 4 && isAsciiAlphanumeric(resumed.text.trimStart()[0]))
-  return {
-    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect)
+  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
-      }).line : l)),
+      }).line : l))
+  return {
+    lines: canonicalItemHeldTildeFence(written),
     end,
   }
+}
+
+/** Canonicalize a closed tilde fence opened by a quote on a list marker line. */
+function canonicalItemHeldTildeFence(lines: string[]): string[] {
+  let pending: { at: number; opening: RegExpExecArray; prefix: string; closer: RegExp } | null = null
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
+    if (pending !== null) {
+      if (line.trim() === '' || line === pending.prefix.trimEnd() || line.startsWith(pending.prefix)) {
+        if (line.startsWith(pending.prefix) && pending.closer.test(line.slice(pending.prefix.length))) {
+          const fence = canonicalFence(lines.slice(pending.at + 1, index).map((body) =>
+            body.startsWith(pending!.prefix) ? body.slice(pending!.prefix.length) : body))
+          const open = pending.opening
+          lines[pending.at] = open[1]! + open[2]! + open[3]! + open[4]! + fence + open[6]!
+          lines[index] = pending.prefix + fence
+          pending = null
+        }
+        continue
+      }
+      pending = null
+    }
+    const opening = /^((?:> )*)((?:[-*+]|\d{1,9}[.)]) +)((?:> )+)( {0,3})(~{3,})([^\n]*)$/.exec(line)
+    if (opening === null || !fenceRunIsAFence(opening[5]!, opening[6]!)) continue
+    const prefix = opening[1]! + ' '.repeat(columnWidth(opening[2]!)) + opening[3]!
+    pending = { at: index, opening, prefix, closer: new RegExp(`^ {0,3}~{${opening[5]!.length},}[ \t]*$`) }
+  }
+  return lines
 }
 
 /**
@@ -5899,7 +5927,8 @@ function collectListInlineRun(
     end++
   }
 
-  return { lines: restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect, terminal), end }
+  const written = restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect, terminal)
+  return { lines: canonicalItemHeldTildeFence(written), end }
 }
 
 /**
