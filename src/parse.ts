@@ -15736,6 +15736,9 @@ class ParseSession {
             !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
         }
         const sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
+        if (RE_DEFLIST_DEF.test(sourceQuoteBody(sourceLine).trimStart()) && lazyState.inDefList === 'term' &&
+            definitionHostColumn !== undefined && sourceMarkerColumn < definitionHostColumn &&
+            sourceMarkerColumn <= physicalItemMarkerColumn && sourceDepth === itemQuoteDepth) break
         if (pendingBlanks > 0) returnedParagraphColumn = undefined
         if (sourceDescription !== null && returnedTermSourceColumn !== undefined &&
             sourceMarkerColumn < returnedTermSourceColumn &&
