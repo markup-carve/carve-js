@@ -14672,6 +14672,7 @@ class ParseSession {
         : baseIndent + (mline.length - leadingWhitespace(mline) - markerContentLength)
       const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line
       const itemMarkerColumn = sourceColumn(itemSource)
+      const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.lineStartColumn(itemStartLineIndex) - 1 + baseIndent)
       const itemQuoteDepth = quotePrefixDepth(itemSource)
       lexer.consume()
 
@@ -15436,7 +15437,7 @@ class ParseSession {
           isContinuationMarker(sourceQuoteBody(markerSource)) &&
           (baseIndent === 0 && !quoteIndentHasTab(markerSource, itemQuoteDepth) || classifiedListOwner) &&
           quotePrefixDepth(markerSource) === itemQuoteDepth &&
-          (plusColumn === itemMarkerColumn || plusColumn === contentCol && classifiedListOwner &&
+          (plusColumn === physicalItemMarkerColumn || plusColumn === contentCol && classifiedListOwner &&
             RE_FOOTNOTE_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()) ||
             plusColumn === contentCol + 1 && classifiedListOwner &&
               RE_DEFLIST_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()))
