@@ -810,6 +810,17 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   ]).has(left.type)
 }
 
+/**
+ * A paragraph opening on a lone `+` line, written right below a list at the
+ * same column, puts that `+` at the list's marker column. PART 9 §17 L3 reads
+ * it as the continuation marker there and attaches the next line, so the `+`
+ * is escaped. Alone on its line with nothing below it, the marker is refused
+ * and stays text, so it is left bare.
+ */
+function escapeLeadingPlusBelowList(rendered: string, previous: BlockNode | null): string {
+  return previous?.type === 'list' && rendered.startsWith('+\n') ? `\\${rendered}` : rendered
+}
+
 /** Whether rendered text contains a character a re-parse can see. */
 function spellsSomething(rendered: string): boolean {
   return /[^ \t\n\r]/.test(rendered)
@@ -1767,7 +1778,7 @@ function trimNonNbsp(text: string): string {
 /**
  * A heading's text with only the run its marker separator takes back.
  */
-function trimHeadingText(text: string): string {
+export function trimHeadingText(text: string): string {
   return trimEndNonNbsp(text.replace(/^ +/, ''))
 }
 
@@ -3187,6 +3198,7 @@ class CarveRenderSession {
       for (const block of blocks) {
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
         let rendered = this.renderBlock(block, ctx)
+        if (block.type === 'paragraph') rendered = escapeLeadingPlusBelowList(rendered, previousBlock)
         const moved: boolean =
           item !== undefined &&
           spellsSomething(rendered) &&
@@ -3830,6 +3842,7 @@ class CarveRenderSession {
         }
         let rendered = this.renderBlock(b, ctx)
         if (b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx)) rendered = '\\+'
+        if (b.type === 'paragraph' && !separated) rendered = escapeLeadingPlusBelowList(rendered, previousEmitted)
         if (rendered.length === 0) return
         // `guardThematicBreakLines` protects a paragraph continuation that is
         // semantically an em dash by giving it one leading space.  Inside a list
