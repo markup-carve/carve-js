@@ -1,28 +1,28 @@
-import { Lexer, indentColumns, isBlankLine } from "./parse-lexer.js";
-import type { LinkDef } from "./inline-resolution.js";
+import { Lexer, indentColumns, isBlankLine } from './parse-lexer.js'
+import type { LinkDef } from './inline-resolution.js'
 import type {
   CloserIndex,
   CommentScopeMemo,
   OpenContainer,
   PrepassScope,
   LinkDefMatch,
-} from "./parse.js";
-import type { CarveExtension } from "./extension.js";
-import type { linkDefinitionHelpers } from "./parse.js";
+} from './parse.js'
+import type { CarveExtension } from './extension.js'
+import type { linkDefinitionHelpers } from './parse.js'
 
 type LinkDefinitionSession = {
-  definitionRegionLines: Set<number> | null;
-  activeMatchers: CarveExtension[];
-  probingLazyParagraph: boolean;
-  verseOwnedLines(lexer: Lexer): boolean[] | undefined;
-  isLinkDefLine(line: string): boolean;
-  matchLinkDef(line: string): LinkDefMatch | null;
+  definitionRegionLines: Set<number> | null
+  activeMatchers: CarveExtension[]
+  probingLazyParagraph: boolean
+  verseOwnedLines(lexer: Lexer): boolean[] | undefined
+  isLinkDefLine(line: string): boolean
+  matchLinkDef(line: string): LinkDefMatch | null
   lineFoldsIntoOpenParagraph(
     lexer: Lexer,
     candidate: number,
     budget: number,
-  ): boolean | "unknown";
-};
+  ): boolean | 'unknown'
+}
 
 export function createLinkDefinitionCollector(
   helpers: typeof linkDefinitionHelpers,
@@ -69,7 +69,7 @@ export function createLinkDefinitionCollector(
     trackWrappedAttributeRun,
     unescapeAttrValue,
     utf8ByteLength,
-  } = helpers;
+  } = helpers
   return function collectLinkDefs(session: LinkDefinitionSession, lexer: Lexer) {
     if (session.definitionRegionLines) return
     // Ownership before a candidate still matters; lines after the last one

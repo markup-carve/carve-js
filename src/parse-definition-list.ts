@@ -5,21 +5,21 @@ import type {
   DefinitionItem,
   InlineNode,
   Position,
-} from "./ast.js";
+} from './ast.js'
 import {
   Lexer,
   indentColumns,
   isBlankLine,
   sliceColumns,
-} from "./parse-lexer.js";
+} from './parse-lexer.js'
 import type {
   definitionListHelpers,
   ItemLazyState,
   QuotedFenceCloserMemo,
   InlineSource,
   PendingAttrCarry,
-} from "./parse.js";
-import type { LinkDef } from "./inline-resolution.js";
+} from './parse.js'
+import type { LinkDef } from './inline-resolution.js'
 
 type DefinitionListSession = {
   collectAttachedBlock(
@@ -30,24 +30,24 @@ type DefinitionListSession = {
     markerColumn?: number,
     quoteLevels?: number,
     acceptFirstNonList?: boolean,
-  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number };
+  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   markerPrefixMemo(
     lexer: Lexer,
     index: number,
-  ): Map<number, number> | undefined;
+  ): Map<number, number> | undefined
   parseBlocks(
     lexer: Lexer,
     baseIndent: number,
     carry?: PendingAttrCarry,
-  ): BlockNode[];
+  ): BlockNode[]
   parseInline(
     text: string,
     abbrDefs: Map<string, string>,
     linkDefs?: Map<string, LinkDef>,
     source?: InlineSource,
     captionContext?: boolean,
-  ): InlineNode[];
-};
+  ): InlineNode[]
+}
 
 export function createDefinitionListParser(
   helpers: typeof definitionListHelpers,
@@ -114,7 +114,7 @@ export function createDefinitionListParser(
     stripLazyFrame,
     trackItemLazyState,
     trimEndSpaceTab,
-  } = helpers;
+  } = helpers
   return function parseDefinitionList(parseSession: DefinitionListSession, lexer: Lexer): DefinitionList {
     const items: DefinitionItem[] = []
     /**

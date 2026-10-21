@@ -10006,10 +10006,11 @@ export class ParseSession {
   }
 
   private collectLinkDefs(lexer: Lexer) {
+    const parseSession = this
     return collectLinkDefsWithHelpers({
-      definitionRegionLines: this.definitionRegionLines,
-      activeMatchers: this.activeMatchers,
-      probingLazyParagraph: this.probingLazyParagraph,
+      get definitionRegionLines() { return parseSession.definitionRegionLines },
+      get activeMatchers() { return parseSession.activeMatchers },
+      get probingLazyParagraph() { return parseSession.probingLazyParagraph },
       verseOwnedLines: this.verseOwnedLines.bind(this),
       isLinkDefLine: this.isLinkDefLine.bind(this),
       matchLinkDef: this.matchLinkDef.bind(this),

@@ -6,9 +6,9 @@ import type {
   InlinePairView,
   EmphasisMatch,
   EmphasisMemo,
-} from "./parse.js";
-import type { CarveExtension, InlineMatch } from "./extension.js";
-import type { CitationGroup, VerbatimCellWrap } from "./ast.js";
+} from './parse.js'
+import type { CarveExtension, InlineMatch } from './extension.js'
+import type { CitationGroup, VerbatimCellWrap } from './ast.js'
 import type {
   Attrs,
   AutoLink,
@@ -36,23 +36,23 @@ import type {
   SymbolInline,
   Tag,
   Text,
-} from "./ast.js";
+} from './ast.js'
 
 export interface InlineScannerSession {
-  activeMatchers: CarveExtension[];
-  pairEndText: string | undefined;
-  inLineBlock: boolean;
-  recordPositions: boolean;
-  singleQuoteSpan: { node?: SmartPunctuation; demote: boolean } | null;
-  bracedPairEnd(text: string, open: number, closer: string): number;
-  criticPairEnd(text: string, open: number, closer: "+}" | "-}"): number;
-  delimitedCommentClose(text: string, from: number): number;
+  activeMatchers: CarveExtension[]
+  pairEndText: string | undefined
+  inLineBlock: boolean
+  recordPositions: boolean
+  singleQuoteSpan: { node?: SmartPunctuation; demote: boolean } | null
+  bracedPairEnd(text: string, open: number, closer: string): number
+  criticPairEnd(text: string, open: number, closer: '+}' | '-}'): number
+  delimitedCommentClose(text: string, from: number): number
   extendPosTo(
     node: InlineNode,
     source: InlineSource,
     text: string,
     end: number,
-  ): void;
+  ): void
   matchEmphasis(
     text: string,
     i: number,
@@ -60,26 +60,26 @@ export interface InlineScannerSession {
     inFootnote?: boolean,
     noClose?: EmphasisMemo,
     end?: number,
-  ): EmphasisMatch | null;
-  pairView(offset: number): InlinePairView;
+  ): EmphasisMatch | null
+  pairView(offset: number): InlinePairView
   plainInlineWord(
     text: string,
     start: number,
     end: number,
     source: InlineSource,
-  ): InlineNode[] | undefined;
+  ): InlineNode[] | undefined
   positionCitationItems(
     node: CitationGroup,
     source: InlineSource,
     text: string,
     groupStart: number,
-  ): void;
+  ): void
   rawSourceSlice(
     source: InlineSource,
     text: string,
     start: number,
     end: number,
-  ): string | undefined;
+  ): string | undefined
   scanInline(
     text: string,
     source?: InlineSource,
@@ -89,38 +89,38 @@ export interface InlineScannerSession {
     opensHostRun?: boolean,
     separateQuoteScope?: boolean,
     pairs?: InlinePairView,
-  ): InlineNode[];
+  ): InlineNode[]
   scanLinkLabel(
     text: string,
     source: InlineSource,
     inFootnote: boolean,
-  ): InlineNode[];
-  shiftSource(source: InlineSource, text: string, by: number): InlineSource;
+  ): InlineNode[]
+  shiftSource(source: InlineSource, text: string, by: number): InlineSource
   smartToken(
     text: string,
     i: number,
     prev: string,
-  ): { out: string; len: number; kind: string } | null;
+  ): { out: string; len: number; kind: string } | null
   substitutionAt(
     text: string,
     open: number,
-  ): { end: number; arrow: number } | null;
-  trimUnclosedRun(content: string): string;
-  tryInlineMatchers(text: string, pos: number): InlineMatch | null;
+  ): { end: number; arrow: number } | null
+  trimUnclosedRun(content: string): string
+  tryInlineMatchers(text: string, pos: number): InlineMatch | null
   verbatimCellWraps(
     text: string,
     source: InlineSource,
     start: number,
     payload: string,
     strippedPadding?: boolean,
-  ): VerbatimCellWrap[] | undefined;
+  ): VerbatimCellWrap[] | undefined
   withPos<T extends InlineNode>(
     node: T,
     source: InlineSource,
     text: string,
     start: number,
     end: number,
-  ): T;
+  ): T
 }
 
 export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
@@ -166,7 +166,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     trimStructural,
     unescapeAttrValue,
     verbatimSpanEnd,
-  } = helpers;
+  } = helpers
   return function scanInlineInner(session: InlineScannerSession,
     text: string,
     source: InlineSource,
