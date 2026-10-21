@@ -2029,7 +2029,7 @@ function attachBlockPos(
     const lastIndex = endLineIndexExclusive - 1
     const lastLine = lexer.rootLines?.[lexer.lineNumber(lastIndex) - 1] ?? lexer.lineAt(lastIndex) ?? ''
     const plusColumn = lastLine.indexOf('+') + 1
-    if (/^[ \t]*\+[ \t]*$/.test(lastLine) && plusColumn > 0 && plusColumn < node.pos.startColumn!) {
+    if (/^(?:[ \t]*>[ \t]*)*[ \t]*\+[ \t]*$/.test(lastLine) && plusColumn > 0 && plusColumn < node.pos.startColumn!) {
       const children = (node as { children?: Array<{ pos?: Position }> }).children ?? []
       const lastChild = [...children].reverse().find((child) => child.pos !== undefined)?.pos
       if (lastChild) {

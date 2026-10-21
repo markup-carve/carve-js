@@ -30,6 +30,9 @@ describe('a carried marker closes a named container without unplacing authored n
     ['bullet', '- ::: d\n+\ntail\n', 7],
     ['ordered', '1. ::: d\n+\ntail\n', 8],
     ['body', '- ::: d\n  z\n+\ntail\n', 11],
+    ['quoted item', '> - ::: d\n> +\n> tail\n', 9],
+    ['adjacent quote marker', '> - ::: d\n>+\n> tail\n', 9],
+    ['nested quoted item', '> > - ::: d\n> > +\n> > tail\n', 11],
   ])('ends an open admonition before its item continuation: %s', (_name, source, endOffset) => {
     const admonition = placedNodes(source).find(node => node.type === 'admonition')
     expect(admonition?.pos?.endOffset).toBe(endOffset)
@@ -43,6 +46,12 @@ describe('a carried marker closes a named container without unplacing authored n
 
   it('keeps a same-column plus inside a standalone admonition', () => {
     const source = '::: d\n+\n'
+    const admonition = placedNodes(source).find(node => node.type === 'admonition')
+    expect(admonition?.pos?.endOffset).toBeGreaterThan(source.indexOf('+'))
+  })
+
+  it('keeps a same-column plus inside a quoted standalone admonition', () => {
+    const source = '> ::: d\n> +\n'
     const admonition = placedNodes(source).find(node => node.type === 'admonition')
     expect(admonition?.pos?.endOffset).toBeGreaterThan(source.indexOf('+'))
   })
