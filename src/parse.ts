@@ -17003,6 +17003,10 @@ class ParseSession {
           subColAt = new Array(nested.length).fill(-1)
           let col = leadIsMarker ? markerContentColumn(content, terminatorFree) : -1
           for (let k = 0; k < nested.length; k++) {
+            // An authored quote at this item's column closes the marker-line
+            // child; a later blank belongs to this item's block sequence.
+            if (col >= 0 && indentColumns(nested[k]!, col) < col &&
+                RE_BLOCKQUOTE.test(nested[k]!.trimStart())) col = -1
             if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
               col = markerContentColumn(nested[k]!)
             }
