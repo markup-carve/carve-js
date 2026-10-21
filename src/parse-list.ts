@@ -842,6 +842,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       let nestedNoteContainer = false
       // A definition body cannot preserve its enclosing item's paragraph claim (CARVE-P0-006).
       let blockedNoteClaimFloor: number | undefined
+      let quotedInvisibleBody = false
       let hostedNoteBodyColumn: number | undefined
       let acceptedPlusLine = -1
       const refusedPlus = (offset: number): boolean => {
@@ -1968,6 +1969,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.
           if (descendantOpaque !== null && !descriptionFenceAwaitingPayload) lazyState.lazyFoldable = false
+          // A quoted invisible definition ends the descendant quote paragraph.
+          // Its body may follow, but neither can keep this item's paragraph open.
+          const quotedInvisible = lazyState.opaque === null && descendantOpaque === null
+            ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
+          if (quotedInvisible !== undefined && quotedInvisible === quotedInvisible.trimStart() &&
+              (RE_FOOTNOTE_DEF.test(quotedInvisible) || isLinkDefLine(quotedInvisible))) {
+            quotedInvisibleBody = RE_FOOTNOTE_DEF.test(quotedInvisible)
+            lazyState.lazyFoldable = false
+          } else if (quotedInvisibleBody) {
+            const quoteBody = lazyState.opaque === null && descendantOpaque === null
+              ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
+            if (quoteBody !== undefined && indentColumns(quoteBody, FOOTNOTE_BODY_COLUMN) >= FOOTNOTE_BODY_COLUMN)
+              lazyState.lazyFoldable = false
+            else quotedInvisibleBody = false
+          }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
               RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol && !enclosingLazy)
