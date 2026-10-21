@@ -2692,6 +2692,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const content = line.startsWith(LAZY_FRAME + '>') ? line.slice(LAZY_FRAME.length + 1) : line.trimStart()
         return RE_FENCE_CLOSER.exec(content)?.[1]?.[0] ?? null
       }
+      const lazyClosersAhead: number[] = new Array(fenceLines.length).fill(0)
+      let lazyCloserMask = 0
+      for (let index = fenceLines.length - 1; index > 0; index--) {
+        if (lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!)) {
+          const char = foldedCloserChar(fenceLines[index]!)
+          if (char === '`') lazyCloserMask |= 1
+          else if (char === '~') lazyCloserMask |= 2
+        }
+        lazyClosersAhead[index - 1] = lazyCloserMask
+      }
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
       // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
@@ -2813,12 +2823,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // without a closer. It folds into the child's paragraph, so the blank
         // after it remains available to loosen the parent item (carve-js#3403).
         const foldedFence = fenceCandidate !== null && k > 0 &&
-          ((itemParagraphFences.has(k - 1) && ((subListColumnAt(k - 1) <= 0 &&
-            (outerCloser || (inlineRunPrecedesParagraph(k) &&
-              !lineOpensBlock(fenceLines[k + 1] ?? '')) ||
-              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k)))) ||
-            (beforeRebase[k - 1] !== undefined &&
-              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)))) ||
+          ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
+            ? beforeRebase[k - 1] !== undefined &&
+              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
+            : (outerCloser ||
+              ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0 ||
+              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k)) ||
+              (beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, 1) === 0 &&
+                inlineRunPrecedesParagraph(k))))) ||
             (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
