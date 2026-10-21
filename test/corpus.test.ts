@@ -42,6 +42,8 @@ const IMPLEMENTED = new Set([
   'a-fence-run-folded-into-a-child-paragraph-loosens-the-outer-item',
   'a-fence-run-folded-into-a-child-paragraph-loosens-the-outer-item-when-it-closes-at-the-outer-column',
   'a-fence-run-that-dedents-out-of-a-child-keeps-the-outer-item-tight',
+  'a-folded-child-fence-keeps-the-below-column-line-in-its-paragraph',
+  'a-folded-fence-run-leaves-a-later-paragraph-loose',
   'a-lazily-folded-fence-opener-line-does-not-keep-a-list-tight',
   'a-refused-marker-leaves-an-open-fence-s-blank-payload',
   'a-refused-plus-without-the-inner-quote-prefix-renders-as-text',

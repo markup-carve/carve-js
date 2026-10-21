@@ -2761,6 +2761,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           foldedChildRun = null
           continue
         }
+        // A run below a child item's content column cannot open an opaque fence
+        // without a closer. It folds into the child's paragraph, so the blank
+        // after it remains available to loosen the parent item (carve-js#3403).
         const foldedFence = fenceCandidate !== null && k > 0 &&
           ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
             ? beforeRebase[k - 1] !== undefined &&
@@ -2768,7 +2771,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             : ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0)) ||
             (k === 1 && subListColumnAt(0) > 0 &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
-              bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content)))) &&
+              bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
+            (!markerNoteItem && subCol > 0 && belowChildColumn &&
+              (isListMarkerLine(fenceLines[k - 1]!.trimStart()) ||
+                (RE_FENCE.test(fenceLines[k - 1]!.trimStart()) &&
+                  indentColumns(fenceLines[k - 1]!, 1) === indentColumns(line, 1))))) &&
           !codeCloserPossible(closers, fenceCandidate[2]!, k)
         const fence = foldedFence ? null : fenceCandidate
         const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
