@@ -11517,6 +11517,19 @@ export class ParseSession {
             lexer.peek() !== undefined && !isListMarkerLine(lexer.peek()!.trimStart()) &&
             quotedLineText(lexer.peek()!, lexer.lineTerminatorFree(lexer.pos)) === null) emptyFirstBlockMarker = true
         if (lineIndex !== firstLineIndex && markerSourceLine !== undefined &&
+            isPhysicalContinuationMarker(markerSourceLine) &&
+            quotePrefixDepth(markerSourceLine) > 0) {
+          const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex)]
+          const depth = quotePrefixDepth(markerSourceLine)
+          if (follower !== undefined && quotePrefixDepth(follower) === depth &&
+              sourceColumn(follower, depth) === sourceColumn(markerSourceLine, depth) &&
+              isListMarkerLine(sourceQuoteBody(follower))) {
+            lexer.reportRefusedContinuationMarker(lineIndex,
+              sourceColumnAt(markerSourceLine, markerSourceLine.lastIndexOf('+')) + 1,
+              'block quote', 'sibling')
+          }
+        }
+        if (lineIndex !== firstLineIndex && markerSourceLine !== undefined &&
             precedingSourceLine !== undefined && isPhysicalContinuationMarker(markerSourceLine) &&
             quotePrefixDepth(precedingSourceLine) > quotePrefixDepth(markerSourceLine)) {
           // A marker at a surviving outer quote level is still a marker when

@@ -15,6 +15,8 @@ const refused = [
   ['nested task, checkbox column, right follower', '- foo\n  - [ ] task\n    +\n    q\n', 5, 3],
   ['list content column with no marker owner', '- a\n  +\n\nx\n', 3, 2],
   ['lazy quote inside list with no marker owner', '- x\n  > q\n  +\n', 3, 3],
+  ['nested quote with a same-column list follower', '> > q\n> > +\n> > - s\n', 5, 2],
+  ['quote with a same-column list follower', '> q\n> +\n> - s\n', 3, 2],
 ] as const
 
 const refusalLocations = (source: string) => lintCarve(source)
