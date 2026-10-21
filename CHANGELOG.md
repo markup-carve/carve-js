@@ -20,7 +20,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Lint reports unclosed fences, refused continuation markers, ordered-list column traps, dropped table cells, and markers below an item's content column; it does not warn on a `+` consumed by an open fence (#3284, #3298, #3300, #3305, #3311, #3363, #3389).
 - HTML and Markdown import preserve Unicode letters in borrowed layouts, autolink fallback brackets, destination characters, escaped table pipes, and unlinked bracket text. Table and autolink loss reports cover the affected shapes (#3274, #3275, #3286, #3288, #3296, #3304, #3308).
 - Markdown import keeps blanks below nested lists, non-interrupting markers, nested container lines, and quoted tilde fences. Its output uses the canonical Carve writer (#3316, #3336, #3349, #3352, #3383, #3405, #3428).
-- The writer escapes a lone continuation marker that would attach below a sub-list, lays out dedent-ended nested fences canonically, and keeps a guarded em-dash line as text in a loose list (#3367, #3406, #3427).
+- The writer escapes a lone continuation marker that would attach below a sub-list, lays out dedent-ended nested fences canonically, and keeps a guarded em-dash line as text at every list depth (#3367, #3406, #3427, #3429).
 - Carve includes recognize only `%% #region` markers; bare and code-style markers no longer select a region in a Carve file (#3239; markup-carve/carve#3319).
 - Nested fences and quotes keep their proper content and end at the right container; an attached caption no longer loosens its list (#3230, #3235, #3262; markup-carve/carve#3305, markup-carve/carve#3364).
 - A caption after a `+`-attached code, raw or plain `::: figure` fence stays with that fence. A fence-looking line folded into a child item's paragraph no longer keeps the list tight, and a fence run folded into a child paragraph loosens the outer item (#3268, #3269, #3271; markup-carve/carve#3369, markup-carve/carve#3370, #3267).
@@ -42,6 +42,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Internal
 - Parser lexer, list state, bracket and inline scanners, table handlers, and core sessions moved into smaller modules without changing the public parse API (#3384, #3385, #3387, #3390, #3391, #3398, #3400, #3416, #3426).
+- List tightness now comes from parsed children and admitted blank lines. List items, descriptions, and footnotes share one indentation admission loop (#3430, #3432).
 
 ## [0.1.12] - 2026-10-15
 
