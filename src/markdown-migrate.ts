@@ -3850,7 +3850,7 @@ const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
 const RE_SOURCE_ITEM = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))(?=[ \t]|$)([ \t]*)(.*)$/
 
-function sourceItem(line: string): { indent: string; bullet?: string; number?: string; delimiter?: string; padding: string; content: string; marker: string } | null {
+function sourceItem(line: string): { indent: string; bullet: string | undefined; number: string | undefined; delimiter: string | undefined; padding: string; content: string; marker: string } | null {
   const match = RE_SOURCE_ITEM.exec(line)
   return match ? { indent: match[1]!, bullet: match[2], number: match[3], delimiter: match[4], padding: match[5]!, content: match[6]!, marker: match[2] ?? match[3]! + match[4]! } : null
 }
