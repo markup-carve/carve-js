@@ -7836,9 +7836,7 @@ function opaqueGroupCloses(
   memo: GroupCloserMemo,
   containerColumn = 0,
 ): boolean {
-  const cached = containerColumn === 0
-    ? group.belowBaseCloses ? memo.comment.get(group.run) : memo.verbatim.get(group.char)
-    : undefined
+  const cached = group.belowBaseCloses ? memo.comment.get(group.run) : memo.verbatim.get(group.char)
   if (group.belowBaseCloses) {
     if (cached !== undefined && from >= (cached as number)) return false
   } else {
@@ -7859,10 +7857,8 @@ function opaqueGroupCloses(
       if (run !== null && run[1]![0] === group.char) maxRun = Math.max(maxRun, run[1]!.length)
     }
   }
-  if (containerColumn === 0) {
-    if (group.belowBaseCloses) memo.comment.set(group.run, from)
-    else memo.verbatim.set(group.char, { from, maxRun })
-  }
+  if (group.belowBaseCloses) memo.comment.set(group.run, from)
+  else memo.verbatim.set(group.char, { from, maxRun })
 
   return false
 }
@@ -7919,7 +7915,6 @@ function sourceCodeFenceEnd(
     if (source === undefined) {
       const column = indentColumns(candidate, base)
       if (column < base) {
-        if (column === 0 && close.test(candidate)) { closed = true; break }
         continue
       }
       if (takenBelowColumn?.has(j)) { heldFoldedLines.add(j); continue }
@@ -7928,7 +7923,7 @@ function sourceCodeFenceEnd(
     }
     const column = indentColumns(source)
     if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
-    if (column <= authoredBase && !heldFoldedLines.has(j) &&
+    if (column >= base && column <= authoredBase && !heldFoldedLines.has(j) &&
         close.test(candidate.slice(leadingWhitespace(candidate)))) {
       lines[j] = candidate.slice(leadingWhitespace(candidate))
       closed = true
@@ -7968,10 +7963,6 @@ function rebasedCodeFenceEnd(
     }
     const column = indentColumns(candidate, base)
     if (column < base) {
-      if (close.test(candidate.replace(/^[ \t]+/, ''))) {
-        closed = true
-        break
-      }
       continue
     }
     if (close.test(sliceColumns(candidate, base, true))) {
@@ -8594,6 +8585,8 @@ function rebaseOverindentedBlocks(
       // the innermost open body, so keep its exact column band here.
       let descriptionColumn: number | null = null
       let descriptionState: ItemLazyState | undefined
+      let descriptionFenceClaimsBelow = false
+      const descriptionCloserMemos = new Map<string, GroupCloserMemo>()
       // A term has no content column of its own, so a line past the list's
       // base folds into an open term and is never an authored block
       // (carve#2411). Only a list marker still interrupts it (§24 C4).
@@ -8602,6 +8595,7 @@ function rebaseOverindentedBlocks(
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
+          descriptionFenceClaimsBelow = false
           if (termFloorText) break
           termOpen = false
           let k = j + 1
@@ -8618,6 +8612,11 @@ function rebaseOverindentedBlocks(
           continue
         }
         const column = indentColumns(candidate)
+        if (descriptionColumn !== null && descriptionFenceClaimsBelow && descriptionState?.opaque?.kind === 'code' &&
+            column < descriptionColumn && (opensCodeFence(candidate) || !lineOpensItemBlock(candidate))) {
+          end = j
+          continue
+        }
         // PART 0: a line that opens nothing continues the open description
         // paragraph lazily, whether the host took it from below its column or
         // it sits between the list's base and the description column.
@@ -8681,6 +8680,7 @@ function rebaseOverindentedBlocks(
           if (description) {
             descriptionColumn = base + 1 + description[1]!.length
             descriptionState = verbatimOnlyLazyState()
+            descriptionFenceClaimsBelow = false
             trackItemLazyState(description[2]!, descriptionState)
           }
           continue
@@ -8709,19 +8709,25 @@ function rebaseOverindentedBlocks(
         if (descriptionColumn !== null && column >= descriptionColumn) {
           const text = candidate.trimStart()
           onFenceBodyLine?.(j)
+          const wasCodeFence = descriptionState?.opaque?.kind === 'code'
+          const hadOpenParagraph = descriptionState?.lazyFoldable === true
           if (descriptionState) trackItemLazyState(text, descriptionState, () => {
             const group = opaqueGroupCloser(text)
             if (group === null) return false
             const closesAt = (atColumn: number): boolean => {
-              let memo = groupCloserMemos.get(atColumn)
+              const key = `${descriptionColumn}:${atColumn}`
+              let memo = descriptionCloserMemos.get(key)
               if (memo === undefined) {
                 memo = { verbatim: new Map(), comment: new Map() }
-                groupCloserMemos.set(atColumn, memo)
+                descriptionCloserMemos.set(key, memo)
               }
-              return opaqueGroupCloses(group, lines, j + 1, atColumn, takenBelowColumn, memo)
+              return opaqueGroupCloses(group, lines, j + 1, atColumn, takenBelowColumn, memo, descriptionColumn!)
             }
             return closesAt(column) || closesAt(descriptionColumn!)
           }, true, width => (commentCloser ??= commentCloserLookup(lines))(width, j) > j)
+          if (!wasCodeFence && descriptionState?.opaque?.kind === 'code')
+            descriptionFenceClaimsBelow = hadOpenParagraph && column > descriptionColumn
+          else if (descriptionState?.opaque?.kind !== 'code') descriptionFenceClaimsBelow = false
           end = j
           continue
         }
@@ -12732,6 +12738,8 @@ class ParseSession {
       let retainedBelowComment = false
       let belowCommentSpan = false
       let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
+      const authoredCodeFenceMemos = new Map<number, QuotedFenceCloserMemo>()
+      let authoredCodeFenceCloses = false
       /**
        * The CONTENT COLUMN of the nested item this body currently has open, in
        * the body's own coordinates, or -1 for none.
@@ -12752,6 +12760,8 @@ class ParseSession {
       const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
         RE_DEFLIST_TERM.test(line) ||
         RE_DEFLIST_DEF.test(line) ||
+        (!isBlankLine(line) && indentColumns(line, contentCol) < contentCol &&
+          !opensCodeFence(line) && lineOpensItemBlock(line)) ||
         (afterBlank && (isBlankLine(line) || indentColumns(line, contentCol) < contentCol))
       let nestedLeadScans: ReturnType<typeof descriptionLeadFenceScans> | undefined
       let commentPayloadState: ItemLazyState | null = null
@@ -12772,6 +12782,8 @@ class ParseSession {
         atContentColumn = true,
         openerCol = contentCol,
       ): void => {
+        const wasCodeFence = lazyState.opaque?.kind === 'code'
+        const hadOpenParagraph = lazyState.lazyFoldable
         // Keep payload classification separate from the actual span state.
         // An unfinished prefix can leave a paragraph open for S4, but blocks
         // inside a completed comment must not change the surrounding state.
@@ -12809,6 +12821,19 @@ class ParseSession {
           return answer
         }
         trackItemLazyState(content, lazyState, hasFenceCloser, atContentColumn)
+        if (!wasCodeFence && lazyState.opaque?.kind === 'code' && openerCol > contentCol && atLineIndex !== undefined) {
+          authoredCodeFenceCloses = false
+          const fenced = RE_FENCE.exec(content)
+          const fence = fenced ?? RE_RAW_FENCE.exec(content)
+          if (fence) {
+            const marker = fenced ? fence[2]! : fence[1]!
+            const memo = authoredCodeFenceMemos.get(openerCol) ?? new Map()
+            authoredCodeFenceMemos.set(openerCol, memo)
+            authoredCodeFenceCloses = hadOpenParagraph && itemFenceHasCloser(lexer, marker, atLineIndex, contentCol,
+              memo, line => !isBlankLine(line) && indentColumns(line, contentCol) < contentCol &&
+                !opensCodeFence(line) && lineOpensItemBlock(line), undefined, false, undefined, 0, openerCol)
+          }
+        } else if (lazyState.opaque?.kind !== 'code') authoredCodeFenceCloses = false
         if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
           paragraphFenceLines.add(bodyLines.length - 1)
           const previous = bodyLines.length - 2
@@ -12993,6 +13018,15 @@ class ParseSession {
             }
             bodyLineNumbers.push(...attachedLineNumbers)
           }
+          continue
+        }
+        if (!isBlankLine(ln) && indentColumns(ln, contentCol) < contentCol &&
+            lazyState.opaque?.kind === 'code' && authoredBase !== null && authoredCodeFenceCloses &&
+            (opensCodeFence(ln) || !lineOpensItemBlock(ln))) {
+          bodyLines.push(opensCodeFence(ln) ? LAZY_FRAME + ln : ln)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          lexer.consume()
           continue
         }
         // Form A: an indented continuation line (with no intervening blank).
