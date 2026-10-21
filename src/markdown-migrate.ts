@@ -3848,6 +3848,29 @@ const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 
 /** A line opening with a list marker, padded with spaces or tabs. */
 const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
+const RE_SOURCE_ITEM = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))(?=[ \t]|$)([ \t]*)(.*)$/
+
+function sourceItem(line: string): { indent: string; bullet: string | undefined; number: string | undefined; delimiter: string | undefined; padding: string; content: string; marker: string } | null {
+  const match = RE_SOURCE_ITEM.exec(line)
+  return match ? { indent: match[1]!, bullet: match[2], number: match[3], delimiter: match[4], padding: match[5]!, content: match[6]!, marker: match[2] ?? match[3]! + match[4]! } : null
+}
+
+function nestedEmptyPlusItem(line: string): string {
+  const outer = sourceItem(line)
+  if (outer === null || columnWidth(outer.indent + outer.marker + outer.padding) - columnWidth(outer.indent + outer.marker) > 4) return line
+  const inner = sourceItem(outer.content)
+  return inner?.marker === '+' && inner.content.trim() === ''
+    ? outer.indent + outer.marker + outer.padding + inner.indent + '- +'
+    : line
+}
+
+/** Whether a source marker may open an item at this paragraph's column. */
+function opensInterruptingItem(line: string, paragraphOpen: boolean, paragraphColumn: number): boolean {
+  const item = sourceItem(line)
+  if (item === null) return false
+  if (!paragraphOpen || columnWidth(item.indent) < paragraphColumn) return true
+  return item.content.trim() !== '' && (item.bullet !== undefined || Number(item.number) === 1)
+}
 
 /**
  * The item markers and task checkbox a line opens with, as CARVE reads them:
@@ -3975,7 +3998,8 @@ class ListMarkers {
    * `outer` is how far the marker line itself moves, `shift` how far the lines
    * the item holds do.
    */
-  write(line: string, paddingIsFree = false): { line: string; separate: boolean; outer: number; shift: number } {
+  write(line: string, paddingIsFree = false, paragraphOpen = false, paragraphColumn = 0): { line: string; separate: boolean; outer: number; shift: number } {
+    if (!opensInterruptingItem(line, paragraphOpen, paragraphColumn)) return { line, separate: false, outer: 0, shift: 0 }
     const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
     if (!m) return { line, separate: false, outer: 0, shift: 0 }
     const col = columnWidth(m[1]!)
@@ -4334,6 +4358,17 @@ function restorePrefixedInlineRun(
 
   const out: string[] = []
   let tableWidth = 0
+  let droppedPrefix: { opener: string; continuation: string; itemEnd: number } | null = null
+  const openingPrefix = (prefix: string): string => {
+    if (droppedPrefix === null) return prefix
+    const { opener, continuation, itemEnd } = droppedPrefix
+    droppedPrefix = null
+    if (prefix.startsWith(continuation)) return opener + prefix.slice(continuation.length)
+    if (continuation.startsWith(prefix) && prefix.length >= itemEnd) return opener.slice(0, prefix.length)
+    if (continuation.startsWith(prefix) && itemEnd > prefix.length &&
+        sourceItem(peelQuoteMarkers(opener.slice(0, prefix.length)).body) !== null) out.push(opener.trimEnd() + ' +')
+    return prefix
+  }
   for (let idx = 0; idx < run.length; idx++) {
     const part = run[idx]!
     const line = converted[idx] ?? ''
@@ -4349,9 +4384,32 @@ function restorePrefixedInlineRun(
         inlineRunSourceLine = runPartSourceLine(part)
         const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
         inlineRunSourceLine = previousLine
-        if (keepTableHeader(header, runPartSourceLine(part))) out.push(part.prefix + marker + emitContainerLine(header, 'verbatim', {
+        if (keepTableHeader(header, runPartSourceLine(part))) out.push(openingPrefix(part.prefix + marker) + emitContainerLine(header, 'verbatim', {
           listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(marker), prefix: part.prefix + marker,
         }).line)
+        else if (droppedPrefix === null) {
+          const opener = part.prefix + marker
+          let continuation = opener
+          let itemEnd = 0
+          for (let at = 0; at < continuation.length;) {
+            if (continuation[at] === '>') {
+              at += continuation[at + 1] === ' ' ? 2 : 1
+              continue
+            }
+            const item = sourceItem(continuation.slice(at))
+            if (item === null) break
+            const end = at + item.indent.length + item.marker.length + item.padding.length
+            if (item.padding === '') break
+            continuation = continuation.slice(0, at + item.indent.length) + ' '.repeat(item.marker.length + item.padding.length) + continuation.slice(end)
+            itemEnd = end
+            at = end
+          }
+          if (itemEnd > 0) droppedPrefix = {
+            opener,
+            continuation,
+            itemEnd,
+          }
+        }
         idx++ // consume the delimiter row
         continue
       }
@@ -4359,7 +4417,8 @@ function restorePrefixedInlineRun(
       inlineRunSourceLine = runPartSourceLine(part)
       const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
       inlineRunSourceLine = previousLine
-      out.push(part.prefix + marker + emitContainerLine(row, 'verbatim', {
+      const prefix = openingPrefix(part.prefix + marker)
+      out.push(prefix + emitContainerLine(row, 'verbatim', {
         listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(marker), prefix: part.prefix + marker,
       }).line)
       continue
@@ -4370,7 +4429,7 @@ function restorePrefixedInlineRun(
     const body = line.startsWith(marker) ? line.slice(marker.length) : peelQuoteMarkers(line).body
     const kept = line.slice(0, line.length - body.length)
 
-    out.push(part.prefix + emitContainerLine(isStandardTableRow(body) ? kept + keepPipeRowLiteral(body) : line, 'paragraph', {
+    out.push(openingPrefix(part.prefix + kept) + emitContainerLine(isStandardTableRow(body) ? keepPipeRowLiteral(body) : body, 'paragraph', {
       listDepth: 1, quoteDepth: quoteDepth(part.prefix) + quoteDepth(kept), prefix: part.prefix + kept,
     }).line)
   }
@@ -5164,8 +5223,10 @@ function respellQuotedBlocks(
     // continues the paragraph, whatever it looks like.
     const item = list.itemAt(markerCol)
     const overIndented = above !== null && markerCol >= (item?.content ?? 0) + 4 && opensParagraph(above)
+    const quoteParagraphOpen = prev?.prefix === part.prefix && opensParagraph(prev.text.replace(RE_LIST_MARKER, ''))
     const asText =
       overIndented ||
+      (RE_ITEM_LINE.test(part.text) && !opensInterruptingItem(part.text, quoteParagraphOpen, holder?.content ?? 0)) ||
       (ordered !== null &&
       (holder === undefined || markerCol >= holder.content) &&
       Number(ordered[1]) !== 1 &&
@@ -5187,7 +5248,7 @@ function respellQuotedBlocks(
         ? quoteEnds
         : next.prefix !== part.prefix || (RE_ITEM_LINE.test(next.text) && indentColumns(next.text) <= markerCol + 3)
     }
-    const written = asText ? { line: part.text, separate: false, outer: 0 } : list.write(part.text, paddingIsFree || ordered !== null && quoteDepth(part.prefix) > 0)
+    const written = asText ? { line: part.text, separate: false, outer: 0 } : list.write(nestedEmptyPlusItem(part.text), paddingIsFree || ordered !== null && quoteDepth(part.prefix) > 0, quoteParagraphOpen, holder?.content ?? 0)
     let text = moveIndent(written.line, markerCol, markerCol + written.outer)
     if (asText || !RE_LIST_MARKER.test(part.text)) {
       // A quote run holds no blank line, so an unmarked paragraph line under an
@@ -5201,7 +5262,9 @@ function respellQuotedBlocks(
         opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
         (asText || opensParagraph(part.text))
       // As text, the marker is escaped wherever the line lands.
-      const trimmed = asText ? escapeBlockOpener(part.text.trimStart()) : part.text.trimStart()
+      const plain = part.text.trimStart()
+      const markerItem = sourceItem(plain)
+      const trimmed = asText && (markerItem === null || markerItem.content.trim() !== '') ? escapeBlockOpener(plain) : plain
       // A quote the open item holds takes the line as a lazy one, with its marker.
       const quote = above === null ? null : openQuoteParagraph(above)
       const quoteLazy =
@@ -6239,9 +6302,12 @@ function writeItemRun(
   markers: ListMarkers,
   paddingIsFree = false,
   foldPlaceholder = true,
+  syntheticEmpty = false,
+  paragraphOpen = false,
+  paragraphColumn = 0,
 ): { lines: string[]; separate: boolean } {
-  const first = run.lines[0]!
-  const written = markers.write(first, paddingIsFree)
+  const first = syntheticEmpty ? run.lines[0]! : nestedEmptyPlusItem(run.lines[0]!)
+  const written = markers.write(first, paddingIsFree, paragraphOpen, paragraphColumn)
   const markerCol = indentColumns(first)
   const content = columnWidth(RE_LIST_MARKER.exec(first)?.[0] ?? '')
   const result = [
@@ -6812,6 +6878,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   let inTableBody = false
   let tableWidth = 0
   const listMarkers = new ListMarkers()
+  let recentChildKind: { col: number; kind: string } | null = null
   // The same for the lists a quote holds, kept across the empty quote lines
   // that split a quote into several runs, and dropped when the quote ends.
   const quoteMarkers = new Map<string, ListMarkers>()
@@ -6865,6 +6932,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
+    if (lines[i]!.trim() === '' || listCols.length === 0) recentChildKind = null
     inlineRunSourceLine = sourceLine(i)
     if (i === footnoteEnd) {
       listCols.length = 0
@@ -6943,6 +7011,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       emptyMarkerColumn = null
     }
+    const paragraphOpen = !prevBlank && (itemParagraph || prevType === 'text' && !inTableBody)
+    const paragraphColumn = listCols.at(-1) ?? 0
+    const refusedItem = !inCode && sourceItem(lines[i]!) !== null &&
+      !opensInterruptingItem(lines[i]!, paragraphOpen, paragraphColumn)
     // A tab after the marker of an item this line opens pads it to the next
     // tab stop. Not on a line four columns past the item holding it, which is
     // code or text, nor on an ordered marker other than 1 under a paragraph.
@@ -6951,7 +7023,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       let holder = 0
       for (const col of listCols) if (col <= at) holder = col
       const ordered = /^[ \t]*(\d+)[.)]/.exec(lines[i]!)
-      const prose = prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1 && !listMarkers.hasListAt(at)
+      const prose = refusedItem || prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1 && !listMarkers.hasListAt(at)
       if (at - holder < 4 && !prose) lines[i] = spaceMarkerPadding(lines[i]!)
     }
     // Carve needs the first-block marker for an empty item. Empty markers
@@ -6960,7 +7032,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const column = indentColumns(lines[i]!)
       let holder = 0
       for (const content of listCols) if (content <= column) holder = content
-      if (column - holder < 4 && (prevType !== 'text' || listMarkers.hasListAt(column))) {
+      if (!refusedItem && column - holder < 4 && (prevType !== 'text' || listMarkers.hasListAt(column))) {
         lines[i] = lines[i]!.trimEnd() + ' +'
         emptyMarkerLines.add(i)
         if (lines[i + 1]?.trim() === '') emptyMarkerColumn = column
@@ -7009,7 +7081,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
         ? null
         : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
-      if (orderedContinuesItem) marker = null
+      if (orderedContinuesItem || refusedItem) marker = null
       // Four columns past the item holding it, a marker under an open
       // paragraph is text of that paragraph (indented code cannot interrupt).
       const anyMarker = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/.exec(line)
@@ -7095,6 +7167,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const held = stripColumns(line, contentCol)
     shiftCol = inCode ? fenceCol : contentCol
     shiftBy = inCode ? fenceShift : listMarkers.shiftAt(contentCol)
+
+    if (refusedItem && indentColumns(line) >= paragraphColumn) {
+      const body = paragraphLineText(stripColumns(line, paragraphColumn))
+      const markerBody = sourceItem(body)?.content ?? ''
+      const text = markerBody.trim() === '' ? body.trimEnd() : escapeBlockOpener(body)
+      out.push(convertInline(' '.repeat(paragraphColumn) + text, dialect))
+      itemParagraph = listCols.length > 0
+      prevType = 'text'
+      continue
+    }
 
     if (overMarker) {
       const text = escapeBlockOpener(line.trimStart())
@@ -7353,9 +7435,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const ordered = trimmed.match(/^(\d+)[.)][ \t]/)
     const isList =
       (/^[-*+][ \t]/.test(trimmed) || ordered !== null) &&
+      !refusedItem &&
       !orderedContinuesItem &&
       !(
-        prevType === 'text' &&
+        paragraphOpen &&
         !startsOwnList &&
         ordered !== null &&
         Number(ordered[1]) !== 1 &&
@@ -7443,9 +7526,13 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (isList) {
         reportOrderedTask(line, sourceLine(i))
         const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
+        const item = sourceItem(line)
+        const kind = item?.bullet ?? item?.delimiter ?? ''
+        if ((afterTable || listCols.length === 0 && isStandardTableRow(out.at(-1) ?? '') || paragraphOpen && recentChildKind?.col === indentColumns(line) && recentChildKind.kind !== kind && !RE_LIST_MARKER.test(out.at(-1) ?? '')) && out.at(-1)?.trim() !== '') out.push('')
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
         const fold = lines[i + 1]?.trim() !== '' && !RE_MD_SETEXT_UNDERLINE.test(lines[i + 1] ?? '')
-        out.push(...writeItemRun(run, listMarkers, true, fold).lines)
+        out.push(...writeItemRun(run, listMarkers, true, fold, emptyMarkerLines.has(i), paragraphOpen, paragraphColumn).lines)
+        if (listCols.length > 1 && run.verbatimFrom !== undefined) recentChildKind = { col: indentColumns(line), kind }
         shiftBy = 0
         itemParagraph = !emptyMarkerLines.has(i) && leavesItemParagraph(run)
         itemQuote = leavesItemQuote(run)
@@ -7627,8 +7714,12 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (isList) {
       reportOrderedTask(line, sourceLine(i))
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
+      const item = sourceItem(line)
+      const kind = item?.bullet ?? item?.delimiter ?? ''
+      if ((afterTable || listCols.length === 0 && isStandardTableRow(out.at(-1) ?? '') || paragraphOpen && recentChildKind?.col === indentColumns(line) && recentChildKind.kind !== kind && !RE_LIST_MARKER.test(out.at(-1) ?? '')) && out.at(-1)?.trim() !== '') out.push('')
       const fold = footnote === null && lines[i + 1]?.trim() !== '' && !RE_MD_SETEXT_UNDERLINE.test(lines[i + 1] ?? '')
-      const written = writeItemRun(run, listMarkers, true, fold)
+      const written = writeItemRun(run, listMarkers, true, fold, emptyMarkerLines.has(i), paragraphOpen, paragraphColumn)
+      if (listCols.length > 1 && run.verbatimFrom !== undefined) recentChildKind = { col: indentColumns(line), kind }
       if (footnote !== null) {
         const marker = convertInline(
           footnote[1]!,
