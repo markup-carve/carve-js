@@ -9,7 +9,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-## [0.1.13] - 2026-10-21
+## [0.1.13] - 2026-10-22
 
 ### Fixes
 - Nested items keep their owner across open fences, lazy quote lines, and relative continuation markers. Blank lines before an accepted marker stay inside the fence (#3279, #3281, #3282, #3285, #3289, #3291, #3338, #3340).
@@ -43,7 +43,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Internal
 - Parser lexer, list state, bracket and inline scanners, table handlers, and core sessions moved into smaller modules without changing the public parse API (#3384, #3385, #3387, #3390, #3391, #3398, #3400, #3416, #3426).
 - List tightness now comes from parsed children and admitted blank lines. List items, descriptions, and footnotes share one indentation admission loop (#3430, #3432).
-- List shape assembly, footnote collection, and continuation-marker classification moved into dedicated helpers without changing parser output (#3431, #3434).
+- List marker classification and shape assembly, footnote collection, and continuation-marker classification moved into dedicated helpers without changing parser output (#3431, #3434).
 
 ## [0.1.12] - 2026-10-15
 
