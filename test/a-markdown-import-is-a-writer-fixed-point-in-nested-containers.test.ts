@@ -61,4 +61,46 @@ describe('a Markdown import is a writer fixed point in nested containers', () =>
     expect(imported).toBe(expected)
     expect(carveToCarve(imported)).toBe(imported)
   })
+
+
+  it('drops paragraph trailing spaces in a quoted item', () => {
+    const imported = markdownToCarve('> - alpha   \n')
+    expect(imported).toBe('> - alpha\n')
+    expect(carveToCarve(imported)).toBe(imported)
+  })
+
+  it('collapses empty quote lines between paragraphs', () => {
+    const imported = markdownToCarve('> alpha\n>\n>\n> beta\n')
+    expect(imported).toBe('> alpha\n>\n> beta\n')
+    expect(carveToCarve(imported)).toBe(imported)
+  })
+
+  it('moves a nested ordered item continuation with its marker', () => {
+    const imported = markdownToCarve('- 01. alpha\n      beta\n')
+    expect(imported).toBe('- 1. alpha\n     beta\n')
+    expect(carveToCarve(imported)).toBe(imported)
+  })
+
+  it('shortens nested ordered markers before rewriting their padding', () => {
+    for (const [markdown, expected] of [
+      ['- 01.   foo\n       bar\n', '- 1. foo\n     bar\n'],
+      ['> - 007.  a\n>         b\n', '> - 7. a\n>      b\n'],
+    ]) {
+      const imported = markdownToCarve(markdown)
+      expect(imported).toBe(expected)
+      expect(carveToCarve(imported)).toBe(imported)
+    }
+  })
+
+  it('removes paragraph slack in a quote on an item opener', () => {
+    const imported = markdownToCarve('* >     sapling\n    leaf\n')
+    expect(imported).toBe('* > sapling\n  > leaf\n')
+    expect(carveToCarve(imported)).toBe(imported)
+  })
+
+  it('keeps a lazy line under the innermost hosted quote', () => {
+    const imported = markdownToCarve('* > 7. > bud\n  opens\n')
+    expect(imported).toBe('* > 7. > bud\n  >    > opens\n')
+    expect(carveToCarve(imported)).toBe(imported)
+  })
 })
