@@ -60,15 +60,15 @@ describe('marked descriptions and container exits', () => {
     )
   })
 
-  it('a line under an OPEN description continues that body, not a second one', () => {
+  it('an outer-column separator leaves the marker-line term', () => {
     expect(carveToHtml('> - :: t\n> :  d\n   :  b\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>d\n:  b</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n  <p>:  d\n:  b</p>\n</blockquote>',
     )
   })
 
-  it('it continues that body from far past the column too', () => {
+  it('keeps a far-indented continuation in the surviving quote paragraph', () => {
     expect(carveToHtml('> - :: t\n> :  d\n      :  b\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>d\n:  b</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n  <p>:  d\n:  b</p>\n</blockquote>',
     )
   })
 
