@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Session } from 'node:inspector'
 import { cpus, loadavg } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -64,7 +64,7 @@ if (first === '--worker') {
 } else {
   assert.ok(first && second && third, 'Usage: node scripts/bench-reference-definitions.mjs BASELINE_INDEX CANDIDATE_INDEX OUTPUT_JSON [--matrix|--cache|--sparse]')
   const entries = { baseline: resolve(first), candidate: resolve(second) }
-  const stamp = entry => Object.fromEntries(['parse.js', 'fast-html.js', 'source-positions.js'].map(name => [name, digest(readFileSync(resolve(dirname(entry), name)))]))
+  const stamp = entry => Object.fromEntries(['parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'fast-html.js', 'source-positions.js'].map(name => [name, existsSync(resolve(dirname(entry), name)) ? digest(readFileSync(resolve(dirname(entry), name))) : null]))
   const metadata = {
     generatedAt: new Date().toISOString(), node: process.version, cpu: cpus()[0].model, logicalCpus: cpus().length,
     baseline: stamp(entries.baseline), candidate: stamp(entries.candidate), runnerSha256: digest(readFileSync(fileURLToPath(import.meta.url))),

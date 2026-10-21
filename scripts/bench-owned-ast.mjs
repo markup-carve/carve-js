@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { resolve, dirname, basename } from 'node:path'
 import { loadavg } from 'node:os'
@@ -47,8 +47,8 @@ if (command === '--worker') {
   const baseline = await import(pathToFileURL(entries.baseline))
   const candidate = await import(pathToFileURL(entries.candidate))
   const buildHash = entry => createHash('sha256').update(Buffer.concat(
-    ['index.js', 'parse.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js']
-      .map(name => readFileSync(resolve(dirname(entry), name))))).digest('hex')
+    ['index.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js']
+      .map(name => resolve(dirname(entry), name)).filter(existsSync).map(path => readFileSync(path)))).digest('hex')
   const builds = Object.fromEntries(Object.entries(entries).map(([reader, entry]) => [reader, buildHash(entry)]))
   const results = []
   for (const fixture of [entry, file]) {
