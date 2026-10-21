@@ -3162,6 +3162,7 @@ function itemFenceHasCloser(
   literalPayload = false,
   quoteDepth?: number,
   quoteColumn = 0,
+  alternateCloserColumn?: number,
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
@@ -3178,9 +3179,11 @@ function itemFenceHasCloser(
       continue
     }
     afterBlank = false
-    const column = columnAt ? columnAt(i) : indentColumns(line, contentCol)
+    const column = columnAt ? columnAt(i) : alternateCloserColumn === undefined ? indentColumns(line, contentCol) : indentColumns(line)
     if (column === undefined || column < contentCol || (columnAt && column !== contentCol)) continue
+    if (alternateCloserColumn !== undefined && column !== contentCol && column !== alternateCloserColumn) continue
     let dedented = literalPayload ? line.replace(/^[ \t]+/, '') : columnAt ? line.slice(lexer.lineLeadingWhitespace(i)) : sliceColumns(line, contentCol, true)
+    if (column === alternateCloserColumn) dedented = dedented.trimStart()
     if (quoteDepth !== undefined) {
       dedented = sliceColumns(line, contentCol, true)
       let missing = false
@@ -12761,13 +12764,7 @@ class ParseSession {
        * below its content column. An invisible line there adds no block, so the
        * paragraph it was folded into is still open behind it.
        *
-       * `openerCol` is the column the fence on this line is READ at, which is the
-       * body's own column plus whatever residual indent the flush reading below
-       * stripped. THE LOOKAHEAD MUST ASK IN THE SPELLING THE TRACKER READS
-       * (markup-carve/carve#1930): with the opener read flush and the closer
-       * sought at the body's column, an over-indented pair never matched, the
-       * fence degraded to inline verbatim and its paragraph stayed open one column
-       * past where the same fence ends the body.
+       * The body and authored opener columns can both close this fence (carve#3446).
        */
       const track = (
         content: string,
@@ -12783,20 +12780,23 @@ class ParseSession {
         }
         const hasFenceCloser = (marker: string, extraColumns = 0): boolean => {
           if (atLineIndex === undefined) return true
-          // ONE MEMO PER COLUMN. The memo records "no closer of this run from
-          // here", which is only true of the column it was measured at.
+          // A failed search is reusable only at the same pair of eligible columns.
           const perColumn = defFenceMemos ??= new Map()
-          let memo = perColumn.get(extraColumns)
-          if (memo === undefined) perColumn.set(extraColumns, memo = new Map())
+          const memoColumn = extraColumns < 0 ? extraColumns : openerCol + extraColumns
+          let memo = perColumn.get(memoColumn)
+          if (memo === undefined) perColumn.set(memoColumn, memo = new Map())
           const answer = itemFenceHasCloser(
             lexer,
             marker,
             atLineIndex,
-            extraColumns < 0 ? contentCol + (extraColumns === -2 ? 1 : 0) : openerCol + extraColumns,
+            extraColumns < 0 ? contentCol + (extraColumns === -2 ? 1 : 0) : contentCol,
             memo,
             bodyEndsAt,
             undefined,
             extraColumns < 0,
+            undefined,
+            0,
+            extraColumns >= 0 ? openerCol + extraColumns : undefined,
           )
           // THE CACHE IS KEYED BY LINE AND MARKER, NOT BY COLUMN, and the block
           // parser reads it. An offset query answers for a column that parser
@@ -15791,6 +15791,11 @@ class ParseSession {
             (authoredQuoteClaim !== null || lazyState.quoteInner === null && lazyState.ownedColumn < 0 && !insideOpenFence(lazyState) &&
               !lazyState.inlineFenceParagraph && descendantOpaque === null)
           const atItemColumn = lw === contentCol && placed[0] !== ' ' && placed[0] !== '\t'
+          if (!insideOpenQuoteParagraph(lazyState) && authoredQuoteClaim === null &&
+              !RE_BLOCKQUOTE.test(unindented) &&
+              !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && !quoteParagraphMarker) {
+            lazyState.quoteInner = null
+          }
           if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
@@ -15864,7 +15869,7 @@ class ParseSession {
               trackBlockQuoteLazyState(quoted[1] ?? '', authoredQuoteClaim, () => true, () => true)
               authoredQuoteParagraphOpen = blockQuoteParagraphOpen(authoredQuoteClaim)
             }
-            else if (!lazyState.lazyFoldable || indentColumns(l) === authoredQuoteHostColumn &&
+            else if (!authoredQuoteParagraphOpen || !lazyState.lazyFoldable || indentColumns(l) === authoredQuoteHostColumn &&
                 !isListMarkerLine(l) &&
                 (lineOpensBlock(unindented) || RE_COMMENT_LINE.test(unindented))) {
               authoredQuoteClaim = null
