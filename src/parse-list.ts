@@ -2697,6 +2697,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       let opaqueIdx = -1
       // Rebasing can make a child paragraph's closing inline run look like an outer fence.
       let foldedChildRun: string | null = null
+      let childFenceRun: string | null = null
       const enter = (entry: { opaque: boolean }, k: number): void => {
         if (!entry.opaque) return
         if (openOpaque === 0) opaqueIdx = k
@@ -2713,6 +2714,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const line = fenceLines[k]!
         if (isBlankLine(line)) foldedChildRun = null
         const subCol = k > 0 ? subListColumnAt(k - 1) : -1
+        if (!isBlankLine(line) && subCol > 0 && beforeRebase[k - 1] !== undefined &&
+            indentColumns(beforeRebase[k - 1]!, subCol) < subCol) childFenceRun = null
         const inner = open[open.length - 1]
         if (inner !== undefined && inner.kind !== 'colon') {
           const closed =
@@ -2740,16 +2743,25 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
         }
         const childRun = RE_FENCE.exec(line.trimStart())
-        if (childRun && foldedChildRun !== null && subCol > 0 &&
+        if (childRun && childFenceRun !== null && subCol > 0 &&
+            beforeRebase[k - 1] !== undefined &&
             indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
-            fenceCloseRe(foldedChildRun).test(line.trimStart()))
+            fenceCloseRe(childFenceRun).test(line.trimStart())) {
           foldedChildRun = null
+          childFenceRun = null
+        }
         else if (childRun && k > 1 && subCol > 0 &&
+            beforeRebase[k - 1] !== undefined && beforeRebase[k - 2] !== undefined &&
             indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
             !isBlankLine(fenceLines[k - 1]!) &&
             (indentColumns(beforeRebase[k - 2]!, subCol) >= subCol ||
               isListMarkerLine(beforeRebase[k - 2]!.trimStart())))
+        {
           foldedChildRun = childRun[2]!
+          childFenceRun ??= foldedChildRun
+        } else if (childRun && subCol > 0 && beforeRebase[k - 1] !== undefined &&
+            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol && childFenceRun === null)
+          childFenceRun = childRun[2]!
         const belowChildColumn = k > 0 && subCol > 0 &&
           beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, subCol) < subCol
         const candidate = RE_FENCE.exec(line)
@@ -2757,6 +2769,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           candidate[2]![0] === foldedChildRun[0] && candidate[2]!.length <= foldedChildRun.length
         const fenceCandidate: RegExpExecArray | null = lazyChildRun ? null : candidate
         if (fenceCandidate && foldedChildRun === fenceCandidate[2] && subCol > 0 &&
+            beforeRebase[k - 1] !== undefined &&
             indentColumns(beforeRebase[k - 1]!, subCol) < subCol) {
           foldedChildRun = null
           continue
@@ -2769,7 +2782,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             ? beforeRebase[k - 1] !== undefined &&
               indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
             : ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0)) ||
-            (k === 1 && subListColumnAt(0) > 0 &&
+            (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
             (!markerNoteItem && subCol > 0 && belowChildColumn &&
