@@ -76,6 +76,7 @@ export const layoutWork = {
   markerLinesClassified: 0,
   markerStackEntriesExamined: 0,
   markerFollowerProbes: 0,
+  literalSpanDecisions: 0,
   reset(): void {
     this.gate = 0
     this.strip = 0
@@ -90,6 +91,7 @@ export const layoutWork = {
     this.markerLinesClassified = 0
     this.markerStackEntriesExamined = 0
     this.markerFollowerProbes = 0
+    this.literalSpanDecisions = 0
   },
   get total(): number {
     return this.gate + this.strip + this.seam
@@ -183,6 +185,8 @@ export class Lexer {
    * anchored.
    */
   rootLines?: readonly string[]
+  /** Root lexer for a document offset after a nested block's last payload line. */
+  documentRoot?: Lexer
   /**
    * Whether an OVER-INDENTED SUBLIST in this lexer's lines carries its own
    * authored block base.
