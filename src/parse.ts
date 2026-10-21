@@ -8435,6 +8435,7 @@ function rebaseOverindentedBlocks(
   // of by the line's own indentation, so a ladder does not re-read the same
   // leading run once per level (carve#752's counted bound).
   let ownedColumn = leadNestedColumn
+  let ownedMarkerBase = -1
   let ownedParagraphOpen = false
   let quoteProbe: Lexer | undefined
   let markerColonEnd = -1
@@ -8445,6 +8446,7 @@ function rebaseOverindentedBlocks(
   let absorbingColonParagraph = false
   let footnoteParagraphOpen = false
   const foldedMarkers = new Set<number>()
+  const paragraphOwnedNotes = new Map<number, number>()
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     if (isBlankLine(line)) { absorbingColonParagraph = false; footnoteParagraphOpen = false; ownedParagraphOpen = false; continue }
@@ -8502,7 +8504,10 @@ function rebaseOverindentedBlocks(
       if (!opaqueGroupCloses(group, lines, i + 1, base, takenBelowColumn, memo)) continue
     }
     const belowOwnedChild = ownedColumn >= 0
+    if (belowOwnedChild && ownedParagraphOpen && RE_FOOTNOTE_DEF.test(line.trimStart()))
+      paragraphOwnedNotes.set(i, ownedMarkerBase)
     ownedColumn = -1
+    ownedMarkerBase = -1
     ownedParagraphOpen = false
     // Folded note text owns deeper lines without opening a child list.
     if (noteParagraph?.markers?.has(i)) {
@@ -8518,6 +8523,7 @@ function rebaseOverindentedBlocks(
     }
     if (markerColumn >= 0) {
       ownedColumn = markerColumn
+      ownedMarkerBase = base
       const childContent = markerFreeContent(line.trimStart())
       ownedParagraphOpen = bottomBlockLeavesParagraphOpen(childContent) &&
         colonFenceOpenerLen(childContent) === null && !opensCodeFence(childContent)
@@ -8595,6 +8601,7 @@ function rebaseOverindentedBlocks(
       continue
 
     let end = i
+    let noteReturnsToParagraphOwner = false
     // Lines this group leaves at the column the host folded them to, so the
     // dedent below skips them as well. See the colon arm.
     const heldFoldedLines = new Set<number>()
@@ -8836,19 +8843,13 @@ function rebaseOverindentedBlocks(
       RE_FOOTNOTE_DEF.test(opener)
     )) {
       // A final line below the nested note's own column returns to its parent.
-      const nextNoteLine = lines[i + 1]
-      const noteEndsBeforeTail = nextNoteLine !== undefined && i + 2 === lines.length &&
-        !isBlankLine(nextNoteLine) &&
-        !RE_ADMONITION_CLOSE.test(nextNoteLine.trimStart()) &&
-        !RE_LINE_BLOCK_OPEN.test(nextNoteLine.trimStart()) &&
-        indentColumns(nextNoteLine, base + FOOTNOTE_BODY_COLUMN) < base + FOOTNOTE_BODY_COLUMN
       const runColumn = RE_FOOTNOTE_DEF.test(opener)
-        ? noteEndsBeforeTail
-          ? base + FOOTNOTE_BODY_COLUMN
-          : Math.max(base, FOOTNOTE_BODY_COLUMN)
+        ? Math.max(base, FOOTNOTE_BODY_COLUMN)
         : base
       const authoredNoteBodyColumn = RE_FOOTNOTE_DEF.test(opener)
-        ? indentColumns(lines[i]!) + FOOTNOTE_BODY_COLUMN : undefined
+        ? (paragraphOwnedNotes.has(i)
+          ? sourceColumn(sourceLines?.[i] ?? lines[i]!)
+          : indentColumns(lines[i]!)) + FOOTNOTE_BODY_COLUMN : undefined
       // A QUOTE IS REACHED BY ITS MARKER, so the run ends where the quote stops
       // reaching: a line that carries no marker is the quote's only as the lazy
       // continuation of an OPEN PARAGRAPH (markup-carve/carve-js#2536). The
@@ -8862,6 +8863,7 @@ function rebaseOverindentedBlocks(
       let returnedToHost = false
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
+        if (hostOwnedBlockStarts?.has(j)) returnedToHost = true
         if (isBlankLine(candidate)) {
           // An unmarked blank ends a quote (CARVE-P2-008). The next block
           // gets its own footnote-body base (CARVE-P0-004, carve#2598).
@@ -8876,10 +8878,32 @@ function rebaseOverindentedBlocks(
           end = j
           continue
         }
-        if (indentColumns(candidate, runColumn) < runColumn) break
-        if (hostOwnedBlockStarts?.has(j)) returnedToHost = true
+        if (indentColumns(candidate, runColumn) < runColumn) {
+          noteReturnsToParagraphOwner = authoredNoteBodyColumn !== undefined &&
+            paragraphOwnedNotes.has(i) && indentColumns(candidate) > paragraphOwnedNotes.get(i)! &&
+            !lineOpensItemBlock(candidate.trimStart())
+          break
+        }
+        if (authoredNoteBodyColumn !== undefined && sourceLines?.[j] !== undefined &&
+            sourceColumn(sourceLines[j]!) < authoredNoteBodyColumn && paragraphOwnedNotes.has(i) &&
+            !returnedToHost &&
+            indentColumns(candidate) > paragraphOwnedNotes.get(i)! &&
+            opaqueGroupCloser(candidate.trimStart()) !== null) break
+        if (authoredNoteBodyColumn !== undefined && sourceLines?.[j] !== undefined &&
+            sourceColumn(sourceLines[j]!, quotePrefixDepth(sourceLines[j]!)) < authoredNoteBodyColumn &&
+            paragraphOwnedNotes.has(i) && indentColumns(candidate) > paragraphOwnedNotes.get(i)! &&
+            !returnedToHost &&
+            !isContinuationMarker(candidate.trimStart()) &&
+            opaqueGroupCloser(candidate.trimStart()) === null) {
+          noteReturnsToParagraphOwner = !lineOpensItemBlock(candidate.trimStart())
+          if (!noteReturnsToParagraphOwner)
+            lines[j] = sliceColumns(candidate, Math.max(0, base - paragraphOwnedNotes.get(i)!), true)
+          break
+        }
         if (authoredNoteBodyColumn !== undefined &&
-            indentColumns(candidate, authoredNoteBodyColumn) < authoredNoteBodyColumn &&
+            (paragraphOwnedNotes.has(i) && sourceLines?.[j] !== undefined
+              ? sourceColumn(sourceLines[j]!)
+              : indentColumns(candidate, authoredNoteBodyColumn)) < authoredNoteBodyColumn &&
             lineOpensItemBlock(candidate.trimStart()) &&
             !RE_FOOTNOTE_DEF.test(candidate.trimStart()) &&
             !returnedToHost) break
@@ -8916,7 +8940,7 @@ function rebaseOverindentedBlocks(
     }
 
     // Preserve the written column when flattening would hand a sibling tail to this note.
-    const keepsAuthoredColumn = (hostIsFootnoteBody ||
+    const keepsAuthoredColumn = (hostIsFootnoteBody || noteReturnsToParagraphOwner ||
       (i + 2 === lines.length && lines[i + 1] !== undefined &&
         !RE_ADMONITION_CLOSE.test(lines[i + 1]!.trimStart()) &&
         !RE_LINE_BLOCK_OPEN.test(lines[i + 1]!.trimStart()) &&
@@ -11884,6 +11908,9 @@ class ParseSession {
     // to the outer note.
     const markerColumn = indentColumns(defLineRaw)
     const bodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
+    const authoredLine = lexer.rootLines?.[lexer.lineNumber(defLineIndex) - 1]
+    const authoredBodyColumn = authoredLine === undefined ? undefined
+      : sourceColumn(authoredLine) + FOOTNOTE_BODY_COLUMN
     const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
     // Preserve the raw label as the AST/source-layout spelling. Resolution and
     // duplicate handling derive their shared ASCII-whitespace key separately.
@@ -11934,6 +11961,9 @@ class ParseSession {
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
+      if (lexer.hostBody === 'description' && pendingBlanks > 0 &&
+          authoredBodyColumn !== undefined && sourceLine !== undefined && !isBlankLine(sourceLine) &&
+          sourceColumn(sourceLine) < authoredBodyColumn && indentColumns(ln, bodyColumn) >= bodyColumn) break
       if (lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
           sourceLine !== undefined && !isBlankLine(sourceLine) &&
           indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) break
@@ -12079,8 +12109,8 @@ class ParseSession {
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
         !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
         (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
-        (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
-          !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
+        (isRetainableLineComment(lexer, ln) ||
+          !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
       ) {
         const content = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
           ? ln.trimStart()
