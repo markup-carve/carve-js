@@ -773,7 +773,6 @@ export function lintCarve(
       left: 'the next block starts left of its column',
       right: 'the next block starts right of its column',
       'wrong-column': 'its column names no open container',
-      'fence-payload': 'an open fence takes it as payload',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
