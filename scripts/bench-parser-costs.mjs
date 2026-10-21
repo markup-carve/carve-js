@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Session } from 'node:inspector'
 import { cpus, loadavg } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -18,7 +18,7 @@ const fixtures = {
   'interior-spaces': 'a' + ' '.repeat(8192) + 'b\n',
   'definitions': '[r]: /target\n\n' + 'alpha [ref][r]\n\n'.repeat(512),
 }
-const digest = files => createHash('sha256').update(Buffer.concat(files.map(file => readFileSync(file)))).digest('hex')
+const digest = files => createHash('sha256').update(Buffer.concat(files.filter(existsSync).map(file => readFileSync(file)))).digest('hex')
 const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
 const [command, entry, family, mode] = process.argv.slice(2)
 if (command === '--worker') {
@@ -58,8 +58,8 @@ if (command === '--worker') {
   const stamp = entry => {
     const root = resolve(dirname(entry), '..')
     return { head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-      sourceSha256: digest(['fast-html.ts', 'parse.ts', 'source-positions.ts'].map(name => resolve(root, 'src', name))),
-      buildSha256: digest(['fast-html.js', 'parse.js', 'source-positions.js'].map(name => resolve(root, 'dist', name))) }
+      sourceSha256: digest(['fast-html.ts', 'parse.ts', 'parse-lexer.ts', 'source-positions.ts'].map(name => resolve(root, 'src', name))),
+      buildSha256: digest(['fast-html.js', 'parse.js', 'parse-lexer.js', 'source-positions.js'].map(name => resolve(root, 'dist', name))) }
   }
   const metadata = { generatedAt: new Date().toISOString(), node: process.version, cpu: cpus()[0].model, logicalCpus: cpus().length,
     baseline: stamp(baseline), candidate: stamp(candidate), runnerSha256: digest([fileURLToPath(import.meta.url)]),
