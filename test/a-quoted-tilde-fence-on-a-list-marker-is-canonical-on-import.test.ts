@@ -18,7 +18,7 @@ describe('a quoted tilde fence on a list marker is canonical on import', () => {
 
   it('leaves an unclosed quoted fence to the existing container rule', () => {
     const source = '- > ~~~\n  > a\n\n  b\n'
-    expect(markdownToCarve(source)).toBe('- > ~~~\n  > a\n\n  b\n')
+    expect(markdownToCarve(source)).toBe('- > ```\n  > a\n  > ```\n\n  b\n')
   })
 
   it('keeps the public no-final-newline behavior', () => {

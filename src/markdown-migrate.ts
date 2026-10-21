@@ -13,6 +13,7 @@ import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-empha
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
+import { canonicalCarveWrite } from './canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './imported-crossrefs.js'
 import { rewriteSameFileHeadingLinks, type FragmentFixup } from './markdown-heading-fragments.js'
 /*
@@ -46,7 +47,7 @@ import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DA
 import { extendsGrapheme } from './grapheme-extender.js'
 import { opensFrontmatter, parse, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, canonicalQuoteBodyLines, dropTrailingWs, emphasisNeedsBraces, escapeQuoted, escapeSpanMarkerPayload, foldEmptyItemBody, listContinuationWidth, padCell, paragraphLineText, quoteAttrValue, renderCarve, spellCodeSpan, trimHeadingText } from './render-carve.js'
-import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
+import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -3968,10 +3969,6 @@ function emitContainerLine(
     const heading = RE_MD_HEADING_OPENER.exec(body)
     if (heading) return { line: `${heading[0].trimEnd()} ${trimHeadingText(body.slice(heading[0].length))}`, continuationWidth: 0 }
   }
-  if (kind === 'break' && RE_MD_THEMATIC.test(body)) {
-    const marker = RE_MD_THEMATIC.exec(body)?.[1] as '-' | '*' | '_' | undefined
-    return { line: thematicBreakSpelling(marker, null), continuationWidth: 0 }
-  }
   if (kind === 'definition' && stack.quoteDepth > 0) {
     const match = RE_SINGLE_QUOTED_DEFINITION.exec(body)
     if (match) return { line: `${match[1]}"${escapeQuoted(match[2]!)}"`, continuationWidth: 0 }
@@ -6470,14 +6467,11 @@ export function markdownToCarveWithLosses(
     }
     if (dialect.abbreviations !== false && value.includes('{abbr="')) value = foldDefinedAbbreviations(value)
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
-    if (value.includes('@') || usedBoundaryKey !== undefined) {
-      const document = parse(value)
-      if (linkMarkdownEmailText(document, usedBoundaryKey)) {
-        const trailingNewline = value.endsWith('\n')
-        value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
-        if (!trailingNewline) value = value.replace(/\n$/, '')
-      }
-    }
+    const trailingNewline = value.endsWith('\n')
+    value = canonicalCarveWrite(value, {
+      onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
+    }, document => { if (value.includes('@') || usedBoundaryKey !== undefined) linkMarkdownEmailText(document, usedBoundaryKey) })
+    if (!trailingNewline) value = value.replace(/\n$/, '')
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')
     }
@@ -6784,123 +6778,6 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
     at = end
   }
   return { text: text.join('\n'), sourceBlanks }
-}
-
-/**
- * Write the blank line `carve fmt` puts inside an empty code block.
- *
- * A fence the import closed on the very next line renders the same empty
- * block either way, so this is bytes; without it the document failed
- * `fmt --check` (markup-carve/carve-js#1952). The blank carries the closer's
- * own container prefix, and the reading is checked before it is kept, the way
- * `separateLooseItems` answers from the parse.
- */
-function blankInsideEmptyFences(source: string): string {
-  const openers: number[] = []
-  const visit = (node: unknown): void => {
-    if (node === null || typeof node !== 'object') return
-    type Block = {
-      type?: string
-      content?: string
-      pos?: { startLine: number; endLine: number }
-      items?: unknown[]
-      children?: unknown[]
-      footnoteDefs?: Record<string, unknown[]>
-    }
-    const block = node as Block
-    if (
-      block.type === 'code_block' &&
-      block.content === '' &&
-      block.pos !== undefined &&
-      block.pos.endLine === block.pos.startLine + 1
-    ) {
-      openers.push(block.pos.startLine)
-    }
-    // A footnote definition's body hangs off the document rather than off its
-    // children, so it needs naming to be reached.
-    const held = Object.values(block.footnoteDefs ?? {}).flat()
-    for (const child of [...(block.items ?? []), ...(block.children ?? []), ...held]) visit(child)
-  }
-  visit(parse(source))
-  if (openers.length === 0) return source
-  const lines = source.split('\n')
-  const after = new Set(openers.map((line) => line - 1))
-  const out: string[] = []
-  for (const [at, line] of lines.entries()) {
-    out.push(line)
-    if (after.has(at)) out.push(/^[ \t>]*/.exec(lines[at + 1] ?? '')![0].trimEnd())
-  }
-  const written = out.join('\n')
-  return reading(written) === reading(source) ? written : source
-}
-
-/** What a source reads as, with everything positional left out. */
-function reading(text: string): string {
-  return JSON.stringify(parse(text), (key, value) => (key === 'pos' || key === 'srcByteLength' ? undefined : value))
-}
-
-/** Matches a quote line carrying nothing but its own markers. */
-const RE_BARE_QUOTE_LINE = /^ *>(?:[ \t]*>)*[ \t]*$/
-
-/**
- * Drop an empty quote line the quote ENDS at, which `carve fmt` does not write.
- *
- * A blank line inside a quote separates two of its blocks, and fmt keeps it;
- * one the quote never comes back from carries nothing, and fmt drops it the way
- * it drops a trailing blank in any container. The import wrote it wherever the
- * source had one - `> alpha` over `>` at the document level as much as under
- * `- > alpha` - so an imported document holding one failed `fmt --check`
- * (markup-carve/carve-js#1947 case 2).
- *
- * A candidate is a quote line with a line of its own quote above it - dropping
- * the only line a quote has would delete the quote - that the next line does not
- * continue the quote of, or whose next line is itself a candidate: a run of them
- * is scanned from the end, since dropping the last leaves the one above it
- * trailing in turn.
- *
- * The reading decides whether the candidates go, because dropping one reopens
- * the paragraph above it for a lazy line. All of them at once answers it in two
- * parses, and one at a time from the end answers the rest - under a budget,
- * since that costs a parse per candidate and the alternative is quadratic in a
- * document built of them. Past the budget the lines stay, which is what the
- * import wrote before any of this.
- */
-const TRAILING_QUOTE_LINE_PARSE_BUDGET = 32
-
-function dropTrailingEmptyQuoteLines(source: string): string {
-  const lines = source.split('\n')
-  const candidates: number[] = []
-  const trailing = new Set<number>()
-  for (let at = lines.length - 1; at >= 0; at--) {
-    const line = lines[at]!
-    if (!RE_BARE_QUOTE_LINE.test(line)) continue
-    // A run of them is scanned from the end, but only a line spelled the same
-    // way is part of the run: a DEEPER quote under this one is the block fmt
-    // writes this very line to separate (markup-carve/carve-js#1921), and the
-    // reading alone cannot tell, since both spellings read alike.
-    const next = lines[at + 1] ?? ''
-    if (next.startsWith(line.trimEnd()) && !(trailing.has(at + 1) && next.trimEnd() === line.trimEnd())) continue
-    // The line above has to be a line of this quote, which it is when it holds
-    // a marker no further right than this one's - `- > alpha` over `  >` as
-    // much as `> alpha` over `>`.
-    const above = lines[at - 1] ?? ''
-    const marker = above.indexOf('>')
-    if (marker < 0 || marker > line.indexOf('>')) continue
-    trailing.add(at)
-    candidates.push(at)
-  }
-  if (candidates.length === 0) return source
-  const was = reading(source)
-  const without = (drop: ReadonlySet<number>): string => lines.filter((_, at) => !drop.has(at)).join('\n')
-  const all = without(new Set(candidates))
-  if (reading(all) === was) return all
-  if (candidates.length > TRAILING_QUOTE_LINE_PARSE_BUDGET) return source
-  const drop = new Set<number>()
-  for (const at of candidates) {
-    drop.add(at)
-    if (reading(without(drop)) !== was) drop.delete(at)
-  }
-  return without(drop)
 }
 
 /**
@@ -8199,9 +8076,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   }
   const assemble = (): string => {
     const written = joinOutput(out, fromSource)
-    let text = dropTrailingEmptyQuoteLines(
-      blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
-    ).replace(/\x00REFITEM\x00/g, '%%')
+    let text = separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)
+      .replace(/\x00REFITEM\x00/g, '%%')
     if (terminalHtmlBlock && !text.endsWith('\n')) text += '\n'
     return text
   }

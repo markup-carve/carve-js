@@ -135,8 +135,8 @@ describe('explicit empty destinations', () => {
     ['>> [t][r]\n>>\n>> [r]: <> "a\n> b"', '> > [t]( "a\n> > b")', '<blockquote>\n  <blockquote><p><a href="" title="a\nb">t</a></p></blockquote>\n</blockquote>'],
     ['[r]: <> "a\nb"\n\n> x [t][r] y', '> x [t]( "a\n> b") y', '<blockquote><p>x <a href="" title="a\nb">t</a> y</p></blockquote>'],
     ['> ![t][r]\n>\n> [r]: <> "a\n> b"', '> ![t]( "a\n> b")', '<blockquote>\n  <img src="" alt="t" title="a\nb">\n</blockquote>'],
-    ['[r]: <> "a\nb"\n\n> - [t][r]', '> - [t]( "a\n> b")', '<blockquote>\n  <ul>\n    <li><a href="" title="a\nb">t</a></li>\n  </ul>\n</blockquote>'],
-    ['[r]: <> "a\nb"\n\n- > [t][r]', '- > [t]( "a\nb")', '<ul>\n  <li>\n    <blockquote><p><a href="" title="a\nb">t</a></p></blockquote>\n  </li>\n</ul>'],
+    ['[r]: <> "a\nb"\n\n> - [t][r]', '> - [t]( "a\n>   b")', '<blockquote>\n  <ul>\n    <li><a href="" title="a\nb">t</a></li>\n  </ul>\n</blockquote>'],
+    ['[r]: <> "a\nb"\n\n- > [t][r]', '- > [t]( "a\n  > b")', '<ul>\n  <li>\n    <blockquote><p><a href="" title="a\nb">t</a></p></blockquote>\n  </li>\n</ul>'],
     ['> x ![t][r] y\n>\n> [r]: <> "a\n> b"', '> x ![t]( "a\n> b") y', '<blockquote><p>x <img src="" alt="t" title="a\nb"> y</p></blockquote>'],
   ])('inlines a quoted titled empty Markdown definition whose title wraps: %j', (source, carve, html) => {
     const result = markdownToCarveWithLosses(source)

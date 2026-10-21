@@ -290,7 +290,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
   })
 
   it('does not read a line under a heading item as lazy', () => {
-    expect(markdownToCarve(md('- # h', 'lazy'))).toBe(md('- # h', 'lazy'))
+    expect(markdownToCarve(md('- # h', 'lazy'))).toBe(md('- # h', '', 'lazy'))
   })
 
   it('keeps a lazy line out of a fence the item line opened', () => {
@@ -307,7 +307,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     [
       'leaves open a fence set apart from its item text with a blank line inside',
       md('- a', '', '  ~~~', '  x', '', '  y'),
-      md('{loose}', '- a', '', '  ```', '  x', '', '  y'),
+      md('{loose}', '- a', '', '  ```', '  x', '', '  y', '  ```'),
     ],
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', '', 'more', '', '9. b')],
     ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('{loose}', '- a', '', '  > iq', '', '> q')],
@@ -411,7 +411,7 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
 
   // A rule on the marker line stays in its item and ends its paragraph.
   it('does not read a rule on an item line as nested items', () => {
-    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- ---', 'x'))
+    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- ---', '', 'x'))
   })
 
   it('reads a sibling after an item paragraph as GFM does', () => {

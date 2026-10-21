@@ -95,7 +95,7 @@ describe('a quote collector measures from the item it holds', () => {
 
   it('takes a lone pipe row under a quoted item as paragraph text', () => {
     // No delimiter row, so GFM reads no table and the row continues the item.
-    expect(markdownToCarve(lines('> - i', '> |a|b|'))).toBe(lines('> - i', '> \\|a|b|'))
+    expect(markdownToCarve(lines('> - i', '> |a|b|'))).toBe(lines('> - i', '>   \\|a|b|'))
   })
 })
 

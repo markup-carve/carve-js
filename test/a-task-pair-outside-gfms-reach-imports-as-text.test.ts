@@ -101,7 +101,7 @@ describe('a task pair outside GFM’s reach imports as text', () => {
     // every case above.
     it.each(STATES)('still imports a top-level [%s] as a checkbox', (state) => {
       const out = imported(`- [${state}] foo\n`)
-      expect(out.carve).toBe(`- [${state}] foo\n`)
+      expect(out.carve).toBe(`- [${state.toLowerCase()}] foo\n`)
       expect(out.html).toContain(BOX)
     })
 

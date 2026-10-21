@@ -22,7 +22,7 @@ describe('new roundtrip carriers', () => {
     const result = migrateMarkdown(markdown)
     expect(result.report.diagnostics.filter(d => d.code === 'carrier-marker-dropped')).toHaveLength(1)
     expect(result.report.diagnostics.filter(d => d.code === 'carrier-markers-damaged')).toEqual([])
-    expect(result.value).toContain(':::: panel')
+    expect(result.value).toContain('\n::: panel\n')
     expect(result.value).toContain('*Group caption*')
     expect(result.value).not.toContain('figure_group')
   })

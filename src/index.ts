@@ -10,10 +10,10 @@ import {
   resolveHeadingIds,
   resolveHeadingIdsWithRegistry,
   headingIdSlugOpts,
-  promoteBlockImages,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { parseDocument } from './parse-document.js'
+import { canonicalCarveWrite } from './canonical-carve-write.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
@@ -819,12 +819,7 @@ export function carveToCarve(
   source: string,
   opts: ParseOptions & CarveRenderOptions = {},
 ): string {
-  const doc = parse(source, opts)
-  promoteBlockImages(doc.children, true)
-  if (doc.footnoteDefs) {
-    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
-  }
-  return renderCarve(doc, opts)
+  return canonicalCarveWrite(source, opts)
 }
 
 export function carveToCarveWithReport(

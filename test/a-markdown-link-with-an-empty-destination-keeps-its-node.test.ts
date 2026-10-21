@@ -10,7 +10,7 @@ describe('a Markdown link or image with an empty destination', () => {
     ['an empty image', '![y]()', '![y]()', '<img src="" alt="y">'],
     ['an empty angle destination', '[z](<>)', '[z]()', '<p><a href="">z</a></p>'],
     ['an empty image angle destination', '![a](<>)', '![a]()', '<img src="" alt="a">'],
-    ['markup in the text', 'a [*b*]() c', 'a [{/b/}]() c', '<p>a <a href=""><em>b</em></a> c</p>'],
+    ['markup in the text', 'a [*b*]() c', 'a [/b/]() c', '<p>a <a href=""><em>b</em></a> c</p>'],
     ['nested brackets in the text', '[a [b] c]()', '[a [b] c]()', '<p><a href="">a [b] c</a></p>'],
     ['a link after it', '[x]()[y](u)', '[x]()[y](u)', '<p><a href="">x</a><a href="u">y</a></p>'],
   ])('imports %s as a native node', (_, markdown, carve, html) => {
