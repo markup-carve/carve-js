@@ -1007,9 +1007,12 @@ export function createDefinitionListParser(
             (authoredList || entryColumn() < lexer.hostContentColumn)
           const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn
           const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
+          const markerTermText = lexer.definitionLeadFromItemMarker && lexer.hostMarkerColumn !== undefined &&
+            RE_DEFLIST_DEF.test(nextEntry) &&
+            entryColumn() > lexer.hostMarkerColumn && entryColumn() < lexer.hostContentColumn
           const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
-            sourceColumn(nextSource, quotePrefixDepth(nextSource)) > termColumn
+            (sourceColumn(nextSource, quotePrefixDepth(nextSource)) > termColumn || markerTermText)
           // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
           // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
           // interruption from a fence with no closer ahead so an OPEN PARAGRAPH

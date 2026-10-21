@@ -1374,6 +1374,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
         }
         const sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
+        // A term written on the item marker line begins at the item's content
+        // column. A separator at the outer marker column leaves that item;
+        // one between those columns is only a continuation of the term.
+        if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
+            sourceDepth === itemQuoteDepth && sourceMarkerColumn <= physicalItemMarkerColumn) break
+        const markerTermText = markerLineTerm && sourceDescription !== null &&
+          lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth &&
+          sourceMarkerColumn < contentCol && sourceMarkerColumn > physicalItemMarkerColumn
         if (RE_DEFLIST_DEF.test(sourceQuoteBody(sourceLine).trimStart()) && lazyState.inDefList === 'term' &&
             definitionHostColumn !== undefined && sourceMarkerColumn < definitionHostColumn &&
             sourceMarkerColumn <= physicalItemMarkerColumn && sourceDepth === itemQuoteDepth) break
@@ -1508,6 +1516,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               : quoteFootnote
                 ? placed.trimStart()
               : placed
+          if (markerTermText) dedented = LAZY_FRAME + sourceEntry
           if (pastDefinitionEntry && survivingItemParagraph &&
               definitionHostColumn === lexer.lineStartColumn(itemStartLineIndex) - 1 + contentCol - baseIndent &&
               (startsInterruptingBlock(lexer, placed.trimStart()) ||

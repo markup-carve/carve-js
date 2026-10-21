@@ -99,9 +99,9 @@ describe('a definition below a bullet whose item holds a def list', () => {
     expect(carveToHtml('* : |\n  [^f]: t\n')).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
-  // The two readings the full flush exists for, and both are unmoved.
-  it('still re-aligns an under-indented description marker', () => {
-    expect(carveToHtml('- :: t\n : d\n')).toContain('<dd>d</dd>')
+  // A marker-line term uses the item's content column for its separator.
+  it('keeps a below-content description marker in the term', () => {
+    expect(carveToHtml('- :: t\n : d\n')).toContain('<dt>t\n: d</dt>')
   })
 
   it('still strips a wrapped term continuation to its dt', () => {
