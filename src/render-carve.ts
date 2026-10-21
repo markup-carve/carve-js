@@ -3648,7 +3648,17 @@ class CarveRenderSession {
           const wrapped = ctx.quoteDepth === 0 ? nested : nested.replace(/\n$/, '').split('\n').map(line =>
             line ? `${'> '.repeat(ctx.quoteDepth)}${line}` : '>'.repeat(ctx.quoteDepth)).join('\n')
           try {
-            let blocks = parse(wrapped).children
+            // A dedented fence after a nested list writes boundary tags as blank
+            // lines. Probe its final spelling before falling back to a loose item.
+            const dedentedFence = item.children.some((child, index) => {
+              const previous = item.children[index - 1]
+              if (child.type !== 'code_block' || previous?.type !== 'list') return false
+              let tail = previous.items.at(-1)?.children.at(-1)
+              while (tail?.type === 'list') tail = tail.items.at(-1)?.children.at(-1)
+              return tail?.type === 'code_block'
+            })
+            const probe = dedentedFence ? this.normalize(wrapped) : wrapped
+            let blocks = parse(probe).children
             for (let depth = 0; depth < ctx.quoteDepth; depth++) {
               const quote = blocks[0]
               if (quote?.type !== 'block_quote') return false
@@ -3856,17 +3866,6 @@ class CarveRenderSession {
           rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `)
         }
         if (b.type === 'list') {
-          if (tight && next?.type === 'code_block' && next.content.startsWith('\n') &&
-              b.items.at(-1)?.children.at(-1)?.type === 'code_block') {
-            const lines = rendered.split('\n')
-            if (/^[ \t]*(`{3,}|~{3,})$/.test(lines.at(-1) ?? '')) {
-              lines.pop()
-              const fenceLines = lines.flatMap((line, index) => /^[ \t]*(`{3,}|~{3,})$/.test(line) ? [index] : [])
-              const opener = fenceLines.at(-1) ?? -1
-              if (opener > 0) lines.splice(opener, 0, '')
-              rendered = lines.join('\n')
-            }
-          }
           if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
           } else if (
