@@ -2781,7 +2781,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
             ? beforeRebase[k - 1] !== undefined &&
               indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
-            : ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0)) ||
+            : (((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0 ||
+              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k))))) ||
             (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
