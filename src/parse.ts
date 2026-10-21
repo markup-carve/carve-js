@@ -8582,6 +8582,7 @@ function rebaseOverindentedBlocks(
     const heldFoldedLines = new Set<number>()
     const definitionEntry = RE_DEFLIST_TERM.test(opener) || RE_DEFLIST_DEF.test(opener)
     if (definitionEntry) {
+      const authoredBase = sourceLines?.[i] === undefined ? base : sourceColumn(sourceLines[i]!)
       // A definition list is one complete block, including every description
       // body that reaches that description's own content column.  Measuring
       // only to the separating blank made an ancestor claim the next opener as
@@ -8651,7 +8652,21 @@ function rebaseOverindentedBlocks(
         }
         if (descriptionColumn !== null && column < descriptionColumn &&
             colonFenceOpenerLen(candidate.trimStart()) !== null) break
-        if (column < base) break
+        if (column < base) {
+          const authoredColumn = sourceLines?.[j] === undefined ? column : sourceColumn(sourceLines[j]!)
+          if (termOpen && !isListMarkerLine(candidate.trimStart()) &&
+              (authoredColumn > authoredBase ||
+                (!lineOpensItemBlock(candidate.trimStart()) && !opensCodeFence(candidate.trimStart())))) {
+            const comment = commentFenceRun(candidate.trimStart())
+            if (comment !== undefined) {
+              const close = (commentCloser ??= commentCloserLookup(lines))(comment, j)
+              if (close > j) j = close
+            }
+            end = j
+            continue
+          }
+          break
+        }
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
         if (column === base && (RE_DEFLIST_TERM.test(local) || description !== null)) {
@@ -8673,7 +8688,10 @@ function rebaseOverindentedBlocks(
           attributes.pos = j
           if (peekBlockAttributes(attributes, local)) break
         }
-        if (termOpen && markerContentColumn(local) < 0 && (column > base || (!lineOpensItemBlock(local) && !RE_COMMENT_LINE.test(local)))) {
+        if (termOpen &&
+            (column > base
+              ? !isListMarkerLine(local.trimStart())
+              : markerContentColumn(local) < 0 && !lineOpensItemBlock(local) && !RE_COMMENT_LINE.test(local))) {
           if (column === base) termFloorText = true
           // A comment fence keeps its body and closer, whatever they look like.
           const comment = commentFenceRun(sliceColumns(candidate, column, true))
@@ -16413,8 +16431,7 @@ class ParseSession {
           () => { authoredCodeFenceOpen = true },
           rebaseTakenBelowColumn,
           leadColon !== null,
-          tabRebaseColumns === undefined ? undefined
-            : leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
+          leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
           tabRebaseColumns,
           { markers: noteParagraphMarkers },
           leadOwnsExtent ? undefined : itemParagraphFences,
