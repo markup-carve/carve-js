@@ -17,6 +17,8 @@ const fixtures = {
   'unicode-lines': '😀 alpha *beta*  \r\nline 😀\n\n'.repeat(256),
   'interior-spaces': 'a' + ' '.repeat(8192) + 'b\n',
   'definitions': '[r]: /target\n\n' + 'alpha [ref][r]\n\n'.repeat(512),
+  'many-tables': '|a|b|\n|---|---|\n|x|y|\n\n'.repeat(256),
+  'many-line-blocks': '::: |\nstanza\nnext\n:::\n\n'.repeat(256),
 }
 const digest = files => createHash('sha256').update(Buffer.concat(files.filter(existsSync).map(file => readFileSync(file)))).digest('hex')
 const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
