@@ -5062,6 +5062,7 @@ interface ItemLazyState {
    * over-wide fix breaks.
    */
   inFootnoteBody: boolean
+  footnoteBodyColumn?: number
   /**
    * The tracker for the quote this item currently ends on, or null.
    *
@@ -6244,9 +6245,10 @@ function trackItemLazyState(
   if (
     state.inFootnoteBody &&
     !isBlankLine(content) &&
-    (state.authoredColon && atContentColumn
-      ? Math.max(0, indentColumns(content, FOOTNOTE_BODY_COLUMN + state.authoredColon.column) - state.authoredColon.column)
-      : indentColumns(content, FOOTNOTE_BODY_COLUMN)) < FOOTNOTE_BODY_COLUMN
+    indentColumns(content, Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
+      atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)) <
+      Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
+        atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)
   ) {
     state.inFootnoteBody = false
   }
@@ -6692,6 +6694,8 @@ function trackItemLazyState(
       { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
       (width, extra = 0) => hasLiteralCommentCloser?.(width, run! + extra) ?? false,
     )
+    if (inner.inFootnoteBody && RE_FOOTNOTE_DEF.test(dedented))
+      inner.footnoteBodyColumn = runColumns! - state.ownedColumn + FOOTNOTE_BODY_COLUMN
     state.commentAtColumn = inner.commentAtColumn
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
@@ -6815,6 +6819,8 @@ function trackItemLazyState(
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
     state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
+    if (state.inFootnoteBody) state.footnoteBodyColumn = indentColumns(content) + FOOTNOTE_BODY_COLUMN
+    else delete state.footnoteBodyColumn
     state.invisibleAtColumn = true
     state.commentAtColumn = false
     state.lazyFoldable = false
