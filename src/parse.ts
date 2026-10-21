@@ -8393,6 +8393,7 @@ function rebaseOverindentedBlocks(
   stripLeftCodePrefix = false,
   // A description or footnote body folds a marker into its open paragraph (PART 9 §10 I2).
   foldsMarkers = false,
+  authoredOpeners?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -8442,6 +8443,7 @@ function rebaseOverindentedBlocks(
     if (i <= markerColonEnd && takenBelowColumn?.has(i) && opensCodeFence(line.trimStart())) inlineLeadPayload = true
     if (inlineLeadPayload && i <= markerColonEnd) continue
     if (eligible && !eligible.has(i)) continue
+    if (authoredOpeners?.has(i)) ownedColumn = -1
     const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
     const base = indentColumns(line, cap)
     if (i <= markerColonEnd && !(ownedColumn >= 0 && base >= ownedColumn)) {
@@ -12776,6 +12778,7 @@ class ParseSession {
       let commentPayloadState: ItemLazyState | null = null
       const paragraphFenceLines = new Set<number>()
       const lazyParagraphFenceLines = new Set<number>()
+      const authoredOpeners = new Set<number>()
       /**
        * Feed one collected body line to the S4 tracker.
        *
@@ -12885,6 +12888,21 @@ class ParseSession {
       // line (`: > q`) is already in `lazyState.quoteInner` before this loop
       // runs and never passes through the flag, so the gate below asks both.
       let bodyHoldsQuote = false
+      const firstSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex) - 1] ?? ''
+      const quoteDepth = quotePrefixDepth(firstSource)
+      const quoteHostColumn = quoteDepth > 0 ? sourceColumn(firstSource, quoteDepth - 1) : -1
+      const descriptionSourceColumn = quoteDepth > 0 ? sourceColumn(firstSource, quoteDepth) : -1
+      const quoteBandFold = (line: string): boolean => {
+        if (quoteDepth === 0 || !lazyState.lazyFoldable || lazyState.opaque !== null ||
+            lazyState.inlineFenceParagraph || isBlankLine(line)) return false
+        const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? line
+        const opener = line.trimStart()
+        if (quotePrefixDepth(source) >= quoteDepth &&
+            sourceColumn(source, quoteDepth - 1) === quoteHostColumn)
+          return indentColumns(line, contentCol) < contentCol &&
+            sourceColumn(source, quoteDepth) > descriptionSourceColumn && RE_BLOCKQUOTE.test(opener)
+        return sourceColumn(source) !== quoteHostColumn || isListMarkerLine(opener)
+      }
       /**
        * The residual indent the currently open block's OPENER was written at, or
        * null while nothing is open.
@@ -13050,6 +13068,16 @@ class ParseSession {
         if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
           const lineIndex = lexer.pos
           const dedented = sliceColumns(ln, contentCol, true)
+          if (quoteBandFold(ln)) {
+            const folded = LAZY_FRAME + dedented.trimStart()
+            bodyLines.push(folded)
+            bodySourceLines.push(ln)
+            bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+            track(folded, undefined, false)
+            lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
+            lexer.consume()
+            continue
+          }
           if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(dedented.trimStart()))
             lexer.hostedFootnoteLines.add(lexer.lineNumber(lineIndex))
           // A LINE BELOW THE OPEN ITEM'S CONTENT COLUMN OPENS NOTHING
@@ -13117,7 +13145,6 @@ class ParseSession {
           // Reading every over-indented line flush on its own closed those, and
           // moved 26 documents off the oracle while fixing 72.
           const flush = dedented.replace(/^[ \t]+/, '')
-          if (flush.startsWith('>')) bodyHoldsQuote = true
           const residual = indentColumns(ln) - contentCol
           let bodyReadsFlush = false
           // A QUOTE THAT COLLECTS NOTHING OWNS NOTHING. The question is whether
@@ -13132,6 +13159,7 @@ class ParseSession {
             !bodyHoldsQuote &&
             lazyState.literalColon === undefined &&
             !insideOpenQuoteParagraph(lazyState) &&
+            !lazyState.inFootnoteBody &&
             !lazyUnderNestedItem &&
             flush !== dedented &&
             lineOpensItemBlock(flush)
@@ -13144,7 +13172,7 @@ class ParseSession {
             // free and true - and it stays safe if that gate is ever relaxed.
             const probe: ItemLazyState = { ...lazyState, quoteInner: null }
             trackItemLazyState(flush, probe, () => true, true)
-            if (!probe.lazyFoldable) {
+            if (!probe.lazyFoldable || (probe.quoteInner !== null && lazyState.quoteInner === null)) {
               if (insideOpenFence(lazyState)) {
                 // Inside an open block: structure at the block's own base, payload
                 // below it. This is what keeps a deeper `:::` from closing an
@@ -13166,6 +13194,8 @@ class ParseSession {
               }
             }
           }
+          if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
+          if (bodyReadsFlush && residual > 0) authoredOpeners.add(bodyLines.length - 1)
           // A line AT the body's column 0 is the body's own block, so it replaces
           // whatever container stood there: another list marker keeps a list
           // collecting, anything else ends one. Read before `track`, because a
@@ -13229,6 +13259,17 @@ class ParseSession {
         if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        if (quoteBandFold(ln)) {
+          const lineIndex = lexer.pos
+          const folded = LAZY_FRAME + below
+          bodyLines.push(folded)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          track(folded, undefined, false)
+          lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
+          lexer.consume()
+          continue
+        }
         // carve#3295: below the body's column a heading, break, table row or
         // quote marker opens nothing, so it folds into the open paragraph. In
         // an item the line reaches the item's column and opens there, unless a
@@ -13388,7 +13429,7 @@ class ParseSession {
       // Definition entries use the same exact block extent in every container.
       rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
         undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines,
-        false, true, true)
+        false, true, true, authoredOpeners)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol
