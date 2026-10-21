@@ -837,6 +837,8 @@ export interface StrippedLineOrigin {
   text: string
   parentIndex: number
   prefix: number
+  /** Virtual syntax borrows one source boundary but contributes no characters. */
+  virtual?: boolean
 }
 
 function nestedSubLexer(
@@ -947,14 +949,16 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
         (mapped === undefined || mapped === parent.lineNumber(origin.parentIndex))) {
       const parentIndex = origin.parentIndex
       previousIndex = parentIndex
-      boundaries.push({ parent, line: parentIndex, start: origin.prefix, synthetic: 0 })
+      boundaries.push({ parent, line: parentIndex, start: origin.prefix, synthetic: origin.virtual ? subLine.length : 0 })
       const lead = leadingWhitespace(subLine)
       const anchor = parent.sourceBoundary(parentIndex, origin.prefix + lead)
       offsets.push(anchor.offset - lead)
       widths.push(anchor.column - 1 - lead)
-      prefixMemoLines.push(parent.prefixMemoAllowed(parentIndex))
-      sub.inheritTerminatorFree(i, parent, parentIndex)
-      sub.inheritLeadingWhitespace(i, parent, parentIndex, origin.prefix)
+      prefixMemoLines.push(!origin.virtual && parent.prefixMemoAllowed(parentIndex))
+      if (!origin.virtual) {
+        sub.inheritTerminatorFree(i, parent, parentIndex)
+        sub.inheritLeadingWhitespace(i, parent, parentIndex, origin.prefix)
+      }
       continue
     }
     let literalSuffix: boolean | undefined

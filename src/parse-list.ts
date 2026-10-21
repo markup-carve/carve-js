@@ -1087,6 +1087,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           const plusLineIndex = lexer.pos
+          const plusEnd = (lexer.lineAt(plusLineIndex) ?? '').length
           lexer.consume()
           lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
           acceptedPlusLine = plusLineNumber
@@ -1124,11 +1125,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               attachesAtDocumentColumnZero(lexer) &&
               ((lexer.peek() !== undefined && !isBlankLine(lexer.peek()!)) || detachedFollower)
           if (closesMarkerColon) {
-            nested.push(':'.repeat(leadColon))
+            const closer = ':'.repeat(leadColon)
+            nestedOrigins.set(nested.length, { text: closer, parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
+            nested.push(closer)
             nestedSourceLines.push(undefined)
             nestedLineNumbers.push(plusLineNumber)
-            trackItemLazyState(':'.repeat(leadColon), lazyState)
+            trackItemLazyState(closer, lazyState)
             if (detachedFollower) {
+              nestedOrigins.set(nested.length, { text: '', parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
               nested.push('')
               nestedSourceLines.push(undefined)
               nestedLineNumbers.push(plusLineNumber)
@@ -1157,6 +1161,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
           lexer.attachmentBoundaries.add(plusLineNumber)
           plusSeparators.add(nested.length)
+          nestedOrigins.set(nested.length, { text: '', parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
           nested.push('')
           nestedSourceLines.push(undefined)
           nestedLineNumbers.push(plusLineNumber)
