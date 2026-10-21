@@ -10569,6 +10569,13 @@ export class ParseSession {
       // which case all three are body text (corpus category 279).
       const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
       const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
+      if (pendingBlanks === 0 && lazyState.opaque === null &&
+          noteMarker?.owner?.kind === 'footnote' && noteMarker.reason !== undefined) {
+        // The note still owns this marker even when the next block misses its
+        // marker column. The body collector leaves the + as text below.
+        lexer.reportRefusedContinuationMarker(lexer.pos, markerColumn + 1,
+          'footnote', noteMarker.reason)
+      }
       if (pendingBlanks === 0 && noteMarkerLine &&
           (isPhysicalContinuationMarker(sourceLine ?? ln) || noteMarker?.owner?.kind === 'footnote' && noteMarker.reason === undefined) &&
           sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] ?? '', quotePrefixDepth(sourceLine ?? ln)) ===
@@ -11509,6 +11516,20 @@ export class ParseSession {
             isStackedFirstBlockQuoteMarker(markerSourceLine ?? ln) &&
             lexer.peek() !== undefined && !isListMarkerLine(lexer.peek()!.trimStart()) &&
             quotedLineText(lexer.peek()!, lexer.lineTerminatorFree(lexer.pos)) === null) emptyFirstBlockMarker = true
+        if (lineIndex !== firstLineIndex && markerSourceLine !== undefined &&
+            precedingSourceLine !== undefined && isPhysicalContinuationMarker(markerSourceLine) &&
+            quotePrefixDepth(precedingSourceLine) > quotePrefixDepth(markerSourceLine)) {
+          // A marker at a surviving outer quote level is still a marker when
+          // it cannot take a block. The inner quote may retain it as text.
+          const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex)]
+          const markerDepth = quotePrefixDepth(markerSourceLine)
+          if (follower === undefined || isBlankLine(follower) ||
+              quotePrefixDepth(follower) !== markerDepth || sourceQuoteLocalColumn(follower, markerDepth) !== 0) {
+            lexer.reportRefusedContinuationMarker(lineIndex,
+              sourceColumnAt(markerSourceLine, markerSourceLine.lastIndexOf('+')) + 1, 'block quote',
+              follower === undefined ? 'document' : isBlankLine(follower) ? 'blank' : 'right')
+          }
+        }
         if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
         inner.push(content)
         untracked.push([content, lineIndex])
