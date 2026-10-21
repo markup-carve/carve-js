@@ -12,10 +12,10 @@ it.each([
 <dl>
 <dt>term</dt>
 <dd>detail</dd>
+<dt>term</dt>
+<dd>detail
+q</dd>
 </dl>
-:: term
-:  detail
-q
 </li>
 </ul>
 <ol>
@@ -29,11 +29,11 @@ q
 <dl>
 <dt>term</dt>
 <dd>detail</dd>
-</dl>
-:: term
-:  detail
+<dt>term</dt>
+<dd>detail
 q
-text
+text</dd>
+</dl>
 </li>
 </ul>`],
   ['task with quoted follower', '* [ ] task\n  1. ordered\n    :: term\n    :  detail\n      :: term\n      :  detail\n        q\n        > quote\n', `<ul class="task-list">
@@ -44,13 +44,13 @@ text
 <dl>
 <dt>term</dt>
 <dd>detail</dd>
+<dt>term</dt>
+<dd>detail
+q</dd>
 </dl>
-:: term
-:  detail
-q
-&gt; quote
+<blockquote><p>quote</p></blockquote>
 </li>
 </ul>`],
-])('returns %s below a description to item text', (_name, source, expected) => {
+])('returns %s below a description to the surviving item', (_name, source, expected) => {
   expect(normalize(carveToHtml(source))).toBe(expected)
 })
