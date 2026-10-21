@@ -15769,10 +15769,11 @@ class ParseSession {
           ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
             definitionAuthored && definitionHostColumn !== undefined &&
               (sourceMarkerColumn < definitionHostColumn ||
-                pastDefinitionEntry && !(survivingItemParagraph && startsInterruptingBlock(lexer, sourceEntry)) &&
+                pastDefinitionEntry && !RE_DEFLIST_TERM.test(sourceEntry) &&
+                  !(survivingItemParagraph && startsInterruptingBlock(lexer, sourceEntry)) &&
                   !(sourceDescription !== null && returnedTermSourceColumn === sourceMarkerColumn)))
-        if (belowDescriptionBodyBand && definitionHostColumn !== undefined && survivingItemParagraph &&
-            (startsInterruptingBlock(lexer, sourceEntry) ||
+        if (belowDescriptionBodyBand && definitionHostColumn !== undefined &&
+            (RE_DEFLIST_TERM.test(sourceEntry) || survivingItemParagraph && startsInterruptingBlock(lexer, sourceEntry) ||
               sourceDescription !== null && returnedTermSourceColumn === sourceMarkerColumn)) {
           const owner = sourceDescription !== null ? returnedTermOwnerColumn ?? definitionHostColumn : definitionHostColumn
           lexer.returnedDescriptionOwnerColumns.set(lexer.lineNumber(lexer.pos), owner)
