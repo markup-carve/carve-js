@@ -11,6 +11,10 @@ const refused = [
   ['surviving outer quote, end of input', '> > q\n> +\n', 3, 2],
   ['surviving outer quote, shifted follower', '> > q\n> +\n>   para\n', 3, 2],
   ['quoted note, blank follower', '> [^a]: n\n> +\n\npara\n', 3, 2],
+  ['nested task, checkbox column, sibling', '- foo\n  - [ ] task\n    +\n  - x\n', 5, 3],
+  ['nested task, checkbox column, right follower', '- foo\n  - [ ] task\n    +\n    q\n', 5, 3],
+  ['list content column with no marker owner', '- a\n  +\n\nx\n', 3, 2],
+  ['lazy quote inside list with no marker owner', '- x\n  > q\n  +\n', 3, 3],
 ] as const
 
 const refusalLocations = (source: string) => lintCarve(source)
@@ -26,7 +30,7 @@ describe('a refused marker at a surviving footnote or quote owner', () => {
   it.each([
     '[^a]: intro\n+\nmore\n\nsee[^a]\n',
     '> > q\n> +\n> para\n',
-    '- a\n  +\n\nx\n',
+    '- a\n  z\n\nx\n',
     '> > q\n>   +\n',
     '> > q\n> z\npara\n',
   ])('leaves an accepted marker or ordinary text silent: %j', source => {

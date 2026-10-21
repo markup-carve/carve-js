@@ -12494,7 +12494,10 @@ export class ParseSession {
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
         secondLineLazy = true
       const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      if (lexer.hostMarkerColumn !== undefined && sourceColumn(physical) === lexer.hostMarkerColumn && isContinuationMarker(ln) &&
+      if (lexer.hostMarkerColumn !== undefined &&
+          (sourceColumn(physical) === lexer.hostMarkerColumn ||
+            lexer.hostBody === 'list' && markerDecision(lexer, lexer.pos).reason === 'wrong-column') &&
+          isContinuationMarker(ln) &&
           (isPhysicalContinuationMarker(physical) || isContinuationMarker(physical.trimStart()))) {
         lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
           lexer.hostBody === 'list' ? 'list item' : 'document', 'wrong-column')
