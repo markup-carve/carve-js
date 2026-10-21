@@ -12,6 +12,7 @@ import {
   isBlankLine,
   sliceColumns,
 } from './parse-lexer.js'
+import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import type {
   definitionListHelpers,
   ItemLazyState,
@@ -402,9 +403,8 @@ export function createDefinitionListParser(
       //  - lazy continuation: a flush-left line with no blank before it that does
       //    NOT start an interrupting block folds into the open paragraph (the same
       //    CommonMark lazy rule list items and block quotes use, matching djot).
-      for (;;) {
-        if (lexer.eof()) break
-        const ln = lexer.peek()!
+      runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
+        const ln = admission.line
         // Form B: `+` pull-left continuation.
         const descriptionPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const descriptionFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
@@ -422,7 +422,7 @@ export function createDefinitionListParser(
           if (lazyState.opaque?.kind === 'code' &&
               (follower === undefined || isBlankLine(follower) || indentColumns(follower) !== 0)) {
             lexer.consume()
-            continue
+            return 'continue'
           }
           const plusLineIndex = lexer.pos
           lexer.consume()
@@ -434,7 +434,7 @@ export function createDefinitionListParser(
           // claim the following line. A block quote does NOT end at a comment
           // there, so it does not end at a refused marker either - that is each
           // container's invisible-line rule, not a second column rule.
-          if (!attachesAtDocumentColumnZero(lexer, sourceColumn(descriptionPlus), quotePrefixDepth(descriptionPlus))) break
+          if (!attachesAtDocumentColumnZero(lexer, sourceColumn(descriptionPlus), quotePrefixDepth(descriptionPlus))) return 'stop'
           const { lines: attached, lineNumbers: attachedLineNumbers } = parseSession.collectAttachedBlock(
             lexer,
             isDefBodyBoundary,
@@ -457,7 +457,7 @@ export function createDefinitionListParser(
             }
             bodyLineNumbers.push(...attachedLineNumbers)
           }
-          continue
+          return 'continue'
         }
         if (!isBlankLine(ln) && indentColumns(ln, contentCol) < contentCol &&
             lazyState.opaque?.kind === 'code' && authoredBase !== null && authoredCodeFenceCloses &&
@@ -466,7 +466,7 @@ export function createDefinitionListParser(
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
           lexer.consume()
-          continue
+          return 'continue'
         }
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
@@ -482,7 +482,7 @@ export function createDefinitionListParser(
             !(quotePrefixDepth(markerSource) > lexer.hostQuoteDepth && quoteBandFold(ln)) &&
             !insideOpenQuoteParagraph(lazyState) &&
             (startsInterruptingBlock(lexer, ln.trimStart()) || isListMarkerLine(ln.trimStart()) ||
-              RE_BLOCKQUOTE.test(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()))) break
+              RE_BLOCKQUOTE.test(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()))) return 'stop'
         // Form A: an indented continuation line (with no intervening blank).
         // The indent is a COLUMN claim, not a character count: `definition_
         // continuation` is a leading indentation run, so a tab is syntax there and
@@ -492,7 +492,7 @@ export function createDefinitionListParser(
         // column - end the body, while three spaces continued it, and made the
         // answer depend on how the author spelled a run rather than where it
         // landed (markup-carve/carve-js#812).
-        if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
+        if (admission.kind === 'content') {
           const lineIndex = lexer.pos
           const dedented = sliceColumns(ln, contentCol, true)
           if (quoteBandFold(ln)) {
@@ -503,7 +503,7 @@ export function createDefinitionListParser(
             track(folded, undefined, false)
             lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
             lexer.consume()
-            continue
+            return 'continue'
           }
           if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(dedented.trimStart()))
             lexer.hostedFootnoteLines.add(lexer.lineNumber(lineIndex))
@@ -650,18 +650,16 @@ export function createDefinitionListParser(
           // The base belongs to the block that established it and dies with it.
           if (!insideOpenFence(lazyState)) authoredBase = null
           lexer.consume()
-          continue
+          return 'continue'
         }
         // Blank line: absorb it as a paragraph separator ONLY when a later line
         // is still an indented continuation. Otherwise leave it in place so the
         // entry-separator rule (a single blank before the next `:: term`) and the
         // outer block stream see it unchanged.
-        if (isBlankLine(ln)) {
-          let look = 1
-          while (isBlankLine(lexer.peek(look))) look++
+        if (admission.kind === 'blank') {
+          const { offset: look, line: after } = nextContainerContent(lexer)
           // The description ends at two blanks, including any unfinished fence.
-          if (look > 1) break
-          const after = lexer.peek(look)
+          if (look > 1) return 'stop'
           // The SECOND spelling of the same rule, and it has its own job: this one
           // decides whether the body survives the blank at all, the Form A branch
           // above decides whether a line folds. Both read columns, or a lone tab
@@ -681,17 +679,17 @@ export function createDefinitionListParser(
               track('')
               lexer.consume()
             }
-            continue
+            return 'continue'
           }
-          break
+          return 'stop'
         }
         // A new term/definition marker ends this definition (the outer loop
         // picks it up). An empty term marker is not one: `::` and `:: ` are the
         // same line, a term with no content, so it folds (#1891).
-        if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
+        if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) return 'stop'
         if (ln.startsWith(LAZY_FRAME) && RE_DEFLIST_TERM.test(stripLazyFrame(ln)) &&
             entryColumn() > listColumn &&
-            entryColumn() < bodySourceColumn) break
+            entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
         if (quoteBandFold(ln)) {
@@ -703,7 +701,7 @@ export function createDefinitionListParser(
           track(folded, undefined, false)
           lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
           lexer.consume()
-          continue
+          return 'continue'
         }
         const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const reachedQuotedDescription = quoteDepth > 0 &&
@@ -714,7 +712,7 @@ export function createDefinitionListParser(
             !reachedQuotedDescription && !insideOpenQuoteParagraph(lazyState) &&
             !isRetainableLineComment(lexer, below) && commentFenceRun(below) === undefined &&
             lineOpensBlock(below) && !opensCodeFence(below)) {
-          break
+          return 'stop'
         }
         // carve#3295: below the body's column a heading, break, table row or
         // quote marker opens nothing, so it folds into the open paragraph. In
@@ -741,7 +739,7 @@ export function createDefinitionListParser(
           bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
           track(folded, undefined, false)
           lexer.consume()
-          continue
+          return 'continue'
         }
         const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
           indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
@@ -757,7 +755,7 @@ export function createDefinitionListParser(
               (atDocumentColumn && ((lineOpensBlock(below) && !isListMarkerLine(below) &&
                 (!/^[`~]/.test(below) || startsInterruptingBlock(lexer, below))) || isBlockAttributeLine(below) ||
                 /^:{3,}[ \t]*$/.test(below)) &&
-                !(priorLazyDefinition && opensCodeFence(below))))) break
+                !(priorLazyDefinition && opensCodeFence(below))))) return 'stop'
         // At document column 0 a definition is a document-level interrupter (CARVE-P0-010).
         // A matched fence an enclosing item took from below its column answers
         // as the `%%` line it would be there: it retains the body (CARVE-P9-053).
@@ -773,7 +771,7 @@ export function createDefinitionListParser(
               lexer.consume()
             }
             retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
-            continue
+            return 'continue'
           }
         }
         const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
@@ -799,7 +797,7 @@ export function createDefinitionListParser(
             belowCommentSpan = false
           }
           lexer.consume()
-          continue
+          return 'continue'
         }
         const lastBodyLine = bodyLines.at(-1)?.trimStart() ?? ''
         if (atDocumentColumn && lazyState.divDepth > 0 && lazyState.opaque === null &&
@@ -807,7 +805,7 @@ export function createDefinitionListParser(
             !RE_COMMENT_LINE.test(below) &&
             ((colonFenceShapeEndsLazyContinuation(first) &&
               (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
-              !lazyState.lazyFoldable)) break
+              !lazyState.lazyFoldable)) return 'stop'
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
           (lazyState.lazyFoldable || quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan ||
@@ -866,10 +864,10 @@ export function createDefinitionListParser(
           const commentRun = commentFenceRun(below)
           if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
           lexer.consume()
-          continue
+          return 'continue'
         }
-        break
-      }
+        return 'stop'
+      })
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
