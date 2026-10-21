@@ -3370,9 +3370,9 @@ class CarveRenderSession {
         if (ctx.lineBlockDepth > 0) {
           return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
         }
-        // A guarded em-dash line in a description's own paragraph stays below
-        // the body column, where it folds as text (carve#3295).
-        if (this.descriptionParagraphs.has(node)) {
+        // PART 11 §1 / CARVE-P11-002 and §5 keep guarded dashes as paragraph text
+        // in list items and descriptions while emitting their source run bare.
+        if (this.markerColumnGuardParagraphs.has(node)) {
           return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `))
         }
 
@@ -3780,6 +3780,9 @@ class CarveRenderSession {
   }
 
   private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus: boolean): string {
+    for (const block of item.children) {
+      if (block.type === 'paragraph') this.markerColumnGuardParagraphs.add(block)
+    }
     // A definition collected from the ONLY line of an item leaves no child
     // behind.  Do not spell that empty item with `+`: at nested marker depth the
     // marker attaches the outer item's following block to the empty INNER item.
@@ -3854,17 +3857,6 @@ class CarveRenderSession {
         if (b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx)) rendered = '\\+'
         if (b.type === 'paragraph' && !separated) rendered = escapeLeadingPlusBelowList(rendered, previousEmitted)
         if (rendered.length === 0) return
-        // `guardThematicBreakLines` protects a paragraph continuation that is
-        // semantically an em dash by giving it one leading space.  Inside a list
-        // the ordinary continuation prefix would add the item content column to
-        // that guard.  Since #1705, that combined indentation is an authored
-        // block base and the guarded text would reparse as a real thematic break.
-        // Keep guarded continuation lines at the item's marker column; the one
-        // authored space remains below the content column and therefore remains
-        // lazy paragraph text.
-        if (b.type === 'paragraph' && rendered.includes('\n ')) {
-          rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `)
-        }
         if (b.type === 'list') {
           if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
@@ -4094,7 +4086,7 @@ class CarveRenderSession {
   /** Paragraphs a description writes at its own column, through any colon fence. */
   private markDescriptionParagraphs(blocks: BlockNode[]): void {
     for (const block of blocks) {
-      if (block.type === 'paragraph') this.descriptionParagraphs.add(block)
+      if (block.type === 'paragraph') this.markerColumnGuardParagraphs.add(block)
       else if (block.type === 'admonition' || block.type === 'div') this.markDescriptionParagraphs(block.children)
     }
   }
@@ -5126,7 +5118,7 @@ class CarveRenderSession {
 
   private itemParagraph = false
   private descriptionBody = false
-  private descriptionParagraphs = new WeakSet<BlockNode>()
+  private markerColumnGuardParagraphs = new WeakSet<BlockNode>()
   private descriptionParagraph = false
   private verbatimLineGuardNodes: InlineNode[] = []
 
