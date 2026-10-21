@@ -108,6 +108,51 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     verbatimOnlyLazyState,
     walkContainerPrefix,
   } = helpers
+  function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
+    physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
+    lexer: Lexer
+    line: string
+    pendingBlankCount: number
+    itemQuoteDepth: number
+    physicalItemMarkerColumn: number
+    contentCol: number
+    baseIndent: number
+    previousNestedLine: string | undefined
+  }) {
+    const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? line
+    const classifiedMarker = isContinuationMarker(line.slice(leadingWhitespace(line))) ? markerDecision(lexer, lexer.pos) : undefined
+    const blankBeforeNestedContinuation = pendingBlankCount > 0 && classifiedMarker?.owner?.kind === 'list' &&
+      classifiedMarker.reason === undefined &&
+      classifiedMarker.owner.column > physicalItemMarkerColumn
+    // A quote prefix may omit its optional space; compare the marker at
+    // the open item's quote-body column in either spelling.
+    const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
+      ? Math.max(sourceColumn(markerSource), physicalItemMarkerColumn)
+      : sourceColumn(markerSource)
+    const classifiedListOwner = classifiedMarker?.owner?.kind === 'list' &&
+      classifiedMarker.owner.column === plusColumn && classifiedMarker.reason === undefined
+    const listPlusOwner = isContinuationMarker(line.slice(leadingWhitespace(line))) &&
+      isContinuationMarker(sourceQuoteBody(markerSource)) &&
+      (baseIndent === 0 && !quoteIndentHasTab(markerSource, itemQuoteDepth) || classifiedListOwner) &&
+      quotePrefixDepth(markerSource) === itemQuoteDepth &&
+      (plusColumn === physicalItemMarkerColumn || plusColumn === contentCol && classifiedListOwner &&
+        RE_FOOTNOTE_DEF.test((previousNestedLine ?? '').trimStart()) ||
+        plusColumn === contentCol + 1 && classifiedListOwner &&
+          RE_DEFLIST_DEF.test((previousNestedLine ?? '').trimStart()))
+    const candidate = listPlusOwner ? (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] : undefined
+    let follower = candidate ?? ''
+    for (let depth = 0; depth < itemQuoteDepth; depth++) follower = quotedLineText(follower, false) ?? follower
+    const followerColumn = candidate === undefined ? Infinity : sourceColumn(candidate, itemQuoteDepth)
+    const listPlusReason: RefusedContinuationMarker['reason'] | null = !listPlusOwner ? null
+      : candidate === undefined ? 'document'
+        : isBlankLine(follower) ? 'blank'
+          : followerColumn < plusColumn ? 'left'
+            : followerColumn > plusColumn || itemQuoteDepth > 0 && quotePrefixDepth(candidate) > itemQuoteDepth &&
+              plusColumn === quoteBodyColumn(markerSource, itemQuoteDepth) ? 'right'
+              : classifiedMarker?.reason === 'sibling' || isListMarkerLine(follower.trimStart()) ? 'sibling' : null
+    return { markerSource, plusColumn, listPlusOwner, listPlusReason, blankBeforeNestedContinuation }
+  }
+
   return function parseList(lexer: Lexer, session: ParseSession): List {
     const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = classifyList(lexer, helpers)
     const items: ListItem[] = []
@@ -1041,39 +1086,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
         // injects a blank separator so the block parses on its own; the
         // compact-list rule above then keeps the item tight.
-        const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
-        const classifiedMarker = isContinuationMarker(l.slice(leadingWhitespace(l))) ? markerDecision(lexer, lexer.pos) : undefined
-        if (pendingBlankRun.count > 0 && classifiedMarker?.owner?.kind === 'list' &&
-            classifiedMarker.reason === undefined &&
-            classifiedMarker.owner.column > physicalItemMarkerColumn) {
-          blankBeforeNestedContinuation = true
-        }
-        // A quote prefix may omit its optional space; compare the marker at
-        // the open item's quote-body column in either spelling.
-        const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
-          ? Math.max(sourceColumn(markerSource), physicalItemMarkerColumn)
-          : sourceColumn(markerSource)
-        const classifiedListOwner = classifiedMarker?.owner?.kind === 'list' &&
-          classifiedMarker.owner.column === plusColumn && classifiedMarker.reason === undefined
-        const listPlusOwner = isContinuationMarker(l.slice(leadingWhitespace(l))) &&
-          isContinuationMarker(sourceQuoteBody(markerSource)) &&
-          (baseIndent === 0 && !quoteIndentHasTab(markerSource, itemQuoteDepth) || classifiedListOwner) &&
-          quotePrefixDepth(markerSource) === itemQuoteDepth &&
-          (plusColumn === physicalItemMarkerColumn || plusColumn === contentCol && classifiedListOwner &&
-            RE_FOOTNOTE_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()) ||
-            plusColumn === contentCol + 1 && classifiedListOwner &&
-              RE_DEFLIST_DEF.test((nestedSourceLines.at(-1) ?? '').trimStart()))
-        const candidate = listPlusOwner ? (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] : undefined
-        let follower = candidate ?? ''
-        for (let depth = 0; depth < itemQuoteDepth; depth++) follower = quotedLineText(follower, false) ?? follower
-        const followerColumn = candidate === undefined ? Infinity : sourceColumn(candidate, itemQuoteDepth)
-        const listPlusReason: RefusedContinuationMarker['reason'] | null = !listPlusOwner ? null
-          : candidate === undefined ? 'document'
-            : isBlankLine(follower) ? 'blank'
-              : followerColumn < plusColumn ? 'left'
-                : followerColumn > plusColumn || itemQuoteDepth > 0 && quotePrefixDepth(candidate) > itemQuoteDepth &&
-                  plusColumn === quoteBodyColumn(markerSource, itemQuoteDepth) ? 'right'
-                  : classifiedMarker?.reason === 'sibling' || isListMarkerLine(follower.trimStart()) ? 'sibling' : null
+        const { markerSource, plusColumn, listPlusOwner, listPlusReason, blankBeforeNestedContinuation: plusAfterBlank } =
+          classifyItemContinuation({ lexer, line: l, pendingBlankCount: pendingBlankRun.count,
+            itemQuoteDepth, physicalItemMarkerColumn, contentCol, baseIndent,
+            previousNestedLine: nestedSourceLines.at(-1) })
+        if (plusAfterBlank) blankBeforeNestedContinuation = true
         if (listPlusReason === 'blank' && acceptedPlusLine === lexer.lineNumber(lexer.pos) - 1 &&
             lazyState.opaque?.kind === 'code') {
           // The first + ended the fence but attached no block. Keep this
