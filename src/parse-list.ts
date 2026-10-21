@@ -19,7 +19,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     RE_DEFLIST_TERM,
     RE_DIV_OPEN,
     RE_FENCE,
-    RE_FENCE_CLOSER,
     RE_FIRST_BLOCK_MARKER,
     RE_FOOTNOTE_DEF,
     RE_HARDBREAKS_OPEN,
@@ -38,7 +37,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     bottomBlockLeavesParagraphOpen,
     buildCloserIndex,
     codeCloserPossible,
-    colonBlockOpenerRun,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
@@ -48,7 +46,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     deflistContentCol,
     deflistMarkerLine,
     endsInPlus,
-    exactCloserPossible,
     extractItemAttr,
     fenceCloseRe,
     firstBlockOpenerContent,
@@ -428,8 +425,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // `nested` indices holding a `%%%` opener the tracker refused, because no
       // run of its width follows in the DOCUMENT. §28 substitutes one `%%` line
       // comment for it, and carve#1903 makes that substitution a classification
-      // rather than a rendering rule, so the two looseness scans below must read
-      // the line the way they read `%% x` (carve-js#2337).
+      // rather than a rendering rule. The invisible-tail check reads the line
+      // the way it reads `%% x` (carve-js#2337).
       //
       // The tracker's answer is the one to record, not a scan of this item's own
       // lines: an opener whose closer fell OUTSIDE the item opened a real span,
@@ -661,9 +658,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // Indices in `nested` that hold a `+`-injected blank separator. These keep
       // the attached block parsing standalone but never loosen the list (Bug B).
       const plusSeparators = new Set<number>()
+      const opaqueBlankLines = new Set<number>()
+      const commentBoundaryBlanks: Array<{ openerIndex: number; lines: number[] }> = []
+      const childInlinePayloadBlanks = new Set<number>()
+      let inlineFenceScanned = 0
+      let inlineFenceColumn = -1
+      let inlineFenceRun: string | null = null
+      let inlineFencePriorText = false
+      let lastNonBlankSource: string | undefined
+      let lastNonBlankPhysicalSource: string | undefined
+      let lastNonBlankColumn = -1
+      let blankBeforeNestedContinuation = false
       const continuationFenceBreaks = new Set<number>()
       let authoredDescendantFenceBlanks = 0
-      const descendantFenceBlankLines = new Set<number>()
       // Track whether the item's collected content currently ends in an open
       // paragraph (family-D lazy continuation). The lead text opens one.
       // ONE WALK for the three questions the lead line answers.
@@ -995,12 +1002,68 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
         if (isBlankLine(l)) {
           markerNoteItemParagraphOpen = false
+          if (lazyState.opaque?.kind === 'comment')
+            opaqueBlankLines.add(lexer.lineNumber(lexer.pos))
           let afterBlanks = 1
           while (true) {
             const next = lexer.peek(afterBlanks)
             if (next === undefined) break
             if (isBlankLine(next) || refusedPlus(afterBlanks)) { afterBlanks++; continue }
             break
+          }
+          for (; inlineFenceScanned < nestedSourceLines.length; inlineFenceScanned++) {
+            const source = nestedSourceLines[inlineFenceScanned]
+            if (source === undefined || isBlankLine(source)) continue
+            const priorSource = lastNonBlankSource
+            lastNonBlankSource = source
+            const sourceLineNumber = nestedLineNumbers[inlineFenceScanned]
+            const physicalSource = sourceLineNumber === undefined ? source :
+              (lexer.rootLines ?? lexer.lines)[sourceLineNumber - 1] ?? source
+            lastNonBlankPhysicalSource = physicalSource
+            lastNonBlankColumn = sourceColumn(physicalSource, itemQuoteDepth)
+            const codeRun = RE_FENCE.exec(source.trimStart())?.[2]
+            if (codeRun !== undefined) {
+              if (inlineFenceRun !== null && codeRun[0] === inlineFenceRun[0] && codeRun.length >= inlineFenceRun.length)
+                inlineFenceRun = null
+              else if (inlineFenceRun === null) {
+                inlineFenceRun = codeRun
+                const priorBody = priorSource === undefined ? '' : sourceQuoteBody(priorSource).trimStart()
+                inlineFencePriorText = priorSource !== undefined &&
+                  !isListMarkerLine(priorBody) && !lineOpensBlock(priorBody)
+              }
+            }
+            if (opensCodeFence(source.trimStart()))
+              inlineFenceColumn = lastNonBlankColumn
+          }
+          const trailingRun = RE_FENCE.exec(lastNonBlankSource?.trimStart() ?? '')?.[2]
+          const mismatchedRun = trailingRun !== undefined && inlineFenceRun !== null &&
+            (trailingRun[0] !== inlineFenceRun[0] || trailingRun.length < inlineFenceRun.length)
+          if (lazyState.inlineFenceParagraph && pendingBlanks === 0 && inlineFenceRun !== null &&
+              inlineFencePriorText && !mismatchedRun)
+            childInlinePayloadBlanks.add(lexer.lineNumber(lexer.pos))
+          if (!markerNoteItem && inlineFenceColumn >= 0) {
+            const nextLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
+            const nextSource = (lexer.rootLines ?? lexer.lines)[nextLineNumber - 1]
+            const nextInContainer = lexer.peek(afterBlanks)?.trimStart() ?? ''
+            const foldedRunBelowBase = lastNonBlankPhysicalSource !== undefined &&
+              RE_FENCE.test(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) &&
+              lastNonBlankColumn < inlineFenceColumn
+            // A line below the inline opener remains in its paragraph's
+            // authored band. A line at the opener's own column starts a second
+            // paragraph after the blank.
+            const followingAdmittedBlock = lazyState.inDefList !== 'description' &&
+              lastNonBlankPhysicalSource !== undefined &&
+              !(markerLineTerm && /^#{1,6}(?:[ \t]|$)/.test(sourceQuoteBody(lastNonBlankPhysicalSource))) &&
+              (lineOpensBlock(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) ||
+                RE_BLOCKQUOTE.test(lastNonBlankPhysicalSource.trimStart())) &&
+              (lastNonBlankColumn < inlineFenceColumn ||
+                lineOpensBlock(nextInContainer))
+            if (nextSource !== undefined && inlineFenceColumn >= 0 && !foldedRunBelowBase &&
+                (lazyState.inlineFenceParagraph && (lazyState.inDefList !== 'description' &&
+                  sourceColumn(nextSource, itemQuoteDepth) < inlineFenceColumn || lineOpensBlock(nextInContainer) ||
+                  RE_COMMENT_LINE.test(nextInContainer)) ||
+                  followingAdmittedBlock))
+              opaqueBlankLines.add(lexer.lineNumber(lexer.pos))
           }
           const rootLines = lexer.rootLines ?? lexer.lines
           const markerLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
@@ -1030,6 +1093,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           markerNoteFirstText = indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
             (isListMarkerLine(continuation) || !lineOpensItemBlock(continuation.trimStart()))
         }
+        if (markerNoteItem && pendingBlanks > 0 && (noteCommentLines.size > 0 || pendingNoteComments.size > 0) &&
+            indentColumns(l, markerNoteFloor) >= markerNoteFloor && !lineOpensBlock(l.trimStart()))
+          loose = true
         // List-continuation marker (Carve): a lone `+` at the marker column
         // attaches the FOLLOWING flush-left block to this item without indenting
         // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
@@ -1037,6 +1103,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // compact-list rule above then keeps the item tight.
         const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
         const classifiedMarker = isContinuationMarker(l.slice(leadingWhitespace(l))) ? markerDecision(lexer, lexer.pos) : undefined
+        if (pendingBlanks > 0 && classifiedMarker?.owner?.kind === 'list' &&
+            classifiedMarker.reason === undefined &&
+            classifiedMarker.owner.column > physicalItemMarkerColumn) {
+          blankBeforeNestedContinuation = true
+        }
         // A quote prefix may omit its optional space; compare the marker at
         // the open item's quote-body column in either spelling.
         const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
@@ -1078,13 +1149,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (listPlusReason === 'sibling' &&
             (pendingBlanks > 0 || !lazyState.lazyFoldable || lazyState.opaque?.kind === 'code' || descendantOpaque !== null)) break
         if (listPlusOwner && listPlusReason === null) {
+          for (const lineNumber of pendingBlankLineNumbers) opaqueBlankLines.add(lineNumber)
           const rootLines = lexer.rootLines ?? lexer.lines
           const rootFollower = rootLines[lexer.lineNumber(lexer.pos)]
           continuationFenceBreaks.add(nested.length)
           if (descendantOpaque !== null || lazyState.opaque?.kind === 'code' ||
               lazyState.deepest?.opaque?.kind === 'code') {
             authoredDescendantFenceBlanks = pendingBlanks
-            for (const lineNumber of pendingBlankLineNumbers) descendantFenceBlankLines.add(lineNumber)
           }
           const plusLineNumber = lexer.lineNumber(lexer.pos)
           const plusLineIndex = lexer.pos
@@ -1455,6 +1526,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             lazyState.lazyFoldable = false
           }
           const followsBlank = pendingBlanks > 0
+          const commentRun = commentFenceRun(placed.trimStart())
+          if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun))
+            commentBoundaryBlanks.push({openerIndex:nested.length+pendingBlankLineNumbers.length,lines:[...pendingBlankLineNumbers]})
           for (let k = 0; k < pendingBlankTexts.length; k++) {
             const comment = pendingNoteComments.has(k)
             if (comment) noteCommentLines.add(nested.length)
@@ -2419,7 +2493,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
           blockQuoteParagraphOpen(markerLineQuoteState(content)!))
       const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
-      const blankBeforeCommentFence: number[] = []
       let nestedNoteSeen = false
       let priorChecked = 0
       const commentFenceOpeners = markerNoteItem ? markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines) : []
@@ -2446,7 +2519,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
         }
         nested[openerIndex] = LAZY_FRAME + opener
-        blankBeforeCommentFence.push(index - 1)
       }
       const rebaseEligible = leadOwnsExtent
         ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
@@ -2458,9 +2530,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // Tightness uses the columns at which the collector admitted the lines.
       // Rebasing a block can move its continuation below a sublist's column.
       let hasBlank = nested.some(isBlankLine)
-      const beforeRebase = hasOverindentedBlockCandidate && hasBlank
-        ? nested.slice()
-        : nested
       let tabRebaseColumns: Map<number, number> | undefined
       if (tabLineFacts !== undefined) {
         for (const [index, entry] of tabLineFacts) {
@@ -2469,8 +2538,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           columns.set(leadOwnsExtent ? index + 1 : index, entry.columns)
         }
       }
-      const rebasedBlanks = hasOverindentedBlockCandidate
-        ? rebaseOverindentedBlocks(
+      if (hasOverindentedBlockCandidate) {
+        rebaseOverindentedBlocks(
           rebaseLines,
           rebaseEligible,
           leadIsMarker ? markerContentColumn(content, terminatorFree) : -1,
@@ -2496,18 +2565,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           undefined,
           contentCol,
         )
-        : new Set<number>()
+      }
       if (leadOwnsExtent) {
         for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
       }
       // Rebasing can reveal a fence opened past the item's content column.
       // Its payload markers must not split the collected stream (#2212).
       const firstBlockIdx = subListMarkers.values().next().value ?? -1
-      const authoredBlockBlanks = leadOwnsExtent
-        ? new Set(Array.from(rebasedBlanks, (index) => index - 1))
-        : rebasedBlanks
-      for (const index of blankBeforeCommentFence) authoredBlockBlanks.add(index)
-
       // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
       // not loosen the item on its own - it is not a second paragraph - but it
       // does not FILL the gap either. So when the item's tail after its last
@@ -2535,13 +2599,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // holding a blank can reach the flag, which is what keeps the pass off
       // every other item.
       const hiddenByComment = hasBlank ? commentBlockSpans([content, ...nested]) : []
+      for (const boundary of commentBoundaryBlanks) {
+        if (hiddenByComment[boundary.openerIndex + 1] === true) continue
+        for (const lineNumber of boundary.lines) opaqueBlankLines.add(lineNumber)
+      }
       for (let k = nested.length - 1; k >= 0; k--) {
         const ln = nested[k]!
         if (hiddenByComment[k + 1] === true || degradedOpeners.has(k)) continue
         if (isBlankLine(ln)) {
           // A `+`-injected separator is not a blank line the author wrote, and
-          // never loosens - the same exemption the second-paragraph scan below
-          // makes for it. Without this the item went loose through the back door:
+          // never loosens. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
           blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
@@ -2612,414 +2679,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         else loose = true
       }
 
-      // Compact list blocks (Carve): an internal blank line loosens the item only
-      // when the content after it is a plain paragraph (a real second paragraph).
-      // A blank followed by a block opener (sub-list, quote, fence, div, heading,
-      // table) keeps the item tight, so an item can carry a sub-block without the
-      // list going loose. Only the tight/loose RENDERING changes; block structure
-      // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
-      // A blank line INSIDE a fenced block is that block's content, not an
-      // interior block separator, so it must not loosen the item (carve#326 case
-      // C; matches carve-rs / carve-php). Precompute which lines fall inside a
-      // fence in a single pass, then skip those blanks in the scan below. The
-      // opener may be the item's lead (a marker-line fence, `- ``` `, which is not
-      // in `nested`), so the pass prepends `content` and a `nested[k]` corresponds
-      // to `fenceLines[k + 1]`. Marking ranges is O(n) total (ranges never
-      // overlap), keeping the scan linear.
-      //
-      // An unterminated code fence absorbed into a paragraph keeps later blanks
-      // from loosening the item until it ends (carve-js#2358). Track the fence
-      // even when §10's closer lookahead prevents it from opening a code block.
-      //
-      // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
-      // one-kind-of-three defect corpus category 279 pins for the collectors -
-      // and it surfaced the moment they were fixed: the blank inside a
-      // `+`-attached `::: note` or `%%%` body reaches `nested` now and loosened
-      // the item, where the identical code fence kept it tight.
-      //
-      // STILL ONE STATEFUL PASS, not one scan per line. Asking
-      // `fencedBlockEnd` at every index reads the same suffix again for every
-      // unterminated opener, which is quadratic. With comment openers of
-      // increasing width that cannot close, each opener repeats the suffix scan.
-      // The stack below runs `findColonCloser`'s nesting model once, left to right,
-      // keeping the whole pass linear (ranges never overlap).
-
-      // The content column of the sub-list item each line sits in. A marker at
-      // the item's content column opens a sibling sub-list item or a new sibling
-      // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
-      // indented below the current column folds into the open paragraph instead.
-      // Built on first use: most items never reach the check below.
-      let subColAt: number[] | null = null
-      const subListColumnAt = (at: number): number => {
-        if (subColAt === null) {
-          subColAt = new Array(nested.length).fill(-1)
-          let col = leadIsMarker ? markerContentColumn(content, terminatorFree) : -1
-          for (let k = 0; k < nested.length; k++) {
-            // An authored quote at this item's column closes the marker-line
-            // child; a later blank belongs to this item's block sequence.
-            if (col >= 0 && indentColumns(nested[k]!, col) < col &&
-                RE_BLOCKQUOTE.test(nested[k]!.trimStart())) col = -1
-            if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
-              col = markerContentColumn(nested[k]!)
-            }
-            subColAt[k] = col
-          }
-        }
-        return subColAt[at]!
-      }
-      // Fence membership is read only for blank lines in the tightness pass.
-      // Without a blank, classifying every descendant on the marker line has
-      // no consumer and repeats the prefix walk at every nesting level.
-      const fenceLines = hasBlank ? [content, ...nested] : []
-      const inFence: boolean[] = new Array(fenceLines.length).fill(false)
-      const nextBlank: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
-      const nextText: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
-      for (let i = fenceLines.length - 1; i >= 0; i--) {
-        nextBlank[i] = isBlankLine(fenceLines[i]!) ? i : nextBlank[i + 1]!
-        nextText[i] = isBlankLine(fenceLines[i]!) ? nextText[i + 1]! : i
-      }
-      const inlineRunPrecedesParagraph = (at: number): boolean => {
-        // An unclosed inline run ends at the blank that separates item paragraphs.
-        const blank = nextBlank[at + 1]!
-        const next = nextText[blank + 1] ?? fenceLines.length
-        if (next >= fenceLines.length) return false
-        const line = fenceLines[next]!
-        return !lineOpensBlock(line) && !RE_COMMENT_LINE.test(line.trimStart()) &&
-          !RE_BLOCKQUOTE.test(line.trimStart()) &&
-          !/^#{1,6}(?:[ \t]|$)/.test(line.trimStart())
-      }
-      const foldedCloserChar = (line: string): string | null => {
-        const content = line.startsWith(LAZY_FRAME + '>') ? line.slice(LAZY_FRAME.length + 1) : line.trimStart()
-        return RE_FENCE_CLOSER.exec(content)?.[1]?.[0] ?? null
-      }
-      const lazyClosersAhead: number[] = new Array(fenceLines.length).fill(0)
-      let lazyCloserMask = 0
-      for (let index = fenceLines.length - 1; index > 0; index--) {
-        if (lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!)) {
-          const char = foldedCloserChar(fenceLines[index]!)
-          if (char === '`') lazyCloserMask |= 1
-          else if (char === '~') lazyCloserMask |= 2
-        }
-        lazyClosersAhead[index - 1] = lazyCloserMask
-      }
-      // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
-      // must not latch this pass either: an unterminated `%%%` swallowed every
-      // later line and a genuinely CLOSED code fence below it went unmarked, so a
-      // blank inside that code loosened the item.
-      const outerCloserLines: string[] = []
-      const closerLines = fenceLines.map((line, index) => {
-        if (index === 0) {
-          outerCloserLines.push(line)
-          return line
-        }
-        const childColumn = subListColumnAt(index - 1)
-        const lazyFenceLine = lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!) &&
-          foldedCloserChar(line) !== null
-        const normalized = lazyFenceLine ? '' :
-          line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0)
-        outerCloserLines.push(normalized)
-        if (lazyFenceLine || (RE_FENCE_CLOSER.test(line.trimStart()) &&
-            childColumn > 0 && beforeRebase[index - 1] !== undefined &&
-            indentColumns(beforeRebase[index - 1]!, childColumn) < childColumn)) return ''
-        return normalized
-      })
-      const closers = buildCloserIndex(closerLines)
-      const outerClosers = buildCloserIndex(outerCloserLines)
-      const open: Array<{
-        kind: 'code' | 'comment' | 'colon'
-        close: RegExp | null
-        len: number
-        opaque: boolean
-      }> = []
-      let openOpaque = 0
-      let opaqueIdx = -1
-      // Rebasing can make a child paragraph's closing inline run look like an outer fence.
-      let foldedChildRun: string | null = null
-      let childFenceRun: string | null = null
-      let previousClosedCode = false
-      const enter = (entry: { opaque: boolean }, k: number): void => {
-        if (!entry.opaque) return
-        if (openOpaque === 0) opaqueIdx = k
-        openOpaque++
-      }
-      const leave = (entry: { opaque: boolean }, k: number): void => {
-        if (!entry.opaque) return
-        openOpaque--
-        if (openOpaque > 0) return
-        for (let i = opaqueIdx; i <= k; i++) inFence[i] = true
-        opaqueIdx = -1
-      }
-      for (let k = 0; k < fenceLines.length; k++) {
-        const line = fenceLines[k]!
-        const closedCodeOnPreviousLine = previousClosedCode
-        previousClosedCode = false
-        if (isBlankLine(line)) foldedChildRun = null
-        const subCol = k > 0 ? subListColumnAt(k - 1) : -1
-        if (!isBlankLine(line) && subCol > 0 && beforeRebase[k - 1] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) < subCol) childFenceRun = null
-        const inner = open[open.length - 1]
-        if (inner !== undefined && inner.kind !== 'colon') {
-          const closed =
-            inner.kind === 'code' ? inner.close!.test(line) : commentFenceRun(line) === inner.len
-          if (!closed) continue
-          open.pop()
-          leave(inner, k)
-          if (inner.kind === 'code') previousClosedCode = true
-          continue
-        }
-        if (inner !== undefined) {
-          // Inside a colon fence a bare run of the INNERMOST width closes it and
-          // any other run opens one (carve#455's exact-length rule).
-          const close = RE_ADMONITION_CLOSE.exec(line)
-          if (close) {
-            const len = close[1]!.length
-            if (len === inner.len) {
-              open.pop()
-              leave(inner, k)
-            } else {
-              const nested = { kind: 'colon' as const, close: null, len, opaque: true }
-              open.push(nested)
-              enter(nested, k)
-            }
-            continue
-          }
-        }
-        const childRun = RE_FENCE.exec(line.trimStart())
-        if (childRun && childFenceRun !== null && subCol > 0 &&
-            beforeRebase[k - 1] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
-            fenceCloseRe(childFenceRun).test(line.trimStart())) {
-          foldedChildRun = null
-          childFenceRun = null
-        }
-        else if (childRun && k > 1 && subCol > 0 &&
-            beforeRebase[k - 1] !== undefined && beforeRebase[k - 2] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
-            !isBlankLine(fenceLines[k - 1]!) &&
-            (indentColumns(beforeRebase[k - 2]!, subCol) >= subCol ||
-              isListMarkerLine(beforeRebase[k - 2]!.trimStart())))
-        {
-          foldedChildRun = childRun[2]!
-          childFenceRun ??= foldedChildRun
-        } else if (childRun && subCol > 0 && beforeRebase[k - 1] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol && childFenceRun === null)
-          childFenceRun = childRun[2]!
-        const belowChildColumn = k > 0 && subCol > 0 &&
-          beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, subCol) < subCol
-        const candidate = RE_FENCE.exec(line)
-        const ownerClosers = belowChildColumn ? outerClosers : closers
-        const outerCloser = candidate !== null &&
-          codeCloserPossible(outerClosers, candidate[2]!, k)
-        const lazyChildRun: boolean = belowChildColumn && foldedChildRun !== null && candidate !== null &&
-          candidate[2]![0] === foldedChildRun[0] && candidate[2]!.length <= foldedChildRun.length
-        const fenceCandidate: RegExpExecArray | null = lazyChildRun && !outerCloser ? null : candidate
-        if (fenceCandidate && foldedChildRun === fenceCandidate[2] && subCol > 0 &&
-            beforeRebase[k - 1] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) < subCol && !outerCloser) {
-          foldedChildRun = null
-          continue
-        }
-        // A run below a child item's content column cannot open an opaque fence
-        // without a closer. It folds into the child's paragraph, so the blank
-        // after it remains available to loosen the parent item (carve-js#3403).
-        const foldedFence = fenceCandidate !== null && k > 0 &&
-          ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
-            ? beforeRebase[k - 1] !== undefined &&
-              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
-            : (outerCloser ||
-              ((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0 ||
-              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k)) ||
-              (beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, 1) === 0 &&
-                inlineRunPrecedesParagraph(k))))) ||
-            (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
-              indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
-              bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
-            (!markerNoteItem && subCol > 0 && belowChildColumn &&
-              (isListMarkerLine(fenceLines[k - 1]!.trimStart()) ||
-                (!closedCodeOnPreviousLine && RE_FENCE.test(fenceLines[k - 1]!.trimStart()) &&
-                  indentColumns(fenceLines[k - 1]!, 1) === indentColumns(line, 1))))) &&
-          !codeCloserPossible(ownerClosers, fenceCandidate[2]!, k)
-        const fence = foldedFence ? null : fenceCandidate
-        const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
-        const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
-        let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
-          null
-        if (marker !== null) {
-          opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
-        } else {
-          const run = commentFenceRun(line)
-          if (run !== undefined) {
-            if (exactCloserPossible(closers.comment, run, k))
-              opened = { kind: 'comment', close: null, len: run }
-          } else {
-            const colon = colonBlockOpenerRun(line)
-            if (colon !== null) opened = { kind: 'colon', close: null, len: colon }
-          }
-        }
-        if (opened === null) continue
-        const entry = {
-          ...opened,
-          opaque: true,
-        }
-        open.push(entry)
-        enter(entry, k)
-      }
-      // WHAT IS STILL OPEN AT THE END REACHED THE END, and its range is marked
-      // from where it opened to the item's last line. Only the loop's transition
-      // through zero wrote a range, so an unterminated container left the stack
-      // non-empty and marked nothing - which is the same blindness the closer gate
-      // above used to produce, one step later.
-      if (openOpaque > 0 && opaqueIdx >= 0) {
-        for (let i = opaqueIdx; i < fenceLines.length; i++) inFence[i] = true
-      }
-      // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
-      // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the
-      // definition is inside its block, not an interior separator of the item, so
-      // it must not loosen the item any more than a blank inside a fence does.
-      //
-      // ONLY THE FOOTNOTE FORM. A link reference definition has no body at all, so
-      // it opens no run and the blank after it still loosens - `- a` /
-      // `  [r]: /u` / blank / `    more` IS a second paragraph (corpus 359-2). That
-      // is the control an over-wide fix breaks, and it is the whole difference
-      // between the two definition kinds here.
-      const inFootnoteRun: boolean[] = new Array(nested.length).fill(false)
-      for (let k = 0; k < nested.length; k++) {
-        const line = nested[k]!
-        if (indentColumns(line, 1) !== 0 || !RE_FOOTNOTE_DEF.test(line)) continue
-        // The run reaches the LAST indented line under the definition; the blanks
-        // after that one are the item's again, so a trailing blank still loosens.
-        let last = k
-        for (let j = k + 1; j < nested.length; j++) {
-          const next = nested[j]!
-          if (isBlankLine(next)) continue
-          // The same `FOOTNOTE_BODY_COLUMN` boundary the tracker uses, so the two
-          // agree about where the definition's block ends.
-          if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
-          last = j
-        }
-        for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
-        k = last
-      }
-      for (let j = 0; j <= markerNoteRunEnd; j++) inFootnoteRun[j] = true
-      const captionAfterBlankLines: number[] = []
-      for (let k = 0; k < nested.length; k++) {
-        if (inFence[k + 1]!) continue
-        if (inFootnoteRun[k]!) continue
-        if (authoredBlockBlanks.has(k)) continue
-        if (descendantFenceBlankLines.has(nestedLineNumbers[k]!)) continue
-        if (!isBlankLine(nested[k])) continue
-        // A `+`-injected separator never loosens, even when the block it attaches
-        // is a plain paragraph -- it keeps the item tight like a `+`-attached
-        // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
-        if (plusSeparators.has(k)) continue
-        let j = k + 1
-        // Skip blanks AND invisible lines: §17 L1 loosens on a second PARAGRAPH,
-        // and a comment or a definition renders nothing, so it is neither the
-        // paragraph that loosens nor a wall that hides one behind it. Stopping at
-        // the invisible line instead of looking past it kept `%% n` / `text`
-        // tight, which is the opposite error - the item does hold a second
-        // paragraph, it just has a comment in front of it (carve#621).
-        // Where the blank's own block sequence resumes, before any invisible line
-        // is skipped. The ownership test below is asked of it as well as of `j`.
-        let resumesAt = -1
-        while (j < nested.length) {
-          if (resumesAt < 0 && !isBlankLine(nested[j])) resumesAt = j
-          // A definition's body belongs to the note, including visible blocks.
-          if (inFootnoteRun[j]) {
-            j++
-            continue
-          }
-          if (isBlankLine(nested[j])) {
-            j++
-            continue
-          }
-          // AN OPENER THAT CANNOT CLOSE IS ONE `%%` LINE, not a block (PART 9
-          // §28, carve#1903), so the scan steps over that one line and reads
-          // what follows as the item's own second paragraph. Reading it as a
-          // block left `- t` / blank / `  %%%` / `  c` tight where the `%% x`
-          // spelling of the same invisible line is loose (carve-js#2337).
-          if (degradedOpeners.has(j)) {
-            j++
-            continue
-          }
-          const comment = commentFenceRun(nested[j]!)
-          if (comment !== undefined) {
-            let close = j + 1
-            while (close < nested.length && commentFenceRun(nested[close]!) !== comment) close++
-            // A closed comment fence is one invisible block. Its verbatim
-            // payload is not a paragraph behind an invisible opener.
-            if (close < nested.length) {
-              j = close + 1
-              continue
-            }
-          }
-          if (invisibleNested(j)) {
-            j++
-            continue
-          }
-          break
-        }
-        if (j >= nested.length) continue
-        // Delay this decision until the blocks are parsed. A line that looks
-        // like a caption host may be paragraph text or an uncapturable block.
-        if (j === k + 1 && RE_CAPTION.test(nested[j]!)) {
-          captionAfterBlankLines.push(nestedLineNumbers[j]!)
-          continue
-        }
-        // A blank followed by content the item's SUB-LIST consumes does not
-        // loosen THIS item: that content belongs to the sub-list, whose looseness
-        // is decided by its own recursive parse. Counting it here wrongly
-        // propagates a child's looseness up to the parent (carve#322). The
-        // threshold is the sub-list's content column: a line at or past it is the
-        // sub-list's, a line BELOW it (an above-content-column line, §24 C3, or a
-        // dedented column-0 paragraph) is the item's OWN block and still loosens.
-        // Matches carve-php / carve-rs, and the sibling-blank invariant where the
-        // outer item stays tight. A marker LEAD (`- 1. x`) is that sub-list's
-        // first item (carve-js#1938); a later sibling sub-list brings its own
-        // column (carve-js#1951).
-        const subCol = subListColumnAt(k)
-        // A tab is measured from the authored source column. Rebasing the line
-        // to the item body resets its tab stop, so its local width can make an
-        // outer paragraph appear to reach the sub-list's content column.
-        const sourceSubColumn = itemMarkerColumn + contentCol - baseIndent + subCol
-        const reachesSubList = (at: number): boolean => {
-          const source = nestedSourceLines[at]
-          return source?.includes('\t')
-            ? sourceColumn(source, itemQuoteDepth) >= sourceSubColumn
-            : indentColumns(beforeRebase[at]!, subCol) >= subCol
-        }
-        if (subCol >= 0 && reachesSubList(j)) continue
-        // AN INVISIBLE BLOCK THE SUB-LIST HOLDS MAKES THE BLANK THE SUB-LIST'S
-        // TOO (markup-carve/carve-js#2243). The skip above looks past a comment to
-        // find the paragraph §17 L1 asks for, and looking past one the CHILD holds
-        // walked out of the child: the next visible line is then this item's own
-        // block, and the blank in front of the child's comment was credited to this
-        // item. `- a` / `  - b` / blank / `    %%%` / `    x` / `%%%` / `  tail`
-        // loosened here where the executable spec keeps it tight, and the `%%`
-        // line form at the child's column did the same.
-        //
-        // Asked of the line the blank's own sequence resumes at, which the walk
-        // above already visited, so an item without a blank pays nothing.
-        if (resumesAt >= 0 && resumesAt !== j && subCol >= 0 &&
-          reachesSubList(resumesAt)) continue
-        // `j` can no longer be an invisible line (skipped above), so this is the
-        // plain "is the next visible thing a paragraph" test it always was.
-        //
-        // ASKED OF A BAND LINE TOO. A line the item folded below its content
-        // column is its own paragraph text, so §17 L1 reads it exactly as the
-        // content-column spelling (markup-carve/carve#2548, corpus 517).
-        //
-        // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
-        // already rewritten an over-indented opener into its exact-column
-        // spelling, so asking the ordinary question here is what makes the two
-        // spellings agree. Asking `lineOpensItemBlock` instead widened the
-        // EXACT-column case too, and a lone block image - a paragraph under §17
-        // L2 - stopped loosening its item (corpus 411, 162).
-        if (!lineOpensBlock(nested[j]!)) {
-          loose = true
-          break
-        }
-      }
+      // Child spans identify which authored blank lines separate blocks.
+      // Blanks within a fence or nested item remain inside that child's span.
 
       const leadOpensColonFence = isColonFenceOpener(content)
       // Parse the lead text together with its continuation/nested lines as one
@@ -3129,8 +2790,92 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
       }
 
-      if (captionAfterBlankLines.length > 0) {
-        if (captionAfterBlankLines.some(line => !captionLines.has(line))) loose = true
+      let previousVisibleSpan: { start: number; end: number; startColumn: number } | undefined
+      let previousVisibleType: BlockNode['type'] | undefined
+      let previousVisibleBlock: BlockNode | undefined
+      let nestedListContentColumn: number | undefined
+      const nestedIndexByLine = new Map<number, number>()
+      for (let index = 0; index < nestedLineNumbers.length; index++) {
+        const lineNumber = nestedLineNumbers[index]!
+        if (!nestedIndexByLine.has(lineNumber)) nestedIndexByLine.set(lineNumber, index)
+      }
+      if (blankBeforeNestedContinuation) loose = true
+      for (const child of children) {
+        if (child.type === 'comment' || child.type === 'abbreviation_def') continue
+        const span = session.blockLineSpan(child)
+        if (span === undefined) continue
+        if (previousVisibleSpan === undefined && child.type === 'paragraph' &&
+            /\+[ \t]*$/.test(itemSource) &&
+            session.hasAuthoredBlankBetween(lexer, lexer.lineNumber(itemStartLineIndex), span.start, opaqueBlankLines))
+          loose = true
+        const rootLine = (lexer.rootLines ?? lexer.lines)[span.start - 1]
+        const nestedIndex = nestedIndexByLine.get(span.start) ?? -1
+        if (child.type === 'list' && rootLine !== undefined) {
+          const markerColumn = span.startColumn - 1
+          let markerIndex = 0
+          let column = 0
+          while (markerIndex < rootLine.length && column < markerColumn) {
+            const char = rootLine[markerIndex++]!
+            column += char === '\t' ? 4 - column % 4 : 1
+          }
+          const markerText = rootLine.slice(markerIndex)
+          let width = markerContentColumn(markerText.slice(0, 8))
+          if (width < 0) {
+            const attributeEnd = markerText.indexOf('}')
+            const boundedEnd = attributeEnd < 0 ? 32 : attributeEnd + 3
+            width = markerContentColumn(markerText.slice(0, boundedEnd))
+          }
+          if (width < 0) width = markerContentColumn(markerText)
+          nestedListContentColumn = width < 0 ? undefined : markerColumn + width
+        } else if ((child.type === 'block_quote' || child.type === 'admonition') &&
+            nestedListContentColumn !== undefined && rootLine !== undefined &&
+            sourceColumn(rootLine) < nestedListContentColumn) {
+          // A later block below the child's column returns ownership to this
+          // item. The following paragraph cannot inherit that child's column.
+          nestedListContentColumn = undefined
+        }
+        const reachesNestedList = nestedListContentColumn !== undefined && rootLine !== undefined &&
+          sourceColumn(rootLine) >= nestedListContentColumn
+        const belowInlineAdmonition = inlineFenceColumn >= 0 && previousVisibleType === 'admonition' &&
+          previousVisibleSpan !== undefined && rootLine !== undefined &&
+          sourceColumn(rootLine, itemQuoteDepth) < previousVisibleSpan.startColumn - 1
+        const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
+          authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
+        if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem) {
+          let noteEndLine = lexer.lineNumber(itemStartLineIndex)
+          for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
+            const source = nestedSourceLines[index] ?? ''
+            if (nestedLineNumbers[index]! >= span.start || isBlankLine(nested[index] ?? '') ||
+                isBlankLine(source) || /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(source)) continue
+            noteEndLine = nestedLineNumbers[index]!
+            break
+          }
+          if (session.hasAuthoredBlankBetween(lexer, noteEndLine, span.start, opaqueBlankLines)) loose = true
+        }
+        let previousVisibleEnd = previousVisibleSpan?.end
+        const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
+          previousVisibleBlock.children.some(block => block.type === 'paragraph' &&
+            block.children.some(inline => inline.type === 'code'))
+        if (previousVisibleSpan !== undefined && previousVisibleType === 'list') {
+          previousVisibleEnd = Math.max(previousVisibleSpan.start, Math.min(previousVisibleSpan.end, span.start - 1))
+          const rootLines = lexer.rootLines ?? lexer.lines
+          while (previousVisibleEnd > previousVisibleSpan.start &&
+              (isBlankLine(rootLines[previousVisibleEnd - 1] ?? '') ||
+                /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(rootLines[previousVisibleEnd - 1] ?? ''))) {
+            previousVisibleEnd--
+          }
+        }
+        if ((child.type === 'paragraph' || child.type === 'image' ||
+            child.type === 'figure' && child.target.type === 'image') &&
+            previousVisibleEnd !== undefined && !priorDivInlineCode &&
+            !reachesNestedList && !authoredBlockParagraph && !belowInlineAdmonition &&
+            (session.hasAuthoredBlankBetween(lexer, previousVisibleEnd, span.start,
+              previousVisibleType === 'list' ? childInlinePayloadBlanks : opaqueBlankLines) ||
+              previousVisibleType === 'list' &&
+                session.hasAuthoredBlankBetween(lexer, span.start - 2, span.start, childInlinePayloadBlanks))) loose = true
+        previousVisibleSpan = span
+        previousVisibleType = child.type
+        previousVisibleBlock = child
       }
 
       if (children[0]?.type === 'admonition' && children[0].pos === undefined) {

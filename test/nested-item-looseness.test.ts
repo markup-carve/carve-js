@@ -45,4 +45,12 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
     // post-blank paragraph belongs to the task sub-item, not the outer item.
     expect(carveToHtml('- a\n  - [ ] b\n\n    text\n')).toContain('<li>a\n    <ul class="task-list">')
   })
+
+  it('a blank reaching the child fence column keeps the outer item tight', () => {
+    expect(carveToHtml('- - ```\n  +\n\n    x')).toContain('    +\n    x\n  </li>')
+  })
+
+  it('a blank before text at the outer column loosens the outer item', () => {
+    expect(carveToHtml('- - ```\n\n\n  +\ntail\n')).toContain('    <p>+\ntail</p>')
+  })
 })

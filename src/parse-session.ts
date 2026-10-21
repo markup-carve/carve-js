@@ -204,6 +204,38 @@ export class ParseSession extends InlineParseSession {
   private lineBlockHost: LineBlockHost | undefined
   private tableBlockHost: TableBlockHost | undefined
   captionLineScopes: Set<number>[] = []
+  private blockLineSpans = new WeakMap<BlockNode, { start: number; end: number; startColumn: number }>()
+  private authoredBlankPrefixes = new WeakMap<readonly string[], number[]>()
+
+  blockLineSpan(node: BlockNode): { start: number; end: number; startColumn: number } | undefined {
+    return this.blockLineSpans.get(node)
+  }
+
+  hasAuthoredBlankBetween(
+    lexer: Lexer, beforeLine: number, afterLine: number, opaqueBlankLines?: ReadonlySet<number>,
+  ): boolean {
+    if (afterLine <= beforeLine + 1) return false
+    const lines = lexer.rootLines ?? lexer.lines
+    let prefix = this.authoredBlankPrefixes.get(lines)
+    if (prefix === undefined) {
+      prefix = [0]
+      for (const line of lines) {
+        const quoteBlank = /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(line)
+        prefix.push(prefix[prefix.length - 1]! + Number(isBlankLine(line) || quoteBlank))
+      }
+      this.authoredBlankPrefixes.set(lines, prefix)
+    }
+    const start = Math.max(0, Math.min(beforeLine, lines.length))
+    const end = Math.max(0, Math.min(afterLine - 1, lines.length))
+    if (prefix[end]! === prefix[start]!) return false
+    if (opaqueBlankLines === undefined || opaqueBlankLines.size === 0) return true
+    for (let lineNumber = start + 1; lineNumber <= end; lineNumber++) {
+      if (opaqueBlankLines.has(lineNumber)) continue
+      const line = lines[lineNumber - 1]!
+      if (isBlankLine(line) || /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(line)) return true
+    }
+    return false
+  }
   private measuringAttachedBlock = false
 
   private recordAttachedCaption(lexer: Lexer, index: number): void {
@@ -254,6 +286,8 @@ export class ParseSession extends InlineParseSession {
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
     this.recordPositions = opts.positions !== false
+    this.blockLineSpans = new WeakMap()
+    this.authoredBlankPrefixes = new WeakMap()
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
     this.markerFenceMemos = new WeakMap()
@@ -632,6 +666,11 @@ export class ParseSession extends InlineParseSession {
           }
         }
         out.push(node)
+        this.blockLineSpans.set(node, {
+          start: lexer.lineNumber(startLine),
+          end: lexer.lineNumber(Math.max(startLine, lexer.pos - 1)),
+          startColumn: lexer.lineStartColumn(startLine),
+        })
         if (node.type === 'list') listMarkerColumns.add(indentColumns(line))
       }
       // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
