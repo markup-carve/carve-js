@@ -3929,7 +3929,7 @@ function trackQuoteHostFence(
   const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
     host.markers.length > 0 && column > host.markers[0]! &&
     !structuralMarker && column < host.columns.at(-1)!
-  const lazyItem = paragraph && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
+  const lazyItem = paragraph && !host.kinds.includes('note') && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
     (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody || open.markerBody === true)
   while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
@@ -4130,6 +4130,15 @@ const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
   while (level.mode.kind === 'quote') level = level.mode.inner
 
   return level.mode.kind === 'paragraph'
+}
+
+const blockQuoteParagraphClaimOpen = (state: BlockQuoteLazyState): boolean => {
+  let level = state
+  while (level.mode.kind === 'quote') {
+    if (level.hosts?.kinds.includes('note')) return false
+    level = level.mode.inner
+  }
+  return level.mode.kind === 'paragraph' && !level.hosts?.kinds.includes('note')
 }
 
 /** How many quotes are open below the one `state` tracks. */
@@ -13873,7 +13882,7 @@ class ParseSession {
       // instead of being swallowed. This is also what ends the quote on a lazy
       // list marker when no open paragraph precedes it.
       trackUntracked()
-      paragraphOpen ??= blockQuoteParagraphOpen(state)
+      paragraphOpen ??= blockQuoteParagraphClaimOpen(state)
       if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
       if (!paragraphOpen && !lazyFootnote) break
       if (leadingWhitespace(ln) === 0 && (deflistMarkerLine(ln) || isListMarkerLine(ln)) &&
@@ -15015,6 +15024,8 @@ class ParseSession {
       let noteInlineFenceOpen = false
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
+      // A definition body cannot preserve its enclosing item's paragraph claim (CARVE-P0-006).
+      let blockedNoteClaimFloor: number | undefined
       let hostedNoteBodyColumn: number | undefined
       let acceptedPlusLine = -1
       const refusedPlus = (offset: number): boolean => {
@@ -15155,6 +15166,9 @@ class ParseSession {
           nestedNoteContainer = false
           noteBodyHeldCode = false
         }
+        const leftBlockedNote = blockedNoteClaimFloor !== undefined && !isBlankLine(l) && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor
+        if (leftBlockedNote)
+          blockedNoteClaimFloor = undefined
         if (markerDescriptionColumn !== undefined &&
             (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) ||
               (!isBlankLine(l) && indentColumns(l, contentCol) < contentCol))) markerDescriptionColumn = undefined
@@ -15489,8 +15503,11 @@ class ParseSession {
           markerNoteItemParagraphOpen = false
           let strippedPrefix: number | undefined
           const placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
-          if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null && RE_FOOTNOTE_DEF.test(placed.trimStart()))
+          if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null && RE_FOOTNOTE_DEF.test(placed.trimStart())) {
             lexer.hostedFootnoteLines.add(lexer.lineNumber(lexer.pos))
+            blockedNoteClaimFloor = indentColumns(l) + FOOTNOTE_BODY_COLUMN
+            lazyState.lazyFoldable = false
+          }
           const followsBlank = pendingBlanks > 0
           for (let k = 0; k < pendingBlankTexts.length; k++) {
             const comment = pendingNoteComments.has(k)
@@ -15710,7 +15727,10 @@ class ParseSession {
               foldable: lazyState.lazyFoldable,
               framed: insideOpenFence(lazyState),
             })
-            if (mayOpenFence && descendantOpaque === null && walkOwnership()) trackedContent = opener
+            if (mayOpenFence && descendantOpaque === null && (leftBlockedNote || walkOwnership())) {
+              trackedContent = opener
+              if (leftBlockedNote) authoredFenceBase = indentColumns(dedented)
+            }
             // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
             // body verbatim, so a fence-shaped line inside it OPENS nothing. It
             // does not stop an open descendant fence CLOSING, though: the item's
@@ -15879,6 +15899,7 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (blockedNoteClaimFloor !== undefined) lazyState.lazyFoldable = false
           if (captionAtItemColumn) {
             captionParagraphClaim = hadQuoteParagraph
             lazyState.quoteInner = null
