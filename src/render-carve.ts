@@ -1778,7 +1778,7 @@ function trimNonNbsp(text: string): string {
 /**
  * A heading's text with only the run its marker separator takes back.
  */
-function trimHeadingText(text: string): string {
+export function trimHeadingText(text: string): string {
   return trimEndNonNbsp(text.replace(/^ +/, ''))
 }
 
