@@ -2672,53 +2672,33 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // no consumer and repeats the prefix walk at every nesting level.
       const fenceLines = hasBlank ? [content, ...nested] : []
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
-      const nextBlank: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
-      const nextText: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
-      for (let i = fenceLines.length - 1; i >= 0; i--) {
-        nextBlank[i] = isBlankLine(fenceLines[i]!) ? i : nextBlank[i + 1]!
-        nextText[i] = isBlankLine(fenceLines[i]!) ? nextText[i + 1]! : i
-      }
-      const inlineRunPrecedesParagraph = (at: number): boolean => {
-        // An unclosed inline run ends at the blank that separates item paragraphs.
-        const blank = nextBlank[at + 1]!
-        const next = nextText[blank + 1] ?? fenceLines.length
-        if (next >= fenceLines.length) return false
-        const line = fenceLines[next]!
-        return !lineOpensBlock(line) && !RE_COMMENT_LINE.test(line.trimStart()) &&
-          !RE_BLOCKQUOTE.test(line.trimStart()) &&
-          !/^#{1,6}(?:[ \t]|$)/.test(line.trimStart())
-      }
       const foldedCloserChar = (line: string): string | null => {
         const content = line.startsWith(LAZY_FRAME + '>') ? line.slice(LAZY_FRAME.length + 1) : line.trimStart()
         return RE_FENCE_CLOSER.exec(content)?.[1]?.[0] ?? null
-      }
-      // Record lazy runs once, so each child opener can ask whether a folded
-      // closer follows it without rescanning the rest of the item.
-      const lazyClosersAhead: number[] = new Array(fenceLines.length).fill(0)
-      let lazyCloserMask = 0
-      for (let index = fenceLines.length - 1; index > 0; index--) {
-        if (lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!)) {
-          const char = foldedCloserChar(fenceLines[index]!)
-          if (char === '`') lazyCloserMask |= 1
-          else if (char === '~') lazyCloserMask |= 2
-        }
-        lazyClosersAhead[index - 1] = lazyCloserMask
       }
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
       // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
       // blank inside that code loosened the item.
+      const outerCloserLines: string[] = []
       const closerLines = fenceLines.map((line, index) => {
-        if (index === 0) return line
+        if (index === 0) {
+          outerCloserLines.push(line)
+          return line
+        }
         const childColumn = subListColumnAt(index - 1)
         const lazyFenceLine = lexer.itemLazyLines.has(nestedLineNumbers[index - 1]!) &&
           foldedCloserChar(line) !== null
+        const normalized = lazyFenceLine ? '' :
+          line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0)
+        outerCloserLines.push(normalized)
         if (lazyFenceLine || (RE_FENCE_CLOSER.test(line.trimStart()) &&
             childColumn > 0 && beforeRebase[index - 1] !== undefined &&
             indentColumns(beforeRebase[index - 1]!, childColumn) < childColumn)) return ''
-        return line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0)
+        return normalized
       })
       const closers = buildCloserIndex(closerLines)
+      const outerClosers = buildCloserIndex(outerCloserLines)
       const open: Array<{
         kind: 'code' | 'comment' | 'colon'
         close: RegExp | null
@@ -2730,6 +2710,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // Rebasing can make a child paragraph's closing inline run look like an outer fence.
       let foldedChildRun: string | null = null
       let childFenceRun: string | null = null
+      let previousClosedCode = false
       const enter = (entry: { opaque: boolean }, k: number): void => {
         if (!entry.opaque) return
         if (openOpaque === 0) opaqueIdx = k
@@ -2744,6 +2725,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       for (let k = 0; k < fenceLines.length; k++) {
         const line = fenceLines[k]!
+        const closedCodeOnPreviousLine = previousClosedCode
+        previousClosedCode = false
         if (isBlankLine(line)) foldedChildRun = null
         const subCol = k > 0 ? subListColumnAt(k - 1) : -1
         if (!isBlankLine(line) && subCol > 0 && beforeRebase[k - 1] !== undefined &&
@@ -2755,6 +2738,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           if (!closed) continue
           open.pop()
           leave(inner, k)
+          if (inner.kind === 'code') previousClosedCode = true
           continue
         }
         if (inner !== undefined) {
@@ -2797,12 +2781,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const belowChildColumn = k > 0 && subCol > 0 &&
           beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, subCol) < subCol
         const candidate = RE_FENCE.exec(line)
+        const ownerClosers = belowChildColumn ? outerClosers : closers
+        const outerCloser = candidate !== null &&
+          codeCloserPossible(outerClosers, candidate[2]!, k)
         const lazyChildRun: boolean = belowChildColumn && foldedChildRun !== null && candidate !== null &&
           candidate[2]![0] === foldedChildRun[0] && candidate[2]!.length <= foldedChildRun.length
-        const fenceCandidate: RegExpExecArray | null = lazyChildRun ? null : candidate
+        const fenceCandidate: RegExpExecArray | null = lazyChildRun && !outerCloser ? null : candidate
         if (fenceCandidate && foldedChildRun === fenceCandidate[2] && subCol > 0 &&
             beforeRebase[k - 1] !== undefined &&
-            indentColumns(beforeRebase[k - 1]!, subCol) < subCol) {
+            indentColumns(beforeRebase[k - 1]!, subCol) < subCol && !outerCloser) {
           foldedChildRun = null
           continue
         }
@@ -2810,21 +2797,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // without a closer. It folds into the child's paragraph, so the blank
         // after it remains available to loosen the parent item (carve-js#3403).
         const foldedFence = fenceCandidate !== null && k > 0 &&
-          ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) > 0
-            ? beforeRebase[k - 1] !== undefined &&
-              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
-            : (((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0 ||
-              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k)) ||
-              (beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, 1) === 0 &&
-                inlineRunPrecedesParagraph(k))))) ||
+          ((itemParagraphFences.has(k - 1) && (subListColumnAt(k - 1) <= 0 ||
+            (beforeRebase[k - 1] !== undefined &&
+              indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)))) ||
             (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
             (!markerNoteItem && subCol > 0 && belowChildColumn &&
               (isListMarkerLine(fenceLines[k - 1]!.trimStart()) ||
-                (RE_FENCE.test(fenceLines[k - 1]!.trimStart()) &&
+                (!closedCodeOnPreviousLine && RE_FENCE.test(fenceLines[k - 1]!.trimStart()) &&
                   indentColumns(fenceLines[k - 1]!, 1) === indentColumns(line, 1))))) &&
-          !codeCloserPossible(closers, fenceCandidate[2]!, k)
+          !codeCloserPossible(ownerClosers, fenceCandidate[2]!, k)
         const fence = foldedFence ? null : fenceCandidate
         const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
         const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
