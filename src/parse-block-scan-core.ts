@@ -1465,10 +1465,10 @@ export function taskMatch(line: string, terminatorFree = false): RegExpExecArray
 // The visual content column of a list-marker line (`- x` -> 2, `1. x` -> 3,
 // `- [ ] x` -> 6), or -1 if the line is not a list marker. Each marker regex
 // captures the item content as its LAST group, so the content column is the
-// column width of everything before that content. Used to decide, in the
-// looseness scan, whether a line belongs to an item's sub-list (carve#322).
+// column width of everything before that content. Used to relate a parsed
+// child list to the authored paragraph column (carve#322).
 export function markerContentColumn(line: string, terminatorFree = false, knownColumn?: number): number {
-  // Mirror parseList's own content-column computation so the looseness scan
+  // Mirror parseList's own content-column computation so the parsed-child check
   // uses the SAME threshold the recursive sub-list parse uses -- including the
   // task convention (content column is base + 2, the bullet width, NOT the
   // `- [ ] ` checkbox width) and an abutting `{...}` attribute (stripped first).
