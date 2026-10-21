@@ -15591,6 +15591,18 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
+        // The note may have ended while this item's paragraph still owns a
+        // follower. Check the authored columns: rebasing the note can make the
+        // same line appear to reach its body in this local frame.
+        const lastItemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
+        const parentNoteSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 2]
+        const sourceAfterNestedNote = pendingBlanks === 0 && lazyState.inFootnoteBody &&
+          lastItemSource !== undefined && RE_FOOTNOTE_DEF.test(lastItemSource.trimStart()) &&
+          parentNoteSource !== undefined && RE_FOOTNOTE_DEF.test(parentNoteSource.trimStart()) &&
+          sourceColumn(parentNoteSource) >= itemMarkerColumn - baseIndent &&
+          sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) > itemMarkerColumn &&
+          sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) < sourceColumn(lastItemSource) + FOOTNOTE_BODY_COLUMN &&
+          !lineOpensItemBlock(l.trimStart())
         if (!isBlankLine(l) && lw === baseIndent && lexer.hostBody === 'list' &&
             (lineOpensItemBlock(l.trimStart()) || deflistMarkerLine(stripLazyFrame(l))) &&
             sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) ===
@@ -16328,7 +16340,7 @@ class ParseSession {
         } else if (
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-          (((((lazyState.lazyFoldable || captionParagraphClaim ||
+          (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
             (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
             (lazyState.deepest?.inDefList === 'description' &&
               (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
@@ -16382,13 +16394,14 @@ class ParseSession {
             (commentFenceRun(l.replace(/^[ \t]+/, '')) !== undefined &&
               bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)) ||
             (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
-              indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart())))
+              indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
         ) {
           const commentState = belowItemComment && lazyState.literalColon === undefined && (lazyState.deepest != null || lazyState.authoredColon?.column === 0) && lazyState.opaque === null ? {...lazyState} : undefined
           const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
             lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
           const termComment = lazyState.inDefList === 'term' && isRetainableLineComment(lexer, l)
           let lazyLine = l
+          if (sourceAfterNestedNote) lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           // A caption line below the column reaches no host: it folds as text (§10 I7).
           if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
               lazyState.opaque === null && !quoteLazyFramed) {
