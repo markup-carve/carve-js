@@ -15771,6 +15771,11 @@ class ParseSession {
             (authoredQuoteClaim !== null || lazyState.quoteInner === null && lazyState.ownedColumn < 0 && !insideOpenFence(lazyState) &&
               !lazyState.inlineFenceParagraph && descendantOpaque === null)
           const atItemColumn = lw === contentCol && placed[0] !== ' ' && placed[0] !== '\t'
+          if (!insideOpenQuoteParagraph(lazyState) && authoredQuoteClaim === null &&
+              !RE_BLOCKQUOTE.test(unindented) &&
+              !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && !quoteParagraphMarker) {
+            lazyState.quoteInner = null
+          }
           if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
@@ -15844,7 +15849,7 @@ class ParseSession {
               trackBlockQuoteLazyState(quoted[1] ?? '', authoredQuoteClaim, () => true, () => true)
               authoredQuoteParagraphOpen = blockQuoteParagraphOpen(authoredQuoteClaim)
             }
-            else if (!lazyState.lazyFoldable || indentColumns(l) === authoredQuoteHostColumn &&
+            else if (!authoredQuoteParagraphOpen || !lazyState.lazyFoldable || indentColumns(l) === authoredQuoteHostColumn &&
                 !isListMarkerLine(l) &&
                 (lineOpensBlock(unindented) || RE_COMMENT_LINE.test(unindented))) {
               authoredQuoteClaim = null
