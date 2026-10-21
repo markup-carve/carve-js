@@ -5676,13 +5676,14 @@ function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quoteLevel
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
+  if (firstBlock && sourceColumn(line, 0) === 0 && !isListMarkerLine(line)) return true
   if (quoteLevels === Infinity) {
     let offset = 0
     for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
     return indentColumns(line.slice(offset)) === markerColumn
   }
   const column = sourceColumn(line, quoteLevels)
-  return column === markerColumn || firstBlock && sourceColumn(line, 0) === 0 && !isListMarkerLine(line)
+  return column === markerColumn
 }
 
 /**
@@ -11928,10 +11929,12 @@ class ParseSession {
     // footnote definition is no boundary here. Otherwise the `+` stays text.
     let firstBlockAttached = false
     const below = lexer.peek()
-    if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) && attachesAtDocumentColumnZero(lexer)) {
+    if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) &&
+        attachesAtDocumentColumnZero(lexer, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true)) {
       const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
         lexer,
         (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a),
+        0, true, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true,
       )
       firstBlockAttached = true
       bodyLines[0] = ''
@@ -12976,7 +12979,8 @@ class ParseSession {
       if (/^\+[ \t]*$/.test(first)) {
         lexer.reportRefusedContinuationMarker(firstLineIndex,
           lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description')
-        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary)
+        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
+          sourceColumn(markerSource, quotePrefixDepth(markerSource)), quotePrefixDepth(markerSource), true)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
@@ -13877,7 +13881,7 @@ class ParseSession {
         // quote's body. Before a blank, a quoted line or the end it stays text.
         if (endsInPlus(content) && !quoteMarkerIsWrongColumn &&
             (isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln) ||
-              lineIndex === firstLineIndex && isStackedFirstBlockQuoteMarker(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln)) &&
+              lineIndex === firstLineIndex) &&
             this.opensFirstBlockQuote(lexer, lineIndex, content, lineIndex === firstLineIndex ? 0 : -1, () => {
           trackUntracked()
           return openQuoteDepth(state)
@@ -13891,8 +13895,9 @@ class ParseSession {
             (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
             0,
             true,
-            isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : 0,
-            isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : Infinity,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : physicalQuoteColumn,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : 0,
+            true,
           )
           if (/^\+[ \t]*$/.test(content)) {
             if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
@@ -14317,9 +14322,9 @@ class ParseSession {
     const levels = chain.get(content.length)
     if (levels === undefined) return false
     if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
-    return isStackedFirstBlockQuoteMarker(sourceLine)
-      ? attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), quotePrefixDepth(sourceLine), true)
-      : attachesAtDocumentColumnZero(lexer)
+    return attachesAtDocumentColumnZero(lexer,
+      isStackedFirstBlockQuoteMarker(sourceLine) ? sourceColumn(sourceLine) : sourceColumn(sourceLine, 0),
+      isStackedFirstBlockQuoteMarker(sourceLine) ? quotePrefixDepth(sourceLine) : 0, true)
   }
 
   private collectAttachedBlock(
@@ -14343,7 +14348,7 @@ class ParseSession {
     // treats an EMPTY result as "the marker attached nothing" and lets its own
     // ordinary rules have the line, which is exactly what the clause's comment
     // spelling does.
-    if (!attachesAtDocumentColumnZero(lexer, markerColumn, quoteLevels)) {
+    if (!attachesAtDocumentColumnZero(lexer, markerColumn, quoteLevels, acceptFirstNonList)) {
       return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
     }
     const scans = lexer.attachmentScans ??= new Map()
