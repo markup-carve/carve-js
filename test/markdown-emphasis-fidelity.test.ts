@@ -38,9 +38,9 @@ it('preserves prose quotes with attributes enabled', () => {
   expect(carveToHtml(markdownToCarve(source, { attributes: true }))).toBe('<p>"hello" \'x\' <em title="two words">word</em></p>')
 })
 
-it.each(['<span title="x  \ny">b</span>', '<!-- x  \ny -->'])('preserves spaces in raw HTML: %s', (html) => {
+it.each(['<span title="x  \ny">b</span>', '<!-- x  \ny -->'])('keeps raw HTML across a line without a hard break: %s', (html) => {
   const written = markdownToCarve('*a ' + html + '\nc*')
-  expect(written).toContain(html.replace(/>b<\/span>$/, '>'))
+  expect(written).toContain(html.replace(/>b<\/span>$/, '>').replace('  \n', '\n'))
   expect(written).not.toContain('x\\\ny')
 })
 

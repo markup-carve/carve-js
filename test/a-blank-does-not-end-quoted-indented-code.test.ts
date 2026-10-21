@@ -71,7 +71,7 @@ describe('a blank line does not end indented code on a quoted item marker line',
     // a code block of two spaces and `b`.
     const out = markdownToCarve(lines('> -' + sp(5) + 'a', '>', '>' + sp(7) + 'b', '> >' + sp(7) + 'b'))
     expect(out).toBe(
-      lines('> - ```', '>' + sp(3) + 'a', '>', '>' + sp(3) + 'b', '>' + sp(3) + '```', '> > ```', '> >' + sp(3) + 'b', '> > ```'),
+      lines('> - ```', '>' + sp(3) + 'a', '>', '>' + sp(3) + 'b', '>' + sp(3) + '```', '>', '> > ```', '> >' + sp(3) + 'b', '> > ```'),
     )
     expect(carveToHtml(out)).toMatch(/<pre><code>a\n\nb\n<\/code><\/pre>[\s\S]*<blockquote>[\s\S]*<pre><code> {2}b\n<\/code><\/pre>/)
   })

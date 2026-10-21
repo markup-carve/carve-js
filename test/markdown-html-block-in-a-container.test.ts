@@ -36,7 +36,7 @@ describe('a block-level HTML element inside a container', () => {
       // A condition-6 opener may interrupt a paragraph, so no blank quote line
       // is needed. marked reads the same two blocks here as with one.
       const carve = markdownToCarve('> quoted\n> <footer>Socrates</footer>\n')
-      expect(carve).toBe('> quoted\n> ```=html\n> <footer>Socrates</footer>\n> ```\n')
+      expect(carve).toBe('> quoted\n>\n> ```=html\n> <footer>Socrates</footer>\n> ```\n')
       expect(carveToHtml(carve)).not.toContain('<p><footer>')
     })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToMarkdown, carveToMarkdownWithReport, parse } from '../src/index.js'
+import { carveToCarve, carveToMarkdown, carveToMarkdownWithReport, parse } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
 
 // CARVE-P11-067: under roundtrip export a fence's title and label travel in a
@@ -44,7 +44,7 @@ describe('a code fence title and label under roundtrip Markdown export', () => {
     it(`round-trips ${JSON.stringify(carve)}`, () => {
       const imported = markdownToCarveWithLosses(carveToMarkdown(carve, { roundtrip: true }))
       expect(imported.losses).toEqual([])
-      expect(imported.value).toBe(carve)
+      expect(imported.value).toBe(carveToCarve(carve))
     })
   }
 

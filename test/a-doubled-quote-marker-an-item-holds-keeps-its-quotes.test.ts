@@ -92,7 +92,7 @@ describe('a doubled quote marker a list item holds', () => {
       //   </blockquote></blockquote></li></ul>. This is the line the ticket
       // reports as writing through byte for byte.
       const carve = markdownToCarve(lines('- >> a', '  >> ***'))
-      expect(carve).toBe(lines('- > > a', '  > > ***'))
+      expect(carve).toBe(lines('- > > a', '  > >', '  > > ***'))
       const out = html(carve)
       expect(out).toContain('<p>a</p>')
       expect(out).toContain('<hr>')

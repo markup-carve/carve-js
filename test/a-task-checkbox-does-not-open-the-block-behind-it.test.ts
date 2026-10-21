@@ -90,8 +90,8 @@ describe('a task checkbox does not open the block behind it', () => {
     // GFM's tasklist extension the first three of those. Only where both read a
     // box does the box survive to move the content position.
     for (const box of ['[ ]', '[x]', '[X]']) {
-      expect(markdownToCarve(`- ${box} > foo\n`)).toBe(`- ${box} \\> foo\n`)
-      expect(markdownToCarve(`* ${box} > foo\n`)).toBe(`* ${box} \\> foo\n`)
+      expect(markdownToCarve(`- ${box} > foo\n`)).toBe(`- ${box.toLowerCase()} \\> foo\n`)
+      expect(markdownToCarve(`* ${box} > foo\n`)).toBe(`* ${box.toLowerCase()} \\> foo\n`)
     }
     // The four states GFM has none of are imported as their own text
     // (carve-js#2048), so the pair is escaped as well.

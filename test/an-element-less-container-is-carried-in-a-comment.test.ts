@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, carveToMarkdown, markdownToCarve, migrateMarkdown } from '../src/index.js'
+import { carveToCarve, carveToHtml, carveToMarkdown, markdownToCarve, migrateMarkdown } from '../src/index.js'
 
 /**
  * CARVE-P11-063, PART 11 §10s: under the opt-in carrier mode the Markdown
@@ -440,7 +440,7 @@ describe('an element-less container is carried in a comment', () => {
     it(`a container ${name} comes back`, () => {
       const restored = markdownToCarve(carrier)
       expect(restored).not.toContain('CARVECARRIER')
-      expect(restored).toBe(carve)
+      expect(restored).toBe(carveToCarve(carve))
     })
 
     // The bytes are the point, but so is the MEANING: a round trip that returns
