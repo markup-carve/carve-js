@@ -182,7 +182,7 @@ export interface RefusedContinuationMarker {
   line: number
   column: number
   host: 'document' | 'list item' | 'definition description' | 'footnote' | 'block quote'
-  reason: 'blank' | 'document' | 'sibling' | 'left' | 'right' | 'wrong-column' | 'fence-payload'
+  reason: 'blank' | 'document' | 'sibling' | 'left' | 'right' | 'wrong-column'
   firstBlock?: boolean
 }
 
@@ -11767,10 +11767,6 @@ class ParseSession {
     const open = lexer.consume()
     const m = RE_FENCE.exec(open)!
     const marker = m[2]!
-    const fenceSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(fenceStartIndex) - 1] ?? open
-    let fenceColumn = 0
-    for (const char of fenceSource.slice(0, fenceSource.indexOf(marker)))
-      fenceColumn += char === '\t' ? 4 - fenceColumn % 4 : 1
     const indent = m[1]!.length
     const lang = m[3] || undefined
     // Header is the quoted group (with or without a language); label is the
@@ -11792,12 +11788,6 @@ class ParseSession {
         lexer.consume()
         closed = true
         break
-      }
-      const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      if (isContinuationMarker(ln) && sourceColumn(physical) === fenceColumn &&
-          (isPhysicalContinuationMarker(physical) || isContinuationMarker(physical.trimStart()))) {
-        lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
-          lexer.hostBody === 'list' ? 'list item' : 'document', 'fence-payload')
       }
       lastPayloadLineIndex = lexer.pos
       lexer.consume()

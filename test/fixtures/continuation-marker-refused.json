@@ -175,7 +175,7 @@
       "description": "A plus inside the fence's content column is payload.",
       "source": "- ```\n  +\n\n  x\n  ```\n",
       "expected": {
-        "findings": [{ "line": 2, "column": 3, "includes": ["payload"] }]
+        "findings": []
       }
     }
   ]
