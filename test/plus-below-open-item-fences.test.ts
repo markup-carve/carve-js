@@ -9,7 +9,8 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     const item = children[0]
     expect(item?.type).toBe('list')
     if (item?.type !== 'list') return
-    expect(item.items[0]?.children.at(-1)).toMatchObject({ type: 'code_block', content: '' })
+    expect(item.items[0]?.children.at(-2)).toMatchObject({ type: 'code_block', content: '' })
+    expect(item.items[0]?.children.at(-1)).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: '+' }] })
     expect(children.at(-1)).toMatchObject({ type: 'paragraph' })
   })
 

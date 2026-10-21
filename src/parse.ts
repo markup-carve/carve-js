@@ -4907,7 +4907,9 @@ class OpenMarkerClassifier {
     const depth = quotePrefixDepth(line)
     const column = sourceColumn(line)
     const localColumn = depth > 0 ? sourceQuoteLocalColumn(line, depth) : column
-    const useLocalColumn = depth > 0 && quoteIndentHasTab(line, depth)
+    // `>+` and `> +` name the same quote level despite different physical
+    // columns for the +. At the quote body's start, compare local columns.
+    const useLocalColumn = depth > 0 && (quoteIndentHasTab(line, depth) || localColumn === 0)
     const markerColumn = useLocalColumn ? localColumn : column
     const body = sourceQuoteBody(line)
     if (isContinuationMarker(body)) {
@@ -9561,6 +9563,7 @@ export const listHelpers = {
   retainCommentBoundary,
   sourceColumn,
   sourceQuoteBody,
+  sourceQuoteLocalColumn,
   startsInterruptingBlock,
   stripLazyFrame,
   subLexer,

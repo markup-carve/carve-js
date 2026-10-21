@@ -99,6 +99,7 @@ export function createListParser(helpers: typeof listHelpers) {
     retainCommentBoundary,
     sourceColumn,
     sourceQuoteBody,
+    sourceQuoteLocalColumn,
     startsInterruptingBlock,
     stripLazyFrame,
     subLexer,
@@ -1035,7 +1036,11 @@ export function createListParser(helpers: typeof listHelpers) {
         // compact-list rule above then keeps the item tight.
         const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
         const classifiedMarker = isContinuationMarker(l.slice(leadingWhitespace(l))) ? markerDecision(lexer, lexer.pos) : undefined
-        const plusColumn = sourceColumn(markerSource)
+        // A quote prefix may omit its optional space; compare the marker at
+        // the open item's quote-body column in either spelling.
+        const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
+          ? Math.max(sourceColumn(markerSource), physicalItemMarkerColumn)
+          : sourceColumn(markerSource)
         const classifiedListOwner = classifiedMarker?.owner?.kind === 'list' &&
           classifiedMarker.owner.column === plusColumn && classifiedMarker.reason === undefined
         const listPlusOwner = isContinuationMarker(l.slice(leadingWhitespace(l))) &&
@@ -1057,6 +1062,17 @@ export function createListParser(helpers: typeof listHelpers) {
                 : followerColumn > plusColumn || itemQuoteDepth > 0 && quotePrefixDepth(candidate) > itemQuoteDepth &&
                   plusColumn === quoteBodyColumn(markerSource, itemQuoteDepth) ? 'right'
                   : classifiedMarker?.reason === 'sibling' || isListMarkerLine(follower.trimStart()) ? 'sibling' : null
+        if (listPlusReason === 'blank' && acceptedPlusLine === lexer.lineNumber(lexer.pos) - 1 &&
+            lazyState.opaque?.kind === 'code') {
+          // The first + ended the fence but attached no block. Keep this
+          // refused second + as authored text in the item.
+          lexer.reportRefusedContinuationMarker(lexer.pos, baseIndent + 1, 'list item', 'blank')
+          nested.push(l)
+          nestedSourceLines.push(markerSource)
+          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+          lexer.consume()
+          continue
+        }
         if (listPlusReason !== null) lexer.reportRefusedContinuationMarker(lexer.pos, baseIndent + 1, 'list item', listPlusReason)
         if (listPlusReason === 'sibling' &&
             (pendingBlanks > 0 || !lazyState.lazyFoldable || lazyState.opaque?.kind === 'code' || descendantOpaque !== null)) break
