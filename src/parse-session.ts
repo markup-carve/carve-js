@@ -34,6 +34,7 @@ import type {
   TableBlockHost,
   ThematicBreak,
 } from './parse-core.js'
+import { ContainerBlankBuffer, runIndentationContainer } from './parse-indentation-container.js'
 import {
   AttachmentFenceClosers,
   FOOTNOTE_BODY_COLUMN,
@@ -1048,9 +1049,7 @@ export class ParseSession extends InlineParseSession {
     // prefix length is its column width.
     const defContentColumn =
       markerColumn + (defLineRaw.replace(/^[ \t]+/, '').length - m[2]!.length)
-    let pendingBlanks = 0
-    let pendingBlankLineNumbers: number[] = []
-    let pendingBlankSources: string[] = []
+    const pendingBlankRun = new ContainerBlankBuffer()
     let nestedSourceBodyColumn: number | undefined
     const noteSpanScan = newCommentSpanScan()
     const lazyState = verbatimOnlyLazyState()
@@ -1083,24 +1082,23 @@ export class ParseSession extends InlineParseSession {
     let termTextContinuation = false
     const belowColumnCommentFence = new Set<number>()
     let commentFenceUntil = 0
-    while (!lexer.eof()) {
-      const ln = lexer.peek()!
+    runIndentationContainer(
+      lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
+      const ln = admission.line
       const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
-      if (lexer.hostBody === 'description' && pendingBlanks > 0 &&
+      if (lexer.hostBody === 'description' && pendingBlankRun.count > 0 &&
           authoredBodyColumn !== undefined && sourceLine !== undefined && !isBlankLine(sourceLine) &&
-          sourceColumn(sourceLine) < authoredBodyColumn && indentColumns(ln, bodyColumn) >= bodyColumn) break
+          sourceColumn(sourceLine) < authoredBodyColumn && indentColumns(ln, bodyColumn) >= bodyColumn) return 'stop'
       if (lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
           sourceLine !== undefined && !isBlankLine(sourceLine) &&
-          indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) break
-      if (isBlankLine(ln)) {
+          indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) return 'stop'
+      if (admission.kind === 'blank') {
         retainedBelowComment = false
         termTextContinuation = false
         trackItemLazyState('', lazyState)
-        pendingBlanks++
-        pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
-        pendingBlankSources.push(ln)
+        pendingBlankRun.add(ln, lexer.lineNumber(lexer.pos))
         lexer.consume()
-        continue
+        return 'continue'
       }
       // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
       // with no indentation (the same continuation marker lists and block quotes
@@ -1109,14 +1107,14 @@ export class ParseSession extends InlineParseSession {
       // which case all three are body text (corpus category 279).
       const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
       const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
-      if (pendingBlanks === 0 && lazyState.opaque === null &&
+      if (pendingBlankRun.count === 0 && lazyState.opaque === null &&
           noteMarker?.owner?.kind === 'footnote' && noteMarker.reason !== undefined) {
         // The note still owns this marker even when the next block misses its
         // marker column. The body collector leaves the + as text below.
         lexer.reportRefusedContinuationMarker(lexer.pos, markerColumn + 1,
           'footnote', noteMarker.reason)
       }
-      if (pendingBlanks === 0 && noteMarkerLine &&
+      if (pendingBlankRun.count === 0 && noteMarkerLine &&
           (isPhysicalContinuationMarker(sourceLine ?? ln) || noteMarker?.owner?.kind === 'footnote' && noteMarker.reason === undefined) &&
           sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] ?? '', quotePrefixDepth(sourceLine ?? ln)) ===
             sourceColumn(sourceLine ?? ln) &&
@@ -1126,9 +1124,7 @@ export class ParseSession extends InlineParseSession {
           !isBlankLine((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)])) {
         const plusLineNumber = lexer.lineNumber(lexer.pos)
         lexer.consume()
-        pendingBlanks = 0
-        pendingBlankLineNumbers = []
-        pendingBlankSources = []
+        pendingBlankRun.clear()
         // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
         // whether this `+` is a marker at all; when it is not, the line is an
         // ordinary invisible line at document column 0, and a footnote body ends
@@ -1137,7 +1133,7 @@ export class ParseSession extends InlineParseSession {
         // own continuation branch would otherwise claim the following line before
         // any extent is measured. The `+` is consumed either way, so the
         // enclosing parse resumes on the line the marker did not take.
-        if (!attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine ?? ln), quotePrefixDepth(sourceLine ?? ln))) break
+        if (!attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine ?? ln), quotePrefixDepth(sourceLine ?? ln))) return 'stop'
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
           lexer,
           (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
@@ -1156,7 +1152,7 @@ export class ParseSession extends InlineParseSession {
           }
           bodyLineNumbers.push(...attachedLineNumbers)
         }
-        continue
+        return 'continue'
       }
       // §16 asks for COLUMNS, not characters, and §24 C1 gives a tab a column
       // value - so a bare tab reaches column 4 and continues the note exactly as
@@ -1165,16 +1161,14 @@ export class ParseSession extends InlineParseSession {
       // tab: three engines, three readings (carve#796, carve-js#725). A rejected
       // continuation does not indent differently, it LEAVES the note and lands in
       // the document body, so the split moved content between blocks.
-      if (indentColumns(ln, bodyColumn) >= bodyColumn) {
-        for (let k = 0; k < pendingBlanks; k++) {
+      if (admission.kind === 'content') {
+        for (let k = 0; k < pendingBlankRun.count; k++) {
           bufferedBlanks.add(bodyLines.length)
           bodyLines.push('')
-          bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
-          bodySourceLines.push(pendingBlankSources[k])
+          bodyLineNumbers.push(pendingBlankRun.lineNumbers[k]!)
+          bodySourceLines.push(pendingBlankRun.lines[k])
         }
-        pendingBlanks = 0
-        pendingBlankLineNumbers = []
-        pendingBlankSources = []
+        pendingBlankRun.clear()
         const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
           ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
         const belowQuotedComment = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
@@ -1207,7 +1201,7 @@ export class ParseSession extends InlineParseSession {
         // `bodyHoldsOpenCommentSpan`. The reported host hides the payload at a
         // delimiter REACHING column two and did not at column zero or one, which is
         // the band this covers.
-        pendingBlanks === 0 &&
+        pendingBlankRun.count === 0 &&
         commentFenceRun(ln.replace(/^[ \t]+/, '')) !== undefined &&
         bodyHoldsOpenCommentSpan(bodyLines, noteSpanScan)
       ) {
@@ -1221,7 +1215,7 @@ export class ParseSession extends InlineParseSession {
         bodySourceLines.push(ln)
         lexer.consume()
       } else if (
-        pendingBlanks === 0 && indentColumns(ln, bodyColumn) < bodyColumn && ln !== ln.trimStart() &&
+        pendingBlankRun.count === 0 && indentColumns(ln, bodyColumn) < bodyColumn && ln !== ln.trimStart() &&
         (retainedBelowComment || lazyState.lazyFoldable) && lazyState.opaque === null &&
         matchedCommentFenceEnd(lexer) !== undefined
       ) {
@@ -1238,7 +1232,7 @@ export class ParseSession extends InlineParseSession {
         }
         retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
       } else if (
-        pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
+        pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
         !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
         (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
         (isRetainableLineComment(lexer, ln) ||
@@ -1256,9 +1250,10 @@ export class ParseSession extends InlineParseSession {
         retainedBelowComment = retainBelowColumnComment(content, lazyState, false)
         lexer.consume()
       } else {
-        break
+        return 'stop'
       }
-    }
+      return 'continue'
+      })
     if (!lexer.footnoteDefs.has(label)) {
       // A recognized opener at or beyond the note's minimum column establishes
       // its authored column as a local base (carve#1729). The collector has
