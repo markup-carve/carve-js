@@ -3373,7 +3373,7 @@ class CarveRenderSession {
         // PART 11 §1 / CARVE-P11-002 and §5 keep guarded dashes as paragraph text
         // in list items and descriptions while emitting their source run bare.
         if (this.markerColumnGuardParagraphs.has(node)) {
-          return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `))
+          return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
         }
 
         return withAttrs(text)
