@@ -3645,7 +3645,7 @@ class CarveRenderSession {
           let nested = source
           for (let depth = 1; depth < ctx.listDepth; depth++)
             nested = '- parent\n' + nested.split('\n').map(line => line ? `  ${line}` : '').join('\n')
-          const wrapped = ctx.quoteDepth === 0 ? nested : nested.split('\n').map(line =>
+          const wrapped = ctx.quoteDepth === 0 ? nested : nested.replace(/\n$/, '').split('\n').map(line =>
             line ? `${'> '.repeat(ctx.quoteDepth)}${line}` : '>'.repeat(ctx.quoteDepth)).join('\n')
           try {
             let blocks = parse(wrapped).children
