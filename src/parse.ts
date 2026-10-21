@@ -923,6 +923,7 @@ class Lexer {
    * admonition pointed at the wrong place (#444).
    */
   sourceOffsetMap?: number[]
+  sourceBoundaries?: Array<{ parent: Lexer; line: number; start: number; synthetic: number }>
   /**
    * The document's last line number, and whether the source ended without a
    * break after it. A code payload running to that line is the only one whose
@@ -1325,6 +1326,15 @@ class Lexer {
     return this.sourceOffsetMap?.[lineIndex] ?? (this.localOffsetsReady ? this.lineOffsets : this.measureLineOffsets())[lineIndex] ?? 0
   }
 
+  sourceBoundary(lineIndex: number, column: number): { offset: number; column: number } {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.sourceBoundary(this.contiguousOrigin.start + lineIndex, column)
+    const boundary = this.sourceBoundaries?.[lineIndex]
+    if (boundary) {
+      return boundary.parent.sourceBoundary(boundary.line, boundary.start + Math.max(0, column - boundary.synthetic))
+    }
+    return { offset: this.lineOffset(lineIndex) + column, column: this.lineStartColumn(lineIndex) + column }
+  }
+
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
   lineStartColumn(lineIndex: number): number {
     if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineStartColumn(this.contiguousOrigin.start + lineIndex)
@@ -1575,6 +1585,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   if (!parent.hasDocumentOffsets) return
   const offsets: number[] = []
   const widths: number[] = []
+  const boundaries: NonNullable<Lexer['sourceBoundaries']> = []
   const prefixMemoLines: boolean[] = []
 
   // Where a sub-line came from, when its lines are NOT a contiguous run of the
@@ -1608,8 +1619,11 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
         (mapped === undefined || mapped === parent.lineNumber(origin.parentIndex))) {
       const parentIndex = origin.parentIndex
       previousIndex = parentIndex
-      offsets.push(parent.lineOffset(parentIndex) + origin.prefix)
-      widths.push(parent.lineStartColumn(parentIndex) - 1 + origin.prefix)
+      boundaries.push({ parent, line: parentIndex, start: origin.prefix, synthetic: 0 })
+      const lead = leadingWhitespace(subLine)
+      const anchor = parent.sourceBoundary(parentIndex, origin.prefix + lead)
+      offsets.push(anchor.offset - lead)
+      widths.push(anchor.column - 1 - lead)
       prefixMemoLines.push(parent.prefixMemoAllowed(parentIndex))
       sub.inheritTerminatorFree(i, parent, parentIndex)
       sub.inheritLeadingWhitespace(i, parent, parentIndex, origin.prefix)
@@ -1668,6 +1682,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     }
     prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoAllowed(parentIndex)))
     let prefix = parentLine.length - subLine.length
+    let synthetic = 0
     if (framed && parentLine.endsWith(unframed)) {
       // The frame occupies no source, so the anchor is the unframed content's
       // own prefix - the three characters are charged nowhere. The frame is
@@ -1675,31 +1690,35 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       // collector strips it as it pushes, which is where a framed line becomes
       // text.
       prefix = parentLine.length - unframed.length
+      synthetic = subLine.length - unframed.length
     } else if (!isLiteralSuffix) {
       // Only reached when the line is NOT a literal suffix, which is the
       // straddling-tab case alone - so the synthetic-indent trim is computed
       // here rather than for every line.
       const trimmed = withoutSyntheticIndent(subLine)
-      const synthetic = subLine.length - trimmed.length
+      synthetic = subLine.length - trimmed.length
       if (synthetic === 0 || !parentLine.endsWith(trimmed)) return declinePositions(sub)
-      prefix = parentLine.length - trimmed.length - synthetic
+      prefix = parentLine.length - trimmed.length
+      // The residual indentation is a view of the boundary after the tab.
+      // It advances no authored source codepoint.
     }
 
     // A parent frame has already been excluded from its source offset.
-    prefix -= parentLine.length - stripLazyFrame(parentLine).length
+    if (!parent.sourceBoundaries?.[parentIndex] && !parent.contiguousOrigin) {
+      prefix -= parentLine.length - stripLazyFrame(parentLine).length
+    }
 
-    const offset = parent.lineOffset(parentIndex) + prefix
-    const width = parent.lineStartColumn(parentIndex) - 1 + prefix
-    // Refuse a negative published offset. This guard is unreachable under the
-    // current prefix bounds but protects the position map if those bounds change.
-    //
-    // The COLUMN base is deliberately NOT clamped the same way. It is a width
-    // added to a sub-column, and a sub-column starts at 1, so the first real
-    // character still lands on a positive document column - clamping it was the
-    // first fix written here and it declined exactly the documents this issue is
-    // about.
-    if (offset < 0) return declinePositions(sub)
+    if (boundaries.length <= i) boundaries.push({ parent, line: parentIndex, start: prefix, synthetic })
 
+    const lead = leadingWhitespace(subLine)
+    const anchor = parent.sourceBoundary(parentIndex, prefix + Math.max(0, lead - synthetic))
+    const offset = anchor.offset - lead
+    const width = anchor.column - 1 - lead
+    // The virtual base may be negative when synthetic indentation precedes
+    // the first source character. Only the projected boundary must be valid.
+    if (anchor.offset < 0) return declinePositions(sub)
+
+    // Inline scanners add local indexes to these virtual bases.
     offsets.push(offset)
     widths.push(width)
   }
@@ -1707,6 +1726,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   sub.prefixMemoLines = prefixMemoLines
   sub.sourceOffsetMap = offsets
   sub.linePrefixWidths = widths
+  sub.sourceBoundaries = boundaries
 }
 
 /**
@@ -2568,8 +2588,6 @@ const EMPTIED_CONTAINER_MARKUP: Record<string, RegExp> = {
   list_item: /^[ \t]*(?:[-+*]|[0-9]+[.)]|[A-Za-z]+[.)]|\.)[ \t]*/,
 }
 
-const authoredLineOffsets = new WeakMap<readonly string[], number[]>()
-
 function attachBlockPos(
   lexer: Lexer,
   node: { pos?: Position },
@@ -2586,14 +2604,21 @@ function attachBlockPos(
   // the frame here leaked its width into every span whose end fell on a framed
   // line, running a fence's end three columns past its last character and its
   // end offset past document length (carve-js#1963, mirroring carve-rs#1559).
-  const endLine = stripLazyFrame(lexer.lineAt(endLineIndex) ?? '')
+  const rawEndLine = lexer.lineAt(endLineIndex) ?? ''
+  const endLine = stripLazyFrame(rawEndLine)
+  const opening = lexer.sourceBoundary(startLineIndex, 0)
+  const ending = lexer.sourceBoundary(
+    endLineIndex,
+    rawEndLine !== endLine && (lexer.sourceBoundaries?.[endLineIndex] || lexer.contiguousOrigin)
+      ? rawEndLine.length : endLine.length,
+  )
   node.pos = {
     startLine: lexer.lineNumber(startLineIndex),
     endLine: lexer.lineNumber(endLineIndex),
-    startColumn: lexer.lineStartColumn(startLineIndex),
-    endColumn: lexer.lineStartColumn(endLineIndex) + endLine.length,
-    startOffset: lexer.lineOffset(startLineIndex),
-    endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
+    startColumn: opening.column,
+    endColumn: ending.column,
+    startOffset: opening.offset,
+    endOffset: ending.offset,
   }
   const type = (node as { type?: string }).type
   // A LEAF BEGINS AT ITS MARKUP. The line offset above is the start of the
@@ -2605,44 +2630,20 @@ function attachBlockPos(
     const startLine = lexer.lineAt(startLineIndex) ?? ''
     const lead = leadingWhitespace(startLine)
     if (lead > 0) {
-      node.pos.startOffset = (node.pos.startOffset ?? 0) + lead
-      node.pos.startColumn = (node.pos.startColumn ?? 1) + lead
+      const marker = lexer.sourceBoundary(startLineIndex, lead)
+      node.pos.startOffset = marker.offset
+      node.pos.startColumn = marker.column
     }
   }
   if (type === 'list' || type === 'list_item') {
-    const physical = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
-    if (physical !== undefined && physical.includes('\t') && node.pos.startColumn === 0 &&
-        (unorderedMatch(physical.trimStart()) !== null || taskMatch(physical.trimStart()) !== null)) {
-      const marker = leadingWhitespace(physical)
-      const root = lexer.rootLines ?? lexer.lines
-      let offsets = authoredLineOffsets.get(root)
-      if (offsets === undefined) {
-        offsets = [0]
-        for (const sourceLine of root) offsets.push(offsets.at(-1)! + [...sourceLine].length + 1)
-        authoredLineOffsets.set(root, offsets)
-      }
-      node.pos.startColumn = [...physical.slice(0, marker)].length + 1
-      node.pos.startOffset = offsets[node.pos.startLine - 1]! + [...physical.slice(0, marker)].length
-      return
-    }
     const startLine = lexer.lineAt(startLineIndex) ?? ''
-    const leadChars = leadingWhitespace(startLine)
-    const documentLine = leadChars > 0 ? (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1] : undefined
-    // A container's span may open in the line's indentation only where nothing
-    // but indentation precedes it; behind a quote marker it opens at the marker.
-    const behindMarkup = documentLine !== undefined && documentLine.endsWith(startLine) &&
-      /\S/.test(documentLine.slice(0, documentLine.length - startLine.length))
-    if (leadChars > 0 && (lexer.sublistsCarryAuthoredBase || behindMarkup)) {
-      const markerLine = startLine.slice(leadChars)
-      // A tab straddling a container strip is represented by synthetic spaces
-      // in the local line. When the remaining marker text is an exact suffix,
-      // measure its column in the untouched document line so those spaces are
-      // not charged a second time.
-      node.pos.startColumn =
-        documentLine !== undefined && documentLine.endsWith(markerLine)
-          ? Array.from(documentLine.slice(0, documentLine.length - markerLine.length)).length + 1
-          : (node.pos.startColumn ?? 1) + leadChars
-      node.pos.startOffset = (node.pos.startOffset ?? 0) + leadChars
+    const lead = leadingWhitespace(startLine)
+    const documentLine = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
+    const behindMarkup = documentLine !== undefined && /\S/.test(documentLine.slice(0, Math.max(0, opening.column - 1)))
+    if (lead > 0 && (lexer.sublistsCarryAuthoredBase || behindMarkup || (lexer.sourceBoundaries?.[startLineIndex]?.synthetic ?? 0) > 0)) {
+      const marker = lexer.sourceBoundary(startLineIndex, lead)
+      node.pos.startColumn = marker.column
+      node.pos.startOffset = marker.offset
     }
   }
   // A paragraph has no opening marker: its extent begins at its first owned
@@ -2681,8 +2682,9 @@ function attachBlockPos(
       const lead = leadingWhitespace(startLine)
       const marker = EMPTIED_CONTAINER_MARKUP[type]!.exec(startLine.slice(lead))?.[0]?.length ?? 0
       node.pos.endLine = node.pos.startLine
-      if (node.pos.startColumn !== undefined) node.pos.endColumn = node.pos.startColumn + marker
-      if (node.pos.startOffset !== undefined) node.pos.endOffset = node.pos.startOffset + marker
+      const end = lexer.sourceBoundary(startLineIndex, lead + marker)
+      node.pos.endColumn = end.column
+      node.pos.endOffset = end.offset
     }
   }
 }
