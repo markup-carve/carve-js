@@ -208,7 +208,6 @@ describe('relative continuation marker columns', () => {
 
   it.each([
     ['- a\n+\n- b', 2, 1, 'sibling'],
-    ['- ```\n  +\n\n  x\n  ```', 2, 3, 'payload'],
   ] as const)('reports the refused marker at $0', (input, line, column, reason) => {
     const findings = lintCarve(input).filter(warning => warning.rule === 'continuation-marker-refused')
     expect(findings).toHaveLength(1)

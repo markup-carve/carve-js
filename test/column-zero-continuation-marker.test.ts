@@ -32,8 +32,8 @@ describe('column-zero continuation markers', () => {
     expect(carveToHtml('- a\n  - ```\n    +\n    payload')).toContain('<pre><code>+\npayload</code></pre>')
   })
 
-  it('does not admit an indented quote plus as a marker', () => {
-    expect(carveToHtml('- a\n  > +\npara')).toContain('<blockquote><p>+\npara</p></blockquote>')
+  it('admits a column-zero paragraph after an indented quote plus', () => {
+    expect(carveToHtml('- a\n  > +\npara')).toContain('<blockquote><p>para</p></blockquote>')
     expect(carveToHtml('- a\n  - +\nflush')).toBe('<ul>\n  <li>a\n    <ul>\n      <li>flush</li>\n    </ul>\n  </li>\n</ul>')
     expect(carveToHtml('- a\n  - > +\nflush')).toContain('<p>flush</p>')
   })
