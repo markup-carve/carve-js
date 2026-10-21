@@ -2656,6 +2656,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // no consumer and repeats the prefix walk at every nesting level.
       const fenceLines = hasBlank ? [content, ...nested] : []
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
+      const nextBlank: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
+      const nextText: number[] = new Array(fenceLines.length + 1).fill(fenceLines.length)
+      for (let i = fenceLines.length - 1; i >= 0; i--) {
+        nextBlank[i] = isBlankLine(fenceLines[i]!) ? i : nextBlank[i + 1]!
+        nextText[i] = isBlankLine(fenceLines[i]!) ? nextText[i + 1]! : i
+      }
+      const inlineRunPrecedesParagraph = (at: number): boolean => {
+        // An unclosed inline run ends at the blank that separates item paragraphs.
+        const blank = nextBlank[at + 1]!
+        const next = nextText[blank + 1] ?? fenceLines.length
+        if (next >= fenceLines.length) return false
+        const line = fenceLines[next]!
+        return !lineOpensBlock(line) && !RE_COMMENT_LINE.test(line.trimStart()) &&
+          !RE_BLOCKQUOTE.test(line.trimStart()) &&
+          !/^#{1,6}(?:[ \t]|$)/.test(line.trimStart())
+      }
       const foldedCloserChar = (line: string): string | null => {
         const content = line.startsWith(LAZY_FRAME + '>') ? line.slice(LAZY_FRAME.length + 1) : line.trimStart()
         return RE_FENCE_CLOSER.exec(content)?.[1]?.[0] ?? null
@@ -2782,7 +2798,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             ? beforeRebase[k - 1] !== undefined &&
               indentColumns(beforeRebase[k - 1]!, subListColumnAt(k - 1)) < subListColumnAt(k - 1)
             : (((lazyClosersAhead[k] ?? 0) & (fenceCandidate[2]![0] === '`' ? 1 : 2)) !== 0 ||
-              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k))))) ||
+              (!isBlankLine(fenceLines[k + 1] ?? '') && takenBelowColumn.has(k)) ||
+              (beforeRebase[k - 1] !== undefined && indentColumns(beforeRebase[k - 1]!, 1) === 0 &&
+                inlineRunPrecedesParagraph(k))))) ||
             (k === 1 && subListColumnAt(0) > 0 && beforeRebase[0] !== undefined &&
               indentColumns(beforeRebase[0]!, subListColumnAt(0)) < subListColumnAt(0) &&
               bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content))) ||
