@@ -222,7 +222,7 @@
   {
     "id": "js-24-3",
     "source": "1. :: t\n   : para\n    - li\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n- li</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n    <ul>\n      <li>li</li>\n    </ul>\n  </li>\n</ol>"
   },
   {
     "id": "js-27-1",
@@ -232,7 +232,7 @@
   {
     "id": "js-27-2",
     "source": "- :: t\n  : para\n   - li\n",
-    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n- li</dd>\n</dl>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n    <ul>\n      <li>li</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "js-28-1",

@@ -13286,6 +13286,16 @@ class ParseSession {
           lexer.consume()
           continue
         }
+        const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        const reachedQuotedDescription = quoteDepth > 0 &&
+          quotePrefixDepth(followerSource) >= quoteDepth &&
+          sourceColumn(followerSource, quoteDepth - 1) === quoteHostColumn
+        if (lexer.hostBody === 'list' && lazyState.lazyFoldable && lazyState.opaque === null &&
+            !reachedQuotedDescription && !insideOpenQuoteParagraph(lazyState) &&
+            !isRetainableLineComment(lexer, below) && commentFenceRun(below) === undefined &&
+            lineOpensBlock(below) && !opensCodeFence(below)) {
+          break
+        }
         // carve#3295: below the body's column a heading, break, table row or
         // quote marker opens nothing, so it folds into the open paragraph. In
         // an item the line reaches the item's column and opens there, unless a
@@ -13507,6 +13517,11 @@ class ParseSession {
         const t = RE_DEFLIST_TERM.exec(peekEntry())
         if (!t) break
         const termLineIndex = lexer.pos
+        const termSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(termLineIndex) - 1] ?? ''
+        const termMarkerOffset = termSource.indexOf('::')
+        const termColumn = termMarkerOffset >= 0
+          ? sourceColumnAt(termSource, termMarkerOffset)
+          : sourceColumn(termSource, quotePrefixDepth(termSource))
         lexer.consume()
         // A term is multi-line like a heading: a following plain line folds into
         // it with a soft break, instead of ending the list and stranding the
@@ -13547,6 +13562,10 @@ class ParseSession {
           // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
           // because a framed heading is the term's text rather than a block.
           const nextEntry = stripLazyFrame(next)
+          const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
+          const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
+            sourceColumn(nextSource, quotePrefixDepth(nextSource)) > termColumn
           // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
           // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
           // interruption from a fence with no closer ahead so an OPEN PARAGRAPH
@@ -13556,7 +13575,7 @@ class ParseSession {
           if (
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
-            (!lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            (!nextPastTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
@@ -13565,10 +13584,16 @@ class ParseSession {
           // The term is the other place a framed line becomes text. The frame
           // kept the opener tests above from claiming it; it comes off before
           // the fold, exactly as the oracle unframes here.
-          const continuation = lexer.hostBodyRoot === 'description' &&
+          let continuation = lexer.hostBodyRoot === 'description' &&
             isBlockAttributeLine(next.trimStart())
               ? stripLazyFrame(next).trimStart()
               : stripLazyFrame(next)
+          if (nextPastTerm && lexer.hostBody === 'list') {
+            const sourceIndent = sourceColumn(nextSource, quotePrefixDepth(nextSource)) - termColumn
+            const retainedIndent = indentColumns(continuation)
+            if (sourceIndent > retainedIndent)
+              continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
+          }
           const last = parts[parts.length - 1]!
           if ('lines' in last) {
             last.text += '\n' + continuation
@@ -14652,6 +14677,8 @@ class ParseSession {
       // lazy line can retain a positive residual indent for recursive safety,
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
+      let authoredTermColumn: number | undefined
+      let authoredDescriptionBodyColumn: number | undefined
       const itemSpanScan = newCommentSpanScan()
       // Lines the item took from BELOW its content column, a narrower fact than
       // `authoredBaseEligible`'s complement: that set also excludes a fence
@@ -15546,11 +15573,28 @@ class ParseSession {
         if (belowItemComment && !heldCommentSpan &&
             !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
             !lazyState.commentAtColumn && lazyState.inDefList !== 'description') break
-        const descriptionMarkerColumn = lazyState.inDefList === 'description' && isListMarkerLine(l)
-          ? indentColumns(l, contentCol + 2) : -1
-        // At the item content column, a marker opens a list after the description.
-        const belowOpenDescription = lazyState.lazyFoldable &&
-          descriptionMarkerColumn > contentCol && descriptionMarkerColumn < contentCol + 2 &&
+        const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
+        const sourceDepth = quotePrefixDepth(sourceLine)
+        const sourceMarkerColumn = sourceColumn(sourceLine, sourceDepth)
+        const sourceEntry = l.trimStart()
+        if (!quoteLazyFramed && lazyState.opaque === null &&
+            lazyState.inDefList === 'description' && RE_DEFLIST_TERM.test(sourceEntry))
+          authoredTermColumn = sourceMarkerColumn
+        const sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
+        if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
+            authoredTermColumn === sourceMarkerColumn)
+          authoredDescriptionBodyColumn = sourceMarkerColumn + deflistContentCol(sourceDescription[1]!)
+        const trackedDescriptionBodyColumn = lazyState.inDefList === 'description' &&
+          lazyState.descriptionColumn !== undefined
+          ? contentCol + lazyState.descriptionColumn : -1
+        const descriptionBodyColumn = Math.max(trackedDescriptionBodyColumn, authoredDescriptionBodyColumn ?? -1)
+        const descriptionFollowerColumn = descriptionBodyColumn > 0
+          ? indentColumns(l, descriptionBodyColumn) : -1
+        const belowOpenDescription = pendingBlanks === 0 && lazyState.lazyFoldable &&
+          descriptionFollowerColumn > contentCol && descriptionFollowerColumn < descriptionBodyColumn &&
+          !lineOpensBlock(l.trimStart()) && !isContinuationMarker(l.trimStart()) &&
+          !isBlockAttributeLine(l.trimStart()) &&
+          !isRetainableLineComment(lexer, l) &&
           !/^:[ \t]+%%/.test((nested.at(-1) ?? '').trimStart())
         if (lw >= contentCol && !belowOpenDescription && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
@@ -15628,6 +15672,16 @@ class ParseSession {
               : quoteFootnote
                 ? placed.trimStart()
               : placed
+          // Lists and invisible definitions keep their authored bases for extent checks.
+          if (authoredDescriptionBodyColumn !== undefined &&
+              authoredDescriptionBodyColumn > trackedDescriptionBodyColumn &&
+              descriptionBodyColumn > contentCol && descriptionFollowerColumn < descriptionBodyColumn &&
+              descriptionFollowerColumn >= contentCol && lazyState.opaque === null &&
+              lineOpensItemBlock(placed.trimStart()) && !RE_DEFLIST_TERM.test(placed.trimStart()) &&
+              !RE_DEFLIST_DEF.test(placed.trimStart()) && !RE_FOOTNOTE_DEF.test(placed.trimStart()) &&
+              !isLinkDefLine(placed.trimStart()) && !isListMarkerLine(placed.trimStart()) &&
+              !quoteLazyFramed)
+            dedented = placed.trimStart()
           if (quoteFootnote) {
             // Keep the authored gap to the note's body when lifting it out of the quote.
             quotedFootnoteColumn = indentColumns(l)
