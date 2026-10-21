@@ -2731,7 +2731,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
         }
         const childRun = RE_FENCE.exec(line.trimStart())
-        if (childRun && k > 1 && subCol > 0 &&
+        if (childRun && foldedChildRun !== null && subCol > 0 &&
+            indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
+            fenceCloseRe(foldedChildRun).test(line.trimStart()))
+          foldedChildRun = null
+        else if (childRun && k > 1 && subCol > 0 &&
             indentColumns(beforeRebase[k - 1]!, subCol) >= subCol &&
             !isBlankLine(fenceLines[k - 1]!) &&
             (indentColumns(beforeRebase[k - 2]!, subCol) >= subCol ||
