@@ -12817,6 +12817,7 @@ class ParseSession {
        * the container standing there.
        */
       let nestedItemColumn = -1
+      let foldedMarkerContentColumn = -1
       /** Is the list the lead opened held by a QUOTE, and so the quote's to lose? */
       let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
@@ -13265,8 +13266,9 @@ class ParseSession {
               }
             }
           }
+          if (foldedMarkerContentColumn >= 0 && residual >= foldedMarkerContentColumn && reachesSourceBody && !lazyUnderNestedItem &&
+              lineOpensItemBlock(flush) && !isListMarkerLine(flush)) bodyReadsFlush = true
           if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
-          if (bodyReadsFlush && residual > 0) authoredOpeners.add(bodyLines.length - 1)
           // A line AT the body's column 0 is the body's own block, so it replaces
           // whatever container stood there: another list marker keeps a list
           // collecting, anything else ends one. Read before `track`, because a
@@ -13276,6 +13278,9 @@ class ParseSession {
           const wasVerbatim = lazyState.opaque !== null
           const foldedMarker = lazyState.lazyFoldable && nestedItemColumn < 0 &&
             markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
+          if (bodyReadsFlush && residual > 0 && !foldedMarker) authoredOpeners.add(bodyLines.length - 1)
+          if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
+          else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
           if (!foldedMarker) track(
             bodyReadsFlush ? flush : dedented,
             lineIndex,
