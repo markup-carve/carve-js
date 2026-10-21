@@ -419,6 +419,7 @@ export function nestedSubLexer(
   sub.usesContainerFenceLookahead = true
   sub.nested = true
   sub.documentLineCount = parent.documentLineCount
+  sub.documentRoot = parent.documentRoot ?? parent
   sub.documentLacksFinalBreak = parent.documentLacksFinalBreak
   sub.rootLines = parent.rootLines ?? parent.lines
   sub.depth = parent.depth + 1

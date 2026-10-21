@@ -1172,6 +1172,26 @@ export function attachBlockPos(
     endOffset: ending.offset,
   }
   const type = (node as { type?: string }).type
+  if (type === 'code_block' || type === 'raw_block') {
+    if (layoutWork.on) layoutWork.literalSpanDecisions++
+    const content = (node as { content?: string }).content ?? ''
+    const sourceLineNumber = lexer.lineNumber(endLineIndex)
+    const root = lexer.documentRoot ?? lexer
+    const sourceLine = (lexer.rootLines ?? root.lines)[sourceLineNumber - 1] ?? ''
+    const nextLineOffset = sourceLineNumber < lexer.documentLineCount
+      ? root.lineOffset(sourceLineNumber) : undefined
+    if (
+      isBlankLine(endLine) &&
+      !/[ \t]$/.test(sourceLine) &&
+      content.charCodeAt(content.length - 1) === 10 &&
+      nextLineOffset !== undefined &&
+      nextLineOffset > ending.offset
+    ) {
+      node.pos.endLine = sourceLineNumber + 1
+      node.pos.endColumn = 1
+      node.pos.endOffset = nextLineOffset
+    }
+  }
   // A LEAF BEGINS AT ITS MARKUP. The line offset above is the start of the
   // LINE, which for an indented leaf is the first space of a run that places
   // nothing - a `comment` at a description body's column started on the fourth
