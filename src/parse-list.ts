@@ -1,9 +1,11 @@
+import type { createListStateTracker } from './parse-list-state.js'
+import type { createRebasePass } from './parse-rebase.js'
 import type { BlockNode, List, ListItem, TaskState } from './ast.js'
 import { Lexer, indentColumns, isBlankLine, sliceColumns } from './parse-lexer.js'
 import { dropPositions } from './source-positions.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, OlKind, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from './parse.js'
 
-export function createListParser(helpers: typeof listHelpers) {
+export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>, rebaseOverindentedBlocks: ReturnType<typeof createRebasePass>) {
   const {
     FOOTNOTE_BODY_COLUMN,
     LAZY_FRAME,
@@ -94,7 +96,6 @@ export function createListParser(helpers: typeof listHelpers) {
     quotePrefixDepth,
     quotePrefixLength,
     quotedLineText,
-    rebaseOverindentedBlocks,
     restoreVerbatimBlanks,
     retainCommentBoundary,
     sourceColumn,
@@ -105,7 +106,6 @@ export function createListParser(helpers: typeof listHelpers) {
     subLexer,
     taskMatch,
     trackBlockQuoteLazyState,
-    trackItemLazyState,
     unorderedMarkerChar,
     unorderedMatch,
     verbatimOnlyLazyState,
