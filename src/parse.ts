@@ -8394,6 +8394,7 @@ function rebaseOverindentedBlocks(
   // A description or footnote body folds a marker into its open paragraph (PART 9 §10 I2).
   foldsMarkers = false,
   authoredOpeners?: ReadonlySet<number>,
+  hostOwnedBlockStarts?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -8834,6 +8835,8 @@ function rebaseOverindentedBlocks(
           ? base + FOOTNOTE_BODY_COLUMN
           : Math.max(base, FOOTNOTE_BODY_COLUMN)
         : base
+      const authoredNoteBodyColumn = RE_FOOTNOTE_DEF.test(opener)
+        ? indentColumns(lines[i]!) + FOOTNOTE_BODY_COLUMN : undefined
       // A QUOTE IS REACHED BY ITS MARKER, so the run ends where the quote stops
       // reaching: a line that carries no marker is the quote's only as the lazy
       // continuation of an OPEN PARAGRAPH (markup-carve/carve-js#2536). The
@@ -8844,6 +8847,7 @@ function rebaseOverindentedBlocks(
       // residual indent, and reached the page as prose. `rebasedQuoteEnd` is the
       // same reach the `!includeSublists` arm above already measures.
       const quoted = RE_FOOTNOTE_DEF.test(opener) ? null : markerLineQuoteState(opener)
+      let returnedToHost = false
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
@@ -8861,6 +8865,12 @@ function rebaseOverindentedBlocks(
           continue
         }
         if (indentColumns(candidate, runColumn) < runColumn) break
+        if (hostOwnedBlockStarts?.has(j)) returnedToHost = true
+        if (authoredNoteBodyColumn !== undefined &&
+            indentColumns(candidate, authoredNoteBodyColumn) < authoredNoteBodyColumn &&
+            lineOpensItemBlock(candidate.trimStart()) &&
+            !RE_FOOTNOTE_DEF.test(candidate.trimStart()) &&
+            !returnedToHost) break
         if (quoted !== null) {
           // AN OVER-INDENTED MARKER IS STILL THE MARKER, and `RE_BLOCKQUOTE` is
           // anchored - reading a line the author wrote one column in as
@@ -15567,6 +15577,8 @@ class ParseSession {
           pendingBlankTexts = []
           pendingNoteComments = new Set()
           const isMarker =
+            !(blockedNoteClaimFloor !== undefined &&
+              indentColumns(l, blockedNoteClaimFloor) >= blockedNoteClaimFloor) &&
             !(lazyState.inFootnoteBody && nestedNoteBodyColumn !== undefined &&
               indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
             !insideOpenFence(lazyState) &&
@@ -15585,6 +15597,9 @@ class ParseSession {
             markerDecision(lexer, lexer.pos - 1).owner?.kind === 'footnote' &&
             markerDecision(lexer, lexer.pos - 1).reason === undefined
           if (isMarker && !followsOwnedNoteMarker) subListMarkers.add(nested.length)
+          if (isMarker && leftBlockedNote && markerNoteItem &&
+              bottomBlockLeavesParagraphOpen(markerFreeContent(l.trimStart())))
+            markerNoteItemParagraphOpen = true
           // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
           // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
           // leading whitespace is alignment under the quoted item, not source the
@@ -16542,6 +16557,13 @@ class ParseSession {
           leadOwnsExtent ? undefined : itemParagraphFences,
           undefined,
           markerLineTerm,
+          false,
+          false,
+          undefined,
+          new Set([
+            ...Array.from(continuationFenceBreaks, (index) => index + (leadOwnsExtent ? 2 : 1)),
+            ...Array.from(subListMarkers, (index) => index + (leadOwnsExtent ? 1 : 0)),
+          ]),
         )
         : new Set<number>()
       if (leadOwnsExtent) {
