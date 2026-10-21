@@ -158,12 +158,12 @@ describe('a fence delimiter line', () => {
   })
 
   it('is the same rule for the looseness scan, which reads fences too', () => {
-    // A blank after a real closer separates paragraphs and loosens the list.
-    // A mark or letter prevents closure, leaving the blank inside the span.
+    // A mark or letter prevents block closure, but the inline run still ends
+    // at the blank paragraph boundary and leaves the list loose.
     const item = (ch: string) => carveToHtml('- a\n  ```\n  x\n  ```' + ch + '\n\n  y\n- b\n')
     expect(item('')).toContain('<li><p>b</p></li>')
-    expect(item('﻿')).toContain('<li>b</li>')
-    expect(item('X')).toContain('<li>b</li>')
+    expect(item('﻿')).toContain('<li><p>b</p></li>')
+    expect(item('X')).toContain('<li><p>b</p></li>')
   })
 })
 
