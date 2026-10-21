@@ -15710,6 +15710,9 @@ class ParseSession {
         const sourceDepth = quotePrefixDepth(sourceLine)
         const sourceMarkerColumn = sourceColumn(sourceLine, sourceDepth)
         const sourceEntry = l.trimStart()
+        // CARVE-P2-028: text past the term host cannot publish a quote claim.
+        const foldedTermText = lazyState.inDefList === 'term' && definitionHostColumn !== undefined &&
+          sourceMarkerColumn > definitionHostColumn
         if (RE_DEFLIST_TERM.test(sourceEntry) && nested.at(-1) !== undefined &&
             (nested.at(-1)!.startsWith(LAZY_FRAME) ||
               !lineOpensItemBlock(nested.at(-1)!.trimStart()) && !isBlankLine(nested.at(-1)!)))
@@ -16158,7 +16161,7 @@ class ParseSession {
             (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen)
           const authoredQuoteLead = unindented[0] === '>' && trackedContent === dedented &&
             !RE_BLOCKQUOTE.test(dedented) && RE_BLOCKQUOTE.test(unindented)
-          const itemOwnsQuote = authoredQuoteLead && !lazyState.inFootnoteBody && nestedNoteBodyColumn === undefined &&
+          const itemOwnsQuote = authoredQuoteLead && !foldedTermText && !lazyState.inFootnoteBody && nestedNoteBodyColumn === undefined &&
             (authoredQuoteClaim !== null || lazyState.quoteInner === null && lazyState.ownedColumn < 0 && !insideOpenFence(lazyState) &&
               !lazyState.inlineFenceParagraph && descendantOpaque === null)
           const claimHostColumn = itemOwnsQuote && lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined
