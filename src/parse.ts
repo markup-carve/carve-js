@@ -6224,6 +6224,10 @@ function trackItemLazyState(
   // The quote the item ended on is dropped by every line that is not more of
   // it; the quoted branch below re-arms it.
   const wasQuote = state.quoteInner
+  // Keep the source owner before the next line changes the claim. A closed
+  // quoted definition leaves no quote paragraph for an unquoted follower;
+  // a descendant that still owns the line keeps its existing quote frame.
+  const quoteOwnerColumn = state.ownedColumn
   state.quoteInner = null
   const wasInvisibleAtColumn = state.invisibleAtColumn
   state.invisibleAtColumn = false
@@ -7027,14 +7031,10 @@ function trackItemLazyState(
   state.lazyFoldable = true
   if (wasInlineFence) state.inlineFenceParagraph = true
   if (wasInlineFenceBlock && wasInlineFence) state.inlineFenceBlock = true
-  // A QUOTE SURVIVES ITS OWN LAZY LINE. Prose here is the quote's lazy text,
-  // not a line that ended it, so dropping `quoteInner` told the collector one
-  // line later that no quote was open and the marker below opened an item at
-  // the item's content column instead of folding (carve-js#1615). No "and its
-  // paragraph is still open" guard: the tracker below records that fact and
-  // every consumer re-reads it, and adding one changed no output over 8992
-  // documents.
-  if (wasQuote !== null) {
+  // A quote's lazy line retains its paragraph claim. A closed quote retains
+  // it only while a descendant still owns the line; otherwise a quoted note
+  // would lend its claim to prose in the enclosing item (carve-js#3361).
+  if (wasQuote !== null && (blockQuoteParagraphOpen(wasQuote) || quoteOwnerColumn >= 0)) {
     trackBlockQuoteLazyState(
       content,
       wasQuote,
