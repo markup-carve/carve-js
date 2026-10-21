@@ -58,8 +58,8 @@ if (command === '--worker') {
   const stamp = entry => {
     const root = resolve(dirname(entry), '..')
     return { head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-      sourceSha256: digest(['fast-html.ts', 'parse.ts', 'parse-lexer.ts', 'parse-list.ts', 'parse-definition-list.ts', 'parse-list-state.ts', 'parse-rebase.ts', 'parse-link-definitions.ts', 'parse-inline-scanner.ts', 'source-positions.ts'].map(name => resolve(root, 'src', name))),
-      buildSha256: digest(['fast-html.js', 'parse.js', 'parse-lexer.js', 'parse-list.js', 'parse-definition-list.js', 'parse-list-state.js', 'parse-rebase.js', 'parse-link-definitions.js', 'parse-inline-scanner.js', 'source-positions.js'].map(name => resolve(root, 'dist', name))) }
+      sourceSha256: digest(['fast-html.ts', 'parse.ts', 'parse-lexer.ts', 'parse-list.ts', 'parse-definition-list.ts', 'parse-list-state.ts', 'parse-rebase.ts', 'parse-table-block.ts', 'parse-line-block.ts', 'parse-link-definitions.ts', 'parse-inline-scanner.ts', 'source-positions.ts'].map(name => resolve(root, 'src', name))),
+      buildSha256: digest(['fast-html.js', 'parse.js', 'parse-lexer.js', 'parse-list.js', 'parse-definition-list.js', 'parse-list-state.js', 'parse-rebase.js', 'parse-table-block.js', 'parse-line-block.js', 'parse-link-definitions.js', 'parse-inline-scanner.js', 'source-positions.js'].map(name => resolve(root, 'dist', name))) }
   }
   const metadata = { generatedAt: new Date().toISOString(), node: process.version, cpu: cpus()[0].model, logicalCpus: cpus().length,
     baseline: stamp(baseline), candidate: stamp(candidate), runnerSha256: digest([fileURLToPath(import.meta.url)]),
