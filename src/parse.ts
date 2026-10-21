@@ -2022,6 +2022,28 @@ function attachBlockPos(
       node.pos.endOffset = end.offset
     }
   }
+  // A continuation marker below this admonition's authored column belongs to
+  // its enclosing item. The colon-body scanner may consume that line while
+  // looking for a closer, but it is not part of this node's source extent.
+  if (type === 'admonition' && endLineIndexExclusive > startLineIndex + 1) {
+    const lastIndex = endLineIndexExclusive - 1
+    const lastLine = lexer.rootLines?.[lexer.lineNumber(lastIndex) - 1] ?? lexer.lineAt(lastIndex) ?? ''
+    const plusColumn = lastLine.indexOf('+') + 1
+    if (/^[ \t]*\+[ \t]*$/.test(lastLine) && plusColumn > 0 && plusColumn < node.pos.startColumn!) {
+      const children = (node as { children?: Array<{ pos?: Position }> }).children ?? []
+      const lastChild = [...children].reverse().find((child) => child.pos !== undefined)?.pos
+      if (lastChild) {
+        node.pos.endLine = lastChild.endLine
+        if (lastChild.endColumn !== undefined) node.pos.endColumn = lastChild.endColumn
+        if (lastChild.endOffset !== undefined) node.pos.endOffset = lastChild.endOffset
+      } else {
+        const end = lexer.sourceBoundary(startLineIndex, (lexer.lineAt(startLineIndex) ?? '').length)
+        node.pos.endLine = node.pos.startLine
+        node.pos.endColumn = end.column
+        node.pos.endOffset = end.offset
+      }
+    }
+  }
 }
 
 // Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
