@@ -48,27 +48,23 @@ describe('a definition list is a first-class block opener that interrupts (carve
     )
   })
 
-  // An UNDER-indented `:  def` (one column below the item's content column but
-  // still inside the item) attaches as a `<dd>` rather than folding into the
-  // term text. carve-rs and carve-php both attach it; carve-js previously
-  // folded it (`<dt>t : d</dt>`). Decision D ("lenient - still a definition")
-  // aligns all engines UP to attach. An OVER-indented `:  def` still folds
-  // (it reaches the item via the content-column dedent, not the lazy path).
-  it('an under-indented `:  def` still attaches as a definition (decision D)', () => {
+  // A `:  def` below the definition list's column does not attach; inside the
+  // item it folds into the open term (markup-carve/carve#3451, CARVE-P2-017).
+  it('an under-indented `:  def` folds into the open term', () => {
     expect(html('- one\n  :: t\n :  d')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>t\n:  d</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
-  it('an under-indented `:  def` attaches inside an ordered item too', () => {
+  it('an under-indented `:  def` folds inside an ordered item too', () => {
     expect(html('1. one\n   :: t\n  :  d')).toBe(
-      '<ol>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n  </li>\n</ol>',
+      '<ol>\n  <li>one\n    <dl>\n      <dt>t\n:  d</dt>\n    </dl>\n  </li>\n</ol>',
     )
   })
 
-  it('multiple under-indented `:  def` lines each attach as a `<dd>`', () => {
+  it('multiple under-indented `:  def` lines all fold into the open term', () => {
     expect(html('- one\n  :: t\n :  d\n :  d2')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n      <dd>d2</dd>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>t\n:  d\n:  d2</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 })

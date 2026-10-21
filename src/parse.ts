@@ -1030,6 +1030,9 @@ class Lexer {
    * (markup-carve/carve-js#1630).
    */
   itemLazyLines: Set<number>
+  hostContentColumn = 0
+  nonAuthoredDefinitionStarts = new Set<number>()
+  definitionLeadFromItemMarker = false
   hostedFootnoteLines: Set<number>
   /**
    * EVERY line a block quote admitted as lazy continuation text.
@@ -1552,6 +1555,9 @@ function nestedSubLexer(
   sub.inFootnoteBody = parent.inFootnoteBody
   sub.hostBody = parent.hostBody
   sub.hostMarkerColumn = parent.hostMarkerColumn
+  sub.hostContentColumn = parent.hostContentColumn
+  sub.nonAuthoredDefinitionStarts = parent.nonAuthoredDefinitionStarts
+  sub.definitionLeadFromItemMarker = parent.definitionLeadFromItemMarker
   sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
   if (contiguous) {
     const origin = parent.contiguousOrigin
@@ -10461,6 +10467,9 @@ class ParseSession {
     probe.depth = lexer.depth
     probe.nested = lexer.nested
     probe.hostBody = lexer.hostBody
+    probe.hostContentColumn = lexer.hostContentColumn
+    probe.definitionLeadFromItemMarker = lexer.definitionLeadFromItemMarker
+    probe.nonAuthoredDefinitionStarts = lexer.nonAuthoredDefinitionStarts
     probe.atDocumentLevel = lexer.atDocumentLevel
     probe.inFootnoteBody = lexer.inFootnoteBody
     parser.activeMatcherCtx = parser.activeMatchers.length ? parser.makeMatcherCtx(probe, {}) : null
@@ -12742,6 +12751,8 @@ class ParseSession {
       // The marker fixes the body's minimum column. Adjacency never lowers it:
       // ownership is selected by the same column band with or without a blank.
       const contentCol = markerContentCol
+      const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex) - 1] ?? ''
+      const bodySourceColumn = sourceColumn(markerSource, quotePrefixDepth(markerSource)) + contentCol
       const bodyLines: string[] = []
       const bodyLineNumbers: number[] = []
       const bodySourceLines: (string | undefined)[] = []
@@ -13273,6 +13284,9 @@ class ParseSession {
         // picks it up). An empty term marker is not one: `::` and `:: ` are the
         // same line, a term with no content, so it folds (#1891).
         if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
+        if (ln.startsWith(LAZY_FRAME) && RE_DEFLIST_TERM.test(stripLazyFrame(ln)) &&
+            entryColumn() > listColumn &&
+            entryColumn() < bodySourceColumn) break
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
         if (quoteBandFold(ln)) {
@@ -13507,7 +13521,21 @@ class ParseSession {
     // wherever it landed - which is why this collector unframes before every
     // entry test while the block dispatch never does.
     const peekEntry = (n = 0) => stripLazyFrame(lexer.peek(n) ?? '')
-    while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry())) {
+    const entryColumn = (n = 0): number => {
+      const index = lexer.pos + n
+      const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? lexer.peek(n) ?? ''
+      const marker = RE_DEFLIST_TERM.test(peekEntry(n)) ? '::' : ':'
+      const markerOffset = source.indexOf(marker)
+      return markerOffset >= 0
+        ? sourceColumnAt(source, markerOffset)
+        : sourceColumn(source, quotePrefixDepth(source))
+    }
+    const listColumn = entryColumn()
+    const authoredList = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
+      listColumn > lexer.hostContentColumn &&
+      !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
+    const entryReachesList = () => !authoredList || entryColumn() === listColumn
+    while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry()) && entryReachesList()) {
       const terms: InlineNode[][] = []
       const termSpans: (Position | undefined)[] = []
       const definitions: BlockNode[][] = []
@@ -13515,7 +13543,7 @@ class ParseSession {
       const definitionSpans: (Position | undefined)[] = []
       while (!lexer.eof()) {
         const t = RE_DEFLIST_TERM.exec(peekEntry())
-        if (!t) break
+        if (!t || !entryReachesList()) break
         const termLineIndex = lexer.pos
         const termSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(termLineIndex) - 1] ?? ''
         const termMarkerOffset = termSource.indexOf('::')
@@ -13562,6 +13590,12 @@ class ParseSession {
           // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
           // because a framed heading is the term's text rather than a block.
           const nextEntry = stripLazyFrame(next)
+          const belowList = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
+            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
+            entryColumn() < listColumn &&
+            (authoredList || entryColumn() < lexer.hostContentColumn)
+          const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn
           const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
           const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
@@ -13575,7 +13609,8 @@ class ParseSession {
           if (
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
-            (!nextPastTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            leavesTerm ||
+            (!belowList && !nextPastTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
@@ -13682,7 +13717,7 @@ class ParseSession {
           for (let k = 0; k < look; k++) lexer.consume()
         }
         const defLineIndex = lexer.pos
-        const d = RE_DEFLIST_DEF.exec(peekEntry())
+        const d = !entryReachesList() ? null : RE_DEFLIST_DEF.exec(peekEntry())
         if (!d) break
         lexer.consume()
         definitionLines.push(lexer.lineNumber(defLineIndex))
@@ -14678,6 +14713,9 @@ class ParseSession {
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
       let authoredTermColumn: number | undefined
+      let definitionHostColumn: number | undefined
+      let definitionAuthored = false
+      let definitionBodyColumn: number | undefined
       let authoredDescriptionBodyColumn: number | undefined
       const itemSpanScan = newCommentSpanScan()
       // Lines the item took from BELOW its content column, a narrower fact than
@@ -15577,10 +15615,43 @@ class ParseSession {
         const sourceDepth = quotePrefixDepth(sourceLine)
         const sourceMarkerColumn = sourceColumn(sourceLine, sourceDepth)
         const sourceEntry = l.trimStart()
+        if (RE_DEFLIST_TERM.test(sourceEntry) && nested.at(-1) !== undefined &&
+            (nested.at(-1)!.startsWith(LAZY_FRAME) ||
+              !lineOpensItemBlock(nested.at(-1)!.trimStart()) && !isBlankLine(nested.at(-1)!)))
+          lexer.nonAuthoredDefinitionStarts.add(lexer.lineNumber(lexer.pos))
+        if (definitionHostColumn !== undefined && !RE_DEFLIST_TERM.test(sourceEntry) &&
+            !RE_DEFLIST_DEF.test(sourceEntry) && lineOpensItemBlock(sourceEntry) &&
+            sourceMarkerColumn >= contentCol) {
+          definitionHostColumn = undefined
+          definitionAuthored = false
+          definitionBodyColumn = undefined
+        }
         if (!quoteLazyFramed && lazyState.opaque === null &&
             lazyState.inDefList === 'description' && RE_DEFLIST_TERM.test(sourceEntry))
           authoredTermColumn = sourceMarkerColumn
+        if (!quoteLazyFramed && lazyState.opaque === null && RE_DEFLIST_TERM.test(sourceEntry) &&
+            lw >= contentCol && (definitionHostColumn === undefined ||
+              sourceMarkerColumn <= definitionHostColumn)) {
+          definitionHostColumn = sourceMarkerColumn
+          definitionAuthored = sourceMarkerColumn > contentCol &&
+            !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
+        }
         const sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
+        const pastDefinitionEntry = definitionAuthored &&
+          definitionHostColumn !== undefined && definitionBodyColumn !== undefined &&
+          sourceMarkerColumn > definitionHostColumn &&
+          sourceMarkerColumn < definitionBodyColumn
+        const belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody &&
+          definitionHostColumn !== undefined &&
+          (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
+          ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
+            definitionAuthored && definitionHostColumn !== undefined &&
+              (sourceMarkerColumn < definitionHostColumn || pastDefinitionEntry))
+        if (belowDefinitionEntry && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
+            !authoredQuoteParagraphOpen) break
+        if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
+            definitionHostColumn === sourceMarkerColumn)
+          definitionBodyColumn = sourceMarkerColumn + deflistContentCol(sourceDescription[1]!)
         if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
             authoredTermColumn === sourceMarkerColumn)
           authoredDescriptionBodyColumn = sourceMarkerColumn + deflistContentCol(sourceDescription[1]!)
@@ -15596,7 +15667,7 @@ class ParseSession {
           !isBlockAttributeLine(l.trimStart()) &&
           !isRetainableLineComment(lexer, l) &&
           !/^:[ \t]+%%/.test((nested.at(-1) ?? '').trimStart())
-        if (lw >= contentCol && !belowOpenDescription && !quoteLazyFramed &&
+        if (lw >= contentCol && !belowOpenDescription && !belowDefinitionEntry && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
           // quote-lazy MARKER line never reaches the content-column arm, not even
           // inside an open fence, where the gate above hands the line back.
@@ -16214,7 +16285,7 @@ class ParseSession {
             lazyLine = l.startsWith(LAZY_FRAME)
               ? l
               : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-          } else if (belowOpenDescription) {
+          } else if (belowOpenDescription || belowDefinitionEntry) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (lazyState.deepest?.inDefList === 'term' &&
               indentColumns(l, baseIndent + 1) > baseIndent && isListMarkerLine(l)) {
@@ -17111,6 +17182,8 @@ class ParseSession {
         sub.markerOpensSublist = true
         sub.hostBody = 'list'
         sub.hostMarkerColumn = itemMarkerColumn
+        sub.hostContentColumn = itemMarkerColumn + contentCol - baseIndent
+        sub.definitionLeadFromItemMarker = nestedOffset === -1 && markerLineTerm
         return sub
       }
       const carry: PendingAttrCarry = { attrs: null }

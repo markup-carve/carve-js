@@ -1061,12 +1061,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['616-a-line-is-read-in-the-container-whose-column-it-reaches-7', {
-    reason: 'markup-carve/carve#3458: a marker below the description column opens a sibling list in the item (CARVE-P2-017)',
-    html: '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n    <ul>\n      <li>li</li>\n    </ul>\n  </li>\n</ul>',
-  }],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
