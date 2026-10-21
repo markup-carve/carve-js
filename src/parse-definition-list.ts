@@ -474,8 +474,10 @@ export function createDefinitionListParser(
             !reachesSourceBody &&
             !isRetainableLineComment(lexer, ln.trimStart()) && commentFenceRun(ln.trimStart()) === undefined &&
             sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn - contentCol &&
+            // A quoted list marker still opens in a surviving description body.
             !(quotePrefixDepth(markerSource) > lexer.hostQuoteDepth && lazyState.lazyFoldable &&
-              (!startsInterruptingBlock(lexer, ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart())) &&
+              ((!startsInterruptingBlock(lexer, ln.trimStart()) && !isListMarkerLine(ln.trimStart())) ||
+                RE_FOOTNOTE_DEF.test(ln.trimStart())) &&
               sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) > bodySourceColumn - contentCol) &&
             !(quotePrefixDepth(markerSource) > lexer.hostQuoteDepth && quoteBandFold(ln)) &&
             !insideOpenQuoteParagraph(lazyState) &&
