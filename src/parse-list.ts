@@ -1,166 +1,17 @@
 import type { createListStateTracker } from './parse-list-state.js'
+import { classifyList } from './parse-list-marker.js'
+import { finishList } from './parse-list-finish.js'
 import type { createRebasePass } from './parse-rebase.js'
 import type { BlockNode, List, ListItem, TaskState } from './ast.js'
 import { Lexer, indentColumns, isBlankLine, sliceColumns } from './parse-lexer.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import { dropPositions } from './source-positions.js'
-import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, OlKind, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from './parse.js'
+import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from './parse.js'
 
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>, rebaseOverindentedBlocks: ReturnType<typeof createRebasePass>) {
-  const {
-    FOOTNOTE_BODY_COLUMN,
-    LAZY_FRAME,
-    RE_ADMONITION_CLOSE,
-    RE_ADMONITION_OPEN,
-    RE_BLOCKQUOTE,
-    RE_CAPTION,
-    RE_COLON_RUN,
-    RE_COMMENT_LINE,
-    RE_DEFLIST_DEF,
-    RE_DEFLIST_TERM,
-    RE_DIV_OPEN,
-    RE_FENCE,
-    RE_FIRST_BLOCK_MARKER,
-    RE_FOOTNOTE_DEF,
-    RE_HARDBREAKS_OPEN,
-    RE_HR,
-    RE_LINE_BLOCK_OPEN,
-    RE_ORDERED,
-    RE_QUOTE_BLOCK_OPEN,
-    RE_RAW_FENCE,
-    RE_TASK,
-    RE_UNORDERED,
-    attachBlockPos,
-    attachesAtDocumentColumnZero,
-    authoredTaskState,
-    blockQuoteParagraphOpen,
-    bodyHoldsOpenCommentSpan,
-    bottomBlockLeavesParagraphOpen,
-    buildCloserIndex,
-    codeCloserPossible,
-    colonFenceOpenerLen,
-    colonFenceShapeEndsLazyContinuation,
-    commentBlockHasCloser,
-    commentBlockSpans,
-    commentFenceRun,
-    coveredNoteComment,
-    deflistContentCol,
-    deflistMarkerLine,
-    endsInPlus,
-    extractItemAttr,
-    fenceCloseRe,
-    firstBlockOpenerContent,
-    insideOpenFence,
-    insideOpenQuoteParagraph,
-    isBlockAttributeLine,
-    isColonFenceOpener,
-    isContinuationMarker,
-    isInvisibleLine,
-    isLinkDefLine,
-    isListMarkerLine,
-    isParentAuthoredBlock,
-    isPhysicalContinuationMarker,
-    isRetainableLineComment,
-    isStackedFirstBlockQuoteMarker,
-    itemFenceHasCloser,
-    lazyContinuationEndsList,
-    leadingWhitespace,
-    lineOpensBlock,
-    lineOpensItemBlock,
-    literalCommentHasCloser,
-    markerContentColumn,
-    markerDecision,
-    markerFreeContent,
-    markerLineBottomBlock,
-    markerLineQuoteState,
-    markerLineState,
-    markerNoteCommentFenceOpeners,
-    markerNoteFenceReach,
-    markerNoteOpenerReach,
-    markerPrefixLength,
-    matchListMarker,
-    matchedCommentFenceEnd,
-    nestedSubLexer,
-    newCommentSpanScan,
-    olKindOf,
-    olStartOf,
-    olTypeOf,
-    opensCodeFence,
-    orderedContinues,
-    orderedMatch,
-    prefixWalkBound,
-    quoteBodyColumn,
-    quoteIndentHasTab,
-    quotePrefixDepth,
-    quotePrefixLength,
-    quotedLineText,
-    restoreVerbatimBlanks,
-    retainCommentBoundary,
-    sourceColumn,
-    sourceQuoteBody,
-    sourceQuoteLocalColumn,
-    startsInterruptingBlock,
-    stripLazyFrame,
-    subLexer,
-    taskMatch,
-    trackBlockQuoteLazyState,
-    unorderedMarkerChar,
-    unorderedMatch,
-    verbatimOnlyLazyState,
-    walkContainerPrefix
-  } = helpers
+  const { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, RE_ADMONITION_CLOSE, RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_CAPTION, RE_COLON_RUN, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_DIV_OPEN, RE_FENCE, RE_FIRST_BLOCK_MARKER, RE_FOOTNOTE_DEF, RE_HARDBREAKS_OPEN, RE_HR, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, RE_TASK, RE_UNORDERED, attachBlockPos, attachesAtDocumentColumnZero, authoredTaskState, blockQuoteParagraphOpen, bodyHoldsOpenCommentSpan, bottomBlockLeavesParagraphOpen, buildCloserIndex, codeCloserPossible, colonFenceOpenerLen, colonFenceShapeEndsLazyContinuation, commentBlockHasCloser, commentBlockSpans, commentFenceRun, coveredNoteComment, deflistContentCol, deflistMarkerLine, endsInPlus, extractItemAttr, fenceCloseRe, firstBlockOpenerContent, insideOpenFence, insideOpenQuoteParagraph, isBlockAttributeLine, isColonFenceOpener, isContinuationMarker, isInvisibleLine, isLinkDefLine, isListMarkerLine, isParentAuthoredBlock, isPhysicalContinuationMarker, isRetainableLineComment, isStackedFirstBlockQuoteMarker, itemFenceHasCloser, lazyContinuationEndsList, leadingWhitespace, lineOpensBlock, lineOpensItemBlock, literalCommentHasCloser, markerContentColumn, markerDecision, markerFreeContent, markerLineBottomBlock, markerLineQuoteState, markerLineState, markerNoteCommentFenceOpeners, markerNoteFenceReach, markerNoteOpenerReach, markerPrefixLength, matchListMarker, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, opensCodeFence, orderedContinues, orderedMatch, prefixWalkBound, quoteBodyColumn, quoteIndentHasTab, quotePrefixDepth, quotePrefixLength, quotedLineText, restoreVerbatimBlanks, retainCommentBoundary, sourceColumn, sourceQuoteBody, sourceQuoteLocalColumn, startsInterruptingBlock, stripLazyFrame, subLexer, taskMatch, trackBlockQuoteLazyState, unorderedMarkerChar, unorderedMatch, verbatimOnlyLazyState, walkContainerPrefix } = helpers
   return function parseList(lexer: Lexer, session: ParseSession): List {
-    const first = lexer.peek()!
-    const firstLineIndex = lexer.pos
-    const baseIndent = indentColumns(first)
-    // Classify on the marker after stripping any abutting `{...}` attribute block.
-    const firstTerminatorFree = lexer.lineTerminatorFree(lexer.pos)
-    const firstAttr = extractItemAttr(first, firstTerminatorFree)
-    const firstStripped = firstAttr ? (firstAttr.markerLine ?? firstAttr.stripped) : first
-    const isTask = taskMatch(firstStripped, firstTerminatorFree) !== null
-    const isOrdered = !isTask && orderedMatch(firstStripped, firstTerminatorFree) !== null
-    // A change of unordered marker character (`-` vs `*` vs `+`), or of
-    // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
-    // new list (grammar PART 9 §11). The first item fixes the ordered
-    // dialect; the second item's marker (if a sibling) tie-breaks an
-    // ambiguous single roman letter.
-    const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
-    const firstOrdered = isOrdered ? orderedMatch(firstStripped, firstTerminatorFree)! : null
-    const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
-    let orderedKind: OlKind = 'dec'
-    let orderedStart = 1
-    if (firstOrdered) {
-      // Tie-break the dialect on the next sibling, looking past blank lines
-      // and the first item's own continuation/nested lines (indented deeper
-      // than the marker) — `x.` / blank or indented body / `xi.` is still one
-      // roman list.
-      let k = 1
-      let blankRun = 0
-      let hardBoundary = false
-      for (; lexer.peek(k) !== undefined; k++) {
-        const ln = lexer.peek(k)!
-        if (isBlankLine(ln)) {
-          blankRun++
-          continue
-        }
-        if (indentColumns(ln, baseIndent + 1) <= baseIndent) {
-          hardBoundary = blankRun >= 3
-          break
-        }
-        blankRun = 0
-      }
-      const nextLine = hardBoundary ? undefined : lexer.peek(k)
-      const nextStripped =
-        nextLine !== undefined
-          ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
-          : undefined
-      const nm =
-        nextStripped !== undefined && indentColumns(nextLine!, baseIndent + 1) === baseIndent
-          ? RE_ORDERED.exec(nextStripped)
-          : null
-      orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
-      orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
-    }
+    const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = classifyList(lexer, helpers)
     const items: ListItem[] = []
     let loose = false
     // §11 N1 hard boundary: a run of three or more blank lines before a
@@ -2884,28 +2735,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (hardBoundary) break
     }
 
-    const singleItemWithNestedFence = items.length === 1 &&
-      items[0]?.children[0]?.type === 'paragraph' &&
-      items[0].children[1]?.type === 'list' &&
-      items[0].children[2]?.type === 'code_block' && !isBlankLine(lexer.lineAt(firstLineIndex + 1)) &&
-      items[0].children.length === 3
-    const list: List = { type: 'list', ordered: isOrdered, tight: !loose || singleItemWithNestedFence, items }
-    if (isOrdered) {
-      if (orderedStart !== 1) list.start = orderedStart
-      const t = olTypeOf(orderedKind)
-      if (t) list.olType = t
-      // Only the non-default spelling is recorded: the schema calls `.` absent,
-      // so writing it would give one document two legal trees (carve#2828).
-      if (orderedDelim === ')') list.delim = orderedDelim
-      // The bare dot is a spelling, not a dialect: `. a` and `1. a` are the same
-      // list, so the tree has to carry which one opened it or the writer must
-      // normalize one away (PART 11 §6).
-      if (firstOrdered && firstOrdered[2] === '') list.bareMarker = true
-    } else if (firstMarkerChar === '*') {
-      // As above: absence spells the default `-` (carve#2828).
-      list.bulletChar = firstMarkerChar
-    }
-    return list
+    return finishList(lexer, items, loose, { firstLineIndex, isOrdered, orderedStart, orderedKind, orderedDelim, firstOrdered, firstMarkerChar }, helpers)
   }
 
 }
