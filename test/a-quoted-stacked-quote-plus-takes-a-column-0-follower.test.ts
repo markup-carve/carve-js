@@ -13,6 +13,7 @@ describe('a stacked quote plus inside a host quote', () => {
     ['> - > > +\nb\n', '<blockquote><ul><li><blockquote><blockquote><p>b</p></blockquote></blockquote></li></ul></blockquote>'],
     ['> a\n>\n> - > +\nb\n', '<blockquote><p>a</p><ul><li><blockquote><p>b</p></blockquote></li></ul></blockquote>'],
     ['> - > +\nb\n> - > +\nc\n', '<blockquote><ul><li><blockquote><p>b</p></blockquote></li><li><blockquote><p>c</p></blockquote></li></ul></blockquote>'],
+    ['> a\n> > - > +\nb\n', '<blockquote><p>a</p><blockquote><ul><li><blockquote><p>b</p></blockquote></li></ul></blockquote></blockquote>'],
     ['> - > +\n| c |\n', '<blockquote><ul><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ul></blockquote>'],
   ]
   for (const [source, html] of cases) {

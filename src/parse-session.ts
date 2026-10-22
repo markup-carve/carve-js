@@ -1519,7 +1519,8 @@ export class ParseSession extends InlineParseSession {
       const stackedFollower = rootLines[lexer.lineNumber(lexer.pos) - 1]
       // Only where the opener line starts a block: after a paragraph it is lazy text.
       const openerStartsBlock = lexer.pos - 1 === firstLineIndex || inner.length > 1 && isBlankLine(inner[inner.length - 2]!) ||
-        inner.length - 1 === stackedAttachEnd
+        inner.length - 1 === stackedAttachEnd ||
+        stackedOpener !== undefined && quotePrefixDepth(stackedOpener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '')
       if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 && openerStartsBlock &&
           isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
           quotePrefixDepth(stackedFollower) === 0 && sourceColumn(stackedFollower, 0) === 0 &&
