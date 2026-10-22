@@ -772,8 +772,8 @@ export function quoteBodyColumn(line: string, levels: number): number {
 
 /**
  * The columns a stacked marker line's first-block `+` takes a follower at, after `levels` host
- * quote prefixes: the line's own column, and the column of a quote its first marker opens
- * (CARVE-P9-067, carve#3421 item 5). A deeper opener's column is refused.
+ * quote prefixes: the line's own column, and the column of the innermost quote, which owns the
+ * `+` (CARVE-P9-067, carve#3421). An intervening opener's column is refused.
  */
 export function stackedOpenerColumns(line: string, levels: number): number[] {
   let offset = 0
@@ -783,16 +783,36 @@ export function stackedOpenerColumns(line: string, levels: number): number[] {
     offset = end
   }
   while (line[offset] === ' ' || line[offset] === '\t') offset++
-  const columns: number[] = []
+  const columns = [sourceColumnAt(line, offset)]
+  let quoteColumn = -1
   const opener = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
   for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
-    if (columns.length === 1 && match[0] !== '> ') break
-    columns.push(sourceColumnAt(line, offset))
-    if (columns.length === 2) break
+    if (match[0] === '> ') quoteColumn = sourceColumnAt(line, offset)
     offset += match[0].length
     while (line[offset] === ' ') offset++
   }
+  if (quoteColumn > columns[0]!) columns.push(quoteColumn)
   return columns
+}
+
+/**
+ * The column of a stacked opener's follower after the opener line's `levels` host quote prefixes,
+ * or Infinity when its `>` markers sit elsewhere: an indented `>` is no host prefix (`> a` / `  > b`).
+ */
+export function stackedFollowerColumn(follower: string, line: string, levels: number): number {
+  let followerOffset = 0
+  let lineOffset = 0
+  for (let level = 0; level < levels; level++) {
+    const followerEnd = sourceQuotePrefixEnd(follower, followerOffset)
+    const lineEnd = sourceQuotePrefixEnd(line, lineOffset)
+    if (followerEnd < 0 || lineEnd < 0) return Infinity
+    if (sourceColumnAt(follower, follower.indexOf('>', followerOffset)) !== sourceColumnAt(line, line.indexOf('>', lineOffset))) {
+      return Infinity
+    }
+    followerOffset = followerEnd
+    lineOffset = lineEnd
+  }
+  return sourceColumn(follower, levels)
 }
 
 export function sourceColumnAt(line: string, offset: number): number {
@@ -1152,6 +1172,7 @@ export const listHelpers = {
   prefixWalkBound,
   quoteBodyColumn,
   stackedOpenerColumns,
+  stackedFollowerColumn,
   quoteIndentHasTab,
   quotePrefixDepth,
   quotePrefixLength,

@@ -789,6 +789,7 @@ export function lintCarve(
       right: 'the next block starts right of its column',
       'wrong-column': 'its column names no open container',
       list: 'the first-block form does not attach a list',
+      unclaimed: 'no open container claims it',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',

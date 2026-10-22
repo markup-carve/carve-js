@@ -672,6 +672,7 @@ export {
   parseAbbrDef,
   quoteBodyColumn,
   stackedOpenerColumns,
+  stackedFollowerColumn,
   quoteIndentHasTab,
   restoreVerbatimBlanks,
   retainBelowColumnComment,
