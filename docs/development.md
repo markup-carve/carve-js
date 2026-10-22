@@ -20,7 +20,7 @@ to fetch the spec corpus.
 
 ```
 carve-js/
-├── src/                    Main modules (a partial list)
+├── src/                    Entry points and implementation modules
 │   ├── ast.ts              Typed AST node definitions
 │   ├── parse.ts            Linear-time block + inline parser
 │   ├── render-html.ts      AST → canonical HTML renderer
@@ -28,8 +28,17 @@ carve-js/
 │   ├── render-plain.ts     AST → plain-text renderer
 │   ├── render-ansi.ts      AST → ANSI-styled renderer
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
-│   ├── djot-import.ts      Djot → Carve source transform
+│   ├── import/djot/        Djot import helpers
 │   ├── markdown-migrate.ts Markdown → Carve source transform
+│   ├── ast/                AST JSON, patches, and sidecars
+│   ├── parse/              Block, inline, list, and table parser modules
+│   ├── import/markdown/    Markdown import helpers
+│   ├── import/html/        HTML import helpers
+│   ├── extension/          Built-in extensions
+│   ├── heading/            Heading IDs, numbers, and references
+│   ├── render/             Renderer helpers
+│   ├── source/             Source positions and errors
+│   ├── table/              Table layout and spans
 │   ├── cli.ts              `carve` binary (render, fmt, flatten, fix, lint, diff, merge, portability, migrate)
 │   └── index.ts            Public API
 ├── test/                   Vitest suites + the spec corpus runner

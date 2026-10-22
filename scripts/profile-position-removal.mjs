@@ -6,6 +6,7 @@ import { resolve, dirname } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { performance } from 'node:perf_hooks'
 import { loadavg } from 'node:os'
+import { namedModuleFiles } from './bench-module-files.mjs'
 
 const fixtures = {
   paragraphs: 'alpha beta\n\n'.repeat(1024),
@@ -16,7 +17,9 @@ const fixtures = {
 const [command, entry, family] = process.argv.slice(2)
 if (command === '--worker') {
   const { parse } = await import(pathToFileURL(entry))
-  const { dropPositions } = await import(pathToFileURL(resolve(dirname(entry), 'source-positions.js')))
+  const sourcePositions = namedModuleFiles(dirname(entry), ['source-positions.js'])[0][1]
+  assert.ok(sourcePositions, 'source-positions.js is missing from the build')
+  const { dropPositions } = await import(pathToFileURL(sourcePositions))
   const source = fixtures[family]
   const docs = () => Array.from({ length: 100 }, () => parse(source))
   const samples = []

@@ -7,6 +7,7 @@ import { cpus, loadavg } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { namedModuleHash } from './bench-module-files.mjs'
 
 const fixtures = {
   'long-line': 'word '.repeat(8192) + 'end\n',
@@ -60,8 +61,8 @@ if (command === '--worker') {
   const stamp = entry => {
     const root = resolve(dirname(entry), '..')
     return { head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-      sourceSha256: digest(['fast-html.ts', 'parse.ts', 'parse-core.ts', 'parse-session.ts', 'parse-prepass-core.ts', 'parse-quote-core.ts', 'parse-inline-session.ts', 'parse-block-scan-core.ts', 'parse-block-boundaries.ts', 'parse-inline-core.ts', 'parse-item-core.ts', 'parse-table-cells.ts', 'parse-lexer.ts', 'parse-list.ts', 'parse-definition-list.ts', 'parse-list-state.ts', 'parse-rebase.ts', 'parse-table-block.ts', 'parse-line-block.ts', 'parse-link-definitions.ts', 'parse-inline-scanner.ts', 'source-positions.ts'].map(name => resolve(root, 'src', name))),
-      buildSha256: digest(['fast-html.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'parse-inline-session.js', 'parse-block-scan-core.js', 'parse-block-boundaries.js', 'parse-inline-core.js', 'parse-item-core.js', 'parse-table-cells.js', 'parse-lexer.js', 'parse-list.js', 'parse-definition-list.js', 'parse-list-state.js', 'parse-rebase.js', 'parse-table-block.js', 'parse-line-block.js', 'parse-link-definitions.js', 'parse-inline-scanner.js', 'source-positions.js'].map(name => resolve(root, 'dist', name))) }
+      sourceSha256: namedModuleHash(resolve(root, 'src'), ['fast-html.ts', 'parse.ts', 'parse-core.ts', 'parse-session.ts', 'parse-prepass-core.ts', 'parse-quote-core.ts', 'parse-inline-session.ts', 'parse-block-scan-core.ts', 'parse-block-boundaries.ts', 'parse-inline-core.ts', 'parse-item-core.ts', 'parse-table-cells.ts', 'parse-lexer.ts', 'parse-list.ts', 'parse-definition-list.ts', 'parse-list-state.ts', 'parse-rebase.ts', 'parse-table-block.ts', 'parse-line-block.ts', 'parse-link-definitions.ts', 'parse-inline-scanner.ts', 'source-positions.ts']),
+      buildSha256: namedModuleHash(resolve(root, 'dist'), ['fast-html.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'parse-inline-session.js', 'parse-block-scan-core.js', 'parse-block-boundaries.js', 'parse-inline-core.js', 'parse-item-core.js', 'parse-table-cells.js', 'parse-lexer.js', 'parse-list.js', 'parse-definition-list.js', 'parse-list-state.js', 'parse-rebase.js', 'parse-table-block.js', 'parse-line-block.js', 'parse-link-definitions.js', 'parse-inline-scanner.js', 'source-positions.js']) }
   }
   const metadata = { generatedAt: new Date().toISOString(), node: process.version, cpu: cpus()[0].model, logicalCpus: cpus().length,
     baseline: stamp(baseline), candidate: stamp(candidate), runnerSha256: digest([fileURLToPath(import.meta.url)]),
