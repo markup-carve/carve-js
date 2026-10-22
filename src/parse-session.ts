@@ -1518,13 +1518,16 @@ export class ParseSession extends InlineParseSession {
       const stackedOpener = rootLines[lexer.lineNumber(lexer.pos) - 2]
       const stackedFollower = rootLines[lexer.lineNumber(lexer.pos) - 1]
       // Only where the opener line starts a block: after a paragraph it is lazy text.
-      const openerStartsBlock = lexer.pos - 1 === firstLineIndex || inner.length > 1 && isBlankLine(inner[inner.length - 2]!) ||
-        inner.length - 1 === stackedAttachEnd ||
-        stackedOpener !== undefined && quotePrefixDepth(stackedOpener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '')
-      if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 && openerStartsBlock &&
+      // The cheap end-of-line test comes first: this runs for every unprefixed line.
+      const openerStartsBlock = (opener: string): boolean => lexer.pos - 1 === firstLineIndex ||
+        inner.length > 1 && isBlankLine(inner[inner.length - 2]!) || inner.length - 1 === stackedAttachEnd ||
+        quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '')
+      if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 &&
+          stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
+          quotePrefixDepth(stackedFollower) === 0 && !isBlankLine(stackedFollower) &&
+          !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower) &&
           isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
-          quotePrefixDepth(stackedFollower) === 0 && sourceColumn(stackedFollower, 0) === 0 &&
-          !isBlankLine(stackedFollower) && !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower)) {
+          openerStartsBlock(stackedOpener)) {
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
           lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next), 0, true, 0, 0, true)
         if (attached.length > 0) {
