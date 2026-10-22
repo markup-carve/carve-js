@@ -1152,7 +1152,7 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
   const fenceShaped = RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) ||
     colonFenceShapeEndsLazyContinuation(bottom)
   let hasNestedQuote = false
-  if (fenceShaped && quote === null) {
+  if ((fenceShaped || isContinuationMarker(bottom)) && quote === null) {
     const prefix = content.slice(0, content.length - bottom.length)
     if (prefix.includes('>')) {
       for (let at = 0; at < prefix.length;) {
@@ -1173,7 +1173,8 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
     // (§17 L3), and what it names is a document-column-0 block. It is not
     // prose, so it opens no paragraph an INDENTED line could fold into - see
     // the fold branch that reads this (markup-carve/carve#1436).
-    bottomIsContinuationMarker: quote === null && isContinuationMarker(bottom),
+    // A stacked quote's `+` (`- - > +`) is quote text when refused, which a lazy line continues.
+    bottomIsContinuationMarker: quote === null && !hasNestedQuote && isContinuationMarker(bottom),
     wrappedAttributeRun: opensWrappedAttributeBlock(bottom) ? bottom : null,
     quote,
   }
