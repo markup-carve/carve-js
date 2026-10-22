@@ -34,6 +34,9 @@ describe('continuation-marker-refused for a plus no container takes', () => {
     '> +\n> q\n',
     '- > +\n  > q\n',
     '- > +\n> q\n',
+    '> ```\n> q\n>   +\n> ```\n',
+    '> %%%\n> q\n>   +\n> %%%\n',
+    '%%%\nq\n+\n- s\n%%%\n',
   ]
   for (const source of quiet) {
     it(`does not report ${JSON.stringify(source)}`, () => {
