@@ -16,7 +16,18 @@ describe('a first-block plus above a column-0 list', () => {
     expect(refused(source)[0]![2]).toContain(effect)
   })
 
+  // A first-block plus with no eligible block below is refused too (CARVE-P9-067).
   it.each([
+    ['[^a]: +\n', 1, 7, 'end of the document'],
+    ['[^a]: +\n\npara\n', 1, 7, 'blank line'],
+    ['[^a]: +\n  - a\n', 1, 7, 'right of its column'],
+    [':: t\n: +\n  - a\n', 2, 3, 'right of its column'],
+  ])('%j with no eligible block is reported', (source, line, column, reason) => {
+    expect(refused(source)).toEqual([[line, column, expect.stringContaining(reason)]])
+  })
+
+  it.each([
+    '[^a]: +\npara\n',
     ':: t\n: a\n+\n- b\n',
     '[^a]: x\n+\n- b\n',
     ':: t\n: +\npara\n',
