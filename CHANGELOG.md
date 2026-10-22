@@ -13,6 +13,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 - Nested open fences end their spans at the last payload newline, along with their containing list items and lists (#3445).
+- Unmarked table rows stay in an open quote paragraph, and blocks after a description note no longer keep a document tail inside the description (#3444).
 - Nested items keep their owner across open fences, lazy quote lines, and relative continuation markers. Blank lines before an accepted marker stay inside the fence (#3279, #3281, #3282, #3285, #3289, #3291, #3338, #3340).
 - Description terms, footnote bodies, and quoted paragraphs stop at their authored columns. Openers that leave a child return to the surviving list or description owner (#3344, #3345, #3346, #3347, #3350, #3351, #3353, #3354, #3360, #3364, #3365, #3366).
 - Stacked task items, nested quotes, and tabbed followers retain their source columns and list owners after a footnote or description closes (#3370, #3371, #3372, #3373, #3374, #3375, #3376, #3377, #3378, #3381, #3382, #3386).

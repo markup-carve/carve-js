@@ -1894,6 +1894,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             },
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
+            authoredQuoteParagraphOpen,
           )
           if (blockedNoteClaimFloor !== undefined) lazyState.lazyFoldable = false
           if (captionAtItemColumn) {

@@ -85,6 +85,7 @@ return function trackItemLazyState(
   hasLiteralCommentCloser?: (width: number, extraColumns?: number) => boolean,
   authoredFenceColumns?: number,
   authoredFenceWhitespace?: number,
+  authoredQuoteParagraphOpen = false,
 ): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
@@ -481,7 +482,8 @@ return function trackItemLazyState(
   const run = authoredFenceWhitespace ?? facts?.whitespace
   // A tab opener reports its run in characters; ownership compares columns.
   const runColumns = authoredFenceColumns ?? run
-  if (atContentColumn && state.opaque === null && run !== undefined && runColumns !== undefined &&
+  if (atContentColumn && state.opaque === null && !authoredQuoteParagraphOpen &&
+      (wasQuote === null || !blockQuoteParagraphOpen(wasQuote)) && run !== undefined && runColumns !== undefined &&
       runColumns > 0 && isTableRow(content.slice(run))) {
     state.inTable = true
     state.lazyFoldable = false
