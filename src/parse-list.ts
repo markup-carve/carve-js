@@ -2706,10 +2706,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
       if (authoredDescendantFenceBlanks > 0) {
         let blocks = children
+        const owners: Array<List | ListItem> = []
         for (;;) {
           const list = [...blocks].reverse().find(block => block.type === 'list') as List | undefined
           if (!list) break
-          blocks = list.items.at(-1)?.children ?? []
+          const item = list.items.at(-1)
+          if (item) owners.push(list, item)
+          blocks = item?.children ?? []
         }
         const code = [...blocks].reverse().find(block => block.type === 'code_block')
         if (code?.type === 'code_block') {
@@ -2719,7 +2722,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           const blanks = trailing - Number(body.length > 0)
           const missing = authoredDescendantFenceBlanks - blanks
           if (missing > 0) code.content += '\n'.repeat(missing)
-          else if (missing < 0) code.content = code.content.slice(0, missing)
+          else if (missing < 0) {
+            code.content = code.content.slice(0, missing)
+            if (code.pos?.endOffset !== undefined) {
+              const oldEndOffset = code.pos.endOffset
+              code.pos.endLine = code.pos.startLine + code.content.split('\n').length
+              code.pos.endOffset = (lexer.documentRoot ?? lexer).lineOffset(code.pos.endLine - 1)
+              code.pos.endColumn = 1
+              for (const owner of owners) {
+                if (owner.pos?.endOffset === oldEndOffset) {
+                  owner.pos.endLine = code.pos.endLine
+                  owner.pos.endOffset = code.pos.endOffset
+                  owner.pos.endColumn = code.pos.endColumn
+                }
+              }
+            }
+          }
         }
       }
 
@@ -2728,11 +2746,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const followingParagraph = children[1]
       if (followingParagraph?.type === 'paragraph' && followingParagraph.children[0]?.type === 'text' &&
           followingParagraph.children[0].value === '+') {
-        let blocks = children[0]?.type === 'list' ? children[0].items.at(-1)?.children : undefined
-        while (blocks?.at(-1)?.type === 'list') blocks = (blocks.at(-1) as List).items.at(-1)?.children
+        const owners: Array<List | ListItem> = []
+        let nestedList = children[0]?.type === 'list' ? children[0] : undefined
+        let blocks: BlockNode[] | undefined
+        while (nestedList) {
+          const item = nestedList.items.at(-1)
+          owners.push(nestedList)
+          if (item) owners.push(item)
+          blocks = item?.children
+          nestedList = blocks?.at(-1)?.type === 'list' ? blocks.at(-1) as List : undefined
+        }
         const code = blocks?.at(-1)
+        let trimmed = false
         if (code?.type === 'code_block' && code.content.endsWith('\n+\n')) {
           code.content = code.content.slice(0, -2)
+          trimmed = true
         } else if (code?.type === 'code_block' && code.content.endsWith('\n\n') &&
             (() => {
               let plusIndex = lexer.pos - 1
@@ -2741,6 +2769,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
                 isBlankLine(lexer.lines[plusIndex - 2])
             })()) {
           code.content = code.content.slice(0, -1)
+          trimmed = true
+        }
+        if (trimmed && code?.type === 'code_block' && code.pos?.endOffset !== undefined &&
+            code.content.endsWith('\n') && owners.length > 0) {
+          const endLine = code.pos.startLine + code.content.split('\n').length
+          const endOffset = (lexer.documentRoot ?? lexer).lineOffset(endLine - 1)
+          code.pos.endLine = endLine
+          code.pos.endColumn = 1
+          code.pos.endOffset = endOffset
+          for (const owner of owners) {
+            if (!owner.pos) continue
+            owner.pos.endLine = endLine
+            owner.pos.endColumn = 1
+            owner.pos.endOffset = endOffset
+          }
         }
       }
 
