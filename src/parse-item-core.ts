@@ -770,6 +770,25 @@ export function quoteBodyColumn(line: string, levels: number): number {
   return column
 }
 
+/** The column of every list or quote opener on a stacked marker line, after `levels` host quote prefixes. */
+export function stackedOpenerColumns(line: string, levels: number): number[] {
+  let offset = 0
+  for (let level = 0; level < levels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) return []
+    offset = end
+  }
+  while (line[offset] === ' ' || line[offset] === '\t') offset++
+  const columns: number[] = []
+  const opener = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
+  for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
+    columns.push(sourceColumnAt(line, offset))
+    offset += match[0].length
+    while (line[offset] === ' ') offset++
+  }
+  return columns
+}
+
 export function sourceColumnAt(line: string, offset: number): number {
   let column = 0
   for (let index = 0; index < offset; index++)
@@ -1126,6 +1145,7 @@ export const listHelpers = {
   orderedMatch,
   prefixWalkBound,
   quoteBodyColumn,
+  stackedOpenerColumns,
   quoteIndentHasTab,
   quotePrefixDepth,
   quotePrefixLength,

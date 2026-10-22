@@ -89,6 +89,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     orderedMatch,
     prefixWalkBound,
     quoteBodyColumn,
+    stackedOpenerColumns,
     quoteIndentHasTab,
     quotePrefixDepth,
     quotePrefixLength,
@@ -275,7 +276,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
       const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
       const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
-        (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth)) &&
+        (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
+          isStackedFirstBlockQuoteMarker(itemSource) && stackedOpenerColumns(itemSource, itemQuoteDepth).includes(firstBlockColumn)) &&
         !isListMarkerLine((lexer.peek() ?? '').trimStart())
       if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
           isStackedFirstBlockQuoteMarker(itemSource)) &&
@@ -874,6 +876,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const physicalFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
         if (pendingBlankRun.count === 0 && precedingSource !== undefined && precedingContent !== undefined &&
             firstBlockOpenerContent(precedingContent) && physicalFollower !== undefined &&
+            // A refused stacked `> +` is quote text that a lazy line continues.
+            !isStackedFirstBlockQuoteMarker(precedingSource) &&
             sourceColumn(precedingSource) > itemMarkerColumn &&
             sourceColumn(physicalFollower, itemQuoteDepth) > itemMarkerColumn &&
             sourceColumn(physicalFollower, itemQuoteDepth) < itemMarkerColumn + contentCol - baseIndent) return 'stop'
