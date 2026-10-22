@@ -1335,6 +1335,7 @@ export class ParseSession extends InlineParseSession {
       : Math.max(quoteMarkerColumn,
         sourceColumn(quoteRootLine, Math.max(0, quotePrefixDepth(quoteRootLine) - localQuoteDepth)))
     let emptyFirstBlockMarker = false
+    let refusedFirstBlockMarker: string | undefined
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
@@ -1397,6 +1398,8 @@ export class ParseSession extends InlineParseSession {
           handDown = null
           continue
         }
+        if (lineIndex === firstLineIndex && /^\+[ \t]*$/.test(content) && !quoteMarkerIsWrongColumn &&
+            markerSourceLine !== undefined) refusedFirstBlockMarker = markerSourceLine
         if (lineIndex === firstLineIndex && endsInPlus(content) &&
             isStackedFirstBlockQuoteMarker(markerSourceLine ?? ln) &&
             lexer.peek() !== undefined && !isListMarkerLine(lexer.peek()!.trimStart()) &&
@@ -1582,6 +1585,18 @@ export class ParseSession extends InlineParseSession {
       if (parts[0]?.type === 'text' && /^\+[ \t]*$/.test(parts[0].value)) {
         parts.splice(0, parts[1]?.type === 'soft_break' ? 2 : 1)
         if (parts.length === 0) children.shift()
+      }
+    }
+    const lead = children[0]?.type === 'paragraph' ? children[0].children[0] : undefined
+    if (refusedFirstBlockMarker !== undefined && lead?.type === 'text' && lead.value.startsWith('+')) {
+      // CARVE-P9-067: a refused first-block `> +` stays text in the quote.
+      const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex)]
+      const reason = follower === undefined ? 'document' : isBlankLine(follower) ? 'blank'
+        : quotePrefixDepth(follower) > 0 ? (isBlankLine(follower.replace(/^[ \t]*(?:>[ \t]?)+/, '')) ? 'blank' : null)
+          : leadingWhitespace(follower) > 0 ? 'right' : isListMarkerLine(follower) ? 'list' : null
+      if (reason !== null) {
+        lexer.reportRefusedContinuationMarker(firstLineIndex,
+          sourceColumnAt(refusedFirstBlockMarker, refusedFirstBlockMarker.lastIndexOf('+')) + 1, 'block quote', reason)
       }
     }
     const bq: BlockQuote = { type: 'block_quote', children }

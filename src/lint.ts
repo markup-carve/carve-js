@@ -560,6 +560,18 @@ export function lintIncludes(source: string, options: LintOptions, lintOne: (sou
   })
 }
 
+// PART 9 §17 L4: a refused first-block `+` adds no block to an item or a
+// description, and stays text in a quote or a note.
+function refusedMarkerEffect(marker: RefusedContinuationMarker): string {
+  if (!marker.firstBlock || (marker.host !== 'list item' && marker.host !== 'definition description')) {
+    return `It remains text in the ${marker.host}.`
+  }
+  const host = marker.host === 'list item' ? 'item' : 'description'
+  return marker.reason === 'right'
+    ? `It adds no block to the ${host}, and the next line follows the ordinary column rules.`
+    : `The ${host} stays empty.`
+}
+
 export function lintCarve(
   source: string,
   opts: {
@@ -777,7 +789,7 @@ export function lintCarve(
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
-      message: `This + attaches nothing because ${reasons[marker.reason]}. ${marker.firstBlock ? `The ${marker.host === 'definition description' ? 'description' : 'item'} stays empty.` : `It remains text in the ${marker.host}.`}` })
+      message: `This + attaches nothing because ${reasons[marker.reason]}. ${refusedMarkerEffect(marker)}` })
   }
 
   // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause
