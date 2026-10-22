@@ -54,6 +54,7 @@ export function createDefinitionListParser(
   helpers: typeof definitionListHelpers,
 ) {
   const {
+    FOOTNOTE_BODY_COLUMN,
     LAZY_FRAME,
     RE_ABBR_DEF,
     RE_BLOCKQUOTE,
@@ -596,7 +597,7 @@ export function createDefinitionListParser(
             !bodyHoldsQuote &&
             lazyState.literalColon === undefined &&
             !insideOpenQuoteParagraph(lazyState) &&
-            !lazyState.inFootnoteBody &&
+            (!lazyState.inFootnoteBody || residual < (lazyState.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN)) &&
             !lazyUnderNestedItem &&
             flush !== dedented &&
             lineOpensItemBlock(flush)
