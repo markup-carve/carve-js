@@ -36,6 +36,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A first-block `+` in a footnote or description leaves a column-zero list at document level. The refused marker stays as text in the footnote, and an empty description stays empty (#3438; markup-carve/carve#3482).
 - Lint reports a first-block `+` in a footnote or description that nothing below can attach: the end of the input, a blank line, or an indented line (markup-carve/carve#3519).
 - Lint says what a refused first-block `+` leaves behind (an empty item or description, an indented follower placed by the column rules, or text in a note or quote) and reports a refused first-block `> +` (#3449; markup-carve/carve#3524).
+- `list-item-block-overindented` no longer fires on a block placed at the content column of a description inside a list item.
 
 ### Added
 - Code-block includes can select files or regions, and `selectIncludeRegion` exposes the same region lookup to hosts (#3239, #3241; markup-carve/carve#3320).
