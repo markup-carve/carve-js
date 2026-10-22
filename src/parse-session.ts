@@ -77,6 +77,7 @@ import {
   commentCloserLookup,
   commentLineContent,
   consumeLooseKey,
+  bottomBlockLeavesParagraphOpen,
   deflistMarkerLine,
   delimitedTable,
   deriveTableMetadata,
@@ -1530,7 +1531,25 @@ export class ParseSession extends InlineParseSession {
       const openerStartsBlock = (opener: string): boolean => lexer.pos - 1 === firstLineIndex ||
         inner.length > 1 && isBlankLine(inner[inner.length - 2]!) || inner.length - 1 === stackedAttachEnd ||
         quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '') ||
-        opensSiblingItem()
+        followsClosedBlock() || opensSiblingItem()
+      // A heading, table row, invisible line or closed fence or div leaves no paragraph to fold into.
+      const followsClosedBlock = (): boolean => {
+        if (inner.length < 2) return false
+        const previous = inner[inner.length - 2]!
+        const fence = /^(`{3,}|~{3,})[ \t]*$/.exec(previous)
+        const colons = /^:{3,}[ \t]*$/.test(previous)
+        if (!fence && !colons) return !bottomBlockLeavesParagraphOpen(previous)
+        let start = inner.length - 2
+        while (start > 0 && !isBlankLine(inner[start - 1]!)) start--
+        if (fence === null) return /^:{3,}[ \t]*\S/.test(inner[start]!)
+        const char = fence[1]![0]!
+        let open = false
+        for (let k = start; k < inner.length - 1; k++) {
+          const run = /^(`{3,}|~{3,})/.exec(inner[k]!)
+          if (run && run[1]![0] === char) open = !open
+        }
+        return !open
+      }
       // `> - a` / `> - > +`: the opener is the next item of a list its block run opened.
       const opensSiblingItem = (): boolean => {
         const item = inner[inner.length - 1]!

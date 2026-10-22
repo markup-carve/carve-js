@@ -50,4 +50,17 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
   it('keeps an opener after a paragraph as lazy text', () => {
     expect(flat(carveToHtml('> a\n> - > +\n# h\n'))).toBe('<blockquote><p>a- &gt; +</p></blockquote><section id="h"><h1>h</h1></section>')
   })
+
+  // Ruling 3: after a closed block the stacked opener starts a block, so any block attaches.
+  for (const before of ['> # t', '> | a |', '> ```\n> x\n> ```', '> ::: note\n> x\n> :::', '> ***', '> {.c}', '> %% c', '> [r]: /u']) {
+    it(`attaches a heading after ${JSON.stringify(before)} and a stacked quote plus`, () => {
+      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
+    })
+  }
+
+  for (const before of ['> ```\n> x', '> ::: note\n> x', '> > q']) {
+    it(`keeps the opener after ${JSON.stringify(before)} as text the heading does not join`, () => {
+      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).not.toContain('<blockquote><h1 id="h">')
+    })
+  }
 })
