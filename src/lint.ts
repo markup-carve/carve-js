@@ -1228,6 +1228,7 @@ export function lintCarve(
     if (out[i]!.rule === 'list-marker-below-content-column' && splitLines.has(out[i]!.line)) out.splice(i, 1)
   }
   for (const ln of termFoldLines) listIndentLines.add(ln)
+  collectDescriptionSeparatorBelowContentColumn(source, doc, unrendered, out)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectRegionMarkerWarnings(source, doc, unrendered, verbatimLines, out)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out, toUtf16)
@@ -1431,6 +1432,93 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
     }
   })
   return folded
+}
+
+function collectDescriptionSeparatorBelowContentColumn(
+  source: string,
+  doc: Document,
+  unrendered: ReadonlySet<number>,
+  out: LintWarning[],
+): void {
+  const lines = source.split(/\r\n?|\n/)
+  const starts: number[] = []
+  for (let offset = 0, i = 0; i < lines.length; i++) {
+    starts[i] = offset
+    offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
+  }
+  const visualColumn = (line: string, end: number): number => {
+    let column = 0
+    for (let i = 0; i < end; ) {
+      column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+      i += (line.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
+    }
+    return column
+  }
+  const utf16Index = (line: string, codepoints: number): number => {
+    let index = 0
+    for (let n = 0; n < codepoints && index < line.length; n++) index += (line.codePointAt(index) ?? 0) > 0xffff ? 2 : 1
+    return index
+  }
+  const quotePrefix = (line: string): { index: number; quoteDepth: number } => {
+    let index = 0
+    let quoteDepth = 0
+    for (let quote; (quote = /^[ \t]*>(?: |$)/.exec(line.slice(index))); quoteDepth++) index += quote[0].length
+    return { index, quoteDepth }
+  }
+  const quoteDepth = (line: string): number => quotePrefix(line).quoteDepth
+  const candidate = (line: string): { index: number; marker: string; quoteDepth: number } | undefined => {
+    let { index, quoteDepth } = quotePrefix(line)
+    while (line[index] === ' ' || line[index] === '\t') index++
+    const marker = /^::?(?=[ \t]|$)/.exec(line.slice(index))?.[0]
+    return marker ? { index, marker, quoteDepth } : undefined
+  }
+  const lists: Array<{ first: number; last: number; column: number; quoteDepth: number }> = []
+  const attached = new Set<number>()
+  const payload = new Set<number>()
+  walkDocument(doc, (node) => {
+    const pos = (node as Positioned).pos
+    if (pos && (node.type === 'code' || node.type === 'math' || node.type === 'raw_inline' || node.type === 'literal_inline')) {
+      for (let line = pos.startLine + 1; line <= (pos.endLine ?? pos.startLine); line++) payload.add(line)
+    }
+    if (node.type !== 'definition_list' || !pos) return
+    const items = (node.items as Array<{ termSpans?: Array<Positioned['pos']>; definitionLines?: Array<number | undefined> }> | undefined) ?? []
+    for (const item of items) {
+      for (const span of item.termSpans ?? []) if (span) attached.add(span.startLine)
+      for (const line of item.definitionLines ?? []) if (line) attached.add(line)
+    }
+    const firstSpan = items[0]?.termSpans?.[0]
+    if (!firstSpan) return
+    const line = lines[firstSpan.startLine - 1] ?? ''
+    const authored = candidate(line)
+    const index = firstSpan.startColumn === undefined
+      ? (authored?.marker === '::' ? authored.index : -1)
+      : utf16Index(line, Math.max(0, firstSpan.startColumn - 1))
+    if (line.slice(index, index + 2) !== '::') return
+    lists.push({ first: pos.startLine, last: pos.endLine ?? pos.startLine, column: visualColumn(line, index), quoteDepth: quoteDepth(line) })
+  })
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = i + 1
+    if (unrendered.has(lineNo) || payload.has(lineNo) || attached.has(lineNo)) continue
+    const found = candidate(lines[i]!)
+    if (!found) continue
+    let previous = i
+    while (previous > 0 && /^[ \t]*(?:>[ \t]*)*$/.test(lines[previous - 1]!)) previous--
+    if (previous === 0 || quoteDepth(lines[previous - 1]!) !== found.quoteDepth) continue
+    const column = visualColumn(lines[i]!, found.index)
+    const host = lists.filter(list => list.first <= previous && previous <= list.last && list.quoteDepth === found.quoteDepth && list.column > column)
+      .sort((a, b) => b.column - a.column)[0]
+    if (!host) continue
+    const start = starts[i]! + found.index
+    const name = found.marker === '::' ? 'term marker' : 'description separator'
+    out.push({
+      line: lineNo,
+      column: Array.from(lines[i]!.slice(0, found.index)).length + 1,
+      rule: 'description-separator-below-content-column',
+      message: `This ${name} starts at column ${column}, below the column ${host.column} of the definition list above, so it adds no entry to that list. Indent it to column ${host.column} to continue the list.`,
+      start,
+      end: start + found.marker.length,
+    })
+  }
 }
 
 /**
