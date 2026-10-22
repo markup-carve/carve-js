@@ -1337,6 +1337,8 @@ export class ParseSession extends InlineParseSession {
       : Math.max(quoteMarkerColumn,
         sourceColumn(quoteRootLine, Math.max(0, quotePrefixDepth(quoteRootLine) - localQuoteDepth)))
     let refusedFirstBlockMarker: string | undefined
+    // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
+    let stackedAttachEnd = -1
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
@@ -1509,6 +1511,29 @@ export class ParseSession extends InlineParseSession {
           closeBlockQuoteParagraph(state)
         }
         continue
+      }
+      // A stacked `> - > +` takes a non-list block at document column 0 into its
+      // innermost quote (CARVE-P9-067), though the line writes no `>`.
+      const rootLines = lexer.rootLines ?? lexer.lines
+      const stackedOpener = rootLines[lexer.lineNumber(lexer.pos) - 2]
+      const stackedFollower = rootLines[lexer.lineNumber(lexer.pos) - 1]
+      // Only where the opener line starts a block: after a paragraph it is lazy text.
+      const openerStartsBlock = lexer.pos - 1 === firstLineIndex || inner.length > 1 && isBlankLine(inner[inner.length - 2]!) ||
+        inner.length - 1 === stackedAttachEnd
+      if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 && openerStartsBlock &&
+          isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
+          quotePrefixDepth(stackedFollower) === 0 && sourceColumn(stackedFollower, 0) === 0 &&
+          !isBlankLine(stackedFollower) && !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower)) {
+        const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+          lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next), 0, true, 0, 0, true)
+        if (attached.length > 0) {
+          inner.push(...attached)
+          innerLineNumbers.push(...attachedLineNumbers)
+          stackedAttachEnd = inner.length
+          trackUntracked()
+          closeBlockQuoteParagraph(state)
+          continue
+        }
       }
       const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
         indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) < quoteMarkerColumn
