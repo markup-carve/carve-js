@@ -143,6 +143,7 @@ import {
   sourceQuoteBody,
   sourceQuoteLocalColumn,
   sourceQuoteRest,
+  stackedOpenerColumns,
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
@@ -1335,7 +1336,6 @@ export class ParseSession extends InlineParseSession {
       ? sourceColumnAt(quoteRootLine, localQuoteOffset)
       : Math.max(quoteMarkerColumn,
         sourceColumn(quoteRootLine, Math.max(0, quotePrefixDepth(quoteRootLine) - localQuoteDepth)))
-    let emptyFirstBlockMarker = false
     let refusedFirstBlockMarker: string | undefined
     while (!lexer.eof()) {
       const ln = lexer.peek()!
@@ -1379,7 +1379,8 @@ export class ParseSession extends InlineParseSession {
           const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
             lexer,
             (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
-            0,
+            // A follower at a stacked opener's column is read from that column.
+            isStackedFirstBlockQuoteMarker(stackedSource) ? indentColumns(lexer.peek() ?? '') : 0,
             true,
             isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : quoteColumn,
             isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : quotedFollower ? followerDepth : 0,
@@ -1411,10 +1412,6 @@ export class ParseSession extends InlineParseSession {
         }
         if (lineIndex === firstLineIndex && /^\+[ \t]*$/.test(content) && !quoteMarkerIsWrongColumn &&
             markerSourceLine !== undefined) refusedFirstBlockMarker = markerSourceLine
-        if (lineIndex === firstLineIndex && endsInPlus(content) &&
-            isStackedFirstBlockQuoteMarker(markerSourceLine ?? ln) &&
-            lexer.peek() !== undefined && !isListMarkerLine(lexer.peek()!.trimStart()) &&
-            quotedLineText(lexer.peek()!, lexer.lineTerminatorFree(lexer.pos)) === null) emptyFirstBlockMarker = true
         if (lineIndex !== firstLineIndex && markerSourceLine !== undefined &&
             isPhysicalContinuationMarker(markerSourceLine) &&
             quotePrefixDepth(markerSourceLine) > 0) {
@@ -1589,13 +1586,6 @@ export class ParseSession extends InlineParseSession {
     subLexer.inFootnoteBody = false
     subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
     const children = this.parseBlocks(subLexer, 0)
-    if (emptyFirstBlockMarker && children[0]?.type === 'paragraph') {
-      const parts = children[0].children
-      if (parts[0]?.type === 'text' && /^\+[ \t]*$/.test(parts[0].value)) {
-        parts.splice(0, parts[1]?.type === 'soft_break' ? 2 : 1)
-        if (parts.length === 0) children.shift()
-      }
-    }
     const lead = children[0]?.type === 'paragraph' ? children[0].children[0] : undefined
     if (refusedFirstBlockMarker !== undefined && lead?.type === 'text' && lead.value.startsWith('+')) {
       // CARVE-P9-067: a refused first-block `> +` stays text in the quote.
@@ -1827,7 +1817,7 @@ export class ParseSession extends InlineParseSession {
     const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ''
     const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
     const nextQuoted = next === undefined ? null : quotedLineText(next, lexer.lineTerminatorFree(lexer.pos))
-    if (next === undefined || isBlankLine(next) || isListMarkerLine(next.trimStart()) ||
+    if (next === undefined || isBlankLine(next) || isListMarkerLine(stripLazyFrame(next).trimStart()) ||
         quotePrefixDepth(nextSource) < quotePrefixDepth(sourceLine) &&
         isListMarkerLine(sourceQuoteBody(nextSource)) ||
         nextQuoted !== null && isBlankLine(nextQuoted) ||
@@ -1852,9 +1842,15 @@ export class ParseSession extends InlineParseSession {
     const levels = chain.get(content.length)
     if (levels === undefined) return false
     if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
-    return attachesAtDocumentColumnZero(lexer,
-      isStackedFirstBlockQuoteMarker(sourceLine) ? sourceColumn(sourceLine) : sourceColumn(sourceLine, 0),
-      isStackedFirstBlockQuoteMarker(sourceLine) ? quotePrefixDepth(sourceLine) : 0, true)
+    if (isStackedFirstBlockQuoteMarker(sourceLine)) {
+      // A stacked opener line also takes a follower at one of its own opener columns (CARVE-P9-067).
+      const depth = quotePrefixDepth(sourceLine)
+      const atOpener = stackedOpenerColumns(sourceLine, depth).includes(sourceColumn(nextSource, depth))
+      // Inside a host quote, column 0 is the host's: only an unprefixed line reaches the document's.
+      if (depth > 0 && quotePrefixDepth(nextSource) >= depth) return atOpener
+      return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), depth, true) || atOpener
+    }
+    return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine, 0), 0, true)
   }
 
   private collectAttachedBlock(

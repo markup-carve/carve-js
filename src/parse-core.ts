@@ -671,6 +671,7 @@ export {
   orderedContinues,
   parseAbbrDef,
   quoteBodyColumn,
+  stackedOpenerColumns,
   quoteIndentHasTab,
   restoreVerbatimBlanks,
   retainBelowColumnComment,

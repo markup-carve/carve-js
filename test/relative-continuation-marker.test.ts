@@ -135,11 +135,12 @@ describe('relative continuation marker columns', () => {
   it.each(['- >+\n b\n', '- > +\n b\n'])('reads a first-block form in %s', input => {
     expect(carveToHtml(input)).toBe(input.includes('>+')
       ? '<ul>\n  <li>&gt;+\nb</li>\n</ul>'
-      : '<ul>\n  <li>\n    <blockquote><p>b</p></blockquote>\n  </li>\n</ul>')
+      // Column 1 is no opener column of `- > +`, so the `+` stays quote text (CARVE-P9-067).
+      : '<ul>\n  <li>\n    <blockquote><p>+\nb</p></blockquote>\n  </li>\n</ul>')
   })
 
-  it('keeps a plus before a quoted follower as text', () => {
-    expect(carveToHtml('- > +\n  > more\n')).toContain('<blockquote><p>+\nmore</p></blockquote>')
+  it('attaches a quoted follower at the quote column as a nested quote', () => {
+    expect(carveToHtml('- > +\n  > more\n').replace(/>\s+</g, '><')).toContain('<blockquote><blockquote><p>more</p></blockquote></blockquote>')
   })
 
   it.each([
