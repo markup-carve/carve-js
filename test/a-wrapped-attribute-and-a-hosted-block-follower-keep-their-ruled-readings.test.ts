@@ -22,4 +22,12 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
       expect(flat(carveToHtml(source))).toBe(html)
     })
   }
+
+  // CARVE-P9-067, corpus 652 (markup-carve/carve#3534): the list follower is refused in every host.
+  for (const source of ['> - > +\n- s\n', '> 1. > +\n1. s\n', '> - - > +\n- s\n']) {
+    it(`folds the unprefixed list line of ${JSON.stringify(source)} into the plus`, () => {
+      const letter = flat(carveToHtml(source.replace('> +', '> x')))
+      expect(flat(carveToHtml(source))).toBe(letter.replace('<p>x', '<p>+'))
+    })
+  }
 })
