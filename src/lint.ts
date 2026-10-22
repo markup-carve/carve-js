@@ -69,7 +69,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, CodeBlock, Document, Heading, Table } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, Heading, Table } from './ast.js'
 import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './colon-fences.js'
@@ -1600,9 +1600,24 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
+  const descriptions: Array<{ startLine: number; endLine: number; contentColumn: number }> = []
   const blockRuns = new Map<string, Array<{ first: number; column: number }>>()
   const commentLines = collectCommentLines(doc, true)
   walkDocument(doc, (node) => {
+    if (node.type === 'definition_list') {
+      for (const entry of (node as unknown as DefinitionList).items) {
+        entry.definitionSpans?.forEach((span, k) => {
+          if (!span) return
+          const markerLine = lines[span.startLine - 1] ?? ''
+          const at = utf16IndexOfColumn(markerLine, Math.max(0, (span.startColumn ?? 1) - 1))
+          const marker = /^:[ \t]+/.exec(markerLine.slice(at))
+          if (!marker) return
+          const endLine = Math.max(span.endLine ?? span.startLine,
+            ...(entry.definitions[k] ?? []).map((block) => (block as Positioned).pos?.endLine ?? 0))
+          descriptions.push({ startLine: span.startLine, endLine, contentColumn: visualColumnAt(markerLine, at + marker[0].length) })
+        })
+      }
+    }
     const blockPos = (node as Positioned).pos
     if (blockPos && (node.type === 'block_quote' || node.type === 'table')) {
       const opening = lines[blockPos.startLine - 1] ?? ''
@@ -1769,6 +1784,11 @@ function collectListItemIndentWarnings(
          !isTableRow(authored.rest))) continue
     let item: LintItemColumn | undefined = containing
     let rule: string | undefined
+    // A description inside the item is the innermost container: its content
+    // column, not the item's, places a block in its body.
+    const outer = containing ?? lastEnded
+    if (outer && descriptions.some((d) => d.startLine >= outer.startLine && d.startLine < lineNo &&
+        lineNo <= d.endLine && d.contentColumn > outer.contentColumn && authored.column >= d.contentColumn)) continue
     if (item && authored.column > item.contentColumn) {
       rule = 'list-item-block-overindented'
     } else if (
