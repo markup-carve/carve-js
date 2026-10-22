@@ -1432,8 +1432,9 @@ export class ParseSession extends InlineParseSession {
           // it cannot take a block. The inner quote may retain it as text.
           const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex)]
           const markerDepth = quotePrefixDepth(markerSourceLine)
+          // A deeper-quoted follower at the marker's column is an attached quote that nests.
           if (follower === undefined || isBlankLine(follower) ||
-              quotePrefixDepth(follower) !== markerDepth || sourceQuoteLocalColumn(follower, markerDepth) !== 0) {
+              quotePrefixDepth(follower) < markerDepth || sourceQuoteLocalColumn(follower, markerDepth) !== 0) {
             lexer.reportRefusedContinuationMarker(lineIndex,
               sourceColumnAt(markerSourceLine, markerSourceLine.lastIndexOf('+')) + 1, 'block quote',
               follower === undefined ? 'document' : isBlankLine(follower) ? 'blank' : 'right')
