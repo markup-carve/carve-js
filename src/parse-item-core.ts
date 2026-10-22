@@ -893,7 +893,7 @@ export function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quo
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
-  if (firstBlock && sourceColumn(line, 0) === 0 && !isListMarkerLine(line)) return true
+  if (firstBlock && sourceColumn(line, 0) === 0) return !isListMarkerLine(line)
   if (quoteLevels === Infinity) {
     let offset = 0
     for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
