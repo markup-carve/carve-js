@@ -282,7 +282,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
           isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
             sourceColumn(firstBlockSource, 0) === 0) &&
-        !isListMarkerLine((lexer.peek() ?? '').trimStart())
+        !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
       if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
           isStackedFirstBlockQuoteMarker(itemSource)) &&
           !firstItemAttachBoundary(lexer.peek()!)) {
