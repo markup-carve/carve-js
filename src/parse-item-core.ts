@@ -727,6 +727,17 @@ export function sourceQuoteBody(line: string): string {
   return body.slice(leadingWhitespace(body))
 }
 
+/** The text after `levels` source quote prefixes, which may sit behind a host's indentation, or null. */
+export function sourceQuoteRest(line: string, levels: number): string | null {
+  let offset = 0
+  for (let level = 0; level < levels; level++) {
+    const end = sourceQuotePrefixEnd(line, offset)
+    if (end < 0) return null
+    offset = end
+  }
+  return line.slice(offset)
+}
+
 export function sourceQuoteLocalColumn(line: string, levels: number): number {
   let offset = 0
   for (let level = 0; level < levels; level++) {

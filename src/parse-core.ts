@@ -679,6 +679,7 @@ export {
   sourceColumnAt,
   sourceQuoteBody,
   sourceQuoteLocalColumn,
+  sourceQuoteRest,
   unorderedMarkerChar,
   verbatimOpener,
 } from './parse-item-core.js'
