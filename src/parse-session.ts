@@ -1529,7 +1529,17 @@ export class ParseSession extends InlineParseSession {
       // The cheap end-of-line test comes first: this runs for every unprefixed line.
       const openerStartsBlock = (opener: string): boolean => lexer.pos - 1 === firstLineIndex ||
         inner.length > 1 && isBlankLine(inner[inner.length - 2]!) || inner.length - 1 === stackedAttachEnd ||
-        quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '')
+        quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '') ||
+        opensSiblingItem()
+      // `> - a` / `> - > +`: the opener is the next item of a list its block run opened.
+      const opensSiblingItem = (): boolean => {
+        const item = inner[inner.length - 1]!
+        let start = inner.length - 2
+        while (start > 0 && !isBlankLine(inner[start - 1]!)) start--
+        const head = inner[start]
+        return start >= 0 && head !== undefined && !isBlankLine(head) && isListMarkerLine(head) &&
+          isListMarkerLine(item) && leadingWhitespace(head) === leadingWhitespace(item)
+      }
       if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 &&
           stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
           quotePrefixDepth(stackedFollower) === 0 && !isBlankLine(stackedFollower) &&

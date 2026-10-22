@@ -30,4 +30,19 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
       expect(flat(carveToHtml(source))).toBe(letter.replace('<p>x', '<p>+'))
     })
   }
+
+  // Corpus 655-3: a sibling item's stacked opener starts a block, so any block attaches (carve#3421 ruling 3).
+  const sibling: Array<[string, string]> = [
+    ['> - a\n> - > +\n# h\n', '<blockquote><ul><li>a</li><li><blockquote><h1 id="h">h</h1></blockquote></li></ul></blockquote>'],
+    ['> 1. a\n>   b\n> 2. > +\n| c |\n', '<blockquote><ol><li>ab</li><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ol></blockquote>'],
+  ]
+  for (const [source, html] of sibling) {
+    it(`attaches the column-0 block after the sibling item of ${JSON.stringify(source)}`, () => {
+      expect(flat(carveToHtml(source))).toBe(html)
+    })
+  }
+
+  it('keeps an opener after a paragraph as lazy text', () => {
+    expect(flat(carveToHtml('> a\n> - > +\n# h\n'))).toBe('<blockquote><p>a- &gt; +</p></blockquote><section id="h"><h1>h</h1></section>')
+  })
 })
