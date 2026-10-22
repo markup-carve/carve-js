@@ -773,10 +773,11 @@ export function lintCarve(
       left: 'the next block starts left of its column',
       right: 'the next block starts right of its column',
       'wrong-column': 'its column names no open container',
+      list: 'the first-block form does not attach a list',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
-      message: `This + attaches nothing because ${reasons[marker.reason]}. ${marker.firstBlock ? 'The item stays empty.' : `It remains text in the ${marker.host}.`}` })
+      message: `This + attaches nothing because ${reasons[marker.reason]}. ${marker.firstBlock ? `The ${marker.host === 'definition description' ? 'description' : 'item'} stays empty.` : `It remains text in the ${marker.host}.`}` })
   }
 
   // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause

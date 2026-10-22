@@ -69,6 +69,7 @@ export function createDefinitionListParser(
     RE_LINE_BLOCK_OPEN,
     RE_RAW_FENCE,
     attachesAtDocumentColumnZero,
+    firstBlockRefusesList,
     bodyHoldsOpenCommentSpan,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
@@ -339,8 +340,10 @@ export function createDefinitionListParser(
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
+        const refusesList = firstBlockRefusesList(lexer)
         lexer.reportRefusedContinuationMarker(firstLineIndex,
-          lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description')
+          lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description',
+          refusesList ? 'list' : undefined, refusesList)
         const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
           sourceColumn(markerSource, quotePrefixDepth(markerSource)), quotePrefixDepth(markerSource), true)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)

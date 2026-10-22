@@ -640,6 +640,7 @@ export {
   RE_COLON_RUN,
   RE_FIRST_BLOCK_MARKER,
   attachesAtDocumentColumnZero,
+  firstBlockRefusesList,
   authoredTaskState,
   commentBlockSpans,
   deflistContentCol,
