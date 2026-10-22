@@ -1366,13 +1366,23 @@ export class ParseSession extends InlineParseSession {
           const stackedDepth = quotePrefixDepth(stackedSource)
           const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ''
           const followerColumn = sourceColumn(followerSource, stackedDepth)
+          // Stacked quotes on one line keep the innermost owner (CARVE-P9-067): an
+          // inner quote takes the follower at the outermost quote's column.
+          // A quoted follower continues the outer quotes and is measured inside them.
+          const plusLineNumber = lexer.lineNumber(lineIndex)
+          const followerDepth = quotePrefixDepth(followerSource)
+          const quotedFollower = followerDepth > 0 && followerDepth < stackedDepth
+          const quoteColumn = quotedFollower
+            ? sourceColumn(stackedSource, followerDepth)
+            : lexer.firstBlockQuoteColumns.get(plusLineNumber) ?? physicalQuoteColumn
+          if (!quotedFollower && !/^\+[ \t]*$/.test(content)) lexer.firstBlockQuoteColumns.set(plusLineNumber, quoteColumn)
           const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
             lexer,
             (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
             0,
             true,
-            isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : physicalQuoteColumn,
-            isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : 0,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : quoteColumn,
+            isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : quotedFollower ? followerDepth : 0,
             true,
           )
           if (/^\+[ \t]*$/.test(content)) {

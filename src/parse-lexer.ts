@@ -104,6 +104,8 @@ export class Lexer {
   consumedContinuationLines: Set<number>
   /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
   quoteChainEndsInPlus: Map<number, Map<number, number>>
+  /** Per first-block `+` line: the follower column of the outermost quote opened on it. */
+  firstBlockQuoteColumns: Map<number, number>
   prefixMemoLines?: boolean[]
   private storedLines: readonly string[] = []
   private lineView: { lexer: Lexer; start: number; length: number } | undefined
@@ -424,6 +426,7 @@ export class Lexer {
     this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
     this.consumedContinuationLines = inherited?.consumedContinuationLines ?? new Set()
     this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
+    this.firstBlockQuoteColumns = inherited?.firstBlockQuoteColumns ?? new Map()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
