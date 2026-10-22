@@ -42,6 +42,11 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
     })
   }
 
+  it('keeps an opener inside a div that ended the list as lazy text', () => {
+    expect(flat(carveToHtml('> - a\n> ::: code\n> x\n> - > +\n# h\n'))).toBe(
+      '<blockquote><ul><li>a</li></ul><div class="code"><p>x- &gt; +</p></div></blockquote><section id="h"><h1>h</h1></section>')
+  })
+
   it('keeps an opener after a paragraph as lazy text', () => {
     expect(flat(carveToHtml('> a\n> - > +\n# h\n'))).toBe('<blockquote><p>a- &gt; +</p></blockquote><section id="h"><h1>h</h1></section>')
   })

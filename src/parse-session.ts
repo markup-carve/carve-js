@@ -1537,8 +1537,15 @@ export class ParseSession extends InlineParseSession {
         let start = inner.length - 2
         while (start > 0 && !isBlankLine(inner[start - 1]!)) start--
         const head = inner[start]
-        return start >= 0 && head !== undefined && !isBlankLine(head) && isListMarkerLine(head) &&
-          isListMarkerLine(item) && leadingWhitespace(head) === leadingWhitespace(item)
+        if (head === undefined || !isListMarkerLine(head) || !isListMarkerLine(item)) return false
+        const column = leadingWhitespace(head)
+        if (leadingWhitespace(item) !== column) return false
+        // A line at or left of the list's column that is not an item ends the list (`::: code`).
+        for (let k = start + 1; k < inner.length - 1; k++) {
+          const line = inner[k]!
+          if (leadingWhitespace(line) <= column && !isListMarkerLine(line)) return false
+        }
+        return true
       }
       if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 &&
           stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
