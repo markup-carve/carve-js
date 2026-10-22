@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 // A lone `+` as the first line of a quote or a footnote takes the following
-// flush-left block as the body, the same reach as `- +` and `:  +`. With no
+// flush-left non-list block as the body, the same reach as `- +` and `:  +`. With no
 // block below it (end of input, or a blank line) the `+` stays text.
 const note = (body: string): string =>
   '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
@@ -91,9 +91,9 @@ describe('a footnote body takes the first-block form', () => {
     expect(carveToHtml('[^a]: +\nflush\n\nsee[^a]\n')).toBe(note(`      <p>flush${backlink}</p>`))
   })
 
-  it('a list is the note body', () => {
+  it('leaves a column-zero list outside the note', () => {
     expect(carveToHtml('[^a]: +\n- x\n- y\n\nsee[^a]\n')).toBe(
-      note(`      <ul>\n        <li>x</li>\n        <li>y</li>\n      </ul>\n      <p>${backlink}</p>`),
+      '<ul>\n  <li>x</li>\n  <li>y</li>\n</ul>\n' + note(`      <p>+${backlink}</p>`),
     )
   })
 
