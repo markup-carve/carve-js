@@ -312,6 +312,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
         (code >= 128 || (code >= 48 && code <= 57) ||
           (code >= 65 && code <= 90) ||
           (code >= 97 && code <= 122) ||
+          code === 41 || code === 44 || code === 59 || code === 63 ||
+          (code === 46 && text[i - 1] !== '.' && text[i + 1] !== '.') ||
           code === 32 ||
           code === 9)
       ) {
@@ -327,6 +329,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
               (next >= 48 && next <= 57) ||
               (next >= 65 && next <= 90) ||
               (next >= 97 && next <= 122) ||
+              next === 41 || next === 44 || next === 59 || next === 63 ||
+              (next === 46 && text[i - 1] !== '.' && text[i + 1] !== '.') ||
               next === 32 ||
               next === 9
             )
