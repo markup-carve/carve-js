@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from './parse-core.js'
 import { ContainerBlankBuffer, runIndentationContainer } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quoteBodyColumn, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from './parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quoteBodyColumn, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from './parse-core.js'
 
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, markerColumn?: number, quoteLevels?: number, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
@@ -65,6 +65,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodySourceLines.push(a)
     }
     bodyLineNumbers.push(...attachedLineNumbers)
+  } else if (/^\+[ \t]*$/.test(m[2]!) && firstBlockRefusesList(lexer)) {
+    lexer.reportRefusedContinuationMarker(defLineIndex, defContentColumn + 1, 'footnote', 'list')
   }
   if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
   let retainedBelowComment = false

@@ -903,6 +903,12 @@ export function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quo
   return column === markerColumn
 }
 
+/** Is the next line the column-0 list a first-block marker refuses (CARVE-P9-067)? */
+export function firstBlockRefusesList(lexer: Lexer): boolean {
+  const line = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+  return line !== undefined && sourceColumn(line, 0) === 0 && isListMarkerLine(line)
+}
+
 /**
  * Is the first LIST in this marker line's run nested INSIDE a quote?
  *
@@ -1049,6 +1055,7 @@ export const listHelpers = {
   RE_UNORDERED,
   attachBlockPos,
   attachesAtDocumentColumnZero,
+  firstBlockRefusesList,
   authoredTaskState,
   blockQuoteParagraphOpen,
   bodyHoldsOpenCommentSpan,
