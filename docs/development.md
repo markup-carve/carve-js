@@ -28,12 +28,10 @@ carve-js/
 │   ├── render-plain.ts     AST → plain-text renderer
 │   ├── render-ansi.ts      AST → ANSI-styled renderer
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
-│   ├── import/djot/        Djot import helpers
 │   ├── markdown-migrate.ts Markdown → Carve source transform
 │   ├── ast/                AST JSON, patches, and sidecars
 │   ├── parse/              Block, inline, list, and table parser modules
-│   ├── import/markdown/    Markdown import helpers
-│   ├── import/html/        HTML import helpers
+│   ├── import/             Djot, Markdown, and HTML import helpers
 │   ├── extension/          Built-in extensions
 │   ├── heading/            Heading IDs, numbers, and references
 │   ├── render/             Renderer helpers
