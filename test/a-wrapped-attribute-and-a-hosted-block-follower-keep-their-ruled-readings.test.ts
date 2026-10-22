@@ -52,7 +52,7 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
   })
 
   // Ruling 3: after a closed block the stacked opener starts a block, so any block attaches.
-  for (const before of ['> # t', '> | a |', '> ```\n> x\n> ```', '> ::: note\n> x\n> :::', '> :::\n> x\n> :::', '> ::: a\n> ::: b\n> x\n> :::', '> ***', '> {.c}', '> %% c', '> [r]: /u']) {
+  for (const before of ['> # t', '> | a |', '> ```\n> x\n> ```', '> ::: note\n> x\n> :::', '> :::\n> x\n> :::', '> :::: note\n> x\n> ::::', '> ::: a\n> ::: b\n> x\n> :::', '> ***', '> {.c}', '> %% c', '> [r]: /u']) {
     it(`attaches a heading after ${JSON.stringify(before)} and a stacked quote plus`, () => {
       expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
     })
@@ -63,4 +63,8 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
       expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).not.toContain('<blockquote><h1 id="h">')
     })
   }
+
+  it('keeps a quoted line in an unclosed fence follower as fence payload', () => {
+    expect(flat(carveToHtml('> # t\n> - > +\n```\n> x\n'))).toContain('<pre><code>&gt; x</code></pre>')
+  })
 })

@@ -1357,7 +1357,7 @@ export class ParseSession extends InlineParseSession {
             openFence = null
             lastCloser = closerScan
           }
-        } else if (openFence === null && /^:{3,}[ \t]*\S/.test(line)) {
+        } else if (openFence === null && /^:{3,}[ \t]*[^:\s]/.test(line)) {
           divDepth++
         } else if (openFence === null && /^:{3,}[ \t]*$/.test(line)) {
           // A bare `:::` opens a nameless div when none is open, and closes one otherwise.
@@ -1591,9 +1591,11 @@ export class ParseSession extends InlineParseSession {
           !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower) &&
           isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
           openerStartsBlock(stackedOpener)) {
+        const opensBody = /^[ \t]*(?:`{3,}|~{3,}|:{3,}|%%%)/.test(stackedFollower)
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
-          // A host-quoted line ends the unprefixed follower; stopping there keeps the scan short.
-          lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next) || next.startsWith('>'), 0, true, 0, 0, true)
+          // A host-quoted line ends a follower that opens no fence; stopping there keeps the scan short.
+          lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next) || next.startsWith('>') && !opensBody,
+          0, true, 0, 0, true)
         if (attached.length > 0) {
           inner.push(...attached)
           innerLineNumbers.push(...attachedLineNumbers)
