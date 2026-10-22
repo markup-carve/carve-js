@@ -124,8 +124,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const blankBeforeNestedContinuation = pendingBlankCount > 0 && classifiedMarker?.owner?.kind === 'list' &&
       classifiedMarker.reason === undefined &&
       classifiedMarker.owner.column > physicalItemMarkerColumn
-    // A quote prefix may omit its optional space; compare the marker at
-    // the open item's quote-body column in either spelling.
     const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
       ? Math.max(sourceColumn(markerSource), physicalItemMarkerColumn)
       : sourceColumn(markerSource)
@@ -147,8 +145,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       : candidate === undefined ? 'document'
         : isBlankLine(follower) ? 'blank'
           : followerColumn < plusColumn ? 'left'
-            : followerColumn > plusColumn || itemQuoteDepth > 0 && quotePrefixDepth(candidate) > itemQuoteDepth &&
-              plusColumn === quoteBodyColumn(markerSource, itemQuoteDepth) ? 'right'
+            : followerColumn > plusColumn ? 'right'
               : classifiedMarker?.reason === 'sibling' || isListMarkerLine(follower.trimStart()) ? 'sibling' : null
     return { markerSource, plusColumn, listPlusOwner, listPlusReason, blankBeforeNestedContinuation }
   }

@@ -110,11 +110,11 @@ export function authoredTaskState(state: string, checked: boolean): TaskState | 
 export const RE_FIRST_BLOCK_MARKER = new RegExp('^[ \\t]*\\+' + TRAILING_WS)
 
 export function isPhysicalContinuationMarker(line: string): boolean {
-  return /^(?:>(?: ?))*\+[ \t]*$/.test(line)
+  return /^(?:> )*\+[ \t]*$/.test(line)
 }
 
 export function isStackedFirstBlockQuoteMarker(line: string): boolean {
-  return /^[ \t]*(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> ?)+\+[ \t]*$/.test(line.replace(/^(?:> ?)+/, ''))
+  return /^[ \t]*(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
 }
 
 export function firstBlockOpenerContent(line: string): boolean {
@@ -787,8 +787,6 @@ export class OpenMarkerClassifier {
     const depth = quotePrefixDepth(line)
     const column = sourceColumn(line)
     const localColumn = depth > 0 ? sourceQuoteLocalColumn(line, depth) : column
-    // `>+` and `> +` name the same quote level despite different physical
-    // columns for the +. At the quote body's start, compare local columns.
     const useLocalColumn = depth > 0 && (quoteIndentHasTab(line, depth) || localColumn === 0)
     const markerColumn = useLocalColumn ? localColumn : column
     const body = sourceQuoteBody(line)
@@ -809,7 +807,8 @@ export class OpenMarkerClassifier {
       const followerColumn = follower === undefined ? Infinity : useLocalColumn
         ? sourceQuoteLocalColumn(follower, depth) : sourceColumn(follower, depth)
       const followerBody = follower === undefined ? '' : sourceQuoteBody(follower)
-      const sibling = follower !== undefined && followerColumn === markerColumn &&
+      const sibling = follower !== undefined && quotePrefixDepth(follower) === depth &&
+        followerColumn === markerColumn &&
         (unorderedMatch(followerBody) !== null || orderedMatch(followerBody) !== null)
       const unprefixedQuoteFollower = depth === 0 && owner?.kind === 'description' && sibling &&
         this.stack.some(entry => entry.kind === 'quote' && entry.quoteDepth > 0)

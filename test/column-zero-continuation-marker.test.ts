@@ -11,12 +11,12 @@ describe('column-zero continuation markers', () => {
     expect(carveToHtml('> - a\n>   - b\n> +\n> para')).toContain('</ul>\n      para\n    </li>')
   })
 
-  it.each(['> +', '>+', '> > +', '>> +'])('accepts %s', marker => {
+  it.each(['> +', '> > +'])('accepts %s', marker => {
     expect(carveToHtml(`${marker}\npara`)).toContain('<p>para</p>')
     expect(carveToHtml(`${marker}\npara`)).not.toContain('<p>+</p>')
   })
 
-  it.each(['> +', '>+', '> > +'])('keeps a later quoted plus as text with %s', marker => {
+  it.each(['> +', '> > +'])('keeps a later quoted plus as text with %s', marker => {
     const lead = marker === '> > +' ? '> > q' : '> q'
     const html = carveToHtml(`${lead}\n${marker}\npara`)
     expect(html).toContain('<p>q\n+\npara</p>')
