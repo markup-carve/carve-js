@@ -770,7 +770,11 @@ export function quoteBodyColumn(line: string, levels: number): number {
   return column
 }
 
-/** The column of every list or quote opener on a stacked marker line, after `levels` host quote prefixes. */
+/**
+ * The columns a stacked marker line's first-block `+` takes a follower at, after `levels` host
+ * quote prefixes: the line's own column, and the column of a quote its first marker opens
+ * (CARVE-P9-067, carve#3421 item 5). A deeper opener's column is refused.
+ */
 export function stackedOpenerColumns(line: string, levels: number): number[] {
   let offset = 0
   for (let level = 0; level < levels; level++) {
@@ -782,7 +786,9 @@ export function stackedOpenerColumns(line: string, levels: number): number[] {
   const columns: number[] = []
   const opener = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
   for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
+    if (columns.length === 1 && match[0] !== '> ') break
     columns.push(sourceColumnAt(line, offset))
+    if (columns.length === 2) break
     offset += match[0].length
     while (line[offset] === ' ') offset++
   }
