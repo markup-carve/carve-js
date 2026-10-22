@@ -333,7 +333,9 @@ export function sourceQuotePrefixEnd(line: string, start: number): number {
   while (line[end] === ' ' || line[end] === '\t') end++
   if (line[end] !== '>') return -1
   end++
-  if (line[end] === ' ' || line[end] === '\t') end++
+  if (line[end] === ' ') end++
+  else if (line[end] !== undefined && line[end] !== '\r' && line[end] !== '\n' &&
+    !(line[end] === '\t' && /^[\t ]*$/.test(line.slice(end)))) return -1
   return end
 }
 

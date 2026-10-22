@@ -1462,14 +1462,15 @@ export class ParseSession extends InlineParseSession {
             quotePlusColumn > quoteMarkerColumn) &&
           !(quotePlusColumn > 0 && quotePlusDecision?.reason === 'wrong-column' &&
             isListMarkerLine((quoteFollower ?? '').trimStart())) &&
-          !(quotePlusDepth > 0 && quotePlusDepth < quotePrefixDepth(quoteRootLine) &&
-            quotePlusDecision?.reason === 'wrong-column' && quotePlusDecision.blockedByInnerList) &&
           isContinuationMarker(quotePlusBody.trimStart()) &&
+          (quotePlusDepth === 0 || sourceQuoteLocalColumn(physicalPlus, quotePlusDepth) === 0 ||
+            quotePlusColumn === physicalQuoteColumn &&
+            isListMarkerLine(sourceQuoteBody(quoteRootLine))) &&
           (quotePlusColumn === physicalQuoteColumn || quotePlusDecision?.owner?.kind === 'list' &&
             quotePlusDecision.owner.column === quotePlusColumn && quotePlusDecision.reason === undefined) &&
           quoteFollower !== undefined &&
           !isBlankLine(quoteFollowerBody) &&
-          (quotePlusDepth === 0 || quotePrefixDepth(quoteFollower) === quotePlusDepth ||
+          (quotePlusDepth === 0 || quotePrefixDepth(quoteFollower) >= quotePlusDepth ||
             quotePlusColumn > quoteBodyColumn(physicalPlus, quotePlusDepth)) &&
           sourceColumn(quoteFollower, quotePlusDepth) === quotePlusColumn) {
         lexer.consume()
@@ -1816,8 +1817,11 @@ export class ParseSession extends InlineParseSession {
   ): boolean {
     const next = lexer.peek()
     const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ''
+    const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
     const nextQuoted = next === undefined ? null : quotedLineText(next, lexer.lineTerminatorFree(lexer.pos))
     if (next === undefined || isBlankLine(next) || isListMarkerLine(next.trimStart()) ||
+        quotePrefixDepth(nextSource) < quotePrefixDepth(sourceLine) &&
+        isListMarkerLine(sourceQuoteBody(nextSource)) ||
         nextQuoted !== null && isBlankLine(nextQuoted) ||
         nextQuoted !== null &&
         !isStackedFirstBlockQuoteMarker(sourceLine)) return false

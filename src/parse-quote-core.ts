@@ -628,7 +628,6 @@ export function endsInPlus(text: string): boolean {
 }
 
 export function quotedLineText(content: string, terminatorFree: boolean): string | null {
-  if (/^>(?:> ?)*\+[ \t]*$/.test(content)) return content.slice(1)
   if (!terminatorFree) {
     const quoted = RE_BLOCKQUOTE.exec(content)
     return quoted ? (quoted[1] ?? '') : null
@@ -1014,7 +1013,6 @@ export function quotePrefixLength(content: string, from: number, bound: number):
   if (content[from] !== '>') return 0
   if (from + 1 === bound) return 1
   if (content[from + 1] === ' ') return 2
-  if (/^(?:> ?)*\+[ \t]*$/.test(content.slice(from + 1, bound))) return 1
   if (content[from + 1] !== '\t') return 0
   // A tab starts no quote separator unless the entire remainder is line-final layout.
   for (let at = from + 1; at < bound; at++) {

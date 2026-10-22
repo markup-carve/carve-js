@@ -1069,7 +1069,16 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['630-a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener-11', {
+    reason: 'A glued quote prefix is paragraph text under carve#3421.',
+    html: '<p>&gt;&gt;+\nq</p>',
+  }],
+  ['630-a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener-12', {
+    reason: 'A glued quote prefix is paragraph text under carve#3421.',
+    html: '<p>&gt;+\nq</p>',
+  }],
+])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
@@ -1087,6 +1096,18 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+// These categories enter the pinned corpus with carve#3521.
+for (const category of [
+  'a-quote-prefixed-plus-takes-one-space-after-each-quote-marker-and-attaches-a-quote',
+  'a-separate-plus-after-content-attaches-a-list-to-a-note-or-description',
+]) {
+  if (pairs.some(name => baseSlug(name) === category)) IMPLEMENTED.add(category)
+}
+if (pairs.some(name => baseSlug(name) === 'a-quote-prefixed-plus-takes-one-space-after-each-quote-marker-and-attaches-a-quote')) {
+  AHEAD_OF_PIN.delete('630-a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener-11')
+  AHEAD_OF_PIN.delete('630-a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener-12')
+}
 
 // A `.crv` with no `.html` used to become `it.skip`, so deleting a golden half
 // left the suite green and the document uncompared. The population guard below

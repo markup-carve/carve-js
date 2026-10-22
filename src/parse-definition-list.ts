@@ -105,7 +105,6 @@ export function createDefinitionListParser(
     newCommentSpanScan,
     opensCodeFence,
     parseCommentBlock,
-    quoteBodyColumn,
     quotePrefixDepth,
     rebaseOverindentedBlocks,
     restoreVerbatimBlanks,
@@ -424,9 +423,6 @@ export function createDefinitionListParser(
         if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description' &&
             descriptionDecision.reason === undefined && !descriptionDecision.unprefixedQuoteFollower &&
             descriptionFollower !== undefined && !isBlankLine(descriptionFollower) &&
-            !(quotePrefixDepth(descriptionPlus) > 0 &&
-              sourceColumn(descriptionPlus) === quoteBodyColumn(descriptionPlus, quotePrefixDepth(descriptionPlus)) &&
-              quotePrefixDepth(descriptionFollower) > quotePrefixDepth(descriptionPlus)) &&
             sourceColumn(descriptionFollower, quotePrefixDepth(descriptionPlus)) === sourceColumn(descriptionPlus)) {
           const follower = lexer.peek(1)
           if (lazyState.opaque?.kind === 'code' &&

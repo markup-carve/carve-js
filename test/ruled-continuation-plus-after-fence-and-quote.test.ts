@@ -28,11 +28,10 @@ describe('ruled continuation markers', () => {
     ])
   })
 
-  it.each(quoteCases)('reads a quoted plus as a marker for its list', source => {
+  it.each(quoteCases)('reads a glued quote plus as text in its list', source => {
     const html = carveToHtml(source)
     expect(html).toContain('<li>a\n')
-    expect(html).toMatch(/<li>a\n\s*tail\n\s*<\/li>/)
-    expect(html).not.toContain('a\n+\ntail')
+    expect(html).toContain(source.includes('>> +') ? '&gt;&gt; +\ntail</li>' : '&gt;+\ntail</li>')
     expect(carveToHtml(carveToCarve(source))).toBe(html)
   })
 })

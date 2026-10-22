@@ -377,6 +377,8 @@ describe('lintCarve — blockquote marker without space', () => {
 
   it('flags operators and tabs that now stay prose', () => {
     expect(rules('>>= operator')).toEqual(['blockquote-marker-without-space'])
+    expect(rules('>+')).toEqual(['blockquote-marker-without-space'])
+    expect(rules('>>+')).toEqual(['blockquote-marker-without-space'])
     expect(rules('>\tquote')).toEqual(['blockquote-marker-without-space'])
   })
 

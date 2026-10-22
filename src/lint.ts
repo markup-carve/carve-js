@@ -28,6 +28,7 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import {
   parse,
   isTableRow,
@@ -1232,6 +1233,18 @@ export function lintCarve(
   // `fence-delimiter-indentation` both had this false positive.
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
+  for (let i = 1; i < sourceLines.length; i++) {
+    const atEnd = i + 1 >= sourceLines.length ||
+      (i + 1 === sourceLines.length - 1 && sourceLines[i + 1] === '')
+    if (!/^\+[ \t]*$/.test(sourceLines[i]!) ||
+      (!atEnd && !isBlankLine(sourceLines[i + 1])) ||
+      sourceQuotePrefixEnd(sourceLines[i - 1]!, 0) < 0 ||
+      unrendered.has(i + 1) || seenMarker.has(`${i + 1}:1`)) continue
+    const reason = atEnd ? 'it reaches the end of the document' : 'a blank line follows it'
+    out.push({ line: i + 1, column: 1, start: lineOffsets[i]!, end: lineOffsets[i]! + 1,
+      rule: 'continuation-marker-refused',
+      message: `This + attaches nothing because ${reason}. It remains text in the block quote.` })
+  }
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
   const termFoldLines = collectTermFoldWarnings(source, doc, out)
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)

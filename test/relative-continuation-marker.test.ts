@@ -132,8 +132,10 @@ describe('relative continuation marker columns', () => {
     expect(carveToHtml(input)).toContain('<pre><code>x\n</code></pre>')
   })
 
-  it.each(['- >+\n b\n', '- > +\n b\n'])('drops a first-block marker with no attachment in %s', input => {
-    expect(carveToHtml(input)).toBe('<ul>\n  <li>\n    <blockquote><p>b</p></blockquote>\n  </li>\n</ul>')
+  it.each(['- >+\n b\n', '- > +\n b\n'])('reads a first-block form in %s', input => {
+    expect(carveToHtml(input)).toBe(input.includes('>+')
+      ? '<ul>\n  <li>&gt;+\nb</li>\n</ul>'
+      : '<ul>\n  <li>\n    <blockquote><p>b</p></blockquote>\n  </li>\n</ul>')
   })
 
   it('keeps a plus before a quoted follower as text', () => {
@@ -149,7 +151,7 @@ describe('relative continuation marker columns', () => {
 
   it.each([
     ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+\n- b</li></ul></blockquote></blockquote>'],
-    ['> > - [ ] a\n> +\n> tail', '<blockquote><blockquote><ul class="task-list"><li><input type="checkbox" disabled aria-label="a + tail"> a\n+\ntail</li></ul></blockquote></blockquote>'],
+    ['> > - [ ] a\n> +\n> tail', '<blockquote><blockquote><ul class="task-list"><li><input type="checkbox" disabled aria-label="a"> a</li></ul><p>tail</p></blockquote></blockquote>'],
     ['- a\n  > q\n+\n- b\n', '<ul><li>a\n<blockquote><p>q\n+</p></blockquote></li><li>b</li></ul>'],
     ['- a\n  > q\n  +\n  - b\n', '<ul><li>a\n<blockquote><p>q\n+\n- b</p></blockquote></li></ul>'],
     ['> - a\n>   > q\n>   +\n>   para\n', '<blockquote><ul><li>a\n<blockquote><p>q\n+\npara</p></blockquote></li></ul></blockquote>'],
