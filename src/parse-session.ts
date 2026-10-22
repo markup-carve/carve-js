@@ -142,6 +142,7 @@ import {
   sourceColumnAt,
   sourceQuoteBody,
   sourceQuoteLocalColumn,
+  sourceQuoteRest,
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
@@ -1450,12 +1451,9 @@ export class ParseSession extends InlineParseSession {
       const quotePlusDepth = quotePrefixDepth(physicalPlus)
       const quotePlusColumn = sourceColumn(physicalPlus)
       const quoteFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
-      let quotePlusBody = physicalPlus
-      let quoteFollowerBody = quoteFollower ?? ''
-      for (let depth = 0; depth < quotePlusDepth; depth++) {
-        quotePlusBody = quotedLineText(quotePlusBody, false) ?? ''
-        quoteFollowerBody = quotedLineText(quoteFollowerBody, false) ?? quoteFollowerBody
-      }
+      // Strip source prefixes, not `^>`: a hosted quote line sits behind the item's indentation.
+      const quotePlusBody = sourceQuoteRest(physicalPlus, quotePlusDepth) ?? ''
+      const quoteFollowerBody = sourceQuoteRest(quoteFollower ?? '', quotePlusDepth) ?? quoteFollower ?? ''
       if (quoteMarkerLine &&
           quotePlusDecision?.reason !== 'sibling' &&
           !(quotePlusDepth === 0 && quotePrefixDepth(quoteRootLine) > 1 &&

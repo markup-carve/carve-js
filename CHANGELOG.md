@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- A `> +` marker inside a list item reads like its top-level twin: `- > > q` / `  > +` / `  > para` gives the inner quote two paragraphs instead of folding the `+` into `q` (markup-carve/carve#3421).
 - A quote-prefixed `+` needs one space after each `>`: `>+`, `>>+` and `>> +` read as text and get the `blockquote-marker-without-space` lint. A `> +` attaches a following quote to the item, description, note or inner quote at its column, and a refused `+` between a quote and a blank line is linted (#3452; markup-carve/carve#3421).
 - Nested open fences end their spans at the last payload newline, along with their containing list items and lists (#3445).
 - Unmarked table rows stay in an open quote paragraph, and blocks after a description note no longer keep a document tail inside the description (#3444).
