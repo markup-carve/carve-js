@@ -12,6 +12,15 @@ describe('continuation-marker-refused for a plus no container takes', () => {
     // The top-level twin of corpus 630-4.
     ['q\n+\n- s\n', ['2:1']],
     ['q\n+\n1. s\n', ['2:1']],
+    // carve#3421 ruling 5: any block after a document-level `+` no container claims.
+    ['q\n+\n| a |\n', ['2:1']],
+    ['q\n+\n# h\n', ['2:1']],
+    ['q\n+\n```\nx\n```\n', ['2:1']],
+    ['q\n+\n> x\n', ['2:1']],
+    ['+\n# h\n', ['1:1']],
+    // A refused stacked quote plus inside a host quote, like its top-level twin.
+    ['> - > > +\n>   b\n', ['1:9']],
+    ['> - - > +\n>   b\n', ['1:9']],
     // Corpus 630-5, docs/validation.md.
     ['> q\n>   +\n> para\n', ['2:5']],
     ['> - a\n>   +\n', ['2:5']],
@@ -28,6 +37,9 @@ describe('continuation-marker-refused for a plus no container takes', () => {
 
   const quiet = [
     'q\n+\npara\n',
+    '+\npara\n',
+    'q\n+\n%% c\n',
+    'q\n+\n{.c}\npara\n',
     '```\nq\n+\n- s\n```\n',
     '> q\n> +\n> para\n',
     '> > q\n> +\n> > r\n',

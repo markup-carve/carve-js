@@ -144,6 +144,7 @@ import {
   sourceQuoteLocalColumn,
   sourceQuoteRest,
   stackedOpenerColumns,
+  stackedFollowerColumn,
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
@@ -1630,7 +1631,12 @@ export class ParseSession extends InlineParseSession {
       const reason = follower === undefined ? 'document' : isBlankLine(follower) ? 'blank'
         : quotePrefixDepth(follower) > 0 ? (isBlankLine(follower.replace(/^[ \t]*(?:>[ \t]?)+/, '')) ? 'blank'
           // A quoted follower indented past the opener line is at no column the `+` pulls from.
-          : sourceColumn(follower, 0) > sourceColumn(refusedFirstBlockMarker, 0) ? 'right' : null)
+          : sourceColumn(follower, 0) > sourceColumn(refusedFirstBlockMarker, 0) ||
+            // Inside a host quote the columns count after the host's prefixes (`> - > > +` / `>   b`).
+            isStackedFirstBlockQuoteMarker(refusedFirstBlockMarker) && quotePrefixDepth(refusedFirstBlockMarker) > 0 &&
+            stackedFollowerColumn(follower, refusedFirstBlockMarker, quotePrefixDepth(refusedFirstBlockMarker)) >
+              sourceColumn(refusedFirstBlockMarker, quotePrefixDepth(refusedFirstBlockMarker))
+            ? 'right' : null)
           : leadingWhitespace(follower) > 0 ? 'right' : isListMarkerLine(follower) ? 'list' : null
       if (reason !== null) {
         lexer.reportRefusedContinuationMarker(firstLineIndex,
@@ -1884,7 +1890,7 @@ export class ParseSession extends InlineParseSession {
     if (isStackedFirstBlockQuoteMarker(sourceLine)) {
       // A stacked opener line also takes a follower at one of its own opener columns (CARVE-P9-067).
       const depth = quotePrefixDepth(sourceLine)
-      const atOpener = stackedOpenerColumns(sourceLine, depth).includes(sourceColumn(nextSource, depth))
+      const atOpener = stackedOpenerColumns(sourceLine, depth).includes(stackedFollowerColumn(nextSource, sourceLine, depth))
       // Inside a host quote, column 0 is the host's: only an unprefixed line reaches the document's.
       if (depth > 0 && quotePrefixDepth(nextSource) >= depth) return atOpener
       return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), depth, true) || atOpener
@@ -2135,11 +2141,12 @@ export class ParseSession extends InlineParseSession {
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
         secondLineLazy = true
       const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      // `q` / `+` / `- s`: no open container claims a document-level `+` before a sibling list.
+      // `q` / `+` / `- s`: no open container claims a document-level `+` before a block (carve#3421).
       if (lexer.rootLines === undefined && /^\+[ \t]*$/.test(ln)) {
         const follower = lexer.peek(1)
-        if (follower !== undefined && indentColumns(follower) === 0 && isListMarkerLine(follower)) {
-          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'document', 'sibling')
+        if (follower !== undefined && indentColumns(follower) === 0 && (isListMarkerLine(follower) ||
+            follower[0] !== '%' && startsInterruptingBlock(lexer, follower, true, false, false))) {
+          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'document', 'unclaimed')
         }
       }
       if (lexer.hostMarkerColumn !== undefined &&

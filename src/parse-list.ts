@@ -90,6 +90,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     prefixWalkBound,
     quoteBodyColumn,
     stackedOpenerColumns,
+    stackedFollowerColumn,
     quoteIndentHasTab,
     quotePrefixDepth,
     quotePrefixLength,
@@ -277,7 +278,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
       const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
         (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
-          isStackedFirstBlockQuoteMarker(itemSource) && stackedOpenerColumns(itemSource, itemQuoteDepth).includes(firstBlockColumn) ||
+          isStackedFirstBlockQuoteMarker(itemSource) &&
+            stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
           isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
             sourceColumn(firstBlockSource, 0) === 0) &&
         !isListMarkerLine((lexer.peek() ?? '').trimStart())
