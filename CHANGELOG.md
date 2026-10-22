@@ -30,6 +30,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Markdown migration keeps a link or image destination's brackets and non-ASCII characters as written, and recognizes a lone image as a block image (#3265, #3266, #3270; markup-carve/carve#3378).
 - BBCode migration reads quote attribution fields consistently and reports dropped fields as `bbcode-quote-field-dropped` (#3238, #3243, #3263; markup-carve/carve#3341, markup-carve/carve#3357).
 - Table alignment measures written escapes, and a CSV or TSV code include with `{table}` renders as a table (#3242, #3247; markup-carve/carve#3335).
+- A first-block `+` in a footnote or description leaves a column-zero list at document level. The refused marker stays as text in the footnote, and an empty description stays empty (#3438; markup-carve/carve#3482).
 
 ### Added
 - Code-block includes can select files or regions, and `selectIncludeRegion` exposes the same region lookup to hosts (#3239, #3241; markup-carve/carve#3320).
