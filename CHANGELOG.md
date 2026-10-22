@@ -37,6 +37,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Code-block includes can select files or regions, and `selectIncludeRegion` exposes the same region lookup to hosts (#3239, #3241; markup-carve/carve#3320).
 - `carve lint --include-root` checks included content; `lintIncludes` is available to library callers (#3252; markup-carve/carve#3339).
 - Lint warns on near misses of consumed attribute keys with `consumed-key-near-miss` (#3232).
+- Lint warns on a `:` or `::` below the column of the definition list it would continue with `description-separator-below-content-column` (#3442).
 - Markdown migration rewrites unambiguous case-only heading fragments and reports them as `link-fragment-case-rewritten` (#3245, #3248; markup-carve/carve#3323).
 
 ### Performance
