@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- A stacked `> - > +` inside a host quote takes a non-list block at document column 0 into its innermost quote, as `- > +` does at document level, instead of ending the quote (markup-carve/carve#3421).
 - A stacked `> > +` opened on its own line in a list item, ordered item or description gives its follower to the inner quote, as at document level, instead of leaving an empty inner quote (#3454).
 - A stacked `- > +` takes its follower only at column 0, the line's own column or the quote's column. A follower anywhere else leaves the `+` as quote text that the line folds into, as a letter would, and the lint reports it; a table at the quote's column now attaches to the quote, and a list follower no longer drops the `+` (markup-carve/carve#3421).
 - `continuation-marker-refused` no longer reports a `> +` whose follower is a deeper quote line at its column, such as `> > q` / `> +` / `> > r`: the marker attaches that quote, which nests (markup-carve/carve#3421).

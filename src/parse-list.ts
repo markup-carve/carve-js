@@ -277,7 +277,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
       const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
         (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
-          isStackedFirstBlockQuoteMarker(itemSource) && stackedOpenerColumns(itemSource, itemQuoteDepth).includes(firstBlockColumn)) &&
+          isStackedFirstBlockQuoteMarker(itemSource) && stackedOpenerColumns(itemSource, itemQuoteDepth).includes(firstBlockColumn) ||
+          isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
+            sourceColumn(firstBlockSource, 0) === 0) &&
         !isListMarkerLine((lexer.peek() ?? '').trimStart())
       if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
           isStackedFirstBlockQuoteMarker(itemSource)) &&
