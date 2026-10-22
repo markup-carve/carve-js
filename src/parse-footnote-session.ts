@@ -65,8 +65,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodySourceLines.push(a)
     }
     bodyLineNumbers.push(...attachedLineNumbers)
-  } else if (/^\+[ \t]*$/.test(m[2]!) && firstBlockRefusesList(lexer)) {
-    lexer.reportRefusedContinuationMarker(defLineIndex, defContentColumn + 1, 'footnote', 'list')
+  } else if (/^\+[ \t]*$/.test(m[2]!)) {
+    const reason = firstBlockRefusesList(lexer) ? 'list' : below === undefined ? 'document'
+      : isBlankLine(below) ? 'blank' : leadingWhitespace(below) > 0 ? 'right' : null
+    if (reason !== null) lexer.reportRefusedContinuationMarker(defLineIndex, defContentColumn + 1, 'footnote', reason)
   }
   if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
   let retainedBelowComment = false
