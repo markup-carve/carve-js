@@ -76,7 +76,8 @@
             "line": 1,
             "column": 3,
             "includes": [
-              "blank line"
+              "blank line",
+              "stays empty"
             ]
           }
         ]
@@ -92,7 +93,8 @@
             "line": 1,
             "column": 3,
             "includes": [
-              "end of the document"
+              "end of the document",
+              "stays empty"
             ]
           }
         ]
@@ -100,10 +102,18 @@
     },
     {
       "name": "nested-item",
-      "description": "The nested item's marker column.",
+      "description": "An indented plus with a blank follower is refused.",
       "source": "- a\n  - b\n  +\n\npara\n",
       "expected": {
-        "findings": [{ "line": 3, "column": 3, "includes": ["blank line"] }]
+        "findings": [
+          {
+            "line": 3,
+            "column": 3,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
       }
     },
     {
@@ -148,7 +158,7 @@
     },
     {
       "name": "footnote-body",
-      "description": "A plus after a footnote with a blank follower is refused and retained as text.",
+      "description": "In a footnote body the plus is ordinary text.",
       "source": "x[^a]\n\n[^a]: note\n+\n\npara\n",
       "expected": {
         "findings": [
@@ -167,7 +177,15 @@
       "description": "A line that is not flush-left follows the plus.",
       "source": "- a\n+\n  x\n",
       "expected": {
-        "findings": [{ "line": 2, "column": 1, "includes": ["right"] }]
+        "findings": [
+          {
+            "line": 2,
+            "column": 1,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
       }
     },
     {
@@ -182,6 +200,498 @@
       "name": "payload-in-a-fence",
       "description": "A plus inside the fence's content column is payload.",
       "source": "- ```\n  +\n\n  x\n  ```\n",
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "nested-left-follower",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- a\n  - b\n  +\ntail\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 3,
+            "column": 3,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested-no-follower",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- a\n  - b\n  +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 3,
+            "column": 3,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "sibling",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- a\n+\n- b\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 1,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested-task-sibling",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- foo\n  - [ ] task\n  +\n  - x\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 3,
+            "column": 3,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested-task-checkbox-column",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- foo\n  - [ ] task\n    +\n  - x\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 3,
+            "column": 5,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "open-fence-other-column",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- a\n  - ```\n  +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 3,
+            "column": 3,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "dangling-mid-body",
+      "description": "The refused plus is reported at its source column.",
+      "source": "- a\n+\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 1,
+            "includes": [
+              "+"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "first-block-sibling",
+      "description": "The first-block plus is refused when it cannot attach.",
+      "source": "- +\n- b\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "+",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ordered-first-block-end",
+      "description": "The first-block plus is refused when it cannot attach.",
+      "source": "1. +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 4,
+            "includes": [
+              "+",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "task-first-block-end",
+      "description": "The first-block plus is refused when it cannot attach.",
+      "source": "- [ ] +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "+",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote-first-block-list",
+      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "source": "[^a]: +\n- a list\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "a list",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote-first-block-ordered-list",
+      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "source": "[^a]: +\n1. b\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "a list",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "description-first-block-list",
+      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "source": ":: t\n: +\n- a list\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 3,
+            "includes": [
+              "a list",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "description-first-block-ordered-list",
+      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "source": ":: t\n: +\n1. b\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 3,
+            "includes": [
+              "a list",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "description-separate-plus-list",
+      "description": "A separate plus after description content attaches the list (carve#3513).",
+      "source": ":: t\n: a\n+\n- b\n",
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "footnote-first-block-end-of-input",
+      "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
+      "source": "[^a]: +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "end of the document",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote-first-block-blank",
+      "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
+      "source": "[^a]: +\n\npara\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "blank line",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote-first-block-indented-list",
+      "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
+      "source": "[^a]: +\n  - a\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 7,
+            "includes": [
+              "+",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "description-first-block-end-of-input",
+      "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
+      "source": ":: t\n: +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 3,
+            "includes": [
+              "end of the document",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "description-first-block-indented-list",
+      "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
+      "source": ":: t\n: +\n  - a\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 3,
+            "includes": [
+              "+",
+              "column rules"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote-first-block-paragraph",
+      "description": "A column-0 paragraph below the first-block plus is attached.",
+      "source": "[^a]: +\npara\n",
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "description-first-block-paragraph",
+      "description": "A column-0 paragraph below the first-block plus is attached.",
+      "source": ":: t\n: +\npara\n",
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "description-first-block-blank",
+      "description": "A refused first-block plus leaves the description empty (CARVE-P9-067).",
+      "source": ":: t\n: +\n\npara\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "column": 3,
+            "includes": [
+              "blank line",
+              "stays empty"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "item-first-block-indented",
+      "description": "A refused first-block plus adds no block; the indented line follows the column rules (CARVE-P9-067).",
+      "source": "- +\n  x\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "+",
+              "column rules"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-end-of-input",
+      "description": "A refused first-block plus stays text in the quote (CARVE-P9-067).",
+      "source": "> +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "end of the document",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-blank",
+      "description": "A refused first-block plus stays text in the quote (CARVE-P9-067).",
+      "source": "> +\n\npara\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "blank line",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-quoted-blank",
+      "description": "A quoted blank line refuses the first-block plus too (CARVE-P9-067).",
+      "source": "> +\n>\npara\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "blank line",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-indented",
+      "description": "A refused first-block plus stays text in the quote (CARVE-P9-067).",
+      "source": "> +\n  x\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "right",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-list",
+      "description": "The first-block form does not pull a column-0 list (CARVE-P9-067).",
+      "source": "> +\n- a\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "a list",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested-quote-first-block-end",
+      "description": "The inner quote of a nested quote takes the first-block form (CARVE-P9-067).",
+      "source": "> > +\n",
+      "expected": {
+        "findings": [
+          {
+            "line": 1,
+            "column": 5,
+            "includes": [
+              "end of the document",
+              "remains text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quote-first-block-paragraph",
+      "description": "A column-0 paragraph below the first-block plus is attached.",
+      "source": "> +\nflush\n",
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "quote-first-block-in-item",
+      "description": "A quote opened in a list item attaches a line at its own column.",
+      "source": "- > +\n  x\n",
       "expected": {
         "findings": []
       }

@@ -344,14 +344,14 @@ export function createDefinitionListParser(
         const refusesList = firstBlockRefusesList(lexer)
         lexer.reportRefusedContinuationMarker(firstLineIndex,
           lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description',
-          refusesList ? 'list' : undefined, refusesList)
+          refusesList ? 'list' : undefined, true)
         const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
           sourceColumn(markerSource, quotePrefixDepth(markerSource)), quotePrefixDepth(markerSource), true)
         const follower = lexer.peek()
         if (firstBlock.lines.length === 0 && !refusesList && follower !== undefined && !isBlankLine(follower) &&
           leadingWhitespace(follower) > 0) {
           lexer.reportRefusedContinuationMarker(firstLineIndex,
-            lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description', 'right')
+            lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description', 'right', true)
         }
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
