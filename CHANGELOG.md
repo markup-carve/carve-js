@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- `continuation-marker-refused` reports a document-level `+` before a sibling list (`q` / `+` / `- s`), a `+` in a quote at a column no container owns (`> q` / `>   +`), and a first-block quote `+` whose quoted follower starts right of its line (#3463, markup-carve/carve#3421).
 - A stacked first-block `+` behind more than one list marker takes a follower only at column 0, its line's column or the column of a quote its first marker opens: `- - > +` / `  b` now reads `+ b` in the inner quote (#3462, markup-carve/carve#3421).
 - A stacked `> - > +` inside a host quote takes a non-list block at document column 0 into its innermost quote, as `- > +` does at document level, instead of ending the quote (markup-carve/carve#3421).
 - A stacked `> > +` opened on its own line in a list item, ordered item or description gives its follower to the inner quote, as at document level, instead of leaving an empty inner quote (#3454).
