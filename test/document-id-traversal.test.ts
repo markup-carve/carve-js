@@ -1,9 +1,9 @@
-import { WIRE_FIELDS } from '../src/wire-fields.js'
-import { ownedChildFields } from '../src/owned-child-fields.js'
+import { WIRE_FIELDS } from '../src/ast/wire-fields.js'
+import { ownedChildFields } from '../src/ast/owned-child-fields.js'
 import { expect, it, vi } from 'vitest'
 import { parse, resolve, renderHtml } from '../src/index.js'
 import type { Document } from '../src/ast.js'
-import { collectDocumentIds, DOCUMENT_ID_CHILD_FIELDS, RECORD_CHILD_FIELDS, DocumentIdRegistry } from '../src/document-ids.js'
+import { collectDocumentIds, DOCUMENT_ID_CHILD_FIELDS, RECORD_CHILD_FIELDS, DocumentIdRegistry } from '../src/ast/document-ids.js'
 
 it('reserves ids in captions, ruby pairs, definition matrices, footnotes and table body groups', () => {
   const text = (id: string) => ({ type: 'text', value: id, attrs: { id } })

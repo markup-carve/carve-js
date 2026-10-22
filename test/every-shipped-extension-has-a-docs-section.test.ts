@@ -38,7 +38,8 @@ function declaredExtensionFactories(): string[] {
   const declaration =
     /export\s+(?:function\s+(\w+)\s*\([^()]*\)|const\s+(\w+)\s*=\s*\([^()]*\))\s*:\s*CarveExtension(?:\[\])?\s*(?:\{|=>)/g
   const names = new Set<string>()
-  for (const file of readdirSync(srcDir)) {
+  for (const entry of readdirSync(srcDir, { recursive: true })) {
+    const file = String(entry)
     if (!file.endsWith('.ts')) continue
     const source = readFileSync(`${srcDir}/${file}`, 'utf8')
     for (const m of source.matchAll(declaration)) {

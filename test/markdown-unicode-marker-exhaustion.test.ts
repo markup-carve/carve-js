@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToMarkdown, carveToMarkdownWithReport, parse, renderMarkdownWithReport, RenderLossError, resolve } from '../src/index.js'
-import { AbbrBudget } from '../src/abbr-budget.js'
+import { AbbrBudget } from '../src/extension/abbr-budget.js'
 import controls from './fixtures/markdown-unicode-marker-exhaustion.json'
 
 const pool = Array.from({ length: 6400 }, (_, index) => String.fromCharCode(0xe000 + index)).join('')

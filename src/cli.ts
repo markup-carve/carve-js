@@ -75,7 +75,7 @@ import {
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
-import { migrateCaseOnlyReferences } from './case-migrate.js'
+import { migrateCaseOnlyReferences } from './import/markdown/case-migrate.js'
 import { migrateMarkdownDirectory } from './migrate-directory.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */

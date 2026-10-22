@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { djotToCarve, carveToHtml, migrateDjot } from '../src/index.js'
-import { djotReferenceLayout } from '../src/djot-reference-layout.js'
+import { djotReferenceLayout } from '../src/import/djot/djot-reference-layout.js'
 import { parse, renderHTML } from '@djot/djot'
 
 it.each(['title', 'class', 'data-long'])('keeps a long inherited %s shared', (attribute) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml, colorSwatch } from '../src/index.js'
-import type { SwatchPosition, SwatchShape } from '../src/color-swatch.js'
+import type { SwatchPosition, SwatchShape } from '../src/extension/color-swatch.js'
 
 describe('color swatch extension', () => {
   it('inline :color[...] renders a swatch for hex colors', () => {

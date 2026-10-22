@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToHtml } from '../src/index.js'
 import type { Document } from '../src/ast.js'
 import { renderMarkdown, renderPlainText, renderAnsi } from '../src/index.js'
-import { blankDeniedDestination } from '../src/deny-listed-destination.js'
+import { blankDeniedDestination } from '../src/import/markdown/deny-listed-destination.js'
 import { SCHEME_PROBE_STRIP_RE } from '../src/render-html.js'
 
 /**

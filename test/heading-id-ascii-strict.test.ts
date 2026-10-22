@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { slugify } from '../src/heading-ids.js'
+import { slugify } from '../src/heading/heading-ids.js'
 import { carveToHtml } from '../src/index.js'
 
 /**

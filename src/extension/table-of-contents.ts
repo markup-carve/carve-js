@@ -1,0 +1,436 @@
+import type { Attrs, Directive, Heading, InlineNode, RawBlock, Text } from '../ast.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
+import { deriveDisplayNodes } from '../heading/heading-ids.js'
+import type { BlockExtensionRenderContext, CarveExtension } from '../extension.js'
+import {
+  escapeAttrValue,
+  LABEL_DEFAULTS,
+  renderInlinesInLinkContext,
+  type RenderOptions,
+} from '../render-html.js'
+import { stripBidiControls } from './bidi-controls.js'
+import { parseContainerLabelInlines } from '../parse.js'
+
+/** Options for the {@link tableOfContents} extension. */
+export interface TableOfContentsOptions {
+  /** Lowest heading level to include (1-6). Default 1. */
+  minLevel?: number
+  /** Highest heading level to include (1-6). Default 6. */
+  maxLevel?: number
+  /** List element for the entries. Default `'ul'`. */
+  listType?: 'ul' | 'ol'
+  /** CSS class on the `<nav>` container. Default `'toc'`. */
+  cssClass?: string
+  /** Insert the generated TOC at the top or bottom of the document. Default `'top'`. */
+  position?: 'top' | 'bottom'
+  /** Wrap the TOC in a `<details>`/`<summary>` disclosure so it can be collapsed.
+   *  Off by default; when off the output is the named `<nav class="toc">`, whose
+   *  `aria-label` comes from the `tocNav` label rather than from here. */
+  collapsible?: boolean
+  /** Summary label for the disclosure (only used when `collapsible` is true). Default `'Table of Contents'`. */
+  summary?: string
+  /** Render the disclosure expanded by default (only used when `collapsible` is true). */
+  open?: boolean
+}
+
+interface TocEntry {
+  level: number
+  nodes: InlineNode[]
+  id: string
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** Strip Trojan-Source bidi-override / isolate controls (§26), matching the
+ *  core's heading-text handling so a TOC link can't visually spoof its target. */
+function stripBidi(s: string): string {
+  return stripBidiControls(s)
+}
+
+/**
+ * Every `text` node in a cloned inline run, in document order.
+ *
+ * The walk is GENERIC - any array or object value, `pos` aside - rather than a
+ * list of child field names. Three byte-identical `CHILD_FIELDS` lists already
+ * live in this package and none of them is exported; a fourth, spelled slightly
+ * differently for one helper, is how a run gets missed. Nothing but a `text`
+ * node is collected, so descending into `attrs` costs a few reads and returns
+ * nothing.
+ */
+function textNodes(nodes: InlineNode[]): Text[] {
+  const out: Text[] = []
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node['type'] === 'text' && typeof node['value'] === 'string') out.push(node as unknown as Text)
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'type' && key !== 'value') visit(node[key])
+    }
+  }
+  visit(nodes)
+  return out
+}
+
+/**
+ * The two string-level steps the flattened entry text used to get, applied to
+ * the cloned run instead: strip Trojan-Source bidi controls from every text
+ * node, then trim the run's outer edges.
+ *
+ * Both still have to happen - the strip is a security rule (PART 9 section 26,
+ * so a TOC link cannot visually spoof its target) and the trim is what keeps the
+ * entry from carrying the space `headingNumbers` left behind when its span was
+ * filtered out. Only WHERE they apply moved, from one string to the nodes that
+ * string was made of (markup-carve/carve#957).
+ */
+function stripBidiAndTrim(nodes: InlineNode[]): void {
+  for (const node of textNodes(nodes)) node.value = stripBidi(node.value)
+  // The trim reaches the RUN's own first and last node, and only when that node
+  // is a text node. Trimming the first and last TEXT node found anywhere ate a
+  // real space: `# :ok: h` clones as [symbol, text(" h")], whose first text node
+  // is the separator, so the entry came out `:ok:h`.
+  const first = nodes[0]
+  if (first?.type === 'text') first.value = first.value.trimStart()
+  const last = nodes[nodes.length - 1]
+  if (last?.type === 'text') last.value = last.value.trimEnd()
+}
+
+// DERIVED DISPLAY TEXT CLONES THE SAME NODES (PART 9R R4,
+// markup-carve/carve#957). A TOC label is display text derived from a heading,
+// so it carries cloned inline nodes instead of flattening to a string, preserving
+// source runs for renderers that need them. The presentational
+// `<span class="section-number">` that HeadingNumbers injects is render chrome,
+// not part of the derived nav text.
+function tocHeadingNodes(children: Heading['children']): InlineNode[] {
+  const filtered = children.filter(
+    (c) =>
+      !(
+        c.type === 'span' &&
+        (c as { attrs?: Attrs }).attrs?.classes?.includes('section-number')
+      ),
+  )
+  // `true`: the entry renders inside its own `<a>`.
+  const nodes = deriveDisplayNodes(filtered, true)
+  stripBidiAndTrim(nodes)
+  return nodes
+}
+
+function renderInlineHtml(nodes: InlineNode[], opts: Readonly<RenderOptions> | undefined): string {
+  return renderInlinesInLinkContext(nodes, opts)
+}
+
+// Build a nested list from a flat, document-order entry list. This is a
+// byte-faithful port of carve-php's TableOfContentsExtension::renderTocList so
+// the TOC HTML is identical across implementations: one tag per line, and a
+// heading deeper than its predecessor's predecessor stays a sibling <li> in the
+// same nested <ul> (rather than opening a fresh <ul>). Returns the `<ul>…</ul>`
+// list including its trailing newline, matching the php source exactly.
+function buildList(
+  entries: TocEntry[],
+  listType: 'ul' | 'ol',
+  // The options the conversion was called with, or `undefined` when the caller
+  // is rendering INSIDE a render (the `::: toc` directive), where the inline
+  // renderer already knows them. Threaded rather than looked up, because the
+  // injected-nav caller runs before any render exists (carve-js#871).
+  opts: Readonly<RenderOptions> | undefined,
+): string {
+  if (entries.length === 0) return ''
+  let html = `<${listType}>\n`
+  const levelStack: number[] = [entries[0]!.level]
+  let hasOpenItem = false
+  for (const e of entries) {
+    if (hasOpenItem) {
+      let depth = levelStack.length
+      const currentLevel = levelStack[depth - 1]!
+      if (e.level > currentLevel) {
+        html += `\n<${listType}>\n`
+        levelStack.push(e.level)
+      } else {
+        while (depth > 1 && e.level <= levelStack[depth - 2]!) {
+          html += `</li>\n</${listType}>\n`
+          levelStack.pop()
+          depth--
+        }
+        html += '</li>\n'
+        // Record the current entry's (shallower) level so a later deeper
+        // heading nests under IT, not under the stale level of the list it
+        // reused. Without this, e.g. `# A / ### B / ## C / ### D` flattens D as
+        // a sibling of C instead of nesting it under C.
+        levelStack[depth - 1] = e.level
+      }
+    }
+    html += `<li><a href="#${escapeHtml(e.id)}">${renderInlineHtml(e.nodes, opts)}</a>`
+    hasOpenItem = true
+  }
+  html += '</li>\n'
+  let depth = levelStack.length
+  while (depth > 1) {
+    html += `</${listType}>\n</li>\n`
+    levelStack.pop()
+    depth--
+  }
+  html += `</${listType}>\n`
+  return html
+}
+
+/**
+ * The nav's accessible name, from the render's `labels` map (PART 9 §16a).
+ *
+ * Read off the OPTIONS rather than a resolved context, because `beforeRender`
+ * runs before any render exists and has no `ctx.labels` to inherit - the same
+ * reason the entry inlines are rendered with the caller's options here
+ * (carve-js#871).
+ */
+function tocNavLabel(opts: Readonly<RenderOptions> | undefined): string {
+  return opts?.labels?.tocNav ?? LABEL_DEFAULTS.tocNav
+}
+
+/**
+ * Generate a table of contents from the document's headings, ported from
+ * carve-php's TableOfContentsExtension. A `beforeRender` transform that
+ * collects headings (with their resolved ids) and injects a `<nav>` of nested
+ * links at the top or bottom of the document.
+ */
+export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtension {
+  const minLevel = opts.minLevel ?? 1
+  const maxLevel = opts.maxLevel ?? 6
+  // Coerce to a known tag: the value is interpolated into raw HTML, so an
+  // untrusted/JSON-supplied listType must not inject markup.
+  const listType: 'ul' | 'ol' = opts.listType === 'ol' ? 'ol' : 'ul'
+  const cssClass = opts.cssClass ?? 'toc'
+  const position = opts.position ?? 'top'
+  const collapsible = opts.collapsible ?? false
+  const summary = opts.summary ?? 'Table of Contents'
+  const open = opts.open ?? false
+
+  return {
+    name: 'table-of-contents',
+    beforeRender(doc, ctx) {
+      const entries: TocEntry[] = []
+      for (const node of doc.children) {
+        if (node.type !== 'heading') continue
+        const h = node as Heading
+        const id = h.attrs?.id
+        if (!id || h.level < minLevel || h.level > maxLevel) continue
+        entries.push({ level: h.level, nodes: tocHeadingNodes(h.children), id })
+      }
+      if (entries.length === 0) return doc
+
+      const list = buildList(entries, listType, ctx.options)
+      // Collapsible: the heading list sits directly inside a <details>
+      // disclosure so it can be toggled, closed by default unless `open`.
+      // Byte-identical to carve-php's TableOfContentsExtension.
+      // The injected nav is named from the same `labels` key the `::: toc`
+      // directive reads, so the two extensions' navs stay byte-identical -
+      // which extensions §8b.3 makes the cross-impl contract, and naming one
+      // per-extension is the single change that would break it. The
+      // `<details>` shape has no `<nav>` at all, so it takes no landmark name;
+      // its `<summary>` stays the `summary` option (carve#1510).
+      const navLabel = tocNavLabel(ctx.options)
+      const named = navLabel === '' ? '' : ` aria-label="${escapeAttrValue(navLabel)}"`
+      const html = collapsible
+        ? `<details class="${escapeHtml(cssClass)}"${open ? ' open' : ''}>\n` +
+          `<summary>${escapeHtml(summary)}</summary>\n${list}</details>`
+        : `<nav class="${escapeHtml(cssClass)}"${named}>\n${list}</nav>`
+      const toc: RawBlock = { type: 'raw_block', format: 'html', content: html }
+      if (position === 'top') {
+        doc.children.unshift(toc)
+        return doc
+      }
+      doc.children.push(toc)
+      doc.trailerBlocks = [...(doc.trailerBlocks ?? []), toc]
+      return doc
+    },
+  }
+}
+
+// Attribute keys on a `::: toc` directive that configure the level window and
+// must NOT leak onto the emitted `<nav>` as HTML attributes.
+const RESERVED_TOC_ATTRS = new Set(['depth', 'from', 'to'])
+
+/** Parse a heading level from an attribute value, clamped to 1-6; falls back
+ *  when absent or non-numeric so a bad `{depth=x}` degrades instead of throwing. */
+function levelOf(v: string | undefined, fallback: number): number {
+  if (v === undefined) return fallback
+  const n = Number.parseInt(v, 10)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(6, Math.max(1, n))
+}
+
+/** Resolve the heading-level window for a `::: toc` directive from its attrs.
+ *  `{from=X to=Y}` is an explicit range (swapped if inverted); `{depth=N}` is
+ *  shorthand for levels 1..N. `from`/`to` win over `depth` when both appear. */
+function tocWindow(attrs: Attrs | undefined): { minLevel: number; maxLevel: number } {
+  const kv = attrs?.keyValues ?? {}
+  if (kv.from !== undefined || kv.to !== undefined) {
+    let minLevel = levelOf(kv.from, 1)
+    let maxLevel = levelOf(kv.to, 6)
+    if (minLevel > maxLevel) [minLevel, maxLevel] = [maxLevel, minLevel]
+    return { minLevel, maxLevel }
+  }
+  return { minLevel: 1, maxLevel: levelOf(kv.depth, 6) }
+}
+
+/**
+ * True when the author wrote `name` on the directive themselves. HTML attribute
+ * names are ASCII-case-insensitive, and this engine echoes an authored
+ * `ARIA-LABEL` back in the author's own spelling, so a case-sensitive test would
+ * write a second name beside theirs (extensions §16a, carve#1468).
+ */
+function authoredAttr(attrs: Attrs | undefined, name: string): boolean {
+  return Object.keys(attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
+}
+
+/** Build the `<nav>`'s attributes: merge the `toc` class into the author's
+ *  class slot, carry the author's own attributes in source order, name the
+ *  landmark, and drop the directive-only `depth`/`from`/`to` keys so they never
+ *  render as HTML attributes. */
+function navAttrs(attrs: Attrs | undefined, navLabel: string, titleId?: string): Attrs {
+  // `toc` leads the class VALUE; drop any author-supplied `toc` so `{.toc}`
+  // never doubles it.
+  const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? []).filter((c) => c !== 'toc')] }
+  if (attrs?.id !== undefined) a.id = attrs.id
+  // The structural class goes after every authored attribute, never ahead of
+  // them (markup-carve/carve#2328): carrying the source order puts the merged
+  // class at the author's own class slot, and leaves the renderer to append it
+  // after the ordered slots when the author wrote no class at all.
+  if (attrs?.order) a.order = attrs.order.filter((slot) => !RESERVED_TOC_ATTRS.has(slot))
+  const kept: Record<string, string> = {}
+  const kv = attrs?.keyValues
+  if (kv) {
+    for (const k of Object.keys(kv)) if (!RESERVED_TOC_ATTRS.has(k)) kept[k] = kv[k]!
+  }
+  // APPENDED, after whatever the author wrote, so naming the landmark never
+  // moves an attribute they placed. A quoted title on the marker IS the name
+  // (CARVE-P9-072), so it replaces the `tocNav` default rather than sitting
+  // beside it.
+  if (titleId !== undefined && !authoredAttr(attrs, 'aria-label') && !authoredAttr(attrs, 'aria-labelledby')) {
+    kept['aria-labelledby'] = titleId
+  } else if (titleId === undefined && namesTheNav(navLabel, attrs)) {
+    kept['aria-label'] = navLabel
+  }
+  if (Object.keys(kept).length > 0) a.keyValues = kept
+  return a
+}
+
+/**
+ * Whether the engine writes the nav's accessible name.
+ *
+ * `<nav>` is a navigation landmark unconditionally, so an unnamed one is an
+ * entry in a reader's landmark list reading only "navigation" - and a page
+ * holds more than one of them the moment both TOC extensions are registered, a
+ * document writes `::: toc` twice, or a site template contributes its own
+ * (extensions §8b.1, markup-carve/carve#1509). Two exceptions, both §1.5's
+ * existing precedence rather than anything new here: an author who named the
+ * element keeps their name with nothing added beside it, and a host who sets
+ * the `tocNav` key to the empty string gets no name at all.
+ */
+function namesTheNav(navLabel: string, attrs: Attrs | undefined): boolean {
+  return (
+    navLabel !== '' &&
+    !authoredAttr(attrs, 'aria-label') &&
+    !authoredAttr(attrs, 'aria-labelledby')
+  )
+}
+
+/** Depth-first, document-order collection of every heading with a resolved id,
+ *  recursing into container blocks. Stops at a heading (its inline children hold
+ *  no headings). Skips `pos` metadata. */
+function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
+  if (!node || typeof node !== 'object') return
+  const typed = node as { type?: string }
+  if (typed.type === 'heading') {
+    const h = node as Heading
+    const id = h.attrs?.id
+    if (id !== undefined) out.push({ level: h.level, nodes: tocHeadingNodes(h.children), id })
+    return
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    if (key === 'pos') continue
+    const value = (node as Record<string, unknown>)[key]
+    if (Array.isArray(value)) for (const el of value) collectPlacementHeadings(el, out)
+    else if (value && typeof value === 'object') collectPlacementHeadings(value, out)
+  }
+}
+
+function renderToc(
+  node: Directive,
+  ctx: BlockExtensionRenderContext,
+  entries: TocEntry[],
+  budget: AbbrBudget,
+): string {
+  // The marker's title and label are the nav's FIRST CHILDREN, and the title is
+  // the nav's accessible name (CARVE-P9-072). Column 0 like the list below it,
+  // so the fragment stays byte-identical across implementations.
+  const titleId = node.title === undefined
+    ? undefined
+    : (authoredAttr(node.attrs, 'aria-label') || authoredAttr(node.attrs, 'aria-labelledby')
+        ? ''
+        : ctx.titleId())
+  const attrs = ctx.renderAttrs(navAttrs(node.attrs, ctx.labels.tocNav, titleId === '' ? undefined : titleId))
+  const idAttr = titleId === undefined || titleId === '' ? '' : ` id="${ctx.escapeAttr(titleId)}"`
+  const head =
+    (node.title === undefined ? '' : `<p class="admonition-title"${idAttr}>${ctx.renderInlines(node.title)}</p>\n`) +
+    (node.label === undefined || node.label === '' ? '' : `<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(node.label))}</p>\n`)
+  const emptyNav = head === '' ? `<nav${attrs}></nav>` : `<nav${attrs}>\n${head}</nav>`
+  // Preserve any authored blocks written inside the placeholder before the nav,
+  // never silently drop them (mirrors the index/glossary directives).
+  const wrap = (nav: string): string =>
+    node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`
+
+  const { minLevel, maxLevel } = tocWindow(node.attrs)
+  const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)
+  if (picked.length === 0) return wrap(emptyNav)
+  // Newlined, column-0 nav matching carve-php byte-for-byte.
+  const nav = `<nav${attrs}>\n${head}${buildList(picked, 'ul', undefined)}</nav>`
+  // Bound cumulative nav bytes across all `::: toc` blocks in one render: K
+  // blocks x N headings would otherwise amplify output ~K*N. Once the
+  // per-render budget is exhausted, further blocks degrade to an empty nav.
+  if (!budget.charge(utf8ByteLength(nav))) return wrap(emptyNav)
+  return wrap(nav)
+}
+
+/**
+ * Render `::: toc` as a `<nav class="toc">` at its source position, using
+ * resolved heading ids for links. Without this extension the directive stays
+ * an empty div. `tableOfContents()` adds a separate nav at the document edge.
+ * Registering only `tableOfContents()` leaves the empty div in place;
+ * registering both extensions adds both navs.
+ *
+ * Place `{depth=2}` or `{from=2 to=4}` on the line before the opener, never
+ * inline on it. With no headings in the selected range, the nav remains an
+ * empty named landmark. See `docs/extensions.md` for the other TOC option.
+ */
+export function tocPlacement(): CarveExtension {
+  let entries: TocEntry[] = []
+  let budget = new AbbrBudget(undefined)
+  return {
+    name: 'toc',
+    beforeRender(doc) {
+      entries = []
+      budget = budgetForDocument(doc)
+      // Walk the whole body in document order so headings nested in containers
+      // (`::: note`, blockquotes, lists, divs) are included - they render with
+      // id anchors, so they belong in the TOC. Footnote definitions live in
+      // `doc.footnoteDefs`, not `doc.children`, so their headings (which get no
+      // id) are naturally excluded.
+      for (const node of doc.children) collectPlacementHeadings(node, entries)
+      return doc
+    },
+    blockRenderers: {
+      directive: (node, ctx) => {
+        const a = node as Directive
+        return a.kind === 'toc' ? renderToc(a, ctx, entries, budget) : undefined
+      },
+    },
+  }
+}

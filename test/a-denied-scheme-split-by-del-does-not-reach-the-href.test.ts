@@ -6,7 +6,7 @@ import {
   carveToCarve,
   sanitizeSvg,
 } from '../src/index.js'
-import { blankDeniedDestination } from '../src/deny-listed-destination.js'
+import { blankDeniedDestination } from '../src/import/markdown/deny-listed-destination.js'
 import { SCHEME_PROBE_STRIP_RE, DANGEROUS_URL_SCHEMES } from '../src/render-html.js'
 
 /**

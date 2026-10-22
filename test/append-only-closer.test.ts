@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AppendOnlyCloser } from '../src/append-only-closer.js'
+import { AppendOnlyCloser } from '../src/parse/block/append-only-closer.js'
 import { expectBuiltInputScansLinearly, expectScansLinearly, perfIt } from './helpers/scaling.js'
 import { carveToHtml } from '../src/index.js'
 

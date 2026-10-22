@@ -4,8 +4,8 @@ import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { carveToHtml, migrateMarkdown, parse, renderCarve } from './index.js'
 import type { AuthoredDestinations } from './markdown-migrate.js'
 import { migrateMarkdownWithDestinations } from './migration.js'
-import { fragmentFixupDiagnostic, headingFragmentAliases, matchingHeadingFragment, type FragmentFixup } from './markdown-heading-fragments.js'
-import { encodeMarkdownFragment } from './markdown-destination-encoding.js'
+import { fragmentFixupDiagnostic, headingFragmentAliases, matchingHeadingFragment, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
+import { encodeMarkdownFragment } from './import/markdown/markdown-destination-encoding.js'
 
 interface Entry { path: string; kind: 'markdown' | 'asset' | 'skipped'; dev: number; ino: number }
 interface LinkCheck { target: string; status: 'rewritten' | 'valid' | 'unresolved'; reason?: string }

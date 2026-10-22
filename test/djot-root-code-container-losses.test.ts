@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { djotToCarve, djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarve, djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-root-code-container-losses.json'
 
 test.each(controls)('root code warning follows Native Djot: $source', ({ source, lines }) => {

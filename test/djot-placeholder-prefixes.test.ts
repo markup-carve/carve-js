@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, djotToCarve } from '../src/index.js'
-import { attributedDjotWords } from '../src/djot-word-attributes.js'
-import { djotPlaceholderPrefix } from '../src/djot-placeholder-prefix.js'
+import { attributedDjotWords } from '../src/import/djot/djot-word-attributes.js'
+import { djotPlaceholderPrefix } from '../src/import/djot/djot-placeholder-prefix.js'
 
 for (const base of ['\0DJOTSTRONG', '\0DJOTWORD', '\0DJOTORPHAN\0', '\0DJOTEMPTYTERM\0', '\0DJOTALT\0', '\0DJOTLITERAL\0']) {
   for (const mode of ['overlap', 'leading-zero', 'long-run', 'reserved-series']) {

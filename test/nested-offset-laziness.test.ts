@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/index.js'
 import { layoutWork } from '../src/parse.js'
-import { dropPositions } from '../src/source-positions.js'
+import { dropPositions } from '../src/source/source-positions.js'
 
 describe('nested source offset bookkeeping', () => {
   it.each(['\n', '\r\n', '\r'])('preserves document offsets through containers with %j endings', (ending) => {

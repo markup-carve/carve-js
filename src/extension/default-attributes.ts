@@ -1,0 +1,154 @@
+import type { AnyNode, Attrs, BlockNode, Document, InlineNode } from '../ast.js'
+import type { CarveExtension } from '../extension.js'
+
+/**
+ * Map of element type (snake_case, as in carve-php's DefaultAttributesExtension)
+ * to the default attributes to apply. A `class` value is merged with any
+ * existing classes; any other key is only set when the node does not already
+ * have it.
+ */
+export type DefaultAttributesMap = Record<string, Record<string, string>>
+
+/** Options for the {@link defaultAttributes} extension. */
+export interface DefaultAttributesOptions {
+  /** Element type (snake_case) -> default attributes. */
+  defaults?: DefaultAttributesMap
+}
+
+const TYPE_MAP: Record<string, string[]> = {
+  paragraph: ['paragraph'],
+  heading: ['heading'],
+  code_block: ['code_block'],
+  block_quote: ['block_quote'],
+  list: ['list'],
+  table: ['table'],
+  div: ['div', 'admonition', 'directive'],
+  thematic_break: ['thematic_break'],
+  link: ['link'],
+  image: ['image'],
+  span: ['span'],
+  code: ['code'],
+  footnote: ['footnote'],
+  footnote_ref: ['footnote'],
+  emphasis: ['emphasis'],
+  strong: ['strong'],
+  superscript: ['superscript'],
+  subscript: ['subscript'],
+  strike: ['strike'],
+}
+
+function applyDefaults(node: AnyNode, defaults: Record<string, string>): void {
+  const n = node as { attrs?: Attrs }
+  if (!n.attrs) n.attrs = {}
+  const attrs = n.attrs
+  const order = new Set(attrs.order ?? [])
+  const pushOrder = (slot: string): void => {
+    if (order.has(slot)) return
+    order.add(slot)
+    if (!attrs.order) attrs.order = []
+    attrs.order.push(slot)
+  }
+  let copiedValues = false
+  for (const [name, value] of Object.entries(defaults)) {
+    if (name === 'class') {
+      const existing = attrs.classes ?? []
+      const seen = new Set(existing)
+      let changed = false
+      for (const cls of value.split(' ')) {
+        const c = cls.trim()
+        if (c !== '' && !seen.has(c)) {
+          seen.add(c)
+          existing.push(c)
+          changed = true
+        }
+      }
+      if (changed) {
+        attrs.classes = existing
+        pushOrder('.class')
+      }
+    } else if (name === 'id') {
+      if (attrs.id === undefined) {
+        attrs.id = value
+        pushOrder('#id')
+      }
+    } else if (!attrs.keyValues || attrs.keyValues[name] === undefined) {
+      if (!copiedValues) {
+        attrs.keyValues = { ...(attrs.keyValues ?? {}) }
+        copiedValues = true
+      }
+      Object.defineProperty(attrs.keyValues!, name, { value, writable: true, enumerable: true, configurable: true })
+      pushOrder(name)
+    }
+  }
+}
+
+function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void {
+  const defaults = byType.get((node as { type: string }).type)
+  if (defaults) applyDefaults(node, defaults)
+
+  // Recurse into every child container the AST exposes.
+  const block = node as BlockNode & { children?: AnyNode[] }
+  const inline = node as InlineNode & { children?: AnyNode[]; content?: InlineNode[] }
+  if (Array.isArray((node as { children?: AnyNode[] }).children)) {
+    for (const c of (node as { children: AnyNode[] }).children) visit(c, byType)
+  }
+  if (Array.isArray((node as { blocks?: AnyNode[] }).blocks)) {
+    for (const c of (node as unknown as { blocks: AnyNode[] }).blocks) visit(c, byType)
+  }
+  if (Array.isArray((inline as { content?: InlineNode[] }).content)) {
+    for (const c of (inline as { content: InlineNode[] }).content) visit(c, byType)
+  }
+  if (node.type === 'ruby') {
+    for (const pair of node.pairs) {
+      for (const child of pair.base) visit(child, byType)
+      for (const child of pair.annotation) visit(child, byType)
+    }
+  }
+  switch ((node as { type: string }).type) {
+    case 'list':
+      for (const it of (block as unknown as { items: { children: AnyNode[] }[] }).items)
+        for (const c of it.children) visit(c, byType)
+      break
+    case 'definition_list':
+      for (const it of (block as unknown as {
+        items: { terms: InlineNode[][]; definitions: BlockNode[][] }[]
+      }).items) {
+        for (const t of it.terms) for (const c of t) visit(c, byType)
+        for (const d of it.definitions) for (const c of d) visit(c, byType)
+      }
+      break
+    case 'table':
+      // Visiting each cell applies cell defaults and recurses into the cell's
+      // inline children via the generic `children` walk above - no second pass.
+      for (const row of (block as unknown as { rows: { cells: AnyNode[] }[] }).rows)
+        for (const cell of row.cells) visit(cell, byType)
+      break
+    case 'figure':
+      visit((block as unknown as { target: AnyNode }).target, byType)
+      break
+    default:
+      break
+  }
+}
+
+/**
+ * Apply configured default attributes to nodes by type, ported from carve-php's
+ * DefaultAttributesExtension. Useful for adding CSS classes, lazy-loading, etc.
+ */
+export function defaultAttributes(opts: DefaultAttributesOptions = {}): CarveExtension {
+  const defaults = opts.defaults ?? {}
+  const byType = new Map<string, Record<string, string>>()
+  for (const [phpType, attrs] of Object.entries(defaults)) {
+    const jsTypes = TYPE_MAP[phpType]
+    if (!jsTypes) continue // Unknown / non-applicable type (e.g. list_item).
+    for (const jsType of jsTypes) byType.set(jsType, attrs)
+  }
+  return {
+    name: 'default-attributes',
+    beforeRender(doc: Document): Document {
+      if (byType.size === 0) return doc
+      for (const c of doc.children) visit(c, byType)
+      return doc
+    },
+  }
+}

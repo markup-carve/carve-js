@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { SubstitutionScanner } from '../src/substitution-scanner.js'
+import { SubstitutionScanner } from '../src/parse/inline/substitution-scanner.js'
 
 function reference(text: string, from: number, to: number): number {
   for (let at = from; at < to; at++) {

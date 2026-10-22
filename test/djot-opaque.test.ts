@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { maskDjotOpaque } from '../src/djot-opaque.js'
+import { maskDjotOpaque } from '../src/import/djot/djot-opaque.js'
 import { carveToHtml, djotToCarve } from '../src/index.js'
 
 it('keeps repeated unfinished comments literal', () => {

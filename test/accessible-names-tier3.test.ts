@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { index } from '../src/index-terms.js'
-import { tabs } from '../src/tabs.js'
-import { codeGroup } from '../src/code-group.js'
-import { mermaid, fencedRender } from '../src/fenced-render.js'
-import { headingPermalinks } from '../src/heading-permalinks.js'
-import { tableOfContents, tocPlacement } from '../src/table-of-contents.js'
+import { index } from '../src/heading/index-terms.js'
+import { tabs } from '../src/extension/tabs.js'
+import { codeGroup } from '../src/extension/code-group.js'
+import { mermaid, fencedRender } from '../src/render/fenced-render.js'
+import { headingPermalinks } from '../src/heading/heading-permalinks.js'
+import { tableOfContents, tocPlacement } from '../src/extension/table-of-contents.js'
 import { LABEL_DEFAULTS } from '../src/render-html.js'
 
 /*

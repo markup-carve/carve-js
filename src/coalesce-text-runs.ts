@@ -1,4 +1,4 @@
-import { ownedChildFields } from './owned-child-fields.js'
+import { ownedChildFields } from './ast/owned-child-fields.js'
 import type { Document } from './ast.js'
 
 /**

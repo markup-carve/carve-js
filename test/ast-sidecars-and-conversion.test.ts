@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderCarveWithConversionReport as collectDiagnostics } from '../src/conversion-diagnostics.js'
+import { renderCarveWithConversionReport as collectDiagnostics } from '../src/import/markdown/conversion-diagnostics.js'
 import {
   applyAstPatch, astNodePaths, AstPatchError, AstSidecarError, createEditorSession, parse, readAnnotationRanges, readNodeIdentity,
   parseWithProvenance, readProvenance, renderCarveWithConversionReport, toAnnotationRanges, toAstJson,

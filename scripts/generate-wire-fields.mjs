@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Generate src/wire-fields.ts from the pinned resources/ast-schema.json.
+ * Generate src/ast/wire-fields.ts from the pinned resources/ast-schema.json.
  *
  * PART 12 §11 makes an ingest refuse a property the schema does not name, which
  * needs the set of named properties AT RUNTIME - and the schema is a dev-time
@@ -626,6 +626,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const schema = JSON.parse(
     readFileSync(resolve(root, "spec/resources/ast-schema.json"), "utf8"),
   );
-  writeFileSync(resolve(root, "src/wire-fields.ts"), wireFieldsSource(schema));
-  console.log("src/wire-fields.ts written from spec/resources/ast-schema.json");
+  writeFileSync(resolve(root, "src/ast/wire-fields.ts"), wireFieldsSource(schema));
+  console.log("src/ast/wire-fields.ts written from spec/resources/ast-schema.json");
 }

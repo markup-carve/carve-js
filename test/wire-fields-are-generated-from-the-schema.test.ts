@@ -6,10 +6,10 @@ import {
   WIRE_FIELDS,
   WIRE_NESTED_RECORDS,
   WIRE_RECORD_FIELDS,
-} from "../src/wire-fields.js";
+} from "../src/ast/wire-fields.js";
 
 /**
- * `src/wire-fields.ts` is GENERATED from the pinned AST schema, and PART 12
+ * `src/ast/wire-fields.ts` is GENERATED from the pinned AST schema, and PART 12
  * section 11 is only as good as that map: a field the schema gained but the map
  * does not name would be refused on ingest even though it is valid.
  *
@@ -24,7 +24,7 @@ describe("the generated wire-field map", () => {
     const schema = JSON.parse(
       readFileSync(resolve(root, "spec/resources/ast-schema.json"), "utf8"),
     );
-    const committed = readFileSync(resolve(root, "src/wire-fields.ts"), "utf8");
+    const committed = readFileSync(resolve(root, "src/ast/wire-fields.ts"), "utf8");
 
     expect(committed, "run: node scripts/generate-wire-fields.mjs").toBe(
       wireFieldsSource(schema),

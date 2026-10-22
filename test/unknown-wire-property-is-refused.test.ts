@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "../src/index.js";
 import { fromAstJson, toAstJson } from "../src/ast-json.js";
-import { WIRE_FIELDS } from "../src/wire-fields.js";
+import { WIRE_FIELDS } from "../src/ast/wire-fields.js";
 
 /**
  * PART 12 section 11: a property the schema does not name is REFUSED on ingest.

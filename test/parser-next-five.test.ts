@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, parse } from '../src/index.js'
-import { applyLinkDefs } from '../src/inline-resolution.js'
-import { referenceImage, referenceLink } from '../src/reference-resolution.js'
+import { applyLinkDefs } from '../src/parse/inline/inline-resolution.js'
+import { referenceImage, referenceLink } from '../src/parse/inline/reference-resolution.js'
 import type { InlineNode } from '../src/ast.js'
 
 const authoritative = { extensions: [{ name: 'declines', matchInline: () => null }] }

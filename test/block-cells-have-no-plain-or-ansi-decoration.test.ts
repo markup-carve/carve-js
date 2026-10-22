@@ -1,4 +1,4 @@
-import { MAX_RENDER_DEPTH } from '../src/render-depth.js'
+import { MAX_RENDER_DEPTH } from '../src/render/render-depth.js'
 import { expect, it } from 'vitest'
 import { fromAstJson, renderPlainText, renderAnsi, renderMarkdown, renderCarve, renderHtml, parse } from '../src/index.js'
 

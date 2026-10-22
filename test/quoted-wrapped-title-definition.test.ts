@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { extractReferenceDefinitions } from '../src/markdown-empty-destination.js'
+import { extractReferenceDefinitions } from '../src/import/markdown/markdown-empty-destination.js'
 import { markdownToCarve } from '../src/markdown-migrate.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 

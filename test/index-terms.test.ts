@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { index } from '../src/index-terms.js'
+import { index } from '../src/heading/index-terms.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [index()] }).trim()
 

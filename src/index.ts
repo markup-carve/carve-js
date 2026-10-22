@@ -4,17 +4,17 @@
 
 import type { Document } from './ast.js'
 import type { CarveExtension } from './extension.js'
-import { applyTransforms } from './extension-transforms.js'
+import { applyTransforms } from './extension/extension-transforms.js'
 import type { ParseOptions } from './parse.js'
 import {
   resolveHeadingIds,
   resolveHeadingIdsWithRegistry,
   headingIdSlugOpts,
   type AsciiHeadingIdMode,
-} from './heading-ids.js'
-import { parseDocument } from './parse-document.js'
-import { canonicalCarveWrite } from './canonical-carve-write.js'
-import { numberFootnotes } from './footnote-numbering.js'
+} from './heading/heading-ids.js'
+import { parseDocument } from './parse/parse-document.js'
+import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
+import { numberFootnotes } from './heading/footnote-numbering.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
@@ -31,10 +31,10 @@ import {
   type PlainTextRenderOptions,
 } from './render-plain.js'
 import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
-import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
+import { adoptBlockFootnoteDefs } from './ast/legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
-import { DocumentIdRegistry, inheritDocumentIds, rememberDocumentIds } from './document-ids.js'
+import { DocumentIdRegistry, inheritDocumentIds, rememberDocumentIds } from './ast/document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 import { toAuthoredProvenance as authoredProvenance, type ProvenanceSidecar } from './ast-sidecars.js'
 import { tryFastHtml } from './fast-html.js'
@@ -43,12 +43,12 @@ import {
   checkedRender,
   type CheckedRenderOptions,
   type RenderResult,
-} from './render-loss.js'
+} from './render/render-loss.js'
 import { createSourcePatch, type SourcePatch } from './source-patch.js'
-import { assessTablePreservation, type PreservationTarget, type PreservationOptions, type TablePreservationReport } from './table-preservation.js'
-import { renderCarveWithConversionReport as collectCarveConversionDiagnostics } from './conversion-diagnostics.js'
+import { assessTablePreservation, type PreservationTarget, type PreservationOptions, type TablePreservationReport } from './table/table-preservation.js'
+import { renderCarveWithConversionReport as collectCarveConversionDiagnostics } from './import/markdown/conversion-diagnostics.js'
 
-export { assessTablePreservation, PreservationError, type PreservationTarget, type PreservationOptions, type PreservationDiagnostic, type TablePreservationReport } from './table-preservation.js'
+export { assessTablePreservation, PreservationError, type PreservationTarget, type PreservationOptions, type PreservationDiagnostic, type TablePreservationReport } from './table/table-preservation.js'
 export * from './ast.js'
 export {
   htmlToAst,
@@ -63,7 +63,7 @@ export {
 } from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
-export type { ConversionDiagnostic, ConversionDiagnostics, CarveConversionResult } from './conversion-diagnostics.js'
+export type { ConversionDiagnostic, ConversionDiagnostics, CarveConversionResult } from './import/markdown/conversion-diagnostics.js'
 export {
   astNodePaths,
   readNodeIdentity,
@@ -83,7 +83,7 @@ export {
   type NodeProvenance,
   type ProvenanceSidecar,
 } from './ast-sidecars.js'
-export { lintAccessibility, type AccessibilityDiagnostic } from './accessibility.js'
+export { lintAccessibility, type AccessibilityDiagnostic } from './extension/accessibility.js'
 export { tryRenderHtmlStreaming, type StreamOutcome } from './stream.js'
 export {
   EditorChangeError,
@@ -164,7 +164,7 @@ export {
   type ToAstEnvelopeOptions,
   type FromAstEnvelopeOptions,
 } from './ast-envelope.js'
-export { RenderDepthError, MAX_RENDER_DEPTH } from './render-depth.js'
+export { RenderDepthError, MAX_RENDER_DEPTH } from './render/render-depth.js'
 export {
   RenderLossError,
   type CheckedRenderOptions,
@@ -172,8 +172,8 @@ export {
   type RenderLossCode,
   type RenderResult,
   type RenderTarget,
-} from './render-loss.js'
-export { SourceUnspellableError } from './source-unspellable-error.js'
+} from './render/render-loss.js'
+export { SourceUnspellableError } from './source/source-unspellable-error.js'
 export type {
   RenderOptions,
   SocialLinkAttrs,
@@ -213,7 +213,7 @@ export {
   BBCODE_MAX_INPUT_LENGTH,
 } from './bbcode-migrate.js'
 export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
-export { djotToCarve } from './djot-import.js'
+export { djotToCarve } from './import/djot/djot-import.js'
 export {
   migrateDjot,
   migrateBbcode,
@@ -233,15 +233,15 @@ export {
   type LintPlatform,
   KNOWN_LINT_PLATFORMS,
 } from './lint.js'
-export { migrateCaseOnlyReferences } from './case-migrate.js'
-export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './colon-fences.js'
+export { migrateCaseOnlyReferences } from './import/markdown/case-migrate.js'
+export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './parse/block/colon-fences.js'
 export { tabNormalize } from './tab-normalize.js'
-export { details } from './details.js'
+export { details } from './extension/details.js'
 export { semanticSpan } from './semantic-span.js'
-export { listTable } from './list-table.js'
-export { glossary } from './glossary.js'
-export { headingNumbers, type HeadingNumbersOptions } from './heading-numbers.js'
-export { codeCallouts } from './code-callouts.js'
+export { listTable } from './table/list-table.js'
+export { glossary } from './extension/glossary.js'
+export { headingNumbers, type HeadingNumbersOptions } from './heading/heading-numbers.js'
+export { codeCallouts } from './extension/code-callouts.js'
 export {
   smartQuotes,
   smartQuoteLocales,
@@ -249,14 +249,14 @@ export {
   SMART_QUOTE_LOCALES,
   type QuoteCharacters,
   type SmartQuotesOptions,
-} from './smart-quotes.js'
-export { index, type IndexOptions } from './index-terms.js'
+} from './extension/smart-quotes.js'
+export { index, type IndexOptions } from './heading/index-terms.js'
 export {
   citations,
   type CitationsOptions,
   type CslEntry,
   type CslName,
-} from './citations.js'
+} from './extension/citations.js'
 export {
   fencedRender,
   mermaid,
@@ -270,25 +270,25 @@ export {
   presets,
   type FencedRenderOptions,
   type FencedRenderContentMode,
-} from './fenced-render.js'
-export { imgFence, type ImgFenceOptions } from './svg-fence.js'
-export { sanitizeSvg, type SanitizeSvgOptions, type SanitizeResult } from './svg-sanitize.js'
-export { mathBlock, type MathBlockOptions } from './math-block.js'
-export { spoiler } from './spoiler.js'
+} from './render/fenced-render.js'
+export { imgFence, type ImgFenceOptions } from './extension/svg-fence.js'
+export { sanitizeSvg, type SanitizeSvgOptions, type SanitizeResult } from './extension/svg-sanitize.js'
+export { mathBlock, type MathBlockOptions } from './extension/math-block.js'
+export { spoiler } from './extension/spoiler.js'
 export {
   colorSwatch,
   type ColorSwatchOptions,
   type SwatchPosition,
   type SwatchShape,
-} from './color-swatch.js'
-export { wikilinks, type WikilinksOptions } from './wikilinks.js'
-export { autolink, type AutolinkOptions } from './autolink.js'
-export { externalLinks, type ExternalLinksOptions } from './external-links.js'
-export { tableOfContents, tocPlacement, type TableOfContentsOptions } from './table-of-contents.js'
-export { headingPermalinks, type HeadingPermalinksOptions } from './heading-permalinks.js'
-export { codeGroup, type CodeGroupOptions } from './code-group.js'
-export { tabs, type TabsOptions, type TabsMode } from './tabs.js'
-export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-level-shift.js'
+} from './extension/color-swatch.js'
+export { wikilinks, type WikilinksOptions } from './extension/wikilinks.js'
+export { autolink, type AutolinkOptions } from './extension/autolink.js'
+export { externalLinks, type ExternalLinksOptions } from './extension/external-links.js'
+export { tableOfContents, tocPlacement, type TableOfContentsOptions } from './extension/table-of-contents.js'
+export { headingPermalinks, type HeadingPermalinksOptions } from './heading/heading-permalinks.js'
+export { codeGroup, type CodeGroupOptions } from './extension/code-group.js'
+export { tabs, type TabsOptions, type TabsMode } from './extension/tabs.js'
+export { headingLevelShift, type HeadingLevelShiftOptions } from './heading/heading-level-shift.js'
 // `fileSystemResolver` is NOT re-exported here: it needs `node:fs`, and this
 // entry is bundled for the browser verbatim. It lives on the `./node` subpath.
 export {
@@ -326,12 +326,12 @@ export {
   parseDirective,
   type Directive as IncludeDirective,
 } from './include-directive.js'
-export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
+export { headingReference, type HeadingReferenceOptions } from './heading/heading-reference.js'
 export {
   defaultAttributes,
   type DefaultAttributesOptions,
   type DefaultAttributesMap,
-} from './default-attributes.js'
+} from './extension/default-attributes.js'
 export {
   Profile,
   LinkPolicy,
@@ -499,7 +499,7 @@ export function renderCarveWithConversionReport(
   ast: Document,
   opts: CarveRenderOptions = {},
   maxDiagnostics = 100,
-): import('./conversion-diagnostics.js').CarveConversionResult {
+): import('./import/markdown/conversion-diagnostics.js').CarveConversionResult {
   return collectCarveConversionDiagnostics(ast, (tree) => renderCarve(tree, opts), maxDiagnostics)
 }
 
@@ -937,4 +937,4 @@ export function carveToPreservationReport(
   return { ...renderers[target](source, opts), preservation }
 }
 
-export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './smart-typography-mode.js'
+export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './extension/smart-typography-mode.js'

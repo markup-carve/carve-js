@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { parseFragment } from 'parse5'
 import { carveToHtml, djotToCarve } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-image-label-nuls.json'
 
 function images(html: string): unknown[] {

@@ -1,0 +1,1789 @@
+import { OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fields.js'
+/**
+ * Serialize a parsed document to the PART 12 exchange shape.
+ *
+ * The runtime `Document` keeps two pieces of document-level content on the
+ * ROOT: `frontmatter`, and `footnoteDefs` keyed by label. PART 12 §7 requires
+ * the serialized root to carry exactly `type`, `children` and `srcByteLength`,
+ * with both of those as block nodes in the tree, because a root FIELD cannot
+ * carry the `pos` §4 requires of every node - and a footnote body or a
+ * frontmatter block is source an editor navigates to (carve#411).
+ *
+ * The runtime shape is deliberately left alone. Renderers, extensions and the
+ * profile filter read `footnoteDefs` from the root in some 39 places, and
+ * downstream consumers (carve-lsp, pandoc-carve) read it too, so reshaping the
+ * in-memory tree would be a breaking change made to serve a wire format.
+ * PART 12 §1 anticipates exactly this: an implementation whose internals differ
+ * "MAPS on the way out; it does not export its internals".
+ *
+ * The two wire node types are declared HERE rather than added to `BlockNode`.
+ * Widening that union would force every exhaustive switch in every renderer to
+ * handle nodes the renderers never see, since neither type exists in a parsed
+ * tree - they are produced only by this function.
+ *
+ * Consumers that need conformant JSON must call this rather than stringifying
+ * `parse()` directly.
+ */
+
+import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from '../ast.js'
+import { resolveTableSpans } from '../table/table-spans.js'
+import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
+import { isResolvedEmptyReference, markResolvedEmptyReference } from '../parse/inline/reference-state.js'
+import { checkAstVersion } from './envelope.js'
+import { MAX_NESTING_DEPTH } from '../parse.js'
+import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from '../heading/heading-ids.js'
+import {
+  entriesFromWire,
+  entriesToWire,
+  isRuntimeEntry,
+  type DefinitionEntryNode,
+} from './definition-list-wire.js'
+import {
+  NODE_FIELDS,
+  NODE_POSITION_KIND,
+  NODE_POSITION_TYPES,
+  WIRE_ARRAY_MIN_ITEMS,
+  WIRE_FIELDS,
+  WIRE_NESTED_RECORDS,
+  WIRE_RECORD_FIELDS,
+  WIRE_REQUIRED,
+  WIRE_VALUE_KINDS,
+} from './wire-fields.js'
+import { ownValue, setOwn } from '../own-property.js'
+import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
+import { replaceLoneSurrogates } from '../well-formed.js'
+
+/** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
+export interface FrontmatterNode {
+  type: 'frontmatter'
+  /** The fence's info word, or `'yaml'` when it carries none. */
+  format: string
+  /** The text between the fences, verbatim. Never parsed. */
+  content: string
+  pos?: Position
+}
+
+/** A footnote definition as a block node (PART 12 §7). */
+export interface FootnoteDefNode {
+  type: 'footnote'
+  /**
+   * The label as written, without `[^` and `]:`.
+   *
+   * `label`, not `id`, per PART 12 §7: PART 9 §16 calls it a label throughout,
+   * and `id` collides with the attribute of that name. This engine and
+   * carve-php both shipped `id` first - matching `footnote_ref.id` - and the
+   * spec settled it the other way when the node moved into the tree (carve#418).
+   *
+   * {@link fromAstJson} REFUSES `id` on input, like any other field the schema
+   * does not name (markup-carve/carve#743, PART 12 §3 and §11). It used to accept
+   * it; carve-php did not, so the same payload decoded in two engines and failed
+   * in the third (markup-carve/carve-js#907).
+   */
+  label: string
+  children: BlockNode[]
+  pos?: Position
+}
+
+export type AstJsonBlock = BlockNode | FrontmatterNode | FootnoteDefNode
+
+/**
+ * The document root, per PART 12 §7: three required fields and optional astVersion.
+ *
+ * All three are REQUIRED, matching `resources/ast-schema.json`. `srcByteLength`
+ * was optional here while §12 makes `fromAstJson` refuse a root without it, so
+ * a TypeScript consumer could build a value the compiler accepted and the
+ * decoder rejected - the mismatch this type exists to prevent.
+ */
+export interface AstJsonDocument {
+  type: 'document'
+  children: AstJsonBlock[]
+  srcByteLength: number
+  astVersion?: string
+}
+
+/** Schema child slots include node arrays, matrices, and runtime records. */
+const CHILD_FIELDS = OWNED_CHILD_FIELDS
+const ingestedLineBlockChildren = new WeakMap<object, string>()
+
+function rememberIngestedLineBlocks(root: Document): void {
+  const stack: unknown[] = [root.children, ...Object.values(root.footnoteDefs ?? {})]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item)
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (record['type'] === 'line_block' && Array.isArray(record['lines'])) {
+      ingestedLineBlockChildren.set(record, JSON.stringify(record['children']))
+    }
+    for (const field of CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
+    for (const field of OWNED_SINGLE_CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
+  }
+}
+
+/** Publish verse lines from the final inline tree, after resolution and filtering. */
+function lineBlockBoundaryPointers(stanza: Record<string, unknown>): string[] {
+  const boundaries: string[] = []
+  let lastLeaf: string | undefined
+  const visit = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}/${index}`))
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node['type'] === 'hard_break') boundaries.push(path)
+    if (Array.isArray(node['children']) && node['children'].length > 0) visit(node['children'], `${path}/children`)
+    else lastLeaf = path
+  }
+  visit(stanza, '')
+  // A final authored break belongs to the last line; it closes no next line.
+  if (boundaries.at(-1) === lastLeaf) boundaries.pop()
+  return boundaries
+}
+
+/**
+ * Rewrite definition lists into their wire shape, everywhere in a subtree, and
+ * drop the runtime-only fields above.
+ *
+ * Structurally shared: a branch with nothing to rewrite comes back as the SAME
+ * object, so `toAstJson` still leaves the runtime document untouched and a
+ * large document does not pay for a deep copy it does not need.
+ */
+/**
+ * PART 12 §26: publish a spanning cell's RESOLVED extent beside the markers the
+ * author wrote.
+ *
+ * The walk is `resolveTableSpans`, the same one the HTML renderer runs - the
+ * point of carve#2190 is that there is one implementation of T5, so a second
+ * copy here would recreate the divergence inside the engine that the clause
+ * removed between engines.
+ *
+ * A count already on the cell WINS and is not recomputed. A tree that reached
+ * this encoder through an ingest may carry counts an importer resolved from a
+ * source whose markers this engine never saw, and §23 settles that shape of
+ * question the same way for `blockImage`: trust the field where it is present.
+ *
+ * A count of 1 is not emitted: §26 makes absent mean 1, on the reasoning §22
+ * gives for a list's `start`.
+ */
+function tableSpansToWire(rows: readonly unknown[]): readonly unknown[] {
+  const grid = resolveTableSpans(rows as readonly TableRow[])
+  let changed = false
+  const mapped = rows.map((row, r) => {
+    if (typeof row !== 'object' || row === null) return row
+    const record = row as Record<string, unknown>
+    const cells = record['cells']
+    if (!Array.isArray(cells)) return row
+    let rowChanged = false
+    const nextCells = cells.map((cell, c) => {
+      const entry = grid[r]?.[c]
+      if (entry === undefined || typeof cell !== 'object' || cell === null) return cell
+      const existing = cell as Record<string, unknown>
+      const additions: Record<string, number> = {}
+      if (existing['colspan'] === undefined && entry.colspan > 1) additions['colspan'] = entry.colspan
+      if (existing['rowspan'] === undefined && entry.rowspan > 1) additions['rowspan'] = entry.rowspan
+      if (Object.keys(additions).length === 0) return cell
+      rowChanged = true
+      return { ...existing, ...additions }
+    })
+    if (!rowChanged) return row
+    changed = true
+    return { ...record, cells: nextCells }
+  })
+  return changed ? mapped : rows
+}
+
+function definitionListsToWire<T>(node: T): T {
+  if (Array.isArray(node)) {
+    let changed = false
+    const mapped = node.map((child) => {
+      const next = definitionListsToWire(child)
+      if (next !== child) changed = true
+      return next
+    })
+    return (changed ? mapped : node) as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = node as Record<string, unknown>
+  let out: Record<string, unknown> | undefined
+
+  if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
+    const items = record['items']
+    if (items.every(isRuntimeEntry)) {
+      out = { ...record, items: entriesToWire(items) as unknown as DefinitionEntryNode[] }
+    }
+  }
+
+  if (record['type'] === 'table' && Array.isArray(record['rows'])) {
+    const rows = tableSpansToWire(record['rows'])
+    if (rows !== record['rows']) out = { ...(out ?? record), rows }
+  }
+
+  for (const field of CHILD_FIELDS) {
+    const value = (out ?? record)[field]
+    if (value === undefined) continue
+    // A definition list's own `items` was just rewritten; walking it again
+    // would descend into wire nodes as if they were runtime ones.
+    if (field === 'items' && (out ?? record)['type'] === 'definition_list') {
+      const mapped = definitionListsToWire(value)
+      if (mapped !== value) out = { ...(out ?? record), [field]: mapped }
+      continue
+    }
+    const mapped = definitionListsToWire(value)
+    if (mapped !== value) out = { ...(out ?? record), [field]: mapped }
+  }
+
+  const originalChildren = ingestedLineBlockChildren.get(record)
+  if (record['type'] === 'line_block' &&
+      (!Array.isArray(record['lines']) || (originalChildren !== undefined && originalChildren !== JSON.stringify(record['children'])))) {
+    const paragraphs = (out ?? record)['children'] as Array<Record<string, unknown>> | undefined
+    const lines = (paragraphs ?? []).map((paragraph) => [
+      ...lineBlockBoundaryPointers(paragraph), '/children/-',
+    ])
+    out = { ...(out ?? record), lines }
+  }
+
+  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+    const child = (out ?? record)[field]
+    if (child === undefined) continue
+    const mapped = definitionListsToWire(child)
+    if (mapped !== child) out = { ...(out ?? record), [field]: mapped }
+  }
+
+  if (((out ?? record)['type'] === 'link' || (out ?? record)['type'] === 'image') &&
+      typeof record['ref'] === 'string' &&
+      (record[record['type'] === 'link' ? 'href' : 'src'] === '') &&
+      isResolvedEmptyReference(record as unknown as Image)) {
+    out = { ...(out ?? record), resolved: true }
+  }
+  if ((out ?? record)['type'] === 'comment') {
+    out = { ...(out ?? record), form: record['block'] === true ? 'block' : record['delimited'] === true ? 'braced' : 'line' }
+  }
+
+  // A resolved crossref carries the target heading's inline content for the
+  // renderers, and PART 12 §3a keeps it OFF the wire: the heading is in the
+  // same document, so a consumer reads the text from there rather than from a
+  // copy in every reference. `target` and `href` - the authored construct and
+  // its resolution - are what the node publishes.
+  if ((out ?? record)['type'] === 'heading_ref' && (out ?? record)['resolvedText'] !== undefined) {
+    const { resolvedText: _resolvedText, ...rest } = out ?? record
+    out = rest
+  }
+
+  // A footnote reference's `refId` is a RENDERING convention - `fnref1`, the
+  // anchor an endnotes section links back to - not a resolution result. The
+  // schema declared it and no engine ever produced one, so carve#762 removed
+  // it, and `additionalProperties: false` now makes a tree carrying it invalid.
+  //
+  // This engine never wrote one. It ECHOED one: the wire record is copied
+  // wholesale, so a `refId` that arrived on a payload came straight back out,
+  // and a document read and re-published here became one the format rejects
+  // (carve-js#707). The runtime field stays - `renderHtml` assigns it to build
+  // the backlinks - it just does not cross the wire in either direction.
+  if (
+    ((out ?? record)['type'] === 'footnote_ref' ||
+      (out ?? record)['type'] === 'inline_footnote') &&
+    (out ?? record)['refId'] !== undefined
+  ) {
+    const { refId: _refId, ...rest } = out ?? record
+    out = rest
+  }
+
+  if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
+    const { start: _start, ...rest } = out ?? record
+    out = rest
+  }
+
+  // `escapedLeadingCaret` used to be stripped here (carve#793). The parser no
+  // longer sets it at all (carve-js#1259), so there is nothing left to strip:
+  // the fact it recorded is stated on the wire by the `escaped_text` node
+  // holding `"^"` that sits where the flag used to point.
+
+  return (out ?? record) as T
+}
+
+/** The inverse: wire entries back to the runtime `{terms, definitions}` form. */
+function definitionListsFromWire<T>(node: T): T {
+  if (Array.isArray(node)) {
+    return node.map((child) => definitionListsFromWire(child)) as unknown as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = { ...(node as Record<string, unknown>) }
+
+  if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
+    // A payload already in the runtime form decodes unchanged: older stored
+    // trees carry it, and this engine produced them.
+    const entries = record['items'].every(isRuntimeEntry)
+      ? (record['items'] as DefinitionItem[])
+      : entriesFromWire(record['items'])
+    // Runtime entries use record fields rather than wire node fields.
+    // Decode their descriptions explicitly before returning this branch.
+    // `terms` gets the pass too, for the INLINE rewrites below rather than for a
+    // nested list: no definition list can appear in a term, but a footnote
+    // reference can, and skipping the pass left `label` unmapped to `id` there
+    // while the same node decoded correctly one field over. A footnote
+    // definition indented under a term folds into the term
+    // (markup-carve/carve#2458), so `[^n]: y` came back written `[^]: y`.
+    record['items'] = entries.map((entry) => {
+      const mapped: DefinitionItem = Array.isArray(entry.definitions)
+        ? { ...entry, definitions: definitionListsFromWire(entry.definitions) }
+        : entry
+      return Array.isArray(mapped.terms)
+        ? { ...mapped, terms: definitionListsFromWire(mapped.terms) }
+        : mapped
+    })
+    return record as T
+  }
+
+  for (const field of CHILD_FIELDS) {
+    if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
+  }
+  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+    if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
+  }
+
+  // Not read either, so an ingested reference does not arrive already carrying a
+  // backlink anchor from whoever wrote the payload. `renderHtml` assigns
+  // `refId` itself from the number, and an inherited one would be the previous
+  // document's numbering rather than this one's (carve-js#707).
+  if (
+    (record['type'] === 'footnote_ref' || record['type'] === 'inline_footnote') &&
+    record['refId'] !== undefined
+  ) {
+    delete record['refId']
+  }
+
+  return record as T
+}
+
+/** The definition kinds §7 COLLECTS, which is what §7 then orders. */
+const COLLECTED_DEFINITION_TYPES = new Set([
+  'link_reference_definition',
+  'footnote',
+])
+
+/**
+ * PART 12 §7: "Definitions appear in DOCUMENT ORDER by source position."
+ *
+ * Collection moves a definition to the document and §4 keeps the `pos` it was
+ * written at, so the published order has to follow that `pos` rather than the
+ * machinery that did the collecting. This engine appended link definitions in
+ * the parser and footnotes here, so a link definition preceded a footnote
+ * whatever the author wrote, and `pos` ran backwards between two siblings.
+ *
+ * Only the COLLECTED kinds move. An `abbreviation_def` is not collected out of
+ * the document - §7 refuses that specifically, since hoisting it would empty
+ * the line rather than relocate visible output - so it already sits at its
+ * source position and is left where it is.
+ *
+ * The sort is confined to the slots the collected definitions already occupy,
+ * so no other child changes index. It is stable, which keeps two definitions
+ * that report the same offset in the order they were collected.
+ */
+function orderCollectedDefinitions(children: AstJsonBlock[]): void {
+  const slots: number[] = []
+  for (let i = 0; i < children.length; i++) {
+    if (COLLECTED_DEFINITION_TYPES.has(children[i]!.type)) slots.push(i)
+  }
+  if (slots.length < 2) return
+  const ordered = slots
+    .map((i) => children[i]!)
+    .sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+  for (let k = 0; k < slots.length; k++) children[slots[k]!] = ordered[k]!
+}
+
+/**
+ * Map a document onto the exchange shape.
+ *
+ * Frontmatter becomes the FIRST child, which is where it was written. Footnote
+ * definitions become `footnote` children of the DOCUMENT, matching PART 9 §16:
+ * a definition is document-level metadata lifted out of whatever container held
+ * it, so it belongs to the document rather than to that container.
+ */
+export function toAstJson(doc: Document): AstJsonDocument {
+  const children: AstJsonBlock[] = []
+
+  if (doc.frontmatter !== undefined) {
+    const node: FrontmatterNode = {
+      type: 'frontmatter',
+      format: doc.frontmatter.format,
+      content: doc.frontmatter.content,
+    }
+    // §4 wants a position on every node but the root. These two are SYNTHESIZED
+    // here from data the parser kept on the root, so unless the parser recorded
+    // a span there is none to give - and they were the only content in a
+    // serialized document that could not be navigated to (carve-js#480).
+    if (doc.frontmatter.pos !== undefined) node.pos = doc.frontmatter.pos
+    children.push(node)
+  }
+
+  for (const child of definitionListsToWire(doc.children)) children.push(child)
+
+  for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
+    const node: FootnoteDefNode = {
+      type: 'footnote',
+      label,
+      children: definitionListsToWire(body),
+    }
+    const pos = ownValue(doc.footnoteDefPos, label)
+    if (pos !== undefined) node.pos = pos
+    children.push(node)
+  }
+
+  orderCollectedDefinitions(children)
+
+  // ALWAYS emitted, even when the runtime document has no length to report.
+  // `srcByteLength` is `required` in the schema, so a root without it is not a
+  // Carve AST - and `parse` is not the only way a `Document` gets built: an
+  // editor, a language server or an extension can hand one over, and this
+  // encoder used to publish an invalid tree for exactly those. §12 then refused
+  // this engine's OWN output, which §9(a) forbids.
+  //
+  // 0 is the honest answer to "how much source was this" for a tree that came
+  // from no source, and §12 explicitly does not check the value. carve-php took
+  // the same route for the same reason (carve-php#917).
+  const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
+  return out
+}
+
+/** Preserve a published result; compute it only for legacy payloads that omit it. */
+function promoteIngestedBlockImages(doc: Document): void {
+  const worklist: BlockNode[][] = [doc.children]
+  for (const body of Object.values(doc.footnoteDefs ?? {})) worklist.push(body)
+  while (worklist.length > 0) {
+    for (const block of worklist.pop()!) {
+      if (block.type === 'paragraph' && block.blockImage === undefined && isBlockImageOnIngest(block)) {
+        block.blockImage = true
+      }
+      pushIngestChildBlocks(block, worklist)
+    }
+  }
+}
+
+/** Whether the paragraph contains one resolved image. */
+function isBlockImageOnIngest(block: Paragraph): boolean {
+  return (
+    block.children.length === 1 &&
+    block.children[0]!.type === 'image' &&
+    !isUnresolvedReference(block.children[0] as Image)
+  )
+}
+
+/** Every nested block list an ingested block can hold. Iterative, like the phase. */
+function pushIngestChildBlocks(block: BlockNode, worklist: BlockNode[][]): void {
+  switch (block.type) {
+    case 'block_quote':
+    case 'admonition':
+    case 'directive':
+    case 'div':
+    case 'section':
+    case 'figure_group':
+      worklist.push(block.children)
+      break
+    case 'table':
+      for (const row of block.rows) for (const cell of row.cells) {
+        if (cell.blocks !== undefined) worklist.push(cell.blocks)
+      }
+      break
+    case 'figure':
+      pushIngestChildBlocks(block.target, worklist)
+      break
+    case 'list':
+      for (const item of block.items) worklist.push(item.children)
+      break
+    case 'definition_list':
+      for (const entry of block.items) for (const d of entry.definitions) worklist.push(d)
+      break
+    default:
+      break
+  }
+}
+
+/**
+ * The inverse of {@link toAstJson}: an exchange-shape document to the runtime
+ * `Document` this engine's renderers, extensions and profile filter expect.
+ *
+ * PART 12 §6 requires `parse(x)` serialized and deserialized to equal
+ * `parse(x)`, and a format with only one direction cannot be checked against
+ * that at all - the round trip is the rule that catches a serializer quietly
+ * dropping a field, one document before a consumer does.
+ *
+ * Input is treated as DATA, not as a trusted tree: a `footnote` child missing
+ * its label, or a `frontmatter` child carrying something other than strings, is
+ * left alone rather than adopted, so a malformed document degrades to "an
+ * unrecognized node" instead of throwing halfway through a conversion.
+ */
+/**
+ * Thrown when an ingested AST nests deeper than the reader will follow.
+ *
+ * A typed error rather than whatever the runtime does on its own: without this
+ * a deep payload walked until the JS call stack ran out and surfaced a
+ * `RangeError`, at a depth that varies by engine and by how much stack the
+ * caller had already used (carve-js#498).
+ */
+export class AstJsonDepthError extends Error {
+  constructor(readonly depth: number) {
+    super(
+      `AST nests ${depth} levels, deeper than the reader's cap of ${MAX_AST_JSON_DEPTH}`,
+    )
+    this.name = 'AstJsonDepthError'
+  }
+}
+
+/**
+ * Thrown when the payload's root is not a `document`.
+ *
+ * PART 12 §9 closes with the reason: "The root type is not a leniency point:
+ * §7 fixes it at `document`, and the schema pins it as a `const`. An ingest
+ * accepting some other root (`doc`, say, which is ProseMirror's) will half-read
+ * a foreign format rather than reject it."
+ *
+ * This reader used to write `type: 'document'` into the tree it returned no
+ * matter what arrived, so a ProseMirror payload - the clause's own example -
+ * was accepted AND had the evidence normalized away: the caller got a valid
+ * Carve document back and no way to learn its input had not been one.
+ */
+export class AstJsonRootError extends Error {
+  constructor(readonly found: unknown) {
+    super(
+      `AST root type ${JSON.stringify(found)} is not "document"; the root is fixed by PART 12 §7`,
+    )
+    this.name = 'AstJsonRootError'
+  }
+}
+
+/**
+ * Thrown when the root omits one of the three fields PART 12 §7 fixes.
+ *
+ * §12(a): "A ROOT MISSING ANY OF THE THREE FIELDS. Not defaulted, not inferred.
+ * A reader that supplies `children: []` for a payload that carried no
+ * `children` has turned a truncated document into an empty one and reported
+ * success."
+ *
+ * This reader used to do exactly that - a missing `children` fell through to
+ * `Array.isArray(json.children) ? json.children : []` and produced an empty
+ * document, and a missing `srcByteLength` was simply left off the result. Both
+ * handed the caller a valid-looking Carve document with no way to learn the
+ * input had not been one, which is the same objection `AstJsonRootError` above
+ * makes to accepting a foreign root type.
+ */
+export class AstJsonRootFieldError extends Error {
+  constructor(readonly field: string) {
+    super(
+      `AST root is missing ${JSON.stringify(field)}; PART 12 §7 fixes the root at ` +
+        '"type", "children" and "srcByteLength", and §12 refuses a root without one',
+    )
+    this.name = 'AstJsonRootFieldError'
+  }
+}
+
+/**
+ * Thrown when a node's `type` is a name the schema does not have.
+ *
+ * §12(c) puts this refusal AT DECODE rather than in a renderer. This engine
+ * used to accept the node and throw `renderHtml: unknown block ...` one step
+ * later, which reads to a caller as a rendering problem for what is really a
+ * payload problem - and never arrives at all for a formatter, a linter, a
+ * language server or an indexer that holds the tree and never renders it.
+ *
+ * The walk follows NODE POSITIONS (`NODE_FIELDS`, derived from the schema) and
+ * deliberately never enters `attrs.keyValues`: attribute names are ordinary
+ * identifiers, so `[x](/u){type=widget}` puts an object literally shaped
+ * `{"type":"widget"}` in the tree, and refusing that would refuse a document
+ * this engine's own parser just produced - which §9(a) forbids.
+ */
+export class AstJsonUnknownNodeTypeError extends Error {
+  constructor(
+    readonly nodeType: string,
+    readonly path: string,
+  ) {
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has type ${JSON.stringify(nodeType)}, ` +
+        'which the schema does not name (PART 12 §12)',
+    )
+    this.name = 'AstJsonUnknownNodeTypeError'
+  }
+}
+
+/**
+ * Thrown when a node the schema only admits inside one owner appears somewhere
+ * else - today a `citation`, which lives in `citation_group.items` and nowhere
+ * else (markup-carve/carve#2227).
+ *
+ * The type IS one the schema names, so {@link AstJsonUnknownNodeTypeError} is
+ * the wrong answer; the payload is a tree this engine cannot render, and §12
+ * asks for the refusal to name what was wrong. It used to be accepted here and
+ * throw `renderHtml: unknown inline citation` one step later, which carve-php
+ * and carve-rs both refuse at decode.
+ */
+export class AstJsonMisplacedNodeTypeError extends Error {
+  constructor(
+    readonly nodeType: string,
+    readonly owner: string,
+    readonly path: string,
+  ) {
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has type ${JSON.stringify(nodeType)}, ` +
+        `which the schema admits only in ${owner} (PART 12 §12)`,
+    )
+    this.name = 'AstJsonMisplacedNodeTypeError'
+  }
+}
+
+/**
+ * Thrown when a node in a node position has no usable `type` at all - the key is
+ * absent, or it is present carrying something that is not a string.
+ */
+export class AstJsonNodeTypeError extends Error {
+  constructor(
+    readonly found: unknown,
+    readonly path: string,
+  ) {
+    const described =
+      found === undefined ? 'no "type"' : `a "type" of ${JSON.stringify(found) ?? typeof found}`
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has ${described}; ` +
+        'every node carries a string "type" the schema names (PART 12 §12)',
+    )
+    this.name = 'AstJsonNodeTypeError'
+  }
+}
+
+/**
+ * Thrown when a node carries a property the schema does not name.
+ *
+ * PART 12 §11: "An ingest MUST REFUSE it with AN ERROR OF ITS OWN -- a typed,
+ * documented failure naming the offending property and the PATH it appeared at,
+ * so a caller can find it in a tree it did not write. Not a silent drop, and
+ * not a pass-through."
+ *
+ * The pass-through was this engine's behavior, and it failed on its own
+ * contract rather than on taste: the codec copied a wire record wholesale, so
+ * re-serializing echoed the property back and the OUTPUT stopped validating
+ * against a schema that closes every node with `additionalProperties: false`.
+ * Measured before the fix, 29 of 31 injected properties survived a round trip
+ * (carve-js#709).
+ */
+export class AstJsonUnknownFieldError extends Error {
+  constructor(
+    readonly property: string,
+    readonly path: string,
+    readonly nodeType: string,
+  ) {
+    super(
+      `AST node ${nodeType} at ${path} carries ${JSON.stringify(property)}, which the schema does not name (PART 12 §11)`,
+    )
+    this.name = 'AstJsonUnknownFieldError'
+  }
+}
+
+/*
+ * THERE IS NO FIELD-NAME ALIAS TABLE, and the absence is the decision.
+ *
+ * `footnote.id` used to sit here: the spelling this engine and carve-php both
+ * published before PART 12 §7 settled the field as `label`. markup-carve/carve#743
+ * ruled ingest STRICT - an unexpected field rejects AT DECODE - and PART 12 §3
+ * makes field names spec surface, which is exactly what a second accepted
+ * spelling of one is not. carve-php refuses it; carve-js and carve-rs accepted
+ * it, so a payload decoded in two engines and failed in the third, which is the
+ * interchange break §3 exists against (markup-carve/carve-js#907).
+ *
+ * A legacy SHAPE the decoder maps is a different thing and is still accepted -
+ * see `LEGACY_TYPELESS_POSITIONS` below, which takes a definition list's old
+ * grouping record. That is not a second spelling of a field NAME, and no engine
+ * has been measured disagreeing about it, so the clause this removal rests on
+ * does not reach it.
+ */
+
+/**
+ * PART 12 §12(d): the payload did not validate against `resources/ast-schema.json`.
+ *
+ * TYPED, like §12(a), (b) and (c)'s errors, and that is half the clause's point.
+ * Before it, six of these sixteen shapes reached the RENDERER and failed there
+ * with a bare `TypeError: nodes is not iterable` - a stack trace from inside a
+ * renderer for a document the decoder had already accepted, which §9(b) forbids
+ * outright.
+ */
+export class AstJsonSchemaError extends Error {
+  constructor(
+    readonly detail: string,
+    readonly path: string,
+  ) {
+    super(`AST payload does not match the schema at ${path === '' ? '$' : path}: ${detail}`)
+    this.name = 'AstJsonSchemaError'
+  }
+}
+
+/**
+ * A `table.rowGroups` that does not partition the table's rows.
+ *
+ * PART 12 §15 makes it a MUST: the counts consume `rows` in order - head first,
+ * then each body, then the foot - and account for every row EXACTLY ONCE. The
+ * schema cannot say so. JSON Schema has no way to relate one field's value to
+ * the length of another's, so `headRows: 5` on a two-row table validates
+ * cleanly, decodes, and reaches a consumer that then reads rows the table does
+ * not have.
+ *
+ * Which is why this is checked on the INPUT path and given an error of its own:
+ * a green validator is not evidence here, and a producer that has just built
+ * both the rows and the counts from the same arrays cannot check it either -
+ * that check could not fail. The payloads worth checking are the ones that
+ * arrive from somewhere else.
+ */
+export class AstJsonPartitionError extends Error {
+  constructor(
+    readonly counted: number,
+    readonly rows: number,
+    readonly path: string,
+  ) {
+    super(
+      `AST payload has a table.rowGroups that does not partition its rows at ${path === '' ? '$' : path}: ` +
+        `the head, bodies and foot account for ${counted} row${counted === 1 ? '' : 's'} of ${rows}`,
+    )
+    this.name = 'AstJsonPartitionError'
+  }
+}
+
+/**
+ * The one value a `const:` kind admits, decoded from the kind that carries it.
+ */
+function constOf(kind: string): unknown {
+  return JSON.parse(kind.slice(6))
+}
+
+/**
+ * Whether `value` matches the shape the schema gives it.
+ *
+ * The kinds are the subset of JSON Schema `resources/ast-schema.json` actually
+ * uses (see `WIRE_VALUE_KINDS`), so this answers §12(d) without re-implementing
+ * a validator - and without a hand-written table, which would be the schema
+ * expressed a second time.
+ */
+function matchesKind(value: unknown, kind: string): boolean {
+  if (kind.startsWith('string>=')) {
+    if (typeof value !== 'string') return false
+    const minimum = Number(kind.slice(8))
+    let length = 0
+    for (const _ of value) {
+      if (++length >= minimum) return true
+    }
+    return length >= minimum
+  }
+  if (kind.startsWith('const:')) {
+    // ONE legal value, compared by identity against the schema's own. The
+    // schema writes `const` where the field's presence IS the fact and there is
+    // no other value to write - `definition_list.loose` is `const: true`
+    // precisely so that absent means derived - so `loose: false` says the
+    // opposite of what the field means and is not a lesser spelling of absent.
+    return value === constOf(kind)
+  }
+  if (kind.startsWith('enum:')) {
+    return typeof value === 'string' && kind.slice(5).split('\u0000').includes(value)
+  }
+  switch (kind) {
+    case 'string':
+      return typeof value === 'string'
+    case 'boolean':
+      return typeof value === 'boolean'
+    case 'integer':
+      return Number.isInteger(value)
+    case 'integer>=0':
+      return Number.isInteger(value) && (value as number) >= 0
+    case 'integer>=1':
+      return Number.isInteger(value) && (value as number) >= 1
+    case 'object':
+      return value !== null && typeof value === 'object' && !Array.isArray(value)
+    case 'string[]':
+      return Array.isArray(value) && value.every((v) => typeof v === 'string')
+    case 'array':
+      return Array.isArray(value)
+    case 'node':
+      return value !== null && typeof value === 'object' && !Array.isArray(value)
+    default:
+      return true
+  }
+}
+
+/**
+ * PART 12 §12(d), over the whole payload (markup-carve/carve#881).
+ */
+function refuseSchemaViolations(node: unknown, path: string): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => refuseSchemaViolations(item, `${path}[${index}]`))
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  const required = typeof type === 'string' ? ownValue(WIRE_REQUIRED, type) : undefined
+  if (required !== undefined) {
+    for (const field of required) {
+      if (field in record) continue
+      throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
+    }
+    const kinds = ownValue(WIRE_VALUE_KINDS, type as string) ?? {}
+    for (const [field, kind] of Object.entries(kinds)) {
+      if (!(field in record)) continue
+      if (record[field] === undefined) continue
+      if (!matchesKind(record[field], kind)) {
+        throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
+      }
+    }
+    if (type === 'comment' && record.form !== undefined) {
+      if (!['block', 'line', 'braced'].includes(record.form as string) ||
+          (record.block === true) !== (record.form === 'block') ||
+          (record.delimited === true) !== (record.form === 'braced')) {
+        throw new AstJsonSchemaError('comment form disagrees with block or delimited', path)
+      }
+    }
+    if ((type === 'link' || type === 'image') && record.resolved !== undefined &&
+        (record.resolved !== true || typeof record.ref !== 'string' ||
+         record[type === 'link' ? 'href' : 'src'] !== '')) {
+      throw new AstJsonSchemaError('resolved requires an empty reference destination', path)
+    }
+    refuseArrayMinimums(record, type as string, path)
+    if (type === 'table' && Array.isArray(record.separatorWidths)) {
+      record.separatorWidths.forEach((width, index) => {
+        if (!Number.isInteger(width) || width < 1) {
+          throw new AstJsonSchemaError('separatorWidths entries must be positive integers', `${path}.separatorWidths[${index}]`)
+        }
+      })
+    }
+    if (type === 'line_block' && Array.isArray(record.lines)) {
+      const stanzas = record.children as unknown[]
+      if (record.lines.length !== stanzas.length) {
+        throw new AstJsonSchemaError('lines must have one entry per stanza', path)
+      }
+      record.lines.forEach((line, index) => {
+        const at = `${path}.lines[${index}]`
+        if (!Array.isArray(line) || line.at(-1) !== '/children/-') {
+          throw new AstJsonSchemaError('a stanza must end at /children/-', at)
+        }
+        const boundaries = new Map(lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>).map((pointer, offset) => [pointer, offset]))
+        let previous = -1
+        line.forEach((pointer, pointerIndex) => {
+          if (typeof pointer !== 'string' || !/^(?:\/(?:[^~/]|~[01])*)+$/.test(pointer)) {
+            throw new AstJsonSchemaError('line boundary must be an RFC 6901 pointer', `${at}[${pointerIndex}]`)
+          }
+          if (pointer === '/children/-') {
+            if (pointerIndex !== line.length - 1) throw new AstJsonSchemaError('stanza end must occur once', at)
+            return
+          }
+          const offset = boundaries.get(pointer) ?? -1
+          if (offset <= previous) throw new AstJsonSchemaError('line boundaries must name hard breaks in order', `${at}[${pointerIndex}]`)
+          previous = offset
+        })
+      })
+    }
+    // The typeless RECORDS that hang off a node. Every node kind can carry
+    // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
+    // ride in - `pos` missing `endOffset` was accepted by two of the three
+    // engines - and `table.rowGroups` was accepted with any shape at all,
+    // because those two were named here by hand rather than derived.
+    refuseNestedRecordShapes(type as string, record, path)
+    refusePartition(record, path)
+    refuseTaskState(record, path)
+    refuseAdditionalSpecConstraints(record, path)
+  }
+  for (const [key, value] of Object.entries(record)) {
+    // A NODE POSITION holds nodes, so an element that is not an object is not a
+    // node - `children: [null]` and `children: ["x"]` both reached the renderer
+    // and failed there with an untyped TypeError.
+    //
+    // AND WHICH nodes, not merely that they are objects. Checking only the
+    // container leaves the schema half-consulted: a `paragraph` sitting in
+    // another paragraph's `children` is a block where the schema names
+    // `inlineNode`, and it decoded cleanly and then threw
+    // `renderHtml: unknown inline paragraph` - the same untyped renderer crash
+    // this clause exists to stop. A `records` position has no entry in
+    // `NODE_POSITION_TYPES` - the schema gives those no `type`, so no member set
+    // exists - and the plain records they hold are therefore untouched.
+    if (NODE_FIELDS.includes(key)) {
+      const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
+      const positionKind =
+        typeof type === 'string' ? NODE_POSITION_KIND[`${type}.${key}`] : undefined
+      const at = path === '' ? key : `${path}.${key}`
+      refuseNodePosition(value, positionKind, admitted, at)
+    }
+    refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+/**
+ * One node position, dispatched on the shape the schema gives it.
+ *
+ * A node-matrix role, if present in a pinned schema, places nodes one level
+ * below the outer array. The current line-block range field holds pointers.
+ */
+function refuseNodePosition(
+  value: unknown,
+  kind: 'nodes' | 'node' | 'node-matrix' | 'records' | undefined,
+  admitted: readonly string[] | undefined,
+  at: string,
+): void {
+  if (kind === 'node') {
+    refuseNodeAt(value, admitted, at)
+    return
+  }
+  if (!Array.isArray(value)) return
+  if (kind === 'node-matrix') {
+    value.forEach((line, index) => {
+      // A non-array here is the unruled wrong-TYPE class the `nodes` case
+      // leaves alone for the container, applied one level in.
+      if (!Array.isArray(line)) return
+      line.forEach((item, inner) =>
+        refuseNodeAt(item, admitted, `${at}[${index}][${inner}]`),
+      )
+    })
+    return
+  }
+  value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
+}
+
+/**
+ * One node position: the value must be a node, and one the schema admits there.
+ *
+ * `admitted` is undefined where the schema does not pin the member set - a
+ * legacy position, or one whose kind is `records`. The object test still runs,
+ * because a scalar is not a node anywhere.
+ */
+function refuseNodeAt(value: unknown, admitted: readonly string[] | undefined, path: string): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AstJsonSchemaError(`${describe(value)} sits where a node belongs`, path)
+  }
+  if (admitted === undefined) return
+  const type = (value as Record<string, unknown>).type
+  // A non-string `type` is section 12(c)'s error and carries its own; saying it
+  // again here would be two producers of one rule.
+  if (typeof type !== 'string') return
+  // A LEGACY record carries no `type` at all, so it is already past the test
+  // above; `LEGACY_TYPELESS_POSITIONS` is what excuses it, and it is keyed by
+  // POSITION rather than by path, so nothing more is needed here.
+  if (!admitted.includes(type)) {
+    throw new AstJsonSchemaError(
+      `a "${type}" node sits where the schema admits only ${admitted.join(', ')}`,
+      path,
+    )
+  }
+}
+
+/**
+ * §12(d) inside every closed RECORD the owner nests, and inside their own.
+ *
+ * The owner is a node type or a record name, and the recursion is the point:
+ * `table.rowGroups` holds `bodies`, a list of closed records that each carry an
+ * `attrs`. Closing only what hangs off a NODE would have left the reported hole
+ * one level further down.
+ *
+ * A position whose value is the WRONG SHAPE entirely is not settled here. The
+ * owner's own `WIRE_VALUE_KINDS` entry already gives `rowGroups` as `object` and
+ * `bodies` as `array`, and that check has run by the time this is called, so a
+ * value that got past it is either the right shape or absent.
+ */
+function refuseNestedRecordShapes(
+  owner: string,
+  record: Record<string, unknown>,
+  path: string,
+): void {
+  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
+  if (nested === undefined) return
+  for (const [field, { record: name, array }] of Object.entries(nested)) {
+    const value = record[field]
+    const at = `${path}.${field}`
+    if (array) {
+      if (!Array.isArray(value)) continue
+      value.forEach((item, index) => refuseRecordShape(item, name, `${at}[${index}]`))
+      continue
+    }
+    refuseRecordShape(value, name, at)
+  }
+}
+
+/**
+ * §15's MUST, checked where the payload comes from outside: the group counts
+ * partition `rows`.
+ *
+ * Runs after the shape checks, so every count it adds is already known to be a
+ * non-negative integer and `bodies` is already known to be an array of records.
+ */
+function refusePartition(record: Record<string, unknown>, path: string): void {
+  if (record.type !== 'table') return
+  const groups = record.rowGroups as
+    | { headRows?: number; footRows?: number; bodies?: Array<{ headRows?: number; bodyRows?: number }> }
+    | undefined
+  if (groups === undefined) return
+  const rows = Array.isArray(record.rows) ? record.rows.length : 0
+  const counted = (groups.headRows ?? 0) + (groups.footRows ?? 0) +
+    (groups.bodies ?? []).reduce((total, body) => total + (body.headRows ?? 0) + (body.bodyRows ?? 0), 0)
+  if (counted !== rows) throw new AstJsonPartitionError(counted, rows, path)
+}
+
+/**
+ * The schema's `if`/`then` on a task item. `WIRE_VALUE_KINDS` sees one field at
+ * a time, so the PAIR is unchecked there.
+ */
+function refuseTaskState(record: Record<string, unknown>, path: string): void {
+  if (record.type !== 'list_item' || record.taskState === undefined) return
+  const implied = record.taskState === 'x'
+  if (record.checked !== implied) {
+    throw new AstJsonSchemaError(
+      `taskState ${JSON.stringify(record.taskState)} needs checked ${implied}`,
+      path,
+    )
+  }
+}
+
+/** Validate cross-field constraints and section levels beyond the wire field table. */
+function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: string): void {
+  if (record.type === 'section' && record.level !== undefined &&
+      (typeof record.level !== 'number' || record.level > 6)) {
+    throw new AstJsonSchemaError('section.level must be an integer from 1 through 6', path)
+  }
+  if (record.type === 'table_cell' &&
+      (record.children === undefined) === (record.blocks === undefined)) {
+    throw new AstJsonSchemaError('table_cell requires exactly one of children or blocks', path)
+  }
+}
+
+/** Enforce schema array bounds at the field and any nested array levels. */
+function refuseArrayMinimums(record: Record<string, unknown>, owner: string, path: string): void {
+  const fields = ownValue(WIRE_ARRAY_MIN_ITEMS, owner) ?? {}
+  for (const [field, bounds] of Object.entries(fields)) {
+    const check = (value: unknown, depth: number, minimum: number, at: string): void => {
+      if (!Array.isArray(value)) return
+      if (depth > 0) {
+        value.forEach((item, index) => check(item, depth - 1, minimum, `${at}[${index}]`))
+      } else if (value.length < minimum) {
+        throw new AstJsonSchemaError(`array must contain at least ${minimum === 1 ? 'one' : minimum} item${minimum === 1 ? '' : 's'}`, at)
+      }
+    }
+    for (const { depth, minimum } of bounds) check(record[field], depth, minimum, `${path}.${field}`)
+  }
+}
+
+/** The required fields and value shapes of one closed record. */
+function refuseRecordShape(value: unknown, name: string, path: string): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    // An element of an ARRAY of records reaches this with any shape at all,
+    // because the array's own kind says nothing about what is in it. A single
+    // record's shape was settled by the owner's value kind, so a non-object
+    // there is already refused and this only sees `undefined`.
+    if (value === undefined) return
+    throw new AstJsonSchemaError(`${describe(value)} sits where the schema gives a record`, path)
+  }
+  const item = value as Record<string, unknown>
+  for (const field of WIRE_REQUIRED[name] ?? []) {
+    if (!(field in item)) {
+      throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
+    }
+  }
+  const kinds = WIRE_VALUE_KINDS[name] ?? {}
+  for (const [field, kind] of Object.entries(kinds)) {
+    if (!(field in item) || item[field] === undefined) continue
+    if (!matchesKind(item[field], kind)) {
+      throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
+    }
+  }
+  refuseArrayMinimums(item, name, path)
+  for (const [field, value] of Object.entries(item)) {
+    if (!NODE_FIELDS.includes(field)) continue
+    const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
+    const kind = NODE_POSITION_KIND[`${name}.${field}`]
+    const at = `${path}.${field}`
+    refuseNodePosition(value, kind, admitted, at)
+  }
+  refuseNestedRecordShapes(name, item, path)
+}
+
+/**
+ * What the schema asked for and what arrived, for a §12(d) error.
+ *
+ * A `const` names the ONE value it admits rather than a shape, so it says
+ * "requires true" where every other kind says "gives boolean" - `describe`
+ * alone would report `loose: false` as "is a boolean where the schema gives
+ * const:true", which reads as a type complaint about a value that has the right
+ * type and the wrong content.
+ */
+function expectation(field: string, value: unknown, kind: string): string {
+  if (kind.startsWith('const:')) {
+    const wanted = constOf(kind)
+    return `"${field}" is ${describe(value)} where the schema requires ${JSON.stringify(wanted)}`
+  }
+
+  return `"${field}" is ${describe(value)} where the schema gives ${kind}`
+}
+
+/** A short, non-leaking description of a value, for an error message. */
+function describe(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'an array'
+  if (typeof value === 'object') return 'an object'
+  if (typeof value === 'string') return 'a string'
+
+  return `a ${typeof value}`
+}
+
+/**
+ * The fields a LEGACY definition-list entry may carry.
+ *
+ * The runtime `DefinitionItem`'s own fields, because the legacy wire form IS
+ * that record: it was produced by stringifying `parse()` output before
+ * `toAstJson` existed, so the two position arrays travel with it.
+ */
+const LEGACY_DEFINITION_ENTRY_FIELDS: ReadonlySet<string> = new Set([
+  'terms',
+  'definitions',
+  'definitionLines',
+  'definitionSpans',
+])
+
+/**
+ * Is this the untyped legacy definition entry, rather than some other untyped
+ * object?
+ *
+ * The same test `isRuntimeEntry` uses and the same one
+ * `LEGACY_TYPELESS_POSITIONS` is conditional on - an array-valued `terms`. A
+ * looser test would close fields on records the exemption never opened.
+ */
+function isLegacyDefinitionEntry(record: Record<string, unknown>): boolean {
+  return record.type === undefined && Array.isArray(record['terms'])
+}
+
+/**
+ * §11 inside every closed RECORD the owner nests, and inside their own.
+ *
+ * `WIRE_FIELDS` is keyed by `type` and a record has none, so nothing else
+ * reaches one. Derived from the schema rather than named here: `attrs` and `pos`
+ * were written out literally, which described the whole wire only until the
+ * schema grew a third record (markup-carve/carve-js#1055).
+ */
+function refuseUnknownRecordFields(
+  owner: string,
+  record: Record<string, unknown>,
+  path: string,
+): void {
+  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
+  if (nested === undefined) return
+  for (const [field, { record: name, array }] of Object.entries(nested)) {
+    const value = record[field]
+    const at = `${path}.${field}`
+    const items: Array<[unknown, string]> = array
+      ? Array.isArray(value)
+        ? value.map((item, index) => [item, `${at}[${index}]`])
+        : []
+      : [[value, at]]
+    for (const [item, itemPath] of items) {
+      // A value that is not a record at all is §12(d)'s to refuse, with the
+      // shape it names. Saying it here as well would be two producers of one
+      // rule, and this one has no shape to report.
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) continue
+      const allowed = new Set(WIRE_RECORD_FIELDS[name])
+      for (const key of Object.keys(item as Record<string, unknown>)) {
+        if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, itemPath, name)
+      }
+      refuseUnknownRecordFields(name, item as Record<string, unknown>, itemPath)
+    }
+  }
+}
+
+function refuseUnknownFields(node: unknown, path: string): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => refuseUnknownFields(item, `${path}[${index}]`))
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  // A node kind the schema does not name at all is NOT this error's business:
+  // the decoder turns an unusable kind away on its own terms, and reporting a
+  // field on a type nobody names would send the caller after the wrong thing.
+  const known = typeof type === 'string' ? ownValue(WIRE_FIELDS, type) : undefined
+  if (known === undefined && isLegacyDefinitionEntry(record)) {
+    for (const key of Object.keys(record)) {
+      if (!LEGACY_DEFINITION_ENTRY_FIELDS.has(key)) {
+        throw new AstJsonUnknownFieldError(key, path, 'definition_list.items')
+      }
+    }
+  }
+  if (known !== undefined) {
+    for (const key of Object.keys(record)) {
+      if (!known.includes(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
+    }
+    // The objects that hang off a node without a `type` of their own. They are
+    // closed in the schema too, and a type-keyed check cannot reach them - which
+    // is how `rowGroups: {junk: -5}` decoded and was published again.
+    refuseUnknownRecordFields(type as string, record, path)
+  }
+  for (const [key, value] of Object.entries(record)) {
+    refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+/**
+ * A node position where a LEGACY payload carries a record with no `type`.
+ */
+const LEGACY_TYPELESS_POSITIONS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['definition_list.items', ['terms', 'definitions']],
+])
+
+/**
+ * The node-bearing fields of those legacy records, which the schema does not
+ * name and `NODE_FIELDS` therefore cannot know about.
+ *
+ * A legacy definition entry keeps its content under `terms` and `definitions`,
+ * both arrays OF ARRAYS of nodes. Without this the walk reached the entry record
+ * and stopped, so every node inside a stored definition list was unchecked -
+ * including against the string-type half of §12(c) that was already
+ * implemented: `{"type":"wat"}` under `terms` decoded and then failed in the
+ * renderer as `unknown inline wat`, which is the arrival point the clause rules
+ * out.
+ *
+ * Applied only where the record carries no `type` of its own. On a typed node
+ * these names are properties the schema does not name, and §11 refuses them
+ * before this could matter.
+ */
+const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
+
+/**
+ * Refuse, at decode, a node whose `type` the schema does not name (PART 12
+ * §12(c)) - whether the name is unknown, absent, or not a string at all.
+ *
+ * @param typeRequired whether a `type` must be PRESENT here. Decided by the
+ *   caller from `NODE_POSITION_KIND`, because one field name means different
+ *   things in different places: `items` holds nodes on `list` and plain
+ *   `citation` records on `citation_group`.
+ *
+ *   Only presence is positional. A `type` that IS present must be a string
+ *   everywhere, exempt position or not - the exemptions exist for records the
+ *   schema gives no `type` at all, not for a node that carries an unusable one.
+ *   Without that split, `definition_list.items` holding `{"type": 7}` - the
+ *   CURRENT wire shape with a bad value - rode in on the legacy grouping form's
+ *   exemption and was silently dropped by `entriesFromWire`.
+ */
+/**
+ * Node types the schema admits in ONE position, and that position.
+ *
+ * `inlineNode` does not dispatch on `citation`: an item is a typed positioned
+ * node inside its group, not an inline a paragraph may hold (CARVE-P12-038).
+ */
+const OWNED_NODE_POSITIONS: ReadonlyMap<string, string> = new Map([
+  ['citation', 'citation_group.items'],
+])
+
+function refuseUnknownNodeTypes(
+  node: unknown,
+  path: string,
+  typeRequired: boolean,
+  legacyKeys?: readonly string[],
+  position?: string,
+): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) =>
+      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys, position),
+    )
+    return
+  }
+  // A `null` or a string in a node position is NOT this check's business: it is
+  // part of the wrong-type class markup-carve/carve#881 leaves unruled, and
+  // refusing it here would decide that question by accident.
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  if (typeof type !== 'string') {
+    // §12(c). A missing `type`, or one carrying a number, `null`, an array, an
+    // object or a boolean, names no schema type - so it is refused HERE and not
+    // by the renderer two steps later.
+    // `legacyKeys` narrows an exemption to the record SHAPE it was granted for:
+    // an untyped object in that position that is not the legacy record is not
+    // exempt, because nothing downstream can read it either.
+    const legacyShaped = legacyKeys === undefined || legacyKeys.some((key) => key in record)
+    if (type !== undefined || typeRequired || !legacyShaped) {
+      throw new AstJsonNodeTypeError(type, path)
+    }
+  } else if (ownValue(WIRE_FIELDS, type) === undefined) {
+    throw new AstJsonUnknownNodeTypeError(type, path)
+  } else {
+    // A type the schema names, in a position it does not admit. `citation` is
+    // in WIRE_FIELDS because `citation_group.items` needs it, and that entry
+    // used to make it acceptable as any node - including a paragraph's own
+    // child, which no engine renders.
+    const owner = OWNED_NODE_POSITIONS.get(type)
+    if (owner !== undefined && position !== owner) {
+      throw new AstJsonMisplacedNodeTypeError(type, owner, path)
+    }
+  }
+  // Only node-bearing fields, never every key: `attrs.keyValues` is a
+  // string-to-string map whose keys are ordinary attribute identifiers, so a
+  // blanket walk finds `{"type":"widget"}` there and refuses a document the
+  // parser produced.
+  const fields =
+    typeof type === 'string' ? NODE_FIELDS : [...NODE_FIELDS, ...LEGACY_RECORD_FIELDS]
+  for (const field of fields) {
+    const value = record[field]
+    if (value === undefined) continue
+    const position = typeof type === 'string' ? `${type}.${field}` : undefined
+    // A record with no `type` of its own is one the schema gives none - a
+    // legacy definition entry - and its own array fields hold real nodes, so the
+    // requirement comes back on for them.
+    const legacy = position === undefined ? undefined : LEGACY_TYPELESS_POSITIONS.get(position)
+    const kind =
+      position === undefined ? 'nodes' : legacy !== undefined ? 'records' : NODE_POSITION_KIND[position]
+    refuseUnknownNodeTypes(
+      value,
+      path === '' ? field : `${path}.${field}`,
+      // `nodes` is about the ELEMENTS: a non-array where the array belongs is
+      // the unruled wrong-type class, and `children: {}` still degrades to an
+      // empty document rather than being decided here.
+      // `node-matrix` falls to false with `records`: the container's ELEMENTS
+      // are arrays, not nodes, and the walk below descends them on its own.
+      kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
+      legacy,
+      position,
+    )
+  }
+}
+
+/**
+ * Deepest node nesting `fromAstJson` will ingest.
+ */
+export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
+
+/**
+ * Deepest WALK the reader will follow, arrays counted.
+ *
+ * Node depth alone does not bound the walk. An array is a child list rather
+ * than a level of its own, which is the right way to count NODES - but a
+ * payload of nothing but nested arrays then measures zero nodes, passes the cap
+ * above, and the conversion walk recurses over it until the stack gives out. So
+ * `[[[[ ... ]]]]` still raised a `RangeError`, the exact failure
+ * `AstJsonDepthError` was added to replace.
+ *
+ * Every level counts here: one array plus one node per level is the worst an
+ * honest payload does, so twice the node cap clears anything the encoder emits,
+ * and the constant keeps this off the boundary.
+ */
+const MAX_AST_JSON_WALK = MAX_AST_JSON_DEPTH * 2 + 32
+
+/** The child-bearing fields, `target` included, each named exactly once. */
+const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, ...OWNED_SINGLE_CHILD_FIELDS])]
+
+/**
+ * Node depth of a payload, measured with an EXPLICIT STACK.
+ *
+ * Deliberately not recursive: this exists to reject input too deep to recurse
+ * over, so measuring it by recursion would overflow on exactly the payload it
+ * is meant to refuse. Stops as soon as the cap is exceeded rather than walking
+ * a whole hostile tree.
+ */
+function astJsonDepth(
+  root: unknown,
+  limit: number,
+  walkLimit: number,
+): { nodes: number; walk: number } {
+  let deepest = 0
+  let deepestWalk = 0
+  const stack: Array<{ node: unknown; depth: number; walk: number }> = [
+    { node: root, depth: 0, walk: 0 },
+  ]
+
+  while (stack.length > 0) {
+    const { node, depth, walk } = stack.pop()!
+    if (depth > deepest) deepest = depth
+    if (walk > deepestWalk) deepestWalk = walk
+    // Either bound is enough to refuse the payload, and stopping at the first
+    // one keeps a hostile tree from being walked in full.
+    if (deepest > limit || deepestWalk > walkLimit) return { nodes: deepest, walk: deepestWalk }
+
+    if (Array.isArray(node)) {
+      // An array is a child LIST, not a level of its own - the nodes in it are.
+      // It IS a level of the walk, though: the conversion recurses through it.
+      for (const child of node) stack.push({ node: child, depth, walk: walk + 1 })
+      continue
+    }
+    if (typeof node !== 'object' || node === null) continue
+
+    const record = node as Record<string, unknown>
+    // `items` is already in CHILD_FIELDS: pushing it again doubled the work for
+    // every level of a nested list, so measuring a 30-deep list took minutes and
+    // a 40-deep one never finished. The fields are walked ONCE each.
+    for (const field of DEPTH_WALK_FIELDS) {
+      if (record[field] !== undefined)
+        stack.push({ node: record[field], depth: depth + 1, walk: walk + 1 })
+    }
+  }
+
+  return { nodes: deepest, walk: deepestWalk }
+}
+
+/**
+ * One string value of an ingested payload, normalized the way the parse
+ * boundary normalizes the same characters in source text.
+ */
+function normalizeIngestedValue(text: string): string {
+  const denulled = replaceLoneSurrogates(text.includes('\0') ? text.replace(/\0/g, '\ufffd') : text)
+  return denulled.includes('\r') ? denulled.replace(/\r\n?/g, '\n') : denulled
+}
+
+/**
+ * Replace every U+0000 and every lone surrogate with U+FFFD in every string
+ * value of an ingested payload, before anything reads one of them (PART 12
+ * section 21, CARVE-P0-023), and collapse every carriage return to a line feed
+ * alongside it.
+ */
+function normalizeIngestedValues<T>(node: T): T {
+  if (typeof node === 'string') {
+    return normalizeIngestedValue(node) as T
+  }
+  if (Array.isArray(node)) {
+    let changed = false
+    const mapped = node.map((child) => {
+      const next = normalizeIngestedValues(child)
+      if (next !== child) changed = true
+      return next
+    })
+    return (changed ? mapped : node) as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = node as Record<string, unknown>
+  let out: Record<string, unknown> | undefined
+  for (const key of Object.keys(record)) {
+    const value = ownValue(record, key)
+    const next = normalizeIngestedValues(value)
+    if (next === value) continue
+    // OWN-PROPERTY WRITE, for the reason `own-property.ts` gives: a payload
+    // naming `__proto__` reaches the prototype setter through plain assignment.
+    setOwn((out ??= { ...record }), key, next)
+  }
+  return (out ?? record) as T
+}
+
+export function fromAstJson(input: unknown, payloadByteLength?: number): Document {
+  // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
+  // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
+  // CLI flag is `--from-json`; all three of those take text. This one takes the
+  // parsed tree. Without this arm the string falls through to the root check and
+  // is reported as `AST root type undefined is not "document"`, which sends the
+  // caller looking at their document instead of at their call (carve-js#703).
+  if (typeof input === 'string') {
+    throw new TypeError(
+      'fromAstJson takes a parsed AST object, not a JSON string; call JSON.parse first',
+    )
+  }
+  // Checked BEFORE the depth walk: a foreign payload should be turned away for
+  // being foreign, not for however deep it happens to be.
+  const json = typeof input === 'object' && input !== null
+    ? input as Record<string, unknown>
+    : undefined
+  if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
+  if (Object.hasOwn(json, 'astVersion')) checkAstVersion(json.astVersion)
+  // PART 12 §12(a), and before the depth walk for the same reason the root type
+  // is: a payload that is not this format should be turned away for that, not
+  // for however deep it happens to be. `in` rather than a value test - (a) is
+  // about the field being PRESENT, and the value of `srcByteLength` is
+  // explicitly not this clause's business.
+  for (const field of ['children', 'srcByteLength'] as const) {
+    if (!(field in json)) throw new AstJsonRootFieldError(field)
+  }
+
+  const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
+  if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
+  if (walk > MAX_AST_JSON_WALK) throw new AstJsonDepthError(walk)
+
+  // AFTER the depth bound, so a payload built to blow the stack is turned away
+  // by the cheap check rather than by a full walk of itself (PART 12 §9).
+  refuseUnknownNodeTypes(json, '', true)
+  refuseUnknownFields(json, '')
+  // PART 12 §12(d), AFTER the two narrower refusals so a payload with an
+  // unknown type or an unnamed property is still reported as that, which is
+  // the more specific answer and the one those clauses name.
+  refuseSchemaViolations(json, '')
+  refuseMathNumberConstraints(json)
+
+  // PART 12 §21, and BEFORE every read of a VALUE below - before a label
+  // becomes a key, before an abbreviation half is joined into a pair key,
+  // before anything reaches a renderer, which are the three readings the clause
+  // names.
+  //
+  // AFTER THE REFUSALS, which is the §9 ordering rather than a weakening of
+  // §21. The refusals read STRUCTURE - a type name, a field name, a value's
+  // kind - and no refusal outcome turns on this character: a type spelled with
+  // a NUL is not a known type, and it is not one with the NUL replaced either,
+  // so a payload is refused identically whichever side of them this runs on.
+  // Going first would cost that ordering for nothing: `refuseUnknownFields`
+  // throws at an unknown field WITHOUT descending into it, so a payload naming
+  // one over a deeply nested object would be walked in full here before the
+  // cheap refusal ever ran.
+  // The schema checks above establish the wire shape before this conversion.
+  const tree = normalizeIngestedValues(json as unknown as AstJsonDocument)
+
+  const children: BlockNode[] = []
+  const footnoteDefs: Record<string, BlockNode[]> = {}
+  const footnoteDefPos: Record<string, Position> = {}
+  let frontmatter: Document['frontmatter']
+
+  // Walk nested block lists in document order. The first footnote definition
+  // for a label wins, whether it appears at the root or in a container.
+  const liftNested = (startLists: BlockNode[][]): void => {
+    const frames = startLists.slice().reverse().map((blocks) => ({ blocks, index: 0 }))
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1]!
+      if (frame.index >= frame.blocks.length) {
+        frames.pop()
+        continue
+      }
+      const block = frame.blocks[frame.index]!
+      if ((block as { type: string }).type === 'footnote') {
+        const node = block as unknown as FootnoteDefNode & { id?: string }
+        const label = typeof node.label === 'string' ? node.label : node.id
+        frame.blocks.splice(frame.index, 1)
+        if (typeof label === 'string' && Array.isArray(node.children) && ownValue(footnoteDefs, label) === undefined) {
+          const body = definitionListsFromWire(node.children)
+          setOwn(footnoteDefs, label, body)
+          if (node.pos !== undefined) setOwn(footnoteDefPos, label, node.pos)
+          frames.push({ blocks: body, index: 0 })
+        }
+        continue
+      }
+      frame.index++
+      const nested: BlockNode[][] = []
+      pushIngestChildBlocks(block, nested)
+      for (let index = nested.length - 1; index >= 0; index--) frames.push({ blocks: nested[index]!, index: 0 })
+    }
+  }
+
+  // The guard stays, and it can no longer fire: §12(d) refuses a root whose
+  // `children` is not an array before the walk reaches here (carve#881). It
+  // used to read an empty document out of one, which is §12's own objection -
+  // "a reader that supplies a default has turned a truncated document into an
+  // empty one" - arriving through a door the clause did not cover. Left as the
+  // type narrowing it also is, rather than deleted for a line count.
+  for (const child of Array.isArray(tree.children) ? tree.children : []) {
+    if (child?.type === 'frontmatter' && frontmatter === undefined) {
+      const node = child as FrontmatterNode
+      if (typeof node.format === 'string' && typeof node.content === 'string') {
+        frontmatter = { format: node.format, content: node.content }
+        // §6 makes the round trip identity, so the span has to come back too -
+        // it is on the node here and on the root in the runtime document.
+        if (node.pos !== undefined) frontmatter.pos = node.pos
+        continue
+      }
+    }
+    if (child?.type === 'footnote') {
+      // `label` is the spec spelling; `id` is what this engine and carve-php
+      // published before PART 12 §7 settled it, and those trees are stored.
+      const node = child as FootnoteDefNode & { id?: string }
+      const label = typeof node.label === 'string' ? node.label : node.id
+      // `children` has to be an array to be a definition BODY. Adopting a
+      // string here puts it where every renderer iterates footnote bodies
+      // without checking, so the failure would surface as a crash inside the
+      // renderer for a document the decoder had already accepted.
+      if (typeof label === 'string' && Array.isArray(node.children)) {
+        // OWN-PROPERTY READ AND WRITE. `footnoteDefs['toString']` answers
+        // from `Object.prototype` on a plain object, so a definition labelled
+        // after any prototype key read as already present and was dropped with
+        // no error - the silent repair strict ingest exists to stop - while
+        // `footnoteDefs['__proto__'] = body` would not have stored it anyway,
+        // because plain assignment there runs the prototype setter
+        // (markup-carve/carve-js#886).
+        if (ownValue(footnoteDefs, label) === undefined) {
+          const body = definitionListsFromWire(node.children)
+          setOwn(footnoteDefs, label, body)
+          if (node.pos !== undefined) setOwn(footnoteDefPos, label, node.pos)
+          liftNested([body])
+        }
+        continue
+      }
+      // Unusable as a definition, and `footnote` is a type no renderer has a
+      // case for - a definition renders where its REFERENCE appears, never in
+      // place. Keeping it would trade a decoder error for a renderer crash, so
+      // it is dropped and a reference to it reads as unresolved, which is what
+      // a missing definition already means.
+      continue
+    }
+    const block = definitionListsFromWire(child) as BlockNode
+    children.push(block)
+    const nested: BlockNode[][] = []
+    pushIngestChildBlocks(block, nested)
+    liftNested(nested)
+  }
+
+  const doc: Document = { type: 'document', children }
+  if (frontmatter !== undefined) doc.frontmatter = frontmatter
+  if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
+  if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
+  if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
+  markResolvedEmptyReferenceNodes(doc)
+
+  clearUnbackedFootnoteNumbers(doc, footnoteDefs)
+  const captionTargets = renumberCaptionsIfPublished(doc)
+  promoteIngestedBlockImages(doc)
+  // §3a leaves a cross-reference's display text off the wire, so the reader
+  // derives it from the target in this same document (carve-js#2238). AFTER the
+  // numbering, whose result the auto-text of a numbered caption's target is.
+  resolveIngestedCrossrefs(doc, captionTargets)
+
+  // WHAT THE SENDER ACTUALLY HAD TO SEND, recorded so the expansion budgets are
+  // not sized from a number the payload supplies about itself. Exact when the
+  // caller measured the bytes it read - the CLI does, and it is the one entry
+  // point in this package that ever holds them - and re-encoded here otherwise,
+  // because a library caller hands over an object that has already lost its
+  // string. See `expansionBudgetLength`.
+  recordIngestPayloadLength(doc, payloadByteLength ?? measurePayload(json))
+  rememberIngestedLineBlocks(doc)
+
+  return doc
+}
+
+/**
+ * The UTF-8 size of `json` re-encoded, or 0 when it cannot be measured.
+ *
+ * 0 is the CONSERVATIVE answer, not a failure to answer: the budget floor still
+ * applies underneath it, so a payload this cannot measure gets the floor rather
+ * than an unbounded budget. The realistic way to get here is a payload larger
+ * than V8's maximum string length, which is exactly the case that must not be
+ * handed a budget sized from its own claim.
+ */
+function measurePayload(json: unknown): number {
+  try {
+    return utf8ByteLength(JSON.stringify(json))
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Re-derive `caption_number.n` when the payload published numbers at all.
+ */
+function renumberCaptionsIfPublished(doc: Document): Map<string, InlineNode[]> {
+  // The crossref targets the numbering registers. Collected here rather than
+  // rebuilt later because the auto-text is "label + number" and the number is
+  // this pass's own result (carve-js#2238).
+  const captionTargets = new Map<string, InlineNode[]>()
+  const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
+  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber) &&
+      !hasPublishedMathNumber(doc.children) && !bodies.some(hasPublishedMathNumber)) return captionTargets
+
+  const counters = new Map<string, number>()
+  const register: Parameters<typeof numberCaptionsIn>[2] = (labelNodes, n, attrs, suffix) => {
+    const id = attrs?.id
+    if (id === undefined || captionTargets.has(id)) return
+    captionTargets.set(id, crossrefAutoText(labelNodes, n, suffix))
+  }
+  numberCaptionsIn(doc.children, counters, register)
+  for (const body of bodies) numberCaptionsIn(body, counters, register)
+  return captionTargets
+}
+
+function hasPublishedMathNumber(blocks: unknown): boolean {
+  const stack: unknown[] = [blocks]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (!value || typeof value !== 'object') continue
+    if (Array.isArray(value)) {
+      for (const child of value) stack.push(child)
+      continue
+    }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math' && node.number !== undefined) return true
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') stack.push(child)
+    }
+  }
+  return false
+}
+
+function refuseMathNumberConstraints(root: unknown): void {
+  const walk = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach((child, i) => walk(child, `${path}[${i}]`)); return }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math') {
+      if (typeof node.label === 'string' && (node.label.length === 0 || node.label.trim() !== node.label))
+        throw new AstJsonSchemaError('math.label must be non-empty and have no surrounding whitespace', path)
+      if (node.number !== undefined && (node.display !== true || node.label === undefined))
+        throw new AstJsonSchemaError('math.number requires display: true and label', path)
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos') walk(child, path ? `${path}.${key}` : key)
+    }
+  }
+  walk(root, '')
+}
+
+/** Whether any `caption_number` in `blocks` arrived carrying a number. */
+function hasPublishedCaptionNumber(blocks: unknown): boolean {
+  const stack: unknown[] = [blocks]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (Array.isArray(cur)) {
+      for (const item of cur) stack.push(item)
+      continue
+    }
+    if (cur === null || typeof cur !== 'object') continue
+    const node = cur as { type?: string; n?: number }
+    if (node.type === 'caption_number' && node.n !== undefined) return true
+    for (const value of Object.values(cur)) {
+      if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
+
+  return false
+}
+
+/**
+ * Drop `number` from any footnote REFERENCE whose definition is not in `defs`.
+ *
+ * Iterative, so a tree deeper than any renderer's ceiling - this reader accepts
+ * up to MAX_AST_JSON_DEPTH, which is higher - is walked rather than refused. A
+ * recursive version would also have to answer which depth bound applies, and the
+ * two count different units (JSON structural levels against render levels), which
+ * is the comparison §25 warns against making.
+ */
+function clearUnbackedFootnoteNumbers(
+  doc: Document,
+  defs: Record<string, BlockNode[]>,
+): void {
+  const stack: unknown[] = [doc.children, Object.values(defs)]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (Array.isArray(cur)) {
+      for (const item of cur) stack.push(item)
+      continue
+    }
+    if (cur === null || typeof cur !== 'object') continue
+    const node = cur as { type?: string; label?: string; number?: number }
+    if (node.type === 'footnote_ref' && node.number !== undefined) {
+      if (node.label === undefined || ownValue(defs, node.label) === undefined) delete node.number
+    }
+    for (const value of Object.values(cur)) {
+      if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
+}
+
+function markResolvedEmptyReferenceNodes(doc: Document): void {
+  const stack: unknown[] = [doc]
+  while (stack.length) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const child of value) stack.push(child)
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const node = value as Record<string, unknown>
+    if ((node.type === 'link' || node.type === 'image') && node.resolved === true) {
+      markResolvedEmptyReference(node as unknown as Image)
+      delete node.resolved
+    }
+    if (node.type === 'comment') delete node.form
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'pos' && key !== 'attrs' && child !== null && typeof child === 'object') stack.push(child)
+    }
+  }
+}

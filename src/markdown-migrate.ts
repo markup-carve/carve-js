@@ -1,21 +1,21 @@
-import { freeMarkerSerial } from './marker-serial.js'
-import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
-import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './markdown-destination-encoding.js'
+import { freeMarkerSerial } from './parse/list/marker-serial.js'
+import { protectNativeMarkdownDestinationGlyphs } from './import/markdown/markdown-native-destination-glyphs.js'
+import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './import/markdown/markdown-destination-encoding.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
-import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './import/markdown/markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
-import { SourceUnspellableError } from './source-unspellable-error.js'
-import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from './attribute-parser.js'
+import { SourceUnspellableError } from './source/source-unspellable-error.js'
+import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from './extension/attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
-import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
-import { backtickRunEnds } from './backtick-run-index.js'
-import { linkMarkdownEmailText } from './markdown-email-links.js'
-import { canonicalCarveWrite } from './canonical-carve-write.js'
-import { convertedIds, protectUnresolvedCrossrefs } from './imported-crossrefs.js'
-import { rewriteSameFileHeadingLinks, type FragmentFixup } from './markdown-heading-fragments.js'
+import { markdownEmphasis, recordMarkdownProtectedDepth } from './import/markdown/markdown-emphasis.js'
+import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markdown-gfm-autolinks.js'
+import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
+import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
+import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
+import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
+import { rewriteSameFileHeadingLinks, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -42,12 +42,12 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
   useEmptyDestinationBoundaryKey,
-} from './markdown-empty-destination.js'
-import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, EXTENDER_LEADING_SPAN_UNSPELLABLE, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+} from './import/markdown/markdown-empty-destination.js'
+import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, EXTENDER_LEADING_SPAN_UNSPELLABLE, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import/markdown/import-report-messages.js'
 import { extendsGrapheme } from './grapheme-extender.js'
 import { opensFrontmatter, parse, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, canonicalQuoteBodyLines, dropTrailingWs, emphasisNeedsBraces, escapeQuoted, escapeSpanMarkerPayload, foldEmptyItemBody, listContinuationWidth, padCell, paragraphLineText, quoteAttrValue, renderCarve, spellCodeSpan, trimHeadingText } from './render-carve.js'
-import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
+import { FRONTMATTER_SAFE_BREAK } from './parse/block/thematic-break-marker.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -2840,7 +2840,7 @@ import {
   carrierIsCloser,
   carrierMarker,
   carrierPayload,
-} from './carrier-markers.js'
+} from './import/markdown/carrier-markers.js'
 import { replaceLoneSurrogates } from './well-formed.js'
 
 export type MarkdownImportLoss = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LiteralCommentClosers } from '../src/literal-comment-closers.js'
+import { LiteralCommentClosers } from '../src/parse/block/literal-comment-closers.js'
 
 describe('literal comment closers', () => {
   it('refuses a closer beyond a sibling departure', () => {

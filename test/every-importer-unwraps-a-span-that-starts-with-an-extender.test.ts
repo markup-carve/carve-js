@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, htmlToCarve } from '../src/index.js'
 import { migrateBbcode, migrateDjot, migrateMarkdown } from '../src/migration.js'
-import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from '../src/import-report-messages.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from '../src/import/markdown/import-report-messages.js'
 
 // carve-js#3146: after CARVE-P3-025 a span whose content starts with a grapheme
 // extender has no Carve spelling. Every importer drops the span, keeps its

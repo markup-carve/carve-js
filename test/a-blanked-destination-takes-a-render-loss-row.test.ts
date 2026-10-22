@@ -19,7 +19,7 @@ import {
   carveToMarkdownWithReport,
   carveToPlainTextWithReport,
 } from '../src/index.js'
-import { RenderLossError, type RenderLoss } from '../src/render-loss.js'
+import { RenderLossError, type RenderLoss } from '../src/render/render-loss.js'
 
 const LINK = '[x](javascript:alert(1))'
 const AUTOLINK = '<javascript:alert(1)>'

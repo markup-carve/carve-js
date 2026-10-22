@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { htmlToCarve, parse, renderCarve, renderHtml } from '../src/index.js'
-import { resolveHeadingIds } from '../src/heading-ids.js'
+import { resolveHeadingIds } from '../src/heading/heading-ids.js'
 
 describe('digit-leading explicit ids and classes', () => {
   it('accepts explicit id/class shorthands without widening attribute names', () => {

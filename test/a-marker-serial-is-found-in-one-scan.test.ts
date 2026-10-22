@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { freeMarkerSerial } from '../src/marker-serial.js'
-import { extractReferenceDefinitions } from '../src/markdown-empty-destination.js'
+import { freeMarkerSerial } from '../src/parse/list/marker-serial.js'
+import { extractReferenceDefinitions } from '../src/import/markdown/markdown-empty-destination.js'
 import { djotToCarve, migrateMarkdown } from '../src/index.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 

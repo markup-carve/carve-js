@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate src/table-unicode-18-data.ts from Unicode 18.0.0 UCD files."""
+"""Regenerate src/table/table-unicode-18-data.ts from Unicode 18.0.0 UCD files."""
 
 import hashlib
 import json
@@ -56,7 +56,7 @@ def main(directory):
         for index in range(0, len(values), 30):
             content += '  ' + ', '.join(map(str, values[index:index + 30])) + ',\n'
         content += ']\n'
-    target = Path(__file__).resolve().parents[1] / 'src/table-unicode-18-data.ts'
+    target = Path(__file__).resolve().parents[1] / 'src/table/table-unicode-18-data.ts'
     target.write_text(content)
 
 

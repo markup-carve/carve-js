@@ -8,7 +8,7 @@ import {
   ABBR_BUDGET_FACTOR,
   abbrBudget,
   utf8ByteLength,
-} from '../src/abbr-budget.js'
+} from '../src/extension/abbr-budget.js'
 
 describe('abbreviation-expansion amplification (DoS guard)', () => {
   // A tiny input that defines a huge expansion (`*[HT]: <50KB>`) and uses the

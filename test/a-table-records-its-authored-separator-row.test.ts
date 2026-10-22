@@ -7,7 +7,7 @@ import {
   toAstJson,
   toAstEnvelope,
 } from '../src/index.js'
-import { WIRE_FIELDS, WIRE_VALUE_KINDS } from '../src/wire-fields.js'
+import { WIRE_FIELDS, WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
 import type { Table } from '../src/ast.js'
 
 /*

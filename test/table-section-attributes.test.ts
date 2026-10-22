@@ -6,7 +6,7 @@ import { renderPlainText } from '../src/render-plain.js'
 import { renderMarkdown } from '../src/render-markdown.js'
 import { renderAnsi } from '../src/render-ansi.js'
 import { renderCarve } from '../src/render-carve.js'
-import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
+import { renderCarveWithConversionReport } from '../src/import/markdown/conversion-diagnostics.js'
 
 const row = (value: string) => ({ type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value }] }] })
 const document = (headRows = 1, footRows = 1) => ({ type: 'document', srcByteLength: 0, children: [{

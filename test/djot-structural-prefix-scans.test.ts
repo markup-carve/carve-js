@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { djotEmphasis, djotStructuralPrefixEnd, djotStructuralPrefixSteps } from '../src/djot-emphasis.js'
+import { djotEmphasis, djotStructuralPrefixEnd, djotStructuralPrefixSteps } from '../src/import/djot/djot-emphasis.js'
 
 const prefix = /^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+(?:\[[ xX-]\][ \t]+)?)*[ \t]*$/
 

@@ -15,14 +15,14 @@ import type {
   EscapedText,
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
-import { utf8ByteLength } from './abbr-budget.js'
+import { utf8ByteLength } from './extension/abbr-budget.js'
 import { replaceLoneSurrogates } from './well-formed.js'
-import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading-ids.js'
-import { promoteCitationDefinitions } from './citations.js'
+import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading/heading-ids.js'
+import { promoteCitationDefinitions } from './extension/citations.js'
 import { markedDelimitedTable, parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
-import { forEachChildBlockList } from './block-children.js'
-import { DocumentIdRegistry, visitDocumentIds } from './document-ids.js'
+import { forEachChildBlockList } from './parse/block/block-children.js'
+import { DocumentIdRegistry, visitDocumentIds } from './ast/document-ids.js'
 import {
   DIRECTIVE_SCAN_RE,
   DIRECTIVE_SHAPE_RE,

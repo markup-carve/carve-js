@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 
 test.each(['::: warning Title', '::: [x]', ':::'])('reports a container opener inside root Djot code: %s', marker => {
   const source = `\`a\n${marker}\nb\``

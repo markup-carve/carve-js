@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
 import type { BlockNode, Document, Figure, DefinitionList } from '../src/ast.js'
-import { collapseLoneImageParagraphs } from '../src/heading-ids.js'
+import { collapseLoneImageParagraphs } from '../src/heading/heading-ids.js'
 import { renderHtml } from '../src/render-html.js'
-import { RenderDepthError } from '../src/render-depth.js'
+import { RenderDepthError } from '../src/render/render-depth.js'
 
 const imageParagraph = (): BlockNode => ({
   type: 'paragraph', children: [{ type: 'image', src: '/a.png', alt: 'A' }],

@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { carveToCarve, carveToHtml, htmlToCarve, parse, renderCarve, renderCarveWithReport, renderHtml, resolve } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
-import { SourceUnspellableError } from '../src/source-unspellable-error.js'
+import { SourceUnspellableError } from '../src/source/source-unspellable-error.js'
 import controls from './fixtures/verbatim-continuation-guards.json'
 
 function payloads(root: unknown): unknown[] {

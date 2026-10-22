@@ -1,5 +1,5 @@
-import { isDjotEscaped, djotContentStart, djotTableRows } from './djot-inline-boundaries.js'
-export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-inline-boundaries.js'
+import { isDjotEscaped, djotContentStart, djotTableRows } from './import/djot/djot-inline-boundaries.js'
+export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } from './import/djot/djot-inline-boundaries.js'
 /*
  * Djot -> Carve migration warnings.
  *
@@ -23,8 +23,8 @@ export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } 
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { readAttributes, continuesParagraph } from './djot-attributes.js'
-import { maskDjotOpaque, type DjotOpaqueOptions } from './djot-opaque.js'
+import { readAttributes, continuesParagraph } from './import/djot/djot-attributes.js'
+import { maskDjotOpaque, type DjotOpaqueOptions } from './import/djot/djot-opaque.js'
 
 import { parse } from './parse.js'
 

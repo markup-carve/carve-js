@@ -7,7 +7,7 @@
  * imports.
  */
 
-import { unescapeAttrValue } from './attribute-parser.js'
+import { unescapeAttrValue } from './extension/attribute-parser.js'
 
 export interface Directive {
   raw: string

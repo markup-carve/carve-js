@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, djotToCarve } from '../src/index.js'
 import { parse, renderHTML } from '@djot/djot'
-import { djotCodePadding, djotInlineLayout } from '../src/djot-block-layout.js'
+import { djotCodePadding, djotInlineLayout } from '../src/import/djot/djot-block-layout.js'
 
 const blockHtml = (html: string): string =>
   html

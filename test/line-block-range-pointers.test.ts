@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fromAstJson, AstJsonSchemaError } from '../src/ast-json.js'
-import { NODE_POSITION_KIND } from '../src/wire-fields.js'
+import { NODE_POSITION_KIND } from '../src/ast/wire-fields.js'
 
 const payload = (lines: unknown) => ({
   type: 'document',

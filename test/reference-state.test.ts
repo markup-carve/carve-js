@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Link } from '../src/ast.js'
-import { applyLinkDefs } from '../src/inline-resolution.js'
-import { isUnresolvedReference } from '../src/unresolved-reference.js'
-import { resolveReferenceDestination, type ResolvedLink, type UnresolvedLink } from '../src/reference-state.js'
+import { applyLinkDefs } from '../src/parse/inline/inline-resolution.js'
+import { isUnresolvedReference } from '../src/parse/inline/unresolved-reference.js'
+import { resolveReferenceDestination, type ResolvedLink, type UnresolvedLink } from '../src/parse/inline/reference-state.js'
 import { parse } from '../src/parse.js'
-import { resolveHeadingIds } from '../src/heading-ids.js'
+import { resolveHeadingIds } from '../src/heading/heading-ids.js'
 
 // Public nodes need a state check before entering the resolver.
 function referenceTypeContract(publicLink: Link, pending: UnresolvedLink, resolved: ResolvedLink): void {

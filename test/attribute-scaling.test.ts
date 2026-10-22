@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAttrs } from '../src/attribute-parser.js'
+import { parseAttrs } from '../src/extension/attribute-parser.js'
 import { carveToHtml, parse, citations, imgFence } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 

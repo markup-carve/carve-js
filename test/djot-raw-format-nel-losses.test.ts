@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { djotToCarve, djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarve, djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-raw-format-nel-losses.json'
 
 test('raw formats containing NEL report losses outside image alternatives', () => {

@@ -2,9 +2,9 @@ import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
-import { tableDisplayWidth } from './table-display-width.js'
-import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
-import { delimitedSource } from './delimited-table.js'
+import { tableDisplayWidth } from './table/table-display-width.js'
+import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
+import { delimitedSource } from './table/delimited-table.js'
 import type {
   Attrs,
   BlockNode,
@@ -33,25 +33,25 @@ import {
   rawImageBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
-import { isAttrValueEscapable } from './attribute-parser.js'
+import { isAttrValueEscapable } from './extension/attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { findDirectives, RunOffsets } from './include-directive.js'
-import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 
 export { MAX_RENDER_DEPTH }
-import { normalizeLegacyInline } from './legacy-nodes.js'
-import { resolveHeadingIds } from './heading-ids.js'
+import { normalizeLegacyInline } from './ast/legacy-nodes.js'
+import { resolveHeadingIds } from './heading/heading-ids.js'
 import { ownValue } from './own-property.js'
 import { codeSource, codeTerminated } from './verbatim-payload.js'
-import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
-import { SourceUnspellableError } from './source-unspellable-error.js'
-import { hydrateResolvedEmptyReferences } from './reference-state.js'
-import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
-import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { EscapeWindows, type EscapeWindow } from './escape-window.js'
-import { utf8ByteLength } from './abbr-budget.js'
-import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
-import { escapeDestinationStructure } from './markdown-destination-encoding.js'
+import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './parse/block/thematic-break-marker.js'
+import { SourceUnspellableError } from './source/source-unspellable-error.js'
+import { hydrateResolvedEmptyReferences } from './parse/inline/reference-state.js'
+import { rubyFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
+import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './parse/inline/sentinel-run.js'
+import { EscapeWindows, type EscapeWindow } from './parse/inline/escape-window.js'
+import { utf8ByteLength } from './extension/abbr-budget.js'
+import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './parse/inline/bracket-escapes.js'
+import { escapeDestinationStructure } from './import/markdown/markdown-destination-encoding.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean

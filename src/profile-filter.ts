@@ -20,7 +20,7 @@
 
 import { codeLines, codeTerminated, rawSource } from './verbatim-payload.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
-import { numberFootnotes } from './footnote-numbering.js'
+import { numberFootnotes } from './heading/footnote-numbering.js'
 import type {
   Attrs,
   BlockNode,

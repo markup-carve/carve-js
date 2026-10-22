@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { headingNumbers } from '../src/heading-numbers.js'
+import { headingNumbers } from '../src/heading/heading-numbers.js'
 
 const h = (s: string, o = {}) => carveToHtml(s, { extensions: [headingNumbers(o)] }).trim()
 

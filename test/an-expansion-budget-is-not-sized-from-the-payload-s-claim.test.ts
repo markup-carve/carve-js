@@ -7,7 +7,7 @@ import {
   budgetForDocument,
   expansionBudgetLength,
   utf8ByteLength,
-} from '../src/abbr-budget.js'
+} from '../src/extension/abbr-budget.js'
 
 /**
  * A cap has to be enforced against something the attacker does not supply.

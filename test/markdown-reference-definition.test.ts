@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { readMarkdownReferenceDefinition } from '../src/markdown-reference-definition.js'
+import { readMarkdownReferenceDefinition } from '../src/import/markdown/markdown-reference-definition.js'
 
 it.each([
   ['[a]: /url\nparagraph', { label: 'a', target: '/url', lines: 1, complex: false }],

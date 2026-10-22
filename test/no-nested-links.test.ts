@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { autolink } from '../src/autolink.js'
+import { autolink } from '../src/extension/autolink.js'
 
 /**
  * Links never nest (CommonMark: a link may not contain another link). A link

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { thematicBreakSpelling } from '../src/thematic-break-marker.js'
+import { thematicBreakSpelling } from '../src/parse/block/thematic-break-marker.js'
 
 describe('thematic-break marker override', () => {
   it('can force the default spelling over an authored marker', () => {

@@ -9,7 +9,7 @@ import {
   renderCarve,
   toAstJson,
 } from '../src/index.js'
-import { tocPlacement } from '../src/table-of-contents.js'
+import { tocPlacement } from '../src/extension/table-of-contents.js'
 
 const source = '::: toc "Contents"\n:::\n'
 

@@ -1,8 +1,8 @@
-import { TableStage, type TableStageContext } from './html-import-table-stage.js'
-import { FootnoteStage, type FootnoteStageContext } from './html-import-footnote-stage.js'
-import { codeLanguage } from './html-import-code-language.js'
+import { TableStage, type TableStageContext } from './import/html/html-import-table-stage.js'
+import { FootnoteStage, type FootnoteStageContext } from './import/html/html-import-footnote-stage.js'
+import { codeLanguage } from './import/html/html-import-code-language.js'
 import { parseFragment, serialize as serializeInner, serializeOuter } from 'parse5'
-import { domAttrs, domContainer, domChildren, domData, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
+import { domAttrs, domContainer, domChildren, domData, domParent, domTag, domValue, type P5Node } from './import/html/html-import-dom.js'
 import type {
   Admonition,
   Attrs,
@@ -18,11 +18,11 @@ import type {
   TableCell,
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
-import { DocumentIdRegistry } from './document-ids.js'
-import { convertedIds, preserveHtmlTextCrossrefs } from './imported-crossrefs.js'
-import { EXTENDER_LEADING_SPAN_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { DocumentIdRegistry } from './ast/document-ids.js'
+import { convertedIds, preserveHtmlTextCrossrefs } from './import/html/imported-crossrefs.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import/markdown/import-report-messages.js'
 import { LEADING_EXTENDER_REASON } from './grapheme-extender.js'
-import { SourceUnspellableError } from './source-unspellable-error.js'
+import { SourceUnspellableError } from './source/source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve, renderCarveForHtmlImport } from './render-carve.js'
 import { mergeAttrs, parse } from './parse.js'
 import {
@@ -37,13 +37,13 @@ import {
   urlListHasDeniedToken,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
-import { inlineText, slugify } from './heading-ids.js'
+import { inlineText, slugify } from './heading/heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
-import type { CarrierName, PrefixedCarrier } from './roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './ast/roundtrip-carriers.js'
+import type { CarrierName, PrefixedCarrier } from './ast/roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -55,9 +55,9 @@ export type HtmlImportAdapter =
   | 'word'
   | 'google-docs'
 
-export { HTML_IMPORT_DIAGNOSTIC_CODES } from './html-import-report.js'
-export type { HtmlImportDiagnostic, HtmlImportDiagnosticCode, HtmlImportFidelity, HtmlImportConfidence } from './html-import-report.js'
-import { HtmlImportReportCollector, type DiagnosticMark, type HtmlImportDiagnostic } from './html-import-report.js'
+export { HTML_IMPORT_DIAGNOSTIC_CODES } from './import/html/html-import-report.js'
+export type { HtmlImportDiagnostic, HtmlImportDiagnosticCode, HtmlImportFidelity, HtmlImportConfidence } from './import/html/html-import-report.js'
+import { HtmlImportReportCollector, type DiagnosticMark, type HtmlImportDiagnostic } from './import/html/html-import-report.js'
 import { replaceLoneSurrogates } from './well-formed.js'
 
 export interface HtmlImportOptions {

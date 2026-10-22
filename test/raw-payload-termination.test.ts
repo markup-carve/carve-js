@@ -3,7 +3,7 @@ import vectors from './fixtures/raw-payload-termination.json'
 import sourceVectors from './fixtures/raw-payload-source-fixtures.json'
 import { parse, renderHtml, renderCarve, carveToHtml, htmlToAst, Profile } from '../src/index.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
-import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
+import { renderCarveWithConversionReport } from '../src/import/markdown/conversion-diagnostics.js'
 import type { Document } from '../src/ast.js'
 
 it.each(vectors)('retains literal raw payload: $id', ({raw, codeContent, rawPassthrough}) => {

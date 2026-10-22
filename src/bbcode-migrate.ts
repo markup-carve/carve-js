@@ -28,9 +28,9 @@ import {
 } from './carve-escape.js'
 import { parse } from './parse.js'
 import { extendsGrapheme } from './grapheme-extender.js'
-import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from './import-report-messages.js'
+import { EXTENDER_LEADING_SPAN_UNSPELLABLE } from './import/markdown/import-report-messages.js'
 import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
-import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { occupiedPrivateUse, pickSentinelRun } from './parse/inline/sentinel-run.js'
 import { replaceLoneSurrogates } from './well-formed.js'
 
 /**

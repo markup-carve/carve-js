@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectSentinelNonces, shortSentinelTokens } from '../src/sentinel-run.js'
+import { collectSentinelNonces, shortSentinelTokens } from '../src/parse/inline/sentinel-run.js'
 import { carveToCarveWithReport, carveToHtml, parse, renderCarveWithReport, resolve } from '../src/index.js'
 
 const pool = Array.from({ length: 6400 }, (_, index) => String.fromCharCode(0xe000 + index)).join('')

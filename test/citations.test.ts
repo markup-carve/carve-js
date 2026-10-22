@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { applyProfile, carveToHtml, parse, Profile } from '../src/index.js'
-import { citations, parseLocator } from '../src/citations.js'
+import { citations, parseLocator } from '../src/extension/citations.js'
 import { expectBuiltInputScansLinearly, expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
@@ -276,7 +276,7 @@ const SMITH = {
   issued: { 'date-parts': [[2020]] },
   title: 'A Study',
 }
-const hb = (s: string, bib: import('../src/citations.js').CslEntry[]) =>
+const hb = (s: string, bib: import('../src/extension/citations.js').CslEntry[]) =>
   carveToHtml(s, { extensions: [citations({ bibliography: bib })] }).trim()
 
 describe('bibliography: external CSL-JSON resolution', () => {

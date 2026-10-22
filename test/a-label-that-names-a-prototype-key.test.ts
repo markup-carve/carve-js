@@ -9,7 +9,7 @@ import {
   renderHtml,
   AstJsonUnknownNodeTypeError,
 } from '../src/index.js'
-import { sanitizeSvg } from '../src/svg-sanitize.js'
+import { sanitizeSvg } from '../src/extension/svg-sanitize.js'
 
 /**
  * Every lookup table keyed by AUTHOR TEXT is a plain object, so it inherits

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-unresolved-nul-references.json'
 
 test('unresolved NUL references do not select replacement-character destinations', () => {
