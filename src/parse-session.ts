@@ -1414,6 +1414,13 @@ export class ParseSession extends InlineParseSession {
         }
         if (lineIndex === firstLineIndex && /^\+[ \t]*$/.test(content) && !quoteMarkerIsWrongColumn &&
             markerSourceLine !== undefined) refusedFirstBlockMarker = markerSourceLine
+        // `> q` / `>   +`: a `+` at a column no open container owns stays quote text.
+        if (lineIndex !== firstLineIndex && quoteMarkerIsWrongColumn &&
+            quotePrefixDepth(precedingSourceLine!) === quotePrefixDepth(markerSourceLine!)) {
+          lexer.reportRefusedContinuationMarker(lineIndex,
+            sourceColumnAt(markerSourceLine!, markerSourceLine!.lastIndexOf('+')) + 1,
+            markerDecision(lexer, lineIndex).blockedByInnerList ? 'list item' : 'block quote', 'wrong-column')
+        }
         if (lineIndex !== firstLineIndex && markerSourceLine !== undefined &&
             isPhysicalContinuationMarker(markerSourceLine) &&
             quotePrefixDepth(markerSourceLine) > 0) {
@@ -1621,7 +1628,9 @@ export class ParseSession extends InlineParseSession {
       // CARVE-P9-067: a refused first-block `> +` stays text in the quote.
       const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex)]
       const reason = follower === undefined ? 'document' : isBlankLine(follower) ? 'blank'
-        : quotePrefixDepth(follower) > 0 ? (isBlankLine(follower.replace(/^[ \t]*(?:>[ \t]?)+/, '')) ? 'blank' : null)
+        : quotePrefixDepth(follower) > 0 ? (isBlankLine(follower.replace(/^[ \t]*(?:>[ \t]?)+/, '')) ? 'blank'
+          // A quoted follower indented past the opener line is at no column the `+` pulls from.
+          : sourceColumn(follower, 0) > sourceColumn(refusedFirstBlockMarker, 0) ? 'right' : null)
           : leadingWhitespace(follower) > 0 ? 'right' : isListMarkerLine(follower) ? 'list' : null
       if (reason !== null) {
         lexer.reportRefusedContinuationMarker(firstLineIndex,
@@ -2126,6 +2135,13 @@ export class ParseSession extends InlineParseSession {
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
         secondLineLazy = true
       const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+      // `q` / `+` / `- s`: no open container claims a document-level `+` before a sibling list.
+      if (lexer.rootLines === undefined && /^\+[ \t]*$/.test(ln)) {
+        const follower = lexer.peek(1)
+        if (follower !== undefined && indentColumns(follower) === 0 && isListMarkerLine(follower)) {
+          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'document', 'sibling')
+        }
+      }
       if (lexer.hostMarkerColumn !== undefined &&
           (sourceColumn(physical) === lexer.hostMarkerColumn ||
             lexer.hostBody === 'list' && markerDecision(lexer, lexer.pos).reason === 'wrong-column') &&

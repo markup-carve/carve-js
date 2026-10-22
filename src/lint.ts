@@ -772,9 +772,11 @@ export function lintCarve(
       rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
   }
   const seenMarker = new Set<string>()
+  // A wrong-column `+` inside a code or comment payload is payload, not a marker (`> ``` ` / `>   +`).
+  const payloadLines = new Set([...collectVerbatimLines(doc), ...collectCommentLines(doc)])
   for (const marker of refusedContinuationMarkers) {
     const key = `${marker.line}:${marker.column}`
-    if (seenMarker.has(key)) continue
+    if (seenMarker.has(key) || marker.reason === 'wrong-column' && payloadLines.has(marker.line)) continue
     seenMarker.add(key)
     const sourceLine = sourceLines[marker.line - 1] ?? ''
     const plus = sourceLine.lastIndexOf('+')
