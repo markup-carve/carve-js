@@ -1050,10 +1050,11 @@ const IMPLEMENTED = new Set([
   'a-task-item-takes-a-first-block-continuation-marker-after-its-checkbox',
   'a-lazy-colon-shaped-line-in-a-quote-paragraph-keeps-no-indentation',
   'a-first-block-marker-does-not-pull-a-column-zero-list-into-a-note-or-description',
-  // ARRIVED WITH THIS PIN BUMP (spec f1532c8a).
+  // ARRIVED WITH THIS PIN BUMP (spec 069a7015).
   'a-separate-plus-after-content-attaches-a-list-to-a-note-or-description',
   'a-comment-line-leaves-a-description-s-list-item-open-for-a-fence',
   'a-quote-prefixed-plus-takes-one-space-after-each-quote-marker-and-attaches-a-quote',
+  'a-quote-opened-on-its-own-line-in-an-item-takes-the-first-block-form',
 ])
 
 /**
