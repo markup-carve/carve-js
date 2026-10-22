@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- A stacked quote `+` on a sibling item inside a host quote attaches any column-0 block, not only a paragraph (`> - a` / `> - > +` / `# h`) (#3467, markup-carve/carve#3421).
 - A stacked quote `+` inside a host quote folds an unprefixed list follower into its text (`> - > +` / `- s`) instead of leaving it after the list (#3465, markup-carve/carve#3534).
 - A stacked first-block `+` takes a follower at the column of the quote that owns it at every depth (`- - > +` / `    b` attaches) and refuses an intervening quote's column (`- > > +` / `  b` reads `+ b`); `continuation-marker-refused` reports a document-level `+` before any block (#3464, markup-carve/carve#3421).
 - `continuation-marker-refused` reports a document-level `+` before a sibling list (`q` / `+` / `- s`), a `+` in a quote at a column no container owns (`> q` / `>   +`), and a first-block quote `+` whose quoted follower starts right of its line (#3463, markup-carve/carve#3421).
