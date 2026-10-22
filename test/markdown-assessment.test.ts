@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { migrateMarkdown } from '../src/index.js'
-import { assessMarkdown } from '../src/markdown-assessment.js'
+import { assessMarkdown } from '../src/import/markdown/markdown-assessment.js'
 
 const rows = (source: string) => migrateMarkdown(source).report.diagnostics
 

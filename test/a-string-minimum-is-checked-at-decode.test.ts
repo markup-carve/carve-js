@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AstJsonSchemaError, fromAstJson } from '../src/index.js'
-import { WIRE_VALUE_KINDS } from '../src/wire-fields.js'
+import { WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
 
 const cases = [
   { owner: 'admonition', field: 'kind', node: { type: 'admonition', children: [] } },

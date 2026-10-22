@@ -1,4 +1,4 @@
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import { expect, test } from 'vitest'
 import { djotToCarve, carveToHtml } from '../src/index.js'
 import cases from './fixtures/djot-quoted-list-boundaries.json'

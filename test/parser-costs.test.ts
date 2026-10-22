@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, parse, renderHtml, resolve } from '../src/index.js'
 import { tryFastHtml } from '../src/fast-html.js'
-import { toCodepointPositions } from '../src/source-positions.js'
+import { toCodepointPositions } from '../src/source/source-positions.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 import type { CarveExtension } from '../src/extension.js'
 import type { Document, Paragraph } from '../src/ast.js'

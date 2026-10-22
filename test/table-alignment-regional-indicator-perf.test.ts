@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/parse.js'
 import { renderCarve } from '../src/index.js'
-import { tableDisplayWidth, tableGraphemeClusters } from '../src/table-display-width.js'
+import { tableDisplayWidth, tableGraphemeClusters } from '../src/table/table-display-width.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const FLAG_A = '\u{1F1E6}'

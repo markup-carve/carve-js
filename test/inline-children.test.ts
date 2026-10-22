@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InlineNode } from '../src/ast.js'
-import { visitInlineChildren } from '../src/inline-children.js'
+import { visitInlineChildren } from '../src/parse/inline/inline-children.js'
 
 describe('authored inline children', () => {
   it('visits ruby base and annotation child lists', () => {

@@ -23,7 +23,7 @@ import {
   renderHtml,
   toAstJson,
 } from "../src/index.js";
-import { NODE_FIELDS, WIRE_FIELDS } from "../src/wire-fields.js";
+import { NODE_FIELDS, WIRE_FIELDS } from "../src/ast/wire-fields.js";
 
 const wire = (source: string) =>
   JSON.parse(JSON.stringify(toAstJson(parse(source)))) as Record<string, unknown>;
@@ -179,7 +179,7 @@ describe("the wire type says what the decoder enforces", () => {
     // `srcByteLength`, satisfy the compiler, and only learn at runtime that
     // `fromAstJson` refuses it. A type check cannot run at runtime, so this
     // asserts on the emitted declaration instead of on a value.
-    const dts = readFileSync(new URL("../dist/ast-json.d.ts", import.meta.url), "utf8");
+    const dts = readFileSync(new URL("../dist/ast/json.d.ts", import.meta.url), "utf8");
     const root = dts.slice(
       dts.indexOf("interface AstJsonDocument"),
       dts.indexOf("}", dts.indexOf("interface AstJsonDocument")),

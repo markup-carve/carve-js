@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { perfIt } from './helpers/scaling.js'
 import { lintCarve, formatLintWarnings } from '../src/lint.js'
-import { citations } from '../src/citations.js'
+import { citations } from '../src/extension/citations.js'
 import { semanticSpan } from '../src/semantic-span.js'
 
 const rules = (src: string) => lintCarve(src).map((w) => w.rule)

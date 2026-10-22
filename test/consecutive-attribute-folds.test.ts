@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, parse } from '../src/index.js'
-import { mergeAttrs } from '../src/attribute-merge.js'
+import { mergeAttrs } from '../src/extension/attribute-merge.js'
 import { buildBracketMap } from '../src/parse.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml, fromAstJson, toAstJson } from '../src/index.js'
-import { resolveTableSpans } from '../src/table-spans.js'
+import { resolveTableSpans } from '../src/table/table-spans.js'
 
 const cellsOf = (source: string) => {
   const tree = carveToAstJson(source) as unknown as {

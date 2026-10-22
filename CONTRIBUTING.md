@@ -121,11 +121,19 @@ src/
 ├── ast.ts               # typed AST node definitions
 ├── render-html.ts       # canonical HTML renderer
 ├── render-markdown.ts   # plus render-plain.ts, render-ansi.ts, render-carve.ts
-├── html-import.ts       # plus djot-import.ts, markdown-migrate.ts, bbcode-migrate.ts
+├── html-import.ts       # plus djot-migrate.ts, markdown-migrate.ts, bbcode-migrate.ts
 ├── profile.ts           # allowed constructs for untrusted input
 ├── includes.ts          # file inclusion; the fs resolver is in includes-fs.ts
 ├── source-patch.ts      # source-preserving patches
-└── cli.ts               # the `carve` binary
+├── cli.ts               # the `carve` binary
+├── ast/                 # AST wire format, patches, and sidecars
+├── parse/               # block, inline, list, and table parser modules
+├── import/              # Djot, Markdown, and HTML import helpers
+├── extension/           # built-in extensions
+├── heading/             # heading IDs, numbers, and references
+├── render/              # renderer helpers
+├── source/              # source positions and error helpers
+└── table/               # table layout and span helpers
 test/                    # vitest suites plus the corpus runners
 spec/                    # git submodule: markup-carve/carve
 scripts/                 # the browser bundle build and the drift check

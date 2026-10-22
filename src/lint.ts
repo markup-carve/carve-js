@@ -28,7 +28,7 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
+import { sourceQuotePrefixEnd } from './parse/block/parse-block-boundaries.js'
 import {
   parse,
   isTableRow,
@@ -59,22 +59,22 @@ import {
   figureGroupPanels,
   resolveHeadingIds,
   type AsciiHeadingIdMode,
-} from './heading-ids.js'
-import { numberFootnotes } from './footnote-numbering.js'
-import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
-import { applyTransforms } from './extension-transforms.js'
-import { parseDocument } from './parse-document.js'
+} from './heading/heading-ids.js'
+import { numberFootnotes } from './heading/footnote-numbering.js'
+import { adoptBlockFootnoteDefs } from './ast/legacy-nodes.js'
+import { applyTransforms } from './extension/extension-transforms.js'
+import { parseDocument } from './parse/parse-document.js'
 import type { CarveExtension } from './extension.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
-import { isBidiControl } from './bidi-controls.js'
+import { isBidiControl } from './extension/bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
 import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, Heading, Table } from './ast.js'
-import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './delimited-table.js'
+import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './table/delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
-import { inspectColonFences } from './colon-fences.js'
-import { resolveTableSpans } from './table-spans.js'
+import { inspectColonFences } from './parse/block/colon-fences.js'
+import { resolveTableSpans } from './table/table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {

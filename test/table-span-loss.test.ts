@@ -4,7 +4,7 @@ import {
   carveToAnsiWithReport, carveToCarveWithReport, carveToHtmlWithReport,
   carveToMarkdownWithReport, carveToPlainTextWithReport, renderMarkdownWithReport,
 } from '../src/index.js'
-import { RenderLossError, type RenderLoss } from '../src/render-loss.js'
+import { RenderLossError, type RenderLoss } from '../src/render/render-loss.js'
 
 const schema = JSON.parse(readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'))
 const source = '|= System |= Limit | < |\n| A | Cold | 20 |\n| ^ | Hot | 10 |\n'

@@ -4,7 +4,7 @@ import {
   renderCarveWithConversionReport, renderCarveWithReport,
   parse, renderHtml, renderMarkdown, renderPlainText, resolve, toAstJson,
 } from '../src/index.js'
-import { collapseLoneImageParagraphs } from '../src/heading-ids.js'
+import { collapseLoneImageParagraphs } from '../src/heading/heading-ids.js'
 
 const payload = () => ({
   type: 'document',

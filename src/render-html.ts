@@ -1,5 +1,5 @@
-import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
-import { withResolvedEmptyReferenceDefinitions } from './reference-state.js'
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './extension/smart-typography-mode.js'
+import { withResolvedEmptyReferenceDefinitions } from './parse/inline/reference-state.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -10,7 +10,7 @@ import { withResolvedEmptyReferenceDefinitions } from './reference-state.js'
  */
 
 import { rawSource } from './verbatim-payload.js'
-import { tableWidthPercentage, tableRowGroupsFromAttrs } from './table-source-metadata.js'
+import { tableWidthPercentage, tableRowGroupsFromAttrs } from './table/table-source-metadata.js'
 import type {
   Admonition,
   Directive,
@@ -33,7 +33,7 @@ import type {
   TableRow,
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, SMART_PUNCTUATION_GLYPHS } from './ast.js'
-import { resolveTableSpans } from './table-spans.js'
+import { resolveTableSpans } from './table/table-spans.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -41,16 +41,16 @@ import type {
   StaticRenderers,
 } from './extension.js'
 
-import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
-import { collectDocumentIds, inheritDocumentIds, type DocumentIdRegistry } from './document-ids.js'
-import { stripBidiControls } from './bidi-controls.js'
-import { normalizeLegacyInline } from './legacy-nodes.js'
-import { numberFootnotes } from './footnote-numbering.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './extension/abbr-budget.js'
+import { collectDocumentIds, inheritDocumentIds, type DocumentIdRegistry } from './ast/document-ids.js'
+import { stripBidiControls } from './extension/bidi-controls.js'
+import { normalizeLegacyInline } from './ast/legacy-nodes.js'
+import { numberFootnotes } from './heading/footnote-numbering.js'
 import { ownValue, setOwn } from './own-property.js'
-import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
-import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
-import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
+import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render/render-loss.js'
+import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
+import { collapseLoneImageParagraphs, inlineText } from './heading/heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
 import {
   CARRIER_CHAR,
@@ -60,7 +60,7 @@ import {
   MAX_CARRIED_SEPARATOR_WIDTH,
   reportReservedAuthoredNames,
   roundtripExport,
-} from './roundtrip-carriers.js'
+} from './ast/roundtrip-carriers.js'
 import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 
 export type SocialLinkKind = 'mention' | 'tag'

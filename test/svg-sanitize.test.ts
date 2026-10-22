@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { sanitizeSvg } from '../src/svg-sanitize.js'
+import { sanitizeSvg } from '../src/extension/svg-sanitize.js'
 
 const wrap = (inner: string) => `<svg viewBox="0 0 10 10">${inner}</svg>`
 

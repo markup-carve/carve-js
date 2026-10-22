@@ -1,6 +1,6 @@
-import { ParseSession } from './parse-session.js'
-import { stripPositions } from './parse-core.js'
-import type { ParseOptions } from './parse-core.js'
+import { ParseSession } from './parse/parse-session.js'
+import { stripPositions } from './parse/parse-core.js'
+import type { ParseOptions } from './parse/parse-core.js'
 import type { Document, InlineNode } from './ast.js'
 
 export { ParseSession }
@@ -46,7 +46,7 @@ export {
   stripContainerPrefixesKeepIndent,
   symbolOpensAt,
   tableBlockHelpers,
-} from './parse-core.js'
+} from './parse/parse-core.js'
 export type {
   AttachedViewScan,
   BlockQuoteLazyState,
@@ -76,7 +76,7 @@ export type {
   StrippedLineOrigin,
   UnclosedCodeFence,
   UnclosedContainer,
-} from './parse-core.js'
+} from './parse/parse-core.js'
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
   return new ParseSession().parse(source, opts)

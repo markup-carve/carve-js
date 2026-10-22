@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml, lintCarve, parse } from '../src/index.js'
-import { citations } from '../src/citations.js'
+import { citations } from '../src/extension/citations.js'
 
 /**
  * AN EMPTY LINK TEXT IS ALLOWED AND PRODUCES AN EMPTY ANCHOR (PART 9 §4), and

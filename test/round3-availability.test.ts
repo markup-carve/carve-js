@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { autolink, carveToHtml } from '../src/index.js'
 import type { MatcherContext } from '../src/extension.js'
-import { citations } from '../src/citations.js'
-import { index } from '../src/index-terms.js'
+import { citations } from '../src/extension/citations.js'
+import { index } from '../src/heading/index-terms.js'
 import { perfIt } from './helpers/scaling.js'
 
 // Round-3 availability / robustness fixes. None change normal output (the spec
@@ -11,7 +11,7 @@ import { perfIt } from './helpers/scaling.js'
 // or real-world-malformed input.
 
 const hb = (s: string, bib: unknown[]) =>
-  carveToHtml(s, { extensions: [citations({ bibliography: bib as import('../src/citations.js').CslEntry[] })] }).trim()
+  carveToHtml(s, { extensions: [citations({ bibliography: bib as import('../src/extension/citations.js').CslEntry[] })] }).trim()
 
 describe('Fix 1: bibliography tolerates a non-array `author`', () => {
   // Real-world CSL-JSON often has `author` as a string/number/object. The old
@@ -82,7 +82,7 @@ describe('Fix 3: index byCodepoint comparator is allocation-free and order-stabl
     return ca.length - cb.length
   }
 
-  // The new comparator (mirror of src/index-terms.ts byCodepoint).
+  // The new comparator (mirror of src/heading/index-terms.ts byCodepoint).
   const newByCodepoint = (a: string, b: string): number => {
     let i = 0
     let j = 0

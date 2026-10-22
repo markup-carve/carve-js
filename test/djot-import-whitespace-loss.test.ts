@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { carveToHtml, djotToCarve } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 
 test('a trailing ASCII space in a block attribute still applies', () => {
   expect(carveToHtml(djotToCarve('> {#x }\n> a'))).toContain('<p id="x">a</p>')

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, djotToCarve } from '../src/index.js'
-import { djotEmphasis } from '../src/djot-emphasis.js'
+import { djotEmphasis } from '../src/import/djot/djot-emphasis.js'
 import cases from './fixtures/djot-failed-braced-openers.json'
 
 describe('failed Djot braced openers', () => {

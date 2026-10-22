@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { parse, renderHtml } from '../src/index.js'
-import * as ids from '../src/document-ids.js'
+import * as ids from '../src/ast/document-ids.js'
 
 afterEach(() => vi.restoreAllMocks())
 

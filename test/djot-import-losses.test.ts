@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, djotToCarve, migrateDjot } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 
 it.each(['_({_foo_})_\n', '*****a*****\n', '__emphasis inside_ emphasis_\n'])('preserves repeated emphasis without an import loss: %s', source => {
   expect(djotToCarveWithLosses(source).losses).toEqual([])

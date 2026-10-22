@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { autolink } from '../src/autolink.js'
+import { autolink } from '../src/extension/autolink.js'
 
 /**
  * PART 3 `url_char` is `unicode_url_char - format_char - control_char`

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { tabs } from '../src/tabs.js'
-import { codeGroup } from '../src/code-group.js'
+import { tabs } from '../src/extension/tabs.js'
+import { codeGroup } from '../src/extension/code-group.js'
 
 /*
  * PART 11 §13, ruled in markup-carve/carve#1489.

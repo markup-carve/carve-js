@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ScopedFenceClosers } from '../src/scoped-fence-closers.js'
+import { ScopedFenceClosers } from '../src/parse/block/scoped-fence-closers.js'
 
 describe('scoped fence closers', () => {
   it('matches fresh scans for every subrange and fence width', () => {

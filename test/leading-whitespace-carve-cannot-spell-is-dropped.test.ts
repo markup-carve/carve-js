@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
-import { HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE } from '../src/import-report-messages.js'
+import { HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE } from '../src/import/markdown/import-report-messages.js'
 
 /*
  * Whitespace a decoded character reference puts at the start of a line has no

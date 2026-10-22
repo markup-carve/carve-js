@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { ColumnReservations } from '../src/column-reservations.js'
+import { ColumnReservations } from '../src/parse/block/column-reservations.js'
 
 it.each([1, 37, 64])('matches column scans across sparse holds, overlapping extensions and expiry at limit %i', (limit) => {
   const index = new ColumnReservations(limit)

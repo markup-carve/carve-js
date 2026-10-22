@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 import { markdownToCarve, markdownToCarveWithLosses } from '../src/markdown-migrate.js'
-import { markdownEmphasis } from '../src/markdown-emphasis.js'
-import { djotToCarve } from '../src/djot-import.js'
+import { markdownEmphasis } from '../src/import/markdown/markdown-emphasis.js'
+import { djotToCarve } from '../src/import/djot/djot-import.js'
 
 it.each([
   ['***foo**', '<p>*<strong>foo</strong></p>'],

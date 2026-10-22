@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest'
 import { parseFragment } from 'parse5'
 import { carveToHtml } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-collapsed-image-keys.json'
 
 test('collapsed image keys preserve native child text and report unresolved destinations', () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { citations } from '../src/citations.js'
-import { glossary } from '../src/glossary.js'
-import { index } from '../src/index-terms.js'
-import { tocPlacement } from '../src/table-of-contents.js'
+import { citations } from '../src/extension/citations.js'
+import { glossary } from '../src/extension/glossary.js'
+import { index } from '../src/heading/index-terms.js'
+import { tocPlacement } from '../src/extension/table-of-contents.js'
 
 const placed = 'a[^1]\n\n::: footnotes "Notes" [End]\n:::\n\n[^1]: body\n'
 

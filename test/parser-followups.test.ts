@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parse, carveToHtml } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
-import { dropPositions } from '../src/source-positions.js'
+import { dropPositions } from '../src/source/source-positions.js'
 import type { Document } from '../src/ast.js'
 
 describe('position removal traversal', () => {

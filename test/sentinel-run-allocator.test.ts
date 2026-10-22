@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { occupiedPrivateUse, pickSentinelRun } from '../src/sentinel-run.js'
+import { occupiedPrivateUse, pickSentinelRun } from '../src/parse/inline/sentinel-run.js'
 
 /**
  * The allocator both writers share, on its own terms.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToCarve, carveToHtml, carveToMarkdown, fromAstJson, htmlToCarve, lintCarve, renderAnsi, renderCarveWithConversionReport, renderHtml, renderPlainText } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 
 const canonical = (source: string) => carveToCarve(source).trim()
 

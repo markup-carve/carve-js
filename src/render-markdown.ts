@@ -1,10 +1,10 @@
-import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
-import { hydrateResolvedEmptyReferences } from './reference-state.js'
+import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './parse/inline/referenced-link-labels.js'
+import { hydrateResolvedEmptyReferences } from './parse/inline/reference-state.js'
 import { normalizeRefLabel } from './label-key.js'
-import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
-import { backtickRunEnds } from './backtick-run-index.js'
-import { renderCellContent } from './render-cell-content.js'
-import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './extension/smart-typography-mode.js'
+import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
+import { renderCellContent } from './render/render-cell-content.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 import type {
   Admonition,
   Attrs,
@@ -23,21 +23,21 @@ import type {
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
-import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
-import { blankDeniedDestination } from './deny-listed-destination.js'
-import { normalizeLegacyInline } from './legacy-nodes.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './extension/abbr-budget.js'
+import { blankDeniedDestination } from './import/markdown/deny-listed-destination.js'
+import { normalizeLegacyInline } from './ast/legacy-nodes.js'
 import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges, trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { codeSource, rawSource } from './verbatim-payload.js'
-import { stripBidiControls } from './bidi-controls.js'
-import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableHeaderRowHoisted, tableSpanFlattened, type RenderLossSinkOptions } from './render-loss.js'
-import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
-import { resolveTableSpans } from './table-spans.js'
-import { inlineText } from './heading-ids.js'
+import { stripBidiControls } from './extension/bidi-controls.js'
+import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
+import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './parse/inline/sentinel-run.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableHeaderRowHoisted, tableSpanFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
+import { footnoteDefsInSourceOrder } from './heading/footnote-numbering.js'
+import { resolveTableSpans } from './table/table-spans.js'
+import { inlineText } from './heading/heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
 import { orderedMarker, renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
-import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
+import { carrierLine, spellCarrierMarkers } from './import/markdown/carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -52,7 +52,7 @@ let suppressAutomaticAbbreviation = false
  * a presentation choice the consumer did not ask for and cannot undo, and a
  * search for the source spelling misses it.
  */
-export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './smart-typography-mode.js'
+export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './extension/smart-typography-mode.js'
 
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */

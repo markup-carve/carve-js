@@ -1,4 +1,4 @@
-import { ALL_OWNED_CHILD_FIELDS, OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fields.js'
+import { ALL_OWNED_CHILD_FIELDS, OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './ast/owned-child-fields.js'
 /*
  * Structural diff over the PART 12 AST.
  *

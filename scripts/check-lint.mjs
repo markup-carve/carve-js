@@ -13,7 +13,7 @@ const command = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scr
 for (const file of lintFiles) assert.ok(command.split(' ').includes(file), `Lint command omits ${file}`)
 const result = spawnSync(process.execPath, [
   join(root, 'node_modules/eslint/bin/eslint.js'),
-  '--stdin', '--stdin-filename', 'src/source-positions.ts', '--format', 'json',
+  '--stdin', '--stdin-filename', 'src/source/source-positions.ts', '--format', 'json',
 ], {
   cwd: root,
   encoding: 'utf8',

@@ -11,7 +11,7 @@ import {
 } from '../src/index.js'
 
 // The TOC HTML is a byte-faithful match of carve-php's TableOfContentsExtension:
-// one tag per line, column 0. See src/table-of-contents.ts buildList().
+// one tag per line, column 0. See src/extension/table-of-contents.ts buildList().
 
 describe('tableOfContents extension', () => {
   it('builds a nested TOC and inserts it at the top', () => {

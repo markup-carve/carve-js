@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { glossary } from '../src/glossary.js'
+import { glossary } from '../src/extension/glossary.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [glossary()] }).trim()
 

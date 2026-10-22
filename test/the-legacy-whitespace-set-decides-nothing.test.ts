@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { autolink } from '../src/autolink.js'
+import { autolink } from '../src/extension/autolink.js'
 
 /**
  * One set difference, three subsystems (carve-js#805, #810, #811).

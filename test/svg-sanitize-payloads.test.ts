@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { sanitizeSvg, type SanitizeSvgOptions } from '../src/svg-sanitize.js'
+import { sanitizeSvg, type SanitizeSvgOptions } from '../src/extension/svg-sanitize.js'
 
 /**
  * A curated corpus of known SVG-based XSS / resource-fetch vectors, drawn from

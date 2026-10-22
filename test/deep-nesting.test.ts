@@ -13,7 +13,7 @@ import {
   type Document,
 } from '../src/index.js'
 import { MAX_NESTING_DEPTH } from '../src/parse.js'
-import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render-depth.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render/render-depth.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guard: deeply nested block containers must not overflow the call

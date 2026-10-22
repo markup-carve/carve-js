@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
-import { abbrBudget, utf8ByteLength } from '../src/abbr-budget.js'
+import { abbrBudget, utf8ByteLength } from '../src/extension/abbr-budget.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 
 /**

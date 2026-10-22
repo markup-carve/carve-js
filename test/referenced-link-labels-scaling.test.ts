@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToMarkdown, parse } from '../src/index.js'
-import { blocksWithLinkDefinitionsInSourceOrder } from '../src/referenced-link-labels.js'
+import { blocksWithLinkDefinitionsInSourceOrder } from '../src/parse/inline/referenced-link-labels.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 
 describe('hoisted link definitions in source order', () => {

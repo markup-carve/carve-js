@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { citations } from '../src/citations.js'
-import { codeGroup } from '../src/code-group.js'
-import { tabs } from '../src/tabs.js'
-import { DocumentIdRegistry } from '../src/document-ids.js'
+import { citations } from '../src/extension/citations.js'
+import { codeGroup } from '../src/extension/code-group.js'
+import { tabs } from '../src/extension/tabs.js'
+import { DocumentIdRegistry } from '../src/ast/document-ids.js'
 
 // Extension-generated ids join the document id namespace (extensions contract
 // §2.6; markup-carve/carve#238): explicit {#id} attributes and generated

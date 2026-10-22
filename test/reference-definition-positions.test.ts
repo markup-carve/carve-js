@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/index.js'
-import { definitionLinePosition } from '../src/source-positions.js'
+import { definitionLinePosition } from '../src/source/source-positions.js'
 
 describe('reference definition positions', () => {
   for (const ending of ['\n', '\r\n', '\r']) {

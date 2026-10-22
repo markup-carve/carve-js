@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest'
 import {
   carveToMarkdownWithReport, fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
 } from '../src/index.js'
-import type { RenderLoss } from '../src/render-loss.js'
-import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
+import type { RenderLoss } from '../src/render/render-loss.js'
+import { renderCarveWithConversionReport } from '../src/import/markdown/conversion-diagnostics.js'
 
 /**
  * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened`,

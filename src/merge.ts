@@ -2,7 +2,7 @@
 
 import type { AstJsonDocument } from './ast-json.js'
 import { fromAstJson } from './ast-json.js'
-import { NODE_POSITION_KIND } from './wire-fields.js'
+import { NODE_POSITION_KIND } from './ast/wire-fields.js'
 import { AstStructuralIndex, astPointer, type AstPath } from './ast-structural-index.js'
 import { mergeText } from './diff.js'
 

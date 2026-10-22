@@ -14,7 +14,7 @@ vi.mock('../src/parse.js', async (importOriginal) => {
 
 const { carveToCarve, carveToHtml, htmlToCarve, renderCarve, RenderDepthError } = await import('../src/index.js')
 const { expectScansLinearly, perfIt } = await import('./helpers/scaling.js')
-const { collectLoneBrackets } = await import('../src/bracket-escapes.js')
+const { collectLoneBrackets } = await import('../src/parse/inline/bracket-escapes.js')
 
 const roundTrips = (html: string, expected: string): void => {
   const out = htmlToCarve(html).value

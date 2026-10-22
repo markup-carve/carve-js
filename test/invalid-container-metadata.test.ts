@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, lintCarve, carveToCarvePatch, djotToCarve } from '../src/index.js'
-import { tabs } from '../src/tabs.js'
+import { tabs } from '../src/extension/tabs.js'
 
 it('recovers tab children, drops bare titles and diagnoses their opener lines', () => {
   const source = ':::: tabs\n::: tab Install\nBody one.\n:::\n::: tab Configure\nBody two.\n:::\n::::\n'

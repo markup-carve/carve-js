@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AstJsonSchemaError, citations, diffAst, fromAstJson, parse, renderDocument, toAstJson } from '../src/index.js'
 import { renderCarve } from '../src/render-carve.js'
-import { SourceUnspellableError } from '../src/source-unspellable-error.js'
+import { SourceUnspellableError } from '../src/source/source-unspellable-error.js'
 
 const extension = citations({ mode: 'author-date' })
 const source = 'See [@a; @b].\n\n[@a]: {author="Ada" year="2020"} A.\n[@b]: {author="Bea" year="2021"} B.\n'

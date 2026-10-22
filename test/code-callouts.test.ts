@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { codeCallouts } from '../src/code-callouts.js'
+import { codeCallouts } from '../src/extension/code-callouts.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [codeCallouts()] }).trim()
 

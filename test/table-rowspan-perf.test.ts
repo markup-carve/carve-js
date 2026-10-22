@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml, htmlToAst } from '../src/index.js'
 import { parse } from '../src/parse.js'
 import { renderHtml } from '../src/render-html.js'
-import { resolveTableSpans } from '../src/table-spans.js'
+import { resolveTableSpans } from '../src/table/table-spans.js'
 import type { TableRow } from '../src/ast.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 

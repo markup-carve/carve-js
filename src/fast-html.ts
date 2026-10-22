@@ -1,8 +1,8 @@
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
-import { slugify, headingIdSlugOpts } from './heading-ids.js'
+import { slugify, headingIdSlugOpts } from './heading/heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
 import { MAX_NESTING_DEPTH, type ParseOptions } from './parse.js'
-import type { RenderLossSinkOptions } from './render-loss.js'
+import type { RenderLossSinkOptions } from './render/render-loss.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue } from './link-destination.js'
 

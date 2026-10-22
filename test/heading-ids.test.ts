@@ -1,6 +1,6 @@
 import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, it, expect } from 'vitest'
-import { slugify, inlineText, resolveHeadingIds } from '../src/heading-ids.js'
+import { slugify, inlineText, resolveHeadingIds } from '../src/heading/heading-ids.js'
 import { parse, carveToHtml } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
 import { perfIt } from './helpers/scaling.js'

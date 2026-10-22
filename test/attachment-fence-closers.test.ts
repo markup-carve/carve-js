@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AttachmentFenceClosers, FailedScanRanges } from '../src/attachment-fence-closers.js'
+import { AttachmentFenceClosers, FailedScanRanges } from '../src/parse/block/attachment-fence-closers.js'
 
 function dedent(line: string, columns: number): string {
   let at = 0, column = 0

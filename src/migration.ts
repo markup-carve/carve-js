@@ -1,5 +1,5 @@
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
-import { djotToCarveWithLosses, stripDjotFootnoteDefinitionAttributes } from './djot-import.js'
+import { djotToCarveWithLosses, stripDjotFootnoteDefinitionAttributes } from './import/djot/djot-import.js'
 import { bbcodeToCarveWithLosses } from './bbcode-migrate.js'
 import {
   htmlToCarve,
@@ -8,9 +8,9 @@ import {
   type HtmlImportOptions,
 } from './html-import.js'
 import { markdownToCarveWithLosses, type AuthoredDestinations, type MarkdownDialect } from './markdown-migrate.js'
-import { assessMarkdown } from './markdown-assessment.js'
-import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
-import { fragmentFixupDiagnostic } from './markdown-heading-fragments.js'
+import { assessMarkdown } from './import/markdown/markdown-assessment.js'
+import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import/markdown/import-report-messages.js'
+import { fragmentFixupDiagnostic } from './import/markdown/markdown-heading-fragments.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'

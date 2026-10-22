@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { renderCarve, SourceUnspellableError, type Document } from '../src/index.js'
-import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
+import { renderCarveWithConversionReport } from '../src/import/markdown/conversion-diagnostics.js'
 
 it('refuses a thematic break in a table cell and reports the refusal', () => {
   const breakNode = { type: 'thematic_break' } as const

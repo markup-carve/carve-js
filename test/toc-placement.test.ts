@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { tableOfContents, tocPlacement } from '../src/table-of-contents.js'
+import { tableOfContents, tocPlacement } from '../src/extension/table-of-contents.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [tocPlacement()] }).trim()
 

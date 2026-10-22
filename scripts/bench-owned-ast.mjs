@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { resolve, dirname, basename } from 'node:path'
 import { loadavg } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { namedModuleFiles, namedModuleHash } from './bench-module-files.mjs'
 
 const [command, entry, file, mode] = process.argv.slice(2)
 const median = values => {
@@ -24,7 +24,9 @@ configured('CARVE_BENCH_CALLS', 1)
 if (command === '--worker') {
   const api = await import(pathToFileURL(entry))
   const source = readFileSync(file, 'utf8')
-  const { collectDocumentIds } = await import(new URL('./document-ids.js', pathToFileURL(entry)))
+  const documentIds = namedModuleFiles(dirname(entry), ['document-ids.js'])[0][1]
+  assert.ok(documentIds, 'document-ids.js is missing from the build')
+  const { collectDocumentIds } = await import(pathToFileURL(documentIds))
   const options = mode.endsWith('no-positions') ? { positions: false } : {}
   const doc = api.resolve(api.parse(source, options))
   const run = mode === 'ids' ? () => collectDocumentIds(doc)
@@ -46,9 +48,8 @@ if (command === '--worker') {
   const entries = { baseline: resolve(command), candidate: fileURLToPath(new URL('../dist/index.js', import.meta.url)) }
   const baseline = await import(pathToFileURL(entries.baseline))
   const candidate = await import(pathToFileURL(entries.candidate))
-  const buildHash = entry => createHash('sha256').update(Buffer.concat(
-    ['index.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'parse-inline-session.js', 'parse-block-scan-core.js', 'parse-block-boundaries.js', 'parse-inline-core.js', 'parse-item-core.js', 'parse-table-cells.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js']
-      .map(name => resolve(dirname(entry), name)).filter(existsSync).map(path => readFileSync(path)))).digest('hex')
+  const buildHash = entry => namedModuleHash(dirname(entry),
+    ['index.js', 'parse.js', 'parse-core.js', 'parse-session.js', 'parse-prepass-core.js', 'parse-quote-core.js', 'parse-inline-session.js', 'parse-block-scan-core.js', 'parse-block-boundaries.js', 'parse-inline-core.js', 'parse-item-core.js', 'parse-table-cells.js', 'heading-ids.js', 'document-ids.js', 'source-positions.js'])
   const builds = Object.fromEntries(Object.entries(entries).map(([reader, entry]) => [reader, buildHash(entry)]))
   const results = []
   for (const fixture of [entry, file]) {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { carveToMarkdown, migrateMarkdown, parse } from '../src/index.js'
-import { carrierPayload } from '../src/carrier-markers.js'
+import { carrierPayload } from '../src/import/markdown/carrier-markers.js'
 
 const tree = (source: string) =>
   JSON.parse(

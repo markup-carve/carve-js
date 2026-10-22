@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, renderCarve, parse, type Document } from '../src/index.js'
-import { SourceUnspellableError } from '../src/source-unspellable-error.js'
+import { SourceUnspellableError } from '../src/source/source-unspellable-error.js'
 
 describe('cross-reference target spelling', () => {
   for (const target of ['p\\an', 'ls\\-greet', 'a\\\\b', 'a\\', '日本語', 'a\tb']) {

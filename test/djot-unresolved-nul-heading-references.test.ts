@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { parseFragment } from 'parse5'
 import { carveToHtml } from '../src/index.js'
-import { djotToCarveWithLosses } from '../src/djot-import.js'
+import { djotToCarveWithLosses } from '../src/import/djot/djot-import.js'
 import controls from './fixtures/djot-unresolved-nul-heading-references.json'
 
 test('unresolved NUL heading references do not select replacement-character headings', () => {

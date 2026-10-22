@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractReferenceDefinitions } from '../src/markdown-empty-destination.js'
+import { extractReferenceDefinitions } from '../src/import/markdown/markdown-empty-destination.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 
 const extract = (source: string) => extractReferenceDefinitions(source.split('\n'), value => value, () => false)

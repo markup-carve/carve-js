@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { tableDisplayWidth, tableGraphemeClusters } from '../src/table-display-width.js'
+import { tableDisplayWidth, tableGraphemeClusters } from '../src/table/table-display-width.js'
 
 const cases = readFileSync(new URL('./fixtures/grapheme-break-18.txt', import.meta.url), 'utf8')
   .split('\n')

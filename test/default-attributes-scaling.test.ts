@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { defaultAttributes } from '../src/default-attributes.js'
+import { defaultAttributes } from '../src/extension/default-attributes.js'
 import { parse } from '../src/parse.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 

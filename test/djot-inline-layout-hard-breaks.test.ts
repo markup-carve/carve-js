@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { djotInlineLayout } from '../src/djot-block-layout.js'
+import { djotInlineLayout } from '../src/import/djot/djot-block-layout.js'
 
 it.each([
   ['a  \\\nnext', 'a\\\nnext'],

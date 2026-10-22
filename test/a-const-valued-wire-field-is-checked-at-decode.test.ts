@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AstJsonSchemaError, citations, fromAstJson, parse, toAstJson } from '../src/index.js'
-import { WIRE_VALUE_KINDS } from '../src/wire-fields.js'
+import { WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
 
 /**
  * A property the schema pins with `const` admits ONE value, and that value is

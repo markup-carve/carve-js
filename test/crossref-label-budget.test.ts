@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml, carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve } from '../src/index.js'
-import { ABBR_BUDGET_BASE, ABBR_BUDGET_FACTOR, abbrBudget, utf8ByteLength } from '../src/abbr-budget.js'
+import { ABBR_BUDGET_BASE, ABBR_BUDGET_FACTOR, abbrBudget, utf8ByteLength } from '../src/extension/abbr-budget.js'
 
 /**
  * A cross-reference label is a derived-text expansion, and it is budgeted.
