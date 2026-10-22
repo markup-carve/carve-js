@@ -1030,8 +1030,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             const nextSource = (lexer.rootLines ?? lexer.lines)[nextLineNumber - 1]
             const nextInContainer = lexer.peek(afterBlanks)?.trimStart() ?? ''
             const foldedRunBelowBase = lastNonBlankPhysicalSource !== undefined &&
-              RE_FENCE.test(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) &&
-              lastNonBlankColumn < inlineFenceColumn
+              (RE_FENCE.test(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) &&
+                lastNonBlankColumn < inlineFenceColumn ||
+                // A glued `>``` is paragraph text admitted lazily into the
+                // quote. It can close an inline fence below its opener, while
+                // sourceColumn(line, itemQuoteDepth) has no quote column for it.
+                itemQuoteDepth > 0 && /^(?:> )*>[`~]{3,}[ \t]*$/.test(lastNonBlankPhysicalSource.trimStart()) &&
+                sourceColumn(lastNonBlankPhysicalSource) < inlineFenceColumn)
             // A line below the inline opener remains in its paragraph's
             // authored band. A line at the opener's own column starts a second
             // paragraph after the blank.

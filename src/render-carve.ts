@@ -3875,7 +3875,8 @@ class CarveRenderSession {
           previousEmitted = b
           return
         }
-        if (this.itemNeedsIndentedBlocks(ctx) && b.type === 'block_quote' && previousEmitted?.type === 'block_quote') {
+        if ((this.itemNeedsIndentedBlocks(ctx) || ctx.quoteDepth > 0) &&
+            b.type === 'block_quote' && previousEmitted?.type === 'block_quote') {
           parts.push('', rendered)
           previousEmitted = b
           return
