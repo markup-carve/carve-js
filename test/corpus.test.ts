@@ -1049,6 +1049,7 @@ const IMPLEMENTED = new Set([
   'a-refused-continuation-plus-remains-text',
   'a-task-item-takes-a-first-block-continuation-marker-after-its-checkbox',
   'a-lazy-colon-shaped-line-in-a-quote-paragraph-keeps-no-indentation',
+  'a-first-block-marker-does-not-pull-a-column-zero-list-into-a-note-or-description',
 ])
 
 /**

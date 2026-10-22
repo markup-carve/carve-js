@@ -49,6 +49,18 @@ describe('column-zero continuation markers', () => {
     expect(carveToHtml('- + \nflush')).toContain('<li>flush</li>')
   })
 
+  it('does not pull a document list into a footnote first-block form', () => {
+    const html = carveToHtml('note [^a]\n\n[^a]: +\n- a list')
+    expect(html).toContain('<ul>\n  <li>a list</li>\n</ul>\n<section role="doc-endnotes"')
+    expect(html).toContain('<li id="fn1">\n      <p>+')
+  })
+
+  it('does not pull a document list into a description first-block form', () => {
+    expect(carveToHtml(':: t\n: +\n- a list')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<ul>\n  <li>a list</li>\n</ul>',
+    )
+  })
+
   it.each(['- - +', '- > +', '> - +', '1. - +'])(
     'attaches a flush-left block to the last opener in %s', opener => {
       const html = carveToHtml(`${opener}\nflush`)
