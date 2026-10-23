@@ -256,8 +256,9 @@ export const QUOTE_LETTER_RUN = /\p{L}+/uy
 
 export const ELISION_WORDS = new Set(['tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould', 'em', 'cause', 'til', 'n', 'bout'])
 
+// R1 (CARVE-P3-023): after a dash or a slash, a quote closes before end, whitespace or closing punctuation.
 export const closesAfterDash = (prev: string, next: string) =>
-  '-–—'.includes(prev) && prev !== '' && (next === '' || isQuoteSpace(next) || `"'.,;:!?)]`.includes(next))
+  '-–—/'.includes(prev) && prev !== '' && (next === '' || isQuoteSpace(next) || `"'.,;:!?)]`.includes(next))
 
 // Adjudicated smart-quote opening context (matches carve-rs on these inputs):
 // a straight quote curls OPENING when preceded by start-of-content, Unicode

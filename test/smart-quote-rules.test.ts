@@ -11,6 +11,13 @@ describe('smart quote direction rules', () => {
     expect(h("'em'𐐀")).toBe('<p>’em’𐐀</p>')
   })
 
+  it('closes a quote after a trailing slash before end, whitespace or closing punctuation', () => {
+    expect(h('Exclude "\\/trunk/app/config/".')).toBe('<p>Exclude “/trunk/app/config/”.</p>')
+    expect(h('see "https://example.org/" here')).toBe('<p>see “https://example.org/” here</p>')
+    expect(h(`the 'tmp/' folder, and/"or" too`)).toBe('<p>the ‘tmp/’ folder, and/“or” too</p>')
+    expect(h('end/"')).toBe('<p>end/”</p>')
+  })
+
   it('keeps previous-character context through empty blocks and attribute comments', () => {
     for (const block of ['{%%}', '{% hidden %}', '{%%}{% hidden %}']) {
       expect(h(`\\{${block}"q"`)).toBe('<p>{“q”</p>')
