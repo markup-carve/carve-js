@@ -1,0 +1,75 @@
+name: Parsing and AST commit audit
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ast-parsing-audit.yml
+      - scripts/ast-parsing-compare.mjs
+  workflow_dispatch:
+
+jobs:
+  compare:
+    name: old and current JS on one runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve-bench
+          ref: 48e8e50418c2d77ce358f2d0dbc7445f8d156661
+          path: bench
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build both fixed engine commits
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/before" 8ba8a84aa3dba46d619f56617d031d3593b6242f
+          git worktree add --detach "$RUNNER_TEMP/after" b6624cd4cacb6132018cfbfb0073aa4db54f0021
+          npm ci --prefix "$RUNNER_TEMP/before"
+          npm run build --prefix "$RUNNER_TEMP/before"
+          npm ci --prefix "$RUNNER_TEMP/after"
+          npm run build --prefix "$RUNNER_TEMP/after"
+
+      - name: Measure Parsing and AST in three fresh processes
+        env:
+          AST_BEFORE_COMMIT: 8ba8a84aa3dba46d619f56617d031d3593b6242f
+          AST_AFTER_COMMIT: b6624cd4cacb6132018cfbfb0073aa4db54f0021
+          AST_ITERATIONS: 1000
+          AST_PAIRS: 20
+          AST_WARMUP: 1000
+        run: |
+          for run in 1 2 3; do
+            order=before-first
+            if [ "$run" = 2 ]; then order=after-first; fi
+            node --expose-gc scripts/ast-parsing-compare.mjs \
+              "$RUNNER_TEMP/before/dist/index.js" \
+              "$RUNNER_TEMP/after/dist/index.js" \
+              "$GITHUB_WORKSPACE/bench/corpus/realistic/peer/case-study-parsing-ast.crv" \
+              "$order" > "$RUNNER_TEMP/parsing-$run.json"
+          done
+          node - "$RUNNER_TEMP/parsing-1.json" "$RUNNER_TEMP/parsing-2.json" "$RUNNER_TEMP/parsing-3.json" <<'JS' | tee -a "$GITHUB_STEP_SUMMARY"
+          const fs = require('node:fs')
+          const files = process.argv.slice(2)
+          const runs = files.map(file => JSON.parse(fs.readFileSync(file, 'utf8')))
+          const ratios = runs.flatMap(run => run.rows.map(row => row.ratio)).sort((a, b) => a - b)
+          const median = values => (values[(values.length - 1) >> 1] + values[values.length >> 1]) / 2
+          const hashes = new Set(runs.map(run => run.output_sha256))
+          if (hashes.size !== 1) throw new Error('output hash changed across runs')
+          console.log('| Process | Median current/old CPU | Pair range | One-minute load |')
+          console.log('| --- | ---: | ---: | ---: |')
+          runs.forEach((run, index) => console.log(`| ${index + 1} | ${run.median_ratio.toFixed(3)} | ${run.range[0].toFixed(3)}–${run.range[1].toFixed(3)} | ${run.load_start.toFixed(2)}–${run.load_end.toFixed(2)} |`))
+          console.log(`\nCombined median across ${ratios.length} pairs: **${median(ratios).toFixed(3)}**. HTML SHA-256: \`${runs[0].output_sha256}\`.`)
+          JS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parsing-ast-commit-audit
+          path: ${{ runner.temp }}/parsing-*.json
