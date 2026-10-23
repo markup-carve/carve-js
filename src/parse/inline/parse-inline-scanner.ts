@@ -150,7 +150,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     RE_TAG,
     accumulateAttrs,
     buildBracketMap,
-    completeDestinationOpeners,
+    destinationSlotEnds,
     crossrefBodyCanEnd,
     execLinkTail,
     extendsGrapheme,
@@ -207,7 +207,12 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
     // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
     // branches resolve the close bracket in O(1); see buildBracketMap.
-    const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
+    const firstLinkTail = text.indexOf('](')
+    const sharedSlots: { first: number; ends?: Map<number, number> } | undefined =
+      firstLinkTail === -1 ? undefined : { first: firstLinkTail + 1 }
+    const bracketClose: BracketClose = text.includes('[') ?
+      (sharedSlots ? buildBracketMap(text, false, undefined, sharedSlots) : buildBracketMap(text)) :
+      () => undefined
     let commentLineEnd = -1
     const bracketRuns: Array<{ start: number; close: number }> = []
 
@@ -215,7 +220,9 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
     // fail. See suffixHasChar/suffixHasPair. Built only when the delimiter is
     // present at all, mirroring the bracketClose guard above.
-    const destinationOpeners = text.includes('](') ? completeDestinationOpeners(text) : new Set<number>()
+    const destinationOpeners = sharedSlots ?
+      new Set((sharedSlots.ends ??= destinationSlotEnds(text, sharedSlots.first)).keys()) :
+      new Set<number>()
     const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
     const rbracketSuf = text.includes(']') ? suffixHasChar(text, ']') : null
     const criticCmtSuf = text.includes('#}') ? suffixHasPair(text, '#', '}') : null

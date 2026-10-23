@@ -88,26 +88,35 @@ export function completeDestinationOpeners(text: string): Set<number> {
 }
 
 /** Each complete destination slot's `(`, mapped to the offset after its `)`, in linear time. */
-export function destinationSlotEnds(text: string): Map<number, number> {
+export function destinationSlotEnds(text: string, first = 0): Map<number, number> {
   const stops = new Int32Array(text.length + 1)
   stops[text.length] = text.length
-  for (let i = text.length - 1; i >= 0; i--) {
-    const c = text[i]!
-    if (c === '\\' && /[\\()]/.test(text[i + 1] ?? '')) stops[i] = stops[i + 2]!
-    else if (c === '(') {
+  for (let i = text.length - 1; i >= first; i--) {
+    const code = text.charCodeAt(i)
+    if (code === 92) {
+      const next = text.charCodeAt(i + 1)
+      if (next === 92 || next === 40 || next === 41) {
+        stops[i] = stops[i + 2]!
+        continue
+      }
+    } else if (code === 40) {
       const close = stops[i + 1]!
-      stops[i] = text[close] === ')' ? stops[close + 1]! : -1
-    } else if (c === ')' || isDestinationWhitespace(c)) stops[i] = i
-    else stops[i] = stops[i + 1]!
+      stops[i] = text.charCodeAt(close) === 41 ? stops[close + 1]! : -1
+      continue
+    } else if (code === 41 || code === 32 || (code >= 9 && code <= 13) ||
+      (code > 127 && RE_DESTINATION_WHITESPACE.test(text[i]!))) {
+      stops[i] = i
+      continue
+    }
+    stops[i] = stops[i + 1]!
   }
   const found = new Map<number, number>()
-  const closes = new Map<string, number>()
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '(') continue
+  const closes = new Map<number, number>()
+  for (let i = text.indexOf('(', first); i !== -1; i = text.indexOf('(', i + 1)) {
     const stop = stops[i + 1]!
     if (stop < i + 1) continue
     const empty = stop === i + 1
-    const key = `${stop}:${empty}`
+    const key = stop * 2 + Number(empty)
     let end = closes.get(key)
     if (end === undefined) {
       const rest = empty ? RE_EMPTY_LINK_REST_STICKY : RE_LINK_REST_STICKY

@@ -77,7 +77,12 @@ const BRACKET_RESCAN_BUDGET = 8
  * span's opening run up, and from that `[` the run is not there, so it is
  * scanned from itself (carve-js#1815).
  */
-export function buildBracketMap(s: string, outsideOnly = false, structural?: Set<number>): BracketClose {
+export function buildBracketMap(
+  s: string,
+  outsideOnly = false,
+  structural?: Set<number>,
+  sharedSlots?: { first: number; ends?: Map<number, number> },
+): BracketClose {
   const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
   const closedRunEnd = (j: number, openLen: number): number | undefined =>
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
@@ -107,8 +112,11 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   // A nested run's destination slot is content of the run around it, so a `]`
   // inside `(/u])` closes nothing (grammar `nested`/`altNested`, CARVE-P3-001).
   let slotEnds: Map<number, number> | undefined
-  const nestedSlotEnd = (j: number): number | undefined =>
-    s[j + 1] === '(' ? (slotEnds ??= destinationSlotEnds(s)).get(j + 1) : undefined
+  const nestedSlotEnd = (j: number): number | undefined => {
+    if (s[j + 1] !== '(') return undefined
+    if (sharedSlots) return (sharedSlots.ends ??= destinationSlotEnds(s, sharedSlots.first)).get(j + 1)
+    return (slotEnds ??= destinationSlotEnds(s)).get(j + 1)
+  }
   const map = new Map<number, number>()
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []

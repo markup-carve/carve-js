@@ -82,7 +82,7 @@ import { extendsGrapheme } from '../grapheme-extender.js'
 import { mapInlineChildren, visitInlineChildren } from './inline/inline-children.js'
 import { applyAbbreviations, applyLinkDefs } from './inline/inline-resolution.js'
 import { normalizeRefLabel } from '../label-key.js'
-import { completeDestinationOpeners, linkDestinationValue } from '../link-destination.js'
+import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue } from '../link-destination.js'
 import { markAboveContentColumn, markSecondLineLazy } from './block/paragraph-indent.js'
 import { Lexer, indentColumns, isBlankLine, layoutWork, normalizeNewlines, sliceColumns } from './parse-lexer.js'
 import { createListParser } from './list/parse-list.js'
@@ -331,6 +331,7 @@ export const inlineScannerHelpers = { ...listHelpers,
   accumulateAttrs,
   buildBracketMap,
   completeDestinationOpeners,
+  destinationSlotEnds,
   crossrefBodyCanEnd,
   execLinkTail,
   extendsGrapheme,
