@@ -11,7 +11,9 @@ import { renderCarveWithConversionReport } from '../src/import/markdown/conversi
  * `destination-denied`, `editorial-comment-flattened`, `carrier-attribute-dropped`,
  * `list-style-dropped`, `list-delimiter-changed`, `table-span-flattened`,
  * `table-header-row-demoted`, `table-header-row-hoisted` and
- * `table-header-cell-demoted`
+ * `table-header-cell-demoted`, `markdown-container-flattened`,
+ * `markdown-caption-flattened`, `markdown-attributes-dropped` and
+ * `raw-html-escaped`
  * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
  * the conversion-diagnostics channel
