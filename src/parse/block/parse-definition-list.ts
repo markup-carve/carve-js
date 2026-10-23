@@ -1070,7 +1070,11 @@ export function createDefinitionListParser(
             isBlockAttributeLine(next.trimStart())
               ? stripLazyFrame(next).trimStart()
               : stripLazyFrame(next)
-          if (separatorBelowTerm) continuation = continuation.replace(/^[ \t]+/, '')
+          if (separatorBelowTerm) {
+            const stripped = continuation.replace(/^[ \t]+/, '')
+            strippedIndent.set(lexer.pos, continuation.length - stripped.length)
+            continuation = stripped
+          }
           if (nextPastTerm && lexer.hostBody === 'list') {
             const sourceIndent = entryLeadColumn(nextSource) - termColumn
             const retainedIndent = indentColumns(continuation)
