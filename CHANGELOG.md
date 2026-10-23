@@ -9,7 +9,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-## [0.1.13] - 2026-10-22
+## [0.1.13] - 2026-10-23
 
 ### Fixes
 - An unclosed fence attached by a list `+` keeps a following list line as payload (`- +` / ```` ``` ```` / `- x`), and a sibling item holding only `+` ends its host quote before an unprefixed line (#3475, markup-carve/carve#3421).
@@ -23,11 +23,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A stacked first-block `+` takes a follower at the column of the quote that owns it at every depth (`- - > +` / `    b` attaches) and refuses an intervening quote's column (`- > > +` / `  b` reads `+ b`); `continuation-marker-refused` reports a document-level `+` before any block (#3464, markup-carve/carve#3421).
 - `continuation-marker-refused` reports a document-level `+` before a sibling list (`q` / `+` / `- s`), a `+` in a quote at a column no container owns (`> q` / `>   +`), and a first-block quote `+` whose quoted follower starts right of its line (#3463, markup-carve/carve#3421).
 - A stacked first-block `+` behind more than one list marker takes a follower only at column 0, its line's column or the column of a quote its first marker opens: `- - > +` / `  b` now reads `+ b` in the inner quote (#3462, markup-carve/carve#3421).
-- A stacked `> - > +` inside a host quote takes a non-list block at document column 0 into its innermost quote, as `- > +` does at document level, instead of ending the quote (markup-carve/carve#3421).
+- A stacked `> - > +` inside a host quote takes a non-list block at document column 0 into its innermost quote, as `- > +` does at document level, instead of ending the quote (#3461, markup-carve/carve#3421).
 - A stacked `> > +` opened on its own line in a list item, ordered item or description gives its follower to the inner quote, as at document level, instead of leaving an empty inner quote (#3454).
-- A stacked `- > +` takes its follower only at column 0, the line's own column or the quote's column. A follower anywhere else leaves the `+` as quote text that the line folds into, as a letter would, and the lint reports it; a table at the quote's column now attaches to the quote, and a list follower no longer drops the `+` (markup-carve/carve#3421).
-- `continuation-marker-refused` no longer reports a `> +` whose follower is a deeper quote line at its column, such as `> > q` / `> +` / `> > r`: the marker attaches that quote, which nests (markup-carve/carve#3421).
-- A `> +` marker inside a list item reads like its top-level twin: `- > > q` / `  > +` / `  > para` gives the inner quote two paragraphs instead of folding the `+` into `q` (markup-carve/carve#3421).
+- A stacked `- > +` takes its follower only at column 0, the line's own column or the quote's column. A follower anywhere else leaves the `+` as quote text that the line folds into, as a letter would, and the lint reports it; a table at the quote's column now attaches to the quote, and a list follower no longer drops the `+` (#3460, markup-carve/carve#3421).
+- `continuation-marker-refused` no longer reports a `> +` whose follower is a deeper quote line at its column, such as `> > q` / `> +` / `> > r`: the marker attaches that quote, which nests (#3459, markup-carve/carve#3421).
+- A `> +` marker inside a list item reads like its top-level twin: `- > > q` / `  > +` / `  > para` gives the inner quote two paragraphs instead of folding the `+` into `q` (#3455, markup-carve/carve#3421).
 - A quote-prefixed `+` needs one space after each `>`: `>+`, `>>+` and `>> +` read as text and get the `blockquote-marker-without-space` lint. A `> +` attaches a following quote to the item, description, note or inner quote at its column, and a refused `+` between a quote and a blank line is linted (#3452; markup-carve/carve#3421).
 - Nested open fences end their spans at the last payload newline, along with their containing list items and lists (#3445).
 - Unmarked table rows stay in an open quote paragraph, and blocks after a description note no longer keep a document tail inside the description (#3444).
@@ -53,22 +53,17 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A first-block `+` in a footnote or description leaves a column-zero list at document level. The refused marker stays as text in the footnote, and an empty description stays empty (#3438; markup-carve/carve#3482).
 - Lint reports a first-block `+` in a footnote or description that nothing below can attach: a column-zero list, the end of the input, a blank line, or an indented line (#3443, #3446; markup-carve/carve#3482, markup-carve/carve#3519).
 - Lint says what a refused first-block `+` leaves behind (an empty item or description, an indented follower placed by the column rules, or text in a note or quote) and reports a refused first-block `> +` (#3449; markup-carve/carve#3524).
+- Lint reports a `:` or `::` below the column of the definition list it would continue as `description-separator-below-content-column` (#3442).
 - `list-item-block-overindented` no longer fires on a block placed at the content column of a description inside a list item (#3450).
 
-### Added
+### Improvements
 - Code-block includes can select files or regions, and `selectIncludeRegion` exposes the same region lookup to hosts (#3239, #3241; markup-carve/carve#3320).
 - `carve lint --include-root` checks included content; `lintIncludes` is available to library callers (#3252; markup-carve/carve#3339).
 - Lint warns on near misses of consumed attribute keys with `consumed-key-near-miss` (#3232).
-- Lint warns on a `:` or `::` below the column of the definition list it would continue with `description-separator-below-content-column` (#3442).
 - Markdown migration rewrites unambiguous case-only heading fragments and reports them as `link-fragment-case-rewritten` (#3245, #3248; markup-carve/carve#3323).
-
-### Performance
+- The Carve writer reports `list-tightness-lost` when it writes a nested tight item loose to keep its blocks (#3289).
 - Adjacent list items, links, short text, table rows, fence closers, line-block gaps, footnotes, and ordinary list lines avoid repeated parser scans (#3292, #3293, #3294, #3297, #3301, #3307, #3313, #3315, #3348).
-
-### Internal
-- Parser lexer, list state, bracket and inline scanners, table handlers, and core sessions moved into smaller modules without changing the public parse API (#3384, #3385, #3387, #3390, #3391, #3398, #3400, #3416, #3426).
-- List tightness now comes from parsed children and admitted blank lines. List items, descriptions, and footnotes share one indentation admission loop (#3430, #3432).
-- List marker classification and shape assembly, footnote collection, and continuation-marker classification moved into dedicated helpers without changing parser output (#3431, #3434).
+- Inline text runs scan plain `)`, `,`, `;`, `?` and single `.` without the per-character path; output is unchanged (#3470).
 
 ## [0.1.12] - 2026-10-15
 

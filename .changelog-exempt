@@ -36,3 +36,17 @@
 2521: Describes exact-case reference matching in a parse.ts comment. Comment text only; no parsed or rendered document changes.
 3171: Shortens sentinel allocator and renderer comments. Comment text only; no statement or emitted byte moves.
 3469: Groups source modules under feature folders. Package entry points and behavior stay the same.
+3384: Moves the lexer into its own module. No parser output changes.
+3385: Moves the list parser out of ParseSession. No parser output changes.
+3387: Moves the inline and definition passes into their own modules. No parser output changes.
+3390: Moves list state and rebasing into their own module. No parser output changes.
+3391: Moves the table and line block handlers out of ParseSession. No parser output changes.
+3398: Moves the bracket boundary scanner into its own module. No parser output changes.
+3400: Moves the inline opaque scanner into its own module. No parser output changes.
+3416: Splits the parser into session and core modules. No parser output changes.
+3426: Splits the parser core and inline session. No parser output changes.
+3430: Derives list tightness from parsed children instead of a source-line scan. Corpus AST and HTML unchanged.
+3431: Moves list shape and footnote parsing stages into helpers. No parser output changes.
+3432: Shares one indentation admission loop across list, description and footnote bodies. No parser output changes.
+3434: Moves continuation-marker classification into a helper. No parser output changes.
+3457: Splits the HTML import table and footnote stages into modules. No import output changes.
