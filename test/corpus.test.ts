@@ -1055,6 +1055,16 @@ const IMPLEMENTED = new Set([
   'a-comment-line-leaves-a-description-s-list-item-open-for-a-fence',
   'a-quote-prefixed-plus-takes-one-space-after-each-quote-marker-and-attaches-a-quote',
   'a-quote-opened-on-its-own-line-in-an-item-takes-the-first-block-form',
+  // ARRIVED WITH THIS PIN BUMP (spec 7f080efe).
+  'a-first-block-plus-refuses-a-follower-at-an-intervening-column',
+  'a-hosted-quote-s-first-block-plus-attaches-any-non-list-block-at-column-zero',
+  'a-quote-follower-below-stacked-quote-openers-in-an-item-is-read-at-its-raw-column',
+  'a-quote-opened-on-an-item-s-marker-line-attaches-a-quote-at-its-own-depth',
+  'a-quote-s-first-block-plus-refuses-a-list-follower-in-every-host',
+  'a-stacked-first-block-plus-takes-a-follower-only-at-column-zero-or-its-line-s-column',
+  'a-wrapped-attribute-line-interrupts-like-a-one-line-attribute-line',
+  'a-wrapped-attribute-line-opened-at-a-container-s-column-is-one-construct',
+  'the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth',
 ])
 
 /**
