@@ -80,3 +80,24 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
     expect(flat(carveToHtml('> - # a\n> b\n> - > +\n# h\n'))).not.toContain('<blockquote><h1 id="h">')
   })
 })
+
+// carve#3421 ruling 1: a wrapped attribute block is one construct, so after a blank line it
+// loosens the list exactly as the one-line `{.c}` does.
+describe('a dangling wrapped attribute after a blank line in an item', () => {
+  const shapes = [
+    '- a\n\n  {.c\n}\n- s\n',
+    '- a\n\n  {.c\n  }\n- s\n',
+    '- a\n\n  {.c\n  .d}\n- s\n',
+    '1. a\n\n   {.c\n}\n2. s\n',
+    '> - a\n>\n>   {.c\n> }\n> - s\n',
+    '- a\n  - b\n\n    {.c\n    }\n  - s\n',
+  ]
+  for (const source of shapes) {
+    it(`loosens ${JSON.stringify(source)} like the one-line form`, () => {
+      const oneLine = source.replace(/\{\.c\n[ >]*(\.d)?\}/, (_, d: string | undefined) => `{.c${d ? ' .d' : ''}}`)
+      expect(oneLine).not.toBe(source)
+      expect(flat(carveToHtml(source))).toBe(flat(carveToHtml(oneLine)))
+      expect(flat(carveToHtml(source))).toContain('<li><p>')
+    })
+  }
+})

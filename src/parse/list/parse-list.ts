@@ -385,6 +385,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       const itemFrameFacts = (facts: ItemLineFacts | undefined): ItemLineFacts | undefined =>
         facts === undefined ? undefined : { ...facts, descendantFrames: true }
+      // The line opening a wrapped attribute block that `end` closes, or -1.
+      const wrappedAttributeOpener = (end: number): number => {
+        if (!/\}[ \t]*$/.test(nested[end]!)) return -1
+        for (let start = end - 1; start >= 0; start--) {
+          const line = nested[start]!
+          if (isBlankLine(line)) return -1
+          if (!line.startsWith('{')) continue
+          const joined = nested.slice(start, end + 1).map((part) => part.trim()).join(' ')
+          return isInvisibleLine(joined) ? start : -1
+        }
+        return -1
+      }
       const invisibleNested = (index: number): boolean => {
         const text = nested[index]!
         const origin = nestedOrigins.get(index)
@@ -2579,7 +2591,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
           break
         }
-        if (!invisibleNested(k)) break
+        if (invisibleNested(k)) continue
+        // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
+        const opener = wrappedAttributeOpener(k)
+        if (opener < 0) break
+        k = opener
       }
 
       // A blank line inside an OPEN verbatim fence is that fence's content, not
