@@ -183,6 +183,12 @@ export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): strin
   return new CarveRenderSession().renderCarve(ast, opts)
 }
 
+/** For an unchanged default parse, matching source bytes prove the minimal form reads back. */
+export function renderCarveFromParsedSource(ast: Document, source: string, opts: CarveRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
+  return new CarveRenderSession().renderCarve(ast, opts, source)
+}
+
 /** Collect span refusals for the HTML importer's next repair pass. */
 export function renderCarveForHtmlImport(ast: Document): string {
   hydrateResolvedEmptyReferences(ast)
@@ -2677,13 +2683,14 @@ class CarveRenderSession {
     }
   }
 
-  renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  renderCarve(ast: Document, opts: CarveRenderOptions = {}, parsedSource?: string): string {
     this.alignTables = opts.alignTables === true
     this.repeatedScopes = new WeakMap()
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
     reportRubyLosses(ast, opts)
     reportNestedTightItemLosses(ast, opts)
+    const parsedAst = ast
     ast = withCellHardBreaksFlattened(ast)
     ast = withTextAsOneRun(ast)
     // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -2733,6 +2740,7 @@ class CarveRenderSession {
     // definition and the second omitted them, and which output was returned then
     // decided whether the document kept its definitions (carve-js#754).
     const minimal = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'minimal'))
+    if (ast === parsedAst && parsedSource === minimal && !nestingReachesCap(ast)) return minimal
     const conservative = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'conservative'))
     // A tree nested to the parser's cap may hold over-cap text that no spelling
     // reads back, so its output is checked even when the two forms agree.

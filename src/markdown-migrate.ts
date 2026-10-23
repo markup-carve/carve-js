@@ -6655,9 +6655,11 @@ export function markdownToCarveWithLosses(
     if (dialect.abbreviations !== false && value.includes('{abbr="')) value = foldDefinedAbbreviations(value)
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     const trailingNewline = value.endsWith('\n')
+    const changesLinks = value.includes('@') || usedBoundaryKey !== undefined
     value = canonicalCarveWrite(value, {
       onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
-    }, document => { if (value.includes('@') || usedBoundaryKey !== undefined) linkMarkdownEmailText(document, usedBoundaryKey) })
+    }, changesLinks ? document => linkMarkdownEmailText(document, usedBoundaryKey) : undefined,
+    value)
     if (!trailingNewline) value = value.replace(/\n$/, '')
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')
