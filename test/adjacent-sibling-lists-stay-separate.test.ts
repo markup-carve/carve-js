@@ -68,6 +68,13 @@ describe('adjacent sibling lists stay separate through fmt', () => {
     expect(topTypes(carveToCarve(source))).toEqual(['list', 'list'])
   })
 
+  it('adds no hard boundary between a task list and a plain list', () => {
+    const source = '- foo\n  - [ ] task\n    +\n  - x\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    expect(carveToCarve(carveToCarve(source))).toBe(source)
+  })
+
   /**
    * BOUND: one list, and two lists with a paragraph between them, are both
    * untouched. Neither breaks under any mutation of the offset.
