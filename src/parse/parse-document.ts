@@ -2,10 +2,19 @@ import type { Document } from '../ast.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { parse as parseImpl, type ParseOptions } from '../parse.js'
+import { parseTransientForHtml } from './parse-session.js'
 
 /** The public `parse()`: the parser plus its representation passes. */
 export function parseDocument(source: string, opts: ParseOptions = {}): Document {
-  const doc = parseImpl(source, opts)
+  return finishDocument(parseImpl(source, opts))
+}
+
+/** Internal HTML parse: keep location sidecars on the transient tree. */
+export function parseDocumentForHtml(source: string, opts: ParseOptions): Document {
+  return finishDocument(parseTransientForHtml(source, opts))
+}
+
+function finishDocument(doc: Document): Document {
   promoteBlockImages(doc.children, true)
   if (doc.footnoteDefs) {
     for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
