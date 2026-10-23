@@ -21,4 +21,9 @@ describe('a term after a comment line in a footnote body keeps its description',
     const html = carveToHtml('r[^c]\n\n[^c]: > para\n  %% c\n      > tail\n')
     expect(note(html)).toContain('<blockquote><p>tail</p></blockquote>')
   })
+
+  it('still takes a quote flush after a below-column comment', () => {
+    const html = carveToHtml('r[^c]\n\n[^c]: > para\n%% c\n      > tail\n')
+    expect(note(html)).toContain('<blockquote><p>tail</p></blockquote>')
+  })
 })

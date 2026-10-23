@@ -227,7 +227,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         lexer.consume()
       }
       retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
-      retainedBelowQuotedComment = false
+      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
       !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
@@ -245,7 +245,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, markerColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), false,
         (run) => commentBlockHasCloser(lexer, run))
       retainedBelowComment = retainBelowColumnComment(content, lazyState, false)
-      retainedBelowQuotedComment = false
+      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
       lexer.consume()
     } else {
       return 'stop'
