@@ -553,6 +553,7 @@ function resolveHeadingIdsImpl(
   // A decoded tree arrives without the runtime bit; keep any a caller set.
   hydrateResolvedEmptyReferences(doc, true)
   const ingested = ingestedCaptionTargets !== undefined
+  let hasHeadingRef = ingested
   const used = documentIds ?? new DocumentIdRegistry()
   const targets = new Map<string, InlineNode[]>()
   // `</#id>` index: NFC id -> actual (verbatim) id, first occurrence wins.
@@ -657,6 +658,7 @@ function resolveHeadingIdsImpl(
   const resolveRefs = (nodes: InlineNode[]): void => {
     for (let i = 0; i < nodes.length; i++) {
       let n = nodes[i]!
+      if (n.type === 'heading_ref') hasHeadingRef = true
       // A link that ALREADY has a destination was resolved by an explicit
       // `[label]: url` definition, and an explicit definition wins over the
       // implicit heading index. It used to be told apart by `ref` being gone;
@@ -1039,15 +1041,17 @@ function resolveHeadingIdsImpl(
   // them, so the clone cache can build one-level link text from the target's
   // own (pre-resolution) inlines rather than from a copy that another target's
   // resolution has already rewritten with nested links.
-  for (const [id, children] of targets)
-    pristineTargets.set(id, deepCloneInlines(children))
+  if (hasHeadingRef) {
+    for (const [id, children] of targets)
+      pristineTargets.set(id, deepCloneInlines(children))
 
-  // Finalize crossrefs WITHIN target (heading/caption) children so each
-  // target's own `</#…>` becomes a one-level link in its rendered text.
-  for (const children of targets.values()) resolveCrossrefs(children)
+    // Finalize crossrefs WITHIN target (heading/caption) children so each
+    // target's own `</#…>` becomes a one-level link in its rendered text.
+    for (const children of targets.values()) resolveCrossrefs(children)
 
-  for (const block of doc.children) walkBlock(block, resolveCrossrefs)
-  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
+    for (const block of doc.children) walkBlock(block, resolveCrossrefs)
+    for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
+  }
 
   // Promote paragraphs that are really block images / figures (see
   // promoteBlockImages). Runs at the end of resolve() so reference images are
