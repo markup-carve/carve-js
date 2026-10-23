@@ -94,6 +94,7 @@ const IMPLEMENTED = new Set([
   'a-shifted-fence-in-a-quoted-container-s-body-stores-no-continuation-claim',
   'a-description-keeps-a-block-at-its-body-column-whatever-leads-the-item',
   'a-description-separator-left-of-its-item-s-column-folds-into-the-definition-body',
+  'a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns',
   'a-line-block-payload-span-pairs-past-the-content-column',
   'a-line-retained-after-a-comment-opens-a-paragraph',
   'a-paragraph-in-a-held-container-does-not-loosen-the-item',
