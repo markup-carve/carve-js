@@ -884,7 +884,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           if (lazyState.deepest) lazyState.deepest.lazyFoldable = false
         }
         const deepAttr = lazyState.deepest
-        if (admission.kind !== 'content' && deepAttr?.attrRun != null &&
+        // Below the descendant's content column, which may still be at or past this item's.
+        // The open-run test comes first, so a deep ladder pays nothing per level.
+        if (deepAttr?.attrRun != null && (admission.kind !== 'content' ||
+            lazyState.ownedColumn >= 0 && indentColumns(l) < contentCol + lazyState.ownedColumn) &&
             trackWrappedAttributeRun(deepAttr, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
         const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
         const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]

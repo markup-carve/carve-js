@@ -111,6 +111,9 @@ describe('a wrapped attribute in a nested item closed below its column', () => {
     '- a\n  - b\n    {.c\n }\npara\n',
     '- a\n  - b\n\n    {.c\n}\npara\n',
     '- a\n  - b\n    {.c\n}\n- s\n',
+    '- a\n  - b\n    {.c\n  }\npara\n',
+    '- a\n  - b\n    {.c\n  .d}\npara\n',
+    '1. a\n   - b\n     {.c\n    }\n  para\n',
   ]
   for (const source of shapes) {
     it(`reads ${JSON.stringify(source)} like the one-line form`, () => {
