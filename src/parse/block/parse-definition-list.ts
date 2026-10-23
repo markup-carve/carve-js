@@ -943,7 +943,7 @@ export function createDefinitionListParser(
         : sourceColumn(source, quotePrefixDepth(source))
     }
     const listColumn = entryColumn()
-    const authoredList = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
+    const authoredList = (lexer.hostBody === 'list' || lexer.hostBody === 'description') && !lexer.definitionLeadFromItemMarker &&
       listColumn > lexer.hostContentColumn &&
       !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
     const entryReachesList = () => !authoredList || entryColumn() === listColumn

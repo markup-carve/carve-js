@@ -178,6 +178,12 @@ source**.
 dropped with the option on exactly as with it off, and the render reports
 `raw-format-dropped` either way.
 
+Default Markdown export reports flattened divs and captions, dropped block
+attributes, and escaped raw HTML as render losses. Roundtrip carriers preserve
+divs, attached attributes, and captions, so those losses are absent in roundtrip
+mode. Escaped raw HTML still reports `raw-html-escaped`. The source-based checked
+export also reports an unattached attribute line that parsing discards.
+
 Under roundtrip export, every authored attribute whose name is reserved is
 dropped on every node, even when that node writes no carrier of that name.
 Each drop reports one `carrier-attribute-dropped` render loss naming the

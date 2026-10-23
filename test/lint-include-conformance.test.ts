@@ -21,6 +21,35 @@ describe('lint include conformance', () => {
 })
 
 describe('lint include offsets', () => {
+  it('uses UTF-16 for include warnings and every site in a nested chain', () => {
+    const root = '😀😀 {{ part.crv }}\n'
+    const part = '😀 {{ absent.crv }}\n'
+    const [finding] = lintCarve(root, { includes: { resolve: path => path === 'part.crv' ? part : null, sourcePath: 'root.crv' } })
+    expect(finding).toMatchObject({ rule: 'include-unresolved', file: 'part.crv' })
+    expect(part.slice(finding!.start, finding!.end)).toBe('{{ absent.crv }}')
+    expect(root.slice(finding!.includedBy![0]!.start, finding!.includedBy![0]!.end)).toBe('{{ part.crv }}')
+  })
+
+  it('uses UTF-16 for an unresolved directive in the root', () => {
+    const source = '😀😀 {{ absent.crv }}\n'
+    const [finding] = lintCarve(source, { includes: { resolve: () => null } })
+    expect(source.slice(finding!.start, finding!.end)).toBe('{{ absent.crv }}')
+  })
+
+  it('accepts cross-references to included headings', () => {
+    const source = '# T\n\n{{ part.crv }}\n\nSee </#Inc>.\n'
+    const findings = lintCarve(source, { includes: { resolve: path => path === 'part.crv' ? '# Inc\n\nBody.\n' : null } })
+    expect(findings.some(finding => finding.rule === 'broken-crossref')).toBe(false)
+    expect(lintCarve(source).some(finding => finding.rule === 'broken-crossref')).toBe(true)
+  })
+
+  it('accepts cross-references to numbered captions supplied by includes', () => {
+    const source = 'See </#fig>.\n\n{{ part.crv }}\n'
+    const part = '{#fig}\n![x](x.jpg)\n^ Figure #: A\n'
+    const findings = lintCarve(source, { includes: { resolve: path => path === 'part.crv' ? part : null } })
+    expect(findings.some(finding => finding.rule === 'broken-crossref')).toBe(false)
+  })
+
   it('measures a sliced child finding in UTF-16 of the included file', () => {
     const part = '\u{1F600}\r\n%% #region r\n>q\n%% #endregion\n'
     const [finding] = lintCarve('{{ part.crv @region:r }}\n', { includes: { resolve: () => part, sourcePath: 'doc.crv' } })

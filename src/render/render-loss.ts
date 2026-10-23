@@ -14,6 +14,10 @@ export type RenderLossCode =
   | 'table-header-row-hoisted'
   | 'table-header-cell-demoted'
   | 'list-tightness-lost'
+  | 'markdown-container-flattened'
+  | 'markdown-caption-flattened'
+  | 'markdown-attributes-dropped'
+  | 'raw-html-escaped'
 
 export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
@@ -37,6 +41,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'table-header-row-hoisted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'table-header-cell-demoted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'list-tightness-lost'; target: 'carve'; nodeType: 'block' })
+  | (RenderLossBase & { code: 'markdown-container-flattened' | 'markdown-caption-flattened' | 'markdown-attributes-dropped' | 'raw-html-escaped'; target: 'markdown'; nodeType: 'block' | 'inline' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -154,6 +159,26 @@ export function rawFormatDropped(
     target,
     nodeType: node.type === 'raw_block' ? 'block' : 'inline',
     message: `Dropped ${node.type === 'raw_block' ? 'block' : 'inline'} raw format "${node.format}" while rendering ${target}`,
+    ...(node.pos ? { pos: node.pos } : {}),
+  })
+}
+
+export function markdownLoss(
+  opts: RenderLossSinkOptions,
+  node: { pos?: Position; type: string },
+  code: 'markdown-container-flattened' | 'markdown-caption-flattened' | 'markdown-attributes-dropped' | 'raw-html-escaped',
+): void {
+  const messages = {
+    'markdown-container-flattened': 'Flattened a container into Markdown blocks',
+    'markdown-caption-flattened': 'Wrote a caption as ordinary Markdown text',
+    'markdown-attributes-dropped': 'Dropped block attributes while rendering Markdown',
+    'raw-html-escaped': 'Escaped raw HTML while rendering Markdown',
+  }
+  opts.onRenderLoss?.({
+    code,
+    target: 'markdown',
+    nodeType: node.type === 'raw_inline' ? 'inline' : 'block',
+    message: messages[code],
     ...(node.pos ? { pos: node.pos } : {}),
   })
 }

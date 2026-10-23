@@ -42,6 +42,7 @@ import { createEditorSession as createEditorSessionInternal } from './editor-ses
 import {
   checkedRender,
   type CheckedRenderOptions,
+  type RenderLoss,
   type RenderResult,
 } from './render/render-loss.js'
 import { createSourcePatch, type SourcePatch } from './source-patch.js'
@@ -791,7 +792,36 @@ export function carveToMarkdownWithReport(
   opts: ParseOptions & MarkdownRenderOptions & ProfileOptions & CheckedRenderOptions = {},
 ): RenderResult {
   return checkedRender(
-    (onRenderLoss) => carveToMarkdown(source, { ...opts, onRenderLoss }),
+    (onRenderLoss) => {
+      const rendered: RenderLoss[] = []
+      const dangling: RenderLoss[] = []
+      const value = carveToMarkdown(source, {
+        ...opts,
+        onRenderLoss: loss => rendered.push(loss),
+        onDanglingBlockAttributes: run => {
+          opts.onDanglingBlockAttributes?.(run)
+          dangling.push({
+            code: 'markdown-attributes-dropped', target: 'markdown', nodeType: 'block',
+            message: 'Dropped an unattached block attribute while rendering Markdown',
+            pos: {
+              startLine: run.line, endLine: run.line,
+              startColumn: run.column, endColumn: run.column + run.endOffset - run.startOffset,
+              startOffset: run.startOffset, endOffset: run.endOffset,
+            },
+          })
+        },
+      })
+      dangling.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+      let next = 0
+      let renderedOffset = -1
+      for (const loss of rendered) {
+        renderedOffset = Math.max(renderedOffset, loss.pos?.startOffset ?? renderedOffset)
+        while (next < dangling.length && (dangling[next]!.pos?.startOffset ?? 0) < renderedOffset) onRenderLoss(dangling[next++]!)
+        onRenderLoss(loss)
+      }
+      while (next < dangling.length) onRenderLoss(dangling[next++]!)
+      return value
+    },
     opts,
   )
 }

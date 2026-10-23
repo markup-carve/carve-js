@@ -28,7 +28,7 @@ describe('render loss reports', () => {
 
   it('reports the target-specific drops rather than merely scanning the AST', () => {
     const html = carveToMarkdownWithReport('`<b>`{=html}\n')
-    expect(html.losses).toEqual([])
+    expect(html.losses.map(loss => loss.code)).toEqual(['raw-html-escaped'])
     expect(html.value).toContain('&lt;b&gt;')
 
     const ansi = carveToAnsiWithReport(source)

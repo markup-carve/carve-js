@@ -35,7 +35,7 @@ it('keeps complete ordered loss counts while repairing nested spans', () => {
 it.each(hostControls)('preserves nested wrapper emphasis and attributes: $source', ({ source, markdown }) => {
   for (const report of [carveToMarkdownWithReport(source), renderMarkdownWithReport(resolve(parse(source)))]) {
     expect(report.value).toBe(markdown)
-    expect(report.losses).toEqual([])
-    expect(report.totalLosses).toBe(0)
+    expect(report.losses.every(loss => loss.code === 'markdown-caption-flattened')).toBe(true)
+    expect(report.truncated).toBe(false)
   }
 })
