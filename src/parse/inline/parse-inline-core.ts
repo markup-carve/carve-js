@@ -1,7 +1,7 @@
 import { type Emphasis, type InlineNode, type Position, SMART_PUNCTUATION_GLYPHS } from '../../ast.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { extendsGrapheme } from '../../grapheme-extender.js'
-import { completeDestinationOpeners, RE_EMPTY_LINK_REST, RE_LINK_REST, scanDestination } from '../../link-destination.js'
+import { destinationSlotEnds, RE_EMPTY_LINK_REST, RE_LINK_REST, scanDestination } from '../../link-destination.js'
 import {
   type BracketClose,
   buildBracketMap,
@@ -547,13 +547,15 @@ export function linkDestinations(text: string, memo: EmphasisMemo): Map<number, 
   if (memo.destinations) return memo.destinations
   const found = new Map<number, number>()
   memo.destinations = found
-  if (!text.includes('](')) return found
-  const brackets = buildBracketMap(text)
+  const firstLinkTail = text.indexOf('](')
+  if (firstLinkTail === -1) return found
+  const sharedSlots: { first: number; ends?: Map<number, number> } = { first: firstLinkTail + 1 }
+  const brackets = buildBracketMap(text, false, undefined, sharedSlots)
   // A destination inside a destination is already hidden by the one around it,
   // and scanning it again is what makes a nest of them quadratic. Brackets come
   // in ascending order, so the outermost of a nest is reached first.
   let covered = -1
-  const destinationOpeners = completeDestinationOpeners(text)
+  const destinationOpeners = new Set((sharedSlots.ends ??= destinationSlotEnds(text, sharedSlots.first)).keys())
   const atoms = atomicLinkRegions(text)
   let atom = 0
   for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
