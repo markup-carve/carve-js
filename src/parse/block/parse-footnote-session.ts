@@ -72,6 +72,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   }
   if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
   let retainedBelowComment = false
+  let retainedBelowQuotedComment = false
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   let termTextContinuation = false
   const belowColumnCommentFence = new Set<number>()
@@ -88,6 +89,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) return 'stop'
     if (admission.kind === 'blank') {
       retainedBelowComment = false
+      retainedBelowQuotedComment = false
       termTextContinuation = false
       trackItemLazyState('', lazyState)
       pendingBlankRun.add(ln, lexer.lineNumber(lexer.pos))
@@ -160,7 +162,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(pendingBlankRun.lines[k])
       }
       pendingBlankRun.clear()
-      const content: string = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
+      // Only a quoted comment's follower is taken flush; after a `%%` line the
+      // follower keeps its columns, so a term there keeps its description.
+      const content: string = retainedBelowQuotedComment && !RE_COMMENT_LINE.test(ln.trimStart())
         ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
       const belowQuotedComment = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
       // The line reaches this body's column, so a definition on it registers
@@ -181,6 +185,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         termTextContinuation = true
       trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, bodyColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
       retainedBelowComment = belowQuotedComment && /^[ \t]*>/.test(lexer.peek(1) ?? '')
+      retainedBelowQuotedComment = retainedBelowComment
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       lexer.consume()
@@ -222,6 +227,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         lexer.consume()
       }
       retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
+      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
       !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
@@ -239,6 +245,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, markerColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), false,
         (run) => commentBlockHasCloser(lexer, run))
       retainedBelowComment = retainBelowColumnComment(content, lazyState, false)
+      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
       lexer.consume()
     } else {
       return 'stop'
