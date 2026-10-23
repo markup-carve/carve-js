@@ -877,8 +877,10 @@ export function classifyQuotedLine(
     if (descent && descent.levels === 0) descent.preserved = true
     return null
   }
+  // A sibling item that opens a block or holds only a list `+` leaves no paragraph for a lazy line.
   if (wasItemParagraph && isListMarkerLine(content) &&
-      !bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content, prefixMemo))) {
+      (!bottomBlockLeavesParagraphOpen(markerLineBottomBlock(content, prefixMemo)) ||
+        markerLineState(content, prefixMemo).bottomIsContinuationMarker)) {
     closeBlockQuoteParagraph(state)
     return null
   }

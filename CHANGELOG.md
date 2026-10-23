@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- An unclosed fence attached by a list `+` keeps a following list line as payload (`- +` / ```` ``` ```` / `- x`), and a sibling item holding only `+` ends its host quote before an unprefixed line (#3475, markup-carve/carve#3421).
 - A nested item's wrapped attribute closed between the outer and nested content columns reads like the one-line form (`- a` / `  - b` / `    {.c` / `  }` / `para`) (#3474, markup-carve/carve#3421).
 - A nested item's wrapped attribute block closed below its column reads like the one-line form, so a column-0 line after it leaves the list (`- a` / `  - b` / `    {.c` / `}` / `para`) (#3473, markup-carve/carve#3421).
 - A wrapped attribute block that reaches no block after a blank line in a list item loosens the list like its one-line form (`- a` / blank / `  {.c` / `}` / `- s`) (#3472, markup-carve/carve#3421).
