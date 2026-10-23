@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, parse } from '../src/index.js'
+import { renderCarve } from '../src/render-carve.js'
 
 /*
  * markup-carve/carve-js#3512, corpus 590-3: a fence that follows a nested list
@@ -24,6 +25,7 @@ describe('a fence after a nested list in a tight item', () => {
       expect(carveToCarve(once)).toBe(once)
       expect(carveToHtml(once)).toBe(carveToHtml(source))
       expect(strip(once)).toBe(strip(source))
+      expect(renderCarve(fromAstJson(carveToAstJson(source)))).toBe(once)
     })
   }
 })
