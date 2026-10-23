@@ -274,6 +274,40 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const itemQuoteDepth = quotePrefixDepth(itemSource)
       lexer.consume()
 
+      // A top-level item with only indented prose before its next sibling has
+      // no container decision to make. Parse that body once as a paragraph.
+      if (!session.recordPositions && session.activeMatchers.length === 0 && !la && !isTask &&
+          baseIndent === 0 && itemQuoteDepth === 0 && content.length > 0 &&
+          !RE_FIRST_BLOCK_MARKER.test(content) && /^\p{L}/u.test(content) &&
+          !lineOpensBlock(content)) {
+        const wrapped: string[] = []
+        const wrappedNumbers: number[] = []
+        let offset = 0
+        while (true) {
+          const candidate = lexer.peek(offset)
+          if (candidate === undefined || isBlankLine(candidate) ||
+              indentColumns(candidate, contentCol) < contentCol) break
+          const body = sliceColumns(candidate, contentCol, true)
+          if (leadingWhitespace(body) !== 0 || !/^\p{L}/u.test(body) ||
+              lineOpensBlock(body)) break
+          wrapped.push(body)
+          wrappedNumbers.push(lexer.lineNumber(lexer.pos + offset))
+          offset++
+        }
+        const follower = lexer.peek(offset)
+        if (wrapped.length > 0 && (follower === undefined ||
+            indentColumns(follower, baseIndent + 1) === baseIndent &&
+            matchListMarker(follower, isTask, isOrdered) !== null &&
+            (isOrdered ? orderedContinues(follower, orderedKind, orderedDelim) :
+              unorderedMarkerChar(follower) === firstMarkerChar))) {
+          for (let index = 0; index < wrapped.length; index++) lexer.consume()
+          const sub = nestedSubLexer(lexer, [content, ...wrapped], itemStartLineIndex,
+            [lexer.lineNumber(itemStartLineIndex), ...wrappedNumbers])
+          items.push({ type: 'list_item', children: session.parseBlocks(sub, 0) })
+          continue
+        }
+      }
+
       const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
       const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
       const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
