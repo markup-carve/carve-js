@@ -59,6 +59,21 @@ import {
   verbatimSpanEnd,
 } from '../parse-core.js'
 
+const smartTokensByFirst = new Map<string, typeof SMART_TOKENS>()
+for (const token of SMART_TOKENS) {
+  const first = token[0][0]!
+  let group = smartTokensByFirst.get(first)
+  if (!group) {
+    group = []
+    smartTokensByFirst.set(first, group)
+  }
+  group.push(token)
+}
+const emphasisPairs: ReadonlyArray<readonly [string, Emphasis['type']]> = [
+  ['/', 'emphasis'], ['*', 'strong'], ['_', 'underline'],
+  ['~', 'strike'], ['=', 'highlight'],
+]
+
 export class InlineParseSession {
   protected linkLabelDepth = 0
 
@@ -406,8 +421,11 @@ export class InlineParseSession {
     i: number,
     prev: string,
   ): { out: string; len: number; kind: string } | null {
-    for (const [tok, out, kind] of SMART_TOKENS) {
-      if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
+    const candidates = smartTokensByFirst.get(text[i]!)
+    if (candidates) {
+      for (const [tok, out, kind] of candidates) {
+        if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
+      }
     }
     // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
     // lone `-` stays literal.
@@ -710,14 +728,7 @@ export class InlineParseSession {
     // below), exactly like `**x**`. There is NO bare `^`/`,` delimiter:
     // superscript and subscript exist only in the braced forms `{^x^}`/`{,x,}`
     // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
-    const pairs: Array<[string, Emphasis['type']]> = [
-      ['/', 'emphasis'],
-      ['*', 'strong'],
-      ['_', 'underline'],
-      ['~', 'strike'],
-      ['=', 'highlight'],
-    ]
-    for (const [delim, type] of pairs) {
+    for (const [delim, type] of emphasisPairs) {
       if (c === delim) {
         const after = text[i + 1]
         const before = text[i - 1]

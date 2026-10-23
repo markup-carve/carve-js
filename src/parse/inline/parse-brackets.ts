@@ -118,6 +118,8 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   let lastBang = -1
   for (let j = 0; j < s.length; j++) {
     const ch = s[j]
+    if (ch !== '\\' && ch !== '`' && ch !== '{' && ch !== '<' &&
+        ch !== '!' && ch !== '[' && ch !== ']') continue
     if (ch === '\\') {
       j++
       continue
@@ -143,13 +145,13 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
     const inImageAlt = imageAlt ? (imageAlt[imageAlt.length - 1] ?? false) : false
-    const commentEnd = opaqueEnd(j, inImageAlt)
+    const commentEnd = ch === '{' ? opaqueEnd(j, inImageAlt) : undefined
     if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
     }
-    const linkEnd = autolinkEnd(j)
+    const linkEnd = ch === '<' ? autolinkEnd(j) : undefined
     if (linkEnd !== undefined) {
       j = linkEnd - 1
       continue
