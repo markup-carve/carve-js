@@ -90,6 +90,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     prefixWalkBound,
     quoteBodyColumn,
     stackedOpenerColumns,
+    trackWrappedAttributeRun,
     stackedFollowerColumn,
     quoteIndentHasTab,
     quotePrefixDepth,
@@ -872,8 +873,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const candidate = rootLines[lexer.lineNumber(lexer.pos + offset)] ?? lexer.peek(offset + 1)
         return candidate === undefined || isBlankLine(candidate) || indentColumns(candidate) !== 0
       }
+      let deepAttributeClosed = false
       runIndentationContainer(lexer, 'list', itemMarkerColumn, contentCol, itemQuoteDepth, (admission) => {
         const l = admission.line
+        // A descendant's wrapped attribute block is one construct, closed below its column too
+        // (carve#3421 ruling 1): once it closes, no paragraph is left for a lazy line.
+        if (deepAttributeClosed) {
+          deepAttributeClosed = false
+          lazyState.lazyFoldable = false
+          if (lazyState.deepest) lazyState.deepest.lazyFoldable = false
+        }
+        const deepAttr = lazyState.deepest
+        if (admission.kind !== 'content' && deepAttr?.attrRun != null &&
+            trackWrappedAttributeRun(deepAttr, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
         const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
         const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
         if (currentSource !== undefined && endsInPlus(currentSource) &&
