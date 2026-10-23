@@ -804,6 +804,7 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   if (left.type === 'list' && right.type === 'list') {
     if (left.ordered !== right.ordered) return false
+    if (isTaskList(left) !== isTaskList(right)) return false
     return left.ordered
       ? (left.delim ?? '.') === (right.delim ?? '.') && left.olType === right.olType
       : (left.bulletChar ?? '-') === (right.bulletChar ?? '-')
@@ -3656,8 +3657,12 @@ class CarveRenderSession {
           const wrapped = ctx.quoteDepth === 0 ? nested : nested.replace(/\n$/, '').split('\n').map(line =>
             line ? `${'> '.repeat(ctx.quoteDepth)}${line}` : '>'.repeat(ctx.quoteDepth)).join('\n')
           try {
-            // A dedented fence after a nested list writes boundary tags as blank
-            // lines. Probe its final spelling before falling back to a loose item.
+            // A quoted raw fence can leave a blank-line sentinel in the
+            // readback probe. Resolve it before deciding the item needs gaps.
+            const quotedRawFence = item.children.some((child, index) =>
+              child.type === 'block_quote' && item.children[index + 1]?.type === 'block_quote' &&
+              child.children.at(-1)?.type === 'raw_block')
+            // A dedented fence after a nested list also needs its final spelling.
             const dedentedFence = item.children.some((child, index) => {
               const previous = item.children[index - 1]
               if (child.type !== 'code_block' || previous?.type !== 'list') return false
@@ -3665,7 +3670,7 @@ class CarveRenderSession {
               while (tail?.type === 'list') tail = tail.items.at(-1)?.children.at(-1)
               return tail?.type === 'code_block'
             })
-            const probe = dedentedFence ? this.normalize(wrapped) : wrapped
+            const probe = quotedRawFence || dedentedFence ? this.normalize(wrapped) : wrapped
             let blocks = parse(probe).children
             for (let depth = 0; depth < ctx.quoteDepth; depth++) {
               const quote = blocks[0]
