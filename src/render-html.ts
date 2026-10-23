@@ -43,7 +43,6 @@ import type {
 
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './extension/abbr-budget.js'
 import { collectDocumentIds, inheritDocumentIds, type DocumentIdRegistry } from './ast/document-ids.js'
-import { stripBidiControls } from './extension/bidi-controls.js'
 import { normalizeLegacyInline } from './ast/legacy-nodes.js'
 import { numberFootnotes } from './heading/footnote-numbering.js'
 import { ownValue, setOwn } from './own-property.js'
@@ -2832,9 +2831,8 @@ const HTML_ESCAPE: Record<string, string> = {
  * (they are only stripped from generated ids; see heading-ids.ts).
  */
 export function escapeHtml(s: string): string {
-  // Strip the Trojan-Source bidi controls, then escape the structural HTML
-  // metacharacters.
-  return stripBidiControls(s).replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)
+  // One pass strips bidi controls and escapes structural HTML characters.
+  return s.replace(/[&<>\u00a0\u202a-\u202e\u2066-\u2069]/g, (c) => HTML_ESCAPE[c] ?? '')
 }
 
 function escapeAttr(s: string): string {
