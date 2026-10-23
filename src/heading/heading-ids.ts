@@ -1475,6 +1475,12 @@ export function numberCaptionsIn(
       } else delete node.number
       return
     }
+    // These inline nodes have no child math; avoid enumerating each leaf's
+    // source and display fields while numbering a document.
+    if (node.type === 'text' || node.type === 'escaped_text' ||
+        node.type === 'smart_punctuation' || node.type === 'code' ||
+        node.type === 'soft_break' || node.type === 'hard_break' ||
+        node.type === 'non_breaking_space') return
     for (const [key, child] of Object.entries(node)) {
       if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') numberMath(child, suppressed)
     }
