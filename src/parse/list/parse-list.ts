@@ -2278,9 +2278,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           const descriptionFenceAtRetainedColumn = markerDescriptionInlineFence && lazyState.inlineFenceParagraph &&
             lazyState.descriptionColumn !== undefined && indentColumns(l) === lazyState.descriptionColumn &&
             opensCodeFence(l.trimStart())
+          // A `:` line below the column with no term open is the paragraph's text, not a description.
+          const termlessLazyDescription = lazyState.inDefList === false && !lazyState.deepest?.inDefList &&
+            indentColumns(l, contentCol) < contentCol && RE_DEFLIST_DEF.test(lazyLine)
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
           if (descriptionFenceAtRetainedColumn) lazyState.lazyFoldable = false
+          if (termlessLazyDescription) lazyState.inDefList = false
           if (commentState) {
             const opaque = lazyState.opaque
             Object.assign(lazyState, commentState, {lazyFoldable: commentState.lazyFoldable && commentState.deepest?.lazyFoldable !== false})

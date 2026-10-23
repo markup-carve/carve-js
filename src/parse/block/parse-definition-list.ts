@@ -1048,6 +1048,9 @@ export function createDefinitionListParser(
             if (sourceIndent > retainedIndent)
               continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
           }
+          // A line below the item's content column keeps none of its indent in the term.
+          if (!nextPastTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))
+            continuation = continuation.replace(/^[ \t]+/, '')
           const last = parts[parts.length - 1]!
           if ('lines' in last) {
             last.text += '\n' + continuation
