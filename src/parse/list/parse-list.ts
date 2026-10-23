@@ -298,7 +298,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !RE_FIRST_BLOCK_MARKER.test(content) && /^\p{L}/u.test(content) &&
           !lineOpensBlock(content)) {
         const wrapped: string[] = []
-        const wrappedNumbers: number[] = []
         let offset = 0
         while (true) {
           const candidate = lexer.peek(offset)
@@ -308,7 +307,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           if (leadingWhitespace(body) !== 0 || !/^\p{L}/u.test(body) ||
               lineOpensBlock(body)) break
           wrapped.push(body)
-          wrappedNumbers.push(lexer.lineNumber(lexer.pos + offset))
           offset++
         }
         const follower = lexer.peek(offset)
@@ -318,9 +316,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             (isOrdered ? orderedContinues(follower, orderedKind, orderedDelim) :
               unorderedMarkerChar(follower) === firstMarkerChar))) {
           for (let index = 0; index < wrapped.length; index++) lexer.consume()
-          const sub = nestedSubLexer(lexer, [content, ...wrapped], itemStartLineIndex,
-            [lexer.lineNumber(itemStartLineIndex), ...wrappedNumbers])
-          items.push({ type: 'list_item', children: session.parseBlocks(sub, 0) })
+          items.push({ type: 'list_item', children: [session.parseSimpleListParagraph(
+            [content, ...wrapped].join('\n'), lexer,
+          )] })
           continue
         }
       }
