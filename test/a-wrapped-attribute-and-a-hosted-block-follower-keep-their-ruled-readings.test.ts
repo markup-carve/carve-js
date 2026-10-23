@@ -69,7 +69,7 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
   })
 
   // A lazy line continues the item's own paragraph, so the next item's opener still starts a block.
-  for (const before of ['> - a\n> b', '> 1. a\n> b\n> c', '> - a\n> - x\n> b', '> - > a\n> b']) {
+  for (const before of ['> - a\n> ```\n> x', '> - a\n> b', '> 1. a\n> b\n> c', '> - a\n> - x\n> b', '> - > a\n> b']) {
     it(`attaches a heading after ${JSON.stringify(before)} and a sibling stacked quote plus`, () => {
       expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
     })

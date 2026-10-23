@@ -1361,11 +1361,19 @@ export class ParseSession extends InlineParseSession {
           if (run && run[1]![0] === innerOpenFence && /^(`{3,}|~{3,})[ \t]*$/.test(line)) innerOpenFence = null
           continue
         }
-        if (run) {
+        // A fence interrupts an open paragraph only with a closer ahead; otherwise it is text.
+        const closes = (k: number): boolean => {
+          const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(inner[k]!.trimStart())
+          return closer !== null && closer[1]![0] === run![1]![0] && closer[1]!.length >= run![1]!.length
+        }
+        let closed = false
+        if (run && innerParagraphOpen) for (let k = paragraphScan + 1; k < until && !closed; k++) closed = closes(k)
+        if (run && (!innerParagraphOpen || closed)) {
           innerOpenFence = run[1]![0]!
           innerParagraphOpen = false
           continue
         }
+        if (run) continue
         const item = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )(.*)$/.exec(line)
         if (isBlankLine(line) || /^:{3,}/.test(line) || !bottomBlockLeavesParagraphOpen(line) ||
             item !== null && !bottomBlockLeavesParagraphOpen(item[1]!)) {
