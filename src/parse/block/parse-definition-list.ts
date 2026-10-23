@@ -981,6 +981,7 @@ export function createDefinitionListParser(
         // run; the first run starts on the term's own line.
         type TermPart = { lines: number[]; text: string } | Comment
         const parts: TermPart[] = [{ lines: [termLineIndex], text: t[1]! }]
+        const strippedIndent = new Map<number, number>()
         while (!lexer.eof()) {
           const next = lexer.peek()!
           if (/^[ \t]+%%/.test(next)) {
@@ -1048,6 +1049,12 @@ export function createDefinitionListParser(
             if (sourceIndent > retainedIndent)
               continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
           }
+          // A line below the item's content column keeps none of its indent in the term.
+          if (!nextPastTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
+            const stripped = continuation.replace(/^[ \t]+/, '')
+            strippedIndent.set(lexer.pos, continuation.length - stripped.length)
+            continuation = stripped
+          }
           const last = parts[parts.length - 1]!
           if ('lines' in last) {
             last.text += '\n' + continuation
@@ -1070,7 +1077,7 @@ export function createDefinitionListParser(
         // gets its own origin instead (#441): the term's own line starts after its
         // `::` marker, a continuation line at its left edge.
         const anchorOf = (source: number) => {
-          const shift = source === termLineIndex ? termStart : 0
+          const shift = source === termLineIndex ? termStart : strippedIndent.get(source) ?? 0
           return {
             offset: lexer.lineOffset(source) + shift,
             column: lexer.lineStartColumn(source) + shift,
