@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The gate script comes from this workflow's ref; only the changelog is
       # taken from changelog_ref, so a ref older than the script still works.
