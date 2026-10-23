@@ -818,14 +818,28 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
 }
 
 /**
- * A paragraph opening on a lone `+` line, written right below a list at the
- * same column, puts that `+` at the list's marker column. PART 9 §17 L3 reads
- * it as the continuation marker there and attaches the next line, so the `+`
- * is escaped. Alone on its line with nothing below it, the marker is refused
- * and stays text, so it is left bare.
+ * A paragraph opening on `+` below a list can look like a continuation
+ * marker. Below a nested fence it stays literal. A task fence needs the `+`
+ * one column farther right; other list tails need an escape when a following
+ * line would be attached by PART 9 §17 L3.
  */
-function escapeLeadingPlusBelowList(rendered: string, previous: BlockNode | null): string {
-  return previous?.type === 'list' && rendered.startsWith('+\n') ? `\\${rendered}` : rendered
+function nestedFenceTail(previous: BlockNode | null): 'plain' | 'task' | undefined {
+  if (previous?.type !== 'list') return undefined
+  const item = previous.items.at(-1)
+  const tail = item?.children.at(-1)
+  if (tail?.type !== 'code_block' && tail?.type !== 'raw_block') return undefined
+  return item?.checked === undefined ? 'plain' : 'task'
+}
+
+function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null, inItem = false): string {
+  const fence = inItem ? nestedFenceTail(previous) : undefined
+  const escapedPlus = rendered === '\\+' || rendered.startsWith('\\+\n')
+  const barePlus = rendered === '+' || rendered.startsWith('+\n')
+  if (fence === 'task' && (escapedPlus || barePlus)) {
+    return ` +${rendered.slice(escapedPlus ? 2 : 1)}`
+  }
+  return previous?.type === 'list' && fence === undefined && rendered.startsWith('+\n')
+    ? `\\${rendered}` : rendered
 }
 
 /** Whether rendered text contains a character a re-parse can see. */
@@ -3207,7 +3221,7 @@ class CarveRenderSession {
       for (const block of blocks) {
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
         let rendered = this.renderBlock(block, ctx)
-        if (block.type === 'paragraph') rendered = escapeLeadingPlusBelowList(rendered, previousBlock)
+        if (block.type === 'paragraph') rendered = guardLeadingPlusBelowList(rendered, previousBlock, item !== undefined)
         const moved: boolean =
           item !== undefined &&
           spellsSomething(rendered) &&
@@ -3867,8 +3881,11 @@ class CarveRenderSession {
           }
         }
         let rendered = this.renderBlock(b, ctx)
-        if (b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx)) rendered = '\\+'
-        if (b.type === 'paragraph' && !separated) rendered = escapeLeadingPlusBelowList(rendered, previousEmitted)
+        if (
+          b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx) &&
+          nestedFenceTail(previousEmitted) === undefined
+        ) rendered = '\\+'
+        if (b.type === 'paragraph' && !separated) rendered = guardLeadingPlusBelowList(rendered, previousEmitted, true)
         if (rendered.length === 0) return
         if (b.type === 'list') {
           if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
