@@ -2,7 +2,7 @@
 
 Working on carve-js itself: the checkout and the source layout. Contributor
 guidelines, the test commands and the other gates are in
-[CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/.github/CONTRIBUTING.md).
 
 ## Install and develop
 

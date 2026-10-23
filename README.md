@@ -121,7 +121,7 @@ streaming, browser use, the CLI, migration, rendering, and integrations.
 
 ## Development
 
-Start with [CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/CONTRIBUTING.md)
+Start with [CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/.github/CONTRIBUTING.md)
 for the toolchain, the test commands, and what a spec-affecting change involves.
 The [development guide](https://github.com/markup-carve/carve-js/blob/main/docs/development.md)
 has the source map.
