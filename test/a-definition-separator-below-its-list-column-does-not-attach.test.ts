@@ -38,9 +38,9 @@ describe('a definition separator below its list column', () => {
     )
   })
 
-  it('returns a separator below an authored list base to the item', () => {
+  it('folds a separator below an authored term column into the term', () => {
     expect(carveToHtml('- a\n   :: m\n  : l\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>m</dt>\n    </dl>\n    : l\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <dl>\n      <dt>m\n: l</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 

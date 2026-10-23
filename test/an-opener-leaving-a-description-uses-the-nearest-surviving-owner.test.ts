@@ -47,7 +47,7 @@ const cases = [
   {
     "name": "row 10 returns to its surviving owner",
     "source": "- a\n  :: term\n  :  detail\n    :: term\n   :  detail\n      [^n]: note\n       q\n1. ordered\n",
-    "expected": "<ul>\n<li>a\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n<dt>term</dt>\n</dl>\n:  detail\n[^n]: note\nq\n</li>\n</ul>\n<ol>\n<li>ordered</li>\n</ol>"
+    "expected": "<ul>\n<li>a\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n<dt>term\n:  detail\n[^n]: note\nq</dt>\n</dl>\n</li>\n</ul>\n<ol>\n<li>ordered</li>\n</ol>"
   }
 ]
 

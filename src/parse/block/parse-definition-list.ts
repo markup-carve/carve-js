@@ -1033,8 +1033,14 @@ export function createDefinitionListParser(
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
             entryColumn() < listColumn &&
             (authoredList || entryColumn() < lexer.hostContentColumn)
-          const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn
           const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
+          const nextSourceColumn = sourceColumn(nextSource, quotePrefixDepth(nextSource))
+          // A separator between the item's content column and an over-indented term's column is term text.
+          const separatorBelowTerm = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
+            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && RE_DEFLIST_DEF.test(nextEntry) &&
+            termColumn > lexer.hostContentColumn && nextSourceColumn < termColumn &&
+            nextSourceColumn >= lexer.hostContentColumn
+          const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn && !separatorBelowTerm
           const markerTermText = lexer.definitionLeadFromItemMarker && lexer.hostMarkerColumn !== undefined &&
             RE_DEFLIST_DEF.test(nextEntry) &&
             entryColumn() > lexer.hostMarkerColumn && entryColumn() < lexer.hostContentColumn
@@ -1051,7 +1057,7 @@ export function createDefinitionListParser(
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
             leavesTerm ||
-            (!belowList && !nextPastTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            (!belowList && !nextPastTerm && !separatorBelowTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
@@ -1064,6 +1070,7 @@ export function createDefinitionListParser(
             isBlockAttributeLine(next.trimStart())
               ? stripLazyFrame(next).trimStart()
               : stripLazyFrame(next)
+          if (separatorBelowTerm) continuation = continuation.replace(/^[ \t]+/, '')
           if (nextPastTerm && lexer.hostBody === 'list') {
             const sourceIndent = entryLeadColumn(nextSource) - termColumn
             const retainedIndent = indentColumns(continuation)
