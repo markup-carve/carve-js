@@ -1341,32 +1341,46 @@ export class ParseSession extends InlineParseSession {
     let refusedFirstBlockMarker: string | undefined
     // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
     let stackedAttachEnd = -1
-    // Fences and divs in `inner`, scanned once as it grows: the last line that closed one.
-    let closerScan = 0
-    let openFence: string | null = null
-    let divDepth = 0
-    let lastCloser = -1
-    const scanClosers = (until: number): void => {
-      if (until < closerScan) { closerScan = 0; openFence = null; divDepth = 0; lastCloser = -1 }
-      for (; closerScan < until; closerScan++) {
-        const line = inner[closerScan]!
+    // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
+    // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
+    let paragraphScan = 0
+    let innerOpenFence: string | null = null
+    let innerParagraphOpen = false
+    let innerItemParagraph = false
+    const scanParagraph = (until: number): void => {
+      if (until < paragraphScan) {
+        paragraphScan = 0
+        innerOpenFence = null
+        innerParagraphOpen = false
+        innerItemParagraph = false
+      }
+      for (; paragraphScan < until; paragraphScan++) {
+        const line = inner[paragraphScan]!.trimStart()
         const run = /^(`{3,}|~{3,})/.exec(line)
-        if (run) {
-          if (openFence === null) openFence = run[1]![0]!
-          else if (run[1]![0] === openFence && /^(`{3,}|~{3,})[ \t]*$/.test(line)) {
-            openFence = null
-            lastCloser = closerScan
-          }
-        } else if (openFence === null && /^:{3,}[ \t]*\S/.test(line)) {
-          divDepth++
-        } else if (openFence === null && /^:{3,}[ \t]*$/.test(line)) {
-          // A bare `:::` opens a nameless div when none is open, and closes one otherwise.
-          if (divDepth > 0) {
-            divDepth--
-            lastCloser = closerScan
-          } else {
-            divDepth++
-          }
+        if (innerOpenFence !== null) {
+          if (run && run[1]![0] === innerOpenFence && /^(`{3,}|~{3,})[ \t]*$/.test(line)) innerOpenFence = null
+          continue
+        }
+        // A fence interrupts an open paragraph only with a closer ahead; otherwise it is text.
+        const closes = (k: number): boolean => {
+          const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(inner[k]!.trimStart())
+          return closer !== null && closer[1]![0] === run![1]![0] && closer[1]!.length >= run![1]!.length
+        }
+        let closed = false
+        if (run && innerParagraphOpen) for (let k = paragraphScan + 1; k < until && !closed; k++) closed = closes(k)
+        if (run && (!innerParagraphOpen || closed)) {
+          innerOpenFence = run[1]![0]!
+          innerParagraphOpen = false
+          continue
+        }
+        if (run) continue
+        const item = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )(.*)$/.exec(line)
+        if (isBlankLine(line) || /^:{3,}/.test(line) || !bottomBlockLeavesParagraphOpen(line) ||
+            item !== null && !bottomBlockLeavesParagraphOpen(item[1]!)) {
+          innerParagraphOpen = false
+        } else if (!innerParagraphOpen) {
+          innerParagraphOpen = true
+          innerItemParagraph = item !== null
         }
       }
     }
@@ -1560,30 +1574,13 @@ export class ParseSession extends InlineParseSession {
       const openerStartsBlock = (opener: string): boolean => lexer.pos - 1 === firstLineIndex ||
         inner.length > 1 && isBlankLine(inner[inner.length - 2]!) || inner.length - 1 === stackedAttachEnd ||
         quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '') ||
-        followsClosedBlock() || opensSiblingItem()
-      // A heading, table row, invisible line or closed fence or div leaves no paragraph to fold into.
-      const followsClosedBlock = (): boolean => {
-        if (inner.length < 2) return false
-        const previous = inner[inner.length - 2]!
-        if (!/^(?:`{3,}|~{3,}|:{3,})[ \t]*$/.test(previous)) return !bottomBlockLeavesParagraphOpen(previous)
-        scanClosers(inner.length - 1)
-        return lastCloser === inner.length - 2
-      }
-      // `> - a` / `> - > +`: the opener is the next item of a list its block run opened.
-      const opensSiblingItem = (): boolean => {
-        const item = inner[inner.length - 1]!
-        let start = inner.length - 2
-        while (start > 0 && !isBlankLine(inner[start - 1]!)) start--
-        const head = inner[start]
-        if (head === undefined || !isListMarkerLine(head) || !isListMarkerLine(item)) return false
-        const column = leadingWhitespace(head)
-        if (leadingWhitespace(item) !== column) return false
-        // A line at or left of the list's column that is not an item ends the list (`::: code`).
-        for (let k = start + 1; k < inner.length - 1; k++) {
-          const line = inner[k]!
-          if (leadingWhitespace(line) <= column && !isListMarkerLine(line)) return false
-        }
-        return true
+        leavesNoTextParagraph()
+      // After a closed block or an item's own paragraph the opener starts a block (CARVE-P9-067).
+      const leavesNoTextParagraph = (): boolean => {
+        scanParagraph(inner.length - 1)
+        // An indented opener under an item's paragraph is a nested item, which its own list attaches.
+        return innerOpenFence === null && (!innerParagraphOpen ||
+          innerItemParagraph && leadingWhitespace(inner[inner.length - 1]!) === 0)
       }
       if (stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 &&
           stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
@@ -1591,9 +1588,11 @@ export class ParseSession extends InlineParseSession {
           !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower) &&
           isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
           openerStartsBlock(stackedOpener)) {
+        const opensBody = /^[ \t]*(?:`{3,}|~{3,}|:{3,}|%%%)/.test(stackedFollower)
         const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
-          // A host-quoted line ends the unprefixed follower; stopping there keeps the scan short.
-          lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next) || next.startsWith('>'), 0, true, 0, 0, true)
+          // A host-quoted line ends a follower that opens no fence; stopping there keeps the scan short.
+          lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next) || next.startsWith('>') && !opensBody,
+          0, true, 0, 0, true)
         if (attached.length > 0) {
           inner.push(...attached)
           innerLineNumbers.push(...attachedLineNumbers)

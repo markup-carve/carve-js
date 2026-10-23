@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [0.1.13] - 2026-10-22
 
 ### Fixes
+- A stacked quote `+` on a sibling item inside a host quote attaches any column-0 block after a lazy line of the previous item (`> - a` / `> b` / `> - > +` / `# h`), and after a wider div closer (#3471, markup-carve/carve#3421).
 - A stacked quote `+` inside a host quote attaches any column-0 block after a heading, table, thematic break, invisible line or closed fence or div (`> # t` / `> - > +` / `# h`) (#3468, markup-carve/carve#3421).
 - A stacked quote `+` on a sibling item inside a host quote attaches any column-0 block, not only a paragraph (`> - a` / `> - > +` / `# h`) (#3467, markup-carve/carve#3421).
 - A stacked quote `+` inside a host quote folds an unprefixed list follower into its text (`> - > +` / `- s`) instead of leaving it after the list (#3465, markup-carve/carve#3534).
