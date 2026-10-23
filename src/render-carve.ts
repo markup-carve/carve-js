@@ -3676,14 +3676,9 @@ class CarveRenderSession {
             const quotedRawFence = item.children.some((child, index) =>
               child.type === 'block_quote' && item.children[index + 1]?.type === 'block_quote' &&
               child.children.at(-1)?.type === 'raw_block')
-            // A dedented fence after a nested list also needs its final spelling.
-            const dedentedFence = item.children.some((child, index) => {
-              const previous = item.children[index - 1]
-              if (child.type !== 'code_block' || previous?.type !== 'list') return false
-              let tail = previous.items.at(-1)?.children.at(-1)
-              while (tail?.type === 'list') tail = tail.items.at(-1)?.children.at(-1)
-              return tail?.type === 'code_block'
-            })
+            // A fence after a nested list carries a closer sentinel until normalized.
+            const dedentedFence = item.children.some((child, index) =>
+              child.type === 'code_block' && item.children[index - 1]?.type === 'list')
             const probe = quotedRawFence || dedentedFence ? this.normalize(wrapped) : wrapped
             let blocks = parse(probe).children
             for (let depth = 0; depth < ctx.quoteDepth; depth++) {
@@ -3695,7 +3690,7 @@ class CarveRenderSession {
             for (let depth = 1; depth < ctx.listDepth; depth++)
               inner = inner?.type === 'list' ? inner.items[0]?.children.find(block => block.type === 'list') : undefined
             return inner?.type === 'list' && inner.tight === node.tight &&
-              stableJson(inner.items[0]) === stableJson(item)
+              stableJson(inner.items[0]) === stableJson(this.withoutRedundantIds(item))
           } catch {
             return false
           }
@@ -3789,6 +3784,17 @@ class CarveRenderSession {
       .split('\n')
       .map((line) => tag + line)
       .join('\n')
+  }
+
+  /** The node as a fresh parse reads it: a generated heading id is not in the source. */
+  private withoutRedundantIds<T>(node: T): T {
+    return JSON.parse(JSON.stringify(node, (_key, value: unknown) => {
+      if (!value || typeof value !== 'object' || !this.redundantIds.has(value)) return value
+      const heading = value as { attrs?: Attrs }
+      const attrs = withoutIdSlot(heading.attrs)
+      const kept = attrs && Object.entries(attrs).some(([key, slot]) => key !== 'order' || (slot as string[]).length > 0)
+      return { ...heading, attrs: kept ? attrs : undefined }
+    })) as T
   }
 
   private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus = false): string {
