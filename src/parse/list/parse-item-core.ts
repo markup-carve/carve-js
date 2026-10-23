@@ -882,8 +882,10 @@ export class OpenMarkerClassifier {
     }
     if (isBlankLine(line)) return
     this.stack = this.stack.filter(entry => entry.kind !== 'quote')
+    // A blank quoted line closes deeper containers only; the items inside the quote stay open.
+    const blankQuoted = depth > 0 && isBlankLine(body)
     while (this.stack.length && (this.stack.at(-1)!.quoteDepth > depth ||
-      this.stack.at(-1)!.quoteDepth === depth && this.stack.at(-1)!.column >= column)) this.stack.pop()
+      !blankQuoted && this.stack.at(-1)!.quoteDepth === depth && this.stack.at(-1)!.column >= column)) this.stack.pop()
     for (let level = 1; level <= depth; level++) {
       const quoteColumn = quoteBodyColumn(line, level)
       this.stack.push({ kind: 'quote', column: quoteColumn, localColumn: 0, quoteDepth: level,
