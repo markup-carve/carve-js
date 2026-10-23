@@ -899,6 +899,7 @@ export class OpenMarkerClassifier {
     let innerLocalColumn = localColumn
     let innerDepth = depth
     let itemOnLine = false
+    let itemDepth = -1
     let quoteOpenedAfterItem = false
     for (let level = 0; level < 32; level++) {
       const marker = taskMatch(inner) ?? unorderedMatch(inner) ?? orderedMatch(inner)
@@ -908,6 +909,7 @@ export class OpenMarkerClassifier {
         this.stack.push({ kind: 'list', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth,
           contentColumn: innerColumn + width, firstBlock: isContinuationMarker(content) })
         itemOnLine = true
+        itemDepth = innerDepth
         quoteOpenedAfterItem = false
         innerColumn += width
         innerLocalColumn += width
@@ -928,7 +930,7 @@ export class OpenMarkerClassifier {
       if (inner.startsWith('[^') && inner.includes(']:'))
         this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false,
           // The follower decides whether a quoted marker-line note owns `+`.
-          ...(itemOnLine && (innerDepth === 0 || quoteOpenedAfterItem) ? { itemMarkerLine: true } : {}) })
+          ...(itemOnLine && (innerDepth === 0 || quoteOpenedAfterItem && itemDepth === 0) ? { itemMarkerLine: true } : {}) })
       else if (inner.startsWith(': '))
         this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
       break

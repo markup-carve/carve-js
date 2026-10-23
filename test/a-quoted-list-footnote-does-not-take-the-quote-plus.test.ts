@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('a footnote on a quoted list marker line', () => {
-  it('does not leave a literal marker when the list is inside the quote', () => {
-    const source = '> - [^a]: a\n>   +\n>   > r\n\nr[^a]\n'
-    expect(carveToHtml(source)).not.toContain('<li>+')
+  it('leaves the marker with a note in an outer quoted list', () => {
+    const source = '> - > [^a]: a\n>   > +\n>   > > r\n\nr[^a]\n'
+    expect(carveToHtml(source)).toContain('<li id="fn1">\n      <p>a</p>\n      <blockquote><p>r</p></blockquote>')
   })
 
   it('takes a following list through the continuation marker', () => {
