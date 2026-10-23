@@ -172,7 +172,10 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 list-style-dropped, list-delimiter-changed,
                                 table-span-flattened, table-header-row-demoted,
                                 table-header-row-hoisted,
-                                table-header-cell-demoted)
+                                table-header-cell-demoted,
+                                markdown-container-flattened,
+                                markdown-caption-flattened,
+                                markdown-attributes-dropped, raw-html-escaped)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -1000,7 +1003,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed', 'table-span-flattened', 'table-header-row-demoted', 'table-header-row-hoisted', 'table-header-cell-demoted']
+  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed', 'table-span-flattened', 'table-header-row-demoted', 'table-header-row-hoisted', 'table-header-cell-demoted', 'markdown-container-flattened', 'markdown-caption-flattened', 'markdown-attributes-dropped', 'raw-html-escaped']
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
     io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)
@@ -1216,29 +1219,6 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
   // format flag or an input file, handled by runRender over the full argv.
   return runRender(argv, io)
-}
-
-/** Report all warnings for one source; returns how many were found. */
-function reportLint(
-  source: string,
-  file: string,
-  io: CliIO,
-  fromDjot: boolean,
-  portable: boolean,
-  platforms: readonly LintPlatform[],
-  citationsEnabled: boolean,
-): number {
-  // Default lint targets hand-written Carve, so it reports only constructs
-  // that mis-render in Carve (`carve-breakage`). Djot-semantic shifts such as
-  // `_x_` (underline, not emphasis) are valid Carve and only matter when the
-  // source is being migrated FROM Djot, so they surface only with --from-djot.
-  const migration = djotMigrationWarnings(source).filter(
-    (w) => fromDjot || w.category === 'carve-breakage',
-  )
-  const semantic = lintCarve(source, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] })
-  if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
-  if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
-  return migration.length + semantic.length
 }
 
 /**
@@ -1548,14 +1528,20 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     const path = relative(realpathSync(absoluteRoot(includeRoot)), id)
     return path === '..' || path.startsWith(`..${sep}`) ? id : path.split(sep).join('/')
   }
-  const childFindings = (src: string, file?: string): LintWarning[] => {
+  const childFindings = (src: string, rootFindings: LintWarning[], file?: string): LintWarning[] => {
     if (!includeResolver) return []
     const extensions = citationsEnabled ? [citations()] : []
     const lintOne = (text: string): LintWarning[] => [
       ...djotMigrationWarnings(text).filter(w => fromDjot || w.category === 'carve-breakage').map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '', start: w.start, end: w.end })),
       ...lintCarve(text, { portable, platforms, extensions }),
     ]
-    return lintIncludes(src, { portable, platforms, extensions, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne)
+    return lintIncludes(src, { portable, platforms, extensions, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne, rootFindings)
+  }
+  const lintSource = (src: string, file?: string) => {
+    const migration = djotMigrationWarnings(src).filter(w => fromDjot || w.category === 'carve-breakage')
+    const semantic = lintCarve(src, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] })
+    const children = childFindings(src, semantic, file)
+    return { migration, semantic, children }
   }
   const showChild = (warning: LintWarning, file: string): void => {
     const childFile = warning.file ? display(warning.file) : file
@@ -1566,16 +1552,15 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
 
   if (positionals.length === 0) {
     const src = await io.readStdin()
+    const { migration, semantic, children } = lintSource(src)
     if (json) {
-      const warnings = jsonLintWarnings(src, '<stdin>', fromDjot, portable, platforms, citationsEnabled)
-      const children = childFindings(src)
-      io.write(JSON.stringify([...warnings, ...children.map(w => childJson(w, '<stdin>'))], null, 2) + '\n')
-      return warnings.length + children.length > 0 ? 1 : 0
+      io.write(JSON.stringify([...migration.map(w => ({ file: '<stdin>', ...w })), ...semantic.map(w => ({ file: '<stdin>', ...w })), ...children.map(w => childJson(w, '<stdin>'))], null, 2) + '\n')
+    } else {
+      if (migration.length) io.write(formatMigrationWarnings(migration, '<stdin>') + '\n')
+      if (semantic.length) io.write(formatLintWarnings(semantic, '<stdin>') + '\n')
+      children.forEach(w => showChild(w, '<stdin>'))
     }
-    const count = reportLint(src, '<stdin>', io, fromDjot, portable, platforms, citationsEnabled)
-    const children = childFindings(src)
-    children.forEach(w => showChild(w, '<stdin>'))
-    return count + children.length > 0 ? 1 : 0
+    return migration.length + semantic.length + children.length > 0 ? 1 : 0
   }
 
   let total = 0
@@ -1590,29 +1575,19 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       hadError = true
       continue
     }
+    const { migration, semantic, children } = lintSource(src, file)
     if (json) {
-      const warnings = jsonLintWarnings(src, file, fromDjot, portable, platforms, citationsEnabled)
-      const children = childFindings(src, file)
-      total += warnings.length + children.length
-      jsonWarnings.push(...warnings, ...children.map(w => childJson(w, file)))
+      jsonWarnings.push(...migration.map(w => ({ file, ...w })), ...semantic.map(w => ({ file, ...w })), ...children.map(w => childJson(w, file)))
     } else {
-      total += reportLint(src, file, io, fromDjot, portable, platforms, citationsEnabled)
-      const children = childFindings(src, file)
+      if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
+      if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
       children.forEach(w => showChild(w, file))
-      total += children.length
     }
+    total += migration.length + semantic.length + children.length
   }
   if (json) io.write(JSON.stringify(jsonWarnings, null, 2) + '\n')
   if (hadError) return 2
   return total > 0 ? 1 : 0
-}
-
-function jsonLintWarnings(source: string, file: string, fromDjot: boolean, portable: boolean, platforms: readonly LintPlatform[], citationsEnabled: boolean): Array<Record<string, unknown>> {
-  const migration = djotMigrationWarnings(source)
-    .filter((warning) => fromDjot || warning.category === 'carve-breakage')
-    .map((warning) => ({ file, ...warning }))
-  const semantic = lintCarve(source, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] }).map((warning) => ({ file, ...warning }))
-  return [...migration, ...semantic]
 }
 
 async function readStdin(): Promise<string> {

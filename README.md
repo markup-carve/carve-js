@@ -148,8 +148,8 @@ Markdown, plain, and ANSI output report flattened merged cells as
 `table-span-flattened`. Markdown also reports later header rows written as body
 rows as `table-header-row-demoted`, a header row moved above earlier body rows
 as `table-header-row-hoisted`, and each header cell in a row that is not a
-header row as `table-header-cell-demoted`. Moving a table caption into a paragraph
-does not emit a render loss. Render-loss reports do not assess every semantic
+header row as `table-header-cell-demoted`. A table caption written as a paragraph
+reports `markdown-caption-flattened`. Render-loss reports do not assess every semantic
 change. A nested tight item whose blocks cannot be written tight without an
 indented `+` is written loose and reports `list-tightness-lost`.
 

@@ -31,7 +31,7 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './extension/bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './parse/inline/sentinel-run.js'
-import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableHeaderRowHoisted, tableSpanFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, markdownLoss, rawFormatDropped, tableHeaderCellDemoted, tableHeaderRowDemoted, tableHeaderRowHoisted, tableSpanFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
 import { footnoteDefsInSourceOrder } from './heading/footnote-numbering.js'
 import { resolveTableSpans } from './table/table-spans.js'
 import { inlineText } from './heading/heading-ids.js'
@@ -279,6 +279,7 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
     if (rendered !== '' && !UNMARKED_WRAPPERS.has(block.type)) ctx.lastList = undefined
     return rendered
   }
+  reportBlockAttributes(block, ctx)
   let mark = block.ordered ? (block.delim === ')' ? ')' : '.') : (block.bulletChar ?? '-')
   const previous = ctx.lastList
   if (previous !== undefined && previous.ordered === block.ordered && previous.mark === mark && !carriesListStyle(block, ctx)) {
@@ -422,9 +423,27 @@ function captionMarker(nodes: InlineNode[], ctx: MarkdownContext): string {
 }
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
+  reportBlockAttributes(node, ctx)
   const body = renderBlockBody(node, ctx)
   if (!ctx.roundtrip || !node.attrs || ['section', 'div', 'admonition', 'directive', 'line_block', 'figure_group'].includes(node.type)) return body
   return attributeMarker(node, ctx) + body
+}
+
+function reportBlockAttributes(node: BlockNode, ctx: MarkdownContext): void {
+  if (!ctx.roundtrip && node.attrs && node.type !== 'section') {
+    let attrs = node.attrs
+    if (node.type === 'heading' && !attrs.order?.includes('#id')) {
+      const { id: _generated, ...authored } = attrs
+      attrs = authored
+    }
+    if (node.type === 'code_block' && attrs.keyValues?.title !== undefined) {
+      attrs = withoutKey(attrs, 'title') ?? {}
+    }
+    if (node.type === 'admonition' && listTableAsTable(node) !== undefined) {
+      for (const key of ['header-rows', 'header-cols', 'aligns']) attrs = withoutKey(attrs, key) ?? {}
+    }
+    if (renderCarrierAttributeBlock(attrs).startsWith('{')) markdownLoss(ctx.options, node, 'markdown-attributes-dropped')
+  }
 }
 
 function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
@@ -520,6 +539,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       return carried(markers, `${labelLine}${body}`)
     }
     case 'div': {
+      if (!ctx.roundtrip) markdownLoss(ctx.options, node, 'markdown-container-flattened')
       if (node.label) ctx.lastList = undefined
       const markers = carrierMarkers(node, ctx)
       const body = carriedChildren(node.children, markers, ctx)
@@ -555,6 +575,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       // slot hangs on the closing fence - so its fallback follows the closer,
       // directly under the caption marker that restores it.
       if (node.caption !== undefined) {
+        if (!ctx.roundtrip) markdownLoss(ctx.options, node, 'markdown-caption-flattened')
         out += renderWrappedInlines(node.caption, ctx, '**', 'strong')
       }
       return out
@@ -569,6 +590,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
         rawFormatDropped(ctx.options, node, 'markdown')
         return ''
       }
+      markdownLoss(ctx.options, node, 'raw-html-escaped')
       return `${escapeMdHtml(stripControls(rawSource(node.content)))}\n\n`
     case 'abbreviation_def':
       // PART 11 §10a: a definition NOTHING references still reaches this
@@ -990,6 +1012,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   // adjacent block is - the move a caption cannot make on this target, whatever
   // it could make on another.
   if (node.caption && node.caption.length > 0) {
+    if (!ctx.roundtrip) markdownLoss(ctx.options, node, 'markdown-caption-flattened')
     out += `\n${captionMarker(node.caption, ctx)}${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
   }
   return `${out}\n`
@@ -1030,6 +1053,7 @@ function escapeCellPipes(cell: string): string {
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {
+  if (!ctx.roundtrip) markdownLoss(ctx.options, node, 'markdown-caption-flattened')
   const target = renderFigureTarget(node, ctx)
   // The caption sits on its own line directly under the figure (`\n`) - an
   // image target used to glue it on (`![a](/u)cap`). A block quote keeps the
@@ -1050,6 +1074,7 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
  * that keeps a panel caption visually subordinate to the group's bold one.
  */
 function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
+  if (!ctx.roundtrip) markdownLoss(ctx.options, node, 'markdown-caption-flattened')
   const target = renderFigureTarget(node, ctx)
   // A BLANK line before the caption, for every host: the emphasized caption is
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
@@ -1319,6 +1344,7 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
         rawFormatDropped(ctx.options, node, 'markdown')
         return ''
       }
+      markdownLoss(ctx.options, node, 'raw-html-escaped')
       return escapeMdHtml(stripControls(node.content))
     case 'literal_inline':
       // §27: emitted by EVERY renderer, never dropped. It is prose, not code,

@@ -55,7 +55,8 @@ const schemaViolations = (loss: Record<string, unknown>): string[] => {
 }
 
 // carve#3098 adds this code to the published schema after the engine reports it.
-const aheadOfPinCodes: string[] = []
+// The schema update is in markup-carve/carve#3553; remove these when the pin moves.
+const aheadOfPinCodes = ['markdown-container-flattened', 'markdown-caption-flattened', 'markdown-attributes-dropped', 'raw-html-escaped']
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */
 const interchangeOnly = () => ({
@@ -122,7 +123,7 @@ const collidesWithCarrier = (): unknown => ({
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('names eleven codes in the selected schema', () => {
+  it('names the selected render loss codes', () => {
     expect(schemaCodes()).toEqual([
       'raw-format-dropped',
       'ruby-flattened',
@@ -163,6 +164,9 @@ describe('the render-loss code enum', () => {
     for (const loss of carveToMarkdownWithReport('|= First |\n|= Second |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('| A |= B |\n| C | D |\n').losses) seen.add(loss.code)
+    for (const source of [':::\ninside\n:::\n', '![img](a.png)\n^ Caption\n', '{#id}\nParagraph\n']) {
+      for (const loss of carveToMarkdownWithReport(source).losses) seen.add(loss.code)
+    }
     expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
   })
 
@@ -180,7 +184,12 @@ describe('the render-loss code enum', () => {
     records.push(...carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses)
     records.push(...carveToMarkdownWithReport('| A |= B |\n| C | D |\n').losses)
     expect(records.map((loss) => loss.code)).toContain('list-delimiter-changed')
-    for (const loss of records) expect(schemaViolations(loss as unknown as Record<string, unknown>), loss.code).toEqual([])
+    for (const loss of records) {
+      if (aheadOfPinCodes.includes(loss.code)) {
+        expect(loss).toMatchObject({ target: 'markdown', message: expect.any(String) })
+        expect('format' in loss).toBe(false)
+      } else expect(schemaViolations(loss as unknown as Record<string, unknown>), loss.code).toEqual([])
+    }
     // The checker sees a misnamed field.
     expect(schemaViolations({ code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', message: 'm', authored: '.', emitted: ')' })).not.toEqual([])
   })

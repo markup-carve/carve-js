@@ -15,6 +15,20 @@ function capture() {
 }
 
 describe('lint include CLI', () => {
+  it('accepts a root cross-reference to an included heading in text and JSON output', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-lint-crossref-'))
+    try {
+      const doc = join(dir, 'doc.crv')
+      writeFileSync(doc, '# T\n\n{{ part.crv }}\n\nSee </#Inc>.\n')
+      writeFileSync(join(dir, 'part.crv'), '# Inc\n\nBody.\n')
+      for (const flags of [[], ['--json']]) {
+        const result = capture()
+        expect(await run(['lint', '--include-root', dir, ...flags, doc], result.io)).toBe(0)
+        expect(flags.length ? JSON.parse(result.output()) : result.output()).toEqual(flags.length ? [] : '')
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
   it('reports child payloads only with an explicit root', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-lint-includes-'))
     try {
