@@ -2155,6 +2155,22 @@ export class ParseSession extends InlineParseSession {
     )
   }
 
+  /** Parse a list lead once the caller has ruled out every block opener. */
+  parseSimpleListParagraph(content: string, lexer: Lexer): Paragraph {
+    const text = dropTrailingWhitespace(content)
+    return {
+      type: 'paragraph',
+      children: this.skipParagraphInlines && !this.inMatcherRequest
+        ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs,
+          this.recordPositions ? {
+            anchored: lexer.hasDocumentOffsets,
+            baseOffset: lexer.lineOffset(0),
+            startLine: lexer.lineNumber(0),
+            startColumn: lexer.lineStartColumn(0),
+          } : undefined),
+    }
+  }
+
   /**
    * `flattened` marks the MAX_NESTING_DEPTH degradation path (§25): past the cap
    * every opener "becomes literal paragraph text", so NOTHING interrupts here and

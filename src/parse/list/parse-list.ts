@@ -239,6 +239,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           matchListMarker(nextLine, isTask, isOrdered) !== null &&
           (isOrdered ? orderedContinues(nextLine, orderedKind, orderedDelim) : unorderedMarkerChar(nextLine) === firstMarkerChar)) {
         lexer.consume()
+        const simpleParagraph = /^\p{L}/u.test(content) && !lineOpensBlock(content)
+        if (!session.recordPositions && simpleParagraph) {
+          items.push({ type: 'list_item', children: [session.parseSimpleListParagraph(content, lexer)],
+            ...(checked !== undefined ? { checked } : {}),
+            ...(taskState !== undefined ? { taskState } : {}) })
+          continue
+        }
         const origins = session.recordPositions && leadOrigin
           ? new Map<number, StrippedLineOrigin>([[0, leadOrigin]]) : undefined
         const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)], origins)
@@ -246,6 +253,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sub.markerOpensSublist = true
           sub.hostBody = 'list'
           sub.hostMarkerColumn = sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line)
+        }
+        if (session.recordPositions && simpleParagraph) {
+          const paragraph = session.parseSimpleListParagraph(content, sub)
+          attachBlockPos(sub, paragraph, 0, 1)
+          const item: ListItem = { type: 'list_item', children: [paragraph] }
+          attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
+          if (checked !== undefined) item.checked = checked
+          if (taskState !== undefined) item.taskState = taskState
+          items.push(item)
+          continue
         }
         const item: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
         if (session.recordPositions) attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
