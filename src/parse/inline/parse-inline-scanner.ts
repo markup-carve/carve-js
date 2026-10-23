@@ -344,8 +344,6 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
         bufLast = value[value.length - 1]!
         continue
       }
-      const rest = text.slice(i)
-
       // Hard line break: a backslash at end of line (before a newline).
       if (c === '\\' && text[i + 1] === '\n') {
         flush()
@@ -609,6 +607,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
         i = end
         continue
       }
+
+      const rest = text.slice(i)
 
       // Image ![alt](src) — the alt text allows nested balanced [...], so the
       // close `]` is found by balance, not a [^\]]* regex that would mis-split
