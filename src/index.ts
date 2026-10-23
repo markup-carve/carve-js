@@ -12,7 +12,7 @@ import {
   headingIdSlugOpts,
   type AsciiHeadingIdMode,
 } from './heading/heading-ids.js'
-import { parseDocument } from './parse/parse-document.js'
+import { parseDocument, parseDocumentForHtml } from './parse/parse-document.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { numberFootnotes } from './heading/footnote-numbering.js'
 import { Profile } from './profile.js'
@@ -591,7 +591,9 @@ export function carveToHtml(
   //   a `figure` where the default path renders a paragraph (carve-js#1263).
   //
   // Keep positions for extensions and reports, which may inspect the tree.
-  // Otherwise the HTML-only path can omit them when the source has no image.
+  // Otherwise the HTML-only path does not attach most inline positions when
+  // the source has no image. Block and definition location fields may remain
+  // on its transient tree, which no caller receives.
   // Extensions are forwarded to the parse so their matchers add syntax.
   const parseOpts: ParseOptions = {
     ...opts,
@@ -607,7 +609,11 @@ export function carveToHtml(
     ? new DocumentIdRegistry()
     : undefined
   let doc = applyTransforms(
-    resolveDocument(parse(source, parseOpts), {
+    // This tree is never returned to callers. Keep its remaining internal
+    // location fields so the position-free HTML path avoids a full-tree copy.
+    resolveDocument(parseOpts.positions === false
+      ? parseDocumentForHtml(source, parseOpts)
+      : parse(source, parseOpts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }, documentIds),

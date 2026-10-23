@@ -274,6 +274,7 @@ export class ParseSession extends InlineParseSession {
   // Set on the line-ownership probe only: a paragraph's inlines never decide
   // which lines a block consumes, so the probe leaves them unscanned.
   private skipParagraphInlines = false
+  private skipPositionDrop = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
@@ -346,8 +347,10 @@ export class ParseSession extends InlineParseSession {
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
-    if (opts.positions === false) return dropPositions(doc)
-    else toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
+    if (opts.positions === false) {
+      return this.skipPositionDrop ? doc : dropPositions(doc)
+    }
+    toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
     return doc
   }
 
@@ -2291,4 +2294,11 @@ export class ParseSession extends InlineParseSession {
     if (secondLineLazy) markSecondLineLazy(paragraphNode)
     return paragraphNode
   }
+}
+
+/** Keep parser-only location fields on an HTML tree that is never returned. */
+export function parseTransientForHtml(source: string, opts: ParseOptions): Document {
+  const session = new ParseSession()
+  session['skipPositionDrop'] = true
+  return session.parse(source, opts)
 }
