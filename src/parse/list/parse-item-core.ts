@@ -922,7 +922,7 @@ export class OpenMarkerClassifier {
       if (inner.startsWith('[^') && inner.includes(']:'))
         this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false,
           // A note on an unquoted item's marker line owns no `+`: one at its column is item text.
-          ...(itemOnLine && innerDepth === 0 ? { itemMarkerLine: true } : {}) })
+          ...(itemOnLine ? { itemMarkerLine: true } : {}) })
       else if (inner.startsWith(': '))
         this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
       break
