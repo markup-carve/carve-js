@@ -96,6 +96,7 @@ import {
   startsInterruptingBlock,
   trackBlockQuoteLazyState,
   walkContainerPrefix,
+  trackWrappedAttributeRun,
 } from '../block/parse-quote-core.js'
 
 /** A colon run, whichever of the colon-fence blocks it goes on to open. */
@@ -1085,6 +1086,7 @@ export interface ItemLineFacts {
 }
 
 export const listHelpers = {
+  trackWrappedAttributeRun,
   FOOTNOTE_BODY_COLUMN,
   LAZY_FRAME,
   RE_ADMONITION_CLOSE,

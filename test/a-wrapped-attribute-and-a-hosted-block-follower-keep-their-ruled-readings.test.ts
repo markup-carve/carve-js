@@ -101,3 +101,22 @@ describe('a dangling wrapped attribute after a blank line in an item', () => {
     })
   }
 })
+
+// Corpus 653-6 (carve#3421 ruling 1): a nested item's wrapped attribute closes below its column
+// as one construct, so a column-0 line leaves the outer item as after the one-line `{.c}`.
+describe('a wrapped attribute in a nested item closed below its column', () => {
+  const shapes = [
+    '- a\n  - b\n    {.c\n}\npara\n',
+    '- a\n  - b\n    {.c\n.d}\npara\n',
+    '- a\n  - b\n    {.c\n }\npara\n',
+    '- a\n  - b\n\n    {.c\n}\npara\n',
+    '- a\n  - b\n    {.c\n}\n- s\n',
+  ]
+  for (const source of shapes) {
+    it(`reads ${JSON.stringify(source)} like the one-line form`, () => {
+      const oneLine = source.replace(/\{\.c\n *(\.d)?\}/, (_, d: string | undefined) => `{.c${d ? ' .d' : ''}}`)
+      expect(oneLine).not.toBe(source)
+      expect(flat(carveToHtml(source))).toBe(flat(carveToHtml(oneLine)))
+    })
+  }
+})
