@@ -853,14 +853,17 @@ export class OpenMarkerClassifier {
       const deepestQuote = this.stack.reduce((deepest, entry) => entry.kind === 'quote'
         ? Math.max(deepest, entry.quoteDepth) : deepest, 0)
       const blockedByInnerList = depth > 0 && this.stack.some(entry => entry.kind === 'list' && entry.quoteDepth >= depth)
+      const follower = this.lines[index + 1]
       for (let at = this.stack.length - 1; at >= 0; at--) {
         layoutWork.markerStackEntriesExamined += Number(layoutWork.on)
         const entry = this.stack[at]!
-        if (entry.itemMarkerLine === true) continue
+        // A note on an item's marker line gives up this `+` when the follower
+        // opens a deeper quote. Otherwise the quoted note keeps the marker.
+        if (entry.itemMarkerLine === true &&
+            (entry.quoteDepth === 0 || follower !== undefined && quotePrefixDepth(follower) > depth)) continue
         if ((useLocalColumn ? entry.localColumn : entry.column) === markerColumn &&
             entry.quoteDepth === depth && (depth === 0 || depth >= deepestQuote)) { owner = entry; break }
       }
-      const follower = this.lines[index + 1]
       if (follower !== undefined) layoutWork.markerFollowerProbes += Number(layoutWork.on)
       const followerColumn = follower === undefined ? Infinity : useLocalColumn
         ? sourceQuoteLocalColumn(follower, depth) : sourceColumn(follower, depth)
@@ -921,7 +924,7 @@ export class OpenMarkerClassifier {
       }
       if (inner.startsWith('[^') && inner.includes(']:'))
         this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false,
-          // A note on an unquoted item's marker line owns no `+`: one at its column is item text.
+          // The follower decides whether a quoted marker-line note owns `+`.
           ...(itemOnLine ? { itemMarkerLine: true } : {}) })
       else if (inner.startsWith(': '))
         this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
