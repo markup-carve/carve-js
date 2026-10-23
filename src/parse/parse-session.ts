@@ -2053,12 +2053,24 @@ export class ParseSession extends InlineParseSession {
     const last = attached.lines.at(-1)
     const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
     const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
-    const closedCode = codeMarker !== null && last !== undefined && fenceCloseRe(codeMarker).test(last)
+    // The opener alone is no closer of its own (`- +` / ``` / `- x`).
+    const closedCode = codeMarker !== null && attached.lines.length > 1 && last !== undefined &&
+      fenceCloseRe(codeMarker).test(last)
     const colon = first === undefined ? null : colonBlockOpenerRun(first)
     const closedColon = colon !== null && isFigureGroupOpener(first!, lexer.inFigureGroup) &&
       last !== undefined && RE_ADMONITION_CLOSE.exec(last)?.[1]?.length === colon
+    // An unclosed attached fence takes the rest of its container when no blank line or closer
+    // follows; otherwise its extent is the attached block's (§17 L3, CARVE-P9-067).
     if (codeMarker !== null && !closedCode) {
-      while (!lexer.eof() && !isBlankLine(lexer.peek()!)) {
+      const closer = fenceCloseRe(codeMarker)
+      let rest = 0
+      for (let line = lexer.peek(rest); line !== undefined; line = lexer.peek(++rest)) {
+        if (isBlankLine(line) || closer.test(line)) {
+          rest = 0
+          break
+        }
+      }
+      for (; rest > 0; rest--) {
         attached.lines.push(lexer.peek()!)
         attached.lineNumbers.push(lexer.lineNumber(lexer.pos))
         lexer.consume()

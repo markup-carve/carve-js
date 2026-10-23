@@ -123,3 +123,28 @@ describe('a wrapped attribute in a nested item closed below its column', () => {
     })
   }
 })
+
+// Spec model readings for a refused list `+` (markup-carve/carve#3421).
+describe('an unclosed attached fence and a hosted sibling plus item', () => {
+  // An unclosed attached fence takes the rest of its container when no blank line or closer follows.
+  for (const source of ['- +\n```\n- x\n', '  - +\n```\n- x\n', '- +\n~~~\n- x\n', '- +\n```\n- x\n- y\n', '- a\n+\n```\n- x\n']) {
+    it(`keeps the list line of ${JSON.stringify(source)} as fence payload`, () => {
+      expect(flat(carveToHtml(source))).toContain('<pre><code>- x')
+    })
+  }
+
+  it('ends an unclosed attached fence at the attached block when a blank line follows', () => {
+    expect(flat(carveToHtml('- +\n```\nx\n- y\n\npara\n'))).toBe('<ul><li><pre><code>x</code></pre></li><li>y</li></ul><p>para</p>')
+  })
+
+  // A sibling item holding only a `+` leaves the host quote no paragraph for a lazy line.
+  for (const source of ['> - a\n> - +\nb\n', '> 1. a\n> 2. +\nb\n', '> - a\n>   b\n> - +\nc\n']) {
+    it(`ends the host quote before the unprefixed line of ${JSON.stringify(source)}`, () => {
+      expect(flat(carveToHtml(source))).toMatch(/<\/blockquote><p>[bc]<\/p>$/)
+    })
+  }
+
+  it('still folds a lazy line after a sibling stacked quote plus', () => {
+    expect(flat(carveToHtml('> - a\n>   - > +\npara\n'))).toContain('<blockquote><p>para</p></blockquote>')
+  })
+})
