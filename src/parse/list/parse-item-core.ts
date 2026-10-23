@@ -823,7 +823,7 @@ export function sourceColumnAt(line: string, offset: number): number {
   return column
 }
 
-export type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean }
+export type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean; itemMarkerLine?: boolean }
 
 export type MarkerDecision = { owner?: OpenMarker; reason?: RefusedContinuationMarker['reason']; blockedByInnerList?: boolean; unprefixedQuoteFollower?: boolean }
 
@@ -856,6 +856,7 @@ export class OpenMarkerClassifier {
       for (let at = this.stack.length - 1; at >= 0; at--) {
         layoutWork.markerStackEntriesExamined += Number(layoutWork.on)
         const entry = this.stack[at]!
+        if (entry.itemMarkerLine === true) continue
         if ((useLocalColumn ? entry.localColumn : entry.column) === markerColumn &&
             entry.quoteDepth === depth && (depth === 0 || depth >= deepestQuote)) { owner = entry; break }
       }
@@ -894,6 +895,7 @@ export class OpenMarkerClassifier {
     let innerColumn = column
     let innerLocalColumn = localColumn
     let innerDepth = depth
+    let itemOnLine = false
     for (let level = 0; level < 32; level++) {
       const marker = taskMatch(inner) ?? unorderedMatch(inner) ?? orderedMatch(inner)
       if (marker !== null) {
@@ -901,6 +903,7 @@ export class OpenMarkerClassifier {
         const width = inner.length - content.length
         this.stack.push({ kind: 'list', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth,
           contentColumn: innerColumn + width, firstBlock: isContinuationMarker(content) })
+        itemOnLine = true
         innerColumn += width
         innerLocalColumn += width
         inner = content.trimStart()
@@ -917,7 +920,9 @@ export class OpenMarkerClassifier {
         continue
       }
       if (inner.startsWith('[^') && inner.includes(']:'))
-        this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
+        this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false,
+          // A note on an unquoted item's marker line owns no `+`: one at its column is item text.
+          ...(itemOnLine && innerDepth === 0 ? { itemMarkerLine: true } : {}) })
       else if (inner.startsWith(': '))
         this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
       break
