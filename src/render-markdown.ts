@@ -479,7 +479,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       return `${withMarker(`${'#'.repeat(node.level)} `, line)}\n\n`
     }
     case 'paragraph':
-      return `${protectParagraphListMarkers(trimParagraphLines(renderInlines(node.children, ctx)))}\n\n`
+      return `${protectParagraphListMarkers(trimParagraphLines(renderInlines(node.children, ctx)), ctx.definitionListDepth > 0)}\n\n`
     case 'code_block': {
       const content = stripControls(node.content)
       // The EFFECTIVE title, not the authored header. An attribute line above the
@@ -2032,7 +2032,7 @@ function trimParagraphLines(text: string): string {
  * Keep paragraph lines from opening a list or a block quote in Markdown readers.
  * A `>` opens a quote with or without a following space.
  */
-function protectParagraphListMarkers(text: string): string {
+function protectParagraphListMarkers(text: string, inDefinition: boolean): string {
   let codeFence = 0
   const lines = text.split('\n')
 
@@ -2044,6 +2044,9 @@ function protectParagraphListMarkers(text: string): string {
       const visible = line
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
+        // A literal marker line can open or attach to a definition after import.
+        .replace(/^([ \t]{0,3})(:{1,2})(?=[ \t])/, (_, lead: string, mark: string) =>
+          mark === '::' || inDefinition ? `${lead}\\${mark}` : `${lead}${mark}`)
         // A text `.` may still be a section 8i carrier; it opens a list all the same.
         .replace(new RegExp(MULTI_CHARACTER_CARRIERS
           ? `^([ \\t]{0,3}\\d{1,9})([.)]|${CONTEXT_SENTINEL['.']})(?=[ \\t])`

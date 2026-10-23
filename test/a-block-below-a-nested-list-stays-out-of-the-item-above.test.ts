@@ -28,8 +28,10 @@ describe('a block below a nested list keeps its blank line', () => {
     expect(reread('- x\n  - L\n+\n| a |\n|---|\n')).toContain('<table')
   })
 
-  it('separates a definition list', () => {
-    expect(carveToMarkdown('- - A\n\n  term\n  : def\n')).toBe('- - A\n\n  term\n  : def\n')
+  it('separates a paragraph with a literal description marker', () => {
+    const source = '- - A\n\n  term\n  : def\n'
+    expect(carveToMarkdown(source)).toBe('- - A\n\n  term\n  : def\n')
+    expect(reread(source)).toBe(carveToHtml(source))
   })
 
   it('separates a paragraph below a deeper sublist', () => {
