@@ -13,6 +13,7 @@ import {
   sliceColumns,
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
+import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import type {
   definitionListHelpers,
   ItemLazyState,
@@ -117,6 +118,26 @@ export function createDefinitionListParser(
     trackItemLazyState,
     trimEndSpaceTab,
   } = helpers
+  // A tab counts from its container's column (§24 C5). Within two columns of a
+  // quote's content column no nested container can have begun, so that tab
+  // counts from the quote; further in, the container is unknown here.
+  const entryColumnAt = (line: string, offset: number): number => {
+    let body = -1
+    for (let end = sourceQuotePrefixEnd(line, 0); end >= 0 && end <= offset; end = sourceQuotePrefixEnd(line, end)) body = end
+    if (body < 0) return sourceColumnAt(line, offset)
+    const quoteColumn = sourceColumnAt(line, body)
+    let column = quoteColumn
+    for (let index = body; index < offset; index++) {
+      if (line[index] !== '\t') column++
+      else column += column - quoteColumn < 2 ? 4 - (column - quoteColumn) % 4 : 4 - column % 4
+    }
+    return column
+  }
+  const entryLeadColumn = (line: string): number => {
+    let body = 0
+    for (let end = sourceQuotePrefixEnd(line, 0); end >= 0; end = sourceQuotePrefixEnd(line, end)) body = end
+    return entryColumnAt(line, body + leadingWhitespace(line.slice(body)))
+  }
   return function parseDefinitionList(parseSession: DefinitionListSession, lexer: Lexer): DefinitionList {
     const items: DefinitionItem[] = []
     /**
@@ -939,8 +960,8 @@ export function createDefinitionListParser(
       const marker = RE_DEFLIST_TERM.test(peekEntry(n)) ? '::' : ':'
       const markerOffset = source.indexOf(marker)
       return markerOffset >= 0
-        ? sourceColumnAt(source, markerOffset)
-        : sourceColumn(source, quotePrefixDepth(source))
+        ? entryColumnAt(source, markerOffset)
+        : entryLeadColumn(source)
     }
     const listColumn = entryColumn()
     const authoredList = (lexer.hostBody === 'list' || lexer.hostBody === 'description') && !lexer.definitionLeadFromItemMarker &&
@@ -962,8 +983,8 @@ export function createDefinitionListParser(
         const termSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(termLineIndex) - 1] ?? ''
         const termMarkerOffset = termSource.indexOf('::')
         const termColumn = termMarkerOffset >= 0
-          ? sourceColumnAt(termSource, termMarkerOffset)
-          : sourceColumn(termSource, quotePrefixDepth(termSource))
+          ? entryColumnAt(termSource, termMarkerOffset)
+          : entryLeadColumn(termSource)
         currentTermSourceColumn = termColumn
         currentTermReturned = lexer.returnedDescriptionOwnerColumns.has(lexer.lineNumber(termLineIndex))
         lexer.consume()
@@ -1019,7 +1040,7 @@ export function createDefinitionListParser(
             entryColumn() > lexer.hostMarkerColumn && entryColumn() < lexer.hostContentColumn
           const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
-            (sourceColumn(nextSource, quotePrefixDepth(nextSource)) > termColumn || markerTermText)
+            (entryLeadColumn(nextSource) > termColumn || markerTermText)
           // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
           // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
           // interruption from a fence with no closer ahead so an OPEN PARAGRAPH
@@ -1044,7 +1065,7 @@ export function createDefinitionListParser(
               ? stripLazyFrame(next).trimStart()
               : stripLazyFrame(next)
           if (nextPastTerm && lexer.hostBody === 'list') {
-            const sourceIndent = sourceColumn(nextSource, quotePrefixDepth(nextSource)) - termColumn
+            const sourceIndent = entryLeadColumn(nextSource) - termColumn
             const retainedIndent = indentColumns(continuation)
             if (sourceIndent > retainedIndent)
               continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
@@ -1146,7 +1167,7 @@ export function createDefinitionListParser(
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
         if (currentTermReturned && defMarkerOffset >= 0 &&
-            sourceColumnAt(defSource, defMarkerOffset) < currentTermSourceColumn) break
+            entryColumnAt(defSource, defMarkerOffset) < currentTermSourceColumn) break
         const d = !entryReachesList() ? null : RE_DEFLIST_DEF.exec(peekEntry())
         if (!d) break
         lexer.consume()
