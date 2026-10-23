@@ -3676,14 +3676,9 @@ class CarveRenderSession {
             const quotedRawFence = item.children.some((child, index) =>
               child.type === 'block_quote' && item.children[index + 1]?.type === 'block_quote' &&
               child.children.at(-1)?.type === 'raw_block')
-            // A dedented fence after a nested list also needs its final spelling.
-            const dedentedFence = item.children.some((child, index) => {
-              const previous = item.children[index - 1]
-              if (child.type !== 'code_block' || previous?.type !== 'list') return false
-              let tail = previous.items.at(-1)?.children.at(-1)
-              while (tail?.type === 'list') tail = tail.items.at(-1)?.children.at(-1)
-              return tail?.type === 'code_block'
-            })
+            // A fence after a nested list carries a closer sentinel until normalized.
+            const dedentedFence = item.children.some((child, index) =>
+              child.type === 'code_block' && item.children[index - 1]?.type === 'list')
             const probe = quotedRawFence || dedentedFence ? this.normalize(wrapped) : wrapped
             let blocks = parse(probe).children
             for (let depth = 0; depth < ctx.quoteDepth; depth++) {
