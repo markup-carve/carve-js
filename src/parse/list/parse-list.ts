@@ -1510,7 +1510,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const pastDefinitionEntry = definitionAuthored && belowDescriptionBodyBand
         const survivingItemParagraph = markerContentColumn(content, terminatorFree) < 0 ||
           lazyState.deepest?.lazyFoldable === true
-        const belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody &&
+        // A marker-line note's body takes a description at its own column below a deeper term.
+        const atMarkerNoteBody = markerNoteItem && sourceDescription !== null && sourceDepth === itemQuoteDepth &&
+          sourceMarkerColumn >= lexer.lineStartColumn(itemStartLineIndex) - 1 + contentCol - baseIndent + FOOTNOTE_BODY_COLUMN
+        const belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
           definitionHostColumn !== undefined &&
           (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
           ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
