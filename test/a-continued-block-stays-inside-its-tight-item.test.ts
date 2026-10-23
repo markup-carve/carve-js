@@ -65,17 +65,17 @@ const cases: Array<[string, string, string]> = [
   [
     'a quote below an emptied sub-list item',
     '- - +\n\n  > b\nZ\n',
-    '- - +\n\n  > b\n  > Z\n',
+    '- - +\n   > b\n   > Z\n',
   ],
   [
     'a quote below an emptied sub-list item, ordered host',
     '1. - +\n\n   > b\nZ\n',
-    '1. - +\n\n   > b\n   > Z\n',
+    '1. - +\n    > b\n    > Z\n',
   ],
   [
     'a quote below an emptied sub-list item, item in a div',
     '::: h\n- - +\n\n  > b\nZ\n:::\n',
-    '::: h\n- - +\n\n  > b\n  > Z\n:::\n',
+    '::: h\n- - +\n   > b\n   > Z\n:::\n',
   ],
 ]
 

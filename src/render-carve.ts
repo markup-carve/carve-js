@@ -3932,20 +3932,17 @@ class CarveRenderSession {
           previousEmitted = b
           return
         }
-        // AN EMPTY LAST ITEM IN THE SUB-LIST ABOVE claims this column: the
-        // sub-list's marker column IS the hosting item's content column, and the
-        // `+` spelling the empty item takes the quote written there into itself
-        // (carve-js#1681). The blank line closes the sub-list and costs the item no
-        // paragraph, so the list stays tight.
+        // An empty last item in the sub-list above takes a quote or fence at
+        // its marker column into itself (carve-js#1681). Shift the block one
+        // column right so it stays with the hosting item. A blank line would
+        // change the compact layout chosen for carve#3489.
         //
-        // BOUNDED TO A QUOTE, and the bound is measured. Of the thirteen block
-        // kinds swept below an empty item only the quote is taken; a PARAGRAPH must
-        // not get the separator at all, since the blank line would part it and turn
-        // the tight item loose.
-        if (b.type === 'block_quote' && !separated && previousEmitted?.type === 'list') {
+        // A paragraph stays at its authored column so it remains tight.
+        if ((b.type === 'block_quote' || b.type === 'code_block') &&
+            !separated && previousEmitted?.type === 'list') {
           const last = previousEmitted.items[previousEmitted.items.length - 1]
           if (last !== undefined && last.children.length === 0) {
-            parts.push('', rendered)
+            parts.push(rendered.split('\n').map(line => line ? ` ${line}` : line).join('\n'))
             previousEmitted = b
             return
           }
