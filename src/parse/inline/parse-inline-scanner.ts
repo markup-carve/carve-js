@@ -38,6 +38,12 @@ import type {
   Text,
 } from '../../ast.js'
 
+const ordinaryAscii = new Uint8Array(128)
+for (let code = 48; code <= 57; code++) ordinaryAscii[code] = 1
+for (let code = 65; code <= 90; code++) ordinaryAscii[code] = 1
+for (let code = 97; code <= 122; code++) ordinaryAscii[code] = 1
+for (const code of [9, 32, 41, 44, 59, 63]) ordinaryAscii[code] = 1
+
 export interface InlineScannerSession {
   activeMatchers: CarveExtension[]
   pairEndText: string | undefined
@@ -196,7 +202,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     let bufLast = ''
     let quoteContextIndex = 0
     let quoteContext = ''
-    const emphasisNoClose = newEmphasisMemo()
+    let emphasisNoClose: EmphasisMemo | undefined
     let crossrefMemo: CrossrefMemo | undefined
 
     // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
@@ -309,13 +315,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       const code = text.charCodeAt(i)
       if (
         session.activeMatchers.length === 0 &&
-        (code >= 128 || (code >= 48 && code <= 57) ||
-          (code >= 65 && code <= 90) ||
-          (code >= 97 && code <= 122) ||
-          code === 41 || code === 44 || code === 59 || code === 63 ||
-          (code === 46 && text[i - 1] !== '.' && text[i + 1] !== '.') ||
-          code === 32 ||
-          code === 9)
+        (code >= 128 || ordinaryAscii[code] === 1 ||
+          (code === 46 && text[i - 1] !== '.' && text[i + 1] !== '.'))
       ) {
         const start = i
         do {
@@ -325,14 +326,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
           const next = text.charCodeAt(i)
           if (
             !(
-              next >= 128 ||
-              (next >= 48 && next <= 57) ||
-              (next >= 65 && next <= 90) ||
-              (next >= 97 && next <= 122) ||
-              next === 41 || next === 44 || next === 59 || next === 63 ||
-              (next === 46 && text[i - 1] !== '.' && text[i + 1] !== '.') ||
-              next === 32 ||
-              next === 9
+              next >= 128 || ordinaryAscii[next] === 1 ||
+              (next === 46 && text[i - 1] !== '.' && text[i + 1] !== '.')
             )
           ) {
             break
@@ -1074,13 +1069,16 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       }
 
       // Emphasis-family delimiters
-      const em = session.matchEmphasis(text, i, source, inFootnote, emphasisNoClose, bracketRuns.at(-1)?.close ?? text.length)
-      if (em) {
-        flush()
-        const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node
-        out.push(session.withPos(node, source, text, i, em.end))
-        i = em.end
-        continue
+      if (c === '/' || c === '*' || c === '_' || c === '~' || c === '=') {
+        const em = session.matchEmphasis(text, i, source, inFootnote,
+          emphasisNoClose ??= newEmphasisMemo(), bracketRuns.at(-1)?.close ?? text.length)
+        if (em) {
+          flush()
+          const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node
+          out.push(session.withPos(node, source, text, i, em.end))
+          i = em.end
+          continue
+        }
       }
 
       // Soft break (single newline inside paragraph)
