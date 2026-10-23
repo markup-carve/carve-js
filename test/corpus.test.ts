@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns',
   'a-caption-after-a-continuation-marker-fence-stays-with-the-fence',
   'a-column-zero-marker-below-an-open-div-attaches-beside-the-div',
   'a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener',
