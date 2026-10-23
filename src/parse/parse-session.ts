@@ -113,6 +113,7 @@ import {
   markSecondLineLazy,
   markerContentColumn,
   markerDecision,
+  markerPrefixLength,
   matchLinkDef,
   mergeAttrs,
   nestedColonLexer,
@@ -130,6 +131,7 @@ import {
   parseListWithHelpers,
   parseRawBlock,
   parseTableBlock,
+  prefixWalkBound,
   quoteBodyColumn,
   quotePrefixDepth,
   quotedCommentHasCloser,
@@ -1525,6 +1527,9 @@ export class ParseSession extends InlineParseSession {
             quotePlusColumn > quoteMarkerColumn) &&
           !(quotePlusColumn > 0 && quotePlusDecision?.reason === 'wrong-column' &&
             isListMarkerLine((quoteFollower ?? '').trimStart())) &&
+          // `> - > a` / `>   +` / `>   - s`: an item-held quote refuses a list follower, as at the top level.
+          !(quotePlusDepth > 0 && quotePlusDecision?.reason === 'wrong-column' &&
+            isListMarkerLine(quoteFollowerBody.trimStart()) && quoteOpensBehindItemMarker(quoteRootLine, physicalQuoteColumn)) &&
           isContinuationMarker(quotePlusBody.trimStart()) &&
           (quotePlusDepth === 0 || sourceQuoteLocalColumn(physicalPlus, quotePlusDepth) === 0 ||
             quotePlusColumn === physicalQuoteColumn &&
@@ -1667,7 +1672,19 @@ export class ParseSession extends InlineParseSession {
         (isLinkDefLine(stripLazyFrame(ln).trimStart()) &&
           indentColumns(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln) < quoteMarkerColumn)
       if (lazyDefinition) lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
-      inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyDefinition || quoteTermContinuation
+      // A lazy `+` writes no `>`, so it reaches no container in the quote and stays text.
+      const lazyPlus = !ln.startsWith(LAZY_FRAME) && isContinuationMarker(ln.trimStart())
+      // Inside an item the `+` is refused as that item's marker; elsewhere it is ordinary lazy text.
+      if (lazyPlus && lexer.hostBody === 'list') {
+        const root = lexer.rootLines ?? lexer.lines
+        const follower = root[lexer.lineNumber(lineIndex)]
+        const plusColumn = sourceColumn(root[lexer.lineNumber(lineIndex) - 1] ?? ln)
+        if (follower === undefined || isBlankLine(follower) ||
+            isListMarkerLine(sourceQuoteBody(follower).trimStart()) && sourceColumn(follower) === plusColumn) {
+          lexer.reportRefusedContinuationMarker(lineIndex, indentColumns(ln) + 1, 'list item', markerDecision(lexer, lineIndex).reason)
+        }
+      }
+      inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || quoteTermContinuation
         ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
       if (!lazyLinkDef) trackLine(ln, lineIndex)
@@ -2301,4 +2318,25 @@ export function parseTransientForHtml(source: string, opts: ParseOptions): Docum
   const session = new ParseSession()
   session['skipPositionDrop'] = true
   return session.parse(source, opts)
+}
+
+/** Does the quote whose `>` sits at `column` open directly behind a list item marker in `line`'s marker run? */
+function quoteOpensBehindItemMarker(line: string, column: number): boolean {
+  const bound = prefixWalkBound(line)
+  let afterMarker = false
+  for (let at = 0; at < bound;) {
+    let lead = at
+    while (line[lead] === ' ' || line[lead] === '\t') lead++
+    if (line[lead] === '>') {
+      if (sourceColumnAt(line, lead) === column) return afterMarker
+      afterMarker = false
+      at = lead + 1
+      continue
+    }
+    const marker = markerPrefixLength(line, at, bound)
+    if (marker === 0) return false
+    afterMarker = true
+    at += marker
+  }
+  return false
 }
