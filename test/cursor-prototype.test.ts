@@ -125,6 +125,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '| a | b |\n|\t--- |\t--- |\n| 1 | 2 |\n',
+    '| a | b |\n| ---\t| ---\t|\n| 1 | 2 |\n',
+  ])('treats tabs in a table separator as cell content: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
     'text\n```js\ncode\n```\n',

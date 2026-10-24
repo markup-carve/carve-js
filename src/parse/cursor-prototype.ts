@@ -417,7 +417,7 @@ function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInli
 function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   const first = cursor.peek()!
   const second = cursor.peek(1)?.text
-  const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
+  const gfm = second?.startsWith('|') && /^\|(?: *:?-{3,}:? *\|)+$/.test(second)
   if (gfm) {
     let row = 0
     let hasSpanMarker = false
