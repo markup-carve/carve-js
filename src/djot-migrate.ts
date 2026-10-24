@@ -356,6 +356,85 @@ function nestedDjotNoteFence(content: string): RegExpMatchArray | null {
   return open
 }
 
+interface FenceListFrame {
+  indent: number
+  column: number
+  ownerIndent: number
+}
+
+function isFenceListMarkerLead(lead: string, next: string): boolean {
+  const code = lead.charCodeAt(0)
+  return '[-*+:('.includes(lead) && lead !== '' || (code >= 48 && code <= 57) ||
+    (((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) &&
+      (next === '.' || next === ')' || /[ivxlcdmIVXLCDM]/.test(lead) && /[ivxlcdmIVXLCDM]/.test(next)))
+}
+
+function pushFenceListFrames(view: string, indent: number, stack: FenceListFrame[]): void {
+  const marker =
+    !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) &&
+    /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(
+      view,
+    )
+  const prefix =
+    /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(
+      view,
+    )?.[0] ?? ''
+  const footnote =
+    /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)*)\[\^[^\]\n]+\]:/.exec(
+      view,
+    )
+  const column = footnote
+    ? footnote[1]!.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length + 2
+    : marker
+      ? prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
+      : (stack.at(-1)?.column ?? 0)
+  const owningIndent = footnote ? footnote[1]!.length : marker ? indent : (stack.at(-1)?.ownerIndent ?? 0)
+  if (footnote && marker)
+    stack.push({
+      indent,
+      column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length,
+      ownerIndent: indent,
+    })
+  if (column > 0) stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
+  const definitionPrefix = /^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}(?=:(?:[ \t]|$))/.exec(view)?.[0]
+  if (definitionPrefix) {
+    const items = [...definitionPrefix.matchAll(/(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+/g)]
+    const last = items.at(-1)!
+    stack.push({ indent: last.index!, column: definitionPrefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length, ownerIndent: last.index! })
+  }
+}
+
+/**
+ * Walk each quote level's list stack for a non-blank line outside a fence and
+ * report the list item that owns the innermost level.
+ */
+function trackFenceListOwners(
+  views: readonly string[],
+  depth: number,
+  ancestors: FenceListFrame[][],
+): { closedOwner: boolean; column: number; ownerIndent: number } {
+  let closedOwner = false,
+    column = 0,
+    ownerIndent = 0
+  ancestors.length = depth + 1
+  for (let level = 0; level <= depth; level++) {
+    const view = views[level]!
+    const stack = ancestors[level] ?? (ancestors[level] = [])
+    const indent = /^[ \t]*/.exec(view)![0].length
+    if (stack.length === 0 && !isFenceListMarkerLead(view[indent] ?? '', view[indent + 1] ?? '')) continue
+    while (stack.length && stack[stack.length - 1]!.indent >= indent) {
+      if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) closedOwner = true
+      stack.pop()
+    }
+    if (level === depth) {
+      column = stack.at(-1)?.column ?? 0
+      ownerIndent = stack.at(-1)?.ownerIndent ?? 0
+    }
+    pushFenceListFrames(view, indent, stack)
+  }
+  return { closedOwner, column, ownerIndent }
+}
+
 /**
  * Return a copy of `src` with every code character (fenced blocks and
  * inline code spans, including multi-line ones) replaced by spaces, and
@@ -422,59 +501,11 @@ export function maskDjotFences(
       ownerIndent = 0
     ancestors.length = Math.min(ancestors.length, depth + 1)
     if (!fence && content.trim() !== '') {
-      ancestors.length = depth + 1
-      for (let level = 0; level <= depth; level++) {
-        const view = views[level]!
-        const stack = ancestors[level] ?? (ancestors[level] = [])
-        const indent = /^[ \t]*/.exec(view)![0].length
-        const lead = view[indent] ?? '', next = view[indent + 1] ?? ''
-        const code = lead.charCodeAt(0)
-        const markerLead = '[-*+:('.includes(lead) && lead !== '' || (code >= 48 && code <= 57) ||
-          (((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) &&
-            (next === '.' || next === ')' || /[ivxlcdmIVXLCDM]/.test(lead) && /[ivxlcdmIVXLCDM]/.test(next)))
-        if (stack.length === 0 && !markerLead) continue
-        while (stack.length && stack[stack.length - 1]!.indent >= indent) {
-          if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) canNormalize = true
-          stack.pop()
-        }
-        if (level === depth) {
-          ownerColumn = stack.at(-1)?.column ?? 0
-          ownerIndent = stack.at(-1)?.ownerIndent ?? 0
-          nested = ownerColumn > 0
-        }
-        const marker =
-          !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) &&
-          /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(
-            view,
-          )
-        const prefix =
-          /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(
-            view,
-          )?.[0] ?? ''
-        const footnote =
-          /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)*)\[\^[^\]\n]+\]:/.exec(
-            view,
-          )
-        const column = footnote
-          ? footnote[1]!.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length + 2
-          : marker
-            ? prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
-            : (stack.at(-1)?.column ?? 0)
-        const owningIndent = footnote ? footnote[1]!.length : marker ? indent : (stack.at(-1)?.ownerIndent ?? 0)
-        if (footnote && marker)
-          stack.push({
-            indent,
-            column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length,
-            ownerIndent: indent,
-          })
-        if (column > 0) stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
-        const definitionPrefix = /^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}(?=:(?:[ \t]|$))/.exec(view)?.[0]
-        if (definitionPrefix) {
-          const items = [...definitionPrefix.matchAll(/(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+/g)]
-          const last = items.at(-1)!
-          stack.push({ indent: last.index!, column: definitionPrefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length, ownerIndent: last.index! })
-        }
-      }
+      const owner = trackFenceListOwners(views, depth, ancestors)
+      if (owner.closedOwner) canNormalize = true
+      ownerColumn = owner.column
+      ownerIndent = owner.ownerIndent
+      nested = ownerColumn > 0
     }
 
     if (fence) {
