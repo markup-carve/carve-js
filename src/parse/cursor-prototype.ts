@@ -176,9 +176,16 @@ function isBlockStart(line: string): boolean {
 
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
-  const finalBlock = innerLast.trimStart()
-  if (isBlockStart(finalBlock) && !finalBlock.startsWith(':: ')) return false
+  let finalBlock = innerLast.trimStart()
+  while (finalBlock.startsWith('>')) {
+    finalBlock = finalBlock.slice(finalBlock[1] === ' ' ? 2 : 1).trimStart()
+  }
+  if (finalBlock === '' || (isBlockStart(finalBlock) && !finalBlock.startsWith(':: '))) return false
   return !isBlockStart(follower)
+}
+
+function plainQuoteText(line: string): boolean {
+  return /^(?:[\p{L}\p{N}]|\\#)/u.test(line) && !line.includes('\t') && !isBlockStart(line)
 }
 
 function listContinuationPrefix(line: string, base: number): number {
@@ -570,6 +577,39 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   return stack[0]!.list
 }
 
+function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
+  const first = cursor.peek()!
+  const body: SourceLine[] = []
+  let last = first
+  let plainParagraph = true
+  while (cursor.peek()) {
+    const line = cursor.peek()!
+    if (line.text.startsWith('>')) {
+      cursor.take()
+      const prefix = line.text.startsWith('> ') ? 2 : 1
+      const text = line.text.slice(prefix)
+      body.push({ text, start: line.start + prefix,
+        number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
+      plainParagraph &&= plainQuoteText(text)
+      last = line
+      continue
+    }
+    if (depth === 0 && plainParagraph && plainQuoteText(line.text) &&
+        mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
+      body.push(cursor.take())
+      last = line
+      continue
+    }
+    break
+  }
+  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text)) {
+    throw new UnsupportedCursorSyntax('lazy quote continuation')
+  }
+  return { type: 'block_quote',
+    children: parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false),
+    pos: position(first, last) }
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>): BlockNode[] {
@@ -690,22 +730,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (first.text.startsWith('>')) {
-      const body: SourceLine[] = []
-      let last = first
-      while (cursor.peek()?.text.startsWith('>')) {
-        const line = cursor.take()
-        const prefix = line.text.startsWith('> ') ? 2 : 1
-        body.push({ text: line.text.slice(prefix), start: line.start + prefix,
-          number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-        last = line
-      }
-      const follower = cursor.peek()?.text
-      const innerLast = body.at(-1)?.text
-      if (mayContinueQuoteLazily(follower, innerLast)) {
-        throw new UnsupportedCursorSyntax('lazy quote continuation')
-      }
-      const quote: BlockQuote = { type: 'block_quote',
-        children: parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false), pos: position(first, last) }
+      const quote = parseQuote(cursor, inline, definitionNodes, depth)
       const caption = takeCaption(cursor, inline)
       emit(caption ? { type: 'figure', target: quote, caption: caption.children,
         pos: position(first, caption.line) } : quote)

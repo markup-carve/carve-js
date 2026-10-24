@@ -244,11 +244,21 @@ describe('experimental block cursor', () => {
   })
 
   it('declines an unmarked quote follower while its paragraph may still be open', () => {
-    expect(() => parseCursorPrototype('> quote\nlazy\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('> :: term\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('> +\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('> > nested\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('> quote\n\tlazy\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['> quote\nlazy\n', '> quote\nlazy\n> more\n',
+    '> a\n\\# escaped heading\n', '> first\n> second\nlazy\n',
+    '> quote\nlazy\n\n', '> quote\nlazy\n^ Attribution\n'])
+  ('keeps a plain quote paragraph open for its unmarked next line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['> Stay hungry.\n^ Attribution\n', '> quote\n\nnext\n', '> # Heading\ntail\n',
+    '> > # H\ntail\n', '> > ```\n> > c\n> > ```\ntail\n',
     '> - item\n>   # Heading\ntail\n'])
   ('keeps a completed quote before the next root block: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
