@@ -17,6 +17,14 @@ describe('Djot heading ID collisions', () => {
     expect(html).toContain('<section id="A-1">')
   })
 
+  it('skips explicit suffixes while continuing a generated collision chain', () => {
+    const html = carveToHtml(djotToCarve('# A\n\n{#A-1}\np\n\n# A\n\n# A\n'))
+    expect(html).toContain('<section id="A">')
+    expect(html).toContain('<p id="A-1">p</p>')
+    expect(html).toContain('<section id="A-2">')
+    expect(html).toContain('<section id="A-3">')
+  })
+
   it('does not reserve an explicit ID that appears later', () => {
     const html = carveToHtml(djotToCarve('# A\n\n{#A}\np\n'))
     expect(html).toContain('<section id="A">')
