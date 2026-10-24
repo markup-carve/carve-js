@@ -23,4 +23,8 @@ export default [{
     '@typescript-eslint/no-misused-promises': 'error',
     '@typescript-eslint/switch-exhaustiveness-check': 'error',
   },
+}, {
+  files: ['src/**/*.ts'],
+  languageOptions: { parser: tseslint.parser },
+  rules: { complexity: ['error', { max: 99 }] },
 }]

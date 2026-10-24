@@ -3,13 +3,7 @@ import { djotPairedEmphasisOpeners } from './djot-emphasis.js'
 
 export { readAttributes, nativeAttributeReader } from './djot-attributes.js'
 
-export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string, inherited: ReadonlySet<string> = new Set()): string {
-  if (!source.includes('{')) return source
-  const paired = djotPairedEmphasisOpeners(source)
-  const literalBraces = new Map<number, number>()
-  const pairedCloses = new Set(paired.values())
-  const escapedBraceCloses = new Set<number>()
-  const wordAtoms = new Map<number, number>()
+function markEscapedNoteBraces(source: string, literalBraces: Map<number, number>, escapedBraceCloses: Set<number>): void {
   for (const note of source.matchAll(/\[\^[^\]\n]*\]/g)) {
     const at = note.index!
     let begin = at
@@ -21,6 +15,16 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       escapedBraceCloses.add(at + note[0].length - 1)
     }
   }
+}
+
+export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string, inherited: ReadonlySet<string> = new Set()): string {
+  if (!source.includes('{')) return source
+  const paired = djotPairedEmphasisOpeners(source)
+  const literalBraces = new Map<number, number>()
+  const pairedCloses = new Set(paired.values())
+  const escapedBraceCloses = new Set<number>()
+  const wordAtoms = new Map<number, number>()
+  markEscapedNoteBraces(source, literalBraces, escapedBraceCloses)
   const braceStack: Array<{ begin: number; literal: boolean; space: number }> = []
   const readBraceAttributes = nativeAttributeReader(source)
   let attributeEnd = 0
