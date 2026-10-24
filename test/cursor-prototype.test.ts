@@ -82,8 +82,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> | a |\n> | b |\n', '> > | a |\n> > | b |\n',
+    '>   | a |\n>   | b |\n', '> |= A |\n', '> > |= A |\n',
+    '::: note\n| a |\n| b |\n:::\n'])
+  ('maps a quoted table back to document source positions: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a table in a list until list-owned rows are mapped', () => {
+    expect(() => parseCursorPrototype('- | a |\n  | b |\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
-    '> |= A |\n',
     '> +\n|= 2-col header | < |= header |\n',
   ])('declines table forms whose container ownership is not migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)

@@ -30,7 +30,8 @@ interface SourceLine { text: string; start: number; number: number; baseColumn?:
 class Cursor {
   at = 0
   rootLexer?: Lexer
-  constructor(readonly lines: SourceLine[], readonly rootSource?: string) {}
+  constructor(readonly lines: SourceLine[], readonly rootSource?: string,
+    readonly tableHost: 'root' | 'quote' | 'colon' | 'list' = 'root') {}
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
   take(): SourceLine { return this.lines[this.at++]! }
 }
@@ -281,9 +282,16 @@ function parseSimpleTable(cursor: Cursor, inline: CursorInline): Table {
 }
 
 function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInline): Table {
-  if (!cursor.rootSource) throw new UnsupportedCursorSyntax('nested canonical table')
+  if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list table source mapping')
   const first = cursor.peek()!
-  const lexer = cursor.rootLexer ??= new Lexer(cursor.rootSource)
+  const lexer = cursor.rootSource ? cursor.rootLexer ??= new Lexer(cursor.rootSource) :
+    new Lexer(cursor.lines.map((line) => line.text))
+  if (!cursor.rootSource) {
+    lexer.nested = true
+    lexer.sourceLineMap = cursor.lines.map((line) => line.number)
+    lexer.sourceOffsetMap = cursor.lines.map((line) => line.start)
+    lexer.linePrefixWidths = cursor.lines.map((line) => (line.baseColumn ?? 1) - 1)
+  }
   lexer.pos = cursor.at
   lexer.abbrDefs = inline.abbreviations
   lexer.linkDefs = inline.linkDefinitions
@@ -314,7 +322,7 @@ function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInli
   return table
 }
 
-function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number): Table {
+function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   const first = cursor.peek()!
   const second = cursor.peek(1)?.text
   const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
@@ -324,7 +332,6 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number)
       (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '')) {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
-  if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
   const table = parseCanonicalTableWithExistingRules(cursor, inline)
   if (!headed && cursor.peek()?.text && !isBlockStart(cursor.peek()!.text)) {
     throw new UnsupportedCursorSyntax('data table paragraph follower')
@@ -451,7 +458,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   const stack = [newFrame(first, firstMarker)]
   const flush = (frame: Frame) => {
     if (!frame.item || !frame.body.length) return
-    frame.item.children.push(...parseBlocks(new Cursor(frame.body), inline, definitionNodes, depth + 1, false))
+    frame.item.children.push(...parseBlocks(new Cursor(frame.body, undefined, 'list'), inline,
+      definitionNodes, depth + 1, false))
     frame.body = []
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number) => {
@@ -660,7 +668,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
   return { type: 'block_quote',
-    children: parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false),
+    children: parseBlocks(new Cursor(body, undefined, cursor.tableHost === 'list' ? 'list' : 'quote'),
+      inline, definitionNodes, depth + 1, false),
     pos: position(first, last) }
 }
 
@@ -828,7 +837,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (first.text.startsWith('|')) {
-      const table = parseTableAtCursor(cursor, inline, depth)
+      const table = parseTableAtCursor(cursor, inline)
       const caption = takeCaption(cursor, inline)
       if (caption) {
         table.caption = caption.children
@@ -850,7 +859,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       cursor.take()
       const body = takeColonBody(cursor, colon[1]!.length)
       const close = cursor.take()
-      const children = parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false,
+      const children = parseBlocks(new Cursor(body, undefined,
+        cursor.tableHost === 'list' ? 'list' : 'colon'), inline, definitionNodes, depth + 1, false,
         undefined, undefined, undefined, colonDepth + 1)
       const kind = colon[2]!
       const pos = position(first, close)
