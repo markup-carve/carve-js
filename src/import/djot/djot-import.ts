@@ -1,6 +1,7 @@
 import { tightDjotDefinitionDescriptions } from './djot-tight-definition-descriptions.js'
 import { djotImageEmptyDestinations } from './djot-image-empty-destinations.js'
 import { importedDjotHeadingTargets } from './djot-heading-targets.js'
+import { preserveDjotHeadingIds } from './djot-heading-ids.js'
 import { genericDjotDivClasses } from './djot-div-classes.js'
 import { backtickRunEnds } from '../../parse/inline/backtick-run-index.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
@@ -1432,7 +1433,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   const containers = tightDjotDefinitionDescriptions(genericDjotDivClasses(converted, djotContentStart))
-  return strippedDefinitions.restore(frontmatter === '' ? containers : `${frontmatter}${separator}${containers}`)
+  return preserveDjotHeadingIds(strippedDefinitions.restore(frontmatter === '' ? containers : `${frontmatter}${separator}${containers}`))
 }
 
 function imageLossChildText(label: string, quoteDepth: number): string {
