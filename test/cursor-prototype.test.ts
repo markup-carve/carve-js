@@ -112,6 +112,12 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(':: term\n\n: body\n')).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['# Before\n\n:: term\n: body\n',
+    ':: term\n: body\n\n# After\n', '- list\n\n:: term\n: body\n'])
+  ('keeps a simple definition list among other root blocks: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [+] plain\n'])
   ('preserves authored task list state: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

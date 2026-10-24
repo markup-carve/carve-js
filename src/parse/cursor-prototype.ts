@@ -294,17 +294,28 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
 
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {
   const first = cursor.peek()!
-  if (cursor.at !== 0 || !cursor.lines.every((line) =>
-    line.text === line.text.trimEnd() &&
-    (/^:: +\S.*$/.test(line.text) || /^: +\S.*$/.test(line.text)))) {
+  let end = cursor.at
+  while (end < cursor.lines.length) {
+    const text = cursor.lines[end]!.text
+    if (!(/^:: +\S.*$/.test(text) || /^: +\S.*$/.test(text))) break
+    if (text !== text.trimEnd()) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
+    end++
+  }
+  if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '')) {
     throw new UnsupportedCursorSyntax('definition list body')
+  }
+  let next = end
+  while (cursor.lines[next]?.text === '') next++
+  const follower = cursor.lines[next]?.text
+  if (follower && (/^[ \t+:]/.test(follower) || follower.startsWith('::'))) {
+    throw new UnsupportedCursorSyntax('definition list continuation')
   }
   const items: DefinitionItem[] = []
   type CompleteSpans = DefinitionItem & {
     termSpans: Position[]; definitionLines: number[]; definitionSpans: Position[] }
   let current: CompleteSpans | undefined
   let last = first
-  while (cursor.peek()) {
+  while (cursor.at < end) {
     const line = cursor.take()
     const term = /^:: +(\S.*)$/.exec(line.text)
     const definition = /^: +(\S.*)$/.exec(line.text)
