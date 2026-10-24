@@ -7,6 +7,8 @@ import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
 import { dropTrailingWhitespace } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
+import { RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
+import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
@@ -39,6 +41,34 @@ function scanLines(source: string): SourceLine[] {
     lines.push({ text: source.slice(start), start, number: lines.length + 1 })
   }
   return lines
+}
+
+function commentOpenersWithCloser(lines: SourceLine[]): Set<number> {
+  const remainingRuns = new Map<number, number>()
+  const openers = new Set<number>()
+  for (const line of lines) {
+    if (line.text[0] !== '%') continue
+    const match = RE_COMMENT_BLOCK_ANY.exec(line.text)
+    if (!match) continue
+    const run = match[1]!.length
+    remainingRuns.set(run, (remainingRuns.get(run) ?? 0) + 1)
+  }
+  let openRun: number | undefined
+  for (const line of lines) {
+    if (line.text[0] !== '%') continue
+    const match = RE_COMMENT_BLOCK_ANY.exec(line.text)
+    if (!match) continue
+    const run = match[1]!.length
+    const remaining = remainingRuns.get(run)! - 1
+    remainingRuns.set(run, remaining)
+    if (openRun !== undefined) {
+      if (openRun === run) openRun = undefined
+    } else if (remaining > 0) {
+      openers.add(line.start)
+      openRun = run
+    }
+  }
+  return openers
 }
 
 function position(first: SourceLine, last: SourceLine, firstColumn = 1, lastColumn = last.text.length + 1): Position {
@@ -334,7 +364,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
 
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
-  footnoteDefPos?: Record<string, Position>): BlockNode[] {
+  footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>): BlockNode[] {
   if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
   const children: BlockNode[] = []
   let pendingAttrs: Attrs | null = null
@@ -391,6 +421,24 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit({ type: 'abbreviation_def', abbr: abbreviation[1]!,
         expansion: dropTrailingWhitespace(abbreviation[2]!), pos: position(first, first) })
       continue
+    }
+    const commentFence = RE_COMMENT_BLOCK_ANY.exec(first.text)
+    if (commentFence) {
+      if (!atDocumentLevel || first.text[0] !== '%') throw new UnsupportedCursorSyntax('nested block comment')
+      if (commentOpeners?.has(first.start)) {
+        cursor.take()
+        const content: string[] = []
+        const openerTail = trimNonNbsp(commentFence[2]!)
+        if (openerTail) content.push(openerTail)
+        while (cursor.peek()) {
+          const closer = RE_COMMENT_BLOCK_ANY.exec(cursor.peek()!.text)
+          if (closer?.[1]?.length === commentFence[1]!.length) break
+          content.push(cursor.take().text)
+        }
+        const close = cursor.take()
+        emit({ type: 'comment', block: true, content: content.join('\n'), pos: position(first, close) })
+        continue
+      }
     }
     if (LINE_COMMENT.test(first.text)) {
       if (first.text.trimStart().startsWith('%%%')) throw new UnsupportedCursorSyntax('block comment')
@@ -504,16 +552,28 @@ export function parseCursorPrototype(source: string): Document {
     throw new UnsupportedCursorSyntax('source normalization is not migrated')
   }
   const cursor = new Cursor(scanLines(source))
+  const commentOpeners = source.includes('%%%') ? commentOpenersWithCloser(cursor.lines) : new Set<number>()
   const linkDefinitions = new Map<string, LinkDef>()
   const abbreviations = new Map<string, string>()
   let openFence: string | undefined
+  let openComment: number | undefined
   for (const line of cursor.lines) {
+    if (openComment !== undefined) {
+      const closer = RE_COMMENT_BLOCK_ANY.exec(line.text)
+      if (closer?.[1]?.length === openComment) openComment = undefined
+      continue
+    }
     if (openFence) {
       if (closesFence(line.text, openFence)) openFence = undefined
       continue
     }
     const fence = FENCE.exec(line.text)
     if (fence) { openFence = fence[1]!; continue }
+    const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
+    if (comment && commentOpeners.has(line.start)) {
+      openComment = comment[1]!.length
+      continue
+    }
     const match = LINK_DEF.exec(line.text)
     if (match) linkDefinitions.set(normalizeRefLabel(match[1]!),
       { rawLabel: match[1]!, line: line.number - 1, href: match[2]! })
@@ -533,7 +593,8 @@ export function parseCursorPrototype(source: string): Document {
     const close = cursor.take()
     frontmatter = { format: 'yaml', content: contents.join('\n'), pos: position(open, close) }
   }
-  const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos)
+  const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos,
+    commentOpeners)
   const document: Document = { type: 'document', children, srcByteLength: utf8ByteLength(source) }
   if (Object.keys(footnoteDefs).length) {
     document.footnoteDefs = footnoteDefs

@@ -52,6 +52,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a root block comment and ignores definitions inside it', () => {
+    const source = '%%% note\n[ref]: /wrong\n%%%\n\n[ref][ref]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['[^f]: note\n\nSee [^f].\n', '[^f]:   note\n', '[^f]: {empty}\n',
     '[^__proto__]: note\n', '[^f]: a\n\n[^f]: b\n'])
   ('keeps a one-line footnote definition in the document sidecar: %s', (source) => {
