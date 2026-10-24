@@ -437,6 +437,48 @@ function takeQuoteCaption(cursor: Cursor, inline: CursorInline, quote: BlockQuot
   return quote.children.length ? takeCaption(cursor, inline) : undefined
 }
 
+function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
+  const first = cursor.peek()!
+  const parts: ContentLine[] = []
+  let last = first
+  while (cursor.peek() && cursor.peek()!.text !== '' &&
+      (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
+    if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
+      const lead = inline.inlines(parts)
+      if (lead.length === 1 && lead[0]?.type === 'image' &&
+          imageReferenceResolved(lead[0], inline) &&
+          lead[0].pos?.startOffset === parts[0]!.line.start &&
+          lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
+    }
+    if (parts.length === 1 && parts[0]!.text.startsWith('$$') &&
+        RE_CAPTION.test(cursor.peek()!.text)) {
+      const lead = inline.inlines(parts)
+      if (lead.length === 1 && lead[0]?.type === 'math' && lead[0].display) break
+    }
+    const line = cursor.take()
+    const column = /^[ \t]*/.exec(line.text)![0].length + 1
+    parts.push({ line, column, text: line.text.slice(column - 1) })
+    last = line
+  }
+  const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
+    pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
+  if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
+    const image = paragraph.children[0]
+    const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
+    if (caption) return { type: 'figure', target: image,
+      caption: caption.children, pos: position(first, caption.line) }
+    if (!image.ref && image.pos?.startColumn === 1 &&
+        image.pos.endColumn === first.text.length + 1) return image
+  }
+  if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'math' &&
+      paragraph.children[0].display) {
+    const caption = takeCaption(cursor, inline)
+    if (caption) return { type: 'figure', target: paragraph,
+      caption: caption.children, pos: position(first, caption.line) }
+  }
+  return paragraph
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -908,38 +950,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)
-    const parts: ContentLine[] = []
-    let last = first
-    while (cursor.peek() && cursor.peek()!.text !== '' && (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
-      if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
-        const lead = inline.inlines(parts)
-        if (lead.length === 1 && lead[0]?.type === 'image' &&
-            imageReferenceResolved(lead[0], inline) &&
-            lead[0].pos?.startOffset === parts[0]!.line.start &&
-            lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
-      }
-      const line = cursor.take()
-      const column = /^[ \t]*/.exec(line.text)![0].length + 1
-      parts.push({ line, column, text: line.text.slice(column - 1) })
-      last = line
-    }
-    const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
-      pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
-    if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
-      const image = paragraph.children[0]
-      const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
-      if (caption) {
-        emit({ type: 'figure', target: paragraph.children[0],
-          caption: caption.children, pos: position(first, caption.line) })
-        continue
-      }
-      if (!image.ref && image.pos?.startColumn === 1 &&
-          image.pos.endColumn === first.text.length + 1) {
-        emit(image)
-        continue
-      }
-    }
-    emit(paragraph)
+    emit(parseParagraphAtCursor(cursor, inline))
   }
   return children
 }

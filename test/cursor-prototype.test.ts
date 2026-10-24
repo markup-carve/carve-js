@@ -120,6 +120,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '$$`E = mc^2`\n^ Equation: mass-energy\n',
+    '$$`E = mc^2`\n\n^ Equation: mass-energy\n',
+    '{#eq-emc}\n$$`E = mc^2`\n^ Equation #: mass-energy\n',
+    '$$`a + b = c`\n\n^ Equation: the sum\n',
+    '$$`E = mc^2`\n\n\n^ detached\n',
+  ])('attaches a caption only to a standalone display equation: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',
