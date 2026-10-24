@@ -18,6 +18,7 @@ import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, deriveTableMetadata, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
 import { parseTableBlock } from './parse-core.js'
+import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
 /**
  * An isolated block-cursor experiment. It deliberately fails on syntax that has
@@ -705,13 +706,24 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
   const children: BlockNode[] = []
   let pendingAttrs: Attrs | null = null
-  const emit = (node: BlockNode) => {
+  const emit = (input: BlockNode) => {
+    let node = input
     if (node.type !== 'comment' && node.type !== 'abbreviation_def' && pendingAttrs) {
       node.attrs = mergeAttrs(pendingAttrs, node.attrs ?? {})
       pendingAttrs = null
     }
     const code = node.type === 'code_block' ? node :
       node.type === 'figure' && node.target.type === 'code_block' ? node.target : undefined
+    if (code && node.attrs?.keyValues?.table === '') {
+      const table = delimitedTable(code, node.attrs)
+      if (table) {
+        if (node.type === 'figure') {
+          table.caption = node.caption
+          if (node.pos) table.pos = node.pos
+        }
+        node = table
+      }
+    }
     if (code?.header !== undefined && node.attrs?.keyValues?.title === undefined &&
         code.attrs?.keyValues?.title === undefined) {
       code.attrs = { ...(code.attrs ?? {}),
@@ -816,7 +828,12 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     if (fence) {
       cursor.take()
       const payload: string[] = []
-      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence.marker)) payload.push(cursor.take().text)
+      const payloadLines: SourceLine[] = []
+      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence.marker)) {
+        const line = cursor.take()
+        payload.push(line.text)
+        payloadLines.push(line)
+      }
       if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed fence')
       const close = cursor.take()
       const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
@@ -824,6 +841,12 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         ...(fence.header !== undefined ? { header: fence.header } : {}),
         ...(fence.label !== undefined ? { label: fence.label } : {}),
         pos: position(first, close) }
+      if (fence.lang === 'csv' || fence.lang === 'tsv') {
+        setDelimitedPayloadLines(block, payloadLines.map((line) => ({
+          offset: line.start, line: line.number,
+          column: line.baseColumn ?? 1, text: line.text,
+        })))
+      }
       const caption = takeCaption(cursor, inline)
       emit(caption ? { type: 'figure', target: block, caption: caption.children,
         pos: position(first, caption.line) } : block)
