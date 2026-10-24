@@ -271,9 +271,14 @@ describe('experimental block cursor', () => {
   })
 
   it('declines a multiline footnote until its body collector is migrated', () => {
-    expect(() => parseCursorPrototype('[^f]: note\n  more\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('[^f]: note\n  # heading\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: note\n\n  more\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('keeps a plain footnote continuation and its source positions', () => {
+    const source = '[^f]: note\n  more\n\nbody[^f]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([':: t\n', ':: t\n: d\n', ':: t\n:  d\n',

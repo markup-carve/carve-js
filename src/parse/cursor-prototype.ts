@@ -917,6 +917,33 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
   throw new UnsupportedCursorSyntax('unclosed fence')
 }
 
+function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
+  footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
+  footnoteDefPos: Record<string, Position> | undefined): void {
+  let nextIndex = 1
+  while (cursor.peek(nextIndex)?.text === '') nextIndex++
+  const next = cursor.peek(nextIndex)?.text
+  const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
+  if (!footnote[2] || (hasBodyLine && (nextIndex !== 1 || !/^  [A-Za-z0-9][A-Za-z0-9 ]*$/.test(next!) ||
+      (cursor.peek(2) && cursor.peek(2)!.text !== '')))) {
+    throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
+  }
+  cursor.take()
+  const continuation = hasBodyLine ? cursor.take() : undefined
+  const label = footnote[1]!
+  if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
+  const column = first.text.length - footnote[2]!.length + 1
+  const parts: ContentLine[] = [{ line: first, column, text: footnote[2]! }]
+  if (continuation) parts.push({ line: continuation, column: 3, text: continuation.text.slice(2) })
+  const last = continuation ?? first
+  const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
+    pos: position(first, last, column) }
+  Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] : [body],
+    enumerable: true, configurable: true, writable: true })
+  Object.defineProperty(footnoteDefPos, label, { value: position(first, last),
+    enumerable: true, configurable: true, writable: true })
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -962,24 +989,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const footnote = FOOTNOTE_DEF.exec(first.text)
     if (footnote) {
-      let nextIndex = 1
-      while (cursor.peek(nextIndex)?.text === '') nextIndex++
-      const next = cursor.peek(nextIndex)?.text
-      if (!atDocumentLevel || !footnote[2] || next?.startsWith('  ') || next?.startsWith('\t')) {
+      if (!atDocumentLevel) {
         throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
       }
-      cursor.take()
-      const label = footnote[1]!
-      if (footnoteDefs && footnoteDefPos && !Object.hasOwn(footnoteDefs, label)) {
-        const column = first.text.length - footnote[2]!.length + 1
-        const body: Paragraph = { type: 'paragraph',
-          children: inline.inlines([{ line: first, column, text: footnote[2]! }]),
-          pos: position(first, first, column) }
-        Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] : [body],
-          enumerable: true, configurable: true, writable: true })
-        Object.defineProperty(footnoteDefPos, label, { value: position(first, first),
-          enumerable: true, configurable: true, writable: true })
-      }
+      takeSimpleFootnote(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)
       continue
     }
     const definition = LINK_DEF.exec(first.text)
