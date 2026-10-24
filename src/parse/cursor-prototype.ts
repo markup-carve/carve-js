@@ -1028,6 +1028,10 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   if (separated) cursor.take()
   const continuation: SourceLine[] = []
   for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
+  const plusFollower = cursor.peek()?.text === '+' ? cursor.peek(1) : undefined
+  const attached = plusFollower && plainQuoteText(plusFollower.text) &&
+    (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text)) ? plusFollower : undefined
+  if (attached) { cursor.take(); cursor.take() }
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
   const bodyIndent = /^[ \t]*/.exec(footnote[2]!)![0].length
@@ -1036,14 +1040,19 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   if (!separated) for (const line of continuation) {
     parts.push({ line, column: 3, text: line.text.slice(2) })
   }
-  const last = continuation.at(-1) ?? first
+  const bodyLast = continuation.at(-1) ?? first
+  const last = attached ?? bodyLast
   const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
-    pos: position(first, separated ? first : last, column) }
+    pos: position(first, separated ? first : bodyLast, column) }
   const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
     children: inline.inlines(continuation.map((line) => ({ line, column: 3, text: line.text.slice(2) }))),
-    pos: position(continuation[0]!, last, 3) } : undefined
+    pos: position(continuation[0]!, continuation.at(-1)!, 3) } : undefined
+  const attachedBody: Paragraph | undefined = attached ? { type: 'paragraph',
+    children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
+    pos: position(attached, attached) } : undefined
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
-    separateBody ? [body, separateBody] : [body],
+    attachedBody ? separateBody ? [body, separateBody, attachedBody] : [body, attachedBody] :
+      separateBody ? [body, separateBody] : [body],
     enumerable: true, configurable: true, writable: true })
   Object.defineProperty(footnoteDefPos, label, { value: position(first, last),
     enumerable: true, configurable: true, writable: true })
