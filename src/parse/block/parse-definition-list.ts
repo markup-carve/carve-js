@@ -14,6 +14,7 @@ import {
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
+import { continueWrappedAttributeBlock, opensWrappedAttributeBlock } from './parse-quote-core.js'
 import type {
   definitionListHelpers,
   ItemLazyState,
@@ -202,6 +203,7 @@ export function createDefinitionListParser(
       let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
       let nestedItemParagraphOpen = false
+      let nestedAttributeRun: string | null = null
       let nestedDescriptionOpened = false
       // The next entry ends the body, and so does a line below its column after a
       // blank. A second blank ends it regardless of the following indentation.
@@ -623,6 +625,13 @@ export function createDefinitionListParser(
         bodyLines.push(dedented)
         bodySourceLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        let closedNestedAttribute = false
+        if (nestedAttributeRun !== null) {
+          const result = continueWrappedAttributeBlock(nestedAttributeRun, dedented.trimStart())
+          nestedAttributeRun = result.verdict === 'open' ? result.run : null
+          closedNestedAttribute = result.verdict === 'attributes'
+        } else if (nestedItemColumn > 0 && indentColumns(dedented) >= nestedItemColumn &&
+            opensWrappedAttributeBlock(dedented.trimStart())) nestedAttributeRun = dedented.trimStart()
         // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
         // (markup-carve/carve#1911). `sliceColumns` removes the body's content
         // column and KEEPS the rest, so an opener written one column past it
@@ -678,6 +687,7 @@ export function createDefinitionListParser(
           true,
           bodyReadsFlush ? contentCol + residual : contentCol,
         )
+        if (closedNestedAttribute) lazyState.lazyFoldable = false
         if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
           nestedItemColumn = markerContentColumn(flush)
           nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
@@ -898,6 +908,15 @@ export function createDefinitionListParser(
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        if (nestedAttributeRun !== null) {
+          const result = continueWrappedAttributeBlock(nestedAttributeRun, below)
+          nestedAttributeRun = result.verdict === 'open' ? result.run : null
+          if (result.verdict === 'attributes' || result.verdict === 'open') {
+            const decision = foldLazyLine(ln, below, atDocumentColumn)
+            if (result.verdict === 'attributes') lazyState.lazyFoldable = false
+            return decision
+          }
+        }
         if (quoteBandFold(ln)) {
           const lineIndex = lexer.pos
           const folded = LAZY_FRAME + below

@@ -568,6 +568,17 @@ export function trackQuoteHostFence(
     return true
   }
   const b = openQuoteHosts(q, paragraph)
+  if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
+    const closed = trackWrappedAttributeRun(state, b.inner)
+    if (closed) {
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+    if (state.attrRun !== null) {
+      state.mode = { kind: 'paragraph', absorbingFence: false, itemParagraph: true }
+      return true
+    }
+  }
   const defined = trackHostDefinitions(q, b)
   if (defined !== undefined) return defined
   if (b.blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
