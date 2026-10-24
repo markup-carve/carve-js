@@ -2115,30 +2115,33 @@ function renderTableRowFlat(
   for (const [column, entry] of cells.entries()) {
     if (entry.skip) continue
     const tag = entry.cell.header || promoteToHeader || column < rowHeadColumns ? 'th' : 'td'
-    const attrs: string[] = []
-    const emitted = new Set<string>()
+    let structuralAttrs = ''
     if (entry.rowspan > 1) {
-      attrs.push(`rowspan="${entry.rowspan}"`)
-      emitted.add('rowspan')
+      structuralAttrs += ` rowspan="${entry.rowspan}"`
     }
     if (entry.colspan > 1) {
-      attrs.push(`colspan="${entry.colspan}"`)
-      emitted.add('colspan')
+      structuralAttrs += ` colspan="${entry.colspan}"`
     }
     if (entry.align || entry.valign) {
       const styles = `${entry.align ? `text-align: ${entry.align};` : ''}${entry.align && entry.valign ? ' ' : ''}${entry.valign ? `vertical-align: ${entry.valign};` : ''}`
-      attrs.push(`style="${styles}"`)
-      emitted.add('style')
+      structuralAttrs += ` style="${styles}"`
     }
     // Author cell attributes (a `{...}` glued to the opening pipe) come first,
     // then the structural span / alignment attributes; any author copy of a
     // structural key actually emitted here is dropped to avoid a duplicate.
     // The scope default LEADS the author's attributes, which is the order the
     // corpus pins (`<th scope="col" class="highlight">`).
+    let authorAttrs = ''
+    if (entry.cell.attrs) {
+      const emitted = new Set<string>()
+      if (entry.rowspan > 1) emitted.add('rowspan')
+      if (entry.colspan > 1) emitted.add('colspan')
+      if (entry.align || entry.valign) emitted.add('style')
+      authorAttrs = renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted))
+    }
     const attrStr =
       cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
-      renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
-      (attrs.length ? ' ' + attrs.join(' ') : '')
+      authorAttrs + structuralAttrs
     const content = entry.cell.blocks === undefined
       ? renderInlines(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? [], opts)
       : renderBlocks(entry.cell.blocks, opts, 0)
