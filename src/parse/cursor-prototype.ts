@@ -283,8 +283,9 @@ export function parseCursorPrototype(source: string): Document {
         }
         if (line.text === '') break
         const contentColumn = top.parts[0]?.column
-        const prefix = contentColumn === undefined ? undefined : ' '.repeat(contentColumn - 1)
-        if (!prefix || !line.text.startsWith(prefix)) break
+        if (contentColumn === undefined) break
+        const prefix = ' '.repeat(contentColumn - 1)
+        if (!line.text.startsWith(prefix)) break
         cursor.take()
         top.parts.push({ line, column: contentColumn, text: line.text.slice(prefix.length) })
         for (const frame of stack) {
