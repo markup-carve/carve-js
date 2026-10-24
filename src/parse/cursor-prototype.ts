@@ -577,6 +577,12 @@ function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
   return only === undefined || only.startsWith('![') || only.startsWith('$$') || isBlockStart(only)
 }
 
+function rejectAmbiguousNestedPlus(marker: ReturnType<typeof listMarker>): void {
+  if (marker && marker.indent > 0 && /^\+[ \t]*$/.test(marker.content)) {
+    throw new UnsupportedCursorSyntax('indented first-block continuation marker')
+  }
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -640,6 +646,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
+    rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
     if (line.text === '+' && top.item) {
       if (depth !== 0 || top.indent !== 0 || top.fenceMarker) {

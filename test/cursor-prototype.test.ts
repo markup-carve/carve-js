@@ -528,6 +528,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('declines a nested first-block continuation marker until column ownership is migrated', () => {
+    expect(() => parseCursorPrototype('- foo\n  1. +\n    > b\n'))
+      .toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('- a\n  - +\f\n\nb\n')).toStrictEqual(parse('- a\n  - +\f\n\nb\n'))
+  })
+
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
     '![a][ref]\n^ cap\n\n[ref]: /u\n'])
   ('attaches an image caption only when its reference resolves: %s', (source) => {
