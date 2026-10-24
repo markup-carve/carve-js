@@ -122,7 +122,34 @@ function closesFence(line: string, marker: string): boolean {
   return count >= marker.length && /^[ \t]*$/.test(line.slice(count))
 }
 
+function attributedListMarker(line: string) {
+  let indent = 0
+  while (line[indent] === ' ') indent++
+  const marker = line[indent]
+  if ((marker !== '-' && marker !== '*' && marker !== '.') || line[indent + 1] !== '{') return undefined
+  const start = indent + 1
+  let quote: '"' | "'" | undefined
+  for (let i = start + 1; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '\\') { i++; continue }
+    if (quote) { if (ch === quote) quote = undefined; continue }
+    if (ch === '"' || ch === "'") { quote = ch; continue }
+    if (ch !== '}') continue
+    const attrs = parseBlockAttributeRun(line.slice(start, i + 1))
+    const rest = /^ +(.*)$/.exec(line.slice(i + 1))
+    if (!attrs || !rest) return undefined
+    return { indent, ordered: marker === '.',
+      raw: marker === '.' ? '' : undefined, delim: marker === '.' ? '.' as const : undefined,
+      bullet: marker === '.' ? undefined : marker as '-' | '*',
+      width: i + 1 + rest[0].length - rest[1]!.length, continuationWidth: indent + 2,
+      content: rest[1]!, attrs }
+  }
+  return undefined
+}
+
 function listMarker(line: string) {
+  const attributed = attributedListMarker(line)
+  if (attributed) return attributed
   const ordered = RE_ORDERED.exec(line)
   if (ordered && !ordered[1]!.includes('\t')) {
     return { indent: ordered[1]!.length, ordered: true, raw: ordered[2]!,
@@ -314,10 +341,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         item.checked = task[1]!.toLowerCase() === 'x'
         if (task[1] === '-') item.taskState = '-'
       }
+      if ('attrs' in marker) item.attrs = marker.attrs
       current.list.items.push(item)
       current.item = item
       current.itemFirst = line
-      current.contentColumn = marker.width + 1
+      current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
       current.fenceMarker = undefined
       appendBody(current, line, marker.width + (task ? task[0].length : 0))

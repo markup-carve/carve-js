@@ -108,6 +108,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['-{.c} A classed item.\n', '-{#k} [x] bare\n',
+    '.{#x} attributed\n', '-{title="a}b"} text\n',
+    '-{.c} a\n  b\n', '.{#x} a\n  b\n'])
+  ('preserves an attribute on a list item marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps task state before item attributes in the serialized AST', () => {
+    const source = '-{#k} [x] bare\n  # inside\n'
+    expect(JSON.stringify(parseCursorPrototype(source))).toBe(JSON.stringify(parse(source)))
+  })
+
   it('promotes a paragraph containing one image to the public block node', () => {
     const source = '# Gallery\n\n![alt](photo.png)\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
