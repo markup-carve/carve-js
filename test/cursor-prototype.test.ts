@@ -108,6 +108,18 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '---\ntitle: Example\n---\n\nBody\n',
+    '--- yaml\ntitle: Example\n---\n\nBody\n',
+    '---\t\ntitle: Example\n---\n\nBody\n',
+    '---\n---\n\nBody\n',
+    '---\nfoo\n',
+    '----\nfoo\n',
+    '---x\nfoo\n',
+  ])('uses the production root frontmatter reader: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',

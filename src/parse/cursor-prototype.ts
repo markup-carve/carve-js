@@ -982,13 +982,11 @@ export function parseCursorPrototype(source: string): Document {
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
   let frontmatter: Document['frontmatter']
-  if (cursor.peek()?.text === '---yaml') {
-    const open = cursor.take()
-    const contents: string[] = []
-    while (cursor.peek() && cursor.peek()!.text !== '---') contents.push(cursor.take().text)
-    if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed frontmatter')
-    const close = cursor.take()
-    frontmatter = { format: 'yaml', content: contents.join('\n'), pos: position(open, close) }
+  if (source.startsWith('---')) {
+    const lexer = cursor.rootLexer ??= new Lexer(source)
+    lexer.consumeFrontmatter()
+    cursor.at = lexer.pos
+    frontmatter = lexer.frontmatter
   }
   const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos,
     commentOpeners)
