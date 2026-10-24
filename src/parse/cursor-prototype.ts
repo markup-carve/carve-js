@@ -1036,7 +1036,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const colon = COLON_OPEN.exec(first.text)
     if (colon) {
-      if ((!atDocumentLevel && colonDepth === 0) || colon[2] === 'figure' || colon[2] === 'list-table') {
+      if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote') ||
+          colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }
       cursor.take()

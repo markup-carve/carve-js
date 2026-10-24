@@ -454,13 +454,16 @@ describe('experimental block cursor', () => {
   it.each(['::: note\nBody\n:::\n', '::: toc\nBody\n:::\n',
     '::: note\n# Heading\n\n- item\n:::\n',
     '::: note\nouter\n::: tip\ninner\n:::\n:::\n',
-    '::: note\n::: tip\nBody\n:::\n:::'])
+    '::: note\n::: tip\nBody\n:::\n:::',
+    '> ::: note\n> Body\n> :::\n',
+    '> quote\n> ::: note\n> body\n> :::\ntail\n',
+    '> ::: footnotes\n> :::\n'])
   ('parses a simple named container through the shared block cursor: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
-    '> ::: note\n> Body\n> :::\n', '- ::: note\n  body\n  :::\n',
+    '> ::: references\n> :::\n', '- ::: note\n  body\n  :::\n',
     '::: note\n```\n:::\n```\n:::\n'])
   ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
