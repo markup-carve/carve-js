@@ -709,6 +709,27 @@ function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
   }
 }
 
+function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
+  depth: number, contentColumn: number): { line: SourceLine; prefix: number } | undefined {
+  if (depth !== 0 || marker.indent !== 0 || marker.content !== '+') return undefined
+  const follower = cursor.peek()
+  if (!follower) return undefined
+  const after = cursor.peek(1)
+  const prefix = ' '.repeat(contentColumn - 1)
+  const atContentColumn = prefix.length > 0 && follower.text.startsWith(prefix)
+  if (!(plainQuoteText(follower.text) ||
+      (atContentColumn && plainQuoteText(follower.text.slice(prefix.length))))) return undefined
+  if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0) return undefined
+  cursor.take()
+  return { line: follower, prefix: atContentColumn ? prefix.length : 0 }
+}
+
+function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceMarker: string | undefined,
+  contentColumn: number | undefined, text: string): boolean {
+  return marker !== undefined && fenceMarker !== undefined && contentColumn !== undefined &&
+    text.startsWith(' '.repeat(contentColumn - 1))
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -802,10 +823,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.indent + 1)
       continue
     }
-    if (marker && top.fenceMarker && top.contentColumn !== undefined &&
-        line.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+    if (isFenceMarkerContinuation(marker, top.fenceMarker, top.contentColumn, line.text)) {
       cursor.take()
-      appendBody(top, line, top.contentColumn - 1)
+      appendBody(top, line, top.contentColumn! - 1)
       top.last = line
       if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.indent + 1)
       continue
@@ -855,9 +875,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       appendBody(current, line, marker.width + (task ? task[0].length : 0))
+      const firstBlock = takeSimpleFirstBlockListPlus(cursor, marker, depth, current.contentColumn)
+      if (firstBlock) {
+        current.body = []
+        appendBody(current, firstBlock.line, firstBlock.prefix)
+        current.last = firstBlock.line
+        item.pos = listSpan(line, firstBlock.line, marker.indent + 1)
+      }
       for (const frame of stack) {
-        frame.last = line
-        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
+        frame.last = firstBlock?.line ?? line
+        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.indent + 1)
       }
       continue
     }
