@@ -47,6 +47,58 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('resolves root abbreviations and retains line comments', () => {
+    const source = 'HTML is short.\n\n*[HTML]: Hyper Text\n\n%% editorial note\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('carries block attributes over an invisible comment and blank line', () => {
+    const source = '{.chapter}{#first}\n\n%% note\n# Title\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    'a. apple\nb. banana\n',
+    'iii. three\niv. four\n',
+    '. first\n. second\n',
+    '1) first\n2) second\n',
+    '* first\n* second\n',
+  ])('retains authored list marker dialect: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('promotes a paragraph containing one image to the public block node', () => {
+    const source = '# Gallery\n\n![alt](photo.png)\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '![alt](photo.png)\n^ Caption\n',
+    '![alt](photo.png)\n\n^ Caption\n',
+    '![alt](photo.png)\n\n\n^ Caption\n',
+  ])('preserves image caption reach: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a caption-looking line in a paragraph led by an image and other text', () => {
+    const source = '![a](p.png) text\n^ Caption\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('continues the outer list item after a blank below a nested list', () => {
+    const source = '- a\n  - b\n\n  c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> quote\n^ Caption\n',
+    '> quote\n\n^ Caption\n',
+    '```\ncode\n```\n^ Caption\n',
+    '| Head |\n|---|\n| body |\n^ Caption\n',
+  ])('keeps a caption on its block target: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines source forms that have not been migrated', () => {
     expect(() => parseCursorPrototype('::: note\nBody\n:::')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('Text\n::: note\nBody\n:::')).toThrow(UnsupportedCursorSyntax)
