@@ -270,8 +270,8 @@ function interruptsParagraphAtCursor(cursor: Cursor): boolean {
     if (probeBlockAttributes(lexer)) return true
   }
   if (cursor.owner.kind === 'root' && (line[0] === '`' || line[0] === '~')) {
-    const fence = fenceOpen(line)
-    if (fence && !hasLaterFenceCloser(cursor, fence.marker)) return false
+    const marker = fenceOpen(line)?.marker ?? RE_RAW_FENCE.exec(line)?.[1]
+    if (marker && !hasLaterFenceCloser(cursor, marker)) return false
   }
   return interruptsParagraph(line, cursor.owner)
 }
