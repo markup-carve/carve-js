@@ -514,7 +514,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     break
   }
   if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '' &&
-      !commentOpeners?.has(cursor.lines[end]!.start))) {
+      !commentOpeners?.has(cursor.lines[end]!.start) &&
+      !(cursor.owner.kind === 'root' && rootLinkDef(cursor.lines[end]!.text)))) {
     throw new UnsupportedCursorSyntax('definition list body')
   }
   let next = end
