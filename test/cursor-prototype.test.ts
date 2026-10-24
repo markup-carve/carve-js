@@ -512,6 +512,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- one\n  ::: note\n  b\n  :::\n',
+    '- item\n  ::: note\n  body\n  :::\ntail\n'])
+  ('keeps a closed one-paragraph colon container in a list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a list colon container with unresolved lazy text after its closer', () => {
+    expect(() => parseCursorPrototype('- a\n  - b\n    ::: note\n    x\n    :::\n    text\nlazy\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
@@ -847,7 +858,7 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
-    '> ::: references\n> :::\n', '- ::: note\n  body\n  :::\n',
+    '> ::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
     '::: "Careful"\nBody\n:::\n',
     '::: note\n```text\n::: tip\n```\nbody\n:::\nafter\n',

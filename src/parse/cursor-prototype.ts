@@ -1418,6 +1418,15 @@ function takeBlockAttrsAtCursor(cursor: Cursor, atDocumentLevel: boolean): Attrs
   return wrapped.attrs
 }
 
+function simpleClosedListColon(cursor: Cursor, run: string): boolean {
+  if (cursor.owner.kind !== 'list') return false
+  const body = cursor.peek(1)?.text
+  const close = cursor.peek(2)?.text
+  return body !== undefined && plainQuoteText(body) &&
+    close !== undefined && new RegExp(`^:{${run.length}}[ \\t]*$`).test(close) &&
+    (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -1602,7 +1611,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const colon = simpleColon ??
       (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
     if (colon) {
-      if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote') ||
+      if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
+          !simpleClosedListColon(cursor, colon[1]!)) ||
           colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }
