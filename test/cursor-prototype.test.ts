@@ -77,6 +77,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '::: note\t"Title"\nx\n:::\n',
+    '::: note "Title"\t[First]\nx\n:::\n',
+    '::: note [a\t%% hidden]\nbody\n:::\n',
+  ])('keeps a recognized colon kind when later metadata has a tab: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

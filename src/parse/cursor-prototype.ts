@@ -17,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -1178,7 +1178,9 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
       continue
     }
-    const colon = COLON_OPEN.exec(first.text)
+    const simpleColon = COLON_OPEN.exec(first.text)
+    const colon = simpleColon ??
+      (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
     if (colon) {
       if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote') ||
           colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
@@ -1199,9 +1201,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       if (colon[4] && kind && GENERATED_CONTENT_KINDS.has(kind)) {
         throw new UnsupportedCursorSyntax('directive label')
       }
-      const title = colon[3] ? inline.inlines([{ line: first,
-        column: first.text.indexOf('"') + 2, text: colon[3] }]) : undefined
-      const label = colon[4]
+      const titleText = simpleColon ? colon[3] : colon[3]?.slice(1, -1)
+      const title = titleText ? inline.inlines([{ line: first,
+        column: first.text.indexOf('"') + 2, text: titleText }]) : undefined
+      const label = simpleColon ? colon[4] : colon[4]?.slice(1, -1)
       const node: BlockNode = kind === undefined ? { type: 'div', children,
         ...(label ? { label } : {}), pos } :
         GENERATED_CONTENT_KINDS.has(kind) ?
