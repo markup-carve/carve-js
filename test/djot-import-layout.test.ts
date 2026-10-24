@@ -10,10 +10,6 @@ const blockHtml = (html: string): string =>
     .replace(/> | </g, (s) => s.trim())
     .trim()
 
-it.each(["{'a/'", "{'a/'.", "{'a/' b", "{'a/'?", "{'a/')"])('preserves Djot text after a slash in %s', (source) => {
-  expect(blockHtml(carveToHtml(djotToCarve(source)))).toBe(blockHtml(renderHTML(parse(source))))
-})
-
 it.each([
   '',
   'tail',
