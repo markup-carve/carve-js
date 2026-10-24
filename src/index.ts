@@ -38,6 +38,7 @@ import { DocumentIdRegistry, inheritDocumentIds, rememberDocumentIds } from './a
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 import { toAuthoredProvenance as authoredProvenance, type ProvenanceSidecar } from './ast-sidecars.js'
 import { tryFastHtml } from './fast-html.js'
+import { tryFastAstDocument } from './parse/fast-ast-document.js'
 import { createEditorSession as createEditorSessionInternal } from './editor-session.js'
 import {
   checkedRender,
@@ -612,7 +613,7 @@ export function carveToHtml(
     // This tree is never returned to callers. Keep its remaining internal
     // location fields so the position-free HTML path avoids a full-tree copy.
     resolveDocument(parseOpts.positions === false
-      ? parseDocumentForHtml(source, parseOpts)
+      ? (tryFastAstDocument(source) ?? parseDocumentForHtml(source, parseOpts))
       : parse(source, parseOpts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
