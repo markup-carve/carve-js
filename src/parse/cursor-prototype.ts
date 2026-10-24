@@ -29,7 +29,7 @@ import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-tab
  */
 export class UnsupportedCursorSyntax extends Error {}
 
-interface SourceLine { text: string; start: number; number: number; baseColumn?: number }
+interface SourceLine { text: string; start: number; number: number; baseColumn?: number; spanEndColumn?: number }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -125,6 +125,7 @@ function position(first: SourceLine, last: SourceLine, firstColumn = 1, lastColu
 }
 
 function contentEndColumn(line: SourceLine): number {
+  if (line.spanEndColumn !== undefined) return line.spanEndColumn
   let end = line.text.length
   while (end > 0 && (line.text.charCodeAt(end - 1) === 32 || line.text.charCodeAt(end - 1) === 9)) end--
   return end + 1
@@ -729,17 +730,25 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
   return { line: follower, prefix: atContentColumn ? prefix.length : 0 }
 }
 
+function isUnattachedRootFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, next: SourceLine | undefined, depth: number): boolean {
+  if (depth !== 0 || marker.indent !== 0 || marker.content.slice(taskWidth) !== '+') return false
+  return next === undefined || isBlankLine(next.text) ||
+    (listMarker(next.text)?.indent ?? Number.POSITIVE_INFINITY) <= marker.indent
+}
+
 function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceMarker: string | undefined,
   contentColumn: number | undefined, text: string): boolean {
   return marker !== undefined && fenceMarker !== undefined && contentColumn !== undefined &&
     text.startsWith(' '.repeat(contentColumn - 1))
 }
 
-function isTaskMarkerContent(content: string): boolean {
-  return /^\[([ xX_>?-])\] /.test(content)
+function isTaskMarkerContent(content: string, ordered: boolean): boolean {
+  return !ordered && /^\[([ xX_>?-])\] /.test(content)
 }
 
-function takeTaskMarker(item: ListItem, content: string): number {
+function takeTaskMarker(item: ListItem, content: string, ordered: boolean): number {
+  if (ordered) return 0
   const task = /^\[([ xX_>?-])\] /.exec(content)
   if (!task) return 0
   item.checked = task[1]!.toLowerCase() === 'x'
@@ -750,7 +759,7 @@ function takeTaskMarker(item: ListItem, content: string): number {
 function sameListKind(marker: NonNullable<ReturnType<typeof listMarker>>,
   frame: { ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean }): boolean {
   return marker.ordered === frame.ordered && marker.delim === frame.delim &&
-    marker.bullet === frame.bullet && isTaskMarkerContent(marker.content) === frame.taskList
+    marker.bullet === frame.bullet && isTaskMarkerContent(marker.content, marker.ordered) === frame.taskList
 }
 
 function endsListBlankRun(blanks: number, next: SourceLine | undefined, rootIndent: number): boolean {
@@ -824,7 +833,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
     return { list, first: line, last: line, indent: marker.indent, ordered: marker.ordered,
-      taskList: isTaskMarkerContent(marker.content),
+      taskList: isTaskMarkerContent(marker.content, marker.ordered),
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
@@ -934,7 +943,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       flush(current)
       cursor.take()
       const item: ListItem = { type: 'list_item', children: [], pos: listSpan(line, line, marker.indent + 1) }
-      const taskWidth = takeTaskMarker(item, marker.content)
+      const taskWidth = takeTaskMarker(item, marker.content, marker.ordered)
       if ('attrs' in marker) item.attrs = marker.attrs
       current.list.items.push(item)
       current.item = item
@@ -945,13 +954,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fencePrefix = undefined
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeSimpleFirstBlockListPlus(cursor, marker, depth, current.contentColumn)
+      const refusedFirstBlock = !firstBlock && isUnattachedRootFirstBlock(marker, taskWidth, cursor.peek(), depth)
+      const spanLine = refusedFirstBlock ? { ...line, spanEndColumn: marker.width + 1 } : line
+      if (refusedFirstBlock) current.body = []
       if (firstBlock) {
         current.body = []
         appendBody(current, firstBlock.line, firstBlock.prefix)
         current.last = firstBlock.line
         item.pos = listSpan(line, firstBlock.line, marker.indent + 1)
       }
-      updateListFrameEnds(stack, firstBlock?.line ?? line, listSpan)
+      updateListFrameEnds(stack, firstBlock?.line ?? spanLine, listSpan)
       continue
     }
     if (line.text === '') {

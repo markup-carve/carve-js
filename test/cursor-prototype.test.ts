@@ -670,6 +670,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- +\n', '- +\n- b\n', '- +\n\npara\n',
+    '1. +\n', '- [ ] +\n', '1. [ ] +\n'])
+  ('keeps a refused first-block marker and its authored span: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
   ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
