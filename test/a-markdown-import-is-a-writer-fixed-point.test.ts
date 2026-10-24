@@ -99,7 +99,8 @@ describe('a Markdown table imports as canonical rows', () => {
 
   it('does not read a literal `<` or `^` cell as a span marker', () => {
     const out = markdownToCarve(['| < | b |', '|---|---|', '| x | ^ |', ''].join('\n'))
-    expect(out).toBe(['|= \\< |= b |', '| x | \\^ |', ''].join('\n'))
+    expect(out).toBe(['|= < |= b |', '| x | \\^ |', ''].join('\n'))
+    expect(carveToCarve(out)).toBe(out)
     const html = carveToHtml(out)
     expect(html).not.toContain('colspan')
     expect(html).not.toContain('rowspan')
