@@ -1047,10 +1047,12 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     if (definition) {
       if (!atDocumentLevel) throw new UnsupportedCursorSyntax('nested link definition')
       cursor.take()
-      definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
-        ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
-        ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
-        pos: position(first, first) })
+      if (inline.linkDefinitions.get(normalizeRefLabel(definition.label))?.line === first.number - 1) {
+        definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
+          ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
+          ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
+          pos: position(first, first) })
+      }
       continue
     }
     const abbreviation = ABBR_DEF.exec(first.text)
