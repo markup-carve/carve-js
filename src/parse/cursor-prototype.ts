@@ -177,6 +177,23 @@ function listContinuationPrefix(line: string, base: number): number {
   return column > base && (block.startsWith('>') || HEADING.test(block)) ? column : base
 }
 
+function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number): number {
+  let shifted = base
+  while (line[shifted] === ' ') shifted++
+  const opener = shifted > base ? FENCE.exec(line.slice(shifted)) : null
+  if (!opener) return base
+  const baseSpaces = ' '.repeat(base)
+  const shiftedSpaces = ' '.repeat(shifted)
+  for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
+    const candidate = cursor.lines[i]!.text
+    if (candidate && !candidate.startsWith(baseSpaces)) break
+    if (candidate.startsWith(shiftedSpaces) && closesFence(candidate.slice(shifted), opener[1]!)) {
+      return shifted
+    }
+  }
+  return base
+}
+
 function pipeSegments(line: SourceLine): Array<{ text: string; from: number; to: number }> {
   if (!line.text.startsWith('|') || !line.text.endsWith('|')) throw new UnsupportedCursorSyntax('table edge')
   if (line.text.includes('\\|')) throw new UnsupportedCursorSyntax('escaped table pipe')
@@ -241,7 +258,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
     ordered: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
-    fenceMarker: string | undefined; body: SourceLine[] }
+    fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[] }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -263,7 +280,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     return { list, first: line, last: line, indent: marker.indent, ordered: marker.ordered,
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
-      ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined, body: [] }
+      ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
+      fencePrefix: undefined, body: [] }
   }
   const stack = [newFrame(first, firstMarker)]
   const flush = (frame: Frame) => {
@@ -276,10 +294,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     frame.body.push({ text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix })
     if (frame.fenceMarker) {
-      if (closesFence(text, frame.fenceMarker)) frame.fenceMarker = undefined
+      if (closesFence(text, frame.fenceMarker)) {
+        frame.fenceMarker = undefined
+        frame.fencePrefix = undefined
+      }
     } else {
       const opener = FENCE.exec(text)
-      if (opener) frame.fenceMarker = opener[1]!
+      if (opener) {
+        frame.fenceMarker = opener[1]!
+        frame.fencePrefix = prefix
+      }
     }
   }
   while (cursor.peek()) {
@@ -355,6 +379,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
       current.fenceMarker = undefined
+      current.fencePrefix = undefined
       appendBody(current, line, marker.width + (task ? task[0].length : 0))
       for (const frame of stack) {
         frame.last = line
@@ -412,8 +437,18 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
     if (!line.text.startsWith(prefix)) break
+    let bodyPrefix = prefix.length
+    if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
+      if (!line.text.startsWith(' '.repeat(top.fencePrefix))) {
+        throw new UnsupportedCursorSyntax('shifted fence continuation')
+      }
+      bodyPrefix = top.fencePrefix
+    } else if (!top.fenceMarker && stack.length === 1 && !listMarker(top.body[0]?.text ?? '')) {
+      bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix)
+    }
     cursor.take()
-    appendBody(top, line, top.fenceMarker ? prefix.length : listContinuationPrefix(line.text, prefix.length))
+    appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
+      listContinuationPrefix(line.text, bodyPrefix) : bodyPrefix)
     for (const frame of stack) {
       frame.last = line
       if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)

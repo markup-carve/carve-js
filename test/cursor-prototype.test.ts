@@ -161,6 +161,9 @@ describe('experimental block cursor', () => {
     '- ```\n  a\n\n  b\n  ```\n',
     '- ```\n  - x\n  ```\n',
     '- ```\n    # H\n  ```\n',
+    '- a\n    ```\n    x\n    ```\n',
+    '- a\n    ```\n    x\n\n    y\n    ```\n',
+    '- a\n    ```\n    x\n',
     '- a\n\n  b\n',
   ])('keeps a list item body intact across its lines: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
