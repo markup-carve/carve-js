@@ -30,6 +30,7 @@ export function tryFastAstDocument(source: string): Document | undefined {
   if (source.includes('\r') || source.includes('\0') || source.includes('\t') || source.includes('![') ||
       source.includes('\n: ') ||
       source.includes('[^') || source.includes('^[') || source.includes(']:') ||
+      /[\u0000-\u0009\u000B-\u001F\u007F\uD800-\uDFFF\uFFFD\u2028\u2029]/.test(source) ||
       /(^|\n)[ \t]+(?:[-*+>|~{:]|[0-9]+[.)] )/.test(source) ||
       /(^|\n)(?:[ \t]*\+\s*$|[ \t]*::|[ \t]*\||[ \t]*%%|[-*] \[)/m.test(source) ||
       /\n\n[ \t]/.test(source) ||
@@ -57,7 +58,8 @@ export function tryFastAstDocument(source: string): Document | undefined {
       while (i < lines.length) {
         const match = BULLET.exec(lines[i]!)
         if (!match || match[1] !== marker) break
-        if (!/^[A-Za-z0-9\u0080-\uFFFF`]/.test(match[2]!) || match[2]!.startsWith('```')) return undefined
+        if (!/^[A-Za-z0-9\u0080-\uFFFF`]/.test(match[2]!) || match[2]!.startsWith('```') ||
+            /^(?:\d+[.)] |[A-Za-z][.)] )/.test(match[2]!)) return undefined
         const content = [match[2]!]
         i++
         while (i < lines.length && lines[i]!.startsWith('  ') && lines[i]!.trim() !== '') {
@@ -71,7 +73,9 @@ export function tryFastAstDocument(source: string): Document | undefined {
         items.push({ type: 'list_item', children: [{ type: 'paragraph',
           children: inline.inlines(dropTrailingWhitespace(content.join('\n'))) }] })
       }
-      if (i < lines.length && lines[i] === '' && BULLET.test(lines[i + 1] ?? '')) return undefined
+      let next = i
+      while (next < lines.length && lines[next] === '') next++
+      if (next > i && BULLET.test(lines[next] ?? '')) return undefined
       if (i < lines.length && lines[i] !== '') return undefined
       blocks.push({ type: 'list', ordered: false, tight: true, bulletChar: marker as '-' | '*', items })
       continue

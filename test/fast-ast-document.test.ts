@@ -15,7 +15,11 @@ describe('simple block AST route', () => {
     for (const source of [
       '- parent\n  - child\n',
       '- first\n\n- second\n',
+      '- first\n\n\n- second\n',
       '- [x] task\n',
+      '- 1. ```\n\n',
+      'a\uD800b *x*',
+      'plain \v tail\n',
     ]) {
       expect(tryFastAstDocument(source), source).toBeUndefined()
       expect(carveToHtml(source), source).toBe(renderHtml(resolve(parse(source))))
