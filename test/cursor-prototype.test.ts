@@ -47,6 +47,26 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
+  ('parses a canonical table row without a GFM separator: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a data-only table until its block ownership is migrated', () => {
+    expect(() => parseCursorPrototype('| a | b |\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    '{aligns="right"}\n|= A |\n',
+    '|= A |\n| b\t|\n',
+    '|= A |\n+ b |\n',
+    '|= A |\n^ Caption\n',
+    '|= A ||\n',
+    '> |= A |\n',
+  ])('declines canonical table metadata and cell forms not yet migrated: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('resolves root abbreviations and retains line comments', () => {
     const source = 'HTML is short.\n\n*[HTML]: Hyper Text\n\n%% editorial note\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

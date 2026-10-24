@@ -241,6 +241,50 @@ function parseSimpleTable(cursor: Cursor, inline: CursorInline): Table {
   return { type: 'table', rows, separatorWidths: widths, pos: position(header, last) }
 }
 
+function parseCanonicalTable(cursor: Cursor, inline: CursorInline): Table {
+  const first = cursor.peek()!
+  const rows: TableRow[] = []
+  let last = first
+  while (cursor.peek()?.text.startsWith('|')) {
+    const line = cursor.take()
+    const segments = pipeSegments(line)
+    const cells = segments.map((part) => {
+      const header = part.text.startsWith('= ')
+      const raw = header ? part.text.slice(1) : part.text
+      const content = raw.trim()
+      if (!content || /[\\`*_{}<>^~\[\]|\t]/.test(raw) ||
+          (part.text.startsWith('=') && !header)) {
+        throw new UnsupportedCursorSyntax('table cell marker')
+      }
+      const lead = raw.length - raw.trimStart().length
+      const column = part.from + (header ? 1 : 0) + lead + 1
+      return { type: 'table_cell' as const, header,
+        children: inline.inlines([{ line, column, text: raw.trim() }]),
+        pos: position(line, line, part.from + 1, part.to + 1) }
+    })
+    rows.push({ type: 'table_row', cells, pos: position(line, line) })
+    last = line
+  }
+  if (cursor.peek()?.text.startsWith('+') || /^\^ /.test(cursor.peek()?.text ?? '') ||
+      (cursor.peek()?.text === '' && /^\^ /.test(cursor.peek(1)?.text ?? ''))) {
+    throw new UnsupportedCursorSyntax('table continuation or caption')
+  }
+  return { type: 'table', rows, pos: position(first, last) }
+}
+
+function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
+  pendingAttrs: Attrs | null): Table {
+  const first = cursor.peek()!
+  const second = cursor.peek(1)?.text
+  const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
+  if (gfm) return parseSimpleTable(cursor, inline)
+  if (!first.text.startsWith('|= ') || pendingAttrs) {
+    throw new UnsupportedCursorSyntax('canonical table header')
+  }
+  if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
+  return parseCanonicalTable(cursor, inline)
+}
+
 function takeCaption(cursor: Cursor, inline: CursorInline):
   { children: InlineNode[]; line: SourceLine } | undefined {
   const blank = cursor.peek()?.text === '' ? 1 : 0
@@ -597,8 +641,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (first.text.startsWith('|')) {
-      if (!cursor.peek(1)?.text.startsWith('|')) throw new UnsupportedCursorSyntax('table header')
-      const table = parseSimpleTable(cursor, inline)
+      const table = parseTableAtCursor(cursor, inline, depth, pendingAttrs)
       const caption = takeCaption(cursor, inline)
       if (caption) {
         table.caption = caption.children
