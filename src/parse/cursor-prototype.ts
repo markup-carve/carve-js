@@ -243,7 +243,8 @@ function isBlockStart(line: string): boolean {
     ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
     RE_RAW_FENCE.test(line) ||
     BREAK.test(line) || !!listMarker(line) ||
-    RE_BLOCKQUOTE.test(line) || (line[0] === '|' && isTableRow(line)) || line.startsWith('::') ||
+    (line[0] === '>' && RE_BLOCKQUOTE.test(line)) ||
+    (line[0] === '|' && isTableRow(line)) || line.startsWith('::') ||
     rootLinkDef(line) !== null || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
@@ -892,7 +893,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let plainParagraph = true
   while (cursor.peek()) {
     const line = cursor.peek()!
-    if (RE_BLOCKQUOTE.test(line.text)) {
+    if (line.text[0] === '>' && RE_BLOCKQUOTE.test(line.text)) {
       cursor.take()
       const prefix = line.text.startsWith('> ') ? 2 : 1
       const text = line.text.slice(prefix)
@@ -1186,7 +1187,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         pos: position(first, caption.line) } : block)
       continue
     }
-    if (RE_BLOCKQUOTE.test(first.text)) {
+    if (first.text[0] === '>' && RE_BLOCKQUOTE.test(first.text)) {
       const quote = parseQuote(cursor, inline, definitionNodes, depth)
       const caption = takeQuoteCaption(cursor, inline, quote)
       emit(caption ? { type: 'figure', target: quote, caption: caption.children,
