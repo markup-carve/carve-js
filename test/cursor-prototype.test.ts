@@ -494,7 +494,9 @@ describe('experimental block cursor', () => {
     '- ![a](b.png)\n\n  ^ cap\n- c\n',
     '- ![a](b.png)\n\n  ^ cap\n',
     '- ```\n  code\n  ```\n\n  ^ cap\n- c\n',
-  ])('keeps a list tight across a caption on its block: %s', (source) => {
+    '- $$`x`\n\n  ^ cap\n- c\n',
+    '- text\n\n  ^ cap\n- c\n',
+  ])('preserves list tightness around a caption: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
