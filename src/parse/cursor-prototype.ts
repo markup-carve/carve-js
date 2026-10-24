@@ -45,6 +45,7 @@ function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>
 class Cursor {
   at = 0
   sharedLexer?: Lexer
+  fenceCloserSuffix?: { backtick: Uint32Array; tilde: Uint32Array }
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
     readonly owner: ContainerOwner = ROOT_OWNER) {}
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
@@ -259,15 +260,31 @@ function interruptsParagraphAtCursor(cursor: Cursor): boolean {
   const line = cursor.peek()!.text
   if (cursor.owner.kind === 'root' && (line[0] === '`' || line[0] === '~')) {
     const fence = fenceOpen(line)
-    if (fence) {
-      let hasCloser = false
-      for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
-        if (closesFence(cursor.lines[i]!.text, fence.marker)) { hasCloser = true; break }
-      }
-      if (!hasCloser) return false
-    }
+    if (fence && !hasLaterFenceCloser(cursor, fence.marker)) return false
   }
   return interruptsParagraph(line, cursor.owner)
+}
+
+function hasLaterFenceCloser(cursor: Cursor, marker: string): boolean {
+  if (!cursor.fenceCloserSuffix) {
+    const backtick = new Uint32Array(cursor.lines.length + 1)
+    const tilde = new Uint32Array(cursor.lines.length + 1)
+    for (let i = cursor.lines.length - 1; i >= 0; i--) {
+      backtick[i] = backtick[i + 1]!
+      tilde[i] = tilde[i + 1]!
+      const line = cursor.lines[i]!.text
+      const char = line[0]
+      if (char !== '`' && char !== '~') continue
+      let run = 0
+      while (line[run] === char) run++
+      if (!/^[ \t]*$/.test(line.slice(run))) continue
+      if (char === '`') backtick[i] = Math.max(backtick[i]!, run)
+      else tilde[i] = Math.max(tilde[i]!, run)
+    }
+    cursor.fenceCloserSuffix = { backtick, tilde }
+  }
+  const runs = marker[0] === '`' ? cursor.fenceCloserSuffix.backtick : cursor.fenceCloserSuffix.tilde
+  return runs[cursor.at + 1]! >= marker.length
 }
 
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
