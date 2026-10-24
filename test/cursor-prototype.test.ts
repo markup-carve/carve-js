@@ -462,6 +462,9 @@ describe('experimental block cursor', () => {
     '::: note "Careful" [x]\nBody\n:::\n',
     '::: 2col\ny\n:::\n',
     ':::[/i/]\ny\n:::\n',
+    '::: note\nbody\n',
+    ':::\nbody\n',
+    '::: note\n',
     '::: note\n# Heading\n\n- item\n:::\n',
     '::: note\nouter\n::: tip\ninner\n:::\n:::\n',
     '::: note\n::: tip\nBody\n:::\n:::',
@@ -476,6 +479,7 @@ describe('experimental block cursor', () => {
     '> ::: references\n> :::\n', '- ::: note\n  body\n  :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
     '::: "Careful"\nBody\n:::\n',
+    '::: note\n```text\n::: tip\n```\nbody\n:::\nafter\n',
     '::: note\n```\n:::\n```\n:::\n'])
   ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
@@ -535,7 +539,6 @@ describe('experimental block cursor', () => {
   })
 
   it('declines source forms that have not been migrated', () => {
-    expect(() => parseCursorPrototype('::: note\nBody\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('A\r\nB')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
   })

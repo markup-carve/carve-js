@@ -850,7 +850,9 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
     } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
     body.push(cursor.take())
   }
-  if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed colon container')
+  if (!cursor.peek() && body.some((line) => RE_FENCE.test(line.text))) {
+    throw new UnsupportedCursorSyntax('unclosed colon literal ownership')
+  }
   return body
 }
 
@@ -1052,7 +1054,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       if (colon[2] === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
         throw new UnsupportedCursorSyntax('abbreviation inside bare container')
       }
-      const close = cursor.take()
+      const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
       const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon')),
         inline, definitionNodes, depth + 1, false,
         undefined, undefined, undefined, colonDepth + 1)
