@@ -130,6 +130,20 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '```=html\n<custom-el>Verbatim HTML</custom-el>\n```\n',
+    '```=html\nb\n\n```\n\nafter\n',
+    '```=html\n\n```\n\nafter\n',
+    '```=html\nunterminated',
+  ])('uses the production raw-fence reader at the root: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines raw fences in containers until their source owner is mapped', () => {
+    expect(() => parseCursorPrototype('> ```=html\n> x\n> ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',

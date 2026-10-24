@@ -15,9 +15,9 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
-import { parseTableBlock } from './parse-core.js'
+import { parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
 /**
@@ -875,6 +875,16 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit({ type: 'thematic_break',
         ...(first.text[0] === '-' ? {} : { marker: first.text[0] as '*' | '_' }),
         pos: position(first, first) })
+      continue
+    }
+    if (RE_RAW_FENCE.test(first.text)) {
+      if (!cursor.rootSource) throw new UnsupportedCursorSyntax('nested raw block')
+      const lexer = cursor.rootLexer ??= new Lexer(cursor.rootSource)
+      lexer.pos = cursor.at
+      const raw = parseRawBlock(lexer)
+      cursor.at = lexer.pos
+      raw.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+      emit(raw)
       continue
     }
     const fence = fenceOpen(first.text)
