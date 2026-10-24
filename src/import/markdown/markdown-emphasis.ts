@@ -24,28 +24,45 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
   depths.set(token, depth)
 }
 
-/** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender') => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough, leadingText: (body: string) => string = body => body): string {
-  const runs: Run[] = []
-  const pairs = new Map<number, Pair>()
-  const claimed = new Set<number>()
-  const literalEscapes = new Set<number>()
-  const neighbor = (index: number, left: boolean): string => {
-    if (index < 0 && edgeNeighbors) return edgeNeighbors.before
-    if (index >= source.length && edgeNeighbors) return edgeNeighbors.after
-    if (source[index] === '\x00') {
-      const other = left ? source.lastIndexOf('\x00', index - 1) : source.indexOf('\x00', index + 1)
-      const token = other < 0 ? '' : source.slice(Math.min(index, other), Math.max(index, other) + 1)
-      const match = /^\x00P(\d+)\x00$/.exec(token)
-      const value = match ? protectedSpans[Number(match[1])] : undefined
-      if (value !== undefined) return left ? Array.from(value.slice(-2)).at(-1) ?? '' : Array.from(value.slice(0, 2))[0] ?? ''
-    }
-    const unit = source.charCodeAt(index)
-    if (unit < 0xd800 || unit > 0xdfff) return source[index]!
-    return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
+interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number; scopeLink: boolean }
+
+/** What a closing span's brace decision reads besides the span itself. */
+interface BraceContext {
+  source: string
+  protectedSpans: readonly string[]
+  claimed: ReadonlySet<number>
+  braceSlashBoundaries: boolean
+  protectOutput: ((value: string) => string) | undefined
+  leadingText: (body: string) => string
+  neighbor: (index: number, left: boolean) => string
+  tokenAt: (at: number) => RegExpExecArray | null
+}
+
+const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}\p{S}]/u.test(s)
+const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
+
+/**
+ * The character beside `index` that flanking reads: the edge neighbors past the
+ * ends, a protected span's outer character, or a whole surrogate pair.
+ */
+function delimiterNeighbor(source: string, protectedSpans: readonly string[], edgeNeighbors: { before: string; after: string } | undefined, index: number, left: boolean): string {
+  if (index < 0 && edgeNeighbors) return edgeNeighbors.before
+  if (index >= source.length && edgeNeighbors) return edgeNeighbors.after
+  if (source[index] === '\x00') {
+    const other = left ? source.lastIndexOf('\x00', index - 1) : source.indexOf('\x00', index + 1)
+    const token = other < 0 ? '' : source.slice(Math.min(index, other), Math.max(index, other) + 1)
+    const match = /^\x00P(\d+)\x00$/.exec(token)
+    const value = match ? protectedSpans[Number(match[1])] : undefined
+    if (value !== undefined) return left ? Array.from(value.slice(-2)).at(-1) ?? '' : Array.from(value.slice(0, 2))[0] ?? ''
   }
-  const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}\p{S}]/u.test(s)
-  const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
+  const unit = source.charCodeAt(index)
+  if (unit < 0xd800 || unit > 0xdfff) return source[index]!
+  return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
+}
+
+/** The CommonMark delimiter runs of `source` with their flanking. */
+function scanDelimiterRuns(source: string, strikethrough: boolean, extensionDelimiters: boolean, neighbor: (index: number, left: boolean) => string): Run[] {
+  const runs: Run[] = []
   for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index
     const end = start + m[0].length
@@ -65,32 +82,41 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
     runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
       close: right && (m[0][0] !== '_' || !left || punctuation(after)), left: 0, right: 0, active: true, previous: runs.length - 1, next: runs.length + 1 })
   }
-  if (strikethrough && source.includes('[')) {
-    const brackets: number[] = []
-    const boundaries = new Map<number, { scope: number; open: boolean }>()
-    for (let i = 0; i < source.length; i++) {
-      if (source[i] === '\\') { i++; continue }
-      if (source[i] === '[') brackets.push(i)
-      else if (source[i] === ']' && brackets.length) {
-        const open = brackets.pop()!
-        const target = source[i + 1] === '\x00' ? /^\x00P(\d+)\x00/.exec(source.slice(i + 1)) : null
-        if (open + 1 < i && target && protectedSpans[Number(target[1])]?.startsWith('(')) {
-          boundaries.set(open + 1, { scope: open, open: true })
-          boundaries.set(i, { scope: open, open: false })
-        }
+  return runs
+}
+
+/** Scope each run to the innermost link label whose destination follows it. */
+function scopeRunsToLinkLabels(source: string, runs: Run[], protectedSpans: readonly string[]): void {
+  const brackets: number[] = []
+  const boundaries = new Map<number, { scope: number; open: boolean }>()
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    if (source[i] === '[') brackets.push(i)
+    else if (source[i] === ']' && brackets.length) {
+      const open = brackets.pop()!
+      const target = source[i + 1] === '\x00' ? /^\x00P(\d+)\x00/.exec(source.slice(i + 1)) : null
+      if (open + 1 < i && target && protectedSpans[Number(target[1])]?.startsWith('(')) {
+        boundaries.set(open + 1, { scope: open, open: true })
+        boundaries.set(i, { scope: open, open: false })
       }
-    }
-    const scopes: number[] = []
-    let cursor = 0
-    for (const run of runs) {
-      while (cursor <= run.start) {
-        const boundary = boundaries.get(cursor++)
-        if (boundary?.open) scopes.push(boundary.scope)
-        else if (boundary) scopes.pop()
-      }
-      run.scope = scopes.at(-1) ?? -1
     }
   }
+  const scopes: number[] = []
+  let cursor = 0
+  for (const run of runs) {
+    while (cursor <= run.start) {
+      const boundary = boundaries.get(cursor++)
+      if (boundary?.open) scopes.push(boundary.scope)
+      else if (boundary) scopes.pop()
+    }
+    run.scope = scopes.at(-1) ?? -1
+  }
+}
+
+/** Pair the delimiter runs as CommonMark's process-emphasis procedure does. */
+function pairDelimiterRuns(runs: Run[], onStep: (() => void) | undefined): { pairs: Map<number, Pair>; claimed: Set<number> } {
+  const pairs = new Map<number, Pair>()
+  const claimed = new Set<number>()
   const remaining = (r: Run): number => r.end - r.start - r.left - r.right
   const unlink = (index: number): void => {
     onStep?.()
@@ -139,12 +165,12 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       if (remaining(closer) === 0) unlink(c)
     }
   }
-  if (plainText) {
-    let text = ''
-    for (let i = 0; i < source.length; i++) if (!claimed.has(i)) text += source[i]
-    return text
-  }
+  return { pairs, claimed }
+}
 
+/** The unpaired delimiter characters that must be written escaped. */
+function literalRunEscapes(source: string, runs: readonly Run[], claimed: ReadonlySet<number>, extensionDelimiters: boolean): Set<number> {
+  const literalEscapes = new Set<number>()
   for (const run of runs) {
     const before = source[run.start - 1] ?? '', after = source[run.end] ?? ''
     const partiallyClaimed = claimed.has(run.start) || claimed.has(run.end - 1)
@@ -152,20 +178,27 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }
-  // Only a singleton can open bare Carve strike; index possible closers once.
+  return literalEscapes
+}
+
+/** Only a singleton can open bare Carve strike; index possible closers once. */
+function singletonTildeEscapes(source: string, claimed: ReadonlySet<number>): Set<number> {
   const tildeEscapes = new Set<number>()
-  if (strikethrough) {
-    let closer = false
-    for (let i = source.length - 1; i >= 0; i--) {
-      const ch = source[i]!
-      if (ch === '\n') { closer = false; continue }
-      if (ch !== '~' || source[i - 1] === '\\') continue
-      const before = source[i - 1] ?? '', after = source[i + 1] ?? ''
-      if (!claimed.has(i) && before !== '~' && after !== '~' &&
-          !/[A-Za-z0-9_]/.test(before) && after !== '' && !whitespace(after) && closer) tildeEscapes.add(i)
-      if (before !== '' && !whitespace(before) && !/[A-Za-z0-9]/.test(after)) closer = true
-    }
+  let closer = false
+  for (let i = source.length - 1; i >= 0; i--) {
+    const ch = source[i]!
+    if (ch === '\n') { closer = false; continue }
+    if (ch !== '~' || source[i - 1] === '\\') continue
+    const before = source[i - 1] ?? '', after = source[i + 1] ?? ''
+    if (!claimed.has(i) && before !== '~' && after !== '~' &&
+        !/[A-Za-z0-9_]/.test(before) && after !== '' && !whitespace(after) && closer) tildeEscapes.add(i)
+    if (before !== '' && !whitespace(before) && !/[A-Za-z0-9]/.test(after)) closer = true
   }
+  return tildeEscapes
+}
+
+/** The matched brackets of `source`, from each end to the other. */
+function matchedBrackets(source: string): { bracketEnds: Map<number, number>; bracketStarts: Map<number, number> } {
   const bracketEnds = new Map<number, number>()
   const bracketStarts = new Map<number, number>()
   const brackets: number[] = []
@@ -178,7 +211,64 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number; scopeLink: boolean }
+  return { bracketEnds, bracketStarts }
+}
+
+/** Whether a kept span, closing with `first`/`last` as its body's edges, is written braced. */
+function closingSpanNeedsBraces(ctx: BraceContext, frame: Frame, pair: Pair, first: string, last: string): boolean {
+  const { source, protectedSpans, claimed, braceSlashBoundaries, protectOutput, leadingText, neighbor, tokenAt } = ctx
+  const { strong, italic, strike } = frame
+  const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
+  const besideLiteral = (/[*_]/.test(source[pair.open - 1] ?? '') || pair.kind === '~' && source[pair.open - 1] === '~') && !claimed.has(pair.open - 1) && source[pair.open - 2] !== '\\'
+  const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
+  const beforeExtender = extendsGrapheme(leadingText(source.slice(pair.close + pair.width, pair.close + pair.width + 40)), 0)
+  const bodyStart = pair.open + pair.width
+  const afterSource = pair.close + pair.width
+  const nextToken = tokenAt(afterSource)
+  const nextValue = nextToken ? protectedSpans[Number(nextToken[1])] ?? '' : ''
+  const nextSpelled = nextValue.startsWith('\\') ? nextValue[1] ?? '' : source[afterSource] === '\\' ? source[afterSource + 1] ?? '' : neighbor(afterSource, false)
+  const beforeWindow = source.slice(Math.max(0, pair.open - 20), pair.open)
+  const tokenClose = beforeWindow.lastIndexOf('\x00')
+  const tokenOpen = beforeWindow.lastIndexOf('\x00', tokenClose - 1)
+  const beforeAt = pair.open - beforeWindow.length + tokenOpen
+  const beforeCandidate = tokenAt(beforeAt)
+  const beforeToken = beforeCandidate && beforeAt + beforeCandidate[0].length === pair.open ? beforeCandidate : null
+  const beforeValue = beforeToken ? protectedSpans[Number(beforeToken[1])] ?? '' : ''
+  const beforeSpelled = frame.parent && claimed.has(pair.open - 1) ? frame.parent
+    : beforeValue.startsWith('\\') || source[pair.open - 2] === '\\' ? '\\' : neighbor(pair.open - 1, true)
+  const afterSpelled = frame.parent && claimed.has(afterSource) ? frame.parent : nextSpelled
+  const bodyToken = tokenAt(bodyStart)
+  const bodyValue = bodyToken && bodyStart + bodyToken[0].length === pair.close ? protectedSpans[Number(bodyToken[1])] ?? '' : ''
+  // renderEmphasis braces a span when its rendered link label owns a delimiter.
+  const scopedBoundary = frame.scopeLink || protectOutput !== undefined || beforeExtender
+  // renderEmphasis braces adjacent or nested delimiters that could join.
+  const delimiterCollision = besideSlash || frame.repeated ||
+    frame.kind === '*' && strong || frame.kind === '/' && italic || frame.kind === '~' && strike ||
+    frame.kind === '~' && frame.literalTilde
+  // renderEmphasis braces delimiters beside word characters or literal openers.
+  const wordBoundary = intraword || besideLiteral && (pair.kind === '*' || source[pair.open] === '_')
+  // renderEmphasis braces content that starts with its delimiter or an italic strong opener.
+  const bodyBoundary = pair.kind === '/' && first === '*' || pair.kind === '*' &&
+    (source[pair.close - 2] === '\\' && source[pair.close - 1] === '*' || bodyValue.endsWith('\\*'))
+  return emphasisNeedsBraces(pair.kind, first + last, beforeSpelled, afterSpelled,
+    scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary)
+}
+
+/** Pair CommonMark delimiter runs before writing native emphasis. */
+export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender') => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough, leadingText: (body: string) => string = body => body): string {
+  const neighbor = (index: number, left: boolean): string => delimiterNeighbor(source, protectedSpans, edgeNeighbors, index, left)
+  const runs = scanDelimiterRuns(source, strikethrough, extensionDelimiters, neighbor)
+  if (strikethrough && source.includes('[')) scopeRunsToLinkLabels(source, runs, protectedSpans)
+  const { pairs, claimed } = pairDelimiterRuns(runs, onStep)
+  if (plainText) {
+    let text = ''
+    for (let i = 0; i < source.length; i++) if (!claimed.has(i)) text += source[i]
+    return text
+  }
+
+  const literalEscapes = literalRunEscapes(source, runs, claimed, extensionDelimiters)
+  const tildeEscapes = strikethrough ? singletonTildeEscapes(source, claimed) : new Set<number>()
+  const { bracketEnds, bracketStarts } = matchedBrackets(source)
   const output: string[] = []
   const stack: Frame[] = []
   const active = new Map<string, number>()
@@ -191,6 +281,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
     protectedToken.lastIndex = at
     return protectedToken.exec(source)
   }
+  const braceContext: BraceContext = { source, protectedSpans, claimed, braceSlashBoundaries, protectOutput, leadingText, neighbor, tokenAt }
   let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0, scopeLink: false }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
@@ -251,40 +342,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
     const extenderLeading = frame.keep && extendsGrapheme(leadingText(output.slice(frame.slot + 1).join('')), 0)
     if (extenderLeading) onFlatten('extender')
     else if (frame.keep) {
-      const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
-      const besideLiteral = (/[*_]/.test(source[pair.open - 1] ?? '') || pair.kind === '~' && source[pair.open - 1] === '~') && !claimed.has(pair.open - 1) && source[pair.open - 2] !== '\\'
-      const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
-      const beforeExtender = extendsGrapheme(leadingText(source.slice(pair.close + pair.width, pair.close + pair.width + 40)), 0)
-      const bodyStart = pair.open + pair.width
-      const afterSource = pair.close + pair.width
-      const nextToken = tokenAt(afterSource)
-      const nextValue = nextToken ? protectedSpans[Number(nextToken[1])] ?? '' : ''
-      const nextSpelled = nextValue.startsWith('\\') ? nextValue[1] ?? '' : source[afterSource] === '\\' ? source[afterSource + 1] ?? '' : neighbor(afterSource, false)
-      const beforeWindow = source.slice(Math.max(0, pair.open - 20), pair.open)
-      const tokenClose = beforeWindow.lastIndexOf('\x00')
-      const tokenOpen = beforeWindow.lastIndexOf('\x00', tokenClose - 1)
-      const beforeAt = pair.open - beforeWindow.length + tokenOpen
-      const beforeCandidate = tokenAt(beforeAt)
-      const beforeToken = beforeCandidate && beforeAt + beforeCandidate[0].length === pair.open ? beforeCandidate : null
-      const beforeValue = beforeToken ? protectedSpans[Number(beforeToken[1])] ?? '' : ''
-      const beforeSpelled = frame.parent && claimed.has(pair.open - 1) ? frame.parent
-        : beforeValue.startsWith('\\') || source[pair.open - 2] === '\\' ? '\\' : neighbor(pair.open - 1, true)
-      const afterSpelled = frame.parent && claimed.has(afterSource) ? frame.parent : nextSpelled
-      const bodyToken = tokenAt(bodyStart)
-      const bodyValue = bodyToken && bodyStart + bodyToken[0].length === pair.close ? protectedSpans[Number(bodyToken[1])] ?? '' : ''
-      // renderEmphasis braces a span when its rendered link label owns a delimiter.
-      const scopedBoundary = frame.scopeLink || protectOutput !== undefined || beforeExtender
-      // renderEmphasis braces adjacent or nested delimiters that could join.
-      const delimiterCollision = besideSlash || frame.repeated ||
-        frame.kind === '*' && strong || frame.kind === '/' && italic || frame.kind === '~' && strike ||
-        frame.kind === '~' && frame.literalTilde
-      // renderEmphasis braces delimiters beside word characters or literal openers.
-      const wordBoundary = intraword || besideLiteral && (pair.kind === '*' || source[pair.open] === '_')
-      // renderEmphasis braces content that starts with its delimiter or an italic strong opener.
-      const bodyBoundary = pair.kind === '/' && first === '*' || pair.kind === '*' &&
-        (source[pair.close - 2] === '\\' && source[pair.close - 1] === '*' || bodyValue.endsWith('\\*'))
-      const braced = emphasisNeedsBraces(pair.kind, first + last, beforeSpelled, afterSpelled,
-        scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary)
+      const braced = closingSpanNeedsBraces(braceContext, frame, pair, first, last)
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
