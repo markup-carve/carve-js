@@ -161,9 +161,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a line block in a quote until its boundary is mapped', () => {
-    expect(() => parseCursorPrototype('> ::: |\n> line\n> :::\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('maps a line block inside a quote to original source positions', () => {
+    const source = '> ::: |\n> line\n> :::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a line-block closer inside its named container', () => {
+    const source = '::: note\n::: |\nline\n:::\n:::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([

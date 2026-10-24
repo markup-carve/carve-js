@@ -511,7 +511,7 @@ function parseRawAtCursor(cursor: Cursor): BlockNode {
 }
 
 function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
-  if (cursor.tableHost !== 'root') throw new UnsupportedCursorSyntax('nested line block')
+  if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list line block')
   const first = cursor.peek()!
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
@@ -786,7 +786,7 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       body.push(cursor.take())
       continue
     }
-    const nested = COLON_OPEN.exec(text)
+    const nested = COLON_OPEN.exec(text) ?? RE_LINE_BLOCK_OPEN.exec(text)
     if (nested) {
       if (nested[2] === 'figure' || nested[2] === 'list-table') {
         throw new UnsupportedCursorSyntax('nested specialized colon container')
