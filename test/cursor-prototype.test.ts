@@ -243,6 +243,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('declines an unmarked quote follower while its paragraph may still be open', () => {
+    expect(() => parseCursorPrototype('> quote\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('> :: term\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['> Stay hungry.\n^ Attribution\n', '> quote\n\nnext\n', '> # Heading\ntail\n',
+    '> - item\n>   # Heading\ntail\n'])
+  ('keeps a completed quote before the next root block: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['::: note\nBody\n:::\n', '::: toc\nBody\n:::\n',
     '::: note\n# Heading\n\n- item\n:::\n'])
   ('parses a simple named container through the shared block cursor: %s', (source) => {

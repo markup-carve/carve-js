@@ -174,6 +174,13 @@ function isBlockStart(line: string): boolean {
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
 
+function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
+  if (!follower || !innerLast || follower.startsWith('^ ')) return false
+  const finalBlock = innerLast.trimStart()
+  if (isBlockStart(finalBlock) && !finalBlock.startsWith(':: ')) return false
+  return !isBlockStart(follower)
+}
+
 function listContinuationPrefix(line: string, base: number): number {
   let column = base
   while (line[column] === ' ') column++
@@ -691,6 +698,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         body.push({ text: line.text.slice(prefix), start: line.start + prefix,
           number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
         last = line
+      }
+      const follower = cursor.peek()?.text
+      const innerLast = body.at(-1)?.text
+      if (mayContinueQuoteLazily(follower, innerLast)) {
+        throw new UnsupportedCursorSyntax('lazy quote continuation')
       }
       const quote: BlockQuote = { type: 'block_quote',
         children: parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false), pos: position(first, last) }
