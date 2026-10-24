@@ -238,11 +238,16 @@ function listMarker(line: string) {
         ...(itemAttr.attrs ? { attrs: itemAttr.attrs } : {}) } : {}),
       content: ordered[4]! }
   }
-  const bullet = BULLET.exec(line)
+  const bullet = BULLET.exec(itemAttr?.stripped ?? line)
   if (!bullet) return undefined
+  const markerWidth = bullet[0].length - bullet[3]!.length
+  const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
   return { indent: bullet[1]!.length, ordered: false, raw: undefined,
     delim: undefined, bullet: bullet[2] as '-' | '*',
-    width: bullet[0].length - bullet[3]!.length, content: bullet[3]! }
+    width: markerWidth + attrWidth,
+    ...(itemAttr ? { continuationWidth: markerWidth,
+      ...(itemAttr.attrs ? { attrs: itemAttr.attrs } : {}) } : {}),
+    content: bullet[3]! }
 }
 
 function isBlockStart(line: string): boolean {
