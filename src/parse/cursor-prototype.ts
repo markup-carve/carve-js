@@ -168,7 +168,7 @@ function fenceOpen(line: string) {
   return { marker: match[2]!, lang: match[3],
     header: headerRaw?.slice(1, -1), label: labelRaw?.slice(1, -1) }
 }
-const COLON_OPEN = /^(:{3,}) +([A-Za-z][A-Za-z0-9_-]*)[ \t]*$/
+const COLON_OPEN = /^(:{3,})(?: +([A-Za-z][A-Za-z0-9_-]*)[ \t]*)?$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
@@ -1049,14 +1049,18 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       }
       cursor.take()
       const body = takeColonBody(cursor, colon[1]!.length)
+      if (colon[2] === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
+        throw new UnsupportedCursorSyntax('abbreviation inside bare container')
+      }
       const close = cursor.take()
       const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon')),
         inline, definitionNodes, depth + 1, false,
         undefined, undefined, undefined, colonDepth + 1)
-      const kind = colon[2]!
+      const kind = colon[2]
       const pos = position(first, close)
-      const node: BlockNode = GENERATED_CONTENT_KINDS.has(kind) ?
-        { type: 'directive', kind, children, pos } : { type: 'admonition', kind, children, pos }
+      const node: BlockNode = kind === undefined ? { type: 'div', children, pos } :
+        GENERATED_CONTENT_KINDS.has(kind) ?
+          { type: 'directive', kind, children, pos } : { type: 'admonition', kind, children, pos }
       emit(node)
       continue
     }
