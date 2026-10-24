@@ -59,6 +59,12 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('replaces NUL text while retaining the raw byte length', () => {
+    for (const source of ['a\0b\n', '# H\0\n', '- a\0\n- b\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
+  })
+
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
   ('parses a canonical table row without a GFM separator: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

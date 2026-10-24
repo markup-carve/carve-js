@@ -1184,9 +1184,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
 }
 
 export function parseCursorPrototype(source: string): Document {
-  if (source.includes('\0') || source.charCodeAt(0) === 0xfeff) {
+  if (source.charCodeAt(0) === 0xfeff) {
     throw new UnsupportedCursorSyntax('source normalization is not migrated')
   }
+  const rawByteLength = utf8ByteLength(source)
+  if (source.includes('\0')) source = source.replace(/\0/g, '�')
   const cursor = new Cursor(scanLines(source), source)
   const commentOpeners = source.includes('%%%') ? commentOpenersWithCloser(cursor.lines) : new Set<number>()
   const linkDefinitions = new Map<string, LinkDef>()
@@ -1229,7 +1231,7 @@ export function parseCursorPrototype(source: string): Document {
   }
   const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos,
     commentOpeners)
-  const document: Document = { type: 'document', children, srcByteLength: utf8ByteLength(source) }
+  const document: Document = { type: 'document', children, srcByteLength: rawByteLength }
   if (Object.keys(footnoteDefs).length) {
     document.footnoteDefs = footnoteDefs
     document.footnoteDefPos = footnoteDefPos
