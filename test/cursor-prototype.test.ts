@@ -131,6 +131,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('starts an indented line comment position at its marker', () => {
+    const source = 'x\n  %% indented comment\ny\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',

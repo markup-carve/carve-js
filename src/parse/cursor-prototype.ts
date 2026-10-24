@@ -1164,7 +1164,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       }
       cursor.take()
       emit({ type: 'comment', block: false, content: commentLineContent(first.text),
-        pos: position(first, first) })
+        pos: position(first, first, /^[ \t]*/.exec(first.text)![0].length + 1) })
       continue
     }
     const heading = first.text[0] === '#' ? RE_HEADING.exec(first.text) : null
