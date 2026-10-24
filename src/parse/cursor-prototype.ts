@@ -850,7 +850,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.list.tight = false
       frame.blankBeforeInvisible = false
     }
-    frame.body.push({ text, start: line.start + prefix, number: line.number,
+    frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix })
     if (frame.fenceMarker) {
       if (closesFence(text, frame.fenceMarker)) {
