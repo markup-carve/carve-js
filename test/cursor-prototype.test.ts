@@ -487,6 +487,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- ![a](b.png)\n\n  ^ cap\n- c\n',
+    '- ![a](b.png)\n\n  ^ cap\n',
+    '- ```\n  code\n  ```\n\n  ^ cap\n- c\n',
+  ])('keeps a list tight across a caption on its block: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
     '![a][ref]\n^ cap\n\n[ref]: /u\n'])
   ('attaches an image caption only when its reference resolves: %s', (source) => {

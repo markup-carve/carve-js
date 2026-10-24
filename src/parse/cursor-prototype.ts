@@ -560,6 +560,10 @@ function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | un
   return comment
 }
 
+function isListGapBlockStart(text: string): boolean {
+  return isBlockStart(text) || RE_CAPTION.test(text)
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -745,7 +749,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
         if (LINE_COMMENT.test(blockText)) continuationFrame.blankBeforeInvisible = true
-        if (!nestedContinuation && !isBlockStart(blockText)) continuationFrame.list.tight = false
+        if (!nestedContinuation && !isListGapBlockStart(blockText)) {
+          continuationFrame.list.tight = false
+        }
       } else if (sibling) target.list.tight = false
       continue
     }
