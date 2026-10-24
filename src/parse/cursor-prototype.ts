@@ -1468,6 +1468,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
       continue
     }
+    if (/^::[ \t]*$/.test(first.text)) {
+      emit(parseParagraphAtCursor(cursor, inline))
+      continue
+    }
     if (/^(?::::|::)/.test(first.text) && !/^:{3,}(?: *\t| +\{)/.test(first.text)) {
       throw new UnsupportedCursorSyntax(`block at line ${first.number}`)
     }
