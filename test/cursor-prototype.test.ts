@@ -469,7 +469,8 @@ describe('experimental block cursor', () => {
 
   it('declines a multiline footnote until its body collector is migrated', () => {
     expect(() => parseCursorPrototype('[^f]: note\n  # heading\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('[^f]: note\n\n\n  more\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('[^f]: note\n\n\n  more\n'))
+      .toStrictEqual(parse('[^f]: note\n\n\n  more\n'))
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: %% comment\n')).toThrow(UnsupportedCursorSyntax)
   })
@@ -696,6 +697,11 @@ describe('experimental block cursor', () => {
   it.each(['[^n]: First paragraph.\n\n    Second paragraph.\n',
     '[^n]: first\n   continuation\n'])
   ('keeps a simply indented footnote paragraph at its source column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a plain footnote paragraph after several blank lines', () => {
+    const source = '[^n]: first\n\n\n\n    second\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

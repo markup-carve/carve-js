@@ -1189,19 +1189,19 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
   const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
-  const separated = hasBodyLine && nextIndex === 2
+  const separated = hasBodyLine && nextIndex > 1
   let bodyLength = 0
   if (hasBodyLine) {
     while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength))) bodyLength++
   }
   if (!footnote[2] || (footnote[2] !== '{empty}' && isBlockStart(footnote[2])) ||
-      (hasBodyLine && (nextIndex > 2 || footnote[2] === '{empty}' ||
+      (hasBodyLine && (footnote[2] === '{empty}' ||
       bodyLength === 0 ||
       (cursor.peek(nextIndex + bodyLength) && cursor.peek(nextIndex + bodyLength)!.text !== '')))) {
     throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
   }
   cursor.take()
-  if (separated) cursor.take()
+  if (separated) for (let i = 1; i < nextIndex; i++) cursor.take()
   const continuation: SourceLine[] = []
   for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
   const plusFollower = cursor.peek()?.text === '+' ? cursor.peek(1) : undefined
