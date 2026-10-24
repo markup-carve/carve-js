@@ -643,6 +643,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- apples\n\n\n\n  still apples\n',
+    '- apples\n\n\n\n- oranges\n'])
+  ('uses the follower to end a long list blank run: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
   ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

@@ -753,6 +753,10 @@ function sameListKind(marker: NonNullable<ReturnType<typeof listMarker>>,
     marker.bullet === frame.bullet && isTaskMarkerContent(marker.content) === frame.taskList
 }
 
+function endsListBlankRun(blanks: number, next: SourceLine | undefined): boolean {
+  return next === undefined || (blanks >= 3 && listMarker(next.text) !== undefined)
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -912,13 +916,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (line.text === '') {
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
-      const next = cursor.peek(blanks)
+      const next = cursor.peek(blanks)!
       if (top.fenceMarker && next && top.contentColumn !== undefined &&
           next.text.startsWith(' '.repeat(top.contentColumn - 1))) {
         for (let i = 0; i < blanks; i++) appendBody(top, cursor.take(), 0)
         continue
       }
-      if (blanks >= 3 || !next) break
+      if (endsListBlankRun(blanks, next)) break
       const nextMarker = listMarker(next.text)
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
       const sibling = nextMarker && target && sameListKind(nextMarker, target)
