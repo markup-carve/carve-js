@@ -52,8 +52,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a data-only table until its block ownership is migrated', () => {
-    expect(() => parseCursorPrototype('| a | b |\n')).toThrow(UnsupportedCursorSyntax)
+  it('parses a standalone data-only table and declines one embedded in other blocks', () => {
+    for (const source of ['| a | b |\n', '| a | b |\n| c | d |\n',
+      '| a |\n', '| --- | --- |\n| 1 | 2 |\n', '| a | b |\n\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
+    expect(() => parseCursorPrototype('# Before\n\n| a | b |\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('\n| a | b |\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('| a | b |\n\n| c | d |\n')).toThrow(UnsupportedCursorSyntax)
   })
 
   it.each([

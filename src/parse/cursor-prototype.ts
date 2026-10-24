@@ -282,7 +282,10 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
   const second = cursor.peek(1)?.text
   const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
   if (gfm) return parseSimpleTable(cursor, inline)
-  if (!first.text.startsWith('|= ') || pendingAttrs) {
+  const headed = first.text.startsWith('|= ')
+  const standalone = !headed && first.text.startsWith('| ') && cursor.at === 0 && cursor.lines.every((line) =>
+    line.text === '' || line.text.startsWith('|'))
+  if ((!headed && !standalone) || pendingAttrs) {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
   if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
