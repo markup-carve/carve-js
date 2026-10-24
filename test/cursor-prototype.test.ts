@@ -119,6 +119,11 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['| a | b\n', '|\n'])
+  ('keeps an invalid pipe row as paragraph text: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

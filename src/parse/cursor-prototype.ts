@@ -17,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -243,7 +243,7 @@ function isBlockStart(line: string): boolean {
     ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
     RE_RAW_FENCE.test(line) ||
     BREAK.test(line) || !!listMarker(line) ||
-    RE_BLOCKQUOTE.test(line) || line.startsWith('|') || line.startsWith('::') ||
+    RE_BLOCKQUOTE.test(line) || isTableRow(line) || line.startsWith('::') ||
     rootLinkDef(line) !== null || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
@@ -1193,7 +1193,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         pos: position(first, caption.line) } : quote)
       continue
     }
-    if (first.text.startsWith('|')) {
+    if (isTableRow(first.text)) {
       const table = parseTableAtCursor(cursor, inline)
       const caption = takeCaption(cursor, inline)
       if (caption) {
