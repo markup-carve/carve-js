@@ -474,6 +474,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   const first = cursor.peek()!
   let end = cursor.at
   let mayWrapDefinition = false
+  let mayWrapTerm = false
+  let mayTermPlus = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
     const term = /^:: +[^ \t].*$/.test(text)
@@ -481,7 +483,23 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     if (term || definition) {
       if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
       mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
+      mayWrapTerm = term
+      mayTermPlus = term
       end++
+      continue
+    }
+    if (mayWrapTerm && /^ {1,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
+        (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '' ||
+          /^: +[^ \t]/.test(cursor.lines[end + 1]!.text) ||
+          (cursor.lines[end + 1]!.text === '+' &&
+            /^: +[^ \t]/.test(cursor.lines[end + 2]?.text ?? '')))) {
+      end++
+      mayWrapTerm = false
+      continue
+    }
+    if (mayTermPlus && text === '+' && /^: +[^ \t]/.test(cursor.lines[end + 1]?.text ?? '')) {
+      end++
+      mayTermPlus = false
       continue
     }
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
@@ -520,8 +538,19 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         items.push(current)
       }
       const column = line.text.length - term[1]!.length + 1
-      current.terms.push(inline.inlines([{ line, column, text: term[1]! }]))
-      current.termSpans.push(position(line, line))
+      const parts: ContentLine[] = [{ line, column, text: term[1]! }]
+      let termLast = line
+      if (cursor.at < end && /^ {1,3}[A-Za-z0-9]/.test(cursor.peek()!.text)) {
+        termLast = cursor.take()
+        parts.push({ line: termLast, column: 1, text: termLast.text })
+      }
+      if (cursor.at < end && cursor.peek()!.text === '+') {
+        termLast = cursor.take()
+        parts.push({ line: termLast, column: 1, text: termLast.text })
+      }
+      current.terms.push(inline.inlines(parts))
+      current.termSpans.push(position(line, termLast))
+      last = termLast
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
       const blockBody = isBlockStart(definition[1]!)
@@ -554,7 +583,6 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       current.definitions.at(-1)!.push(paragraph)
       last = follower
     } else throw new UnsupportedCursorSyntax('definition list body')
-    if (term) last = line
   }
   return { type: 'definition_list', items, pos: position(first, last) }
 }
