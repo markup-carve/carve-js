@@ -772,6 +772,23 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   return next !== undefined && next.indent === top.indent && sameListKind(next, top)
 }
 
+function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarker>>,
+  top: { indent: number; contentColumn?: number; fenceMarker: string | undefined; body: SourceLine[] },
+  depth: number, lineNumber: number): boolean {
+  return depth === 0 && !top.fenceMarker && top.contentColumn !== undefined &&
+    marker.indent > top.indent && marker.indent < top.contentColumn - 1 &&
+    top.body.at(-1)?.number === lineNumber - 1 && plainQuoteText(top.body.at(-1)?.text ?? '')
+}
+
+function updateListFrameEnds(frames: Array<{ last: SourceLine; indent: number;
+  item?: ListItem; itemFirst?: SourceLine }>, line: SourceLine,
+listSpan: (from: SourceLine, to: SourceLine, column: number) => Position): void {
+  for (const frame of frames) {
+    frame.last = line
+    if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
+  }
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -875,6 +892,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (marker) {
+      if (isBelowListMarkerColumn(marker, top, depth, line.number)) {
+        cursor.take()
+        appendBody(top, line, 0)
+        updateListFrameEnds(stack, line, listSpan)
+        continue
+      }
       if (marker.indent < firstMarker.indent) break
       if (marker.indent > top.indent && top.contentColumn !== undefined &&
           top.body.length > 0 && listMarker(top.body[0]!.text) &&
@@ -922,10 +945,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         current.last = firstBlock.line
         item.pos = listSpan(line, firstBlock.line, marker.indent + 1)
       }
-      for (const frame of stack) {
-        frame.last = firstBlock?.line ?? line
-        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.indent + 1)
-      }
+      updateListFrameEnds(stack, firstBlock?.line ?? line, listSpan)
       continue
     }
     if (line.text === '') {
@@ -992,10 +1012,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (mayFoldNestedListParagraph(cursor, top, stack.length, depth)) {
       cursor.take()
       appendBody(top, line, 0)
-      for (const frame of stack) {
-        frame.last = line
-        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
-      }
+      updateListFrameEnds(stack, line, listSpan)
       continue
     }
     if (!line.text.startsWith(prefix)) {
@@ -1015,10 +1032,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     cursor.take()
     appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
       listContinuationPrefix(line.text, bodyPrefix) : bodyPrefix)
-    for (const frame of stack) {
-      frame.last = line
-      if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
-    }
+    updateListFrameEnds(stack, line, listSpan)
   }
   for (let i = stack.length - 1; i >= 0; i--) {
     const frame = stack[i]!
