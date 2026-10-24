@@ -72,6 +72,18 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('matches position-free and frontmatter-format parse options', () => {
+    for (const source of ['# Heading\n', '- a\n- b\n', '\ufeff# Heading\r\n']) {
+      expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+        parse(source, { positions: false }))
+    }
+    const frontmatter = '---\ntitle: X\n---\nText\n'
+    expect(parseCursorPrototype(frontmatter, { defaultFrontmatterFormat: 'toml' })).toStrictEqual(
+      parse(frontmatter, { defaultFrontmatterFormat: 'toml' }))
+    expect(() => parseCursorPrototype('Text\n', { onUnclosedContainer: () => {} }))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('replaces lone surrogates before scanning without changing raw byte length', () => {
     for (const source of ['a\ud800b\n', '# H\udfff\n', '- a\ud800\n- b\n']) {
       expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

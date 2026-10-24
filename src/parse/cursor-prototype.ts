@@ -2,7 +2,7 @@ import type { Attrs, BlockNode, BlockQuote, CodeBlock, DefinitionItem, Definitio
 import type { InlineSource } from '../parse.js'
 import { GENERATED_CONTENT_KINDS } from '../ast.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
-import { toCodepointPositions } from '../source/source-positions.js'
+import { dropPositions, toCodepointPositions } from '../source/source-positions.js'
 import { normalizeRefLabel } from '../label-key.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
@@ -18,6 +18,7 @@ import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
+import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
@@ -1194,7 +1195,12 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   return children
 }
 
-export function parseCursorPrototype(source: string): Document {
+export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
+  if (opts.extensions?.length || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
+      opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata ||
+      opts.onDanglingBlockAttributes) {
+    throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
+  }
   const rawSource = source
   const rawByteLength = utf8ByteLength(source)
   const strippedBom = source.charCodeAt(0) === 0xfeff
@@ -1242,6 +1248,7 @@ export function parseCursorPrototype(source: string): Document {
   let frontmatter: Document['frontmatter']
   if (source.startsWith('---')) {
     const lexer = lexerForCursor(cursor)
+    lexer.defaultFrontmatterFormat = opts.defaultFrontmatterFormat ?? 'yaml'
     lexer.consumeFrontmatter()
     cursor.at = lexer.pos
     frontmatter = lexer.frontmatter
@@ -1255,8 +1262,8 @@ export function parseCursorPrototype(source: string): Document {
   }
   if (frontmatter) document.frontmatter = frontmatter
   children.push(...definitionNodes)
-  toCodepointPositions(document, rawSource)
+  if (opts.positions !== false) toCodepointPositions(document, rawSource)
   if (inline.hasLeadingImage) promoteBlockImages(children, true)
   document.children = promoteCitationDefinitions(children)
-  return document
+  return opts.positions === false ? dropPositions(document) : document
 }
