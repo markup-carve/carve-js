@@ -15,7 +15,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, deriveTableMetadata, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
 import { parseTableBlock } from './parse-core.js'
 
@@ -314,14 +314,13 @@ function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInli
   return table
 }
 
-function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
-  pendingAttrs: Attrs | null): Table {
+function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number): Table {
   const first = cursor.peek()!
   const second = cursor.peek(1)?.text
   const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
   if (gfm) return parseSimpleTable(cursor, inline)
   const headed = first.text.startsWith('|=')
-  if (!first.text.startsWith('|') || pendingAttrs ||
+  if (!first.text.startsWith('|') ||
       (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '')) {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
@@ -709,6 +708,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       code.attrs = { ...(code.attrs ?? {}),
         keyValues: { ...(code.attrs?.keyValues ?? {}), title: code.header } }
     }
+    if (node.type === 'table') deriveTableMetadata(node)
     consumeLooseKey(node)
     children.push(node)
   }
@@ -828,7 +828,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (first.text.startsWith('|')) {
-      const table = parseTableAtCursor(cursor, inline, depth, pendingAttrs)
+      const table = parseTableAtCursor(cursor, inline, depth)
       const caption = takeCaption(cursor, inline)
       if (caption) {
         table.caption = caption.children

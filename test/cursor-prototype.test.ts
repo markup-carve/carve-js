@@ -73,6 +73,7 @@ describe('experimental block cursor', () => {
     '# Before\n\n|= A |\n| b |\n',
     '|= A |\n\nText\n\n|= B |\n',
     '|= A |\n^ Table #\n',
+    '{aligns="right"}\n|= A |\n', '{#id .table}\n|= A |\n',
     '|= A |\n^ First #\nsecond\n',
     '| a |\n^ caption\ncontinued\n',
     '# Before\n\n|= A |\n| b |\n^ Caption\n',
@@ -82,7 +83,6 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
-    '{aligns="right"}\n|= A |\n',
     '> |= A |\n',
     '> +\n|= 2-col header | < |= header |\n',
   ])('declines table forms whose container ownership is not migrated: %s', (source) => {
