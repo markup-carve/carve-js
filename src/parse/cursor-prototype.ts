@@ -17,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -1074,6 +1074,20 @@ function parseSigilFence(cursor: Cursor, inline: CursorInline, definitionNodes: 
     pos: position(first, caption.line) } : quote
 }
 
+function takeBlockAttrsAtCursor(cursor: Cursor, atDocumentLevel: boolean): Attrs | null {
+  const first = cursor.peek()!
+  if (first.text[0] !== '{') return null
+  const oneLine = parseBlockAttributeRun(first.text)
+  if (oneLine) { cursor.take(); return oneLine }
+  if (!atDocumentLevel) return null
+  const lexer = lexerForCursor(cursor)
+  lexer.pos = cursor.at
+  const wrapped = probeBlockAttributes(lexer)
+  if (!wrapped) return null
+  for (let i = 0; i < wrapped.count; i++) cursor.take()
+  return wrapped.attrs
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -1111,9 +1125,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   while (cursor.peek()) {
     const first = cursor.peek()!
     if (isBlankLine(first.text)) { cursor.take(); continue }
-    const attrs = first.text.startsWith('{') ? parseBlockAttributeRun(first.text) : null
+    const attrs = takeBlockAttrsAtCursor(cursor, atDocumentLevel)
     if (attrs) {
-      cursor.take()
       pendingAttrs = pendingAttrs ? mergeAttrs(pendingAttrs, attrs) : attrs
       continue
     }

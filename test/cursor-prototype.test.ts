@@ -154,6 +154,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- a\n{.c\n}\n~~~\ny\n~~~\n',
+    '- a\n{.c\n.d}\npara\n',
+  ])('collects wrapped root block attributes before the following block: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
     'text\n```js\ncode\n```\n',
