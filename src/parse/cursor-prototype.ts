@@ -334,11 +334,22 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {
   const first = cursor.peek()!
   let end = cursor.at
+  let mayWrapDefinition = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
-    if (!(/^:: +\S.*$/.test(text) || /^: +\S.*$/.test(text))) break
-    if (text !== text.trimEnd()) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
-    end++
+    const term = /^:: +\S.*$/.test(text)
+    const definition = /^: +\S.*$/.test(text)
+    if (term || definition) {
+      if (text !== text.trimEnd()) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
+      mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
+      end++
+      continue
+    }
+    if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && text === text.trimEnd() &&
+        (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
+      end++
+    }
+    break
   }
   if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '')) {
     throw new UnsupportedCursorSyntax('definition list body')
@@ -369,13 +380,23 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): Defini
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
       if (isBlockStart(definition[1]!)) throw new UnsupportedCursorSyntax('definition block body')
+      const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
+      let definitionLast = line
+      if (cursor.at < end && !/^(?:::|:) +\S/.test(cursor.peek()!.text)) {
+        const follower = cursor.take()
+        const followerColumn = /^ */.exec(follower.text)![0].length + 1
+        parts.push({ line: follower, column: followerColumn,
+          text: follower.text.slice(followerColumn - 1) })
+        definitionLast = follower
+      }
       current.definitions.push([{ type: 'paragraph',
-        children: inline.inlines([{ line, column, text: definition[1]! }]),
-        pos: position(line, line, column) }])
+        children: inline.inlines(parts),
+        pos: position(line, definitionLast, column) }])
       current.definitionLines.push(line.number)
       current.definitionSpans.push(position(line, line))
+      last = definitionLast
     } else throw new UnsupportedCursorSyntax('definition list body')
-    last = line
+    if (term) last = line
   }
   return { type: 'definition_list', items, pos: position(first, last) }
 }
