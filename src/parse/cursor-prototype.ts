@@ -1,4 +1,4 @@
-import type { Attrs, BlockNode, BlockQuote, CodeBlock, Document, HeadingLevel, InlineNode, List, ListItem, Paragraph, Position, Table, TableRow } from '../ast.js'
+import type { Attrs, BlockNode, BlockQuote, CodeBlock, DefinitionItem, DefinitionList, Document, HeadingLevel, InlineNode, List, ListItem, Paragraph, Position, Table, TableRow } from '../ast.js'
 import { GENERATED_CONTENT_KINDS } from '../ast.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
 import { toCodepointPositions } from '../source/source-positions.js'
@@ -290,6 +290,44 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
   }
   if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
   return parseCanonicalTable(cursor, inline)
+}
+
+function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {
+  const first = cursor.peek()!
+  if (cursor.at !== 0 || !cursor.lines.every((line) =>
+    line.text === line.text.trimEnd() &&
+    (/^:: +\S.*$/.test(line.text) || /^: +\S.*$/.test(line.text)))) {
+    throw new UnsupportedCursorSyntax('definition list body')
+  }
+  const items: DefinitionItem[] = []
+  type CompleteSpans = DefinitionItem & {
+    termSpans: Position[]; definitionLines: number[]; definitionSpans: Position[] }
+  let current: CompleteSpans | undefined
+  let last = first
+  while (cursor.peek()) {
+    const line = cursor.take()
+    const term = /^:: +(\S.*)$/.exec(line.text)
+    const definition = /^: +(\S.*)$/.exec(line.text)
+    if (term) {
+      if (!current || current.definitions.length) {
+        current = { terms: [], definitions: [], termSpans: [], definitionLines: [], definitionSpans: [] }
+        items.push(current)
+      }
+      const column = line.text.length - term[1]!.length + 1
+      current.terms.push(inline.inlines([{ line, column, text: term[1]! }]))
+      current.termSpans.push(position(line, line))
+    } else if (definition && current) {
+      const column = line.text.length - definition[1]!.length + 1
+      if (isBlockStart(definition[1]!)) throw new UnsupportedCursorSyntax('definition block body')
+      current.definitions.push([{ type: 'paragraph',
+        children: inline.inlines([{ line, column, text: definition[1]! }]),
+        pos: position(line, line, column) }])
+      current.definitionLines.push(line.number)
+      current.definitionSpans.push(position(line, line))
+    } else throw new UnsupportedCursorSyntax('definition list body')
+    last = line
+  }
+  return { type: 'definition_list', items, pos: position(first, last) }
 }
 
 function takeCaption(cursor: Cursor, inline: CursorInline):
@@ -685,6 +723,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       const node: BlockNode = GENERATED_CONTENT_KINDS.has(kind) ?
         { type: 'directive', kind, children, pos } : { type: 'admonition', kind, children, pos }
       emit(node)
+      continue
+    }
+    if (/^:: +\S/.test(first.text) && atDocumentLevel) {
+      emit(parseSimpleDefinitionList(cursor, inline))
       continue
     }
     if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)

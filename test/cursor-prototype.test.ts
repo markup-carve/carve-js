@@ -101,6 +101,17 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([':: t\n', ':: t\n: d\n', ':: t\n:  d\n',
+    ':: t\n: d\n:: u\n: e\n', ':: a\n:: b\n: c\n'])
+  ('parses a standalone simple definition list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a definition body with trailing whitespace until its span rule is migrated', () => {
+    expect(() => parseCursorPrototype(':: term\n: body  \n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype(':: term\n\n: body\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [+] plain\n'])
   ('preserves authored task list state: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
