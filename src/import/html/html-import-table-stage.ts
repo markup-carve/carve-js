@@ -137,6 +137,8 @@ export class TableStage {
    *
    * ONLY WHERE THE VALUE AGREES. A body cell that differs from its column keeps
    * its own marker, because that is the only thing that overrides the default.
+   * If any body cell lacks a head alignment, the head marker must stay local;
+   * return true so the writer spells that head with `header-rows` instead.
    *
    * The column walk is the renderer's: a header cell seeds only its starting
    * column, while a rowspan holds its columns in the rows below. Among
@@ -158,9 +160,10 @@ export class TableStage {
   private dropInheritedCellAlignment(
     built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
     leadingHeaderRows: number,
-  ): void {
-    if (leadingHeaderRows === 0) return
+  ): boolean {
+    if (leadingHeaderRows === 0) return false
     const columns: Array<{ align?: string; valign?: string }> = []
+    const bodyCells: Array<{ cell: TableCell; column: number }> = []
     const held = new Map<number, number>()
     const opened = new Map<number, number>()
     const walk = (row: Array<{ cell: TableCell; colspan: number; rowspan: number }>, visit: (entry: { cell: TableCell; colspan: number; rowspan: number }, column: number) => void): void => {
@@ -191,11 +194,18 @@ export class TableStage {
           if (entry.cell.valign) columns[column]!.valign = entry.cell.valign
           return
         }
-        if (entry.cell.align && columns[column]?.align === entry.cell.align) delete entry.cell.align
-        if (entry.cell.valign && columns[column]?.valign === entry.cell.valign) delete entry.cell.valign
+        bodyCells.push({ cell: entry.cell, column })
       })
       endOfRow()
     }
+    const localHeadAlignment = bodyCells.some(({ cell, column }) =>
+      (columns[column]?.align && !cell.align) || (columns[column]?.valign && !cell.valign))
+    if (localHeadAlignment) return true
+    for (const { cell, column } of bodyCells) {
+      if (cell.align && columns[column]?.align === cell.align) delete cell.align
+      if (cell.valign && columns[column]?.valign === cell.valign) delete cell.valign
+    }
+    return false
   }
 
   run(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
@@ -310,6 +320,13 @@ export class TableStage {
       }
       leadingHeaderRows += 1
     }
+    // An explicit thead ends the table head even if the next tbody opens
+    // with th cells. Those cells are body-group headers, not column defaults.
+    let columnHeadRows = leadingHeaderRows
+    if (tr.length > 0 && domTag(group.get(tr[0]!)) === 'thead') {
+      const end = tr.findIndex(row => domTag(group.get(row)) !== 'thead')
+      columnHeadRows = end === -1 ? tr.length : end
+    }
 
     // How many rows are left in each row's own group, INCLUDING it. Computed
     // once: asking per cell meant scanning the whole table for each one, which
@@ -408,7 +425,7 @@ export class TableStage {
         return { cell: built, colspan, rowspan }
       }),
     )
-    this.dropInheritedCellAlignment(built, leadingHeaderRows)
+    const localHeadAlignment = this.dropInheritedCellAlignment(built, columnHeadRows)
     // A `<tr>`'s own attributes have a slot - `table_row.attrs`, which the
     // writer spells on the closing pipe and every renderer emits on the `<tr>`
     // - and went in silence before this.
@@ -429,6 +446,7 @@ export class TableStage {
       for (let r = rows.length - 1; r >= 0; r--) {
         if (rows[r]!.cells.length > 0) continue
         if (r < leadingHeaderRows) leadingHeaderRows -= 1
+        if (r < columnHeadRows) columnHeadRows -= 1
         this.context.report.add('structure-unspellable', 'Dropped a row with no cells: Carve has no spelling for it', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
         rows.splice(r, 1)
         group.delete(tr[r]!)
@@ -440,8 +458,16 @@ export class TableStage {
     }
     const unspellableBefore = this.context.unspellable.length
     const rowGroups = this.rowGroups.run(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
+    const tableAttrs = localHeadAlignment
+      ? { ...(attrs ?? {}), keyValues: { ...(attrs?.keyValues ?? {}), 'header-rows': String(columnHeadRows) } }
+      : attrs
+    if (localHeadAlignment && this.context.writing && !listForm) {
+      for (const row of rows.slice(0, columnHeadRows)) {
+        for (const cell of row.cells) cell.header = false
+      }
+    }
     if (rowGroups) {
-      const table: Table = { type: 'table', rows, rowGroups, ...(attrs ? { attrs } : {}) }
+      const table: Table = { type: 'table', rows, rowGroups, ...(tableAttrs ? { attrs: tableAttrs } : {}) }
       if (listForm || !preservesTableRowGroups(table, tableSourceAttrs(table))) {
         this.context.unspellable.push({ node, path, message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows' })
       }
@@ -502,7 +528,7 @@ export class TableStage {
       return listTableOf(kept, ownAlignment, caption, attrs, this.context.writing)
     }
     const separatorWidths = this.separatorWidths(node, path)
-    return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+    return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(tableAttrs ? { attrs: tableAttrs } : {}) }
   }
 
   /**

@@ -4179,7 +4179,11 @@ class CarveRenderSession {
     const authored = authoredSeparator(node)
     const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
     let separator = needsDelimiter
-      ? authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`
+      ? authored ?? `|${first!.cells.map(cell => {
+        const left = cell.align === 'left' || cell.align === 'center' ? ':' : ''
+        const right = cell.align === 'right' || cell.align === 'center' ? ':' : ''
+        return `${left}---${right}`
+      }).join('|')}|`
       : undefined
 
     node.rows.forEach((row, rowIndex) => {
@@ -4191,10 +4195,10 @@ class CarveRenderSession {
         // In the delimiter form the promoted row is written as ordinary data
         // cells - the row after it is what makes them headers.
         const asHeader = !(needsDelimiter && rowIndex === 0)
-        // The authored separator spells the alignment in its own colons, so the
-        // cell marker would be a second spelling of it and the bytes would not
-        // be the ones the author wrote. Both re-parse to the same alignment.
-        const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
+        // The separator carries horizontal defaults in colons, including a
+        // generated separator. A second marker on the head cell is redundant.
+        const colonSpelled = needsDelimiter && rowIndex === 0 &&
+          (authored === undefined || cellIndex < node.separatorWidths!.length)
         let rendered = this.renderTableCell(cell, ctx, asHeader, colonSpelled)
         if (cell.span && cell.children?.length) {
           if (!row.continuationLines) throw new SourceUnspellableError('table_cell', 'a span cell with text needs a continuation line', cell)
