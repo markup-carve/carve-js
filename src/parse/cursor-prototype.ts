@@ -7,11 +7,12 @@ import { normalizeRefLabel } from '../label-key.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
-import { dropTrailingWhitespace } from './block/parse-block-boundaries.js'
+import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
+import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
@@ -94,8 +95,8 @@ class CursorInline extends InlineParseSession {
   hasLeadingImage = false
   constructor(readonly linkDefinitions: Map<string, LinkDef>,
     readonly abbreviations: Map<string, string>) { super() }
-  tableInlines(text: string, source?: InlineSource): InlineNode[] {
-    return this.parseInline(text, this.abbreviations, this.linkDefinitions, source)
+  tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
+    return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
   }
   inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
     const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
@@ -290,12 +291,17 @@ function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInli
     parseInline: (text, _abbrDefs, _linkDefs, source) => inline.tableInlines(text, source),
     recordAttachedCaption: () => {},
     parseCaptionInline: (tableLexer, text) => {
-      const line = cursor.lines[tableLexer.pos - 1]
-      if (!line || tableLexer.peek()?.trim()) {
-        throw new UnsupportedCursorSyntax('multiline canonical table caption')
-      }
-      const column = line.text.length - text.length + 1
-      return inline.inlines([{ line, column, text }], true)
+      const capIndex = tableLexer.pos - 1
+      const line = tableLexer.lineAt(capIndex)
+      if (!line?.endsWith(text)) throw new UnsupportedCursorSyntax('table caption source')
+      const within = line.length - text.length
+      const anchors = [{ offset: tableLexer.lineOffset(capIndex) + within,
+        column: tableLexer.lineStartColumn(capIndex) + within,
+        line: tableLexer.lineNumber(capIndex) }]
+      const content = readCaptionText(tableLexer, text, anchors)
+      return inline.tableInlines(content, inlineSource({ anchored: true,
+        baseOffset: anchors[0]!.offset, startLine: anchors[0]!.line,
+        startColumn: anchors[0]!.column, lineAnchors: anchors }), true)
     },
   }, lexer)
   if (table.type !== 'table' || lexer.pos <= cursor.at) {
