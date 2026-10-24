@@ -758,6 +758,20 @@ function endsListBlankRun(blanks: number, next: SourceLine | undefined, rootInde
   return next === undefined || (blanks >= 3 && marker !== undefined && marker.indent <= rootIndent)
 }
 
+function startsNestedListAfterLongBlankRun(blanks: number,
+  marker: ReturnType<typeof listMarker>, rootIndent: number): boolean {
+  return blanks >= 3 && marker !== undefined && marker.indent > rootIndent
+}
+
+function mayFoldNestedListParagraph(cursor: Cursor,
+  top: { indent: number; ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
+    body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
+  if (depth !== 0 || stackLength < 2 || top.fenceMarker ||
+      !plainQuoteText(cursor.peek()!.text) || !plainQuoteText(top.body.at(-1)?.text ?? '')) return false
+  const next = listMarker(cursor.peek(1)?.text ?? '')
+  return next !== undefined && next.indent === top.indent && sameListKind(next, top)
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -925,7 +939,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (endsListBlankRun(blanks, next, firstMarker.indent)) break
       const nextMarker = listMarker(next.text)
-      if (blanks >= 3 && nextMarker && nextMarker.indent > firstMarker.indent) {
+      if (startsNestedListAfterLongBlankRun(blanks, nextMarker, firstMarker.indent)) {
         while (stack.length > 1) {
           const done = stack.pop()!
           flush(done)
@@ -975,6 +989,15 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
+    if (mayFoldNestedListParagraph(cursor, top, stack.length, depth)) {
+      cursor.take()
+      appendBody(top, line, 0)
+      for (const frame of stack) {
+        frame.last = line
+        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
+      }
+      continue
+    }
     if (!line.text.startsWith(prefix)) {
       rejectListQuoteBoundary(top.body, line)
       break
