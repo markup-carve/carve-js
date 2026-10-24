@@ -145,6 +145,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('retains reference-image promotion inside a quote', () => {
+    const source = '> ![a][p]\n> ^ Cap\n\n[p]: /a\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '![alt](photo.png)\n^ Caption\n',
     '![alt](photo.png)\n\n^ Caption\n',

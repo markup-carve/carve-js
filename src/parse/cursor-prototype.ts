@@ -86,6 +86,8 @@ function position(first: SourceLine, last: SourceLine, firstColumn = 1, lastColu
 type ContentLine = { line: SourceLine; column: number; text: string }
 
 class CursorInline extends InlineParseSession {
+  // Image promotion only changes paragraphs whose first inline node is an image.
+  hasLeadingImage = false
   constructor(private readonly linkDefinitions: Map<string, LinkDef>,
     private readonly abbreviations: Map<string, string>) { super() }
   inlines(parts: ContentLine[]): InlineNode[] {
@@ -96,13 +98,15 @@ class CursorInline extends InlineParseSession {
         column: (part.line.baseColumn ?? 1) + part.column - 1, line: part.line.number }
       return anchor
     })
-    return this.parseInline(text, this.abbreviations, this.linkDefinitions, {
+    const nodes = this.parseInline(text, this.abbreviations, this.linkDefinitions, {
       anchored: true,
       baseOffset: first.line.start + first.column - 1,
       startLine: first.line.number,
       startColumn: (first.line.baseColumn ?? 1) + first.column - 1,
       ...(parts.length > 1 ? { lineAnchors } : {}),
     })
+    if (nodes[0]?.type === 'image') this.hasLeadingImage = true
+    return nodes
   }
 }
 
@@ -769,7 +773,7 @@ export function parseCursorPrototype(source: string): Document {
   if (frontmatter) document.frontmatter = frontmatter
   children.push(...definitionNodes)
   toCodepointPositions(document, source)
-  promoteBlockImages(children, true)
+  if (inline.hasLeadingImage) promoteBlockImages(children, true)
   document.children = promoteCitationDefinitions(children)
   return document
 }
