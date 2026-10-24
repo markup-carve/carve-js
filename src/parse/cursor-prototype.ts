@@ -231,6 +231,7 @@ function listMarker(line: string) {
 function isBlockStart(line: string): boolean {
   return (line[0] === '#' && RE_HEADING.test(line)) ||
     ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
+    RE_RAW_FENCE.test(line) ||
     BREAK.test(line) || !!listMarker(line) ||
     line.startsWith('>') || line.startsWith('|') || line.startsWith('::') ||
     LINK_DEF.test(line) || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
@@ -513,7 +514,9 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
 }
 
 function parseRawAtCursor(cursor: Cursor): BlockNode {
-  if (cursor.owner.inList) throw new UnsupportedCursorSyntax('list raw block')
+  if (cursor.owner.inList && cursor.at === 0) {
+    throw new UnsupportedCursorSyntax('marker-line raw block')
+  }
   const first = cursor.peek()!
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
@@ -610,9 +613,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.fencePrefix = undefined
       }
     } else {
-      const opener = fenceOpen(text)
-      if (opener) {
-        frame.fenceMarker = opener.marker
+      const marker = RE_RAW_FENCE.exec(text)?.[1] ?? fenceOpen(text)?.marker
+      if (marker) {
+        frame.fenceMarker = marker
         frame.fencePrefix = prefix
       }
     }

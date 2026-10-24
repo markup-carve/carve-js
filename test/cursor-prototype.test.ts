@@ -181,6 +181,19 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '- a\n\n  ```=latex\n  \\x\n  ```\n',
+    '- a\n\n  ```=latex\n  \\x\n  ```\n\n  c\n',
+    '- a\n\n  ```=html\n  <x>\n  ```\n',
+  ])('keeps raw-fence boundaries and list spacing separate: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a raw fence on an item marker until its payload column is mapped', () => {
+    expect(() => parseCursorPrototype('- ```=html\n  <x>\n  ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('assigns a lazy quote line to a quote inside a named container', () => {
     const source = '::: note\n> a\nb\n:::\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
