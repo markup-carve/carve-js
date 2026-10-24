@@ -574,10 +574,7 @@ export function trackQuoteHostFence(
       closeBlockQuoteParagraph(state)
       return true
     }
-    if (state.attrRun !== null) {
-      state.mode = { kind: 'paragraph', absorbingFence: false, itemParagraph: true }
-      return true
-    }
+    state.hostAttrTracked = true
   }
   const defined = trackHostDefinitions(q, b)
   if (defined !== undefined) return defined
@@ -591,6 +588,7 @@ export function trackQuoteHostFence(
 }
 
 export interface BlockQuoteLazyState {
+  hostAttrTracked?: boolean
   hosts?: QuoteFenceHosts
   mode: BlockQuoteLazyMode
   /**
@@ -702,6 +700,7 @@ export function trackBlockQuoteLazyState(
   let literalDepth = 0
   const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
   for (;;) {
+    level.hostAttrTracked = false
     const descend = classifyQuotedLine(
       text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo, atColumn,
       hasLiteralCommentCloser === undefined ? commentCloser : (width, floor) => {
@@ -820,7 +819,7 @@ export function classifyQuotedLine(
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
   // same way.
-  if (trackWrappedAttributeRun(state, content)) {
+  if (!state.hostAttrTracked && trackWrappedAttributeRun(state, content)) {
     closeBlockQuoteParagraph(state)
     return null
   }
