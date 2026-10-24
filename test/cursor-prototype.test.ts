@@ -160,6 +160,7 @@ describe('experimental block cursor', () => {
   it.each([
     '- ```\n  a\n\n  b\n  ```\n',
     '- ```\n  - x\n  ```\n',
+    '- ```\n    # H\n  ```\n',
     '- a\n\n  b\n',
   ])('keeps a list item body intact across its lines: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -167,7 +168,8 @@ describe('experimental block cursor', () => {
 
   it.each(['- a\n\n  > q\n', '- a\n\n  # H\n',
     '- a\n\n  b\n', '- > a\n\n  > b\n',
-    '- a\n\n  {.x}\n  b\n', '- a\n\n  {.x}\n  # H\n'])
+    '- a\n\n  {.x}\n  b\n', '- a\n\n  {.x}\n  # H\n',
+    '- a\n    > q\n', '1. one\n\n    > q\n', '- a\n    # H\n'])
   ('classifies a blank before a new item block: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

@@ -170,6 +170,13 @@ function isBlockStart(line: string): boolean {
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
 
+function listContinuationPrefix(line: string, base: number): number {
+  let column = base
+  while (line[column] === ' ') column++
+  const block = line.slice(column)
+  return column > base && (block.startsWith('>') || HEADING.test(block)) ? column : base
+}
+
 function pipeSegments(line: SourceLine): Array<{ text: string; from: number; to: number }> {
   if (!line.text.startsWith('|') || !line.text.endsWith('|')) throw new UnsupportedCursorSyntax('table edge')
   if (line.text.includes('\\|')) throw new UnsupportedCursorSyntax('escaped table pipe')
@@ -390,12 +397,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           next.text.startsWith(' '.repeat(continuationFrame.contentColumn - 1 + firstNested.width))
         const prefixLength = continuationFrame.contentColumn! - 1
         let lookahead = 0
-        let blockText = next.text.slice(prefixLength)
+        let blockText = next.text.slice(listContinuationPrefix(next.text, prefixLength))
         while (parseBlockAttributeRun(blockText)) {
           lookahead++
           const following = cursor.peek(lookahead)
           if (!following?.text.startsWith(' '.repeat(prefixLength))) break
-          blockText = following.text.slice(prefixLength)
+          blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
         if (!nestedContinuation && !isBlockStart(blockText)) continuationFrame.list.tight = false
       } else if (sibling) target.list.tight = false
@@ -406,7 +413,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const prefix = ' '.repeat(contentColumn - 1)
     if (!line.text.startsWith(prefix)) break
     cursor.take()
-    appendBody(top, line, prefix.length)
+    appendBody(top, line, top.fenceMarker ? prefix.length : listContinuationPrefix(line.text, prefix.length))
     for (const frame of stack) {
       frame.last = line
       if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)
