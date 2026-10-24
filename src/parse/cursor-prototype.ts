@@ -90,7 +90,7 @@ class CursorInline extends InlineParseSession {
   hasLeadingImage = false
   constructor(private readonly linkDefinitions: Map<string, LinkDef>,
     private readonly abbreviations: Map<string, string>) { super() }
-  inlines(parts: ContentLine[]): InlineNode[] {
+  inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
     const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
     const first = parts[0]!
     const lineAnchors = parts.map((part) => {
@@ -104,7 +104,7 @@ class CursorInline extends InlineParseSession {
       startLine: first.line.number,
       startColumn: (first.line.baseColumn ?? 1) + first.column - 1,
       ...(parts.length > 1 ? { lineAnchors } : {}),
-    })
+    }, captionContext)
     if (nodes[0]?.type === 'image') this.hasLeadingImage = true
     return nodes
   }
@@ -364,7 +364,7 @@ function takeCaption(cursor: Cursor, inline: CursorInline):
   if (blank) cursor.take()
   cursor.take()
   const column = line.text.length - match[1]!.length + 1
-  return { children: inline.inlines([{ line, column, text: match[1]! }]), line }
+  return { children: inline.inlines([{ line, column, text: match[1]! }], true), line }
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,

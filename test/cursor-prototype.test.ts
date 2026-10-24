@@ -291,6 +291,8 @@ describe('experimental block cursor', () => {
     '> quote\n\n^ Caption\n',
     '```\ncode\n```\n^ Caption\n',
     '| Head |\n|---|\n| body |\n^ Caption\n',
+    '| Head |\n|---|\n| body |\n^ Table #\n',
+    '![p](p.png)\n^ Figure #, q\n',
   ])('keeps a caption on its block target: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
