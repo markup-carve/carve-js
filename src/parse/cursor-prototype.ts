@@ -543,7 +543,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
     ordered: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
-    fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[] }
+    fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
+    blankBeforeInvisible: boolean }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -566,9 +567,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
-      fencePrefix: undefined, body: [] }
+      fencePrefix: undefined, body: [], blankBeforeInvisible: false }
   }
   const stack = [newFrame(first, firstMarker)]
+  const applyInvisibleTail = (frame: Frame): void => {
+    if (frame.blankBeforeInvisible) frame.list.tight = false
+    frame.blankBeforeInvisible = false
+  }
   const flush = (frame: Frame) => {
     if (!frame.item || !frame.body.length) return
     frame.item.children.push(...parseBlocks(new Cursor(frame.body, undefined, 'list'), inline,
@@ -650,6 +655,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         break
       }
       const current = stack.at(-1)!
+      applyInvisibleTail(current)
       flush(current)
       cursor.take()
       const item: ListItem = { type: 'list_item', children: [], pos: position(line, line, marker.indent + 1) }
@@ -715,6 +721,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           if (!following?.text.startsWith(' '.repeat(prefixLength))) break
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
+        if (LINE_COMMENT.test(blockText)) continuationFrame.blankBeforeInvisible = true
         if (!nestedContinuation && !isBlockStart(blockText)) continuationFrame.list.tight = false
       } else if (sibling) target.list.tight = false
       continue

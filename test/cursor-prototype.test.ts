@@ -189,6 +189,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- - a\n\n  %% just a note\n- b\n',
+    '- a\n\n  %% note\n- b\n',
+  ])('keeps a list loose when a blank precedes an invisible tail: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',
