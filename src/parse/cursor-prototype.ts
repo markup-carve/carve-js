@@ -675,6 +675,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number) => {
     const text = line.text.slice(prefix)
+    const previous = frame.body.at(-1)?.text ?? ''
+    if (frame.blankBeforeInvisible && text !== '' && !LINE_COMMENT.test(text) &&
+        LINE_COMMENT.test(previous) && !RE_COMMENT_BLOCK_ANY.test(previous)) {
+      frame.list.tight = false
+      frame.blankBeforeInvisible = false
+    }
     frame.body.push({ text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix })
     if (frame.fenceMarker) {

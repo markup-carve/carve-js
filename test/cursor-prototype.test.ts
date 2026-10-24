@@ -259,7 +259,14 @@ describe('experimental block cursor', () => {
   it.each([
     '- - a\n\n  %% just a note\n- b\n',
     '- a\n\n  %% note\n- b\n',
+    '- a\n\n  %% note\n  text\n',
+    '10. t\n\n    %% c\n    z\n',
   ])('keeps a list loose when a blank precedes an invisible tail: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a closed block comment separate from a line-comment tail', () => {
+    const source = '- t\n\n  %%%\n  c\n  %%%\n z\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
