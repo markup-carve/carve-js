@@ -469,6 +469,16 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   return table
 }
 
+function rootBlockAttributeAt(cursor: Cursor, index: number): boolean {
+  if (cursor.owner.kind !== 'root' || cursor.lines[index]?.text[0] !== '{') return false
+  const lexer = lexerForCursor(cursor)
+  const saved = lexer.pos
+  lexer.pos = index
+  const found = probeBlockAttributes(lexer) !== null
+  lexer.pos = saved
+  return found
+}
+
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
   const first = cursor.peek()!
@@ -516,7 +526,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '' &&
       !commentOpeners?.has(cursor.lines[end]!.start) &&
       !(cursor.owner.kind === 'root' && (rootLinkDef(cursor.lines[end]!.text) ||
-        cursor.lines[end]!.text.startsWith('{'))))) {
+        rootBlockAttributeAt(cursor, end))))) {
     throw new UnsupportedCursorSyntax('definition list body')
   }
   let next = end

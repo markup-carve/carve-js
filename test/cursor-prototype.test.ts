@@ -533,6 +533,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('declines an unfinished attribute after a definition body', () => {
+    expect(() => parseCursorPrototype(':: t\n: d\n{.open\ntext\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
