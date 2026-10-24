@@ -550,6 +550,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- ```\nx\n```\n', '- ```\n x\n ```\n', '- ~~~\nx\n~~~\n',
+    '- a\n  - ```\n  x\n  +\n', '- a\n  - ```\n  x\n    +\n'])
+  ('bounds an empty marker-line fence using the next physical line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- - ```\n\ntail\n', '- a\n  - ```\n  +\n  > q\n'])
+  ('declines marker-line fences whose physical follower still needs an owner: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- a\n  - > +\n   b\n', '- a\n  - > +\n  # h\n',
     '- a\n  - > +\n  b\n'])
   ('declines an unresolved quote boundary while returning to an ancestor: %s', (source) => {

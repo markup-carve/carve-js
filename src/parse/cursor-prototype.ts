@@ -34,12 +34,15 @@ type ContainerKind = 'root' | 'quote' | 'colon' | 'list'
 interface ContainerOwner {
   readonly kind: ContainerKind
   readonly inList: boolean
+  readonly allowEmptyFence?: boolean
   readonly parent?: ContainerOwner
 }
 const ROOT_OWNER: ContainerOwner = { kind: 'root', inList: false }
 
-function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>): ContainerOwner {
-  return { kind, inList: kind === 'list' || parent.inList, parent }
+function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>,
+  allowEmptyFence = false): ContainerOwner {
+  return { kind, inList: kind === 'list' || parent.inList, parent,
+    ...(allowEmptyFence ? { allowEmptyFence } : {}) }
 }
 
 class Cursor {
@@ -47,7 +50,8 @@ class Cursor {
   sharedLexer?: Lexer
   fenceCloserSuffix?: { backtick: Uint32Array; tilde: Uint32Array }
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
-    readonly owner: ContainerOwner = ROOT_OWNER) {}
+    readonly owner: ContainerOwner = ROOT_OWNER,
+    readonly physicalLines: SourceLine[] = lines) {}
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
   take(): SourceLine { return this.lines[this.at++]! }
 }
@@ -576,7 +580,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           RE_BLOCKQUOTE.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         current.definitions.push(parseBlocks(new Cursor([follower], undefined,
-          childOwner(cursor.owner, 'colon')), inline, [], 1, false))
+          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
         last = follower
@@ -597,7 +601,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const blocks = blockBody ? parseBlocks(new Cursor([{
         text: definition[1]!, start: line.start + column - 1,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1,
-      }], undefined, childOwner(cursor.owner, 'colon')), inline, [], 1, false) :
+      }], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) :
         [{ type: 'paragraph' as const, children: inline.inlines(parts),
           pos: position(line, definitionLast, column) }]
       current.definitions.push(blocks)
@@ -889,7 +893,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.delim === ')') list.delim = ')'
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
-    return { list, first: line, last: line, indent: marker.indent, ordered: marker.ordered,
+    return { list, first: line, last: line,
+      indent: marker.indent, ordered: marker.ordered,
       taskList: isTaskMarkerContent(marker.content, marker.ordered),
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
@@ -911,8 +916,21 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const flush = (frame: Frame) => {
     if (!frame.item || !frame.body.length) return
+    let allowEmptyFence = false
+    const firstText = frame.body[0]!.text
+    if (frame.body.length === 1 && frame.itemFirst?.number === frame.body[0]!.number &&
+        (firstText[0] === '`' || firstText[0] === '~') &&
+        /^(?:`{3,}|~{3,})$/.test(firstText)) {
+      const next = cursor.peek()
+      const immediate = cursor.physicalLines[frame.itemFirst.number]
+      allowEmptyFence = (!immediate || !isBlankLine(immediate.text)) &&
+        (!next || (next.text !== '' && next.text.trim() !== '+' &&
+          frame.contentColumn !== undefined &&
+          !next.text.startsWith(' '.repeat(frame.contentColumn - 1))))
+    }
     frame.item.children.push(...parseBlocks(
-      new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list')),
+      new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence),
+        cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
     frame.body = []
   }
@@ -1144,7 +1162,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       cursor.take()
       cursor.take()
       return { type: 'block_quote',
-        children: parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'quote')),
+        children: parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'quote'),
+          cursor.physicalLines),
           inline, definitionNodes, depth + 1, false),
         pos: position(first, follower, 1, contentEndColumn(follower)) }
     }
@@ -1180,7 +1199,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
   return { type: 'block_quote',
-    children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote')),
+    children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
+      cursor.physicalLines),
       inline, definitionNodes, depth + 1, false),
     pos: position(first, last, 1, contentEndColumn(last)) }
 }
@@ -1214,6 +1234,8 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
 
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
+  if (cursor.owner.allowEmptyFence && payload.length === 0 &&
+      /^(?:`{3,}|~{3,})$/.test(first.text)) return first
   if (cursor.owner.kind === 'root' && /^(?:`{3,}|~{3,})$/.test(first.text) &&
       (first.number === 1 || isBlankLine(cursor.lines[first.number - 2]?.text))) {
     return payload.at(-1) ?? first
@@ -1409,7 +1431,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
     pos: position(attached, attached) } : undefined
   const structuralBody = structural ? parseBlocks(new Cursor(structural.body, undefined,
-    childOwner(cursor.owner, 'colon')), inline, [], 1, false) : []
+    childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) : []
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
     attachedBody ? separateBody ? [body, separateBody, ...structuralBody, attachedBody] :
       [body, ...structuralBody, attachedBody] :
@@ -1432,7 +1454,8 @@ function parseSigilFence(cursor: Cursor, inline: CursorInline, definitionNodes: 
   const body = takeColonBody(cursor, sigil.width)
   const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
   const inner = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner,
-    sigil.kind === 'quote' ? 'quote' : 'colon')), inline, definitionNodes, depth + 1, false)
+    sigil.kind === 'quote' ? 'quote' : 'colon'), cursor.physicalLines),
+    inline, definitionNodes, depth + 1, false)
   if (sigil.kind === 'hardbreak') {
     for (const child of inner) {
       if (child.type !== 'paragraph') continue
@@ -1667,7 +1690,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         throw new UnsupportedCursorSyntax('abbreviation inside bare container')
       }
       const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-      const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon')),
+      const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon'),
+        cursor.physicalLines),
         inline, definitionNodes, depth + 1, false,
         undefined, undefined, undefined, colonDepth + 1)
       const kind = colon[2]
