@@ -37,6 +37,7 @@ export function preserveDjotHeadingIds(source: string): string {
   collect(doc)
   explicit.sort((a, b) => a.at - b.at)
   const occupied = new Set<string>()
+  const nextSuffix = new Map<string, number>()
   let nextExplicit = 0
   const actual = headings(resolveHeadingIds(parse(source)).children)
   const edits: Array<{ at: number; text: string }> = []
@@ -49,7 +50,9 @@ export function preserveDjotHeadingIds(source: string): string {
     if (heading.attrs?.id !== undefined) continue
     const base = slugify(inlineText(heading.children))
     let id = base
-    for (let suffix = 1; occupied.has(id); suffix++) id = `${base}-${suffix}`
+    let suffix = nextSuffix.get(base) ?? 1
+    while (occupied.has(id)) id = `${base}-${suffix++}`
+    nextSuffix.set(base, suffix)
     occupied.add(id)
     if (actual[i]?.attrs?.id === id || at === undefined) continue
     const lineStart = source.lastIndexOf('\n', at - 1) + 1
