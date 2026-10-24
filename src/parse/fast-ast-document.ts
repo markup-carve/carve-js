@@ -37,9 +37,17 @@ export function tryFastAstDocument(source: string): Document | undefined {
       source.charCodeAt(0) === 0xfeff) return undefined
   const lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
+  let firstBlock = 0
+  let frontmatter: Document['frontmatter']
+  if (lines[0] === '---yaml') {
+    const close = lines.indexOf('---', 1)
+    if (close < 0) return undefined
+    frontmatter = { format: 'yaml', content: lines.slice(1, close).join('\n') }
+    firstBlock = close + 1
+  }
   const inline = new FastInlineSession()
   const blocks: BlockNode[] = []
-  for (let i = 0; i < lines.length;) {
+  for (let i = firstBlock; i < lines.length;) {
     const line = lines[i]!
     if (line === '') { i++; continue }
     if (line.trim() === '') return undefined
@@ -92,5 +100,7 @@ export function tryFastAstDocument(source: string): Document | undefined {
     }
     blocks.push({ type: 'paragraph', children: inline.inlines(dropTrailingWhitespace(content.join('\n'))) })
   }
-  return { type: 'document', children: blocks, srcByteLength: utf8ByteLength(source) }
+  const document: Document = { type: 'document', children: blocks, srcByteLength: utf8ByteLength(source) }
+  if (frontmatter) document.frontmatter = frontmatter
+  return document
 }
