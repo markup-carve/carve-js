@@ -330,7 +330,9 @@ function parseSimpleTable(cursor: Cursor, inline: CursorInline): Table {
 }
 
 function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInline): Table {
-  if (cursor.owner.inList) throw new UnsupportedCursorSyntax('list table source mapping')
+  if (cursor.owner.inList && cursor.owner.kind !== 'list') {
+    throw new UnsupportedCursorSyntax('list table source mapping')
+  }
   const first = cursor.peek()!
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
@@ -377,6 +379,11 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
   const table = parseCanonicalTableWithExistingRules(cursor, inline)
+  if (cursor.owner.inList && isBlankLine(cursor.peek()?.text ?? '') &&
+      isBlankLine(cursor.peek(1)?.text ?? '') &&
+      RE_CAPTION.test(cursor.peek(2)?.text ?? '')) {
+    throw new UnsupportedCursorSyntax('list table caption gap')
+  }
   if (!headed && cursor.peek()?.text && !isBlockStart(cursor.peek()!.text)) {
     throw new UnsupportedCursorSyntax('data table paragraph follower')
   }

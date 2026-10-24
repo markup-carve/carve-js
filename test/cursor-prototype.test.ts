@@ -100,8 +100,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a table in a list until list-owned rows are mapped', () => {
-    expect(() => parseCursorPrototype('- | a |\n  | b |\n')).toThrow(UnsupportedCursorSyntax)
+  it('maps a direct list table and guards unresolved caption and quote ownership', () => {
+    const source = '- | a |\n  | b |\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(() => parseCursorPrototype('- | a |\n\n\n  ^ cap\n- c\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('- > | a |\n  + b |\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })
 
   it.each([
