@@ -15,9 +15,9 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
-import { parseRawBlock, parseTableBlock } from './parse-core.js'
+import { parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
 /**
@@ -113,6 +113,15 @@ class CursorInline extends InlineParseSession {
     readonly abbreviations: Map<string, string>) { super() }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
+  }
+  lineBlockInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
+    const previous = this.inLineBlock
+    this.inLineBlock = true
+    try {
+      return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
+    } finally {
+      this.inLineBlock = previous
+    }
   }
   inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
     const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
@@ -499,6 +508,22 @@ function parseRawAtCursor(cursor: Cursor): BlockNode {
   cursor.at = lexer.pos
   raw.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
   return raw
+}
+
+function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
+  if (cursor.tableHost !== 'root') throw new UnsupportedCursorSyntax('nested line block')
+  const first = cursor.peek()!
+  const lexer = lexerForCursor(cursor)
+  lexer.pos = cursor.at
+  const block = parseLineBlockWithHelpers({
+    definitionRegionLines: null, inMatcherRequest: false, inLineBlock: false,
+    activeMatchers: [], quoteGlyphHasNul: false,
+    parseInline: (text, _abbr, _links, source, caption) =>
+      inline.lineBlockInlines(text, source, caption),
+  }, lexer)
+  cursor.at = lexer.pos
+  block.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  return block
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
@@ -901,6 +926,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     if (RE_RAW_FENCE.test(first.text)) {
       emit(parseRawAtCursor(cursor))
+      continue
+    }
+    if (RE_LINE_BLOCK_OPEN.test(first.text)) {
+      emit(parseLineBlockAtCursor(cursor, inline))
       continue
     }
     const fence = fenceOpen(first.text)

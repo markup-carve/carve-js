@@ -152,6 +152,21 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '::: |\nRoses are red,\nViolets are blue.\n:::\n',
+    '::: |\nRoses are red,\n  Violets are blue.\n:::\n',
+    '::: |\nTwo roads    diverged in a yellow wood,\nAnd looked   down one as far as I could\n:::\n',
+    '::: |\ntab\tgap\nwide\t\tgap\n\tlead\n:::\n',
+    '::: |\na  \\\n:::\n',
+  ])('uses the production line-block reader and inline mode: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a line block in a quote until its boundary is mapped', () => {
+    expect(() => parseCursorPrototype('> ::: |\n> line\n> :::\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',
