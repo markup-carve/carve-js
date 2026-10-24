@@ -171,6 +171,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('maps a line block after an item paragraph through the list owner', () => {
+    const source = '- x\n\n  ::: |\n  ab\\\t\n  cd\n  :::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a line block on an item marker until its payload column is mapped', () => {
+    expect(() => parseCursorPrototype('- ::: |\n    ```\n  :::\n  para\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('assigns a lazy quote line to a quote inside a named container', () => {
     const source = '::: note\n> a\nb\n:::\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

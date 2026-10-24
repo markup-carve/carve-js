@@ -528,7 +528,9 @@ function parseRawAtCursor(cursor: Cursor): BlockNode {
 }
 
 function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
-  if (cursor.owner.inList) throw new UnsupportedCursorSyntax('list line block')
+  if (cursor.owner.inList && cursor.at === 0) {
+    throw new UnsupportedCursorSyntax('marker-line line block')
+  }
   const first = cursor.peek()!
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
