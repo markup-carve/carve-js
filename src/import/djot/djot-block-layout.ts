@@ -162,6 +162,1039 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
   return lines.flatMap((line, row) => removed.has(row) ? [] : [...(before.get(row) ?? []), line]).join('\n')
 }
 
+type DivFrame = {
+  width: number
+  prefix: string
+  itemColumn?: number
+  depth: number
+  start: number
+}
+
+type ListFrame = {
+  sourcePrefix: number
+  depth: number
+  column: number
+  content: number
+  target: number
+  kind: string
+  bullet: string
+  loose: boolean
+  start: number
+  continuation: boolean
+  empty?: boolean
+}
+
+type EmbeddedOwner = { depth: number; column: number; content: number; sourcePrefix?: number; sourceContent?: number; target?: number }
+type OpaqueQuoteOwner = { depth: number; column: number; content: number }
+type PendingAttribute = { owner: number; depth: number; row: number; output: string[]; attributes: string }
+type NoteOwner = { depth: number; column: number; target: number; content: number; listBase: number; parentOut: string[]; parentLists: ListFrame[]; parentDivs: DivFrame[]; parentDepth: number; parentBoundary: string; parentEmbedded: EmbeddedOwner | undefined; parentEmbeddedOwners: EmbeddedOwner[]; parentOpaque: OpaqueQuoteOwner | undefined; parentDefinition: number; placement: number | undefined; fenceColumn?: number }
+
+/** Inputs that stay fixed while one document is laid out. */
+interface LayoutInput {
+  source: string
+  lines: string[]
+  mask: string[]
+  fences: string[]
+  lineOffsets: number[]
+  rows: readonly boolean[]
+  divClosers: Map<number, number[]>
+  hasDefinitionSyntax: boolean
+  isBoundary: (line: string) => boolean
+  noteSourceWidths: ReadonlyMap<string, number>
+  emptyNote: string
+  holdItemAttributes: ((attributes: string, block?: boolean) => string) | undefined
+  onLiteralQuote: ((line: number, depth: number) => void) | undefined
+}
+
+/** Container state carried from one source line to the next. */
+interface LayoutState {
+  out: string[]
+  lists: ListFrame[]
+  divs: DivFrame[]
+  returnedNoteItemAttributes: string[]
+  returnedNoteDestinationDepth: number | undefined
+  pendingAttributes: PendingAttribute[]
+  paragraph: boolean
+  blank: boolean
+  depth: number
+  embeddedListOwner: EmbeddedOwner | undefined
+  embeddedOwners: EmbeddedOwner[]
+  noteOwner: NoteOwner | undefined
+  notes: NoteOwner[]
+  completedNotes: { body: string[]; placement: number | undefined; fenceColumn?: number }[]
+  opaqueQuoteOwner: OpaqueQuoteOwner | undefined
+  quoteBoundary: string
+  headingMarker: string
+  definitionIndent: number
+  definitionStack: number[]
+}
+
+/** One source line split into its quote prefix and content. */
+interface LayoutLine {
+  n: number
+  original: string
+  masked: string
+  physicalQuote: string
+  physicalQuoteDepth: number
+  quotedNoteItem: RegExpExecArray | null
+  quote: string
+  quoteDepth: number
+  nativeRemainder: string
+  raw: string
+  view: string
+  rawIndent: number
+  sourcePrefix: number
+  indent: number
+  text: string
+  visible: string
+  quoteBases: number[]
+  quoteColumns: number[]
+  inlineNoteItem: RegExpExecArray | null
+  noteHead: RegExpExecArray | null
+}
+
+/** How the content of a non-blank line opens or continues a block. */
+interface BlockLine {
+  row: boolean
+  rawFencedItem: boolean
+  rawReferenceItem: boolean
+  fencedItemOpener: boolean
+  wholeAttributes: boolean
+  blockStart: boolean | undefined
+  emptyItem: boolean
+  item: RegExpExecArray | null
+}
+
+function setEmbedded(s: LayoutState, owner: EmbeddedOwner | undefined, owners?: EmbeddedOwner[]): void {
+  s.embeddedListOwner = owner
+  s.embeddedOwners = owners ?? (owner ? [owner] : [])
+}
+
+function trimEmbedded(s: LayoutState, maximumDepth: number): void {
+  while (s.embeddedOwners.at(-1) && s.embeddedOwners.at(-1)!.depth > maximumDepth) s.embeddedOwners.pop()
+  s.embeddedListOwner = s.embeddedOwners.at(-1)
+}
+
+/** Open a note body: later lines write into a fresh output until the note ends. */
+function enterNote(s: LayoutState, depth: number, column: number, placement: number | undefined): NoteOwner {
+  const owner: NoteOwner = { depth, column, target: 0, content: 2, listBase: 0, parentOut: s.out, parentLists: s.lists, parentDivs: s.divs, parentDepth: s.depth, parentBoundary: s.quoteBoundary, parentEmbedded: s.embeddedListOwner, parentEmbeddedOwners: s.embeddedOwners, parentOpaque: s.opaqueQuoteOwner, parentDefinition: s.definitionIndent, placement }
+  s.noteOwner = owner
+  s.notes.push(owner)
+  s.out = []
+  s.lists = []
+  s.divs = []
+  setEmbedded(s, undefined)
+  s.opaqueQuoteOwner = undefined
+  s.definitionIndent = -1
+  return owner
+}
+
+function endNote(s: LayoutState): void {
+  const ended = s.notes.pop()!
+  for (const attribute of s.pendingAttributes) { attribute.output[attribute.row] = ''; s.returnedNoteItemAttributes.push(attribute.attributes) }
+  s.pendingAttributes = []
+  if (s.returnedNoteItemAttributes.length) s.returnedNoteDestinationDepth = Math.min(s.returnedNoteDestinationDepth ?? ended.depth, ended.depth)
+  if (s.divs.length) dropOrphanAttributeLine(s.out)
+  while (s.divs.length) {
+    const div = s.divs.pop()!
+    if (!div.prefix.includes('>')) s.out.push(div.prefix + ':'.repeat(div.width))
+  }
+  s.completedNotes.push({ body: s.out, placement: ended.placement })
+  s.out = ended.parentOut
+  s.lists = ended.parentLists
+  s.divs = ended.parentDivs
+  s.depth = ended.parentDepth
+  s.quoteBoundary = ended.parentBoundary
+  setEmbedded(s, ended.parentEmbedded, ended.parentEmbeddedOwners)
+  s.opaqueQuoteOwner = ended.parentOpaque
+  s.definitionIndent = ended.parentDefinition
+  s.noteOwner = s.notes.at(-1)
+  s.paragraph = false
+  s.headingMarker = ''
+}
+
+function readLayoutLine(I: LayoutInput, s: LayoutState, n: number): LayoutLine {
+  const { lines, mask, fences } = I
+  const original = lines[n]!,
+    masked = mask[n]!
+  const physicalQuote = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(original)![0]
+  const physicalQuoteDepth = (physicalQuote.match(/>/g) ?? []).length
+  const quotedNoteItem: RegExpExecArray | null = !s.noteOwner && (s.blank || !s.paragraph || physicalQuoteDepth < s.depth || s.lists.at(-1)?.depth === physicalQuoteDepth && /^[ \t]*/.exec(original.slice(physicalQuote.length))![0].length <= s.lists.at(-1)!.column) && fences[n] === original ? /^([ \t]*)((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(>[ \t](?:[ \t]*>[ \t])*)[ \t]*(?=\[\^[^\]\n]+\]:(?:[ \t]|$))/.exec(original.slice(physicalQuote.length)) : null
+  const quote: string = quotedNoteItem ? physicalQuote + quotedNoteItem[1] + quotedNoteItem[2] + quotedNoteItem[3] : physicalQuote
+  const quoteDepth: number = (quote.match(/>/g) ?? []).length
+  const raw = original.slice(quote.length),
+    view = masked.slice(quote.length)
+  const rawIndent = /^[ \t]*/.exec(raw)![0].length
+  const sourcePrefix = !quotedNoteItem && s.lists.at(-1)?.depth === quoteDepth ? s.lists.at(-1)!.sourcePrefix : quote.length
+  const indent = Math.max(0, rawIndent + quote.length - sourcePrefix)
+  const text = raw.slice(rawIndent),
+    visible = view.slice(rawIndent)
+  const quoteBases: number[] = []
+  const quoteView = quotedNoteItem ? original.slice(0, physicalQuote.length + quotedNoteItem[1]!.length) + ' '.repeat(quotedNoteItem[2]!.length) + original.slice(physicalQuote.length + quotedNoteItem[1]!.length + quotedNoteItem[2]!.length) : original
+  const quoteColumns = quoteDepth > 0 ? indentColumnsAfterQuotes(quoteView, quoteDepth, quoteBases) : []
+  const inlineNoteItem = (s.blank || !s.paragraph || quoteDepth < s.depth || s.lists.at(-1)?.depth === quoteDepth && indent <= s.lists.at(-1)!.column) ? /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=\[\^[^\]\n]+\]:(?:[ \t]|$))/.exec(visible) : null
+  const noteText = inlineNoteItem ? text.slice(inlineNoteItem[0].length) : text
+  const noteHead = (inlineNoteItem || visible.startsWith('[^')) ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(noteText) : null
+  return { n, original, masked, physicalQuote, physicalQuoteDepth, quotedNoteItem, quote, quoteDepth, nativeRemainder: original.slice(quote.length), raw, view, rawIndent, sourcePrefix, indent, text, visible, quoteBases, quoteColumns, inlineNoteItem, noteHead }
+}
+
+function ownerColumn(L: LayoutLine, owner: { depth: number; sourcePrefix?: number }): number {
+  const { quote, quoteDepth, quoteColumns, quoteBases, rawIndent, indent } = L
+  return quoteDepth > owner.depth ? (quoteColumns[owner.depth] ?? rawIndent) + (owner.sourcePrefix === undefined ? 0 : (quoteBases[owner.depth] ?? 0) - owner.sourcePrefix) : owner.sourcePrefix === undefined ? indent : quote.length + rawIndent - owner.sourcePrefix
+}
+
+/** The quote prefix Carve needs for this line, aligned to the list items that own each level. */
+function quoteForCarve(I: LayoutInput, s: LayoutState, L: LayoutLine): string {
+  const { hasDefinitionSyntax, fences } = I
+  const { n, original, masked, quote, quoteDepth, quoteColumns } = L
+  const baseDepth = s.noteOwner?.depth ?? 0
+  const retainedQuote = baseDepth ? quote.slice(closedQuoteBoundary(quote, baseDepth - 1).length).replace(/^[ \t]/, '') : quote
+  if (!quoteDepth || s.definitionIndent >= 0 || hasDefinitionSyntax || fences[n] !== original || masked[quote.indexOf('>')] !== '>') return baseDepth ? retainedQuote : quote
+  const owner = s.lists.at(-1)
+  const contexts: { depth: number; column: number; content: number; target: number; sourcePrefix?: number }[] = []
+  if (owner) contexts.push(owner)
+  for (const candidate of s.embeddedOwners) {
+    if (candidate.depth >= quoteDepth) break
+    contexts.push({ ...candidate, target: candidate.target ?? 0 })
+  }
+  if (s.noteOwner) contexts.push(s.noteOwner)
+  if (s.opaqueQuoteOwner) contexts.push({ ...s.opaqueQuoteOwner, target: s.opaqueQuoteOwner.column })
+  const firstOwned = Math.min(...contexts.map(value => value!.depth))
+  const lastOwned = Math.max(...contexts.map(value => value!.depth))
+  const byDepth = new Map<number, typeof contexts[number]>()
+  for (const candidate of contexts) if (ownerColumn(L, candidate) > candidate.column && (!byDepth.has(candidate.depth) || candidate.column >= byDepth.get(candidate.depth)!.column)) byDepth.set(candidate.depth, candidate)
+  const parts: string[] = []
+  for (let level = baseDepth; level < quoteDepth; level++) {
+    const held = byDepth.get(level)
+    const column = held ? held.target + held.content : level > firstOwned && level < lastOwned ? (quoteColumns[level] ?? 0) : 0
+    parts.push(' '.repeat(column), '>')
+    if (level + 1 < quoteDepth || !quote.endsWith('>')) parts.push(' ')
+  }
+  return parts.join('')
+}
+
+function originalForCarve(I: LayoutInput, s: LayoutState, L: LayoutLine): string {
+  const { fences } = I
+  const { n, original, quoteDepth, indent, text, noteHead } = L
+  const ownedList = s.lists.at(-1)
+  const noteColumn = ownedList && ownedList.depth === quoteDepth && indent > ownedList.column ? ownedList.target + ownedList.content : s.noteOwner?.content ?? 0
+  return quoteForCarve(I, s, L) + (s.noteOwner && text !== '' && quoteDepth === s.noteOwner.depth && !noteHead ? fences[n] === original ? ' '.repeat(noteColumn) + text : L.nativeRemainder.slice(Math.min(indent, s.noteOwner.column)) : L.nativeRemainder)
+}
+
+/** End notes this line falls outside of, and write fenced lines a note still owns. */
+function writeNoteContinuation(I: LayoutInput, s: LayoutState, L: LayoutLine): boolean {
+  const { fences, isBoundary } = I
+  const { n, original, quoteDepth, quoteColumns, indent, text, visible, noteHead } = L
+  while (s.noteOwner && fences[n] === original && (text || quoteDepth > s.noteOwner.depth)) {
+    const column = quoteDepth > s.noteOwner.depth ? quoteColumns[s.noteOwner.depth] ?? 0 : indent
+    const outside = quoteDepth < s.noteOwner.depth || column <= s.noteOwner.column
+    const block = isBoundary(original) || noteHead || quoteDepth > s.noteOwner.depth || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[|]|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|\[[^\]\n]+\]:)/.test(visible) || (visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length)
+    if (outside && !(s.paragraph && !s.blank && !block && quoteDepth <= s.noteOwner.depth)) {
+      endNote(s)
+    } else break
+  }
+  if (s.noteOwner && fences[n] !== original) {
+    const host = s.noteOwner.depth ? closedQuoteBoundary(original, s.noteOwner.depth - 1).length : 0
+    const payload = original.slice(host).replace(s.noteOwner.depth ? /^[ \t]/ : /$^/, '')
+    const payloadIndent = /^[ \t]*/.exec(payload)![0].length
+    if (s.noteOwner.fenceColumn === undefined && payloadIndent <= s.noteOwner.column && /^(`{3,}|~{3,})/.test(payload.slice(payloadIndent))) {
+      while (s.noteOwner && payloadIndent <= s.noteOwner.column) endNote(s)
+    }
+    if (s.noteOwner) {
+      s.noteOwner.fenceColumn ??= payloadIndent
+      if (s.returnedNoteItemAttributes.length) {
+        const prefix = ' '.repeat(s.noteOwner.content)
+        for (const attributes of s.returnedNoteItemAttributes) s.out.push(prefix + attributes)
+        s.returnedNoteItemAttributes.length = 0
+        s.returnedNoteDestinationDepth = undefined
+      }
+      s.out.push(' '.repeat(s.noteOwner.content) + payload.slice(Math.min(payloadIndent, s.noteOwner.fenceColumn)))
+      s.paragraph = false
+      s.headingMarker = ''
+      s.blank = false
+      return true
+    }
+  } else if (s.noteOwner) delete s.noteOwner.fenceColumn
+  return false
+}
+
+/** Close quote and embedded list owners that this line no longer belongs to. */
+function releaseLineOwners(I: LayoutInput, s: LayoutState, L: LayoutLine): void {
+  const { fences, emptyNote } = I
+  const { n, original, quoteDepth, quoteColumns, indent, text, visible } = L
+  if (/^\[(?!\^)[^\]\n]*\]:/.test(text) && s.out.at(-1)?.includes(emptyNote)) s.out.push(quoteForCarve(I, s, L) + ' '.repeat(Math.max(0, indent)))
+  if (s.opaqueQuoteOwner && text && (quoteDepth < s.opaqueQuoteOwner.depth || (quoteDepth === s.opaqueQuoteOwner.depth ? indent : quoteColumns[s.opaqueQuoteOwner.depth] ?? 0) < s.opaqueQuoteOwner.column + 1)) s.opaqueQuoteOwner = undefined
+  const embeddedParent = s.lists.at(-1)
+  if (text && fences[n] === original && s.embeddedOwners.length && embeddedParent && quoteDepth > embeddedParent.depth && ownerColumn(L, embeddedParent) <= embeddedParent.column) {
+    if (s.paragraph && !s.blank) s.out.push(closedQuoteBoundary(s.quoteBoundary, Math.max(0, embeddedParent.depth - (s.noteOwner?.depth ?? 0))))
+    setEmbedded(s, undefined)
+    s.paragraph = false
+    s.headingMarker = ''
+  }
+  if (text && fences[n] === original && s.embeddedOwners.length) {
+    const startsBlock = /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[|]|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|\[[^\]\n]+\]:)/.test(visible)
+    for (let i = 0; i < s.embeddedOwners.length; i++) {
+      const owner = s.embeddedOwners[i]!
+      const outside = quoteDepth < owner.depth || ownerColumn(L, owner) <= owner.column
+      if (outside && (s.blank || !s.paragraph || quoteDepth > owner.depth || startsBlock)) {
+        const siblingItem = quoteDepth === owner.depth && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
+        if (s.paragraph && !s.blank) s.out.push(closedQuoteBoundary(s.quoteBoundary, Math.max(0, owner.depth - (s.noteOwner?.depth ?? 0) - 1 + (siblingItem ? 1 : 0))))
+        s.embeddedOwners = s.embeddedOwners.slice(0, i)
+        s.embeddedListOwner = s.embeddedOwners.at(-1)
+        s.paragraph = false
+        s.headingMarker = ''
+        break
+      }
+      if (owner.depth >= quoteDepth && !s.blank && s.paragraph && !startsBlock) break
+    }
+  }
+}
+
+function quoteItemPlacement(s: LayoutState, L: LayoutLine): { blockIndent: number; outsideQuoteItem: boolean | undefined } {
+  const { quoteDepth, quoteColumns, indent } = L
+  const blockIndent = quoteDepth > s.depth ? (quoteColumns[s.depth] ?? indent) : indent
+  const ordinaryQuoteList = s.lists.at(-1)
+  const quoteList = s.embeddedListOwner && s.embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || s.embeddedListOwner.depth > ordinaryQuoteList.depth) ? s.embeddedListOwner : ordinaryQuoteList
+  const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && ownerColumn(L, quoteList) < quoteList.column + 1
+  return { blockIndent, outsideQuoteItem }
+}
+
+function flushReturnedNoteAttributes(I: LayoutInput, s: LayoutState, L: LayoutLine): void {
+  const { quoteDepth } = L
+  if (s.returnedNoteItemAttributes.length) {
+    const retainedDepth = Math.max(0, Math.min(s.returnedNoteDestinationDepth ?? 0, quoteDepth) - (s.noteOwner?.depth ?? 0))
+    const prefix = retainedDepth ? closedQuoteBoundary(quoteForCarve(I, s, L), retainedDepth - 1) + ' ' : ' '.repeat(s.noteOwner?.content ?? 0)
+    for (const attributes of s.returnedNoteItemAttributes) s.out.push(prefix + attributes)
+    s.returnedNoteItemAttributes.length = 0
+    s.returnedNoteDestinationDepth = undefined
+  }
+}
+
+function openNote(I: LayoutInput, s: LayoutState, L: LayoutLine, noteHead: RegExpExecArray): void {
+  const { emptyNote } = I
+  const { physicalQuote, physicalQuoteDepth, quotedNoteItem, quote, quoteDepth, indent, rawIndent, inlineNoteItem } = L
+  for (const attribute of s.pendingAttributes) attribute.output[attribute.row] = ''
+  s.pendingAttributes = []
+  if (!s.noteOwner && (quotedNoteItem || inlineNoteItem) && physicalQuoteDepth < s.depth) {
+    s.out.push(s.quoteBoundary)
+    s.depth = physicalQuoteDepth
+    s.quoteBoundary = physicalQuote.trimEnd()
+  }
+  if (quotedNoteItem) {
+    const marker = quotedNoteItem[2]!
+    const column = quotedNoteItem[1]!.length
+    const context = { sourcePrefix: physicalQuote.length, depth: physicalQuoteDepth, column, content: compactDjotListPrefix(marker).length, target: column, kind: djotListKind(marker.trim()), bullet: marker[0] === '*' ? '*' : '-', loose: false, start: s.out.length, continuation: false }
+    s.lists.push(context)
+    s.out.push(physicalQuote + quotedNoteItem[1] + compactDjotListPrefix(marker) + quotedNoteItem[3] + emptyNote)
+    s.depth = quoteDepth
+    s.quoteBoundary = (physicalQuote + ' '.repeat(context.target + context.content) + quotedNoteItem[3]).trimEnd()
+  }
+  if (inlineNoteItem) {
+    const parent = s.lists.at(-1)
+    const target = parent && parent.depth === quoteDepth && parent.column === indent ? parent.target : rawIndent
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(target) + compactDjotListPrefix(inlineNoteItem[0]) + emptyNote)
+  }
+  const noteIndent = indent + (inlineNoteItem?.[0].length ?? 0)
+  while (s.lists.length && (s.lists.at(-1)!.depth > quoteDepth || (s.lists.at(-1)!.depth === quoteDepth && (indent < s.lists.at(-1)!.column || !inlineNoteItem && indent === s.lists.at(-1)!.column)))) s.lists.pop()
+  if (!inlineNoteItem && !quotedNoteItem && (quoteDepth > 0 || (!s.lists.length && s.out.length && s.out.at(-1)?.trim() !== ''))) s.out.push(quoteForCarve(I, s, L).trimEnd())
+  enterNote(s, quoteDepth, noteIndent, !s.noteOwner && quoteDepth === 0 && noteIndent === 0 && !s.lists.length ? s.out.length : undefined)
+  writeNoteHead(I, s, L, noteHead, quote.length + rawIndent + (inlineNoteItem?.[0].length ?? 0))
+}
+
+/** Write a note's first line, opening a nested note when its first item starts one. */
+function writeNoteHead(I: LayoutInput, s: LayoutState, L: LayoutLine, noteHead: RegExpExecArray, noteBodySourceAt: number): void {
+  const { lines, lineOffsets, rows, noteSourceWidths, emptyNote } = I
+  const { n, quote, quoteDepth } = L
+  let noteOwner = s.noteOwner!
+  let currentNoteHead = noteHead
+  let nestedFirstBody = false
+  while (true) {
+  const body = currentNoteHead[2]!
+  const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
+  let childBody = body
+  if (child) {
+    s.lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: s.out.length, continuation: false })
+    childBody = body.slice(child[1]!.length)
+    if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\](?:[ \t]+|$)/, '')
+  }
+  const nestedHead = child ? /^(\[\^[^\]\n]+\]:[ \t]*)(.+)$/.exec(childBody) : null
+  if (!nestedFirstBody && nestedHead) {
+    s.out.push(currentNoteHead[1] + compactDjotListPrefix(child![1]!) + emptyNote)
+    noteOwner = enterNote(s, quoteDepth, s.lists.at(-1)!.column + child![1]!.length, undefined)
+    noteBodySourceAt += (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length) + child![1]!.length
+    currentNoteHead = nestedHead
+    nestedFirstBody = true
+    continue
+  }
+  if (/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(childBody)) noteOwner.fenceColumn = noteOwner.column + noteOwner.content
+  const inlineQuote = itemQuotePrefix(childBody)
+  const noteBodyStart = noteBodySourceAt + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length) + body.length - childBody.length
+  const inlineOwners = inlineQuote.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: noteBodyStart + owner.sourceOffset }))
+  setEmbedded(s, inlineOwners.at(-1), inlineOwners)
+  s.depth = quoteDepth + inlineQuote.depth
+  const context = child ? s.lists.at(-1)! : noteOwner
+  s.quoteBoundary = (quoteForCarve(I, s, L) + ' '.repeat(context.target + context.content) + inlineQuote.prefix).trimEnd()
+  const emptyTaskEnd = emptyDjotTaskTailEnd(body, n + 1 === lines.length || lines[n + 1]!.trim() === '')
+  let writtenBody = compactDjotListPrefix(emptyTaskEnd === undefined ? body : body.slice(0, emptyTaskEnd).trimEnd() + ' +', emptyTaskEnd !== undefined)
+  if (emptyTaskEnd !== undefined && body.startsWith('* ')) {
+    writtenBody = '*' + writtenBody.slice(1)
+    s.out.push(currentNoteHead[1] + emptyNote + '\n  ' + writtenBody)
+  } else s.out.push(currentNoteHead[1] + writtenBody)
+  const content = inlineQuote.body
+  const inlineDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(content)
+  if (inlineDiv) s.divs.push({ width: inlineDiv[1]!.length, prefix: ' '.repeat(context.target + context.content) + inlineQuote.prefix, depth: s.depth, start: lineOffsets[n]!, ...(child ? { itemColumn: context.column + 1 } : {}) })
+  s.paragraph = !rows[n] && content !== '' && !content.startsWith(emptyNote) && !/^(?:#{1,6}(?:[ \t]|$)|:{3,}|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(content) && !/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(content)
+  s.headingMarker = /^(#{1,6})(?:[ \t]|$)/.exec(content)?.[1] ?? ''
+  s.blank = !s.paragraph
+  break
+  }
+}
+
+function writeBlankLine(I: LayoutInput, s: LayoutState, L: LayoutLine, outsideQuoteItem: boolean | undefined): void {
+  const { onLiteralQuote } = I
+  const { n, quoteDepth } = L
+  while (s.lists.length && s.lists.at(-1)!.depth > quoteDepth) s.lists.pop()
+  if (s.embeddedListOwner && s.embeddedListOwner.depth > quoteDepth) trimEmbedded(s, quoteDepth)
+  if (outsideQuoteItem) {
+    while (s.lists.length && quoteDepth > s.lists.at(-1)!.depth && ownerColumn(L, s.lists.at(-1)!) < s.lists.at(-1)!.column + 1) s.lists.pop()
+    if (s.embeddedListOwner && quoteDepth > s.embeddedListOwner.depth && ownerColumn(L, s.embeddedListOwner) < s.embeddedListOwner.column + 1) setEmbedded(s, undefined)
+    s.depth = quoteDepth
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+  }
+  if (s.paragraph && quoteDepth > s.depth && !outsideQuoteItem) {
+    onLiteralQuote?.(n, s.depth)
+    const markerAt = closedQuoteBoundary(quoteForCarve(I, s, L), Math.max(0, s.depth - (s.noteOwner?.depth ?? 0))).length - 1
+    const written = originalForCarve(I, s, L)
+    s.out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
+    s.blank = false
+    return
+  }
+  s.out.push(originalForCarve(I, s, L))
+  s.paragraph = false
+  s.headingMarker = ''
+  s.blank = true
+}
+
+/** Lines inside a definition body are copied with their quote prefix rewritten. */
+function writeDefinitionLine(I: LayoutInput, s: LayoutState, L: LayoutLine): boolean {
+  const { lineOffsets, divClosers } = I
+  const { n, quoteDepth, indent, visible } = L
+  if (s.definitionIndent >= 0 && quoteDepth < s.depth && /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|:(?:[ \t]|$))/.test(visible)) {
+    s.definitionStack.length = 0
+    s.definitionIndent = -1
+    s.paragraph = false
+    s.blank = true
+    s.depth = quoteDepth
+  }
+  if ((s.definitionStack.at(-1) ?? -1) !== s.definitionIndent) {
+    s.definitionStack.length = 0
+    if (s.definitionIndent >= 0) s.definitionStack.push(s.definitionIndent)
+  }
+  if (/^:(?:[ \t]|$)/.test(visible) && (s.blank || s.definitionIndent >= 0) && (s.blank || indent <= s.definitionIndent)) {
+    while (s.definitionStack.length && s.definitionStack.at(-1)! >= indent) s.definitionStack.pop()
+    s.definitionStack.push(indent)
+    s.definitionIndent = indent
+  } else if (s.definitionIndent >= 0 && s.blank && indent <= s.definitionIndent) {
+    while (s.definitionStack.length && s.definitionStack.at(-1)! >= indent) s.definitionStack.pop()
+    s.definitionIndent = s.definitionStack.at(-1) ?? -1
+  }
+  if (s.definitionIndent >= 0 && indent <= s.definitionIndent && rejectedCommentStartsBlock(visible)) {
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(indent))
+    s.definitionIndent = -1
+    s.paragraph = false
+    s.blank = true
+  }
+  if (s.definitionIndent >= 0 && indent <= s.definitionIndent && divClosers.has(lineOffsets[n]!)) {
+    s.definitionStack.length = 0
+    s.definitionIndent = -1
+    s.paragraph = false
+    s.blank = true
+  }
+  if (s.definitionIndent >= 0) {
+    s.out.push(originalForCarve(I, s, L))
+    s.depth = Math.max(s.depth, quoteDepth)
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+    s.headingMarker = ''
+    s.paragraph = true
+    s.blank = false
+    return true
+  }
+  return false
+}
+
+function blockShape(I: LayoutInput, s: LayoutState, L: LayoutLine): Pick<BlockLine, 'row' | 'rawFencedItem' | 'rawReferenceItem' | 'fencedItemOpener' | 'wholeAttributes'> {
+  const { rows } = I
+  const { n, quoteDepth, indent, raw, rawIndent, text, visible } = L
+  const row: boolean = (rows[n] ?? false) && !(s.noteOwner && s.paragraph && quoteDepth >= s.depth && !(s.lists.at(-1) && indent <= s.lists.at(-1)!.column))
+  const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
+  const rawReferenceItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+\[(?!\^)[^\]\n]+\]:/.test(text)
+  const fencedItemOpener = rawFencedItem && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
+  const wholeAttributes = visible.startsWith('{') && readAttributes(raw, rawIndent)?.end === raw.length
+  return { row, rawFencedItem, rawReferenceItem, fencedItemOpener, wholeAttributes }
+}
+
+/** Place attribute lines held for a list item once the next line shows they belong elsewhere. */
+function releasePendingAttributes(I: LayoutInput, s: LayoutState, L: LayoutLine, shape: Pick<BlockLine, 'rawFencedItem' | 'rawReferenceItem' | 'wholeAttributes'>): void {
+  const { quoteDepth, quoteColumns, indent, text, visible } = L
+  const { rawFencedItem, rawReferenceItem, wholeAttributes } = shape
+  if (s.pendingAttributes.length && text !== '' && (!wholeAttributes || !s.lists.some(list => list.depth === quoteDepth && indent > list.column)) && (!/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+[^ \t]/.test(visible) && !rawFencedItem && !rawReferenceItem || s.pendingAttributes.some(attribute => attribute.depth !== quoteDepth))) {
+    for (const attribute of s.pendingAttributes) {
+      const destinationDepth = Math.min(attribute.depth, quoteDepth)
+      const column = quoteDepth > attribute.depth ? quoteColumns[attribute.depth] ?? 0 : indent
+      const owner = s.lists.filter(list => list.depth === destinationDepth && column > list.column).at(-1)
+      const target = owner ? owner.target + owner.content + Math.max(0, column - owner.column - owner.content) : column
+      const retainedDepth = Math.max(0, destinationDepth - (s.noteOwner?.depth ?? 0))
+      const prefix = retainedDepth === quoteDepth - (s.noteOwner?.depth ?? 0) ? quoteForCarve(I, s, L) : closedQuoteBoundary(quoteForCarve(I, s, L), retainedDepth - 1) + (retainedDepth ? ' ' : '')
+      attribute.output[attribute.row] = prefix + ' '.repeat(target) + attribute.attributes
+    }
+    s.pendingAttributes = []
+  }
+}
+
+function classifyBlockLine(I: LayoutInput, s: LayoutState, L: LayoutLine, outsideQuoteItem: boolean | undefined): BlockLine {
+  const { fences } = I
+  const { n, original, quoteDepth, text, visible } = L
+  const shape = blockShape(I, s, L)
+  releasePendingAttributes(I, s, L, shape)
+  const { row, rawFencedItem, rawReferenceItem, fencedItemOpener } = shape
+  const blockStart =
+    outsideQuoteItem || (quoteDepth > s.depth && !s.paragraph) ||
+    row ||
+    fences[n] !== original ||
+    /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
+    (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text))
+  // Match authored empty bodies, not spaces masking inline code.
+  const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
+  const item =
+    /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+[^ \t]/.exec(
+      emptyItem ? visible.trimEnd() + ' +' : fencedItemOpener || s.pendingAttributes.length && (rawFencedItem || rawReferenceItem) ? text : visible,
+    )
+  return { ...shape, blockStart, emptyItem, item }
+}
+
+/** A new block ends lazy continuation, quoted list items and item-owned divs it falls outside of. */
+function endLazyContinuation(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine, outsideQuoteItem: boolean | undefined): void {
+  const { quoteDepth, indent, visible } = L
+  const { blockStart, item } = B
+  if (outsideQuoteItem) {
+    s.paragraph = false
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+  }
+  if (s.embeddedListOwner && quoteDepth > s.embeddedListOwner.depth && quoteDepth >= s.depth && ownerColumn(L, s.embeddedListOwner) < s.embeddedListOwner.column + 1) setEmbedded(s, undefined)
+  const shallowerAttributes = quoteDepth < s.depth && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length
+  if (shallowerAttributes && !s.blank) s.out.push(quoteForCarve(I, s, L).trimEnd())
+  // A new block can end lazy continuation outside a quote or list item.
+  if (quoteDepth < s.depth && (blockStart || item || shallowerAttributes || rejectedCommentStartsBlock(visible))) {
+    while (s.lists.length && s.lists.at(-1)!.depth > quoteDepth) s.lists.pop()
+    if (s.embeddedListOwner && s.embeddedListOwner.depth > quoteDepth) trimEmbedded(s, quoteDepth)
+    const owner = s.lists.at(-1)
+    if (item && !s.blank && s.paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) s.out.push(closedQuoteBoundary(s.quoteBoundary, Math.max(0, quoteDepth - (s.noteOwner?.depth ?? 0))))
+    else if (rejectedCommentStartsBlock(visible) && !s.blank) s.out.push(quoteForCarve(I, s, L).trimEnd())
+    s.paragraph = false
+    s.headingMarker = ''
+    s.depth = quoteDepth
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+  }
+  while (s.divs.at(-1)?.itemColumn !== undefined) {
+    const owned = s.divs.at(-1)!
+    if (
+      quoteDepth >= owned.depth &&
+      !(quoteDepth === owned.depth && indent < owned.itemColumn! && (item || blockStart || s.blank))
+    )
+      break
+    s.divs.pop()
+    let before = s.out.length
+    while (before > 0 && s.out[before - 1]!.trim() === '') before--
+    s.out.splice(before, 0, owned.prefix + ':'.repeat(owned.width))
+    s.paragraph = false
+  }
+}
+
+function closeOwnedLists(s: LayoutState, L: LayoutLine, B: BlockLine, blockIndent: number): void {
+  const { quoteDepth } = L
+  const { blockStart, fencedItemOpener, row, item } = B
+  if (blockStart && !((s.pendingAttributes.length || fencedItemOpener || row) && item)) {
+    // A block outside the nested item's content column belongs to its parent.
+    while (
+      s.lists.length &&
+      ((quoteDepth > s.lists.at(-1)!.depth ? ownerColumn(L, s.lists.at(-1)!) : blockIndent) <= s.lists.at(-1)!.column ||
+        (s.lists.length > 1 && (quoteDepth > s.lists.at(-1)!.depth ? ownerColumn(L, s.lists.at(-1)!) : blockIndent) < s.lists.at(-1)!.column + 1))
+    ) {
+      s.lists.pop()
+      s.paragraph = false
+      s.headingMarker = ''
+      if (s.lists.length) s.lists.at(-1)!.loose = true
+    }
+    if (s.blank) for (const list of s.lists) if (blockIndent > list.column) list.loose = true
+    if (!s.lists.length) setEmbedded(s, undefined)
+  }
+}
+
+/** A line inside a quote that a list item owns keeps the item's content column. */
+function writeQuoteOwnedLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine): boolean {
+  const { fences } = I
+  const { n, original, quote, quoteDepth, indent, raw, text, visible } = L
+  const { row, wholeAttributes, item } = B
+  const quoteOwner = s.lists.at(-1)
+  if (
+    quoteOwner && quoteDepth > quoteOwner.depth &&
+    ownerColumn(L, quoteOwner) >= quoteOwner.column + 1 &&
+    (!s.paragraph || quoteDepth === s.depth)
+  ) {
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+    s.depth = quoteDepth
+    if (item && (!s.paragraph || (s.embeddedListOwner?.depth === quoteDepth && indent <= s.embeddedListOwner.column))) {
+      L.nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
+      setEmbedded(s, { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }, s.embeddedOwners.filter(owner => owner.depth < quoteDepth).concat({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }))
+    }
+    s.out.push(wholeAttributes && !s.paragraph && s.embeddedListOwner?.depth !== quoteDepth ? quoteForCarve(I, s, L) + text : originalForCarve(I, s, L))
+    s.paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text)) || /^\[[^\]\n]*\]:/.test(visible) || (!s.paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
+    s.blank = false
+    return true
+  }
+  return false
+}
+
+function writeLiteralLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine): boolean {
+  const { fences, onLiteralQuote } = I
+  const { n, original, quoteDepth, text } = L
+  const { row, fencedItemOpener, item } = B
+  if ((fences[n] !== original || row) && !((s.pendingAttributes.length || fencedItemOpener || row) && item)) {
+    s.out.push(row && !item && !s.noteOwner && !s.lists.length && !s.embeddedListOwner && !s.opaqueQuoteOwner && s.definitionIndent < 0 ? quoteForCarve(I, s, L) + text : originalForCarve(I, s, L))
+    s.paragraph = false
+    s.headingMarker = ''
+    s.blank = false
+    return true
+  }
+  if (s.paragraph && quoteDepth > s.depth) {
+    onLiteralQuote?.(n, s.depth)
+    const markerAt = closedQuoteBoundary(quoteForCarve(I, s, L), Math.max(0, s.depth - (s.noteOwner?.depth ?? 0))).length - 1
+    const written = originalForCarve(I, s, L)
+    s.out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
+    s.blank = false
+    return true
+  }
+  return false
+}
+
+function settleQuoteDepth(I: LayoutInput, s: LayoutState, L: LayoutLine): void {
+  const { quoteDepth } = L
+  if (quoteDepth > s.depth && !s.paragraph) {
+    s.lists.length = 0
+    setEmbedded(s, undefined)
+    s.depth = quoteDepth
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+  } else if (quoteDepth < s.depth && !s.paragraph) {
+    if (s.blank) s.out.push(quoteForCarve(I, s, L).trimEnd())
+    while (s.lists.length && s.lists.at(-1)!.depth > quoteDepth) s.lists.pop()
+    if (s.embeddedListOwner && s.embeddedListOwner.depth > quoteDepth) trimEmbedded(s, quoteDepth)
+    s.depth = quoteDepth
+    s.quoteBoundary = quoteForCarve(I, s, L).trimEnd()
+  }
+}
+
+/** Close divs on a `:::` line; false when the line is not a closer here. */
+function closeDivLine(I: LayoutInput, s: LayoutState, L: LayoutLine, div: RegExpExecArray): boolean {
+  const { lineOffsets, divClosers } = I
+  const { n, quoteDepth, indent, text } = L
+  const top = s.divs.at(-1)
+  const closeStarts = divClosers.get(lineOffsets[n]!)
+  if (div && top && closeStarts !== undefined) {
+    dropOrphanAttributeLine(s.out)
+    let matched = 0
+    const outerStart = closeStarts.at(-1)!
+    while (s.divs.length && s.divs.at(-1)!.start >= outerStart) {
+      const closed = s.divs.pop()!
+      while ((closeStarts[matched] ?? -1) > closed.start) matched++
+      if (closed.start === closeStarts[matched]) {
+        s.out.push(closed.prefix + ':'.repeat(closed.width))
+        matched++
+      }
+    }
+    s.paragraph = false
+    s.headingMarker = ''
+    s.blank = true
+    return true
+  }
+  if (div && /^:{3,}[ \t]*$/.test(text) && top && (div[1]!.length >= top.width || s.paragraph)) {
+    if (div[1]!.length >= top.width) {
+      dropOrphanAttributeLine(s.out)
+      let closed = s.divs.pop()!
+      s.out.push(closed.prefix + ':'.repeat(closed.width))
+      while (s.divs.length && s.divs.at(-1)!.width !== closed.width && div[1]!.length >= s.divs.at(-1)!.width) {
+        closed = s.divs.pop()!
+        s.out.push(closed.prefix + ':'.repeat(closed.width))
+      }
+      s.paragraph = false
+      s.headingMarker = ''
+      s.blank = true
+    } else {
+      s.out.push(quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : indent) + '\\' + text)
+      s.paragraph = true
+      s.blank = false
+    }
+    return true
+  }
+  return false
+}
+
+function writeListItem(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine, item: RegExpExecArray): void {
+  const { quoteDepth, indent, text } = L
+  const carriedAttributes = s.pendingAttributes
+  s.pendingAttributes = []
+  for (const attribute of carriedAttributes) attribute.output[attribute.row] = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(attribute.output[attribute.row]!)![0].trimEnd()
+  const previousList = s.lists.at(-1)
+  const endsNestedList = previousList && indent < previousList.column
+  while (s.lists.length && indent < s.lists.at(-1)!.column) {
+    s.lists.pop()
+    s.paragraph = false
+    s.headingMarker = ''
+  }
+  const parent = s.lists.at(-1)
+  const priorKind = parent?.kind
+  if (parent && s.blank && indent === parent.column && endsNestedList && !parent.loose) {
+    while (s.out.length && s.out.at(-1)!.replace(/>/g, '').trim() === '' && (s.out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) s.out.pop()
+    if (!parent.continuation && s.out[previousList.start - 1]?.replace(/>/g, '').trim() === '') s.out.splice(previousList.start - 1, 1)
+  } else if (parent && s.blank && indent === parent.column) parent.loose = true
+  if (((parent && indent > parent.column) || !parent) && s.paragraph && !s.blank) {
+    const target = parent?.target !== undefined ? parent.target + parent.content : s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : indent
+    const literal = item[1] ? '\\' + text : parent ? text.replace(/[.)]/, '\\$&') : text
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(target) + literal)
+    if (parent) parent.continuation = true
+    s.blank = false
+    return
+  }
+  const { context, nested, sameKind } = listItemContext(I, s, L, item, parent, priorKind)
+  const itemOwned = parent && !nested && sameKind
+  writeListItemLine(I, s, L, B, item, context, carriedAttributes.filter(attribute => itemOwned && attribute.depth === quoteDepth && attribute.owner >= indent), carriedAttributes)
+}
+
+/** Djot keeps a nested item's content column after a definition head of several markers. */
+function definitionItemTarget(I: LayoutInput, L: LayoutLine, parent: ListFrame): number | undefined {
+  const { lines, mask } = I
+  const { n, quoteDepth, indent } = L
+  let previous = n - 1
+  while (previous >= 0 && /^[ \t>]*$/.test(lines[previous]!) && (lines[previous]!.match(/>/g) ?? []).length === quoteDepth) previous--
+  const head = previous < 0 ? null : /^((?:[ \t]*>(?:[ \t]|$))*)([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}):(?:[ \t]|$)/.exec(lines[previous]!)
+  if (head && (head[1]!.match(/>/g) ?? []).length === quoteDepth && head[2]!.length === indent && mask[previous]![head[1]!.length + head[2]!.length] === ':') return parent.target + indent - parent.column
+  return undefined
+}
+
+/** Find or open the list this item belongs to. */
+function listItemContext(I: LayoutInput, s: LayoutState, L: LayoutLine, item: RegExpExecArray, parent: ListFrame | undefined, priorKind: string | undefined): { context: ListFrame; nested: boolean | undefined; sameKind: boolean } {
+  const { quoteDepth, indent, text, sourcePrefix } = L
+  let kind = (item[1] ?? djotListKind(item[2]!)) + (item[1] && item[0].length === 3 && item[0][1] === ' ' && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length - 1)) ? ':task' : '')
+  let context = parent
+  const nested = parent && indent > parent.column
+  const sharedKind = sharedDjotListKind(priorKind, kind)
+  const sameKind = sharedKind !== undefined
+  if (parent && !nested && sharedKind !== undefined) { kind = sharedKind; parent.kind = kind }
+  if (!parent || nested) {
+    const definitionTarget = parent && nested && s.blank ? definitionItemTarget(I, L, parent) : undefined
+    context = {
+      sourcePrefix,
+      depth: quoteDepth,
+      column: indent,
+      content: compactDjotListPrefix(item[0].slice(0, -1)).length,
+      target: definitionTarget ?? (nested ? parent.target + parent.content : s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : 0),
+      kind,
+      bullet: item[1] === '*' ? '*' : '-',
+      loose: false,
+      start: s.out.length,
+      continuation: false,
+    }
+    s.lists.push(context)
+  } else if (!sameKind) {
+    if (s.out.at(-1)?.trim() !== '') s.out.push(quoteForCarve(I, s, L).trimEnd())
+    parent.kind = kind
+    parent.bullet = parent.bullet === '-' ? '*' : '-'
+  }
+  if (parent && !nested && parent.loose && parent.continuation && s.out.at(-1)?.trim() !== '')
+    s.out.push(quoteForCarve(I, s, L).trimEnd())
+  return { context: context!, nested, sameKind }
+}
+
+function writeListItemLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine, item: RegExpExecArray, context: ListFrame, attached: PendingAttribute[], carriedAttributes: PendingAttribute[]): void {
+  const { lines, lineOffsets, holdItemAttributes } = I
+  const { n, quote, quoteDepth, rawIndent, text } = L
+  const { emptyItem, row, rawFencedItem } = B
+  const emptyTaskEnd = emptyDjotTaskTailEnd(text, n + 1 === lines.length || lines[n + 1]!.trim() === '')
+  const compact = compactDjotListPrefix(emptyTaskEnd !== undefined ? text.slice(0, emptyTaskEnd).trimEnd() + ' +' : emptyItem ? text.trimEnd() + ' +' : text)
+  const written = item[1] ? context!.bullet + compact.slice(1) : compact
+  context!.continuation = false
+  context!.empty = emptyItem
+  s.headingMarker = ''
+  const attachedSet = new Set(attached)
+  for (const attribute of carriedAttributes) {
+    if (!attachedSet.has(attribute)) s.out.push(quoteForCarve(I, s, L) + ' '.repeat(context!.target) + attribute.attributes)
+  }
+  if (attached.length && holdItemAttributes) {
+    while (s.out.length && s.out.at(-1)!.replace(/>/g, '').trim() === '' && (s.out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) s.out.pop()
+    const attributes = '{' + attached.map(attribute => attribute.attributes.slice(1, -1)).join(' ') + '}'
+    if (context!.loose) s.out.push(quoteForCarve(I, s, L).trimEnd())
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(context!.target) + holdItemAttributes(attributes), quoteForCarve(I, s, L).trimEnd())
+  }
+  s.out.push(quoteForCarve(I, s, L) + ' '.repeat(context!.target) + written)
+  const body = text.slice(item[0].length - 1)
+  const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
+  s.headingMarker = itemHeading?.[1] ?? ''
+  const task = item[1] !== undefined && item[0].length === 3 && item[0][1] === ' ' && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
+  const itemBody = task ? body.slice(task[0].length) : body
+  const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
+  if (itemDiv)
+    s.divs.push({
+      width: itemDiv[1]!.length,
+      prefix: quoteForCarve(I, s, L) + ' '.repeat(context!.target + context!.content),
+      itemColumn: context!.column + 1,
+      depth: quoteDepth,
+      start: lineOffsets[n]!,
+    })
+  const itemQuote = itemBody.startsWith('>') ? itemQuotePrefix(itemBody) : undefined
+  const itemOwners = itemQuote?.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: quote.length + rawIndent + item[0].length - 1 + (task?.[0].length ?? 0) + owner.sourceOffset })) ?? []
+  setEmbedded(s, itemOwners.at(-1), itemOwners)
+  if (itemQuote?.depth) {
+    s.depth = quoteDepth + (itemQuote.body ? itemQuote.depth : 0)
+    s.quoteBoundary = (quoteForCarve(I, s, L) + ' '.repeat(context!.target + context!.content) + itemQuote.prefix).trimEnd()
+  }
+  const quoteBody = itemQuote?.body ?? ''
+  const itemAttributes = itemBody.startsWith('{') ? readAttributes(itemBody, 0) : undefined
+  s.paragraph = !emptyItem && !row && !rawFencedItem && !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
+  s.blank = !!itemDiv
+}
+
+function openDivLine(I: LayoutInput, s: LayoutState, L: LayoutLine, div: RegExpExecArray): void {
+  const { lineOffsets } = I
+  const { n, quoteDepth, indent } = L
+  const parent = s.lists.at(-1)
+  s.divs.push({
+    width: div[1]!.length,
+    prefix: quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.content : indent),
+    depth: quoteDepth,
+    start: lineOffsets[n]!,
+    ...(parent && indent > parent.column ? { itemColumn: parent.column + 1 } : {}),
+  })
+  s.out.push(originalForCarve(I, s, L))
+  s.paragraph = false
+  s.headingMarker = ''
+  s.blank = true
+}
+
+function writeHeldItemAttributes(I: LayoutInput, s: LayoutState, L: LayoutLine): boolean {
+  const { text } = L
+  const heldItemAttributes = /^\x00DJOTITEMATTR\x00(?:\d+\x00)?(B?)\d+\x00$/.exec(text)
+  if (heldItemAttributes) {
+    if (heldItemAttributes[1] && s.out.at(-1)?.trimEnd() !== quoteForCarve(I, s, L).trimEnd()) s.out.push(quoteForCarve(I, s, L).trimEnd())
+    s.out.push(originalForCarve(I, s, L))
+    s.paragraph = false
+    s.blank = !!heldItemAttributes[1]
+    return true
+  }
+  return false
+}
+
+/** Write a line holding only attributes, or hold it for the list item that follows. */
+function placeAttributeLine(I: LayoutInput, s: LayoutState, L: LayoutLine, attrs: ReturnType<typeof readAttributes>, attributeLine: boolean): boolean {
+  const { holdItemAttributes } = I
+  const { quoteDepth, indent, visible } = L
+  if (attributeLine && !s.paragraph && !s.lists.some(list => list.depth === quoteDepth && indent > list.column)) {
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.content : 0) + attrs!.source)
+    s.paragraph = false
+    s.blank = false
+    return true
+  }
+  if (attributeLine && !s.paragraph && holdItemAttributes) {
+    let owner: typeof s.lists[number] | undefined
+    for (let index = s.lists.length - 1; index >= 0; index--) {
+      const candidate = s.lists[index]!
+      if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
+    }
+    if (owner && attrs!.source !== '{}') {
+      const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(s.out[owner.start - 2] ?? '')
+      if (s.blank && !heldLoose && !s.out[owner.start]!.includes('{loose}\n')) {
+        const start = s.out[owner.start]!, noteItem = s.noteOwner ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(start) : null
+        s.out[owner.start] = noteItem ? `${noteItem[1]}{loose}\n  ${noteItem[2]}` : quoteForCarve(I, s, L) + ' '.repeat(owner.target) + '{loose}\n' + start
+        owner.loose = true
+      }
+      s.pendingAttributes.push({ owner: owner.column, depth: quoteDepth, row: s.out.length, output: s.out, attributes: attrs!.source })
+    }
+  } else if (visible.trim() !== '' && s.pendingAttributes.length) {
+    let owner: typeof s.lists[number] | undefined
+    for (let index = s.lists.length - 1; index >= 0; index--) {
+      const candidate = s.lists[index]!
+      if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
+    }
+    const target = owner ? owner.target + owner.content + Math.max(0, indent - owner.column - owner.content) : indent
+    for (const attribute of s.pendingAttributes) attribute.output[attribute.row] = quoteForCarve(I, s, L) + ' '.repeat(target) + attribute.attributes
+    s.pendingAttributes = []
+  }
+  return false
+}
+
+/** Write a paragraph, heading, rule or table line. */
+function writeTextLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine, div: RegExpExecArray | null, rule: boolean, attributeLine: boolean): void {
+  const { indent, visible } = L
+  const { row } = B
+  if (s.lists.at(-1)?.empty && indent <= s.lists.at(-1)!.column && visible.trim() !== '' && !attributeLine) {
+    if (s.out.at(-1)?.trim() !== '') s.out.push(quoteForCarve(I, s, L).trimEnd())
+    s.blank = true
+  }
+  if (visible.trim() !== '' && !attributeLine) {
+    for (const list of s.lists) if (indent > list.column) list.empty = false
+  }
+  const outsideColumn = (s.blank || !s.paragraph) && !parentContains(s.lists, indent) && !attributeLine ? s.lists[0]?.column : undefined
+  if (outsideColumn !== undefined) { s.lists.length = 0; setEmbedded(s, undefined) }
+  const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
+  if (rejectedCommentStartsBlock(visible)) {
+    const outsideList = s.lists.length > 0 && indent <= s.lists[0]!.column
+    if (s.headingMarker || outsideList) s.out.push(quoteForCarve(I, s, L) + ' '.repeat(indent))
+    if (outsideList) { s.lists.length = 0; s.paragraph = false; s.blank = true }
+    s.headingMarker = ''
+  }
+  if (row) {
+    s.out.push(originalForCarve(I, s, L))
+    s.paragraph = false
+    s.blank = false
+    return
+  }
+  writeTextContent(I, s, L, B, div, rule, attributeLine, outsideColumn, heading)
+}
+
+function writeTextContent(I: LayoutInput, s: LayoutState, L: LayoutLine, B: BlockLine, div: RegExpExecArray | null, rule: boolean, attributeLine: boolean, outsideColumn: number | undefined, heading: RegExpExecArray | null): void {
+  const { quoteDepth, indent, text, visible } = L
+  const { row, item } = B
+  const reference = /^\[[^\]\n]*\]:/.test(visible)
+  const block =
+    (heading && heading[1] !== s.headingMarker) ||
+    div ||
+    (rule && (!visible.includes('*') || !visible.includes('-'))) ||
+    visible.startsWith('>') ||
+    visible.startsWith('|')
+  if ((block && (!heading || heading[1] !== s.headingMarker)) || attributeLine || reference) s.headingMarker = ''
+  if (s.blank && !block && !attributeLine && !reference) {
+    for (const list of s.lists) if (indent > list.column) list.loose = true
+  }
+  if (s.paragraph && block) {
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : indent) + '\\' + text)
+    s.blank = false
+    return
+  }
+  if (!s.paragraph && /^\|`+\|$/.test(text) && !row) {
+    while (s.out[0] === '') s.out.shift()
+    s.out.push(quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : indent) + '\\' + text)
+    s.paragraph = true
+    s.blank = false
+    return
+  }
+  if (heading) s.headingMarker = heading[1]!
+  if (heading && !s.lists.length) {
+    s.out.push(
+      quoteForCarve(I, s, L) +
+        ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : 0) +
+        heading[1] +
+        // Carve whitespace does not include a vertical tab or a form feed, so
+        // `String.prototype.trim` would eat heading content (carve-js#2681).
+        (trimNonNbsp(text.slice(heading[1]!.length)) ? ' ' + trimStartNonNbsp(text.slice(heading[1]!.length)) : ''),
+    )
+  } else if (rule && !s.lists.length && !s.paragraph) s.out.push(quoteForCarve(I, s, L) + ' '.repeat(s.noteOwner && quoteDepth === s.noteOwner.depth ? s.noteOwner.target + s.noteOwner.content : 0) + '***')
+  else {
+    let embedded: EmbeddedOwner | undefined
+    for (const candidate of s.embeddedOwners) {
+      if (candidate.depth > quoteDepth) break
+      if (candidate.depth === quoteDepth && ownerColumn(L, candidate) > candidate.column) { embedded = candidate; break }
+    }
+    const parent = s.lists.at(-1)
+    if (embedded) s.out.push(quoteForCarve(I, s, L) + ' '.repeat((embedded.target ?? 0) + embedded.content + Math.max(0, ownerColumn(L, embedded) - embedded.column - (embedded.sourceContent ?? embedded.content))) + text)
+    else if (parent && indent > parent.column)
+      s.out.push(
+        quoteForCarve(I, s, L) +
+          ' '.repeat(parent.target + parent.content + Math.max(0, indent - parent.column - parent.content)) +
+          text,
+      )
+    else s.out.push(outsideColumn === undefined || s.noteOwner ? originalForCarve(I, s, L) : quoteForCarve(I, s, L) + ' '.repeat(Math.max(0, indent - outsideColumn)) + text)
+  }
+  // Masked code ends a s.paragraph only when it is a block fence.
+  const fence = /^[`~]{3,}/.test(text) && visible.trim() === ''
+  s.paragraph = !(
+    heading ||
+    s.headingMarker ||
+    rule ||
+    attributeLine ||
+    reference ||
+    row ||
+    fence ||
+    /^:[ \t]/.test(visible) ||
+    quoteDepth > s.depth
+  )
+  if (!s.paragraph && quoteDepth > s.depth) s.depth = quoteDepth
+  if (s.blank && !item && !parentContains(s.lists, indent) && !attributeLine) { s.lists.length = 0; setEmbedded(s, undefined) }
+  s.blank = false
+}
+
+function writeBlockLine(I: LayoutInput, s: LayoutState, L: LayoutLine, blockIndent: number, outsideQuoteItem: boolean | undefined): void {
+  const B = classifyBlockLine(I, s, L, outsideQuoteItem)
+  endLazyContinuation(I, s, L, B, outsideQuoteItem)
+  closeOwnedLists(s, L, B, blockIndent)
+  if (writeQuoteOwnedLine(I, s, L, B)) return
+  if (writeLiteralLine(I, s, L, B)) return
+  settleQuoteDepth(I, s, L)
+  if (L.view.trim() === '' && !(s.pendingAttributes.length && B.item)) {
+    s.out.push(originalForCarve(I, s, L))
+    s.paragraph = !s.headingMarker && !/^(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?\[[^\]\n]+\]:/.test(L.text)
+    s.blank = false
+    return
+  }
+  const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(L.visible)
+  if (div && closeDivLine(I, s, L, div)) return
+  const rule = (/^(?:[*-][ \t]*){3,}$/.test(L.visible) && /^(?:[*-][ \t]*){3,}$/.test(L.text))
+  if (B.item && !rule) {
+    writeListItem(I, s, L, B, B.item)
+    return
+  }
+  if (div && !s.paragraph) {
+    openDivLine(I, s, L, div)
+    return
+  }
+  if (writeHeldItemAttributes(I, s, L)) return
+  const attrs = L.visible.startsWith('{') ? readAttributes(L.raw, L.rawIndent) : undefined
+  const attributeLine = attrs?.end === L.raw.length
+  if (placeAttributeLine(I, s, L, attrs, attributeLine)) return
+  writeTextLine(I, s, L, B, div, rule, attributeLine)
+}
+
+/** Close what is still open, then place each note body where it belongs. */
+function finishLayout(I: LayoutInput, s: LayoutState): string {
+  const { source } = I
+  while (s.notes.length) endNote(s)
+  const newline = s.out.at(-1) === ''
+  if (s.divs.length && newline) s.out.pop()
+  if (s.divs.length) dropOrphanAttributeLine(s.out)
+  while (s.divs.length) {
+    const div = s.divs.pop()!
+    if (!div.prefix.includes('>')) s.out.push(div.prefix + ':'.repeat(div.width))
+  }
+  if (newline && s.out.at(-1) !== '') s.out.push('')
+  const rendered: string[] = []
+  const placedNotes = new Map<number, string[][]>()
+  const appendNote = (body: string[]): void => {
+    for (const line of body) rendered.push(line)
+    if (rendered.at(-1) !== '') rendered.push('')
+  }
+  for (const { body, placement } of s.completedNotes) {
+    if (placement === undefined) appendNote(body)
+    else {
+      const held = placedNotes.get(placement) ?? []
+      held.push(body)
+      placedNotes.set(placement, held)
+    }
+  }
+  for (let i = 0; i <= s.out.length; i++) {
+    for (const body of placedNotes.get(i) ?? []) appendNote(body)
+    if (i < s.out.length) rendered.push(s.out[i]!)
+  }
+  if (!source.endsWith('\n') && rendered.at(-1) === '') rendered.pop()
+  return rendered.join('\n')
+}
+
 export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string, onLiteralQuote?: (line: number, depth: number) => void): string {
   if (holdItemAttributes) {
     const prepared = deepQuotedItemAttributes(source, holdItemAttributes)
@@ -176,797 +1209,51 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   let lineOffset = 0
   const lineOffsets = lines.map(line => { const at = lineOffset; lineOffset += line.length + 1; return at })
   const fences = maskDjotFences(source).split('\n')
-  let divs: {
-    width: number
-    prefix: string
-    itemColumn?: number
-    depth: number
-    start: number
-  }[] = []
-  let lists: {
-    sourcePrefix: number
-    depth: number
-    column: number
-    content: number
-    target: number
-    kind: string
-    bullet: string
-    loose: boolean
-    start: number
-    continuation: boolean
-    empty?: boolean
-  }[] = []
-  const mainOut: string[] = []
-  let out = mainOut
-  const returnedNoteItemAttributes: string[] = []
-  let returnedNoteDestinationDepth: number | undefined
-  let pendingAttributes: { owner: number; depth: number; row: number; output: string[]; attributes: string }[] = []
-  let paragraph = false,
-    blank = true,
-    depth = 0
-  type EmbeddedOwner = { depth: number; column: number; content: number; sourcePrefix?: number; sourceContent?: number; target?: number }
-  let embeddedListOwner: EmbeddedOwner | undefined
-  let embeddedOwners: EmbeddedOwner[] = []
-  const setEmbedded = (owner: EmbeddedOwner | undefined, owners?: EmbeddedOwner[]): void => {
-    embeddedListOwner = owner
-    embeddedOwners = owners ?? (owner ? [owner] : [])
+  const I: LayoutInput = { source, lines, mask, fences, lineOffsets, rows, divClosers, hasDefinitionSyntax, isBoundary, noteSourceWidths, emptyNote, holdItemAttributes, onLiteralQuote }
+  const s: LayoutState = {
+    out: [],
+    lists: [],
+    divs: [],
+    returnedNoteItemAttributes: [],
+    returnedNoteDestinationDepth: undefined,
+    pendingAttributes: [],
+    paragraph: false,
+    blank: true,
+    depth: 0,
+    embeddedListOwner: undefined,
+    embeddedOwners: [],
+    noteOwner: undefined,
+    notes: [],
+    completedNotes: [],
+    opaqueQuoteOwner: undefined,
+    quoteBoundary: '',
+    headingMarker: '',
+    definitionIndent: -1,
+    definitionStack: [],
   }
-  const trimEmbedded = (maximumDepth: number): void => {
-    while (embeddedOwners.at(-1) && embeddedOwners.at(-1)!.depth > maximumDepth) embeddedOwners.pop()
-    embeddedListOwner = embeddedOwners.at(-1)
-  }
-  type NoteOwner = { depth: number; column: number; target: number; content: number; listBase: number; parentOut: string[]; parentLists: typeof lists; parentDivs: typeof divs; parentDepth: number; parentBoundary: string; parentEmbedded: typeof embeddedListOwner; parentEmbeddedOwners: EmbeddedOwner[]; parentOpaque: typeof opaqueQuoteOwner; parentDefinition: number; placement: number | undefined; fenceColumn?: number }
-  let noteOwner: NoteOwner | undefined
-  const notes: NoteOwner[] = []
-  const completedNotes: { body: string[]; placement: number | undefined; fenceColumn?: number }[] = []
-  const endNote = (): void => {
-    const ended = notes.pop()!
-    for (const attribute of pendingAttributes) { attribute.output[attribute.row] = ''; returnedNoteItemAttributes.push(attribute.attributes) }
-    pendingAttributes = []
-    if (returnedNoteItemAttributes.length) returnedNoteDestinationDepth = Math.min(returnedNoteDestinationDepth ?? ended.depth, ended.depth)
-    if (divs.length) dropOrphanAttributeLine(out)
-    while (divs.length) {
-      const div = divs.pop()!
-      if (!div.prefix.includes('>')) out.push(div.prefix + ':'.repeat(div.width))
-    }
-    completedNotes.push({ body: out, placement: ended.placement })
-    out = ended.parentOut
-    lists = ended.parentLists
-    divs = ended.parentDivs
-    depth = ended.parentDepth
-    quoteBoundary = ended.parentBoundary
-    setEmbedded(ended.parentEmbedded, ended.parentEmbeddedOwners)
-    opaqueQuoteOwner = ended.parentOpaque
-    definitionIndent = ended.parentDefinition
-    noteOwner = notes.at(-1)
-    paragraph = false
-    headingMarker = ''
-  }
-  let opaqueQuoteOwner: { depth: number; column: number; content: number } | undefined
-  let quoteBoundary = ''
-  let headingMarker = ''
-  let definitionIndent = -1
-  const definitionStack: number[] = []
   for (let n = 0; n < lines.length; n++) {
-    const original = lines[n]!,
-      masked = mask[n]!
-    const physicalQuote = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(original)![0]
-    const physicalQuoteDepth = (physicalQuote.match(/>/g) ?? []).length
-    const quotedNoteItem: RegExpExecArray | null = !noteOwner && (blank || !paragraph || physicalQuoteDepth < depth || lists.at(-1)?.depth === physicalQuoteDepth && /^[ \t]*/.exec(original.slice(physicalQuote.length))![0].length <= lists.at(-1)!.column) && fences[n] === original ? /^([ \t]*)((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(>[ \t](?:[ \t]*>[ \t])*)[ \t]*(?=\[\^[^\]\n]+\]:(?:[ \t]|$))/.exec(original.slice(physicalQuote.length)) : null
-    const quote: string = quotedNoteItem ? physicalQuote + quotedNoteItem[1] + quotedNoteItem[2] + quotedNoteItem[3] : physicalQuote
-    const quoteDepth: number = (quote.match(/>/g) ?? []).length
-    if (quoteDepth > 0 && masked[quote.indexOf('>')] !== '>' && fences[n] === original) {
-      out.push(original)
-      blank = false
+    const L = readLayoutLine(I, s, n)
+    if (L.quoteDepth > 0 && L.masked[L.quote.indexOf('>')] !== '>' && fences[n] === L.original) {
+      s.out.push(L.original)
+      s.blank = false
       continue
     }
-    const quoteForCarve = (): string => {
-      const baseDepth = noteOwner?.depth ?? 0
-      const retainedQuote = baseDepth ? quote.slice(closedQuoteBoundary(quote, baseDepth - 1).length).replace(/^[ \t]/, '') : quote
-      if (!quoteDepth || definitionIndent >= 0 || hasDefinitionSyntax || fences[n] !== original || masked[quote.indexOf('>')] !== '>') return baseDepth ? retainedQuote : quote
-      const owner = lists.at(-1)
-      const contexts: { depth: number; column: number; content: number; target: number; sourcePrefix?: number }[] = []
-      if (owner) contexts.push(owner)
-      for (const candidate of embeddedOwners) {
-        if (candidate.depth >= quoteDepth) break
-        contexts.push({ ...candidate, target: candidate.target ?? 0 })
-      }
-      if (noteOwner) contexts.push(noteOwner)
-      if (opaqueQuoteOwner) contexts.push({ ...opaqueQuoteOwner, target: opaqueQuoteOwner.column })
-      const firstOwned = Math.min(...contexts.map(value => value!.depth))
-      const lastOwned = Math.max(...contexts.map(value => value!.depth))
-      const byDepth = new Map<number, typeof contexts[number]>()
-      for (const candidate of contexts) if (ownerColumn(candidate) > candidate.column && (!byDepth.has(candidate.depth) || candidate.column >= byDepth.get(candidate.depth)!.column)) byDepth.set(candidate.depth, candidate)
-      const parts: string[] = []
-      for (let level = baseDepth; level < quoteDepth; level++) {
-        const held = byDepth.get(level)
-        const column = held ? held.target + held.content : level > firstOwned && level < lastOwned ? (quoteColumns[level] ?? 0) : 0
-        parts.push(' '.repeat(column), '>')
-        if (level + 1 < quoteDepth || !quote.endsWith('>')) parts.push(' ')
-      }
-      return parts.join('')
-    }
-    let nativeRemainder = original.slice(quote.length)
-    const originalForCarve = (): string => {
-      const ownedList = lists.at(-1)
-      const noteColumn = ownedList && ownedList.depth === quoteDepth && indent > ownedList.column ? ownedList.target + ownedList.content : noteOwner?.content ?? 0
-      return quoteForCarve() + (noteOwner && text !== '' && quoteDepth === noteOwner.depth && !noteHead ? fences[n] === original ? ' '.repeat(noteColumn) + text : nativeRemainder.slice(Math.min(indent, noteOwner.column)) : nativeRemainder)
-    }
-    const raw = original.slice(quote.length),
-      view = masked.slice(quote.length)
-    const rawIndent = /^[ \t]*/.exec(raw)![0].length
-    const sourcePrefix = !quotedNoteItem && lists.at(-1)?.depth === quoteDepth ? lists.at(-1)!.sourcePrefix : quote.length
-    const indent = Math.max(0, rawIndent + quote.length - sourcePrefix)
-    const text = raw.slice(rawIndent),
-      visible = view.slice(rawIndent)
-    const quoteBases: number[] = []
-    const quoteView = quotedNoteItem ? original.slice(0, physicalQuote.length + quotedNoteItem[1]!.length) + ' '.repeat(quotedNoteItem[2]!.length) + original.slice(physicalQuote.length + quotedNoteItem[1]!.length + quotedNoteItem[2]!.length) : original
-    const quoteColumns = quoteDepth > 0 ? indentColumnsAfterQuotes(quoteView, quoteDepth, quoteBases) : []
-    const ownerColumn = (owner: { depth: number; sourcePrefix?: number }): number => quoteDepth > owner.depth ? (quoteColumns[owner.depth] ?? rawIndent) + (owner.sourcePrefix === undefined ? 0 : (quoteBases[owner.depth] ?? 0) - owner.sourcePrefix) : owner.sourcePrefix === undefined ? indent : quote.length + rawIndent - owner.sourcePrefix
-    const inlineNoteItem = (blank || !paragraph || quoteDepth < depth || lists.at(-1)?.depth === quoteDepth && indent <= lists.at(-1)!.column) ? /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=\[\^[^\]\n]+\]:(?:[ \t]|$))/.exec(visible) : null
-    const noteText = inlineNoteItem ? text.slice(inlineNoteItem[0].length) : text
-    const noteHead = (inlineNoteItem || visible.startsWith('[^')) ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(noteText) : null
-    while (noteOwner && fences[n] === original && (text || quoteDepth > noteOwner.depth)) {
-      const ownerColumn = quoteDepth > noteOwner.depth ? quoteColumns[noteOwner.depth] ?? 0 : indent
-      const outside = quoteDepth < noteOwner.depth || ownerColumn <= noteOwner.column
-      const block = isBoundary(original) || noteHead || quoteDepth > noteOwner.depth || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[|]|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|\[[^\]\n]+\]:)/.test(visible) || (visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length)
-      if (outside && !(paragraph && !blank && !block && quoteDepth <= noteOwner.depth)) {
-        endNote()
-      } else break
-    }
-    if (noteOwner && fences[n] !== original) {
-      const host = noteOwner.depth ? closedQuoteBoundary(original, noteOwner.depth - 1).length : 0
-      const payload = original.slice(host).replace(noteOwner.depth ? /^[ \t]/ : /$^/, '')
-      const payloadIndent = /^[ \t]*/.exec(payload)![0].length
-      if (noteOwner.fenceColumn === undefined && payloadIndent <= noteOwner.column && /^(`{3,}|~{3,})/.test(payload.slice(payloadIndent))) {
-        while (noteOwner && payloadIndent <= noteOwner.column) endNote()
-      }
-      if (noteOwner) {
-        noteOwner.fenceColumn ??= payloadIndent
-        if (returnedNoteItemAttributes.length) {
-          const prefix = ' '.repeat(noteOwner.content)
-          for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
-          returnedNoteItemAttributes.length = 0
-          returnedNoteDestinationDepth = undefined
-        }
-        out.push(' '.repeat(noteOwner.content) + payload.slice(Math.min(payloadIndent, noteOwner.fenceColumn)))
-        paragraph = false
-        headingMarker = ''
-        blank = false
-        continue
-      }
-    } else if (noteOwner) delete noteOwner.fenceColumn
-    if (/^\[(?!\^)[^\]\n]*\]:/.test(text) && out.at(-1)?.includes(emptyNote)) out.push(quoteForCarve() + ' '.repeat(Math.max(0, indent)))
-    if (opaqueQuoteOwner && text && (quoteDepth < opaqueQuoteOwner.depth || (quoteDepth === opaqueQuoteOwner.depth ? indent : quoteColumns[opaqueQuoteOwner.depth] ?? 0) < opaqueQuoteOwner.column + 1)) opaqueQuoteOwner = undefined
-    const embeddedParent = lists.at(-1)
-    if (text && fences[n] === original && embeddedOwners.length && embeddedParent && quoteDepth > embeddedParent.depth && ownerColumn(embeddedParent) <= embeddedParent.column) {
-      if (paragraph && !blank) out.push(closedQuoteBoundary(quoteBoundary, Math.max(0, embeddedParent.depth - (noteOwner?.depth ?? 0))))
-      setEmbedded(undefined)
-      paragraph = false
-      headingMarker = ''
-    }
-    if (text && fences[n] === original && embeddedOwners.length) {
-      const startsBlock = /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[|]|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|\[[^\]\n]+\]:)/.test(visible)
-      for (let i = 0; i < embeddedOwners.length; i++) {
-        const owner = embeddedOwners[i]!
-        const outside = quoteDepth < owner.depth || ownerColumn(owner) <= owner.column
-        if (outside && (blank || !paragraph || quoteDepth > owner.depth || startsBlock)) {
-          const siblingItem = quoteDepth === owner.depth && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
-          if (paragraph && !blank) out.push(closedQuoteBoundary(quoteBoundary, Math.max(0, owner.depth - (noteOwner?.depth ?? 0) - 1 + (siblingItem ? 1 : 0))))
-          embeddedOwners = embeddedOwners.slice(0, i)
-          embeddedListOwner = embeddedOwners.at(-1)
-          paragraph = false
-          headingMarker = ''
-          break
-        }
-        if (owner.depth >= quoteDepth && !blank && paragraph && !startsBlock) break
-      }
-    }
-    const blockIndent = quoteDepth > depth ? (quoteColumns[depth] ?? indent) : indent
-    const ordinaryQuoteList = lists.at(-1)
-    const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
-    const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && ownerColumn(quoteList) < quoteList.column + 1
-    if (returnedNoteItemAttributes.length) {
-      const retainedDepth = Math.max(0, Math.min(returnedNoteDestinationDepth ?? 0, quoteDepth) - (noteOwner?.depth ?? 0))
-      const prefix = retainedDepth ? closedQuoteBoundary(quoteForCarve(), retainedDepth - 1) + ' ' : ' '.repeat(noteOwner?.content ?? 0)
-      for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
-      returnedNoteItemAttributes.length = 0
-      returnedNoteDestinationDepth = undefined
-    }
-    if (noteHead) {
-      for (const attribute of pendingAttributes) attribute.output[attribute.row] = ''
-      pendingAttributes = []
-      if (!noteOwner && (quotedNoteItem || inlineNoteItem) && physicalQuoteDepth < depth) {
-        out.push(quoteBoundary)
-        depth = physicalQuoteDepth
-        quoteBoundary = physicalQuote.trimEnd()
-      }
-      if (quotedNoteItem) {
-        const marker = quotedNoteItem[2]!
-        const column = quotedNoteItem[1]!.length
-        const context = { sourcePrefix: physicalQuote.length, depth: physicalQuoteDepth, column, content: compactDjotListPrefix(marker).length, target: column, kind: djotListKind(marker.trim()), bullet: marker[0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false }
-        lists.push(context)
-        out.push(physicalQuote + quotedNoteItem[1] + compactDjotListPrefix(marker) + quotedNoteItem[3] + emptyNote)
-        depth = quoteDepth
-        quoteBoundary = (physicalQuote + ' '.repeat(context.target + context.content) + quotedNoteItem[3]).trimEnd()
-      }
-      if (inlineNoteItem) {
-        const parent = lists.at(-1)
-        const target = parent && parent.depth === quoteDepth && parent.column === indent ? parent.target : rawIndent
-        out.push(quoteForCarve() + ' '.repeat(target) + compactDjotListPrefix(inlineNoteItem[0]) + emptyNote)
-      }
-      const noteIndent = indent + (inlineNoteItem?.[0].length ?? 0)
-      while (lists.length && (lists.at(-1)!.depth > quoteDepth || (lists.at(-1)!.depth === quoteDepth && (indent < lists.at(-1)!.column || !inlineNoteItem && indent === lists.at(-1)!.column)))) lists.pop()
-      if (!inlineNoteItem && !quotedNoteItem && (quoteDepth > 0 || (!lists.length && out.length && out.at(-1)?.trim() !== ''))) out.push(quoteForCarve().trimEnd())
-      noteOwner = { depth: quoteDepth, column: noteIndent, target: 0, content: 2, listBase: 0, parentOut: out, parentLists: lists, parentDivs: divs, parentDepth: depth, parentBoundary: quoteBoundary, parentEmbedded: embeddedListOwner, parentEmbeddedOwners: embeddedOwners, parentOpaque: opaqueQuoteOwner, parentDefinition: definitionIndent, placement: !noteOwner && quoteDepth === 0 && noteIndent === 0 && !lists.length ? out.length : undefined }
-      notes.push(noteOwner)
-      out = []
-      lists = []
-      divs = []
-      setEmbedded(undefined)
-      opaqueQuoteOwner = undefined
-      definitionIndent = -1
-      let currentNoteHead = noteHead
-      let nestedFirstBody = false
-      let noteBodySourceAt = quote.length + rawIndent + (inlineNoteItem?.[0].length ?? 0)
-      while (true) {
-      const body = currentNoteHead[2]!
-      const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
-      let childBody = body
-      if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
-        childBody = body.slice(child[1]!.length)
-        if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\](?:[ \t]+|$)/, '')
-      }
-      const nestedHead = child ? /^(\[\^[^\]\n]+\]:[ \t]*)(.+)$/.exec(childBody) : null
-      if (!nestedFirstBody && nestedHead) {
-        out.push(currentNoteHead[1] + compactDjotListPrefix(child![1]!) + emptyNote)
-        noteOwner = { depth: quoteDepth, column: lists.at(-1)!.column + child![1]!.length, target: 0, content: 2, listBase: 0, parentOut: out, parentLists: lists, parentDivs: divs, parentDepth: depth, parentBoundary: quoteBoundary, parentEmbedded: embeddedListOwner, parentEmbeddedOwners: embeddedOwners, parentOpaque: opaqueQuoteOwner, parentDefinition: definitionIndent, placement: undefined }
-        notes.push(noteOwner)
-        out = []
-        lists = []
-        divs = []
-        setEmbedded(undefined)
-        opaqueQuoteOwner = undefined
-        definitionIndent = -1
-        noteBodySourceAt += (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length) + child![1]!.length
-        currentNoteHead = nestedHead
-        nestedFirstBody = true
-        continue
-      }
-      if (/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(childBody)) noteOwner.fenceColumn = noteOwner.column + noteOwner.content
-      const inlineQuote = itemQuotePrefix(childBody)
-      const noteBodyStart = noteBodySourceAt + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length) + body.length - childBody.length
-      const inlineOwners = inlineQuote.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: noteBodyStart + owner.sourceOffset }))
-      setEmbedded(inlineOwners.at(-1), inlineOwners)
-      depth = quoteDepth + inlineQuote.depth
-      const context = child ? lists.at(-1)! : noteOwner
-      quoteBoundary = (quoteForCarve() + ' '.repeat(context.target + context.content) + inlineQuote.prefix).trimEnd()
-      const emptyTaskEnd = emptyDjotTaskTailEnd(body, n + 1 === lines.length || lines[n + 1]!.trim() === '')
-      let writtenBody = compactDjotListPrefix(emptyTaskEnd === undefined ? body : body.slice(0, emptyTaskEnd).trimEnd() + ' +', emptyTaskEnd !== undefined)
-      if (emptyTaskEnd !== undefined && body.startsWith('* ')) {
-        writtenBody = '*' + writtenBody.slice(1)
-        out.push(currentNoteHead[1] + emptyNote + '\n  ' + writtenBody)
-      } else out.push(currentNoteHead[1] + writtenBody)
-      const content = inlineQuote.body
-      const inlineDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(content)
-      if (inlineDiv) divs.push({ width: inlineDiv[1]!.length, prefix: ' '.repeat(context.target + context.content) + inlineQuote.prefix, depth, start: lineOffsets[n]!, ...(child ? { itemColumn: context.column + 1 } : {}) })
-      paragraph = !rows[n] && content !== '' && !content.startsWith(emptyNote) && !/^(?:#{1,6}(?:[ \t]|$)|:{3,}|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(content) && !/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(content)
-      headingMarker = /^(#{1,6})(?:[ \t]|$)/.exec(content)?.[1] ?? ''
-      blank = !paragraph
-      break
-      }
-
+    if (writeNoteContinuation(I, s, L)) continue
+    releaseLineOwners(I, s, L)
+    const { blockIndent, outsideQuoteItem } = quoteItemPlacement(s, L)
+    flushReturnedNoteAttributes(I, s, L)
+    if (L.noteHead) {
+      openNote(I, s, L, L.noteHead)
       continue
     }
-    if (text === '') {
-      while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
-      if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) trimEmbedded(quoteDepth)
-      if (outsideQuoteItem) {
-        while (lists.length && quoteDepth > lists.at(-1)!.depth && ownerColumn(lists.at(-1)!) < lists.at(-1)!.column + 1) lists.pop()
-        if (embeddedListOwner && quoteDepth > embeddedListOwner.depth && ownerColumn(embeddedListOwner) < embeddedListOwner.column + 1) setEmbedded(undefined)
-        depth = quoteDepth
-        quoteBoundary = quoteForCarve().trimEnd()
-      }
-      if (paragraph && quoteDepth > depth && !outsideQuoteItem) {
-        onLiteralQuote?.(n, depth)
-        const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
-        const written = originalForCarve()
-        out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
-        blank = false
-        continue
-      }
-      out.push(originalForCarve())
-      paragraph = false
-      headingMarker = ''
-      blank = true
+    if (L.text === '') {
+      writeBlankLine(I, s, L, outsideQuoteItem)
       continue
     }
-    if (definitionIndent >= 0 && quoteDepth < depth && /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|:(?:[ \t]|$))/.test(visible)) {
-      definitionStack.length = 0
-      definitionIndent = -1
-      paragraph = false
-      blank = true
-      depth = quoteDepth
-    }
-    if ((definitionStack.at(-1) ?? -1) !== definitionIndent) {
-      definitionStack.length = 0
-      if (definitionIndent >= 0) definitionStack.push(definitionIndent)
-    }
-    if (/^:(?:[ \t]|$)/.test(visible) && (blank || definitionIndent >= 0) && (blank || indent <= definitionIndent)) {
-      while (definitionStack.length && definitionStack.at(-1)! >= indent) definitionStack.pop()
-      definitionStack.push(indent)
-      definitionIndent = indent
-    } else if (definitionIndent >= 0 && blank && indent <= definitionIndent) {
-      while (definitionStack.length && definitionStack.at(-1)! >= indent) definitionStack.pop()
-      definitionIndent = definitionStack.at(-1) ?? -1
-    }
-    if (definitionIndent >= 0 && indent <= definitionIndent && rejectedCommentStartsBlock(visible)) {
-      out.push(quoteForCarve() + ' '.repeat(indent))
-      definitionIndent = -1
-      paragraph = false
-      blank = true
-    }
-    if (definitionIndent >= 0 && indent <= definitionIndent && divClosers.has(lineOffsets[n]!)) {
-      definitionStack.length = 0
-      definitionIndent = -1
-      paragraph = false
-      blank = true
-    }
-    if (definitionIndent >= 0) {
-      out.push(originalForCarve())
-      depth = Math.max(depth, quoteDepth)
-      quoteBoundary = quoteForCarve().trimEnd()
-      headingMarker = ''
-      paragraph = true
-      blank = false
-      continue
-    }
-    const row: boolean = (rows[n] ?? false) && !(noteOwner && paragraph && quoteDepth >= depth && !(lists.at(-1) && indent <= lists.at(-1)!.column))
-    const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
-    const rawReferenceItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+\[(?!\^)[^\]\n]+\]:/.test(text)
-    const fencedItemOpener = rawFencedItem && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
-    const wholeAttributes = visible.startsWith('{') && readAttributes(raw, rawIndent)?.end === raw.length
-    if (pendingAttributes.length && text !== '' && (!wholeAttributes || !lists.some(list => list.depth === quoteDepth && indent > list.column)) && (!/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+[^ \t]/.test(visible) && !rawFencedItem && !rawReferenceItem || pendingAttributes.some(attribute => attribute.depth !== quoteDepth))) {
-      for (const attribute of pendingAttributes) {
-        const destinationDepth = Math.min(attribute.depth, quoteDepth)
-        const column = quoteDepth > attribute.depth ? quoteColumns[attribute.depth] ?? 0 : indent
-        const owner = lists.filter(list => list.depth === destinationDepth && column > list.column).at(-1)
-        const target = owner ? owner.target + owner.content + Math.max(0, column - owner.column - owner.content) : column
-        const retainedDepth = Math.max(0, destinationDepth - (noteOwner?.depth ?? 0))
-        const prefix = retainedDepth === quoteDepth - (noteOwner?.depth ?? 0) ? quoteForCarve() : closedQuoteBoundary(quoteForCarve(), retainedDepth - 1) + (retainedDepth ? ' ' : '')
-        attribute.output[attribute.row] = prefix + ' '.repeat(target) + attribute.attributes
-      }
-      pendingAttributes = []
-    }
-    const blockStart =
-      outsideQuoteItem || (quoteDepth > depth && !paragraph) ||
-      row ||
-      fences[n] !== original ||
-      /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
-      (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text))
-    // Match authored empty bodies, not spaces masking inline code.
-    const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
-    const item =
-      /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+[^ \t]/.exec(
-        emptyItem ? visible.trimEnd() + ' +' : fencedItemOpener || pendingAttributes.length && (rawFencedItem || rawReferenceItem) ? text : visible,
-      )
-    if (outsideQuoteItem) {
-      paragraph = false
-      quoteBoundary = quoteForCarve().trimEnd()
-    }
-    if (embeddedListOwner && quoteDepth > embeddedListOwner.depth && quoteDepth >= depth && ownerColumn(embeddedListOwner) < embeddedListOwner.column + 1) setEmbedded(undefined)
-    const shallowerAttributes = quoteDepth < depth && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length
-    if (shallowerAttributes && !blank) out.push(quoteForCarve().trimEnd())
-    // A new block can end lazy continuation outside a quote or list item.
-    if (quoteDepth < depth && (blockStart || item || shallowerAttributes || rejectedCommentStartsBlock(visible))) {
-      while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
-      if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) trimEmbedded(quoteDepth)
-      const owner = lists.at(-1)
-      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(closedQuoteBoundary(quoteBoundary, Math.max(0, quoteDepth - (noteOwner?.depth ?? 0))))
-      else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quoteForCarve().trimEnd())
-      paragraph = false
-      headingMarker = ''
-      depth = quoteDepth
-      quoteBoundary = quoteForCarve().trimEnd()
-    }
-    while (divs.at(-1)?.itemColumn !== undefined) {
-      const owned = divs.at(-1)!
-      if (
-        quoteDepth >= owned.depth &&
-        !(quoteDepth === owned.depth && indent < owned.itemColumn! && (item || blockStart || blank))
-      )
-        break
-      divs.pop()
-      let before = out.length
-      while (before > 0 && out[before - 1]!.trim() === '') before--
-      out.splice(before, 0, owned.prefix + ':'.repeat(owned.width))
-      paragraph = false
-    }
-    if (blockStart && !((pendingAttributes.length || fencedItemOpener || row) && item)) {
-      // A block outside the nested item's content column belongs to its parent.
-      while (
-        lists.length &&
-        ((quoteDepth > lists.at(-1)!.depth ? ownerColumn(lists.at(-1)!) : blockIndent) <= lists.at(-1)!.column ||
-          (lists.length > 1 && (quoteDepth > lists.at(-1)!.depth ? ownerColumn(lists.at(-1)!) : blockIndent) < lists.at(-1)!.column + 1))
-      ) {
-        lists.pop()
-        paragraph = false
-        headingMarker = ''
-        if (lists.length) lists.at(-1)!.loose = true
-      }
-      if (blank) for (const list of lists) if (blockIndent > list.column) list.loose = true
-      if (!lists.length) setEmbedded(undefined)
-    }
-    const quoteOwner = lists.at(-1)
-    if (
-      quoteOwner && quoteDepth > quoteOwner.depth &&
-      ownerColumn(quoteOwner) >= quoteOwner.column + 1 &&
-      (!paragraph || quoteDepth === depth)
-    ) {
-      quoteBoundary = quoteForCarve().trimEnd()
-      depth = quoteDepth
-      if (item && (!paragraph || (embeddedListOwner?.depth === quoteDepth && indent <= embeddedListOwner.column))) {
-        nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
-        setEmbedded({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }, embeddedOwners.filter(owner => owner.depth < quoteDepth).concat({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }))
-      }
-      out.push(wholeAttributes && !paragraph && embeddedListOwner?.depth !== quoteDepth ? quoteForCarve() + text : originalForCarve())
-      paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text)) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
-      blank = false
-      continue
-    }
-    if ((fences[n] !== original || row) && !((pendingAttributes.length || fencedItemOpener || row) && item)) {
-      out.push(row && !item && !noteOwner && !lists.length && !embeddedListOwner && !opaqueQuoteOwner && definitionIndent < 0 ? quoteForCarve() + text : originalForCarve())
-      paragraph = false
-      headingMarker = ''
-      blank = false
-      continue
-    }
-    if (paragraph && quoteDepth > depth) {
-      onLiteralQuote?.(n, depth)
-      const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
-      const written = originalForCarve()
-      out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
-      blank = false
-      continue
-    }
-    if (quoteDepth > depth && !paragraph) {
-      lists.length = 0
-      setEmbedded(undefined)
-      depth = quoteDepth
-      quoteBoundary = quoteForCarve().trimEnd()
-    } else if (quoteDepth < depth && !paragraph) {
-      if (blank) out.push(quoteForCarve().trimEnd())
-      while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
-      if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) trimEmbedded(quoteDepth)
-      depth = quoteDepth
-      quoteBoundary = quoteForCarve().trimEnd()
-    }
-    if (view.trim() === '' && !(pendingAttributes.length && item)) {
-      out.push(originalForCarve())
-      paragraph = !headingMarker && !/^(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?\[[^\]\n]+\]:/.test(text)
-      blank = false
-      continue
-    }
-    const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
-    const top = divs.at(-1)
-    const closeStarts = divClosers.get(lineOffsets[n]!)
-    if (div && top && closeStarts !== undefined) {
-      dropOrphanAttributeLine(out)
-      let matched = 0
-      const outerStart = closeStarts.at(-1)!
-      while (divs.length && divs.at(-1)!.start >= outerStart) {
-        const closed = divs.pop()!
-        while ((closeStarts[matched] ?? -1) > closed.start) matched++
-        if (closed.start === closeStarts[matched]) {
-          out.push(closed.prefix + ':'.repeat(closed.width))
-          matched++
-        }
-      }
-      paragraph = false
-      headingMarker = ''
-      blank = true
-      continue
-    }
-    if (div && /^:{3,}[ \t]*$/.test(text) && top && (div[1]!.length >= top.width || paragraph)) {
-      if (div[1]!.length >= top.width) {
-        dropOrphanAttributeLine(out)
-        let closed = divs.pop()!
-        out.push(closed.prefix + ':'.repeat(closed.width))
-        while (divs.length && divs.at(-1)!.width !== closed.width && div[1]!.length >= divs.at(-1)!.width) {
-          closed = divs.pop()!
-          out.push(closed.prefix + ':'.repeat(closed.width))
-        }
-        paragraph = false
-        headingMarker = ''
-        blank = true
-      } else {
-        out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
-        paragraph = true
-        blank = false
-      }
-      continue
-    }
-    const rule = (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text))
-    if (item && !rule) {
-      const carriedAttributes = pendingAttributes
-      pendingAttributes = []
-      for (const attribute of carriedAttributes) attribute.output[attribute.row] = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(attribute.output[attribute.row]!)![0].trimEnd()
-      const previousList = lists.at(-1)
-      const endsNestedList = previousList && indent < previousList.column
-      while (lists.length && indent < lists.at(-1)!.column) {
-        lists.pop()
-        paragraph = false
-        headingMarker = ''
-      }
-      const parent = lists.at(-1)
-      const priorKind = parent?.kind
-      if (parent && blank && indent === parent.column && endsNestedList && !parent.loose) {
-        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '' && (out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) out.pop()
-        if (!parent.continuation && out[previousList.start - 1]?.replace(/>/g, '').trim() === '') out.splice(previousList.start - 1, 1)
-      } else if (parent && blank && indent === parent.column) parent.loose = true
-      if (((parent && indent > parent.column) || !parent) && paragraph && !blank) {
-        const target = parent?.target !== undefined ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent
-        const literal = item[1] ? '\\' + text : parent ? text.replace(/[.)]/, '\\$&') : text
-        out.push(quoteForCarve() + ' '.repeat(target) + literal)
-        if (parent) parent.continuation = true
-        blank = false
-        continue
-      }
-      let kind = (item[1] ?? djotListKind(item[2]!)) + (item[1] && item[0].length === 3 && item[0][1] === ' ' && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length - 1)) ? ':task' : '')
-      let context = parent
-      const nested = parent && indent > parent.column
-      const sharedKind = sharedDjotListKind(priorKind, kind)
-      const sameKind = sharedKind !== undefined
-      if (parent && !nested && sharedKind !== undefined) { kind = sharedKind; parent.kind = kind }
-      if (!parent || nested) {
-        let definitionTarget: number | undefined
-        if (parent && nested && blank) {
-          let previous = n - 1
-          while (previous >= 0 && /^[ \t>]*$/.test(lines[previous]!) && (lines[previous]!.match(/>/g) ?? []).length === quoteDepth) previous--
-          const head = previous < 0 ? null : /^((?:[ \t]*>(?:[ \t]|$))*)([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+){2,}):(?:[ \t]|$)/.exec(lines[previous]!)
-          if (head && (head[1]!.match(/>/g) ?? []).length === quoteDepth && head[2]!.length === indent && mask[previous]![head[1]!.length + head[2]!.length] === ':') definitionTarget = parent.target + indent - parent.column
-        }
-        context = {
-          sourcePrefix,
-          depth: quoteDepth,
-          column: indent,
-          content: compactDjotListPrefix(item[0].slice(0, -1)).length,
-          target: definitionTarget ?? (nested ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0),
-          kind,
-          bullet: item[1] === '*' ? '*' : '-',
-          loose: false,
-          start: out.length,
-          continuation: false,
-        }
-        lists.push(context)
-      } else if (!sameKind) {
-        if (out.at(-1)?.trim() !== '') out.push(quoteForCarve().trimEnd())
-        parent.kind = kind
-        parent.bullet = parent.bullet === '-' ? '*' : '-'
-      }
-      if (parent && !nested && parent.loose && parent.continuation && out.at(-1)?.trim() !== '')
-        out.push(quoteForCarve().trimEnd())
-      const emptyTaskEnd = emptyDjotTaskTailEnd(text, n + 1 === lines.length || lines[n + 1]!.trim() === '')
-      const compact = compactDjotListPrefix(emptyTaskEnd !== undefined ? text.slice(0, emptyTaskEnd).trimEnd() + ' +' : emptyItem ? text.trimEnd() + ' +' : text)
-      const written = item[1] ? context!.bullet + compact.slice(1) : compact
-      context!.continuation = false
-      context!.empty = emptyItem
-      headingMarker = ''
-      const itemOwned = parent && !nested && sameKind
-      const attached = carriedAttributes.filter(attribute => itemOwned && attribute.depth === quoteDepth && attribute.owner >= indent)
-      const attachedSet = new Set(attached)
-      for (const attribute of carriedAttributes) {
-        if (!attachedSet.has(attribute)) out.push(quoteForCarve() + ' '.repeat(context!.target) + attribute.attributes)
-      }
-      if (attached.length && holdItemAttributes) {
-        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '' && (out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) out.pop()
-        const attributes = '{' + attached.map(attribute => attribute.attributes.slice(1, -1)).join(' ') + '}'
-        if (context!.loose) out.push(quoteForCarve().trimEnd())
-        out.push(quoteForCarve() + ' '.repeat(context!.target) + holdItemAttributes(attributes), quoteForCarve().trimEnd())
-      }
-      out.push(quoteForCarve() + ' '.repeat(context!.target) + written)
-      const body = text.slice(item[0].length - 1)
-      const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
-      headingMarker = itemHeading?.[1] ?? ''
-      const task = item[1] !== undefined && item[0].length === 3 && item[0][1] === ' ' && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
-      const itemBody = task ? body.slice(task[0].length) : body
-      const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
-      if (itemDiv)
-        divs.push({
-          width: itemDiv[1]!.length,
-          prefix: quoteForCarve() + ' '.repeat(context!.target + context!.content),
-          itemColumn: context!.column + 1,
-          depth: quoteDepth,
-          start: lineOffsets[n]!,
-        })
-      const itemQuote = itemBody.startsWith('>') ? itemQuotePrefix(itemBody) : undefined
-      const itemOwners = itemQuote?.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: quote.length + rawIndent + item[0].length - 1 + (task?.[0].length ?? 0) + owner.sourceOffset })) ?? []
-      setEmbedded(itemOwners.at(-1), itemOwners)
-      if (itemQuote?.depth) {
-        depth = quoteDepth + (itemQuote.body ? itemQuote.depth : 0)
-        quoteBoundary = (quoteForCarve() + ' '.repeat(context!.target + context!.content) + itemQuote.prefix).trimEnd()
-      }
-      const quoteBody = itemQuote?.body ?? ''
-      const itemAttributes = itemBody.startsWith('{') ? readAttributes(itemBody, 0) : undefined
-      paragraph = !emptyItem && !row && !rawFencedItem && !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
-      blank = !!itemDiv
-      continue
-    }
-    if (div && !paragraph) {
-      const parent = lists.at(-1)
-      divs.push({
-        width: div[1]!.length,
-        prefix: quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.content : indent),
-        depth: quoteDepth,
-        start: lineOffsets[n]!,
-        ...(parent && indent > parent.column ? { itemColumn: parent.column + 1 } : {}),
-      })
-      out.push(originalForCarve())
-      paragraph = false
-      headingMarker = ''
-      blank = true
-      continue
-    }
-    const heldItemAttributes = /^\x00DJOTITEMATTR\x00(?:\d+\x00)?(B?)\d+\x00$/.exec(text)
-    if (heldItemAttributes) {
-      if (heldItemAttributes[1] && out.at(-1)?.trimEnd() !== quoteForCarve().trimEnd()) out.push(quoteForCarve().trimEnd())
-      out.push(originalForCarve())
-      paragraph = false
-      blank = !!heldItemAttributes[1]
-      continue
-    }
-    const attrs = visible.startsWith('{') ? readAttributes(raw, rawIndent) : undefined
-    const attributeLine = attrs?.end === raw.length
-    if (attributeLine && !paragraph && !lists.some(list => list.depth === quoteDepth && indent > list.column)) {
-      out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.content : 0) + attrs!.source)
-      paragraph = false
-      blank = false
-      continue
-    }
-    if (attributeLine && !paragraph && holdItemAttributes) {
-      let owner: typeof lists[number] | undefined
-      for (let index = lists.length - 1; index >= 0; index--) {
-        const candidate = lists[index]!
-        if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
-      }
-      if (owner && attrs!.source !== '{}') {
-        const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(out[owner.start - 2] ?? '')
-        if (blank && !heldLoose && !out[owner.start]!.includes('{loose}\n')) {
-          const start = out[owner.start]!, noteItem = noteOwner ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(start) : null
-          out[owner.start] = noteItem ? `${noteItem[1]}{loose}\n  ${noteItem[2]}` : quoteForCarve() + ' '.repeat(owner.target) + '{loose}\n' + start
-          owner.loose = true
-        }
-        pendingAttributes.push({ owner: owner.column, depth: quoteDepth, row: out.length, output: out, attributes: attrs!.source })
-      }
-    } else if (visible.trim() !== '' && pendingAttributes.length) {
-      let owner: typeof lists[number] | undefined
-      for (let index = lists.length - 1; index >= 0; index--) {
-        const candidate = lists[index]!
-        if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
-      }
-      const target = owner ? owner.target + owner.content + Math.max(0, indent - owner.column - owner.content) : indent
-      for (const attribute of pendingAttributes) attribute.output[attribute.row] = quoteForCarve() + ' '.repeat(target) + attribute.attributes
-      pendingAttributes = []
-    }
-    if (lists.at(-1)?.empty && indent <= lists.at(-1)!.column && visible.trim() !== '' && !attributeLine) {
-      if (out.at(-1)?.trim() !== '') out.push(quoteForCarve().trimEnd())
-      blank = true
-    }
-    if (visible.trim() !== '' && !attributeLine) {
-      for (const list of lists) if (indent > list.column) list.empty = false
-    }
-    const outsideColumn = (blank || !paragraph) && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
-    if (outsideColumn !== undefined) { lists.length = 0; setEmbedded(undefined) }
-    const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
-    if (rejectedCommentStartsBlock(visible)) {
-      const outsideList = lists.length > 0 && indent <= lists[0]!.column
-      if (headingMarker || outsideList) out.push(quoteForCarve() + ' '.repeat(indent))
-      if (outsideList) { lists.length = 0; paragraph = false; blank = true }
-      headingMarker = ''
-    }
-    const reference = /^\[[^\]\n]*\]:/.test(visible)
-    if (row) {
-      out.push(originalForCarve())
-      paragraph = false
-      blank = false
-      continue
-    }
-    const block =
-      (heading && heading[1] !== headingMarker) ||
-      div ||
-      (rule && (!visible.includes('*') || !visible.includes('-'))) ||
-      visible.startsWith('>') ||
-      visible.startsWith('|')
-    if ((block && (!heading || heading[1] !== headingMarker)) || attributeLine || reference) headingMarker = ''
-    if (blank && !block && !attributeLine && !reference) {
-      for (const list of lists) if (indent > list.column) list.loose = true
-    }
-    if (paragraph && block) {
-      out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
-      blank = false
-      continue
-    }
-    if (!paragraph && /^\|`+\|$/.test(text) && !row) {
-      while (out[0] === '') out.shift()
-      out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
-      paragraph = true
-      blank = false
-      continue
-    }
-    if (heading) headingMarker = heading[1]!
-    if (heading && !lists.length) {
-      out.push(
-        quoteForCarve() +
-          ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0) +
-          heading[1] +
-          // Carve whitespace does not include a vertical tab or a form feed, so
-          // `String.prototype.trim` would eat heading content (carve-js#2681).
-          (trimNonNbsp(text.slice(heading[1]!.length)) ? ' ' + trimStartNonNbsp(text.slice(heading[1]!.length)) : ''),
-      )
-    } else if (rule && !lists.length && !paragraph) out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0) + '***')
-    else {
-      let embedded: EmbeddedOwner | undefined
-      for (const candidate of embeddedOwners) {
-        if (candidate.depth > quoteDepth) break
-        if (candidate.depth === quoteDepth && ownerColumn(candidate) > candidate.column) { embedded = candidate; break }
-      }
-      const parent = lists.at(-1)
-      if (embedded) out.push(quoteForCarve() + ' '.repeat((embedded.target ?? 0) + embedded.content + Math.max(0, ownerColumn(embedded) - embedded.column - (embedded.sourceContent ?? embedded.content))) + text)
-      else if (parent && indent > parent.column)
-        out.push(
-          quoteForCarve() +
-            ' '.repeat(parent.target + parent.content + Math.max(0, indent - parent.column - parent.content)) +
-            text,
-        )
-      else out.push(outsideColumn === undefined || noteOwner ? originalForCarve() : quoteForCarve() + ' '.repeat(Math.max(0, indent - outsideColumn)) + text)
-    }
-    // Masked code ends a paragraph only when it is a block fence.
-    const fence = /^[`~]{3,}/.test(text) && visible.trim() === ''
-    paragraph = !(
-      heading ||
-      headingMarker ||
-      rule ||
-      attributeLine ||
-      reference ||
-      row ||
-      fence ||
-      /^:[ \t]/.test(visible) ||
-      quoteDepth > depth
-    )
-    if (!paragraph && quoteDepth > depth) depth = quoteDepth
-    if (blank && !item && !parentContains(lists, indent) && !attributeLine) { lists.length = 0; setEmbedded(undefined) }
-    blank = false
+    if (writeDefinitionLine(I, s, L)) continue
+    writeBlockLine(I, s, L, blockIndent, outsideQuoteItem)
   }
-  while (notes.length) endNote()
-  const newline = out.at(-1) === ''
-  if (divs.length && newline) out.pop()
-  if (divs.length) dropOrphanAttributeLine(out)
-  while (divs.length) {
-    const div = divs.pop()!
-    if (!div.prefix.includes('>')) out.push(div.prefix + ':'.repeat(div.width))
-  }
-  if (newline && out.at(-1) !== '') out.push('')
-  const rendered: string[] = []
-  const placedNotes = new Map<number, string[][]>()
-  const appendNote = (body: string[]): void => {
-    for (const line of body) rendered.push(line)
-    if (rendered.at(-1) !== '') rendered.push('')
-  }
-  for (const { body, placement } of completedNotes) {
-    if (placement === undefined) appendNote(body)
-    else {
-      const held = placedNotes.get(placement) ?? []
-      held.push(body)
-      placedNotes.set(placement, held)
-    }
-  }
-  for (let i = 0; i <= out.length; i++) {
-    for (const body of placedNotes.get(i) ?? []) appendNote(body)
-    if (i < out.length) rendered.push(out[i]!)
-  }
-  if (!source.endsWith('\n') && rendered.at(-1) === '') rendered.pop()
-  return rendered.join('\n')
+  return finishLayout(I, s)
 }
 
 /** Djot attaches an attribute line with no block after it to nothing, so drop it. */

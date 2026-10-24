@@ -1,6 +1,7 @@
 import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../parse.js'
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
 import type { listStateHelpers } from '../../parse.js'
+import { createRunPhases, endsOnBlock, type CommentCloser, type FenceCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
 export function createListStateTracker(helpers: typeof listStateHelpers) {
   const {
@@ -24,23 +25,19 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     RE_TABLE_CONT,
     blockQuoteParagraphOpen,
     bottomBlockLeavesParagraphOpen,
-    colonBlockOpenerRun,
     colonFenceOpenerLen,
     commentFenceRun,
     continuesInlineFenceParagraph,
     extractItemAttr,
     fenceCloseRe,
-    hostedAuthoredBlockOpener,
     isBlockAttributeLine,
     isLinkDefLine,
     isTableRow,
     leadingWhitespace,
-    lineOpensBlock,
     markerLineState,
     markerPrefixLength,
     opaqueGroupCloser,
     opensCodeFence,
-    opensWrappedAttributeBlock,
     orderedMatch,
     prefixWalkBound,
     quotedLineText,
@@ -50,93 +47,91 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     unorderedMatch,
     verbatimOnlyLazyState,
   } = helpers
-return function trackItemLazyState(
-  content: string,
-  state: ItemLazyState,
-  /**
-   * Does a fence of this marker have a closer ahead (PART 9 section 10 I4)?
-   *
-   * `extraColumns` is how far PAST the container's content column the opener is
-   * read, which the descendant recursion below needs: a closer at this item's
-   * column is not the descendant's closer, and asking without the offset read an
-   * unterminated descendant fence as a terminated one (corpus 509 rows 4 and 5).
-   */
-  hasFenceCloser: (marker: string, extraColumns?: number) => boolean = () => true,
-  /**
-   * Does this line sit AT the container's content column, rather than below it?
-   *
-   * Only the invisible blocks read it. An invisible line AT the column is a
-   * BLOCK and ends the paragraph, and what it renders is not a parameter
-   * (markup-carve/carve#1364); the same line collected BELOW the column is a
-   * lazy continuation and adds no block at all, which is what keeps
-   * `- a` / `  %% c` / ` b` folding (corpus 358). Every line the item collects
-   * at its own column arrives here as true; the two lazy call sites pass false.
-   */
-  atContentColumn = true,
-  /**
-   * Does a comment fence of this width have a closer ahead (PART 9 §28)?
-   *
-   * The default answers "yes" for the same reason `hasFenceCloser`'s does: the
-   * callers that cannot look ahead - the synthetic blank at a `+` marker and an
-   * attached block's own lines - keep the old unconditional behavior.
-   */
-  hasCommentCloser: (fence: number) => boolean = () => true,
-  facts?: ItemLineFacts,
-  hasLiteralCommentCloser?: (width: number, extraColumns?: number) => boolean,
-  authoredFenceColumns?: number,
-  authoredFenceWhitespace?: number,
-  authoredQuoteParagraphOpen = false,
-): void {
+
+  /** The closer pattern of a code or raw fence opener `text`, or null. */
+  function fenceCloserOf(text: string): RegExp | null {
+    const fence = RE_FENCE.exec(text)
+    if (fence) return fenceCloseRe(fence[2]!)
+    const raw = RE_RAW_FENCE.exec(text)
+    return raw ? fenceCloseRe(raw[1]!) : null
+  }
+
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
   // that continue the same paragraph is what keeps a heading, a table or a code
   // fence between the malformed fence and a later bare `:::` from leaving the
   // flag set: at the top level those end the paragraph and the later fence
   // opens a real div, and this tracker has to give the same answer.
-  delete state.retainedMarker
-  const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
-  const wasAbsorbing = state.absorbingFence
-  state.absorbingFence = false
-  const wasInlineFence = state.inlineFenceParagraph === true
-  delete state.inlineFenceParagraph
-  const wasInlineFenceBlock = state.inlineFenceBlock === true
-  delete state.inlineFenceBlock
-  const wasClosedColon = state.closedColonBody === true
-  const wasClosedLiteralComment = state.closedLiteralComment === true
-  delete state.closedColonBody
-  delete state.closedLiteralComment
-  if (state.unrebasedColonBody && RE_ADMONITION_CLOSE.exec(content)?.[1]?.length === state.unrebasedColonBody.width) delete state.unrebasedColonBody
-  // Carried the same way the absorption is, and for the same reason: every
-  // other block ends the table, so only the two row branches re-arm it.
-  const wasInTable = state.inTable
-  state.inTable = false
-  // The quote the item ended on is dropped by every line that is not more of
-  // it; the quoted branch below re-arms it.
-  const wasQuote = state.quoteInner
-  // Keep the source owner before the next line changes the claim. A closed
-  // quoted definition leaves no quote paragraph for an unquoted follower;
-  // a descendant that still owns the line keeps its existing quote frame.
-  const quoteOwnerColumn = state.ownedColumn
-  state.quoteInner = null
-  const wasInvisibleAtColumn = state.invisibleAtColumn
-  state.invisibleAtColumn = false
-  const wasBelowComment = state.closedBelowComment === true
-  delete state.closedBelowComment
-  const wasCommentAtColumn = state.commentAtColumn
-  state.commentAtColumn = false
-  // A retained fence opens a block, including one held by a description.
-  if ((wasCommentAtColumn || state.deepest?.commentAtColumn || (wasBelowComment && atContentColumn && state.inDefList === false && leadingWhitespace(content) === 0)) && !wasInlineFence &&
-      !(state.unclosedFenceBase !== undefined && indentColumns(content) > state.unclosedFenceBase) &&
-      state.opaque === null && opensCodeFence(content.trimStart())) {
-    const fence = RE_FENCE.exec(content.trimStart()) ?? RE_RAW_FENCE.exec(content.trimStart())
-    if (fence) {
-      state.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content.trimStart()) ? fence[2]! : fence[1]!) }
-      state.lazyFoldable = false
-      state.inDefList = false
-      state.deepest = null
-      return
+  function beginLine(
+    content: string,
+    state: ItemLazyState,
+    hasFenceCloser: FenceCloser,
+    atContentColumn: boolean,
+    hasCommentCloser: CommentCloser,
+    facts: ItemLineFacts | undefined,
+    hasLiteralCommentCloser: LiteralCommentCloser | undefined,
+    authoredFenceColumns: number | undefined,
+    authoredFenceWhitespace: number | undefined,
+    authoredQuoteParagraphOpen: boolean,
+  ): LazyLine {
+    delete state.retainedMarker
+    const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
+    const wasAbsorbing = state.absorbingFence
+    state.absorbingFence = false
+    const wasInlineFence = state.inlineFenceParagraph === true
+    delete state.inlineFenceParagraph
+    const wasInlineFenceBlock = state.inlineFenceBlock === true
+    delete state.inlineFenceBlock
+    const wasClosedColon = state.closedColonBody === true
+    const wasClosedLiteralComment = state.closedLiteralComment === true
+    delete state.closedColonBody
+    delete state.closedLiteralComment
+    if (state.unrebasedColonBody && RE_ADMONITION_CLOSE.exec(content)?.[1]?.length === state.unrebasedColonBody.width) delete state.unrebasedColonBody
+    // Carried the same way the absorption is, and for the same reason: every
+    // other block ends the table, so only the two row branches re-arm it.
+    const wasInTable = state.inTable
+    state.inTable = false
+    // The quote the item ended on is dropped by every line that is not more of
+    // it; the quoted branch below re-arms it.
+    const wasQuote = state.quoteInner
+    // Keep the source owner before the next line changes the claim. A closed
+    // quoted definition leaves no quote paragraph for an unquoted follower;
+    // a descendant that still owns the line keeps its existing quote frame.
+    const quoteOwnerColumn = state.ownedColumn
+    state.quoteInner = null
+    const wasInvisibleAtColumn = state.invisibleAtColumn
+    state.invisibleAtColumn = false
+    const wasBelowComment = state.closedBelowComment === true
+    delete state.closedBelowComment
+    const wasCommentAtColumn = state.commentAtColumn
+    state.commentAtColumn = false
+    return {
+      content, state, hasFenceCloser, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser,
+      authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen,
+      wasDescendantColumn, wasAbsorbing, wasInlineFence, wasInlineFenceBlock, wasClosedColon,
+      wasClosedLiteralComment, wasInTable, wasQuote, quoteOwnerColumn, wasInvisibleAtColumn,
+      wasBelowComment, wasCommentAtColumn,
+      run: undefined, runColumns: undefined, readFlush: false, readDescendant: false,
     }
   }
+
+  // A retained fence opens a block, including one held by a description.
+  function retainedCommentFence(line: LazyLine): boolean {
+    const { content, state } = line
+    if (!(line.wasCommentAtColumn || state.deepest?.commentAtColumn ||
+        (line.wasBelowComment && line.atContentColumn && state.inDefList === false && leadingWhitespace(content) === 0))) return false
+    if (line.wasInlineFence) return false
+    if (state.unclosedFenceBase !== undefined && indentColumns(content) > state.unclosedFenceBase) return false
+    if (state.opaque !== null || !opensCodeFence(content.trimStart())) return false
+    const close = fenceCloserOf(content.trimStart())
+    if (!close) return false
+    state.opaque = { kind: 'code', close }
+    state.lazyFoldable = false
+    state.inDefList = false
+    state.deepest = null
+    return true
+  }
+
   // A FOOTNOTE DEFINITION'S BODY RUNS ON. A blank between its lines is inside
   // the body rather than after it, so it does not end the run.
   //
@@ -146,43 +141,46 @@ return function trackItemLazyState(
   // and leaves an open paragraph behind it. Reading any indent as body made
   // `- a` / `  [^f]: t` / ` more` / `tail` end the item where carve-php folds
   // `tail` into it.
-  if (
-    state.inFootnoteBody &&
-    !isBlankLine(content) &&
-    indentColumns(content, Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
-      atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)) <
-      Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
-        atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)
-  ) {
-    state.inFootnoteBody = false
+  function footnoteBody(line: LazyLine): boolean {
+    const { content, state } = line
+    if (state.inFootnoteBody && !isBlankLine(content)) {
+      const bodyColumn = Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
+        line.atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)
+      if (indentColumns(content, bodyColumn) < bodyColumn) state.inFootnoteBody = false
+    }
+    if (!state.inFootnoteBody) return false
+    state.invisibleAtColumn = line.wasInvisibleAtColumn
+    state.commentAtColumn = line.wasCommentAtColumn
+    return endsOnBlock(state)
   }
-  if (state.inFootnoteBody) {
-    state.invisibleAtColumn = wasInvisibleAtColumn
-    state.commentAtColumn = wasCommentAtColumn
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+
+  /** A below-column comment span held by an open colon container closes on its run. */
+  function belowColumnCommentClose(line: LazyLine): boolean {
+    const { content, state } = line
+    if (!line.atContentColumn && state.literalColon?.opaque?.belowBaseCloses &&
+        commentFenceRun(content.trimStart()) === state.literalColon.opaque.run) {
+      delete state.literalColon.opaque
+      return endsOnBlock(state)
+    }
+    if (state.authoredColon?.belowComment !== undefined) {
+      if (commentFenceRun(content.trimStart()) === state.authoredColon.belowComment) delete state.authoredColon.belowComment
+      state.inDefList = false
+      return true
+    }
+    return false
   }
-  if (!atContentColumn && state.literalColon?.opaque?.belowBaseCloses &&
-      commentFenceRun(content.trimStart()) === state.literalColon.opaque.run) {
-    delete state.literalColon.opaque
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (state.authoredColon?.belowComment !== undefined) {
-    if (commentFenceRun(content.trimStart()) === state.authoredColon.belowComment) delete state.authoredColon.belowComment
-    state.inDefList = false
-    return
-  }
-  if (state.literalColon !== undefined && atContentColumn) {
+
+  /** A line inside an open literal (line-block) colon container. */
+  function literalColonLine(line: LazyLine): boolean {
+    const { content, state, facts, hasFenceCloser, hasCommentCloser } = line
+    if (state.literalColon === undefined || !line.atContentColumn) return false
     const open = state.literalColon
     const column = indentColumns(content, open.column + 1)
     const text = content.trimStart()
     if (state.definitionBody && column === 0 && opensCodeFence(text) && !open.opaque) {
       delete state.literalColon
-      trackItemLazyState(content, state, hasFenceCloser, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser)
-      return
+      trackItemLazyState(content, state, hasFenceCloser, line.atContentColumn, hasCommentCloser, facts, line.hasLiteralCommentCloser)
+      return true
     }
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
     if (open.opaque) {
@@ -190,16 +188,16 @@ return function trackItemLazyState(
       state.lazyFoldable = !open.opaque.belowBaseCloses && text !== ''
       if (closedPayload) delete open.opaque
       state.inDefList = false
-      return
+      return true
     }
     if (open.belowComment !== undefined && commentFenceRun(text) === open.belowComment) {
       delete open.belowComment
       state.inDefList = false
-      return
+      return true
     }
     const group = opaqueGroupCloser(text)
     const codeAtBase = opensCodeFence(text) && (column === 0 || column === open.column)
-    if (group && (group.belowBaseCloses ? (hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
+    if (group && (group.belowBaseCloses ? (line.hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
       opensCodeFence(text) && (column === 0 || column >= open.column) && hasFenceCloser(group.char.repeat(group.run), state.definitionBody ? -2 : -1))) open.opaque = group
     if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
@@ -220,30 +218,39 @@ return function trackItemLazyState(
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false
-    return
+    return true
   }
+
   // Carry real CODE payload across boundaries without letting an interrupter claim a lazy tail.
   // A definition body's collector reads its own fence groups (carve-js#2819).
-  const continuesFenceParagraph = state.definitionBody === true
-    ? bottomBlockLeavesParagraphOpen(content)
-    : continuesInlineFenceParagraph(content, state.unclosedFenceBase, facts?.terminatorFree ?? false)
-  if (wasInlineFence && (wasInlineFenceBlock || continuesFenceParagraph) && !RE_COMMENT_LINE.test(content.trimStart()) && !RE_ADMONITION_CLOSE.test(content.trimStart()) && colonFenceOpenerLen(content) === null) {
+  function inlineFenceContinuation(line: LazyLine): boolean {
+    const { content, state } = line
+    if (!line.wasInlineFence) return false
+    const continuesFenceParagraph = state.definitionBody === true
+      ? bottomBlockLeavesParagraphOpen(content)
+      : continuesInlineFenceParagraph(content, state.unclosedFenceBase, line.facts?.terminatorFree ?? false)
+    if (!(line.wasInlineFenceBlock || continuesFenceParagraph) || RE_COMMENT_LINE.test(content.trimStart()) ||
+        RE_ADMONITION_CLOSE.test(content.trimStart()) || colonFenceOpenerLen(content) !== null) return false
     state.lazyFoldable = !isBlankLine(content) &&
-      (bottomBlockLeavesParagraphOpen(content) || (wasInlineFenceBlock && leadingWhitespace(content) > 0))
+      (bottomBlockLeavesParagraphOpen(content) || (line.wasInlineFenceBlock && leadingWhitespace(content) > 0))
     state.inlineFenceParagraph = true
-    if (wasInlineFenceBlock) state.inlineFenceBlock = true
+    if (line.wasInlineFenceBlock) state.inlineFenceBlock = true
     state.inDefList = false
-    return
+    return true
   }
-  if (state.deepest?.literalColon && !state.ownedAuthored && state.ownedColumn >= 0 &&
-      indentColumns(content, state.ownedColumn) >= state.ownedColumn) {
+
+  /** A line a descendant marker owns while its frame sits in a literal colon container. */
+  function descendantLiteralColon(line: LazyLine): boolean {
+    const { content, state, facts, hasFenceCloser } = line
+    if (!state.deepest?.literalColon || state.ownedAuthored || state.ownedColumn < 0 ||
+        indentColumns(content, state.ownedColumn) < state.ownedColumn) return false
     const offset = state.ownedColumn
     const inner = state.deepest
     trackItemLazyState(
       sliceColumns(content, offset, true), inner,
       (marker, extra = 0) => hasFenceCloser(marker, extra < 0 ? extra : offset + extra), true, () => false,
       {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
-      (width, extra = 0) => hasLiteralCommentCloser?.(width, offset + extra) ?? false,
+      (width, extra = 0) => line.hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
     // The checker keeps a descendant line block outside this item's paragraph.
     state.lazyFoldable = inner.literalColon === undefined && inner.lazyFoldable
@@ -253,69 +260,98 @@ return function trackItemLazyState(
       state.commentAtColumn = true
     }
     state.inDefList = false
-    return
+    return true
   }
-  const authoredColon = state.authoredColon
-  if (state.opaque === null && authoredColon && state.divDepth === authoredColon.depth) {
-    const close = RE_ADMONITION_CLOSE.exec(content.trimStart())
-    const column = indentColumns(content, authoredColon.column + 1)
-    if (close && close[1]!.length === authoredColon.width && (column === 0 || column === authoredColon.column)) {
-      delete state.authoredColon
-      state.divDepth--
-      const hadDescendant = state.deepest !== undefined && state.deepest !== null
-      state.ownedColumn = -1
-      state.deepest = null
-      if (hadDescendant) state.closedColonBody = true
-      state.lazyFoldable = false
-      state.inDefList = false
-      return
+
+  /**
+   * An open authored colon container: its closer, a dedent out of it, or a line
+   * inside it, which is rebased to the container's column for the later phases.
+   */
+  function authoredColonLine(line: LazyLine): boolean {
+    const { state } = line
+    const authoredColon = state.authoredColon
+    if (state.opaque !== null || !authoredColon) return false
+    if (state.divDepth === authoredColon.depth) {
+      const close = RE_ADMONITION_CLOSE.exec(line.content.trimStart())
+      const column = indentColumns(line.content, authoredColon.column + 1)
+      if (close && close[1]!.length === authoredColon.width && (column === 0 || column === authoredColon.column)) {
+        delete state.authoredColon
+        state.divDepth--
+        const hadDescendant = state.deepest !== undefined && state.deepest !== null
+        state.ownedColumn = -1
+        state.deepest = null
+        if (hadDescendant) state.closedColonBody = true
+        return endsOnBlock(state)
+      }
     }
+    if (!line.atContentColumn) return false
+    if (authoredColon.column > 0 && indentColumns(line.content, authoredColon.column) < authoredColon.column &&
+        !RE_COMMENT_LINE.test(line.content.trimStart())) {
+      return authoredColonDedent(line)
+    }
+    if (state.divDepth >= authoredColon.depth) rebaseIntoAuthoredColon(line, authoredColon.column)
+    return false
   }
-  if (atContentColumn && state.opaque === null && authoredColon && authoredColon.column > 0 &&
-      indentColumns(content, authoredColon.column) < authoredColon.column && !RE_COMMENT_LINE.test(content.trimStart())) {
+
+  function authoredColonDedent(line: LazyLine): true {
+    const { content, state } = line
     const text = content.trimStart()
     if (state.descriptionHasTerm && state.descriptionColumn !== undefined && !state.lazyFoldable && opensCodeFence(text)) {
-      const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
-      const marker = RE_FENCE.test(text) ? fence![2]! : fence![1]!
-      state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: indentColumns(content) }
+      state.opaque = { kind: 'code', close: fenceCloserOf(text)!, column: indentColumns(content) }
       state.inDefList = false
-      return
+      return true
     }
     state.ownedColumn = -1
     state.deepest = null
     state.lazyFoldable = bottomBlockLeavesParagraphOpen(content) && colonFenceOpenerLen(content) === null &&
       (!opensCodeFence(content) || state.lazyFoldable)
     state.inDefList = false
-    return
+    return true
   }
-  if (atContentColumn && state.opaque === null && authoredColon && state.divDepth >= authoredColon.depth) {
-    const column = indentColumns(content, authoredColon.column + 1)
-    const base = authoredColon.column
+
+  function rebaseIntoAuthoredColon(line: LazyLine, base: number): void {
+    const column = indentColumns(line.content, base + 1)
     if (base > 0 && column >= base) {
-      content = sliceColumns(content, base, true)
-      if (facts) facts = { ...facts, whitespace: facts.whitespace === undefined ? undefined : Math.max(0, facts.whitespace - base) }
-      const closer = hasFenceCloser
-      hasFenceCloser = (marker, extra = 0) => closer(marker, extra < 0 ? extra : extra + base)
+      line.content = sliceColumns(line.content, base, true)
+      const facts = line.facts
+      if (facts) line.facts = { ...facts, whitespace: facts.whitespace === undefined ? undefined : Math.max(0, facts.whitespace - base) }
+      const closer = line.hasFenceCloser
+      line.hasFenceCloser = (marker, extra = 0) => closer(marker, extra < 0 ? extra : extra + base)
     } else {
-      const run = commentFenceRun(content.trimStart())
-      if (run !== undefined && hasCommentCloser(run)) content = content.trimStart()
+      const run = commentFenceRun(line.content.trimStart())
+      if (run !== undefined && line.hasCommentCloser(run)) line.content = line.content.trimStart()
     }
   }
-  if (!atContentColumn && state.opaque === null && (state.literalColon || state.authoredColon) && RE_COMMENT_LINE.test(content.trimStart())) {
+
+  /** A comment line below the column of an open colon container. */
+  function belowColumnColonComment(line: LazyLine): boolean {
+    const { content, state } = line
+    if (line.atContentColumn || state.opaque !== null || !(state.literalColon || state.authoredColon) ||
+        !RE_COMMENT_LINE.test(content.trimStart())) return false
     const run = commentFenceRun(content.trimStart())
-    if (state.literalColon && run !== undefined && hasCommentCloser(run)) state.literalColon.belowComment = run
-    if (state.authoredColon && run !== undefined && hasCommentCloser(run)) state.authoredColon.belowComment = run
+    if (state.literalColon && run !== undefined && line.hasCommentCloser(run)) state.literalColon.belowComment = run
+    if (state.authoredColon && run !== undefined && line.hasCommentCloser(run)) state.authoredColon.belowComment = run
     state.invisibleAtColumn = state.literalColon === undefined
     state.commentAtColumn = state.literalColon === undefined
-    return
+    return true
   }
-  const inlineCommentRun = wasInlineFence ? commentFenceRun(content.trimStart()) : undefined
-  if (wasInlineFence && RE_COMMENT_LINE.test(content.trimStart()) &&
-      (inlineCommentRun === undefined || !hasCommentCloser(inlineCommentRun))) {
-    state.inlineFenceParagraph = true
-    if (wasInlineFenceBlock) state.inlineFenceBlock = true
+
+  /** An unterminated comment opener inside an inline fence paragraph stays part of it. */
+  function inlineFenceComment(line: LazyLine): boolean {
+    const { content, state } = line
+    if (!line.wasInlineFence) return false
+    const inlineCommentRun = commentFenceRun(content.trimStart())
+    if (RE_COMMENT_LINE.test(content.trimStart()) &&
+        (inlineCommentRun === undefined || !line.hasCommentCloser(inlineCommentRun))) {
+      state.inlineFenceParagraph = true
+      if (line.wasInlineFenceBlock) state.inlineFenceBlock = true
+    }
+    return false
   }
-  if (state.opaque?.kind === 'comment') {
+
+  function openCommentSpan(line: LazyLine): boolean {
+    const { content, state, atContentColumn } = line
+    if (state.opaque?.kind !== 'comment') return false
     const comment = state.opaque
     // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
     // anchored, unlike the opener below, which may carry an info string" - and
@@ -339,46 +375,51 @@ return function trackItemLazyState(
       state.lazyFoldable = false
     }
     state.inDefList = comment.term ? 'term' : false
-    return
+    return true
   }
-  if (state.opaque?.kind === 'code') {
+
+  function openCodeFence(line: LazyLine): boolean {
+    const { content, state } = line
+    if (state.opaque?.kind !== 'code') return false
     // See the comment twin above.
     state.deepest = null
     const base = state.opaque.column ?? 0
     const column = indentColumns(content, base + 1)
     if (column <= base && state.opaque.close.test(content.trimStart())) state.opaque = null
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+    return endsOnBlock(state)
   }
-  if (state.inDefList === 'term' && (state.lazyFoldable || state.termAfterComment) && state.opaque === null &&
-      leadingWhitespace(content) > 0 && RE_COMMENT_LINE.test(content.trimStart())) {
+
+  /** An indented comment line after a definition term. */
+  function termComment(line: LazyLine): boolean {
+    const { content, state } = line
+    if (state.inDefList !== 'term' || !(state.lazyFoldable || state.termAfterComment) || state.opaque !== null ||
+        leadingWhitespace(content) === 0 || !RE_COMMENT_LINE.test(content.trimStart())) return false
     const run = commentFenceRun(content.trimStart())
-    if (run !== undefined && hasCommentCloser(run)) {
+    if (run !== undefined && line.hasCommentCloser(run)) {
       state.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: false, term: true }
     }
     state.lazyFoldable = false
     state.termAfterComment = true
-    return
+    return true
   }
+
   // A WRAPPED block-attribute block is held open the way a fence is (§15 A5).
   // It renders nothing and opens nothing at either width, so the container has
   // no paragraph for a column-0 line to fold into while the run is open or once
   // it closes as attributes. A run that turns out NOT to parse hands its last
   // line back to the classifiers below, where its lines are the prose they look
   // like.
-  if (trackWrappedAttributeRun(state, content)) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+  function attributeRun(line: LazyLine): boolean {
+    const { content, state } = line
+    if (trackWrappedAttributeRun(state, content)) return endsOnBlock(state)
+    if (line.atContentColumn && state.divDepth > 0 && (content[0] === ' ' || content[0] === '\t') &&
+        isBlockAttributeLine(content.trimStart())) return endsOnBlock(state)
+    return false
   }
-  if (atContentColumn && state.divDepth > 0 && (content[0] === ' ' || content[0] === '\t') &&
-      isBlockAttributeLine(content.trimStart())) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (isBlankLine(content)) {
+
+  function blankLine(line: LazyLine): boolean {
+    const { state } = line
+    if (!isBlankLine(line.content)) return false
     delete state.termAfterComment
     if (state.descriptionHasTerm === false) state.inDefList = false
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
@@ -388,11 +429,14 @@ return function trackItemLazyState(
     // fence-shaped line is an opener again.
     state.absorbingFence = false
     if (state.deepest) delete state.deepest.closedColonBody
-    return
+    return true
   }
+
   // A definition-list term or definition marker opens (or continues) a def
   // list in this item, and leaves an open paragraph for its body.
-  if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
+  function definitionMarker(line: LazyLine): boolean {
+    const { content, state } = line
+    if (!RE_DEFLIST_TERM.test(content) && !RE_DEFLIST_DEF.test(content)) return false
     const isTerm = RE_DEFLIST_TERM.test(content)
     const hasTerm = isTerm || state.inDefList === 'term' ||
       (state.inDefList === 'description' && state.descriptionHasTerm === true)
@@ -402,8 +446,9 @@ return function trackItemLazyState(
     if (description) state.descriptionColumn = 1 + description[1]!.length
     delete state.termAfterComment
     state.lazyFoldable = true
-    return
+    return true
   }
+
   // A code or raw fence opens a verbatim block, which holds no open paragraph -
   // but only when it really opens. Section 10's CLOSER LOOKAHEAD applies here
   // exactly as it does in the quote's tracker: with a paragraph already open
@@ -415,19 +460,19 @@ return function trackItemLazyState(
   // The default callback answers "yes" so a caller that cannot look ahead - the
   // synthetic blank at a `+` marker, and the attached block's own lines - keeps
   // the old unconditional behavior.
-  const fence = RE_FENCE.exec(content)
-  const raw = fence ? null : RE_RAW_FENCE.exec(content)
-  const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
-  // A closed child leaves the following unmatched fence foldable; a blank ends that claim.
-  const followsClosedChild = state.divDepth > 0 && state.deepest?.closedColonBody === true
-  if (fenceMarker !== null && ((!state.lazyFoldable && !followsClosedChild) || hasFenceCloser(fenceMarker))) {
-    state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
-    state.deepest = null
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (fenceMarker !== null) {
+  function codeFenceOpener(line: LazyLine): boolean {
+    const { content, state } = line
+    const fence = RE_FENCE.exec(content)
+    const raw = fence ? null : RE_RAW_FENCE.exec(content)
+    const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
+    if (fenceMarker === null) return false
+    // A closed child leaves the following unmatched fence foldable; a blank ends that claim.
+    const followsClosedChild = state.divDepth > 0 && state.deepest?.closedColonBody === true
+    if ((!state.lazyFoldable && !followsClosedChild) || line.hasFenceCloser(fenceMarker)) {
+      state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
+      state.deepest = null
+      return endsOnBlock(state)
+    }
     // An unterminated fence mid-paragraph: inline verbatim, and the paragraph
     // it sits in stays open. Fall through to the bottom rather than returning,
     // which is where ordinary paragraph text lands.
@@ -435,15 +480,16 @@ return function trackItemLazyState(
     state.inlineFenceParagraph = true
     state.unclosedFenceBase ??= 0
     state.inDefList = false
-    return
+    return true
   }
+
   // An OPENER may carry an info string: `%%% x` is a comment fence, exactly as
   // the block parser reads it via RE_COMMENT_BLOCK_ANY. Requiring a bare run
   // here missed that opener entirely and then matched the CLOSER as an opener,
   // leaving the tracker permanently inside a comment: every later line read as
   // unfoldable, the item ended at the fence, and a following sibling marker
   // started a SECOND list (carve-js#659).
-  const commentRun = commentFenceRun(content)
+  //
   // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 §28): it degrades to a
   // `comment_line`, and PART 0's COMMENTS ARE CLASSIFIED BEFORE BLOCK OWNERSHIP
   // says the same from the layout side - "an opener without an exact-width
@@ -457,262 +503,36 @@ return function trackItemLazyState(
   // there, the reading is open at markup-carve/carve#1903, and degrading it
   // here would take carve-js away from the executable spec, carve-rs and
   // carve-php at once.
-  if (commentRun !== undefined && hasCommentCloser(commentRun)) {
-    state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: atContentColumn }
+  function commentFenceOpener(line: LazyLine): boolean {
+    const { state } = line
+    const commentRun = commentFenceRun(line.content)
+    if (commentRun === undefined || !line.hasCommentCloser(commentRun)) return false
+    state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn }
     state.deepest = null
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+    return endsOnBlock(state)
   }
-  // AN OVER-INDENTED LEAF BLOCK LEAVES NO OPEN PARAGRAPH. The three arms below
-  // are column-0 strict (§24 C3), and a block the author wrote PAST the item's
-  // content column still carries that run, so it read as prose and left a
-  // paragraph the block does not have - `- p` / `    # H` / `x` kept `x` inside
-  // the item where the heading had already ended it (carve-js#2542).
-  //
-  // Only when the run is AUTHORED, which `ownedColumn` decides, in the two
-  // senses `rebaseOverindentedBlocks` already holds it: a NESTED MARKER owns
-  // every line at or past its content column, because they are the deeper
-  // item's; an AUTHORED BASE owns only the lines PAST it, because a line AT the
-  // base is more of the same block. Reading either flush erases a level.
-  //
-  // Every step here is O(1) off the run the lexer already measured, so the
-  // ladder stays linear (carve#752's counted bound). A caller that cannot
-  // report the run leaves the whole arm shut rather than measuring one.
-  const run = authoredFenceWhitespace ?? facts?.whitespace
-  // A tab opener reports its run in characters; ownership compares columns.
-  const runColumns = authoredFenceColumns ?? run
-  if (atContentColumn && state.opaque === null && !authoredQuoteParagraphOpen &&
-      (wasQuote === null || !blockQuoteParagraphOpen(wasQuote)) && run !== undefined && runColumns !== undefined &&
-      runColumns > 0 && isTableRow(content.slice(run))) {
-    state.inTable = true
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (state.inDefList === 'description' && state.descriptionHasTerm &&
-      run !== undefined && runColumns !== undefined && runColumns > 0 &&
-      RE_HEADING.test(content.slice(run))) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
-      runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
-      (colonBlockOpenerRun(content.slice(run!)) !== null || RE_BLOCKQUOTE.test(content.slice(run!)))) state.inDefList = false
-  if (state.inDefList === 'description' && run !== undefined && run > 0 &&
-      (isTableRow(content.slice(run)) || RE_HR.test(content.slice(run)))) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    state.inTable = isTableRow(content.slice(run))
-    return
-  }
-  if (state.inDefList === 'description' && state.descriptionHasTerm && state.descriptionColumn !== undefined &&
-      run !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
-    const text = content.slice(run)
-    // A deeper authored run can still belong to the description's inline fence paragraph.
-    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || (isBlockAttributeLine(text) && !(state.ownedAuthored && state.ownedColumn > state.descriptionColumn)) || colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text)) {
-      state.ownedColumn = state.descriptionColumn
-      state.ownedAuthored = false
-      const inner = state.deepest = verbatimOnlyLazyState()
-      inner.definitionBody = true
-      trackItemLazyState(text, inner)
-      state.lazyFoldable = inner.lazyFoldable
-      state.inTable = inner.inTable
-      state.inDefList = false
-      return
-    }
-  }
-  let readFlush = false
-  let readDescendant = false
-  if (run !== undefined && runColumns !== undefined) {
-    if (state.ownedColumn >= 0) {
-      if (runColumns < state.ownedColumn) {
-        const text = content.slice(run)
-        const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
-        if (!state.literalLayout && facts?.rebasedFrame !== true && !state.ownedAuthored && (state.deepest?.ownedColumn ?? -1) < 0 &&
-            (state.deepest?.commentAtColumn || wasCommentAtColumn) && marker) {
-          state.retainedMarker = true
-          state.lazyFoldable = false
-          state.commentAtColumn = false
-          return
-        }
-        if (facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
-            (marker
-              ? state.ownedMarker !== undefined && run > state.ownedMarker
-              : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
-          state.absorbingFence = wasAbsorbing
-          return
-        }
-        if (!state.ownedAuthored && RE_COMMENT_LINE.test(text)) {
-          state.invisibleAtColumn = true
-          state.commentAtColumn = true
-          state.lazyFoldable = false
-          state.inDefList = false
-          return
-        }
-        const closedDescendantMarker = facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.invisibleAtColumn === true &&
-          !state.deepest.lazyFoldable && marker
-        state.ownedColumn = -1
-        state.deepest = null
-        // A new marker after a closed descendant supplies no continuation
-        // claim. A line already admitted by an ancestor may still belong here.
-        if (closedDescendantMarker) {
-          state.retainedMarker = true
-          state.lazyFoldable = false
-          state.inDefList = false
-          return
-        }
-      } else if (state.ownedAuthored && (runColumns === state.ownedColumn ||
-          (state.authoredColon !== undefined && runColumns > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run))) || (state.divDepth === 0 &&
-          colonFenceOpenerLen(content.slice(run)) !== null))) readFlush = true
-      else if (!state.ownedAuthored && (facts?.descendantFrames === true || authoredFenceColumns !== undefined)) readDescendant = true
-    }
-    if (state.ownedColumn < 0 && atContentColumn && run > 0 &&
-        (state.unclosedFenceBase === undefined || runColumns === state.unclosedFenceBase)) {
-      state.ownedColumn = runColumns
-      state.ownedAuthored = true
-      readFlush = true
-    }
-  }
-  // THE DESCENDANT FRAME ANSWERS. One line, in the deeper item's coordinates,
-  // through this same tracker - so a fenced body, a `:::` container and a quote
-  // are read there exactly as they are here, rather than enumerated. An
-  // enumeration of block kinds is how the three engines drifted apart.
-  if (readDescendant && state.inDefList === false) {
-    // A footnote body is measured from the note's column, so its continuation keeps that offset.
-    const dedented = state.deepest?.inFootnoteBody === true
-      ? sliceColumns(content, state.ownedColumn, true)
-      : content.slice(run!)
-    const inlineFence = RE_FENCE.exec(dedented)
-    const inlineMarker = inlineFence?.[2] ?? RE_RAW_FENCE.exec(dedented)?.[1]
-    const inner = (state.deepest ??= {
-      ...verbatimOnlyLazyState(),
-      lazyFoldable: state.lazyFoldable && inlineMarker !== undefined && !hasFenceCloser(inlineMarker, run!),
-    })
-    trackItemLazyState(
-      dedented,
-      inner,
-      (marker, extra = 0) => hasFenceCloser(marker, extra + run!),
-      true,
-      // NO COMMENT SPAN OPENS IN THE FRAME. The callers that can look ahead ask
-      // at THIS container's column, and a `%%%` run at the descendant's is a
-      // different question nobody answers here. PART 9 section 28 degrades an
-      // opener with no exact-width closer to one `%%` line comment, and that
-      // answer - invisible, closes the paragraph, opens nothing - is the same
-      // one a terminated span gives for Q1, because what follows the span is
-      // what Q1 reads either way.
-      () => false,
-      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
-      (width, extra = 0) => hasLiteralCommentCloser?.(width, run! + extra) ?? false,
-    )
-    if (inner.inFootnoteBody && RE_FOOTNOTE_DEF.test(dedented))
-      inner.footnoteBodyColumn = runColumns! - state.ownedColumn + FOOTNOTE_BODY_COLUMN
-    state.commentAtColumn = inner.commentAtColumn
-    state.lazyFoldable = inner.lazyFoldable
-    state.inTable = inner.inTable
-    state.inDefList = false
 
-    return
-  }
-  // An open quote's own paragraph takes the line as lazy text, so its run is
-  // not authored either. A quote that ended on a block holds no such paragraph
-  // and the run below it is the ITEM's - the shape this ticket was found on
-  // (`: - > | a |` with an over-indented table under it). An open colon-fence
-  // container and an open description entry hold the run for the same reason:
-  // each is the innermost container and reads its body flush.
-  if (
-    readFlush && (state.divDepth === 0 || (state.divDepth > 0 && state.literalColon === undefined && !state.literalLayout &&
-      (opensCodeFence(content.slice(run!)) || RE_LINE_BLOCK_OPEN.test(content.slice(run!)))) ||
-      (state.authoredColon !== undefined && runColumns! > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run!)))) &&
-    state.inDefList === false && !state.unrebasedColonBody &&
-    (wasQuote === null || !blockQuoteParagraphOpen(wasQuote) ||
-      (state.unclosedFenceBase !== undefined && runColumns === state.unclosedFenceBase) ||
-      (state.descriptionHasTerm && state.ownedAuthored && runColumns === state.ownedColumn))
-  ) {
-    const overIndented = content.slice(run!)
-    const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
-    if (inlineCode && state.divDepth > 0 && state.literalColon === undefined && !state.literalLayout &&
-        (state.authoredColon === undefined || runColumns! > state.authoredColon.column)) {
-      const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
-      state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: authoredFenceColumns ?? run! }
-      state.lazyFoldable = false
-      state.inDefList = false
-      return
-    }
-    if (inlineCode && state.lazyFoldable) {
-      const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
-      if (!hasFenceCloser(marker, authoredFenceColumns ?? run!) && !hasFenceCloser(marker, 0)) {
-        state.inlineFenceParagraph = true
-        state.unclosedFenceBase ??= runColumns!
-        state.inDefList = false
-        return
-      }
-      if ((facts?.descendantFrames === true || authoredFenceColumns !== undefined) && !wasDescendantColumn) {
-        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: authoredFenceColumns ?? run! }
-        state.lazyFoldable = false
-        state.inDefList = false
-        return
-      }
-    }
-    const colon = colonFenceOpenerLen(overIndented)
-    if (colon !== null && !wasInlineFence && !wasAbsorbing && !wasClosedColon) {
-      state.divDepth++
-      if (RE_LINE_BLOCK_OPEN.test(overIndented)) state.literalColon = { width: colon, column: run! }
-      else state.authoredColon = { width: colon, column: run!, depth: state.divDepth }
-      state.lazyFoldable = false
-      state.inDefList = false
-      return
-    }
-    if (colon === null && /^:{3,}/.test(overIndented)) {
-      state.absorbingFence = true
-      state.lazyFoldable = true
-      state.inDefList = false
-      return
-    }
-    if (wasClosedColon) {
-      state.lazyFoldable = true
-      state.inDefList = false
-      return
-    }
-    const authoredQuote = RE_BLOCKQUOTE.exec(overIndented)
-    if (authoredQuote && ((state.descriptionHasTerm || (!state.lazyFoldable && state.descriptionColumn !== undefined)) ||
-        isBlankLine(authoredQuote[1] ?? ''))) {
-      content = overIndented
-      if (facts) facts = { ...facts, whitespace: 0 }
-    }
-    if (RE_HEADING.test(overIndented) || isTableRow(overIndented) || RE_HR.test(overIndented) || isBlockAttributeLine(overIndented)) {
-      state.inTable = isTableRow(overIndented)
-      state.lazyFoldable = false
-      state.inDefList = false
-
-      return
-    }
-  }
   // A heading is a block and leaves no paragraph open. At the item's content
   // column a following dedented line therefore reaches no container (PART 1
   // S4, carve#1377), just as it does after a table row or thematic break.
-  if (RE_HEADING.test(content)) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+  function leafBlock(line: LazyLine): boolean {
+    const { content, state } = line
+    if (RE_HEADING.test(content)) return endsOnBlock(state)
+    if (isTableRow(content) || RE_HR.test(content)) {
+      state.inTable = isTableRow(content)
+      return endsOnBlock(state)
+    }
+    // A TABLE IS A TABLE HOWEVER ITS LAST ROW IS SPELLED. The row test above reads
+    // a leading pipe and a continuation row carries none, so an item whose table
+    // ended on one kept a dedented line where the standard-row spelling of the
+    // same table sent it out (markup-carve/carve#1348).
+    if (line.wasInTable && RE_TABLE_CONT.test(content)) {
+      state.inTable = true
+      return endsOnBlock(state)
+    }
+    return false
   }
-  if (isTableRow(content) || RE_HR.test(content)) {
-    state.inTable = isTableRow(content)
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  // A TABLE IS A TABLE HOWEVER ITS LAST ROW IS SPELLED. The row test above reads
-  // a leading pipe and a continuation row carries none, so an item whose table
-  // ended on one kept a dedented line where the standard-row spelling of the
-  // same table sent it out (markup-carve/carve#1348).
-  if (wasInTable && RE_TABLE_CONT.test(content)) {
-    state.inTable = true
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
+
   // AN INVISIBLE LINE AT THE CONTENT COLUMN IS A BLOCK. A comment and a
   // reference or footnote definition each render nothing, and what a block
   // renders is not a parameter (markup-carve/carve#1364): the paragraph above it
@@ -721,12 +541,11 @@ return function trackItemLazyState(
   //
   // No RE_ABBR_DEF: PART 12 §7 recognizes an abbreviation definition only as a
   // direct child of the document, so inside an item the line IS a paragraph.
-  const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)
-  if (
-    atContentColumn &&
-    RE_INVISIBLE_BLOCK_LEAD.test(invisibleContent) &&
-    (RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))
-  ) {
+  function invisibleLine(line: LazyLine): boolean {
+    const { content, state, facts } = line
+    const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)
+    if (!line.atContentColumn || !RE_INVISIBLE_BLOCK_LEAD.test(invisibleContent) ||
+        !(RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))) return false
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
@@ -735,10 +554,9 @@ return function trackItemLazyState(
     else delete state.footnoteBodyColumn
     state.invisibleAtColumn = true
     state.commentAtColumn = false
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+    return endsOnBlock(state)
   }
+
   // A blockquote line keeps the fold open: the quote's trailing paragraph
   // absorbs the dedented line via the quote's own lazy continuation. An EMPTY
   // quote holds no paragraph, so it does not (PART 1 S4).
@@ -749,11 +567,13 @@ return function trackItemLazyState(
   // could answer the first two; only the quote's own tracker answers the third,
   // because a quoted table spanning two lines is one block.
   // A closed quoted note still owns its indented quoted body line, but open quoted prose reads it literally.
-  const quotedLine = RE_BLOCKQUOTE.exec(content) ??
-    (wasQuote !== null && !blockQuoteParagraphOpen(wasQuote) &&
-      wasQuote.hosts?.kinds.at(-1) === 'note' && indentColumns(content) < 4
-      ? RE_BLOCKQUOTE.exec(content.trimStart()) : null)
-  if (quotedLine) {
+  function quotedLine(line: LazyLine): boolean {
+    const { content, state, wasQuote } = line
+    const quoted = RE_BLOCKQUOTE.exec(content) ??
+      (wasQuote !== null && !blockQuoteParagraphOpen(wasQuote) &&
+        wasQuote.hosts?.kinds.at(-1) === 'note' && indentColumns(content) < 4
+        ? RE_BLOCKQUOTE.exec(content.trimStart()) : null)
+    if (!quoted) return false
     const inner: BlockQuoteLazyState = wasQuote ?? {
       mode: { kind: 'closed' },
       inTable: false,
@@ -761,84 +581,83 @@ return function trackItemLazyState(
       attrRun: null,
     }
     trackBlockQuoteLazyState(
-      quotedLine[1] ?? '',
+      quoted[1] ?? '',
       inner,
       () => true,
-      facts?.quoteFenceCloser ?? (() => true),
+      line.facts?.quoteFenceCloser ?? (() => true),
     )
     state.quoteInner = inner
     state.lazyFoldable = blockQuoteParagraphOpen(inner)
     state.inDefList = false
-    return
+    return true
   }
+
   // A block-attribute line renders nothing and opens nothing: it collects into
   // `pending` and floats forward to the next block (§15 A1/A2). So there is no
   // open paragraph for a following column-0 line to fold into, and PART 1 S4
   // closes the item and re-classifies the line at the top level - the same
   // answer, for the same reason, as the empty quote above.
-  if (isBlockAttributeLine(content)) {
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
+  function attributeLine(line: LazyLine): boolean {
+    return isBlockAttributeLine(line.content) ? endsOnBlock(line.state) : false
   }
+
   // A div / admonition / line-block OPENER is structural; it opens no paragraph
   // itself, but plain text on a later line inside it does (handled by the
   // fall-through below once the opener line has been seen).
-  const bareFence = /^:{3,}[ \t]*$/.test(content)
-  // A bare run with a container open is that container's closer.
-  if (bareFence && state.divDepth > 0 && (state.authoredColon === undefined ||
-    state.divDepth !== state.authoredColon.depth || content.trim().length === state.authoredColon.width)) {
-    state.divDepth--
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  if (
-    RE_DIV_OPEN.test(content) ||
-    (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
-    RE_LINE_BLOCK_OPEN.test(content) ||
-    RE_HARDBREAKS_OPEN.test(content) ||
-    RE_QUOTE_BLOCK_OPEN.test(content)
-  ) {
-    // ...unless the paragraph above it already absorbed a malformed fence AND
-    // this line is a BARE run, in which case §12 takes it as text too and the
-    // paragraph stays open. Not width-tagged: after a malformed `:::note` a
-    // following `::::` is absorbed as readily as a `:::`.
-    //
-    // ONLY A BARE RUN. A line that opens something of its own - `::: note`,
-    // `::: |`, `::: [label]` - interrupts the absorbing paragraph exactly as it
-    // does at the top level, which is where this rule is already implemented
-    // and where it was measured: `:::note` over `::: note` is a paragraph plus
-    // an admonition in all three engines, while `:::note` over `:::` is one
-    // paragraph in all three.
-    if (wasAbsorbing && bareFence) {
-      state.absorbingFence = true
-      state.lazyFoldable = true
-      return
+  function colonFenceLine(line: LazyLine): boolean {
+    const { content, state } = line
+    const bareFence = /^:{3,}[ \t]*$/.test(content)
+    // A bare run with a container open is that container's closer.
+    if (bareFence && state.divDepth > 0 && (state.authoredColon === undefined ||
+      state.divDepth !== state.authoredColon.depth || content.trim().length === state.authoredColon.width)) {
+      state.divDepth--
+      return endsOnBlock(state)
     }
-    state.divDepth++
-    if (RE_LINE_BLOCK_OPEN.test(content)) state.literalColon = {width: colonFenceOpenerLen(content)!, column: indentColumns(content)}
-    // A valid opener ENDS the absorbing paragraph, so the bare fence that
-    // closes the block it opens is that block's closer rather than more
-    // absorbed text - and a closed block leaves no open paragraph.
-    state.lazyFoldable = false
-    state.inDefList = false
-    return
-  }
-  // A fence-shaped line that is NOT a valid opener is ordinary paragraph text,
-  // and from here the paragraph absorbs the next fence-shaped line as well.
-  // `:::note` fails §12's opener test because a type word must be separated
-  // from the fence by a space; `::: note` passes it and takes the branch above.
-  if (/^:{3,}/.test(content)) {
+    if (
+      RE_DIV_OPEN.test(content) ||
+      (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
+      RE_LINE_BLOCK_OPEN.test(content) ||
+      RE_HARDBREAKS_OPEN.test(content) ||
+      RE_QUOTE_BLOCK_OPEN.test(content)
+    ) {
+      // ...unless the paragraph above it already absorbed a malformed fence AND
+      // this line is a BARE run, in which case §12 takes it as text too and the
+      // paragraph stays open. Not width-tagged: after a malformed `:::note` a
+      // following `::::` is absorbed as readily as a `:::`.
+      //
+      // ONLY A BARE RUN. A line that opens something of its own - `::: note`,
+      // `::: |`, `::: [label]` - interrupts the absorbing paragraph exactly as it
+      // does at the top level, which is where this rule is already implemented
+      // and where it was measured: `:::note` over `::: note` is a paragraph plus
+      // an admonition in all three engines, while `:::note` over `:::` is one
+      // paragraph in all three.
+      if (line.wasAbsorbing && bareFence) {
+        state.absorbingFence = true
+        state.lazyFoldable = true
+        return true
+      }
+      state.divDepth++
+      if (RE_LINE_BLOCK_OPEN.test(content)) state.literalColon = {width: colonFenceOpenerLen(content)!, column: indentColumns(content)}
+      // A valid opener ENDS the absorbing paragraph, so the bare fence that
+      // closes the block it opens is that block's closer rather than more
+      // absorbed text - and a closed block leaves no open paragraph.
+      return endsOnBlock(state)
+    }
+    // A fence-shaped line that is NOT a valid opener is ordinary paragraph text,
+    // and from here the paragraph absorbs the next fence-shaped line as well.
+    // `:::note` fails §12's opener test because a type word must be separated
+    // from the fence by a space; `::: note` passes it and takes the branch above.
+    if (!/^:{3,}/.test(content)) return false
     // ...but only at the item's own level. Inside an open container the line is
     // ordinary body text and the container's closer below it is still a closer,
     // so arming here would swallow it and hold the paragraph open past the
     // block's end.
     state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined
-    state.lazyFoldable = !(wasClosedColon && wasClosedLiteralComment)
+    state.lazyFoldable = !(line.wasClosedColon && line.wasClosedLiteralComment)
     state.inDefList = false
-    return
+    return true
   }
+
   // A NESTED MARKER LINE IS A MARKER LINE. The sub-item it opens is a container
   // whose first block is whatever the marker holds, so S4's question about it is
   // the one `markerLineState` answers - `- a` / `  - # N` leaves a
@@ -847,19 +666,21 @@ return function trackItemLazyState(
   // the MARKER content only: a heading on a line the sub-item COLLECTS is the
   // other half of S4, which the enumeration below decides and corpus
   // 75-list-nesting-and-looseness-4 pins the folding answer for.
-  const nestedAttr = extractItemAttr(content, facts?.terminatorFree)
-  const nestedMarker = nestedAttr ? (nestedAttr.markerLine ?? nestedAttr.stripped) : content
-  const nestedTask = taskMatch(nestedMarker, facts?.terminatorFree)
-  const nestedBullet = nestedTask ? null
-    : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
-  if (nestedTask || nestedBullet) {
+  function nestedMarkerLine(line: LazyLine): boolean {
+    const { content, state, facts, run } = line
+    const nestedAttr = extractItemAttr(content, facts?.terminatorFree)
+    const nestedMarker = nestedAttr ? (nestedAttr.markerLine ?? nestedAttr.stripped) : content
+    const nestedTask = taskMatch(nestedMarker, facts?.terminatorFree)
+    const nestedBullet = nestedTask ? null
+      : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
+    if (!nestedTask && !nestedBullet) return false
     if (state.authoredColon !== undefined && state.divDepth > state.authoredColon.depth && state.lazyFoldable) {
-      state.absorbingFence = wasAbsorbing
-      return
+      state.absorbingFence = line.wasAbsorbing
+      return true
     }
-    if (!atContentColumn && state.deepest != null && state.lazyFoldable) {
-      state.absorbingFence = wasAbsorbing
-      return
+    if (!line.atContentColumn && state.deepest != null && state.lazyFoldable) {
+      state.absorbingFence = line.wasAbsorbing
+      return true
     }
     state.absorbingFence = false
     // `markerContentColumn`'s arithmetic off the match already in hand, since
@@ -882,58 +703,144 @@ return function trackItemLazyState(
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
     state.inDefList = false
-    // THE FRAME THIS MARKER OPENS, seeded with what the marker itself holds.
-    // Starting it empty would say no paragraph is open in the sub-item, and
-    // that is what decides whether a fence written in it INTERRUPTS or is
-    // absorbed (section 10 I4).
-    if (state.ownedColumn >= 0) {
-      const frame = verbatimOnlyLazyState()
-      frame.lazyFoldable = nested.leavesParagraphOpen
-      frame.inTable = nested.endsOnTableRow
-      frame.quoteInner = nested.quote
-      const nestedContent = (nestedTask ?? nestedBullet)!.at(-1)!
-      const nestedColon = colonFenceOpenerLen(nestedContent)
-      if (nestedColon !== null) {
-        frame.lazyFoldable = false
-        frame.divDepth = 1
-        if (RE_LINE_BLOCK_OPEN.test(nestedContent)) frame.literalColon = { width: nestedColon, column: 0 }
-      }
-      // A fence on the marker line is the sub-item's first block. It interrupts
-      // no paragraph, so it opens with or without a closer and leaves none open.
-      // In a literal line block the line is payload, and its backticks stay inline.
-      const nestedFence = RE_FENCE.exec(nestedContent) ?? RE_RAW_FENCE.exec(nestedContent)
-      if (nestedFence !== null && state.literalLayout !== true) {
-        frame.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(nestedContent) ? nestedFence[2]! : nestedFence[1]!) }
-        frame.lazyFoldable = false
-        state.lazyFoldable = false
-      }
-      state.deepest = frame
-    } else {
-      state.deepest = null
-    }
-    return
+    state.deepest = state.ownedColumn >= 0 ? nestedMarkerFrame(state, nested, (nestedTask ?? nestedBullet)!.at(-1)!) : null
+    return true
   }
+
+  // THE FRAME THIS MARKER OPENS, seeded with what the marker itself holds.
+  // Starting it empty would say no paragraph is open in the sub-item, and
+  // that is what decides whether a fence written in it INTERRUPTS or is
+  // absorbed (section 10 I4).
+  function nestedMarkerFrame(
+    state: ItemLazyState,
+    nested: ReturnType<typeof markerLineState>,
+    nestedContent: string,
+  ): ItemLazyState {
+    const frame = verbatimOnlyLazyState()
+    frame.lazyFoldable = nested.leavesParagraphOpen
+    frame.inTable = nested.endsOnTableRow
+    frame.quoteInner = nested.quote
+    const nestedColon = colonFenceOpenerLen(nestedContent)
+    if (nestedColon !== null) {
+      frame.lazyFoldable = false
+      frame.divDepth = 1
+      if (RE_LINE_BLOCK_OPEN.test(nestedContent)) frame.literalColon = { width: nestedColon, column: 0 }
+    }
+    // A fence on the marker line is the sub-item's first block. It interrupts
+    // no paragraph, so it opens with or without a closer and leaves none open.
+    // In a literal line block the line is payload, and its backticks stay inline.
+    const nestedFence = RE_FENCE.exec(nestedContent) ?? RE_RAW_FENCE.exec(nestedContent)
+    if (nestedFence !== null && state.literalLayout !== true) {
+      frame.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(nestedContent) ? nestedFence[2]! : nestedFence[1]!) }
+      frame.lazyFoldable = false
+      state.lazyFoldable = false
+    }
+    return frame
+  }
+
   // Everything else (plain prose, div body text) leaves an open paragraph the
   // dedented line can continue. Prose folds into a def body, so an open def list
   // stays open (inDefList unchanged) - and it is the SAME paragraph, so an
   // absorption already under way survives it.
-  state.absorbingFence = wasAbsorbing
-  state.lazyFoldable = true
-  if (wasInlineFence) state.inlineFenceParagraph = true
-  if (wasInlineFenceBlock && wasInlineFence) state.inlineFenceBlock = true
-  // A quote's lazy line retains its paragraph claim. A closed quote retains
-  // it only while a descendant still owns the line; otherwise a quoted note
-  // would lend its claim to prose in the enclosing item (carve-js#3361).
-  if (wasQuote !== null && (blockQuoteParagraphOpen(wasQuote) || quoteOwnerColumn >= 0)) {
-    trackBlockQuoteLazyState(
-      content,
-      wasQuote,
-      () => true,
-      () => true,
-      undefined, undefined, false,
-    )
-    state.quoteInner = wasQuote
+  function prose(line: LazyLine): boolean {
+    const { state, wasQuote } = line
+    state.absorbingFence = line.wasAbsorbing
+    state.lazyFoldable = true
+    if (line.wasInlineFence) state.inlineFenceParagraph = true
+    if (line.wasInlineFenceBlock && line.wasInlineFence) state.inlineFenceBlock = true
+    // A quote's lazy line retains its paragraph claim. A closed quote retains
+    // it only while a descendant still owns the line; otherwise a quoted note
+    // would lend its claim to prose in the enclosing item (carve-js#3361).
+    if (wasQuote !== null && (blockQuoteParagraphOpen(wasQuote) || line.quoteOwnerColumn >= 0)) {
+      trackBlockQuoteLazyState(
+        line.content,
+        wasQuote,
+        () => true,
+        () => true,
+        undefined, undefined, false,
+      )
+      state.quoteInner = wasQuote
+    }
+    return true
   }
-}
 
+  const runPhases = createRunPhases(helpers, trackItemLazyState)
+
+  // Order is the precedence: each phase sees only lines every earlier one passed on.
+  const phases: readonly LazyPhase[] = [
+    retainedCommentFence,
+    footnoteBody,
+    belowColumnCommentClose,
+    literalColonLine,
+    inlineFenceContinuation,
+    descendantLiteralColon,
+    authoredColonLine,
+    belowColumnColonComment,
+    inlineFenceComment,
+    openCommentSpan,
+    openCodeFence,
+    termComment,
+    attributeRun,
+    blankLine,
+    definitionMarker,
+    codeFenceOpener,
+    commentFenceOpener,
+    runPhases.measureRun,
+    runPhases.overIndentedTableRow,
+    runPhases.overIndentedDescription,
+    runPhases.runOwnership,
+    runPhases.descendantFrame,
+    runPhases.authoredFlush,
+    leafBlock,
+    invisibleLine,
+    quotedLine,
+    attributeLine,
+    colonFenceLine,
+    nestedMarkerLine,
+    prose,
+  ]
+
+  function trackItemLazyState(
+    content: string,
+    state: ItemLazyState,
+    /**
+     * Does a fence of this marker have a closer ahead (PART 9 section 10 I4)?
+     *
+     * `extraColumns` is how far PAST the container's content column the opener is
+     * read, which the descendant recursion needs: a closer at this item's
+     * column is not the descendant's closer, and asking without the offset read an
+     * unterminated descendant fence as a terminated one (corpus 509 rows 4 and 5).
+     */
+    hasFenceCloser: FenceCloser = () => true,
+    /**
+     * Does this line sit AT the container's content column, rather than below it?
+     *
+     * Only the invisible blocks read it. An invisible line AT the column is a
+     * BLOCK and ends the paragraph, and what it renders is not a parameter
+     * (markup-carve/carve#1364); the same line collected BELOW the column is a
+     * lazy continuation and adds no block at all, which is what keeps
+     * `- a` / `  %% c` / ` b` folding (corpus 358). Every line the item collects
+     * at its own column arrives here as true; the two lazy call sites pass false.
+     */
+    atContentColumn = true,
+    /**
+     * Does a comment fence of this width have a closer ahead (PART 9 §28)?
+     *
+     * The default answers "yes" for the same reason `hasFenceCloser`'s does: the
+     * callers that cannot look ahead - the synthetic blank at a `+` marker and an
+     * attached block's own lines - keep the old unconditional behavior.
+     */
+    hasCommentCloser: CommentCloser = () => true,
+    facts?: ItemLineFacts,
+    hasLiteralCommentCloser?: LiteralCommentCloser,
+    authoredFenceColumns?: number,
+    authoredFenceWhitespace?: number,
+    authoredQuoteParagraphOpen = false,
+  ): void {
+    const line = beginLine(content, state, hasFenceCloser, atContentColumn, hasCommentCloser, facts,
+      hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
+    for (const phase of phases) if (phase(line)) return
+  }
+
+  return trackItemLazyState
 }

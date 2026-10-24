@@ -199,34 +199,71 @@ export interface QuoteFenceHosts {
   commentBoundaryBelow?: boolean
 }
 
-export function trackQuoteHostFence(
-  content: string, state: BlockQuoteLazyState,
-  hasCloser: (marker: string, column?: number) => boolean,
-  terminatorFree: boolean,
-  hasCommentCloser: (width: number, floor: number) => boolean,
-  wasInTable: boolean,
-): boolean {
-  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
-  const rejectedItemComment = host.rejectedItemComment === true
-  delete host.rejectedItemComment
-  const afterComment = host.commentBoundary === true
-  const afterCommentBelow = host.commentBoundaryBelow === true
-  delete host.commentBoundary
-  delete host.commentBoundaryBelow
-  const column = indentColumns(content)
-  const text = content.replace(/^[ \t]*/, '')
-  if (host.fence) {
-    const open = host.fence
-    if (text !== '' && column < open.floor) host.fence = null
-    else {
-      if (
-        (column === open.floor || column === open.column) &&
-        fenceCloseRe(open.marker).test(text)
-      ) host.fence = null
-      closeBlockQuoteParagraph(state)
-      return true
-    }
+// One line of trackQuoteHostFence. Every phase below returns the function's
+// verdict, or `undefined` to hand the line to the next phase.
+interface QuoteHostLine {
+  content: string
+  state: BlockQuoteLazyState
+  host: QuoteFenceHosts
+  hasCloser: (marker: string, column?: number) => boolean
+  terminatorFree: boolean
+  hasCommentCloser: (width: number, floor: number) => boolean
+  wasInTable: boolean
+  rejectedItemComment: boolean
+  afterComment: boolean
+  afterCommentBelow: boolean
+  column: number
+  text: string
+}
+
+// The line after the host markers it opened: `inner` sits at column `at`.
+interface QuoteHostBody {
+  inner: string
+  at: number
+  blockStart: boolean
+  paragraph: boolean
+  insideItem: boolean
+  colons: NonNullable<QuoteFenceHosts['colons']>
+  floor: number
+  pendingColonBody: boolean
+}
+
+type QuoteHostVerdict = boolean | undefined
+
+function popQuoteHost(host: QuoteFenceHosts): void {
+  host.columns.pop(); host.markers.pop(); host.kinds.pop(); host.terms.pop()
+}
+
+// Index past the last entry whose key is at most `limit`; entries are sorted by key.
+function upperBound<T>(entries: readonly T[], limit: number, key: (entry: T) => number): number {
+  let low = 0
+  let high = entries.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (key(entries[middle]!) <= limit) low = middle + 1
+    else high = middle
   }
+  return low
+}
+
+function trackHeldHostFence(q: QuoteHostLine): QuoteHostVerdict {
+  const { host, column, text } = q
+  const open = host.fence
+  if (!open) return undefined
+  if (text !== '' && column < open.floor) {
+    host.fence = null
+    return undefined
+  }
+  if (
+    (column === open.floor || column === open.column) &&
+    fenceCloseRe(open.marker).test(text)
+  ) host.fence = null
+  closeBlockQuoteParagraph(q.state)
+  return true
+}
+
+function trackHeldColonComment(q: QuoteHostLine): QuoteHostVerdict {
+  const { host, state, column, text } = q
   const heldColon = host.colons?.at(-1)
   const commentRun = heldColon && RE_COMMENT_LINE.test(text) ? commentFenceRun(text) : undefined
   if (heldColon && RE_COMMENT_LINE.test(text) && commentRun === undefined &&
@@ -237,83 +274,85 @@ export function trackQuoteHostFence(
   if (heldColon?.literal && column < heldColon.floor) {
     host.colons!.pop()
     closeBlockQuoteParagraph(state)
-    if (commentRun !== undefined && hasCommentCloser(commentRun, column)) return false
+    if (commentRun !== undefined && q.hasCommentCloser(commentRun, column)) return false
   }
+  return undefined
+}
+
+function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
+  const { host, state, column, text } = q
   const literal = host.colons?.at(-1)
-  if (literal?.literal && column >= literal.floor) {
-    if (literal.opaque) {
-      const closedPayload = literal.opaque.closes(text)
-      if (text !== '') {
-        state.mode = { kind: 'paragraph', absorbingFence: false }
-      } else closeBlockQuoteParagraph(state)
-      if (closedPayload) delete literal.opaque
-      return true
-    }
-    const group = opaqueGroupCloser(text)
-    if (group && (group.belowBaseCloses ? hasCommentCloser(group.run, literal.floor) :
-      column >= literal.floor &&
-      hasCloser(group.char.repeat(group.run), literal.floor === 0 ? -2 : -1))) literal.opaque = group
-    const close = /^(:{3,})[ \t]*$/.exec(text)
-    if (close && close[1]!.length === literal.width && (column === literal.floor || column === literal.column)) {
-      host.colons!.pop()
-      if (literal.floor === 0) state.colonWidths.pop()
-    }
-    // Line-block payload is inline content, whatever its block shape.
-    if (host.colons?.at(-1) === literal && text !== '') {
+  if (!literal?.literal || column < literal.floor) return undefined
+  if (literal.opaque) {
+    const closedPayload = literal.opaque.closes(text)
+    if (text !== '') {
       state.mode = { kind: 'paragraph', absorbingFence: false }
     } else closeBlockQuoteParagraph(state)
+    if (closedPayload) delete literal.opaque
     return true
   }
-  if (RE_COMMENT_LINE.test(text)) {
-    if (!blockQuoteParagraphOpen(state) && host.markers.length > 0 && column < host.columns.at(-1)!) {
-      while (host.markers.length > 0 && host.markers.at(-1)! >= column) {
-        host.columns.pop(); host.markers.pop(); host.kinds.pop(); host.terms.pop()
-      }
-      if (host.colons) host.colons = host.colons.filter(open => open.floor <= host.columns.at(-1)!)
-      if (host.markers.length === 0) { host.rejectedItemComment = true; closeBlockQuoteParagraph(state); return true }
-    }
-    let low = 0
-    let high = host.columns.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (host.columns[middle]! <= column) low = middle + 1
-      else high = middle
-    }
-    const level = Math.max(0, low - 1)
-    const floor = host.columns[level]!
-    const colons = host.colons ?? []
-    low = 0
-    high = colons.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (colons[middle]!.floor <= floor) low = middle + 1
-      else high = middle
-    }
-    const open = colons[low - 1]
-    if ((commentFenceRun(text) !== undefined && column < host.columns.at(-1)!) ||
-        !(host.kinds[level - 1] === 'item' && open && floor === open.floor && column > open.column)) {
-      host.commentBoundary = true
-      host.commentBoundaryBelow = commentFenceRun(text) !== undefined && column < host.columns.at(-1)!
-    }
-    return false
+  const group = opaqueGroupCloser(text)
+  if (group && (group.belowBaseCloses ? q.hasCommentCloser(group.run, literal.floor) :
+    column >= literal.floor &&
+    q.hasCloser(group.char.repeat(group.run), literal.floor === 0 ? -2 : -1))) literal.opaque = group
+  const close = /^(:{3,})[ \t]*$/.exec(text)
+  if (close && close[1]!.length === literal.width && (column === literal.floor || column === literal.column)) {
+    host.colons!.pop()
+    if (literal.floor === 0) state.colonWidths.pop()
   }
+  // Line-block payload is inline content, whatever its block shape.
+  if (host.colons?.at(-1) === literal && text !== '') {
+    state.mode = { kind: 'paragraph', absorbingFence: false }
+  } else closeBlockQuoteParagraph(state)
+  return true
+}
+
+function trackHostCommentLine(q: QuoteHostLine): boolean {
+  const { host, state, column, text } = q
+  if (!blockQuoteParagraphOpen(state) && host.markers.length > 0 && column < host.columns.at(-1)!) {
+    while (host.markers.length > 0 && host.markers.at(-1)! >= column) popQuoteHost(host)
+    if (host.colons) host.colons = host.colons.filter(open => open.floor <= host.columns.at(-1)!)
+    if (host.markers.length === 0) { host.rejectedItemComment = true; closeBlockQuoteParagraph(state); return true }
+  }
+  const level = Math.max(0, upperBound(host.columns, column, entry => entry) - 1)
+  const floor = host.columns[level]!
+  const colons = host.colons ?? []
+  const open = colons[upperBound(colons, floor, entry => entry.floor) - 1]
+  if ((commentFenceRun(text) !== undefined && column < host.columns.at(-1)!) ||
+      !(host.kinds[level - 1] === 'item' && open && floor === open.floor && column > open.column)) {
+    host.commentBoundary = true
+    host.commentBoundaryBelow = commentFenceRun(text) !== undefined && column < host.columns.at(-1)!
+  }
+  return false
+}
+
+// Blank lines, comments and quote markers reset or skip the host stack.
+function trackHostResetLine(q: QuoteHostLine): QuoteHostVerdict {
+  const { host, text } = q
+  if (RE_COMMENT_LINE.test(text)) return trackHostCommentLine(q)
   if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
-  if (quotedLineText(content, terminatorFree) !== null) {
+  if (quotedLineText(q.content, q.terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []; host.terms = []
     host.colons = []
     host.initialMarkerColumn = undefined
     host.definitionList = undefined
     return false
   }
-  const paragraph = blockQuoteParagraphOpen(state)
-  if (afterComment && host.kinds.at(-1) === 'item' && column > 0 &&
-      column < host.columns.at(-1)! &&
-      !(!afterCommentBelow && opensCodeFence(text) && host.colons?.some(open => open.floor <= column && open.column < column)) &&
-      (!lineOpensBlock(text) || isListMarkerLine(text) || column < host.columns[1]! ||
-        ((host.colons?.length ?? 0) > 0 && (RE_FENCE.test(text) || RE_RAW_FENCE.test(text))))) {
-    state.mode = { kind: 'paragraph', absorbingFence: false }
-    return true
-  }
+  return undefined
+}
+
+function continuesAfterComment(q: QuoteHostLine): boolean {
+  const { host, column, text } = q
+  return q.afterComment && host.kinds.at(-1) === 'item' && column > 0 &&
+    column < host.columns.at(-1)! &&
+    !(!q.afterCommentBelow && opensCodeFence(text) && host.colons?.some(open => open.floor <= column && open.column < column)) &&
+    (!lineOpensBlock(text) || isListMarkerLine(text) || column < host.columns[1]! ||
+      ((host.colons?.length ?? 0) > 0 && (RE_FENCE.test(text) || RE_RAW_FENCE.test(text))))
+}
+
+// Pop hosts the line has left, then push the item, note or description markers it opens.
+function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
+  const { host, column, text } = q
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
   const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
   // A marker below an ancestor's content column can remain paragraph text.
@@ -326,9 +365,7 @@ export function trackQuoteHostFence(
   const lazyItem = paragraph && !host.kinds.includes('note') && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
     (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody || open.markerBody === true)
-  while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
-    host.columns.pop(); host.markers.pop(); host.kinds.pop(); host.terms.pop()
-  }
+  while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) popQuoteHost(host)
   const colons = host.colons ??= []
   while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
   const insideItem = host.kinds.at(-1) === 'item'
@@ -374,6 +411,17 @@ export function trackQuoteHostFence(
     }
     break
   }
+  return {
+    inner, at, blockStart, paragraph, insideItem, colons,
+    floor: host.columns.at(-1)!,
+    pendingColonBody: colons.at(-1)?.awaitingBody === true,
+  }
+}
+
+// Track definition terms and lists opened by the line's body.
+function trackHostDefinitions(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
+  const { host, state, column } = q
+  const { inner, at, blockStart } = b
   if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
   if (blockStart && host.kinds.at(-1) === 'item' && host.kinds.includes('note') &&
       !opensCodeFence(inner) && colonFenceOpenerLen(inner) === null && !RE_DEFLIST_TERM.test(inner)) {
@@ -383,96 +431,152 @@ export function trackQuoteHostFence(
   if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
   else if (host.definitionList !== undefined && column <= host.definitionList &&
     host.kinds.at(-1) !== 'description') host.definitionList = undefined
-  const floor = host.columns.at(-1)!
-  const pendingColonBody = colons.at(-1)?.awaitingBody === true
-  if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
-  if (floor > 0) {
-    const bare = /^(:{3,})[ \t]*$/.exec(inner)
-    const open = colons.at(-1)
-    if (bare && open && bare[1]!.length === open.width &&
-        (at === open.column || at === open.floor)) {
-      colons.pop()
+  return undefined
+}
+
+// Colon fences inside a host: close, absorb as paragraph text, or open one.
+function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
+  const { host, state } = q
+  const { inner, at, blockStart, colons, floor } = b
+  const bare = /^(:{3,})[ \t]*$/.exec(inner)
+  const open = colons.at(-1)
+  if (bare && open && bare[1]!.length === open.width &&
+      (at === open.column || at === open.floor)) {
+    colons.pop()
+    closeBlockQuoteParagraph(state)
+    return true
+  }
+  if (bare && open && at !== open.column && at !== open.floor) {
+    if (host.kinds.at(-1) === 'note') {
       closeBlockQuoteParagraph(state)
       return true
     }
-    if (bare && open && at !== open.column && at !== open.floor) {
-      if (host.kinds.at(-1) === 'note') {
-        closeBlockQuoteParagraph(state)
-        return true
-      }
-      return false
-    }
-    if (open) open.awaitingBody = false
-    if (open?.literal) {
+    return false
+  }
+  if (open) open.awaitingBody = false
+  if (open?.literal) {
+    closeBlockQuoteParagraph(state)
+    return true
+  }
+  const width = colonFenceOpenerLen(inner)
+  if (b.insideItem && open && floor === open.floor && at > open.column && !(q.afterComment && opensCodeFence(inner)) &&
+      !hostedAuthoredBlockOpener(inner)) {
+    if (q.afterComment && width !== null) {
       closeBlockQuoteParagraph(state)
       return true
     }
-    const width = colonFenceOpenerLen(inner)
-    if (insideItem && open && floor === open.floor && at > open.column && !(afterComment && opensCodeFence(inner)) &&
-        !hostedAuthoredBlockOpener(inner)) {
-      if (afterComment && width !== null) {
-        closeBlockQuoteParagraph(state)
-        return true
-      }
-      if (width === null && /^(:{3,})/.exec(inner)?.[1]?.length === open.width) {
-        state.mode = { kind: 'paragraph', absorbingFence: true }
-        return true
-      }
-      return false
-    }
-    const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
-    if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
-        !(blockStart && host.kinds.at(-1) === 'note'))) {
+    if (width === null && /^(:{3,})/.exec(inner)?.[1]?.length === open.width) {
       state.mode = { kind: 'paragraph', absorbingFence: true }
       return true
     }
-    if (width !== null && !absorbedBare) {
-      colons.push({ width, column: at, floor, awaitingBody: blockStart,
-        literal: RE_LINE_BLOCK_OPEN.test(inner), markerBody: blockStart })
-      closeBlockQuoteParagraph(state)
-      return true
-    }
+    return false
   }
-  if (floor === 0 && at === 0 && RE_LINE_BLOCK_OPEN.test(inner)) {
-    colons.push({ width: colonFenceOpenerLen(inner)!, column: at, floor, awaitingBody: false, literal: true })
+  const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
+  if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
+      !(blockStart && host.kinds.at(-1) === 'note'))) {
+    state.mode = { kind: 'paragraph', absorbingFence: true }
+    return true
   }
+  if (width !== null && !absorbedBare) {
+    colons.push({ width, column: at, floor, awaitingBody: blockStart,
+      literal: RE_LINE_BLOCK_OPEN.test(inner), markerBody: blockStart })
+    closeBlockQuoteParagraph(state)
+    return true
+  }
+  return undefined
+}
+
+function trackHostCodeFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
+  const { host, state, hasCloser } = q
+  const { inner, at, blockStart, paragraph, colons, floor } = b
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
-  if (marker && (floor > 0 || (rejectedItemComment && at > 0 && !paragraph))) {
-    const colon = colons.at(-1)
-    // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
-    // to NAME a block opener past the item's canonical content column, not to
-    // refuse it, so the host holds its payload exactly as it holds a canonical
-    // one - and a flush-left line then reaches no open paragraph. Read as a
-    // continuation instead, it put a document-level line inside the fence
-    // (carve-js#2350). Its closer may sit at its own column or at the host's.
-    const overIndented = at !== floor
-    if (blockStart || !paragraph || (pendingColonBody && colon && (at === colon.floor || at === colon.column)) ||
-      hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
-      host.fence = { marker, column: at, floor }
-      closeBlockQuoteParagraph(state)
-      return true
-    }
+  if (!marker || !(floor > 0 || (q.rejectedItemComment && at > 0 && !paragraph))) return undefined
+  const colon = colons.at(-1)
+  // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
+  // to NAME a block opener past the item's canonical content column, not to
+  // refuse it, so the host holds its payload exactly as it holds a canonical
+  // one - and a flush-left line then reaches no open paragraph. Read as a
+  // continuation instead, it put a document-level line inside the fence
+  // (carve-js#2350). Its closer may sit at its own column or at the host's.
+  const overIndented = at !== floor
+  if (blockStart || !paragraph || (b.pendingColonBody && colon && (at === colon.floor || at === colon.column)) ||
+    hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
+    host.fence = { marker, column: at, floor }
+    closeBlockQuoteParagraph(state)
+    return true
   }
+  return undefined
+}
+
+// A block-level line at the host's column ends the quote's open paragraph.
+function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
+  const { host, state } = q
+  const { inner, at, blockStart, paragraph, floor } = b
   if (!blockStart && at === floor && host.terms.length > 0 &&
       (!paragraph || lineOpensBlock(inner) || RE_DEFLIST_DEF.test(inner) || isBlockAttributeLine(inner)))
     host.terms[host.terms.length - 1] = false
-  if (floor > 0 && at >= floor && !blockStart && !host.terms.at(-1)) {
-    if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
-      closeBlockQuoteParagraph(state)
-      return true
-    }
-    const row = isTableRow(inner) || (wasInTable && RE_TABLE_CONT.test(inner))
-    if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
-        (host.kinds.at(-1) === 'item' && RE_DEFLIST_TERM.test(inner)) ||
-        (host.kinds.at(-1) !== 'note' && isBlockAttributeLine(inner))) {
-      state.inTable = row
-      closeBlockQuoteParagraph(state)
-      return true
-    }
+  if (floor <= 0 || at < floor || blockStart || host.terms.at(-1)) return false
+  if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
+    closeBlockQuoteParagraph(state)
+    return true
+  }
+  const row = isTableRow(inner) || (q.wasInTable && RE_TABLE_CONT.test(inner))
+  if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
+      (host.kinds.at(-1) === 'item' && RE_DEFLIST_TERM.test(inner)) ||
+      (host.kinds.at(-1) !== 'note' && isBlockAttributeLine(inner))) {
+    state.inTable = row
+    closeBlockQuoteParagraph(state)
+    return true
   }
   return false
+}
+
+// A line block at the quote's own column holds its payload as inline text.
+function openRootLineBlock(b: QuoteHostBody): void {
+  if (b.floor === 0 && b.at === 0 && RE_LINE_BLOCK_OPEN.test(b.inner)) {
+    b.colons.push({ width: colonFenceOpenerLen(b.inner)!, column: b.at, floor: b.floor, awaitingBody: false, literal: true })
+  }
+}
+
+export function trackQuoteHostFence(
+  content: string, state: BlockQuoteLazyState,
+  hasCloser: (marker: string, column?: number) => boolean,
+  terminatorFree: boolean,
+  hasCommentCloser: (width: number, floor: number) => boolean,
+  wasInTable: boolean,
+): boolean {
+  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
+  const rejectedItemComment = host.rejectedItemComment === true
+  delete host.rejectedItemComment
+  const afterComment = host.commentBoundary === true
+  const afterCommentBelow = host.commentBoundaryBelow === true
+  delete host.commentBoundary
+  delete host.commentBoundaryBelow
+  const q: QuoteHostLine = {
+    content, state, host, hasCloser, terminatorFree, hasCommentCloser, wasInTable,
+    rejectedItemComment, afterComment, afterCommentBelow,
+    column: indentColumns(content),
+    text: content.replace(/^[ \t]*/, ''),
+  }
+  const held = trackHeldHostFence(q) ?? trackHeldColonComment(q) ?? trackLineBlockPayload(q) ?? trackHostResetLine(q)
+  if (held !== undefined) return held
+  const paragraph = blockQuoteParagraphOpen(state)
+  if (continuesAfterComment(q)) {
+    state.mode = { kind: 'paragraph', absorbingFence: false }
+    return true
+  }
+  const b = openQuoteHosts(q, paragraph)
+  const defined = trackHostDefinitions(q, b)
+  if (defined !== undefined) return defined
+  if (b.blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
+  const colonFence = b.floor > 0 ? trackHostColonFence(q, b) : undefined
+  if (colonFence !== undefined) return colonFence
+  openRootLineBlock(b)
+  const codeFence = trackHostCodeFence(q, b)
+  if (codeFence !== undefined) return codeFence
+  return closesHostParagraph(q, b)
 }
 
 export interface BlockQuoteLazyState {

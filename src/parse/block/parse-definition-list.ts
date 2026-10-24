@@ -23,6 +23,9 @@ import type {
 } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
 
+// A phase's answer for one admitted line, or `undefined` to ask the next phase.
+type DescriptionVerdict = 'continue' | 'stop' | undefined
+
 type DefinitionListSession = {
   collectAttachedBlock(
     lexer: Lexer,
@@ -422,20 +425,8 @@ export function createDefinitionListParser(
       }
       nestedLeadScans = descriptionLeadFenceScans(first)
       lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, () => true, true)
-      // A definition continues like a list item (PART 9 \u00a717):
-      //  - form A: a deeper-indented line (>= the content column) folds in, and a
-      //    blank line is tolerated when a later line still continues the body, so
-      //    a `<dd>` can hold multiple paragraphs;
-      //  - form B: a lone `+` attaches the FOLLOWING flush-left block, so rich
-      //    content can join the definition with no indentation (the un-prefixed
-      //    analogue of the list-item and block-quote `+` forms; a leading `:  +`
-      //    is the same marker opening the FIRST block);
-      //  - lazy continuation: a flush-left line with no blank before it that does
-      //    NOT start an interrupting block folds into the open paragraph (the same
-      //    CommonMark lazy rule list items and block quotes use, matching djot).
-      runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
-        const ln = admission.line
-        // Form B: `+` pull-left continuation.
+      // Form B: `+` pull-left continuation.
+      const admitPlusContinuation = (ln: string): DescriptionVerdict => {
         const descriptionPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const descriptionFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
         const descriptionDecision = isContinuationMarker(ln) ? markerDecision(lexer, lexer.pos) : undefined
@@ -486,6 +477,9 @@ export function createDefinitionListParser(
           }
           return 'continue'
         }
+        return undefined
+      }
+      const admitBelowColumnCodePayload = (ln: string): DescriptionVerdict => {
         if (!isBlankLine(ln) && indentColumns(ln, contentCol) < contentCol &&
             lazyState.opaque?.kind === 'code' && authoredBase !== null && authoredCodeFenceCloses &&
             (opensCodeFence(ln) || !lineOpensItemBlock(ln))) {
@@ -495,8 +489,9 @@ export function createDefinitionListParser(
           lexer.consume()
           return 'continue'
         }
-        const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-        const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
+        return undefined
+      }
+      const leavesBeforeSourceBody = (ln: string, sourceFollower: string, reachesSourceBody: boolean): DescriptionVerdict => {
         if (lazyState.opaque === null && (lexer.hostBody === 'list' || lexer.hostBody === 'description') &&
             !reachesSourceBody &&
             !isRetainableLineComment(lexer, ln.trimStart()) && commentFenceRun(ln.trimStart()) === undefined &&
@@ -510,218 +505,82 @@ export function createDefinitionListParser(
             !insideOpenQuoteParagraph(lazyState) &&
             (startsInterruptingBlock(lexer, ln.trimStart()) || isListMarkerLine(ln.trimStart()) ||
               RE_BLOCKQUOTE.test(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()))) return 'stop'
-        // Form A: an indented continuation line (with no intervening blank).
-        // The indent is a COLUMN claim, not a character count: `definition_
-        // continuation` is a leading indentation run, so a tab is syntax there and
-        // advances to the next multiple of 4 (markup-carve/carve#888's signoff,
-        // reaffirmed by markup-carve/carve#901; the same family as #692, #796 and
-        // #905). Counting characters made a lone tab - column 4, past the content
-        // column - end the body, while three spaces continued it, and made the
-        // answer depend on how the author spelled a run rather than where it
-        // landed (markup-carve/carve-js#812).
-        if (admission.kind === 'content') {
-          const lineIndex = lexer.pos
-          const dedented = sliceColumns(ln, contentCol, true)
-          if (quoteBandFold(ln)) {
-            const folded = LAZY_FRAME + dedented.trimStart()
-            bodyLines.push(folded)
-            bodySourceLines.push(ln)
-            bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-            track(folded, undefined, false)
-            lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
-            lexer.consume()
-            return 'continue'
-          }
-          if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(dedented.trimStart()))
-            lexer.hostedFootnoteLines.add(lexer.lineNumber(lineIndex))
-          // A LINE BELOW THE OPEN ITEM'S CONTENT COLUMN OPENS NOTHING
-          // (markup-carve/carve-js#2535). It reaches the body but not the item,
-          // which makes it the item's lazy continuation, and a lazy
-          // continuation has no structure to read: the oracle folds it into the
-          // item's open paragraph whatever it is spelled as. The authored-base
-          // pass asked the line's SPELLING instead - whether it looks like an
-          // opener - so a heading, a break, a table, a quote, a fence or a `:::`
-          // run written one column short of the item became a block of the
-          // body's own, where prose at the identical column folded. One rule
-          // with two answers, decided by the spelling rather than by the column.
-          // A DEFINITION REGISTERS WHEREVER IT STANDS. A reference and a footnote
-          // definition render nothing and are recognized from a leading run, so
-          // the oracle still takes one here and the interruption veto in front
-          // of the fold gate already keeps it. The comment line, the `%%%` run,
-          // a following term and a list marker need no exemption: they fold or
-          // interrupt on the column alone.
-          const localLine = dedented.replace(/^[ \t]+/, '')
-          const lazyUnderNestedItem =
-            nestedItemColumn > 0 &&
-            nestedItemParagraphOpen &&
-            indentColumns(ln) - contentCol < nestedItemColumn &&
-            !isLinkDefLine(localLine) &&
-            !RE_FOOTNOTE_DEF.test(localLine) &&
-            !(reachesSourceBody && RE_DEFLIST_TERM.test(localLine))
-          if (!lazyUnderNestedItem && lazyState.opaque === null) {
-            if (RE_DEFLIST_DEF.test(localLine)) nestedDescriptionOpened = true
-            else if (dedented === localLine && (RE_DEFLIST_TERM.test(localLine) || isListMarkerLine(localLine))) nestedDescriptionOpened = false
-          }
-          if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
-          bodyLines.push(dedented)
-          bodySourceLines.push(ln)
-          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
-          // (markup-carve/carve#1911). `sliceColumns` removes the body's content
-          // column and KEEPS the rest, so an opener written one column past it
-          // arrives here as ` # H` - and every VISIBLE-opener arm of the tracker is
-          // column-0 strict, so it read prose and left the paragraph open. The line
-          // is not prose: `rebaseOverindentedBlocks` below gives it ONE AUTHORED
-          // BLOCK BASE and the body parses a heading. The paragraph was decided
-          // from a spelling the body never reads, one pass before the pass that
-          // normalizes it. The INVISIBLE arms are whitespace-tolerant and were
-          // already right, which is exactly the split between the corpus rows that
-          // passed and the ones that did not - and why row 7 contradicted itself,
-          // ending the body at the column and keeping it open one past.
-          //
-          // SS10 I1 closes the paragraph for a visible opener at or past the column
-          // and SS10 I5 closes it for a definition or an attribute block, so the two
-          // columns answer alike - an answer that MOVES between the body's column
-          // and one past it is reading indentation rather than the rule.
-          //
-          // AN OPENER THAT LEAVES A BLOCK OPEN IS READ IN THE SAME SPELLING, AT ONE
-          // AUTHORED BASE (markup-carve/carve#1930). Refusing the flush reading for
-          // those left the body's fence state untracked across this whole band:
-          // `::: note` one column past never reached `divDepth`, its `:::` was never
-          // a closer, and the body ended on prose - so a CLOSED fence held the
-          // paragraph open and `tail` folded in, where the same body written AT the
-          // column ends it.
-          //
-          // The base is the OPENER's residual indent, and only lines written at it
-          // are that block's structure. `normalizeAuthoredBodyBases` dedents a block
-          // by the one column its opener established and leaves anything deeper
-          // alone, so `::: note` at the column with its `:::` one deeper closes
-          // nothing - the run is payload and the container is still collecting.
-          // Reading every over-indented line flush on its own closed those, and
-          // moved 26 documents off the oracle while fixing 72.
-          const flush = dedented.replace(/^[ \t]+/, '')
-          const residual = indentColumns(ln) - contentCol
-          let bodyReadsFlush = false
-          // A QUOTE THAT COLLECTS NOTHING OWNS NOTHING. The question is whether
-          // the open quote still takes this line, and only a quote with an OPEN
-          // PARAGRAPH does: an unquoted line below one ending in a table, a
-          // heading or a break is not the quote's, so it is the body's own block
-          // and gets the body's own reading (markup-carve/carve-js#2536). Asking
-          // merely whether a quote was TRACKED withheld the flush reading from
-          // every such line, and an over-indented table row below `: > | a |`
-          // came out as prose where the oracle starts a fresh table.
-          if (
-            !bodyHoldsQuote &&
-            lazyState.literalColon === undefined &&
-            !insideOpenQuoteParagraph(lazyState) &&
-            (!lazyState.inFootnoteBody || residual < (lazyState.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN)) &&
-            !lazyUnderNestedItem &&
-            flush !== dedented &&
-            lineOpensItemBlock(flush)
-          ) {
-            // A COPY, and one that cannot write back. `quoteInner` is the state's
-            // only mutable object and `trackBlockQuoteLazyState` advances it IN
-            // PLACE, so a plain spread would let this probe move the real quote
-            // tracker and `track` below would then move it a second time. The gate
-            // above already means no quote is open here, so seeding it null is both
-            // free and true - and it stays safe if that gate is ever relaxed.
-            const probe: ItemLazyState = { ...lazyState, quoteInner: null }
-            trackItemLazyState(flush, probe, () => true, true)
-            if (!probe.lazyFoldable || (probe.quoteInner !== null && lazyState.quoteInner === null)) {
-              if (insideOpenFence(lazyState)) {
-                // Inside an open block: structure at the block's own base, payload
-                // below it. This is what keeps a deeper `:::` from closing an
-                // admonition its opener wrote one column shallower.
-                //
-                // AND NOT A DEEPER CONTAINER. `bodyClosesAFenceAt` scans the body
-                // flat - it closes a colon fence on the first bare run of its own
-                // width and steps over code-fence payload, with no stack - so a
-                // nested opener is not structure to it. Reading one as an opener
-                // here made the inner closer close the outer block and published a
-                // follower the oracle keeps in the body, on 10 documents.
-                bodyReadsFlush = residual === authoredBase && probe.divDepth <= lazyState.divDepth
-              } else {
-                // Nothing open. A LEAF block (a heading, a table, a definition)
-                // needs no base - that arm is carve#1911's, unchanged. A line that
-                // OPENS one fixes the base the rest of that block is read at.
-                bodyReadsFlush = true
-                if (insideOpenFence(probe)) authoredBase = residual
-              }
+        return undefined
+      }
+      // Whether an over-indented content line is read at its own authored base.
+      const contentReadsFlush = (
+        dedented: string,
+        flush: string,
+        residual: number,
+        lazyUnderNestedItem: boolean,
+        reachesSourceBody: boolean,
+      ): boolean => {
+        let bodyReadsFlush = false
+        // A QUOTE THAT COLLECTS NOTHING OWNS NOTHING. The question is whether
+        // the open quote still takes this line, and only a quote with an OPEN
+        // PARAGRAPH does: an unquoted line below one ending in a table, a
+        // heading or a break is not the quote's, so it is the body's own block
+        // and gets the body's own reading (markup-carve/carve-js#2536). Asking
+        // merely whether a quote was TRACKED withheld the flush reading from
+        // every such line, and an over-indented table row below `: > | a |`
+        // came out as prose where the oracle starts a fresh table.
+        if (
+          !bodyHoldsQuote &&
+          lazyState.literalColon === undefined &&
+          !insideOpenQuoteParagraph(lazyState) &&
+          (!lazyState.inFootnoteBody || residual < (lazyState.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN)) &&
+          !lazyUnderNestedItem &&
+          flush !== dedented &&
+          lineOpensItemBlock(flush)
+        ) {
+          // A COPY, and one that cannot write back. `quoteInner` is the state's
+          // only mutable object and `trackBlockQuoteLazyState` advances it IN
+          // PLACE, so a plain spread would let this probe move the real quote
+          // tracker and `track` below would then move it a second time. The gate
+          // above already means no quote is open here, so seeding it null is both
+          // free and true - and it stays safe if that gate is ever relaxed.
+          const probe: ItemLazyState = { ...lazyState, quoteInner: null }
+          trackItemLazyState(flush, probe, () => true, true)
+          if (!probe.lazyFoldable || (probe.quoteInner !== null && lazyState.quoteInner === null)) {
+            if (insideOpenFence(lazyState)) {
+              // Inside an open block: structure at the block's own base, payload
+              // below it. This is what keeps a deeper `:::` from closing an
+              // admonition its opener wrote one column shallower.
+              //
+              // AND NOT A DEEPER CONTAINER. `bodyClosesAFenceAt` scans the body
+              // flat - it closes a colon fence on the first bare run of its own
+              // width and steps over code-fence payload, with no stack - so a
+              // nested opener is not structure to it. Reading one as an opener
+              // here made the inner closer close the outer block and published a
+              // follower the oracle keeps in the body, on 10 documents.
+              bodyReadsFlush = residual === authoredBase && probe.divDepth <= lazyState.divDepth
+            } else {
+              // Nothing open. A LEAF block (a heading, a table, a definition)
+              // needs no base - that arm is carve#1911's, unchanged. A line that
+              // OPENS one fixes the base the rest of that block is read at.
+              bodyReadsFlush = true
+              if (insideOpenFence(probe)) authoredBase = residual
             }
           }
-          if (foldedMarkerContentColumn >= 0 && residual >= foldedMarkerContentColumn && reachesSourceBody && !lazyUnderNestedItem &&
-              lineOpensItemBlock(flush) && !isListMarkerLine(flush)) bodyReadsFlush = true
-          if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
-          // A line AT the body's column 0 is the body's own block, so it replaces
-          // whatever container stood there: another list marker keeps a list
-          // collecting, anything else ends one. Read before `track`, because a
-          // fence opener is still structure at this column even though it leaves
-          // a verbatim region open behind it; a line INSIDE one is payload and
-          // decides nothing. A line past the column belongs to the open item.
-          const wasVerbatim = lazyState.opaque !== null
-          const foldedMarker = lazyState.lazyFoldable && nestedItemColumn < 0 &&
-            markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
-          if (bodyReadsFlush && residual > 0 && !foldedMarker) authoredOpeners.add(bodyLines.length - 1)
-          if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
-          else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
-          if (!foldedMarker) track(
-            bodyReadsFlush ? flush : dedented,
-            lineIndex,
-            true,
-            bodyReadsFlush ? contentCol + residual : contentCol,
-          )
-          if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
-            nestedItemColumn = markerContentColumn(flush)
-            nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
-          }
-          // The base belongs to the block that established it and dies with it.
-          if (!insideOpenFence(lazyState)) authoredBase = null
-          lexer.consume()
-          return 'continue'
         }
-        // Blank line: absorb it as a paragraph separator ONLY when a later line
-        // is still an indented continuation. Otherwise leave it in place so the
-        // entry-separator rule (a single blank before the next `:: term`) and the
-        // outer block stream see it unchanged.
-        if (admission.kind === 'blank') {
-          const { offset: look, line: after } = nextContainerContent(lexer)
-          // The description ends at two blanks, including any unfinished fence.
-          if (look > 1) return 'stop'
-          // The SECOND spelling of the same rule, and it has its own job: this one
-          // decides whether the body survives the blank at all, the Form A branch
-          // above decides whether a line folds. Both read columns, or a lone tab
-          // after a blank ends the body while Form A would have kept it.
-          if (
-            after !== undefined &&
-            !isBlankLine(after) &&
-            indentColumns(after, contentCol) >= contentCol
-          ) {
-            for (let k = 0; k < look; k++) {
-              const lineIndex = lexer.pos
-              bodyBaseEligible.add(bodyLines.length)
-              bufferedBlanks.add(bodyLines.length)
-              bodyLines.push('')
-              bodySourceLines.push(lexer.peek())
-              bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-              track('')
-              lexer.consume()
-            }
-            return 'continue'
-          }
-          return 'stop'
-        }
-        // A new term/definition marker ends this definition (the outer loop
-        // picks it up). An empty term marker is not one: `::` and `:: ` are the
-        // same line, a term with no content, so it folds (#1891).
-        if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) return 'stop'
-        if (ln.startsWith(LAZY_FRAME) && RE_DEFLIST_TERM.test(stripLazyFrame(ln)) &&
-            entryColumn() > listColumn &&
-            entryColumn() < bodySourceColumn) return 'stop'
-        const below = ln.replace(/^[ \t]+/, '')
-        const atDocumentColumn = below === ln
+        if (foldedMarkerContentColumn >= 0 && residual >= foldedMarkerContentColumn && reachesSourceBody && !lazyUnderNestedItem &&
+            lineOpensItemBlock(flush) && !isListMarkerLine(flush)) bodyReadsFlush = true
+        return bodyReadsFlush
+      }
+      // Form A: an indented continuation line (with no intervening blank).
+      // The indent is a COLUMN claim, not a character count: `definition_
+      // continuation` is a leading indentation run, so a tab is syntax there and
+      // advances to the next multiple of 4 (markup-carve/carve#888's signoff,
+      // reaffirmed by markup-carve/carve#901; the same family as #692, #796 and
+      // #905). Counting characters made a lone tab - column 4, past the content
+      // column - end the body, while three spaces continued it, and made the
+      // answer depend on how the author spelled a run rather than where it
+      // landed (markup-carve/carve-js#812).
+      const admitContentLine = (ln: string, reachesSourceBody: boolean): 'continue' => {
+        const lineIndex = lexer.pos
+        const dedented = sliceColumns(ln, contentCol, true)
         if (quoteBandFold(ln)) {
-          const lineIndex = lexer.pos
-          const folded = LAZY_FRAME + below
+          const folded = LAZY_FRAME + dedented.trimStart()
           bodyLines.push(folded)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -730,6 +589,136 @@ export function createDefinitionListParser(
           lexer.consume()
           return 'continue'
         }
+        if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(dedented.trimStart()))
+          lexer.hostedFootnoteLines.add(lexer.lineNumber(lineIndex))
+        // A LINE BELOW THE OPEN ITEM'S CONTENT COLUMN OPENS NOTHING
+        // (markup-carve/carve-js#2535). It reaches the body but not the item,
+        // which makes it the item's lazy continuation, and a lazy
+        // continuation has no structure to read: the oracle folds it into the
+        // item's open paragraph whatever it is spelled as. The authored-base
+        // pass asked the line's SPELLING instead - whether it looks like an
+        // opener - so a heading, a break, a table, a quote, a fence or a `:::`
+        // run written one column short of the item became a block of the
+        // body's own, where prose at the identical column folded. One rule
+        // with two answers, decided by the spelling rather than by the column.
+        // A DEFINITION REGISTERS WHEREVER IT STANDS. A reference and a footnote
+        // definition render nothing and are recognized from a leading run, so
+        // the oracle still takes one here and the interruption veto in front
+        // of the fold gate already keeps it. The comment line, the `%%%` run,
+        // a following term and a list marker need no exemption: they fold or
+        // interrupt on the column alone.
+        const localLine = dedented.replace(/^[ \t]+/, '')
+        const lazyUnderNestedItem =
+          nestedItemColumn > 0 &&
+          nestedItemParagraphOpen &&
+          indentColumns(ln) - contentCol < nestedItemColumn &&
+          !isLinkDefLine(localLine) &&
+          !RE_FOOTNOTE_DEF.test(localLine) &&
+          !(reachesSourceBody && RE_DEFLIST_TERM.test(localLine))
+        if (!lazyUnderNestedItem && lazyState.opaque === null) {
+          if (RE_DEFLIST_DEF.test(localLine)) nestedDescriptionOpened = true
+          else if (dedented === localLine && (RE_DEFLIST_TERM.test(localLine) || isListMarkerLine(localLine))) nestedDescriptionOpened = false
+        }
+        if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
+        bodyLines.push(dedented)
+        bodySourceLines.push(ln)
+        bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
+        // (markup-carve/carve#1911). `sliceColumns` removes the body's content
+        // column and KEEPS the rest, so an opener written one column past it
+        // arrives here as ` # H` - and every VISIBLE-opener arm of the tracker is
+        // column-0 strict, so it read prose and left the paragraph open. The line
+        // is not prose: `rebaseOverindentedBlocks` below gives it ONE AUTHORED
+        // BLOCK BASE and the body parses a heading. The paragraph was decided
+        // from a spelling the body never reads, one pass before the pass that
+        // normalizes it. The INVISIBLE arms are whitespace-tolerant and were
+        // already right, which is exactly the split between the corpus rows that
+        // passed and the ones that did not - and why row 7 contradicted itself,
+        // ending the body at the column and keeping it open one past.
+        //
+        // SS10 I1 closes the paragraph for a visible opener at or past the column
+        // and SS10 I5 closes it for a definition or an attribute block, so the two
+        // columns answer alike - an answer that MOVES between the body's column
+        // and one past it is reading indentation rather than the rule.
+        //
+        // AN OPENER THAT LEAVES A BLOCK OPEN IS READ IN THE SAME SPELLING, AT ONE
+        // AUTHORED BASE (markup-carve/carve#1930). Refusing the flush reading for
+        // those left the body's fence state untracked across this whole band:
+        // `::: note` one column past never reached `divDepth`, its `:::` was never
+        // a closer, and the body ended on prose - so a CLOSED fence held the
+        // paragraph open and `tail` folded in, where the same body written AT the
+        // column ends it.
+        //
+        // The base is the OPENER's residual indent, and only lines written at it
+        // are that block's structure. `normalizeAuthoredBodyBases` dedents a block
+        // by the one column its opener established and leaves anything deeper
+        // alone, so `::: note` at the column with its `:::` one deeper closes
+        // nothing - the run is payload and the container is still collecting.
+        // Reading every over-indented line flush on its own closed those, and
+        // moved 26 documents off the oracle while fixing 72.
+        const flush = dedented.replace(/^[ \t]+/, '')
+        const residual = indentColumns(ln) - contentCol
+        const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody)
+        if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
+        // A line AT the body's column 0 is the body's own block, so it replaces
+        // whatever container stood there: another list marker keeps a list
+        // collecting, anything else ends one. Read before `track`, because a
+        // fence opener is still structure at this column even though it leaves
+        // a verbatim region open behind it; a line INSIDE one is payload and
+        // decides nothing. A line past the column belongs to the open item.
+        const wasVerbatim = lazyState.opaque !== null
+        const foldedMarker = lazyState.lazyFoldable && nestedItemColumn < 0 &&
+          markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
+        if (bodyReadsFlush && residual > 0 && !foldedMarker) authoredOpeners.add(bodyLines.length - 1)
+        if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
+        else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
+        if (!foldedMarker) track(
+          bodyReadsFlush ? flush : dedented,
+          lineIndex,
+          true,
+          bodyReadsFlush ? contentCol + residual : contentCol,
+        )
+        if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
+          nestedItemColumn = markerContentColumn(flush)
+          nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
+        }
+        // The base belongs to the block that established it and dies with it.
+        if (!insideOpenFence(lazyState)) authoredBase = null
+        lexer.consume()
+        return 'continue'
+      }
+      // Blank line: absorb it as a paragraph separator ONLY when a later line
+      // is still an indented continuation. Otherwise leave it in place so the
+      // entry-separator rule (a single blank before the next `:: term`) and the
+      // outer block stream see it unchanged.
+      const admitBlankLine = (): 'continue' | 'stop' => {
+        const { offset: look, line: after } = nextContainerContent(lexer)
+        // The description ends at two blanks, including any unfinished fence.
+        if (look > 1) return 'stop'
+        // The SECOND spelling of the same rule, and it has its own job: this one
+        // decides whether the body survives the blank at all, the Form A branch
+        // above decides whether a line folds. Both read columns, or a lone tab
+        // after a blank ends the body while Form A would have kept it.
+        if (
+          after !== undefined &&
+          !isBlankLine(after) &&
+          indentColumns(after, contentCol) >= contentCol
+        ) {
+          for (let k = 0; k < look; k++) {
+            const lineIndex = lexer.pos
+            bodyBaseEligible.add(bodyLines.length)
+            bufferedBlanks.add(bodyLines.length)
+            bodyLines.push('')
+            bodySourceLines.push(lexer.peek())
+            bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+            track('')
+            lexer.consume()
+          }
+          return 'continue'
+        }
+        return 'stop'
+      }
+      const admitLazyBlockLine = (ln: string, below: string, atDocumentColumn: boolean): DescriptionVerdict => {
         const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const reachedQuotedDescription = quoteDepth > 0 &&
           quotePrefixDepth(followerSource) >= quoteDepth &&
@@ -768,9 +757,9 @@ export function createDefinitionListParser(
           lexer.consume()
           return 'continue'
         }
-        const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
-          indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
-          lazyState.opaque === null
+        return undefined
+      }
+      const admitBelowColumnComment = (ln: string, below: string, atDocumentColumn: boolean, belowLeadColon: boolean): DescriptionVerdict => {
         const priorLazyDefinition = bodySourceLines.length > 1 &&
           indentColumns(bodySourceLines.at(-1) ?? '', contentCol) < contentCol &&
           (isLinkDefLine(bodySourceLines.at(-1)?.trimStart() ?? '') ||
@@ -801,8 +790,6 @@ export function createDefinitionListParser(
             return 'continue'
           }
         }
-        const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
-          RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol
         // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
         // THE COLUMN" (markup-carve/carve-js#2255, markup-carve/carve#2488). The
         // body ends at one of those, which is right for an opener and for the `%%`
@@ -833,67 +820,129 @@ export function createDefinitionListParser(
             ((colonFenceShapeEndsLazyContinuation(first) &&
               (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
               !lazyState.lazyFoldable)) return 'stop'
-        // A collecting list does not supply an open paragraph (CARVE-P0-009).
-        if (
-          (lazyState.lazyFoldable || quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan ||
-            (belowLeadColon && bodyLines.length > 1 && RE_COMMENT_LINE.test(below)) ||
-            (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
-              (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
-                (!nestedDescriptionOpened && indentColumns(bodySourceLines.at(-1) ?? '') > contentCol &&
-                  isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? ''))))) &&
-          !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
-          (quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
-            ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
-            (indentColumns(ln, contentCol) < contentCol &&
-              (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
-              (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
-              !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn)))
-          && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
-        ) {
-          const lineIndex = lexer.pos
-          if (indentColumns(ln, contentCol) < contentCol) {
-            lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
-          }
-          // CLAMPED TO ONE COLUMN, as the list collector clamps it
-          // (markup-carve/carve-js#540, #1623). A block-shaped line below the
-          // content column opens nothing (§24 C3) and folds here for that
-          // reason, but the body's own reparse reads columns from 0, so a fence
-          // line left flush left opened a code block there instead of staying
-          // the paragraph's inline verbatim run - one rule with two answers,
-          // decided by whether a list or a description body sat above it
-          // (markup-carve/carve-js#2515).
-          //
-          // THE CODE FENCE IS THE ONLY KIND THAT NEEDS IT here. This body's
-          // lines are already dedented by its content margin, so the column is
-          // not a clamp on indentation the author wrote but one added past the
-          // body's own column 0 - and a list marker moved off that column opens
-          // a second list where the fold continues the first. Every other kind
-          // either ends the body above or reads the same at both columns.
-          //
-          const folded =
-            RE_CAPTION.test(below) && lazyState.opaque === null
+        return undefined
+      }
+      const foldsLazyLine = (
+        ln: string,
+        below: string,
+        atDocumentColumn: boolean,
+        belowLeadColon: boolean,
+        quoteFootnoteBelowBody: boolean,
+      ): boolean => (
+        (lazyState.lazyFoldable || quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan ||
+          (belowLeadColon && bodyLines.length > 1 && RE_COMMENT_LINE.test(below)) ||
+          (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
+            (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
+              (!nestedDescriptionOpened && indentColumns(bodySourceLines.at(-1) ?? '') > contentCol &&
+                isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? ''))))) &&
+        !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
+        (quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
+          ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
+          (indentColumns(ln, contentCol) < contentCol &&
+            (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
+            (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
+            !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn)))
+        && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
+      )
+      const foldLazyLine = (ln: string, below: string, atDocumentColumn: boolean): 'continue' => {
+        const lineIndex = lexer.pos
+        if (indentColumns(ln, contentCol) < contentCol) {
+          lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
+        }
+        // CLAMPED TO ONE COLUMN, as the list collector clamps it
+        // (markup-carve/carve-js#540, #1623). A block-shaped line below the
+        // content column opens nothing (§24 C3) and folds here for that
+        // reason, but the body's own reparse reads columns from 0, so a fence
+        // line left flush left opened a code block there instead of staying
+        // the paragraph's inline verbatim run - one rule with two answers,
+        // decided by whether a list or a description body sat above it
+        // (markup-carve/carve-js#2515).
+        //
+        // THE CODE FENCE IS THE ONLY KIND THAT NEEDS IT here. This body's
+        // lines are already dedented by its content margin, so the column is
+        // not a clamp on indentation the author wrote but one added past the
+        // body's own column 0 - and a list marker moved off that column opens
+        // a second list where the fold continues the first. Every other kind
+        // either ends the body above or reads the same at both columns.
+        //
+        const folded =
+          RE_CAPTION.test(below) && lazyState.opaque === null
+            ? LAZY_FRAME + below
+            : retainedBelowComment && !RE_COMMENT_LINE.test(below)
+            ? below
+            : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
+                (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
               ? LAZY_FRAME + below
-              : retainedBelowComment && !RE_COMMENT_LINE.test(below)
-              ? below
-              : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
-                  (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
-                ? LAZY_FRAME + below
-                : atDocumentColumn && opensCodeFence(below)
-                  ? ' ' + below
-                  : ln
+              : atDocumentColumn && opensCodeFence(below)
+                ? ' ' + below
+                : ln
+        bodyLines.push(folded)
+        bodySourceLines.push(ln)
+        bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        // Track the body's reading: retained openers stay flush, while a
+        // clamped fence continues the paragraph.
+        track(folded, undefined, false)
+        retainedBelowComment = retainBelowColumnComment(folded, lazyState, false)
+        const commentRun = commentFenceRun(below)
+        if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
+        lexer.consume()
+        return 'continue'
+      }
+      const admitLazyLine = (ln: string): 'continue' | 'stop' => {
+        // A new term/definition marker ends this definition (the outer loop
+        // picks it up). An empty term marker is not one: `::` and `:: ` are the
+        // same line, a term with no content, so it folds (#1891).
+        if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) return 'stop'
+        if (ln.startsWith(LAZY_FRAME) && RE_DEFLIST_TERM.test(stripLazyFrame(ln)) &&
+            entryColumn() > listColumn &&
+            entryColumn() < bodySourceColumn) return 'stop'
+        const below = ln.replace(/^[ \t]+/, '')
+        const atDocumentColumn = below === ln
+        if (quoteBandFold(ln)) {
+          const lineIndex = lexer.pos
+          const folded = LAZY_FRAME + below
           bodyLines.push(folded)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          // Track the body's reading: retained openers stay flush, while a
-          // clamped fence continues the paragraph.
           track(folded, undefined, false)
-          retainedBelowComment = retainBelowColumnComment(folded, lazyState, false)
-          const commentRun = commentFenceRun(below)
-          if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
+          lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
           lexer.consume()
           return 'continue'
         }
+        const blockVerdict = admitLazyBlockLine(ln, below, atDocumentColumn)
+        if (blockVerdict !== undefined) return blockVerdict
+        const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
+          indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
+          lazyState.opaque === null
+        const commentVerdict = admitBelowColumnComment(ln, below, atDocumentColumn, belowLeadColon)
+        if (commentVerdict !== undefined) return commentVerdict
+        const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
+          RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol
+        if (foldsLazyLine(ln, below, atDocumentColumn, belowLeadColon, quoteFootnoteBelowBody)) return foldLazyLine(ln, below, atDocumentColumn)
         return 'stop'
+      }
+      // A definition continues like a list item (PART 9 \u00a717):
+      //  - form A: a deeper-indented line (>= the content column) folds in, and a
+      //    blank line is tolerated when a later line still continues the body, so
+      //    a `<dd>` can hold multiple paragraphs;
+      //  - form B: a lone `+` attaches the FOLLOWING flush-left block, so rich
+      //    content can join the definition with no indentation (the un-prefixed
+      //    analogue of the list-item and block-quote `+` forms; a leading `:  +`
+      //    is the same marker opening the FIRST block);
+      //  - lazy continuation: a flush-left line with no blank before it that does
+      //    NOT start an interrupting block folds into the open paragraph (the same
+      //    CommonMark lazy rule list items and block quotes use, matching djot).
+      runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
+        const ln = admission.line
+        const early = admitPlusContinuation(ln) ?? admitBelowColumnCodePayload(ln)
+        if (early !== undefined) return early
+        const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
+        const left = leavesBeforeSourceBody(ln, sourceFollower, reachesSourceBody)
+        if (left !== undefined) return left
+        if (admission.kind === 'content') return admitContentLine(ln, reachesSourceBody)
+        if (admission.kind === 'blank') return admitBlankLine()
+        return admitLazyLine(ln)
       })
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus

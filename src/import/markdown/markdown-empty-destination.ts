@@ -167,6 +167,327 @@ function hasNestedReferenceHead(source: string): boolean {
   return false
 }
 
+/** The mutable state of one reference definition pass, shared by its branches. */
+interface ReferenceExtraction {
+  readonly lines: string[]
+  readonly kept: string[]
+  // The source index each kept line came from, so a diagnostic can name the
+  // line the author wrote rather than its offset in this stripped array.
+  readonly keptSource: number[]
+  readonly bareReferenceHeads: Array<{ index: number; key: string; marker: number; labelLength: number }>
+  sourceIndex: number
+  precedingNonblank: string | undefined
+  referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
+  deferredBlanks: { start: number; end: number; values: string[] } | undefined
+  nextSerial: number
+  readonly reservedReferences: ReadonlySet<number>
+  readonly decodeEntity: (entity: string) => string
+  readonly titleBreakMarker: string
+  readonly titleWrap: string
+  readonly empty: Map<string, string>
+  readonly titled: Set<string>
+  readonly defined: Set<string>
+  readonly authoredDefinitions: Set<string>
+  readonly labels: Map<string, string>
+  readonly sourceLabels: Map<string, string>
+  readonly inline: Map<string, string>
+  readonly tableInline: Map<string, string>
+  readonly definitions: string[]
+  readonly definitionContainers: boolean[]
+  readonly discardedEmptyDefinitions: Array<{ line: number; label: string }>
+}
+
+/** A definition line as the pass reads it, with the containers it stands in. */
+interface DefinitionLine {
+  line: string
+  i: number
+  label: string
+  key: string
+  continued: string[]
+  quotePrefix: string
+  prefix: string
+  opensItem: boolean
+  lineDepth: number
+  blockList: number
+  wrappedDestinationTitle: boolean
+}
+
+const leadingSpaces = (s: string): number => /^ */.exec(s)![0].length
+const LINE_TITLE = new RegExp(String.raw`^[ \t]*(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
+const opensBlock = (text: string): boolean =>
+  /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
+  /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
+
+function keepLines(st: ReferenceExtraction, ...entries: string[]): void {
+  for (const entry of entries) if (entry.trim() !== '') st.precedingNonblank = entry
+  for (const _ of entries) st.keptSource.push(st.sourceIndex)
+  st.kept.push(...entries)
+}
+
+function nextNonblankFrom(st: ReferenceExtraction, start: number): number {
+  let at = start
+  if (st.deferredBlanks && at >= st.deferredBlanks.start && at < st.deferredBlanks.end) at = st.deferredBlanks.end
+  while (at < st.lines.length && st.lines[at]!.trim() === '') at++
+  return at
+}
+
+/** The serials authored text already spells, which generated labels skip. */
+function reservedImportSerials(lines: readonly string[], decodeEntity: (entity: string) => string): { references: Set<number>; footnotes: Set<number> } {
+  const references = new Set<number>()
+  const footnotes = new Set<number>()
+  for (const line of lines) {
+    for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) references.add(Number(match[1]))
+    for (const match of line.matchAll(/\[\^((?:[^[\]\\\n]|\\.)+)\]/g)) {
+      const reserved = /^carve-import-footnote-(\d+)$/i.exec(decodeLinkTitle(match[1]!, decodeEntity).trim())
+      if (reserved) footnotes.add(Number(reserved[1]))
+    }
+  }
+  return { references, footnotes }
+}
+
+/**
+ * Take the list markers off a line inside `quotePrefix`, and the container
+ * prefixes nested under them off the content the block readings see.
+ */
+function readContainerPrefixes(
+  line: string,
+  quotePrefix: string,
+  fence: string | null,
+  listIndent: number,
+  blockIndent: number,
+): { prefix: string; content: string; blockContent: string; opensItem: boolean; listIndent: number; blockIndent: number } {
+  let prefix = quotePrefix
+  let content = line.slice(prefix.length)
+  let opensItem = false
+  const marker = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(content)
+  if (fence === null && !/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(content) && marker) {
+    prefix += marker[0]
+    content = content.slice(marker[0].length)
+    listIndent = prefix.length
+    opensItem = true
+  } else if (listIndent > 0 && content.trim() !== '') {
+    if (leadingSpaces(line) >= listIndent) content = line.slice(listIndent)
+    else listIndent = 0
+  }
+  // CONTAINER PREFIXES NEST, and the BLOCK decisions below need the innermost
+  // content. An item's indentation or marker came off the line without the
+  // quote regex running again, so a block quote inside that item still has its
+  // `>` run on the content and a fence or an HTML block opening there would be
+  // read as the block's own text. Only the fence and HTML-block readings take
+  // the nested run off; everything else keeps the content it has today, so a
+  // definition inside such a quote is handled exactly as before
+  // (markup-carve/carve#2850).
+  // Every container prefix the line carries comes off, not just the first:
+  // `- - ::: note` opens TWO items on one line, and a quote inside an item
+  // carries both prefixes. One marker stripped is not enough.
+  //
+  // A LIST MARKER INSIDE AN OPEN FENCE IS VERBATIM CONTENT, so only the
+  // quote prefix keeps coming off there - stripping a marker would let a
+  // `- ```` line inside the fence read as its closer.
+  let blockContent = fence !== null && leadingSpaces(line) >= blockIndent
+    ? line.slice(blockIndent)
+    : content
+  while (listIndent > 0) {
+    const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
+    if (nested !== '') {
+      blockContent = blockContent.slice(nested.length)
+      continue
+    }
+    if (fence !== null) break
+    const inner = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(blockContent)
+    // `- - -` is a thematic break, not two nested items.
+    if (inner === null || /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(blockContent)) break
+    blockContent = blockContent.slice(inner[0].length)
+  }
+  // The content column EVERY prefix on the line put the body at, which is
+  // what a continuation line of this item is read against. `listIndent` only
+  // counts the first marker, so a body six columns in under `- - - ` would
+  // otherwise read as code.
+  if (opensItem) blockIndent = line.length - blockContent.length
+  else if (listIndent === 0) blockIndent = 0
+  if (!opensItem && blockIndent > listIndent && leadingSpaces(line) >= blockIndent) {
+    blockContent = line.slice(blockIndent)
+    const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
+    if (nested !== '') blockContent = blockContent.slice(nested.length)
+  }
+  return { prefix, content, blockContent, opensItem, listIndent, blockIndent }
+}
+
+/**
+ * Join the continuation lines of a definition title, which CommonMark lets
+ * wrap, into `definition[2]`, so the branch below sees one title. The breaks
+ * are restored when the title is decoded or written. Null where it stays.
+ */
+function joinWrappedDefinitionTitle(
+  st: ReferenceExtraction,
+  definition: RegExpExecArray,
+  i: number,
+  destinationPattern: string,
+  titleOnNext: boolean,
+  continuationAt: (at: number) => string | undefined,
+): { i: number; wrapped: boolean } | null {
+  const empty = /^[ \t]*<>/.test(definition[2]!)
+  const marker = empty ? st.titleBreakMarker : st.titleWrap
+  let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${continuationAt(i + 1)!.trimStart()}` : definition[2]!
+  let end = titleOnNext ? i + 1 : i
+  const opener = new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+(["'(])((?:[^\\]|\\.)*)$`).exec(joined)
+  const closer = opener ? (opener[1] === '(' ? /[()]/ : new RegExp(opener[1]!)) : null
+  // Read on only while the title is open, so a run of definitions stays linear.
+  if (closer !== null && !closer.test(opener![2]!.replace(/\\./g, ''))) {
+    for (;;) {
+      const body = continuationAt(end + 1)
+      if (body === undefined) break
+      joined += marker + body
+      end++
+      if (closer.test(body.replace(/\\./g, ''))) break
+    }
+  }
+  if (end > i && new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+${TITLE}[ \t]*$`).test(joined)) {
+    definition[2] = joined
+    return { i: end, wrapped: !empty && joined.includes(st.titleWrap) }
+  }
+  return null
+}
+
+/** Write a definition with a destination, or keep a bare reference head. */
+function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, destination: string): { i: number; canStart: boolean } {
+  const { line, label, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, wrappedDestinationTitle } = d
+  let i = d.i
+  const target = trimReferenceWhitespace(destination)
+  if (target === '') {
+    const marker = line.indexOf(`[${label}]:`)
+    const next = st.lines[i + 1]
+    const setext = next?.startsWith(quotePrefix) && /^ {0,3}(?:=+|-+)[ \t]*$/.test(next.slice(quotePrefix.length))
+    if (marker >= 0 && !setext) st.bareReferenceHeads.push({ index: st.kept.length, key, marker, labelLength: label.length })
+    keepLines(st, line, ...continued)
+    return { i, canStart: false }
+  }
+  const authoredKey = normalizeReferenceLabel(label)
+  const authoredRepeated = st.authoredDefinitions.has(authoredKey)
+  const repeated = st.defined.has(key) || authoredRepeated
+  st.authoredDefinitions.add(authoredKey)
+  st.defined.add(key)
+  if (label.startsWith('^')) {
+    keepLines(st, line, ...continued)
+    return { i, canStart: true }
+  }
+  if (!repeated) {
+    st.labels.set(key, label)
+    st.sourceLabels.set(normalizeReferenceLabel(label), label)
+  }
+  const preceding = st.precedingNonblank
+  const nextNonblank = st.lines[nextNonblankFrom(st, i + 1)]
+  const isItem = (entry: string | undefined) => entry !== undefined &&
+    /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)/.test(entry.slice(quotePrefix.length))
+  if (!opensItem && leadingSpaces(line) < 2 && st.kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
+    keepLines(st, line, ...continued)
+    return { i, canStart: true }
+  }
+  const next = st.lines[i + 1]
+  const nextTitle = next !== undefined && next.startsWith(quotePrefix)
+    ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
+  const targetHasTitle = new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target)
+  let title = !targetHasTitle && nextTitle
+    ? ` ${nextTitle[1]}` : ''
+  let multilineTitle = false
+  if (!title && !targetHasTitle && opensItem && next !== undefined && /^ {2,}"[^"\n]*$/.test(next) &&
+      st.lines[i + 2] !== undefined && /^ {2,}[^"\n]*"[ \t]*$/.test(st.lines[i + 2]!) &&
+      !st.lines.some((candidate, at) => at !== i &&
+        (/^ {0,3}>/.test(candidate) || /^(?:[ \t]*[-*+][ \t]+)?#{1,6}[ \t]/.test(candidate) ||
+          /^[ \t]*\|/.test(candidate) || /^[ \t]*\d+[.)][ \t]/.test(candidate) ||
+          /^[ \t]*[-=]+[ \t]*$/.test((st.lines[at + 1] ?? '').replace(/^(?: {0,3}>[ \t]?)*/, ''))) &&
+        Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key))) {
+    title = ` "${next.trimStart().slice(1)}${st.titleBreakMarker}${st.lines[i + 2]!.trim().slice(0, -1)}"`
+    multilineTitle = true
+    i += 2
+  } else if (title) i++
+  if (!repeated && label.includes('|')) st.tableInline.set(label, `${target}${title}`)
+  const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(new RegExp(String.raw`^<((?:[^<>\n\\]|\\[^\n])+)>`), (_match, url: string) =>
+    url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
+  ))
+  if ((multilineTitle || wrappedDestinationTitle) && !repeated) {
+    while (st.reservedReferences.has(st.nextSerial)) st.nextSerial++
+    const canonical = `carve-import-reference-${st.nextSerial++}`
+    st.inline.set(canonical, `${target}${title}`)
+    st.sourceLabels.set(key, canonical)
+  } else if (!authoredRepeated && !wrappedDestinationTitle) {
+    st.definitions.push(`[${label}]: ${writtenTarget}`)
+    st.definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
+  }
+  if (opensItem) {
+    const nextLine = st.lines[i + 1]
+    if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
+        !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
+      st.lines[i + 1] = prefix + nextLine.trimStart()
+    } else {
+      let continuation = i + 2
+      if (nextLine?.trim() === '') {
+        continuation = nextNonblankFrom(st, continuation)
+      }
+      if (nextLine?.trim() === '' && continuation < st.lines.length &&
+          leadingSpaces(st.lines[continuation]!) >= prefix.length && leadingSpaces(st.lines[continuation]!) < prefix.length + 4 &&
+          !opensBlock(st.lines[continuation]!.trimStart())) {
+        const moved = prefix + st.lines[continuation]!.trimStart()
+        // Keep a blank run in place while chained definitions move ahead of it.
+        const values = st.deferredBlanks?.values ?? st.lines.slice(i + 1, continuation)
+        if (st.deferredBlanks) {
+          for (let at = st.deferredBlanks.end; at < continuation; at++) values.push(st.lines[at]!)
+        }
+        st.deferredBlanks = { start: i + 2, end: continuation + 1, values }
+        st.lines[i + 1] = moved
+        st.lines[continuation] = ''
+        st.referenceChunk = undefined
+      } else keepLines(st, prefix.trimEnd() + ' \x00REFITEM\x00')
+    }
+  } else if (quotePrefix !== '') {
+    keepLines(st, quotePrefix)
+  } else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && st.lines[i + 1]?.trim() === '') {
+    i++
+  } else if (st.lines[i + 1]?.startsWith('    ') && st.lines[i + 1]!.trim() !== '') {
+    st.lines[i + 1] = st.lines[i + 1]!.replace(/^ {4}/, '')
+    if (st.referenceChunk && i + 1 >= st.referenceChunk.start && i + 1 <= st.referenceChunk.through) {
+      st.referenceChunk.offsets[i + 1 - st.referenceChunk.start]! += 4
+    }
+  }
+  return { i, canStart: true }
+}
+
+/** Record a definition whose destination is empty, for inline fallback. */
+function recordEmptyDestination(st: ReferenceExtraction, d: DefinitionLine, emptied: RegExpExecArray): number {
+  const { label, key, quotePrefix, prefix, opensItem, lineDepth, blockList } = d
+  let i = d.i
+  let raw = emptied[1] ?? ''
+  const next = st.lines[i + 1]
+  const nextTitle = next !== undefined && next.startsWith(quotePrefix) ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
+  if (raw === '' && nextTitle) {
+    raw = nextTitle[1]!
+    i++
+  }
+  const authoredKey = normalizeReferenceLabel(label)
+  if (!st.defined.has(key) && !st.authoredDefinitions.has(authoredKey)) {
+    st.empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), st.decodeEntity).replaceAll(st.titleBreakMarker, '\n'))
+    if (raw !== '') st.titled.add(key)
+    if (raw !== '') st.discardedEmptyDefinitions.push({ line: st.sourceIndex, label })
+    const canonicalLabel = label.includes('\\')
+      ? label
+      : decodeLinkTitle(label, st.decodeEntity)
+    st.labels.set(key, canonicalLabel)
+    st.sourceLabels.set(key, canonicalLabel)
+    if (raw === '') {
+      st.definitions.push(`[${canonicalLabel}]:`)
+      st.definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
+    }
+  }
+  st.defined.add(key)
+  st.authoredDefinitions.add(authoredKey)
+  // Keep the item as an empty comment line; the output pass restores the
+  // marker after inline conversion.
+  if (opensItem) keepLines(st, prefix.trimEnd() + ' \x00REFITEM\x00')
+  else if (quotePrefix !== '') keepLines(st, quotePrefix)
+  else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && i + 1 < st.lines.length && st.lines[i + 1]!.trim() === '') i++
+  return i
+}
+
 /**
  * Remove reference definitions from the body. Empty destinations are recorded
  * for inline fallback; other definitions are returned for the document end.
@@ -198,41 +519,27 @@ export function extractReferenceDefinitions(
   const empty = new Map<string, string>()
   const titled = new Set<string>()
   const defined = new Set<string>()
-  const authoredDefinitions = new Set<string>()
   const labels = new Map<string, string>()
   const definitions: string[] = []
   const definitionContainers: boolean[] = []
   const discardedEmptyDefinitions: Array<{ line: number; label: string }> = []
   const inline = new Map<string, string>()
   const tableInline = new Map<string, string>()
-  let nextSerial = 1
   const sourceLabels = new Map<string, string>()
   const footnotes = new Map<string, string>()
-  const reservedFootnotes = new Set<number>()
   let nextFootnote = 1
-  const reservedReferences = new Set<number>()
-  for (const line of lines) {
-    for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
-    for (const match of line.matchAll(/\[\^((?:[^[\]\\\n]|\\.)+)\]/g)) {
-      const reserved = /^carve-import-footnote-(\d+)$/i.exec(decodeLinkTitle(match[1]!, decodeEntity).trim())
-      if (reserved) reservedFootnotes.add(Number(reserved[1]))
-    }
+  const reserved = reservedImportSerials(lines, decodeEntity)
+  const reservedFootnotes = reserved.footnotes
+  const st: ReferenceExtraction = {
+    lines, kept: [], keptSource: [], bareReferenceHeads: [], sourceIndex: 0, precedingNonblank: undefined,
+    referenceChunk: undefined, deferredBlanks: undefined, nextSerial: 1, reservedReferences: reserved.references,
+    decodeEntity, titleBreakMarker, titleWrap, empty, titled, defined, authoredDefinitions: new Set(), labels,
+    sourceLabels, inline, tableInline, definitions, definitionContainers, discardedEmptyDefinitions,
   }
-  const kept: string[] = []
-  const bareReferenceHeads: Array<{ index: number; key: string; marker: number; labelLength: number }> = []
-  // The source index each kept line came from, so a diagnostic can name the
-  // line the author wrote rather than its offset in this stripped array.
-  const keptSource: number[] = []
-  let sourceIndex = 0
-  let precedingNonblank: string | undefined
-  const keep = (...entries: string[]): void => {
-    for (const entry of entries) if (entry.trim() !== '') precedingNonblank = entry
-    for (const _ of entries) keptSource.push(sourceIndex)
-    kept.push(...entries)
-  }
-  let referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
+  const { kept } = st
+  const keep = (...entries: string[]): void => keepLines(st, ...entries)
   const referenceSource = (index: number): string => {
-    if (!referenceChunk || referenceChunk.lines !== lines || index > referenceChunk.through) {
+    if (!st.referenceChunk || st.referenceChunk.lines !== lines || index > st.referenceChunk.through) {
       const chunks: string[] = []
       const offsets: number[] = []
       let size = 0, through = index
@@ -241,24 +548,18 @@ export function extractReferenceDefinitions(
         chunks.push(lines[through]!)
         size += lines[through]!.length + 1
       }
-      referenceChunk = { lines, start: index, through: through - 1, text: chunks.join('\n'), offsets }
+      st.referenceChunk = { lines, start: index, through: through - 1, text: chunks.join('\n'), offsets }
     }
-    return referenceChunk.text.slice(referenceChunk.offsets[index - referenceChunk.start])
+    return st.referenceChunk.text.slice(st.referenceChunk.offsets[index - st.referenceChunk.start])
   }
-  let deferredBlanks: { start: number; end: number; values: string[] } | undefined
   const flushBlanks = (): void => {
-    if (!deferredBlanks) return
-    for (let at = deferredBlanks.start; at < deferredBlanks.end; at++) {
-      lines[at] = deferredBlanks.values[at - deferredBlanks.start]!
+    const blanks = st.deferredBlanks
+    if (!blanks) return
+    for (let at = blanks.start; at < blanks.end; at++) {
+      lines[at] = blanks.values[at - blanks.start]!
     }
-    deferredBlanks = undefined
-    referenceChunk = undefined
-  }
-  const nextNonblankFrom = (start: number): number => {
-    let at = start
-    if (deferredBlanks && at >= deferredBlanks.start && at < deferredBlanks.end) at = deferredBlanks.end
-    while (at < lines.length && lines[at]!.trim() === '') at++
-    return at
+    st.deferredBlanks = undefined
+    st.referenceChunk = undefined
   }
   let fence: string | null = null
   let htmlCloser: RegExp | null = null
@@ -269,20 +570,12 @@ export function extractReferenceDefinitions(
   let listIndent = 0
   /** The content column every container prefix on the line put the body at. */
   let blockIndent = 0
-  const leadingSpaces = (s: string) => /^ */.exec(s)![0].length
-  const lineTitle = new RegExp(String.raw`^[ \t]*(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
-  const opensBlock = (text: string): boolean =>
-    /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
-    /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
   for (let i = 0; i < lines.length; i++) {
-    sourceIndex = i
-    if (deferredBlanks && i >= deferredBlanks.start) flushBlanks()
+    st.sourceIndex = i
+    if (st.deferredBlanks && i >= st.deferredBlanks.start) flushBlanks()
     const line = lines[i]!
-    let prefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
-    let content = line.slice(prefix.length)
-    const quotePrefix = prefix
-    const lineDepth = (prefix.match(/>/g) ?? []).length
-    let opensItem = false
+    const quotePrefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
+    const lineDepth = (quotePrefix.match(/>/g) ?? []).length
     // Leaving the container ends a fence or HTML block opened in it.
     if (
       (fence !== null || htmlCloser !== null) &&
@@ -306,57 +599,10 @@ export function extractReferenceDefinitions(
       keep(line)
       continue
     }
-    const marker = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(content)
-    if (fence === null && !/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(content) && marker) {
-      prefix += marker[0]
-      content = content.slice(marker[0].length)
-      listIndent = prefix.length
-      opensItem = true
-    } else if (listIndent > 0 && content.trim() !== '') {
-      if (leadingSpaces(line) >= listIndent) content = line.slice(listIndent)
-      else listIndent = 0
-    }
-    // CONTAINER PREFIXES NEST, and the BLOCK decisions below need the innermost
-    // content. An item's indentation or marker came off the line without the
-    // quote regex running again, so a block quote inside that item still has its
-    // `>` run on the content and a fence or an HTML block opening there would be
-    // read as the block's own text. Only the fence and HTML-block readings take
-    // the nested run off; everything else keeps the content it has today, so a
-    // definition inside such a quote is handled exactly as before
-    // (markup-carve/carve#2850).
-    // Every container prefix the line carries comes off, not just the first:
-    // `- - ::: note` opens TWO items on one line, and a quote inside an item
-    // carries both prefixes. One marker stripped is not enough.
-    //
-    // A LIST MARKER INSIDE AN OPEN FENCE IS VERBATIM CONTENT, so only the
-    // quote prefix keeps coming off there - stripping a marker would let a
-    // `- ```` line inside the fence read as its closer.
-    let blockContent = fence !== null && leadingSpaces(line) >= blockIndent
-      ? line.slice(blockIndent)
-      : content
-    while (listIndent > 0) {
-      const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
-      if (nested !== '') {
-        blockContent = blockContent.slice(nested.length)
-        continue
-      }
-      if (fence !== null) break
-      const inner = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(blockContent)
-      // `- - -` is a thematic break, not two nested items.
-      if (inner === null || /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(blockContent)) break
-      blockContent = blockContent.slice(inner[0].length)
-    }
-    // The content column EVERY prefix on the line put the body at, which is
-    // what a continuation line of this item is read against. `listIndent` only
-    // counts the first marker, so a body six columns in under `- - - ` would
-    // otherwise read as code.
-    if (opensItem) blockIndent = line.length - blockContent.length
-    else if (listIndent === 0) blockIndent = 0
-    if (!opensItem && blockIndent > listIndent && leadingSpaces(line) >= blockIndent) {
-      blockContent = line.slice(blockIndent)
-      const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
-      if (nested !== '') blockContent = blockContent.slice(nested.length)
-    }
+    const containers = readContainerPrefixes(line, quotePrefix, fence, listIndent, blockIndent)
+    const { prefix, content, blockContent, opensItem } = containers
+    listIndent = containers.listIndent
+    blockIndent = containers.blockIndent
     if (fence !== null) {
       const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(blockContent)
       if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) {
@@ -406,17 +652,17 @@ export function extractReferenceDefinitions(
     }
     if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {
       const single = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
-      const ordinary = single && !/\\\]/.test(single[1]!) && (single[2]!.trim() === '' || lineTitle.test(single[2]!))
+      const ordinary = single && !/\\\]/.test(single[1]!) && (single[2]!.trim() === '' || LINE_TITLE.test(single[2]!))
       const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
         const key = normalizeReferenceLabel(parsed.label)
-        if (!authoredDefinitions.has(key)) {
-          while (reservedReferences.has(nextSerial)) nextSerial++
-          const canonical = `carve-import-reference-${nextSerial++}`
+        if (!st.authoredDefinitions.has(key)) {
+          while (st.reservedReferences.has(st.nextSerial)) st.nextSerial++
+          const canonical = `carve-import-reference-${st.nextSerial++}`
           inline.set(canonical, parsed.target)
           sourceLabels.set(normalizeReferenceLabel(parsed.label), canonical)
           defined.add(key)
-          authoredDefinitions.add(key)
+          st.authoredDefinitions.add(key)
         }
         i += parsed.lines - 1
         depth = 0
@@ -438,7 +684,7 @@ export function extractReferenceDefinitions(
         while (reservedFootnotes.has(nextFootnote)) nextFootnote++
         footnotes.set(key, `carve-import-footnote-${nextFootnote++}`)
       }
-      const next = lines[nextNonblankFrom(i + 1)]
+      const next = lines[nextNonblankFrom(st, i + 1)]
       const empty = definition[2]!.trim() === '' && (next === undefined || !/^ {4}/.test(next.slice(quotePrefix.length)))
       keep(line + (empty ? ' \x00FNEMPTY\x00' : ''))
       depth = lineDepth
@@ -465,29 +711,10 @@ export function extractReferenceDefinitions(
     let wrappedDestinationTitle = false
     if ((canStart || lineDepth > depth) && !opensItem && (quotePrefix === '' || listIndent === 0) && definition &&
       (new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+["'(]`).test(definition[2]!) || titleOnNext)) {
-      // CommonMark lets a definition title wrap. Join the continuation lines so
-      // the branch below sees one title, and restore the breaks when the title
-      // is decoded or written.
-      const empty = /^[ \t]*<>/.test(definition[2]!)
-      const marker = empty ? titleBreakMarker : titleWrap
-      let joined = titleOnNext ? `${definition[2]!.trimEnd()} ${continuationAt(i + 1)!.trimStart()}` : definition[2]!
-      let end = titleOnNext ? i + 1 : i
-      const opener = new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+(["'(])((?:[^\\]|\\.)*)$`).exec(joined)
-      const closer = opener ? (opener[1] === '(' ? /[()]/ : new RegExp(opener[1]!)) : null
-      // Read on only while the title is open, so a run of definitions stays linear.
-      if (closer !== null && !closer.test(opener![2]!.replace(/\\./g, ''))) {
-        for (;;) {
-          const body = continuationAt(end + 1)
-          if (body === undefined) break
-          joined += marker + body
-          end++
-          if (closer.test(body.replace(/\\./g, ''))) break
-        }
-      }
-      if (end > i && new RegExp(String.raw`^[ \t]*${destinationPattern}[ \t]+${TITLE}[ \t]*$`).test(joined)) {
-        definition[2] = joined
-        i = end
-        wrappedDestinationTitle = !empty && joined.includes(titleWrap)
+      const joined = joinWrappedDefinitionTitle(st, definition, i, destinationPattern, titleOnNext, continuationAt)
+      if (joined !== null) {
+        i = joined.i
+        wrappedDestinationTitle = joined.wrapped
       }
     }
     if (
@@ -501,152 +728,28 @@ export function extractReferenceDefinitions(
       let destination = definition[2]!
       const following = lines[i + 1]
       if (trimReferenceWhitespace(destination) === '' && following !== undefined && following.startsWith(quotePrefix) &&
-          !opensBlock(following.slice(quotePrefix.length)) && lineTitle.test(following.slice(quotePrefix.length))) {
+          !opensBlock(following.slice(quotePrefix.length)) && LINE_TITLE.test(following.slice(quotePrefix.length))) {
         continued.push(following)
         i++
         destination = following.slice(quotePrefix.length)
       }
+      const d: DefinitionLine = { line, i, label: definition[1]!, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, wrappedDestinationTitle }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
       if (!emptied) {
-        const target = trimReferenceWhitespace(destination)
-        if (target === '') {
-          const marker = line.indexOf(`[${definition[1]}]:`)
-          const next = lines[i + 1]
-          const setext = next?.startsWith(quotePrefix) && /^ {0,3}(?:=+|-+)[ \t]*$/.test(next.slice(quotePrefix.length))
-          if (marker >= 0 && !setext) bareReferenceHeads.push({ index: kept.length, key, marker, labelLength: definition[1]!.length })
-          keep(line, ...continued)
-          canStart = false
-          continue
-        }
-        const authoredKey = normalizeReferenceLabel(definition[1]!)
-        const authoredRepeated = authoredDefinitions.has(authoredKey)
-        const repeated = defined.has(key) || authoredRepeated
-        authoredDefinitions.add(authoredKey)
-        defined.add(key)
-        if (definition[1]!.startsWith('^')) {
-          keep(line, ...continued)
-          canStart = true
-          continue
-        }
-        if (!repeated) {
-          labels.set(key, definition[1]!)
-          sourceLabels.set(normalizeReferenceLabel(definition[1]!), definition[1]!)
-        }
-        const preceding = precedingNonblank
-        const nextNonblank = lines[nextNonblankFrom(i + 1)]
-        const isItem = (entry: string | undefined) => entry !== undefined &&
-          /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)/.test(entry.slice(quotePrefix.length))
-        if (!opensItem && leadingSpaces(line) < 2 && kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
-          keep(line, ...continued)
-          canStart = true
-          continue
-        }
-        const next = lines[i + 1]
-        const nextTitle = next !== undefined && next.startsWith(quotePrefix)
-          ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
-        const targetHasTitle = new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target)
-        let title = !targetHasTitle && nextTitle
-          ? ` ${nextTitle[1]}` : ''
-        let multilineTitle = false
-        if (!title && !targetHasTitle && opensItem && next !== undefined && /^ {2,}"[^"\n]*$/.test(next) &&
-            lines[i + 2] !== undefined && /^ {2,}[^"\n]*"[ \t]*$/.test(lines[i + 2]!) &&
-            !lines.some((candidate, at) => at !== i &&
-              (/^ {0,3}>/.test(candidate) || /^(?:[ \t]*[-*+][ \t]+)?#{1,6}[ \t]/.test(candidate) ||
-                /^[ \t]*\|/.test(candidate) || /^[ \t]*\d+[.)][ \t]/.test(candidate) ||
-                /^[ \t]*[-=]+[ \t]*$/.test((lines[at + 1] ?? '').replace(/^(?: {0,3}>[ \t]?)*/, ''))) &&
-              Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key))) {
-          title = ` "${next.trimStart().slice(1)}${titleBreakMarker}${lines[i + 2]!.trim().slice(0, -1)}"`
-          multilineTitle = true
-          i += 2
-        } else if (title) i++
-        if (!repeated && definition[1]!.includes('|')) tableInline.set(definition[1]!, `${target}${title}`)
-        const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(new RegExp(String.raw`^<((?:[^<>\n\\]|\\[^\n])+)>`), (_match, url: string) =>
-          url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
-        ))
-        if ((multilineTitle || wrappedDestinationTitle) && !repeated) {
-          while (reservedReferences.has(nextSerial)) nextSerial++
-          const canonical = `carve-import-reference-${nextSerial++}`
-          inline.set(canonical, `${target}${title}`)
-          sourceLabels.set(key, canonical)
-        } else if (!authoredRepeated && !wrappedDestinationTitle) {
-          definitions.push(`[${definition[1]}]: ${writtenTarget}`)
-          definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
-        }
-        if (opensItem) {
-          const nextLine = lines[i + 1]
-          if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
-              !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
-            lines[i + 1] = prefix + nextLine.trimStart()
-          } else {
-            let continuation = i + 2
-            if (nextLine?.trim() === '') {
-              continuation = nextNonblankFrom(continuation)
-            }
-            if (nextLine?.trim() === '' && continuation < lines.length &&
-                leadingSpaces(lines[continuation]!) >= prefix.length && leadingSpaces(lines[continuation]!) < prefix.length + 4 &&
-                !opensBlock(lines[continuation]!.trimStart())) {
-              const moved = prefix + lines[continuation]!.trimStart()
-              // Keep a blank run in place while chained definitions move ahead of it.
-              const values = deferredBlanks?.values ?? lines.slice(i + 1, continuation)
-              if (deferredBlanks) {
-                for (let at = deferredBlanks.end; at < continuation; at++) values.push(lines[at]!)
-              }
-              deferredBlanks = { start: i + 2, end: continuation + 1, values }
-              lines[i + 1] = moved
-              lines[continuation] = ''
-              referenceChunk = undefined
-            } else keep(prefix.trimEnd() + ' \x00REFITEM\x00')
-          }
-        } else if (quotePrefix !== '') {
-          keep(quotePrefix)
-        } else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && lines[i + 1]?.trim() === '') {
-          i++
-        } else if (lines[i + 1]?.startsWith('    ') && lines[i + 1]!.trim() !== '') {
-          lines[i + 1] = lines[i + 1]!.replace(/^ {4}/, '')
-          if (referenceChunk && i + 1 >= referenceChunk.start && i + 1 <= referenceChunk.through) {
-            referenceChunk.offsets[i + 1 - referenceChunk.start]! += 4
-          }
-        }
-        canStart = true
+        const written = writeTargetDefinition(st, d, destination)
+        i = written.i
+        canStart = written.canStart
         continue
       }
-      let raw = emptied[1] ?? ''
-      const next = lines[i + 1]
-      const nextTitle = next !== undefined && next.startsWith(quotePrefix) ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
-      if (raw === '' && nextTitle) {
-        raw = nextTitle[1]!
-        i++
-      }
-      const authoredKey = normalizeReferenceLabel(definition[1]!)
-      if (!defined.has(key) && !authoredDefinitions.has(authoredKey)) {
-        empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity).replaceAll(titleBreakMarker, '\n'))
-        if (raw !== '') titled.add(key)
-        if (raw !== '') discardedEmptyDefinitions.push({ line: sourceIndex, label: definition[1]! })
-        const canonicalLabel = definition[1]!.includes('\\')
-          ? definition[1]!
-          : decodeLinkTitle(definition[1]!, decodeEntity)
-        labels.set(key, canonicalLabel)
-        sourceLabels.set(key, canonicalLabel)
-        if (raw === '') {
-          definitions.push(`[${canonicalLabel}]:`)
-          definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
-        }
-      }
-      defined.add(key)
-      authoredDefinitions.add(authoredKey)
+      i = recordEmptyDestination(st, d, emptied)
       canStart = true
-      // Keep the item as an empty comment line; the output pass restores the
-      // marker after inline conversion.
-      if (opensItem) keep(prefix.trimEnd() + ' \x00REFITEM\x00')
-      else if (quotePrefix !== '') keep(quotePrefix)
-      else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && i + 1 < lines.length && lines[i + 1]!.trim() === '') i++
       continue
     }
     keep(line)
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  for (const { index, key, marker, labelLength } of bareReferenceHeads) {
+  for (const { index, key, marker, labelLength } of st.bareReferenceHeads) {
     const line = kept[index]!
     kept[index] = defined.has(key)
       ? line.slice(0, marker + labelLength + 2) + '[]' + line.slice(marker + labelLength + 2)
@@ -655,7 +758,7 @@ export function extractReferenceDefinitions(
   return {
     lines: kept,
     titleBreakMarker,
-    sourceLines: keptSource,
+    sourceLines: st.keptSource,
     references: { empty, titled, defined, labels, inline, tableInline, sourceLabels, footnotes, titleWrap },
     definitions,
     definitionContainers,
