@@ -52,7 +52,10 @@ function lexerForCursor(cursor: Cursor): Lexer {
   if (cursor.sharedLexer) return cursor.sharedLexer
   const lexer = cursor.rootSource ? new Lexer(cursor.rootSource) :
     new Lexer(cursor.lines.map((line) => line.text))
-  if (!cursor.rootSource) {
+  if (cursor.rootSource && cursor.lines[0]?.baseColumn === 2) {
+    lexer.sourceOffsetMap = cursor.lines.map((line) => line.start)
+    lexer.linePrefixWidths = cursor.lines.map((_line, index) => index === 0 ? 1 : 0)
+  } else if (!cursor.rootSource) {
     lexer.nested = true
     lexer.sourceLineMap = cursor.lines.map((line) => line.number)
     lexer.sourceOffsetMap = cursor.lines.map((line) => line.start)
@@ -1184,12 +1187,17 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
 }
 
 export function parseCursorPrototype(source: string): Document {
-  if (source.charCodeAt(0) === 0xfeff) {
-    throw new UnsupportedCursorSyntax('source normalization is not migrated')
-  }
+  const rawSource = source
   const rawByteLength = utf8ByteLength(source)
+  const strippedBom = source.charCodeAt(0) === 0xfeff
+  if (strippedBom) source = source.slice(1)
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
-  const cursor = new Cursor(scanLines(source), source)
+  const lines = scanLines(source)
+  if (strippedBom) for (let i = 0; i < lines.length; i++) {
+    lines[i]!.start++
+    if (i === 0) lines[i]!.baseColumn = 2
+  }
+  const cursor = new Cursor(lines, source)
   const commentOpeners = source.includes('%%%') ? commentOpenersWithCloser(cursor.lines) : new Set<number>()
   const linkDefinitions = new Map<string, LinkDef>()
   const abbreviations = new Map<string, string>()
@@ -1238,7 +1246,7 @@ export function parseCursorPrototype(source: string): Document {
   }
   if (frontmatter) document.frontmatter = frontmatter
   children.push(...definitionNodes)
-  toCodepointPositions(document, source)
+  toCodepointPositions(document, rawSource)
   if (inline.hasLeadingImage) promoteBlockImages(children, true)
   document.children = promoteCitationDefinitions(children)
   return document

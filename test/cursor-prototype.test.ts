@@ -65,6 +65,13 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('maps the stripped leading BOM back to authored positions', () => {
+    for (const source of ['\ufeff# Heading\n', '\ufeffa\nb\n',
+      '\ufeff- a\n- b\n', '\ufeff|= A |\n| b |\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
+  })
+
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
   ('parses a canonical table row without a GFM separator: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
