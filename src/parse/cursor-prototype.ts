@@ -892,7 +892,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let plainParagraph = true
   while (cursor.peek()) {
     const line = cursor.peek()!
-    if (line.text.startsWith('>')) {
+    if (RE_BLOCKQUOTE.test(line.text)) {
       cursor.take()
       const prefix = line.text.startsWith('> ') ? 2 : 1
       const text = line.text.slice(prefix)
