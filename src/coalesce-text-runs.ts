@@ -38,7 +38,8 @@ function visit(node: Record<string, unknown> | null | undefined): void {
 }
 
 function visitList(nodes: unknown[]): unknown[] {
-  for (const [index, child] of nodes.entries()) {
+  for (let index = 0; index < nodes.length; index++) {
+    const child = nodes[index]
     if (Array.isArray(child)) nodes[index] = visitList(child as unknown[])
     else visit(child as Record<string, unknown>)
   }
