@@ -7,6 +7,7 @@ import { normalizeRefLabel } from '../label-key.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
+import { parseAttrs, unescapeAttrValue } from '../extension/attribute-parser.js'
 import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { RE_CAPTION, RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
@@ -16,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -177,7 +178,9 @@ function fenceOpen(line: string) {
 }
 const COLON_OPEN = /^(:{3,})(?: +([A-Za-z0-9][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: *\[([A-Za-z0-9_/-]+)\])?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
-const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\P{White_Space}+)[ \t]*$/u
+function rootLinkDef(line: string) {
+  return line.startsWith('[') && !line.startsWith('[^') ? matchLinkDef(line) : null
+}
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
 const ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 const LINE_COMMENT = /^[ \t]*%%/
@@ -241,7 +244,7 @@ function isBlockStart(line: string): boolean {
     RE_RAW_FENCE.test(line) ||
     BREAK.test(line) || !!listMarker(line) ||
     line.startsWith('>') || line.startsWith('|') || line.startsWith('::') ||
-    LINK_DEF.test(line) || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
+    rootLinkDef(line) !== null || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
 
@@ -1040,11 +1043,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       takeSimpleFootnote(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)
       continue
     }
-    const definition = LINK_DEF.exec(first.text)
+    const definition = rootLinkDef(first.text)
     if (definition) {
       if (!atDocumentLevel) throw new UnsupportedCursorSyntax('nested link definition')
       cursor.take()
-      definitionNodes.push({ type: 'link_reference_definition', label: definition[1]!, href: definition[2]!,
+      definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
+        ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
+        ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
         pos: position(first, first) })
       continue
     }
@@ -1244,9 +1249,11 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       openComment = comment[1]!.length
       continue
     }
-    const match = LINK_DEF.exec(line.text)
-    if (match) linkDefinitions.set(normalizeRefLabel(match[1]!),
-      { rawLabel: match[1]!, line: line.number - 1, href: match[2]! })
+    const match = rootLinkDef(line.text)
+    if (match) linkDefinitions.set(normalizeRefLabel(match.label),
+      { rawLabel: match.label, line: line.number - 1, href: match.href,
+        ...(match.title !== undefined ? { title: unescapeAttrValue(match.title) } : {}),
+        ...(match.attrText !== null ? { attrs: parseAttrs(match.attrText) } : {}) })
     const abbr = ABBR_DEF.exec(line.text)
     if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
   }
