@@ -733,7 +733,8 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
-    position(from, to, column, contentEndColumn(to))
+    position(from, to, depth === 0 && from.baseColumn === undefined &&
+      column === firstMarker.indent + 1 ? 1 : column, contentEndColumn(to))
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
     ordered: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
