@@ -17,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ADMONITION_OPEN, RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -1002,6 +1002,36 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     enumerable: true, configurable: true, writable: true })
 }
 
+function matchSigilFence(line: string): { kind: 'hardbreak' | 'quote'; width: number } | undefined {
+  const hardbreak = RE_HARDBREAKS_OPEN.exec(line)
+  if (hardbreak) return { kind: 'hardbreak', width: hardbreak[1]!.length }
+  const quote = RE_QUOTE_BLOCK_OPEN.exec(line)
+  return quote ? { kind: 'quote', width: quote[1]!.length } : undefined
+}
+
+function parseSigilFence(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
+  depth: number, sigil: NonNullable<ReturnType<typeof matchSigilFence>>): BlockNode {
+  const first = cursor.take()
+  const body = takeColonBody(cursor, sigil.width)
+  const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
+  const inner = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner,
+    sigil.kind === 'quote' ? 'quote' : 'colon')), inline, definitionNodes, depth + 1, false)
+  if (sigil.kind === 'hardbreak') {
+    for (const child of inner) {
+      if (child.type !== 'paragraph') continue
+      child.children = child.children.map((node) => node.type === 'soft_break' ?
+        { type: 'hard_break', ...(node.pos ? { pos: node.pos } : {}) } : node)
+    }
+    return { type: 'div', attrs: { classes: ['hardbreaks'], order: ['.class'] },
+      children: inner, pos: position(first, close) }
+  }
+  const quote: BlockQuote = { type: 'block_quote', fenced: true,
+    children: inner, pos: position(first, close) }
+  const caption = takeQuoteCaption(cursor, inline, quote)
+  return caption ? { type: 'figure', target: quote, caption: caption.children,
+    pos: position(first, caption.line) } : quote
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -1178,18 +1208,9 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
       continue
     }
-    const quoteFence = RE_QUOTE_BLOCK_OPEN.exec(first.text)
-    if (quoteFence) {
-      cursor.take()
-      const body = takeColonBody(cursor, quoteFence[1]!.length)
-      const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-      const quote: BlockQuote = { type: 'block_quote', fenced: true,
-        children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote')),
-          inline, definitionNodes, depth + 1, false),
-        pos: position(first, close) }
-      const caption = takeQuoteCaption(cursor, inline, quote)
-      emit(caption ? { type: 'figure', target: quote, caption: caption.children,
-        pos: position(first, caption.line) } : quote)
+    const sigilFence = matchSigilFence(first.text)
+    if (sigilFence) {
+      emit(parseSigilFence(cursor, inline, definitionNodes, depth, sigilFence))
       continue
     }
     const simpleColon = COLON_OPEN.exec(first.text)
