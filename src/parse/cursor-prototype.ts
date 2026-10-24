@@ -1025,8 +1025,9 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
-  const column = first.text.length - footnote[2]!.length + 1
-  const parts: ContentLine[] = [{ line: first, column, text: footnote[2]! }]
+  const bodyIndent = /^[ \t]*/.exec(footnote[2]!)![0].length
+  const column = first.text.length - footnote[2]!.length + bodyIndent + 1
+  const parts: ContentLine[] = [{ line: first, column, text: footnote[2]!.slice(bodyIndent) }]
   if (!separated) for (const line of continuation) {
     parts.push({ line, column: 3, text: line.text.slice(2) })
   }

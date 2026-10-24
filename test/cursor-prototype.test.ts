@@ -148,6 +148,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('places footnote text after a tab in its marker separator', () => {
+    const source = 'x[^f]\n\n[^f]: \tnote\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
