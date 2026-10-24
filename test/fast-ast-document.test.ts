@@ -11,6 +11,13 @@ describe('simple block AST route', () => {
     expect(carveToHtml(source)).toBe(renderHtml(resolve(parse(source))))
   })
 
+  it('keeps a YAML front matter header on an eligible document', () => {
+    const source = '---yaml\ntitle: Title\n---\n\n# Title\n\nOne *strong* line.\n\n- alpha\n- beta\n'
+    expect(tryFastHtml(source, {})).toBeUndefined()
+    expect(tryFastAstDocument(source)?.frontmatter).toEqual({ format: 'yaml', content: 'title: Title' })
+    expect(carveToHtml(source)).toBe(renderHtml(resolve(parse(source))))
+  })
+
   it('passes nested and loose lists to the general parser', () => {
     for (const source of [
       '- parent\n  - child\n',
@@ -20,6 +27,10 @@ describe('simple block AST route', () => {
       '- 1. ```\n\n',
       'a\uD800b *x*',
       'plain \v tail\n',
+      '---yaml\ntitle: Title\n',
+      '---yaml \ntitle: Title\n---\n',
+      '---json\n{"title":"Title"}\n---\n',
+      '---yaml\ntitle: Title\n--- \n',
     ]) {
       expect(tryFastAstDocument(source), source).toBeUndefined()
       expect(carveToHtml(source), source).toBe(renderHtml(resolve(parse(source))))
