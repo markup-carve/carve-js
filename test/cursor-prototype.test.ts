@@ -61,10 +61,11 @@ describe('experimental block cursor', () => {
     for (const source of ['| a | b |\n', '| a | b |\n| c | d |\n',
       '| a |\n', '| --- | --- |\n| 1 | 2 |\n', '| a | b |\n\n',
       '# Before\n\n| a | b |\n', '\n| a | b |\n',
-      '| a | b |\n\n| c | d |\n']) {
+      '| a | b |\n\n| c | d |\n', 'para\n| a |\n', '# Heading\n| a |\n',
+      '{aligns="right,,center" valigns="top,middle,bottom" widths="25,50,25"}\n| A | B | C |\n| D | E | F |\n']) {
       expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     }
-    for (const source of ['- +\n| a | b |\n', '| a |\npara\n',
+    for (const source of ['- +\n| a | b |\n', '> - > +\n| c |\n', '| a |\npara\n',
       '| a |\n\n>\n\n^ cap\n', '| a |\n\n- +\n']) {
       expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
     }

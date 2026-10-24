@@ -370,7 +370,10 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   if (gfm) return parseSimpleTable(cursor, inline)
   const headed = first.text.startsWith('|=')
   if (!first.text.startsWith('|') ||
-      (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '')) {
+      (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '' &&
+        (cursor.owner.kind !== 'root' ||
+          listMarker(cursor.lines[cursor.at - 1]!.text) !== undefined ||
+          cursor.lines[cursor.at - 1]!.text.startsWith('>')))) {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
   const table = parseCanonicalTableWithExistingRules(cursor, inline)
