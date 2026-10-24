@@ -486,6 +486,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let mayWrapDefinition = false
   let mayWrapTerm = false
   let mayTermPlus = false
+  let mayFirstBlockQuote = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
     const term = /^:: +[ \t]*[^ \t].*$/.test(text)
@@ -493,6 +494,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     if (term || definition) {
       if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
       mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
+      mayFirstBlockQuote = definition && /^: +\+[ \t]*$/.test(text)
       mayWrapTerm = term
       mayTermPlus = term
       end++
@@ -511,6 +513,11 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       mayTermPlus = false
       continue
+    }
+    if (mayFirstBlockQuote && RE_BLOCKQUOTE.test(text) &&
+        (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
+      end++
+      break
     }
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
@@ -565,6 +572,16 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = termLast
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
+      if (definition[1] === '+' && cursor.at < end &&
+          RE_BLOCKQUOTE.test(cursor.peek()!.text)) {
+        const follower = cursor.take()
+        current.definitions.push(parseBlocks(new Cursor([follower], undefined,
+          childOwner(cursor.owner, 'colon')), inline, [], 1, false))
+        current.definitionLines.push(line.number)
+        current.definitionSpans.push(position(line, line))
+        last = follower
+        continue
+      }
       const blockBody = isBlockStart(definition[1]!)
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
