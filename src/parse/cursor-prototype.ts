@@ -14,7 +14,7 @@ import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
 import { parseTableBlock } from './parse-core.js'
 
@@ -119,7 +119,15 @@ class CursorInline extends InlineParseSession {
 
 const HEADING = /^(#{1,6}) +(\S.*)$/
 const BULLET = /^( *)([-*]) +(.*)$/
-const FENCE = /^(`{3,}|~{3,})(?: ?([A-Za-z0-9_-]+))?[ \t]*$/
+function fenceOpen(line: string) {
+  if (line[0] !== '`' && line[0] !== '~') return null
+  const match = RE_FENCE.exec(line)
+  if (!match) return null
+  const headerRaw = match[4] ?? match[6]
+  const labelRaw = match[5] ?? match[7] ?? match[8]
+  return { marker: match[2]!, lang: match[3],
+    header: headerRaw?.slice(1, -1), label: labelRaw?.slice(1, -1) }
+}
 const COLON_OPEN = /^(:{3,}) +([A-Za-z][A-Za-z0-9_-]*)[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
@@ -175,7 +183,8 @@ function listMarker(line: string) {
 }
 
 function isBlockStart(line: string): boolean {
-  return HEADING.test(line) || FENCE.test(line) || BREAK.test(line) || !!listMarker(line) ||
+  return HEADING.test(line) || ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
+    BREAK.test(line) || !!listMarker(line) ||
     line.startsWith('>') || line.startsWith('|') || line.startsWith('::') ||
     LINK_DEF.test(line) || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
@@ -205,14 +214,14 @@ function listContinuationPrefix(line: string, base: number): number {
 function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number): number {
   let shifted = base
   while (line[shifted] === ' ') shifted++
-  const opener = shifted > base ? FENCE.exec(line.slice(shifted)) : null
+  const opener = shifted > base ? fenceOpen(line.slice(shifted)) : null
   if (!opener) return base
   const baseSpaces = ' '.repeat(base)
   const shiftedSpaces = ' '.repeat(shifted)
   for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
     const candidate = cursor.lines[i]!.text
     if (candidate && !candidate.startsWith(baseSpaces)) break
-    if (candidate.startsWith(shiftedSpaces) && closesFence(candidate.slice(shifted), opener[1]!)) {
+    if (candidate.startsWith(shiftedSpaces) && closesFence(candidate.slice(shifted), opener.marker)) {
       return shifted
     }
   }
@@ -425,9 +434,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.fencePrefix = undefined
       }
     } else {
-      const opener = FENCE.exec(text)
+      const opener = fenceOpen(text)
       if (opener) {
-        frame.fenceMarker = opener[1]!
+        frame.fenceMarker = opener.marker
         frame.fencePrefix = prefix
       }
     }
@@ -636,6 +645,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       node.attrs = mergeAttrs(pendingAttrs, node.attrs ?? {})
       pendingAttrs = null
     }
+    const code = node.type === 'code_block' ? node :
+      node.type === 'figure' && node.target.type === 'code_block' ? node.target : undefined
+    if (code?.header !== undefined && node.attrs?.keyValues?.title === undefined &&
+        code.attrs?.keyValues?.title === undefined) {
+      code.attrs = { ...(code.attrs ?? {}),
+        keyValues: { ...(code.attrs?.keyValues ?? {}), title: code.header } }
+    }
     consumeLooseKey(node)
     children.push(node)
   }
@@ -729,15 +745,17 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         pos: position(first, first) })
       continue
     }
-    const fence = FENCE.exec(first.text)
+    const fence = fenceOpen(first.text)
     if (fence) {
       cursor.take()
       const payload: string[] = []
-      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence[1]!)) payload.push(cursor.take().text)
+      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence.marker)) payload.push(cursor.take().text)
       if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed fence')
       const close = cursor.take()
       const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
-        ...(fence[2] ? { lang: fence[2] } : {}),
+        ...(fence.lang ? { lang: fence.lang } : {}),
+        ...(fence.header !== undefined ? { header: fence.header } : {}),
+        ...(fence.label !== undefined ? { label: fence.label } : {}),
         pos: position(first, close) }
       const caption = takeCaption(cursor, inline)
       emit(caption ? { type: 'figure', target: block, caption: caption.children,
@@ -848,8 +866,8 @@ export function parseCursorPrototype(source: string): Document {
       if (closesFence(line.text, openFence)) openFence = undefined
       continue
     }
-    const fence = FENCE.exec(line.text)
-    if (fence) { openFence = fence[1]!; continue }
+    const fence = fenceOpen(line.text)
+    if (fence) { openFence = fence.marker; continue }
     const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
     if (comment && commentOpeners.has(line.start)) {
       openComment = comment[1]!.length

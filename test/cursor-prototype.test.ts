@@ -313,8 +313,12 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['``` graphviz\ndigraph { A -> B }\n```\n',
-    '``` php\ncode\n```\n', '~~~ php\ncode\n~~~\n'])
-  ('parses a fence language after one ASCII space: %s', (source) => {
+    '``` php\ncode\n```\n', '~~~ php\ncode\n~~~\n',
+    '```php "src/Auth.php" [Composer]\ncomposer require x\n```\n',
+    '``` "Heading"\ncode\n```\n', '``` [Label]\ncode\n```\n',
+    '~~~php "Title" [Label]\ncode\n~~~\n',
+    '- ```php "Title"\n  code\n  ```\n'])
+  ('parses fence language and metadata: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
