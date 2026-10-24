@@ -71,7 +71,7 @@ describe('HTML import keeps header alignment in its original scope', () => {
     const html = '<table data-carve-col-widths="3"><thead><tr><th style="text-align:right">H</th></tr></thead><tbody><tr><td>b</td></tr></tbody></table>'
     const result = htmlToCarve(html)
     expect(result.value).toContain('{header-rows=1}')
-    expect(result.value).not.toContain('|---:|')
+    expect(result.value).not.toMatch(/^\|[-:|]+\|$/m)
     expect(result.report.diagnostics.some(item => item.message.includes('Dropped col-widths carrier'))).toBe(true)
     expect(carveToHtml(result.value)).toContain('<td>b</td>')
   })
