@@ -52,6 +52,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('preserves raw source positions across CRLF lines', () => {
+    for (const source of ['a\r\nb\r\n', '- a\r\n- b\r\n', '> quote\r\nlazy\r\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
+    expect(() => parseCursorPrototype('a\rb')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
   ('parses a canonical table row without a GFM separator: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -611,7 +618,7 @@ describe('experimental block cursor', () => {
   })
 
   it('declines source forms that have not been migrated', () => {
-    expect(() => parseCursorPrototype('A\r\nB')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('A\rB')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
   })
 })

@@ -67,7 +67,8 @@ function scanLines(source: string): SourceLine[] {
   let start = 0
   for (let i = 0; i < source.length; i++) {
     if (source.charCodeAt(i) !== 10) continue
-    lines.push({ text: source.slice(start, i), start, number: lines.length + 1 })
+    lines.push({ text: source.slice(start, source.charCodeAt(i - 1) === 13 ? i - 1 : i),
+      start, number: lines.length + 1 })
     start = i + 1
   }
   if (start < source.length || lines.length === 0) {
@@ -1182,7 +1183,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
 }
 
 export function parseCursorPrototype(source: string): Document {
-  if (source.includes('\r') || source.includes('\0') || source.charCodeAt(0) === 0xfeff) {
+  if ((source.includes('\r') && /\r(?!\n)/.test(source)) ||
+      source.includes('\0') || source.charCodeAt(0) === 0xfeff) {
     throw new UnsupportedCursorSyntax('source normalization is not migrated')
   }
   const cursor = new Cursor(scanLines(source), source)
