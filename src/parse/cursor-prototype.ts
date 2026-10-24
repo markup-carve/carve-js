@@ -897,6 +897,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       fencePrefix: undefined, body: [], blankBeforeInvisible: false }
   }
   const stack = [newFrame(first, firstMarker)]
+  const reachedFrame = (text: string, excludeTop = false): Frame | undefined => {
+    for (let index = stack.length - 1 - (excludeTop ? 1 : 0); index >= 0; index--) {
+      const frame = stack[index]!
+      if (frame.contentColumn !== undefined &&
+          text.startsWith(' '.repeat(frame.contentColumn - 1))) return frame
+    }
+    return undefined
+  }
   const applyInvisibleTail = (frame: Frame): void => {
     if (frame.blankBeforeInvisible) frame.list.tight = false
     frame.blankBeforeInvisible = false
@@ -1047,9 +1055,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
       const sibling = nextMarker && target && sameListKind(nextMarker, target)
       const nested = nextMarker && nextMarker.indent > top.indent
-      const continuationFrame = !nextMarker ? [...stack].reverse().find((frame) =>
-        frame.contentColumn !== undefined &&
-        next.text.startsWith(' '.repeat(frame.contentColumn - 1))) : undefined
+      const continuationFrame = !nextMarker ? reachedFrame(next.text) : undefined
       rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
       for (let i = 0; i < blanks; i++) cursor.take()
@@ -1092,15 +1098,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (!line.text.startsWith(prefix)) {
-      let ancestor: Frame | undefined
-      for (let index = stack.length - 2; index >= 0; index--) {
-        const frame = stack[index]!
-        if (frame.contentColumn !== undefined &&
-            line.text.startsWith(' '.repeat(frame.contentColumn - 1))) {
-          ancestor = frame
-          break
-        }
-      }
+      const ancestor = reachedFrame(line.text, true)
       if (ancestor) {
         rejectListQuoteBoundary(top.body, line)
         while (stack.at(-1) !== ancestor) {
