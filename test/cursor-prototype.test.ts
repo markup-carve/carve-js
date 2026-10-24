@@ -496,6 +496,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a plain footnote paragraph after a bounded table', () => {
+    const source = '[^a]: intro\n\n  | a |\n  | - |\n  | b |\n\n  closing line.\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
