@@ -322,7 +322,7 @@ export interface TableCell extends BaseNode {
   /**
    * Explicit per-cell alignment from a tight prefix marker
    * (`>` right, `<` left, `~` center). When undefined the cell
-   * inherits its column's alignment (taken from row 0).
+   * inherits its physical column's default, if one was declared.
    */
   align?: 'left' | 'right' | 'center'
   valign?: 'top' | 'middle' | 'bottom'

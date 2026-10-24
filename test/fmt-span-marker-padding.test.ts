@@ -5,12 +5,8 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  * A lone span marker in a table cell keeps its padding.
  *
  * Glued to the opening pipe, `<` is also the LEFT-ALIGNMENT sigil, and the two
- * readings differ: the executable spec reads `|<|` as an alignment marker on an
- * empty cell where all three engines read a colspan (markup-carve/carve#710).
- * The grammar puts `alignment_marker` glued to the pipe and lets
- * `colspan_marker` carry surrounding whitespace, so the padded form is the one
- * that means the same thing to every reader - and the writer was turning the
- * unambiguous source into the ambiguous one.
+ * readings differ. The glued `|<|` and padded `| <|` forms are spans, while
+ * `|< |` is an empty left-aligned cell. The writer pads spans consistently.
  *
  * `^` is not an alignment sigil and needs no disambiguation; it takes the same
  * shape so a row of span cells stays readable.
@@ -38,7 +34,7 @@ describe('fmt keeps a lone span marker padded', () => {
     expect(carveToHtml('| a |< |')).toContain('<td>a</td><td style="text-align: left;"></td>')
     expect(carveToHtml('| a |<|')).toContain('<td colspan="2">a</td>')
     expect(carveToHtml('| a | < |')).toContain('<td colspan="2">a</td>')
-    expect(carveToHtml('| a | <|')).toContain('<td>a</td><td>&lt;</td>')
+    expect(carveToHtml('| a | <|')).toContain('<td colspan="2">a</td>')
   })
 
   it('the table still says the same thing after formatting', () => {

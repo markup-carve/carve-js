@@ -92,9 +92,8 @@ export function assessTablePreservation(
         const headerEnd = record(groups) && typeof groups.headRows === 'number' ? groups.headRows : leadingHeaders
         for (const row of rows.slice(0, headerEnd)) {
           if (Array.isArray(row.cells)) row.cells.forEach((cell, c) => {
-            if (!record(cell) || cell.span !== undefined || cell.align === undefined) return
-            const extent = typeof cell.colspan === 'number' ? cell.colspan : 1
-            for (let k = c; k < c + extent; k++) columnAligns[k] = cell.align
+            if (!record(cell) || cell.header !== true || (cell.span !== undefined && cell.span !== 'colspan') || cell.align === undefined) return
+            columnAligns[c] = cell.align
           })
         }
         const columns = Array.isArray(value.columns) ? value.columns : []

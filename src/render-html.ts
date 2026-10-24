@@ -1967,25 +1967,24 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   }
   const footerStart = node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
 
-  // Column defaults come from the header section. With multiple header
-  // rows the last row that specifies an alignment for a column wins;
-  // omission does not reset (so we only overwrite on an explicit marker).
-  // A header colspan seeds every column it covers. Headerless tables
-  // (headerEnd === 0) have no column default — body markers are the only
-  // alignment available.
+  // An authored header marker sets a default only for its starting column.
+  // A colspan does not copy it to covered columns. Explicit row-group
+  // promotion changes the HTML tag, not a plain cell marker's scope.
+  // Later header markers in the same column win; omission does not reset.
   const columnAlign: Array<'left' | 'right' | 'center' | undefined> = []
   const columnValign: Array<'top' | 'middle' | 'bottom' | undefined> = []
   for (let r = 0; r < headerEnd; r++) {
     const hr = grid[r]!
     for (let c = 0; c < hr.length; c++) {
       const entry = hr[c]!
-      if (entry.skip || !entry.cell.align) continue
-      for (let k = c; k < c + entry.colspan; k++) columnAlign[k] = entry.cell.align
+      // GFM delimiter alignment is carried by a consumed colspan slot too.
+      if ((!entry.cell.header || !entry.cell.align) || (entry.skip && entry.cell.span !== 'colspan')) continue
+      columnAlign[c] = entry.cell.align
     }
     for (let c = 0; c < hr.length; c++) {
       const entry = hr[c]!
-      if (entry.skip || !entry.cell.valign) continue
-      for (let k = c; k < c + entry.colspan; k++) columnValign[k] = entry.cell.valign
+      if (entry.skip || !entry.cell.header || !entry.cell.valign) continue
+      columnValign[c] = entry.cell.valign
     }
   }
   for (let r = 0; r < grid.length; r++) {
