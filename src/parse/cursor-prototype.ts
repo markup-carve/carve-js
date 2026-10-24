@@ -276,7 +276,14 @@ function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInli
   const table = parseTableBlock({
     parseInline: (text, _abbrDefs, _linkDefs, source) => inline.tableInlines(text, source),
     recordAttachedCaption: () => {},
-    parseCaptionInline: () => { throw new UnsupportedCursorSyntax('canonical table caption') },
+    parseCaptionInline: (tableLexer, text) => {
+      const line = cursor.lines[tableLexer.pos - 1]
+      if (!line || tableLexer.peek()?.trim()) {
+        throw new UnsupportedCursorSyntax('multiline canonical table caption')
+      }
+      const column = line.text.length - text.length + 1
+      return inline.inlines([{ line, column, text }], true)
+    },
   }, lexer)
   if (table.type !== 'table' || lexer.pos <= cursor.at) {
     throw new UnsupportedCursorSyntax('canonical table adapter')

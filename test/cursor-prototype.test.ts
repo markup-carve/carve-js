@@ -68,15 +68,18 @@ describe('experimental block cursor', () => {
     '|= A ||\n',
     '# Before\n\n|= A |\n| b |\n',
     '|= A |\n\nText\n\n|= B |\n',
+    '|= A |\n^ Table #\n',
+    '# Before\n\n|= A |\n| b |\n^ Caption\n',
+    '|= A |\n^ Caption   \n',
   ])('uses the existing table rules for canonical rows: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
     '{aligns="right"}\n|= A |\n',
-    '|= A |\n^ Caption\n',
     '> |= A |\n',
     '> +\n|= 2-col header | < |= header |\n',
+    '|= A |\n^ Caption\ncontinues\n',
   ])('declines table forms whose container ownership is not migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
