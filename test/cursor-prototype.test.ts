@@ -52,11 +52,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('preserves raw source positions across CRLF lines', () => {
-    for (const source of ['a\r\nb\r\n', '- a\r\n- b\r\n', '> quote\r\nlazy\r\n']) {
+  it('preserves raw source positions across CRLF and CR lines', () => {
+    for (const source of ['a\r\nb\r\n', '- a\r\n- b\r\n', '> quote\r\nlazy\r\n',
+      'a\rb\r', '- a\r- b\r', '> quote\rlazy\r']) {
       expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     }
-    expect(() => parseCursorPrototype('a\rb')).toThrow(UnsupportedCursorSyntax)
   })
 
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
@@ -617,8 +617,7 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('Text\n```\ncode\n')).toThrow(UnsupportedCursorSyntax)
   })
 
-  it('declines source forms that have not been migrated', () => {
-    expect(() => parseCursorPrototype('A\rB')).toThrow(UnsupportedCursorSyntax)
+  it('declines a table form that has not been migrated', () => {
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
   })
 })
