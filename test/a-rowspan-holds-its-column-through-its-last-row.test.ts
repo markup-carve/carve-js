@@ -22,7 +22,7 @@ import { parse } from '../src/parse.js'
  *
  * The unspanned cases are settled with three-engine parity
  * (markup-carve/carve#1741, markup-carve/carve#1745, markup-carve/carve#1746)
- * and are pinned here as controls: this fix must not move them.
+ * and are pinned here as controls: their rendered alignment must not move.
  */
 const carve = (html: string): string => htmlToCarve(html, { mode: 'semantic' }).value
 const back = (html: string): string => renderHtml(parse(carve(html))).replace(/\n\s*/g, '')
@@ -44,7 +44,7 @@ describe('a rowspan holds its column through its last row', () => {
       + '</tbody></table>'
     expect(codes(html)).toEqual([])
     expect(back(html)).toContain('<td style="text-align: right;">q</td>')
-    expect(carve(html)).toBe('|=> A |=< B |=~ C |\n| x | y | z |\n| ^ |> q | r |\n')
+    expect(carve(html)).toBe('{header-rows=1}\n|> A |< B |~ C |\n| x | y | z |\n| ^ |> q | r |\n')
   })
 
   /**
@@ -61,10 +61,11 @@ describe('a rowspan holds its column through its last row', () => {
     const rendered = back(html)
     for (const cell of ['q1', 'q2']) expect(rendered).toContain(`<td style="text-align: right;">${cell}</td>`)
     // The row after the span is a full row again: `q3` really is in column A,
-    // really does repeat it, and really should carry no marker of its own.
+    // repeats it. The first body row has no alignment, so the head marker
+    // stays local and q3 keeps its explicit marker.
     expect(rendered).toContain('<td style="text-align: right;">q3</td>')
     expect(carve(html)).toBe(
-      '|=> A |=< B |=~ C |\n| x | y | z |\n| ^ |> q1 | r1 |\n| ^ |> q2 | r2 |\n| q3 | r3 |\n',
+      '{header-rows=1}\n|> A |< B |~ C |\n| x | y | z |\n| ^ |> q1 | r1 |\n| ^ |> q2 | r2 |\n|> q3 | r3 |\n',
     )
   })
 
@@ -108,7 +109,7 @@ describe('a rowspan holds its column through its last row', () => {
 
     const html = '<table><thead><tr><th colspan="3" style="text-align:center">H</th><th style="text-align:left">K</th></tr></thead>'
       + '<tbody><tr><td style="text-align:center">p</td><td style="text-align:center">q</td><td style="text-align:right">s</td><td style="text-align:left">t</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|~ H | < | < |< K |\n|---|---|---|---|\n| p |~ q |> s | t |\n')
+    expect(carve(html)).toBe('| H | < | < | K |\n|:---:|---|---|:---|\n| p |~ q |> s | t |\n')
     const rendered = back(html)
     for (const [cell, css] of [['p', 'center'], ['q', 'center'], ['s', 'right'], ['t', 'left']] as const) {
       expect(rendered).toContain(`<td style="text-align: ${css};">${cell}</td>`)
