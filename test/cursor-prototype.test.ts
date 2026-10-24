@@ -303,6 +303,7 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('[^f]: note\n  # heading\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: note\n\n\n  more\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('[^f]: %% comment\n')).toThrow(UnsupportedCursorSyntax)
   })
 
   it('keeps a plain footnote continuation and its source positions', () => {

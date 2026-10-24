@@ -943,7 +943,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     while (cursor.peek(nextIndex + bodyLength)?.text.startsWith('  ') &&
       plainQuoteText(cursor.peek(nextIndex + bodyLength)!.text.slice(2))) bodyLength++
   }
-  if (!footnote[2] || (hasBodyLine && (nextIndex > 2 || footnote[2] === '{empty}' ||
+  if (!footnote[2] || (footnote[2] !== '{empty}' && isBlockStart(footnote[2])) ||
+      (hasBodyLine && (nextIndex > 2 || footnote[2] === '{empty}' ||
       bodyLength === 0 ||
       (cursor.peek(nextIndex + bodyLength) && cursor.peek(nextIndex + bodyLength)!.text !== '')))) {
     throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
