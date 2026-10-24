@@ -753,8 +753,9 @@ function sameListKind(marker: NonNullable<ReturnType<typeof listMarker>>,
     marker.bullet === frame.bullet && isTaskMarkerContent(marker.content) === frame.taskList
 }
 
-function endsListBlankRun(blanks: number, next: SourceLine | undefined): boolean {
-  return next === undefined || (blanks >= 3 && listMarker(next.text) !== undefined)
+function endsListBlankRun(blanks: number, next: SourceLine | undefined, rootIndent: number): boolean {
+  const marker = next ? listMarker(next.text) : undefined
+  return next === undefined || (blanks >= 3 && marker !== undefined && marker.indent <= rootIndent)
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
@@ -922,8 +923,17 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         for (let i = 0; i < blanks; i++) appendBody(top, cursor.take(), 0)
         continue
       }
-      if (endsListBlankRun(blanks, next)) break
+      if (endsListBlankRun(blanks, next, firstMarker.indent)) break
       const nextMarker = listMarker(next.text)
+      if (blanks >= 3 && nextMarker && nextMarker.indent > firstMarker.indent) {
+        while (stack.length > 1) {
+          const done = stack.pop()!
+          flush(done)
+          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+        }
+        for (let i = 0; i < blanks; i++) cursor.take()
+        continue
+      }
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
       const sibling = nextMarker && target && sameListKind(nextMarker, target)
       const nested = nextMarker && nextMarker.indent > top.indent

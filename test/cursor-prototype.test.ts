@@ -649,6 +649,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- outer\n\n  - a\n\n\n\n  - b\n',
+    '- outer\n\n  para\n\n  - a\n\n\n\n  - b\n'])
+  ('reopens a nested list after a long blank run: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
   ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
