@@ -15,7 +15,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, deriveTableMetadata, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
 import { parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
@@ -175,11 +175,17 @@ function attributedListMarker(line: string) {
 function listMarker(line: string) {
   const attributed = attributedListMarker(line)
   if (attributed) return attributed
-  const ordered = RE_ORDERED.exec(line)
+  const itemAttr = extractItemAttr(line)
+  const ordered = RE_ORDERED.exec(itemAttr?.stripped ?? line)
   if (ordered && !ordered[1]!.includes('\t')) {
+    const markerWidth = ordered[0].length - ordered[4]!.length
+    const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
     return { indent: ordered[1]!.length, ordered: true, raw: ordered[2]!,
       delim: ordered[3] as '.' | ')', bullet: undefined,
-      width: ordered[0].length - ordered[4]!.length, content: ordered[4]! }
+      width: markerWidth + attrWidth,
+      ...(itemAttr ? { continuationWidth: markerWidth,
+        ...(itemAttr.attrs ? { attrs: itemAttr.attrs } : {}) } : {}),
+      content: ordered[4]! }
   }
   const bullet = BULLET.exec(line)
   if (!bullet) return undefined

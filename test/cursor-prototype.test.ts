@@ -99,6 +99,15 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '3.{#x k=v} A numbered item with id and key-value.\n',
+    'a.{.c} An alpha item.\n',
+    '1.{#k} a\n   # h\n',
+    '1.{.note}  first\n\n    second\n',
+  ])('parses attributes abutting an ordered item marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',
