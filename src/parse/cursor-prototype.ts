@@ -973,6 +973,19 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
 
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
+  if (first.text === '> +' && depth === 0) {
+    const follower = cursor.peek(1)
+    const after = cursor.peek(2)
+    if (follower && plainQuoteText(follower.text) &&
+        (!after || isBlankLine(after.text))) {
+      cursor.take()
+      cursor.take()
+      return { type: 'block_quote',
+        children: parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'quote')),
+          inline, definitionNodes, depth + 1, false),
+        pos: position(first, follower, 1, contentEndColumn(follower)) }
+    }
+  }
   const body: SourceLine[] = []
   let last = first
   let plainParagraph = true

@@ -626,6 +626,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
+  ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a plus that precedes an indented line', () => {
     expect(() => parseCursorPrototype('- a\n+\n  c\n')).toThrow(UnsupportedCursorSyntax)
   })
@@ -664,7 +669,7 @@ describe('experimental block cursor', () => {
 
   it('declines an unmarked quote follower while its paragraph may still be open', () => {
     expect(() => parseCursorPrototype('> :: term\nlazy\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('> +\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('> +\nlazy\n')).toStrictEqual(parse('> +\nlazy\n'))
     expect(() => parseCursorPrototype('> quote\n\tlazy\n')).toThrow(UnsupportedCursorSyntax)
   })
 
