@@ -1179,7 +1179,8 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
 function simpleFootnoteParagraphLine(line: SourceLine | undefined): boolean {
   if (!line?.text.startsWith('  ')) return false
   const content = line.text.slice(/^[ ]*/.exec(line.text)![0].length)
-  return plainQuoteText(content)
+  return plainQuoteText(content) ||
+    ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
 }
 
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,

@@ -715,6 +715,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['[^n]: first\n  *emphasis*\n', '[^n]: first\n\n  `code`\n'])
+  ('keeps inline markup in a simple footnote continuation: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
   ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
