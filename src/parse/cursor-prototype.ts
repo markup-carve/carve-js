@@ -1029,6 +1029,9 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const continuation: SourceLine[] = []
   for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
   const plusFollower = cursor.peek()?.text === '+' ? cursor.peek(1) : undefined
+  if (footnote[2] === '{empty}' && plusFollower) {
+    throw new UnsupportedCursorSyntax('empty footnote continuation')
+  }
   const attached = plusFollower && plainQuoteText(plusFollower.text) &&
     (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text)) ? plusFollower : undefined
   if (attached) { cursor.take(); cursor.take() }

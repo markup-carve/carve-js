@@ -172,6 +172,10 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('declines an empty-sentinel footnote with a continuation marker', () => {
+    expect(() => parseCursorPrototype('[^a]: {empty}\n+\nmore\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
