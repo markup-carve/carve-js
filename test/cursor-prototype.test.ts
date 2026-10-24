@@ -124,6 +124,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    'text\n```js\ncode\n',
+    'text\n~~~\ncode\n# Heading\n',
+    'text\n```js\ncode\n```\n',
+  ])('checks for a fence closer before interrupting a root paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -718,8 +726,8 @@ describe('experimental block cursor', () => {
 
   it.each(['```  php\ncode\n```\n', '```\tphp\ncode\n```\n',
     '~~~  php\ncode\n~~~\n'])
-  ('declines a fence language with an invalid separator: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ('keeps a fence with an invalid language separator as paragraph text: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['```\ncode\n', '~~~\ncode\n',
@@ -729,8 +737,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an unclosed fence after open paragraph text', () => {
-    expect(() => parseCursorPrototype('Text\n```\ncode\n')).toThrow(UnsupportedCursorSyntax)
+  it('keeps an unclosed fence after open paragraph text in that paragraph', () => {
+    const source = 'Text\n```\ncode\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('declines a table form that has not been migrated', () => {

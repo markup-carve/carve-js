@@ -255,6 +255,21 @@ function interruptsParagraph(line: string, owner: ContainerOwner): boolean {
   return isBlockStart(line)
 }
 
+function interruptsParagraphAtCursor(cursor: Cursor): boolean {
+  const line = cursor.peek()!.text
+  if (cursor.owner.kind === 'root' && (line[0] === '`' || line[0] === '~')) {
+    const fence = fenceOpen(line)
+    if (fence) {
+      let hasCloser = false
+      for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
+        if (closesFence(cursor.lines[i]!.text, fence.marker)) { hasCloser = true; break }
+      }
+      if (!hasCloser) return false
+    }
+  }
+  return interruptsParagraph(line, cursor.owner)
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -520,7 +535,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   let last = first
   const literalColonOpener = /^:{3,}(?: *\t| +\{)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
-      (parts.length === 0 || (!interruptsParagraph(cursor.peek()!.text, cursor.owner) &&
+      (parts.length === 0 || (!interruptsParagraphAtCursor(cursor) &&
         !(parts.length === 1 && parts[0]!.text.trim() === '+' && listMarker(cursor.peek()!.text))) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
     if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
