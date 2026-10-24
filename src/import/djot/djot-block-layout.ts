@@ -998,8 +998,37 @@ export function djotInlineLayout(source: string, preserveQuote?: (at: number) =>
   const output: string[] = []
   let escaped = false
   let forcedSingle = false
+  const plainSingleOpeners: number[] = []
+  const firstLine = source.slice(0, source.indexOf('\n') < 0 ? undefined : source.indexOf('\n'))
+  let itemIndent: number | undefined = /^([ \t]*)(?:[-+*]|\d+[.)]|:)[ \t]+/.exec(
+    firstLine.replace(/^[ \t]*(?:>[ \t]*)+/, ''),
+  )?.[1]?.length
+  let inDiv = false
   for (let i = 0; i < source.length; i++) {
     escaped = source[i - 1] === '\\' ? !escaped : false
+    if (source[i] === '\n') {
+      const lineStart = source.lastIndexOf('\n', i - 1) + 1
+      const line = source.slice(lineStart, i)
+      const nextEnd = source.indexOf('\n', i + 1)
+      const next = source.slice(i + 1, nextEnd < 0 ? undefined : nextEnd)
+      const unquotedLine = line.replace(/^[ \t]*(?:>[ \t]*)+/, '')
+      const unquotedNext = next.replace(/^[ \t]*(?:>[ \t]*)+/, '')
+      const nextItem = /^([ \t]*)(?:[-+*]|\d+[.)]|:)[ \t]+/.exec(unquotedNext)
+      const nextIndent = nextItem?.[1]?.length
+      if (/^[ \t]*(?:>[ \t]*)*$/.test(line) ||
+        (inDiv && /^[ \t]*:{3,}[ \t]*$/.test(unquotedLine)) ||
+        (nextIndent !== undefined && itemIndent !== undefined && nextIndent <= itemIndent)) {
+        plainSingleOpeners.length = 0
+      }
+      if (/^[ \t]*:{3,}[ \t]+\S/.test(unquotedLine)) inDiv = true
+      else if (inDiv && /^[ \t]*:{3,}[ \t]*$/.test(unquotedLine)) inDiv = false
+      if (nextIndent !== undefined) itemIndent = nextIndent
+      else if (/^[ \t]*(?:>[ \t]*)*$/.test(line)) itemIndent = undefined
+    }
+    if (source[i] === '|' && !escaped && mask[i] === '|' &&
+      /^[ \t]*\|/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i + 1))) {
+      plainSingleOpeners.length = 0
+    }
     const commentEnd = comments.get(i)
     if (commentEnd !== undefined && source[commentEnd - 2] !== '%' && source.slice(i + 2, commentEnd).includes('{')) {
       output.push('{%%}')
@@ -1055,10 +1084,21 @@ export function djotInlineLayout(source: string, preserveQuote?: (at: number) =>
       i++
       continue
     }
-    if (forcedSingle && source[i] === "'" && source[i - 1] === '/' &&
-      (i + 1 === source.length || /^[\s"'.,;:!?)\]]/u.test(source[i + 1]!)) && !preserveQuote?.(i)) {
+    const plainSingle = source[i] === "'" && !preserveQuote?.(i)
+    const lastPlainSingle = plainSingleOpeners.at(-1)
+    const closesPlainSingle = plainSingle && lastPlainSingle !== undefined && lastPlainSingle !== i - 1 &&
+      source[i - 1] !== undefined && !/\s/u.test(source[i - 1]!)
+    if (forcedSingle && plainSingle && !closesPlainSingle && source[i - 1] === '/' &&
+      (i + 1 === source.length || /^[\s"'.,;:!?)\]]/u.test(source[i + 1]!))) {
       output.push('‘')
       continue
+    }
+    if (plainSingle) {
+      if (closesPlainSingle) plainSingleOpeners.pop()
+      else if (source[i + 1] !== undefined && !/\s/u.test(source[i + 1]!) &&
+        (i === 0 || [' ', '\t', '\r', '\n', '"', "'", '-', '(', '['].includes(source[i - 1]!))) {
+        plainSingleOpeners.push(i)
+      }
     }
     if (source[i] === '\\' && (output.at(-1) === ' ' || output.at(-1) === '\t') && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
       while (output.at(-1) === ' ' || output.at(-1) === '\t') {
