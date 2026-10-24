@@ -997,6 +997,7 @@ export function djotInlineLayout(source: string, preserveQuote?: (at: number) =>
   }
   const output: string[] = []
   let escaped = false
+  let forcedSingle = false
   for (let i = 0; i < source.length; i++) {
     escaped = source[i - 1] === '\\' ? !escaped : false
     const commentEnd = comments.get(i)
@@ -1048,8 +1049,15 @@ export function djotInlineLayout(source: string, preserveQuote?: (at: number) =>
     }
     const quote = quotes[source.slice(i, i + 2)]
     if (quote && !preserveQuote?.(i)) {
+      if (source.startsWith("{'", i)) forcedSingle = true
+      else if (source.startsWith("'}", i)) forcedSingle = false
       output.push(quote)
       i++
+      continue
+    }
+    if (forcedSingle && source[i] === "'" && source[i - 1] === '/' &&
+      (i + 1 === source.length || /^[\s"'.,;:!?)\]]/u.test(source[i + 1]!)) && !preserveQuote?.(i)) {
+      output.push('‘')
       continue
     }
     if (source[i] === '\\' && (output.at(-1) === ' ' || output.at(-1) === '\t') && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
