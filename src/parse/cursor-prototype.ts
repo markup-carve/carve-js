@@ -301,14 +301,21 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
   const second = cursor.peek(1)?.text
   const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
   if (gfm) return parseSimpleTable(cursor, inline)
-  const headed = first.text.startsWith('|= ')
-  const standalone = !headed && first.text.startsWith('| ') && cursor.at === 0 && cursor.lines.every((line) =>
-    line.text === '' || line.text.startsWith('|'))
-  if ((!headed && !standalone) || pendingAttrs) {
+  const headed = first.text.startsWith('|=')
+  if (!first.text.startsWith('|') || pendingAttrs ||
+      (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '')) {
     throw new UnsupportedCursorSyntax('canonical table header')
   }
   if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
-  return parseCanonicalTableWithExistingRules(cursor, inline)
+  const table = parseCanonicalTableWithExistingRules(cursor, inline)
+  if (!headed && cursor.peek()?.text && !isBlockStart(cursor.peek()!.text)) {
+    throw new UnsupportedCursorSyntax('data table paragraph follower')
+  }
+  if (!headed && cursor.peek()?.text === '' &&
+      (listMarker(cursor.peek(1)?.text ?? '') || cursor.peek(1)?.text.startsWith('>'))) {
+    throw new UnsupportedCursorSyntax('data table container follower')
+  }
+  return table
 }
 
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {

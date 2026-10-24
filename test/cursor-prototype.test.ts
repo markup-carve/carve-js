@@ -52,20 +52,24 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('parses a standalone data-only table and declines one embedded in other blocks', () => {
+  it('parses data-only tables at the root after a document or block boundary', () => {
     for (const source of ['| a | b |\n', '| a | b |\n| c | d |\n',
-      '| a |\n', '| --- | --- |\n| 1 | 2 |\n', '| a | b |\n\n']) {
+      '| a |\n', '| --- | --- |\n| 1 | 2 |\n', '| a | b |\n\n',
+      '# Before\n\n| a | b |\n', '\n| a | b |\n',
+      '| a | b |\n\n| c | d |\n']) {
       expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     }
-    expect(() => parseCursorPrototype('# Before\n\n| a | b |\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('\n| a | b |\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('| a | b |\n\n| c | d |\n')).toThrow(UnsupportedCursorSyntax)
+    for (const source of ['- +\n| a | b |\n', '| a |\npara\n',
+      '| a |\n\n>\n\n^ cap\n', '| a |\n\n- +\n']) {
+      expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    }
   })
 
   it.each([
     '|= A |\n| b\t|\n',
     '|= A |\n+ b |\n',
     '|= A ||\n',
+    '|=x |\n',
     '# Before\n\n|= A |\n| b |\n',
     '|= A |\n\nText\n\n|= B |\n',
     '|= A |\n^ Table #\n',
