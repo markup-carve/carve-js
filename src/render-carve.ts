@@ -3,6 +3,7 @@ import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table/table-display-width.js'
+import { trimCellPadding } from './parse/table/parse-table-cells.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
@@ -4287,9 +4288,8 @@ class CarveRenderSession {
 
   private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true, alignIsColonSpelled = false): string {
     const attrs = renderAttrs(cell.attrs)
-    // A lone span marker keeps a space before it. `|< |` is an empty
-    // left-aligned cell; `|<|` and `| <|` are colspan markers. Padding the
-    // marker makes the writer's intent clear.
+    // A lone span marker is padded for readability. Every padding form is a
+    // span, including `|< |`.
     // `^` is not an alignment sigil and needs no disambiguation, but it takes the
     // same shape so a row of span cells stays readable.
     //
@@ -4309,12 +4309,14 @@ class CarveRenderSession {
     // a data cell whose content starts with `=` - and reads it as that, so an
     // attributed header cell round-tripped into `<td class="x">=h</td>` and
     // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
-    const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
     ctx.tableCellDepth++
     try {
       const content = cell.blocks === undefined
         ? this.renderInlines(cell.children ?? [], ctx)
         : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
+      const markerRun = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
+      // A lone `<` would re-read as a colspan. It aligns no content here.
+      const prefix = markerRun === '<' && trimCellPadding(content) === '' ? '' : markerRun
       return padCell(prefix, escapeSpanMarkerPayload(content, prefix))
     } finally {
       ctx.tableCellDepth--

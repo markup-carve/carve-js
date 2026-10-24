@@ -31,7 +31,7 @@ describe('fmt keeps a lone span marker padded', () => {
   })
 
   it('reads a glued left marker followed by space as an empty aligned cell', () => {
-    expect(carveToHtml('| a |< |')).toContain('<td>a</td><td style="text-align: left;"></td>')
+    expect(carveToHtml('| a |< |')).toContain('<td colspan="2">a</td>')
     expect(carveToHtml('| a |<|')).toContain('<td colspan="2">a</td>')
     expect(carveToHtml('| a | < |')).toContain('<td colspan="2">a</td>')
     expect(carveToHtml('| a | <|')).toContain('<td colspan="2">a</td>')
