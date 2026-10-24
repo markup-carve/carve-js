@@ -172,6 +172,23 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> %%%\n> hidden\n> %%%\n',
+    '::: note\n%%%\nhidden\n%%%\n:::\n',
+  ])('uses the production comment reader in mapped containers: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a list-owned block comment until its boundary is mapped', () => {
+    expect(() => parseCursorPrototype('- %%%\n  hidden\n  %%%\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('declines a degraded quote comment until its line ownership is mapped', () => {
+    expect(() => parseCursorPrototype('> %%%\n> text\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '{table}\n```csv\na,b\n1,2\n```\n',
     '{table header-rows=0}\n```tsv\nA\tB\n^\t<x>\n```\n',
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',

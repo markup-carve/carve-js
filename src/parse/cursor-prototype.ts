@@ -17,7 +17,7 @@ import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
-import { parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
+import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
 /**
@@ -526,6 +526,18 @@ function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   return block
 }
 
+function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | undefined {
+  const lexer = lexerForCursor(cursor)
+  lexer.pos = cursor.at
+  if (!commentBlockHasCloser(lexer, run)) return undefined
+  if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list comment source ownership')
+  const first = cursor.peek()!
+  const comment = parseCommentBlock(lexer)
+  cursor.at = lexer.pos
+  comment.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  return comment
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -881,7 +893,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const commentFence = RE_COMMENT_BLOCK_ANY.exec(first.text)
     if (commentFence) {
-      if (!atDocumentLevel || first.text[0] !== '%') throw new UnsupportedCursorSyntax('nested block comment')
+      if (!atDocumentLevel) {
+        const comment = parseNestedCommentAtCursor(cursor, commentFence[1]!.length)
+        if (comment) { emit(comment); continue }
+      }
+      if (first.text[0] !== '%') throw new UnsupportedCursorSyntax('nested block comment')
       if (commentOpeners?.has(first.start)) {
         cursor.take()
         const content: string[] = []
