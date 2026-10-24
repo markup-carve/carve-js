@@ -476,15 +476,15 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let mayWrapDefinition = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
-    const term = /^:: +\S.*$/.test(text)
-    const definition = /^: +\S.*$/.test(text)
+    const term = /^:: +[^ \t].*$/.test(text)
+    const definition = /^: +[^ \t].*$/.test(text)
     if (term || definition) {
-      if (text !== text.trimEnd()) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
+      if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
       mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
       end++
       continue
     }
-    if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && text === text.trimEnd() &&
+    if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
       end++
     } else if (mayWrapDefinition && text === '+' &&
@@ -512,8 +512,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let last = first
   while (cursor.at < end) {
     const line = cursor.take()
-    const term = /^:: +(\S.*)$/.exec(line.text)
-    const definition = /^: +(\S.*)$/.exec(line.text)
+    const term = /^:: +([^ \t].*)$/.exec(line.text)
+    const definition = /^: +([^ \t].*)$/.exec(line.text)
     if (term) {
       if (!current || current.definitions.length) {
         current = { terms: [], definitions: [], termSpans: [], definitionLines: [], definitionSpans: [] }
@@ -528,7 +528,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
       if (cursor.at < end && cursor.peek()!.text !== '+' &&
-          !/^(?:::|:) +\S/.test(cursor.peek()!.text)) {
+          !/^(?:::|:) +[^ \t]/.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         const followerColumn = /^ */.exec(follower.text)![0].length + 1
         parts.push({ line: follower, column: followerColumn,
@@ -1464,7 +1464,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(node)
       continue
     }
-    if (/^:: +\S/.test(first.text) && atDocumentLevel) {
+    if (/^:: +[^ \t]/.test(first.text) && atDocumentLevel) {
       emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
       continue
     }
