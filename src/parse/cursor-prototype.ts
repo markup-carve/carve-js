@@ -264,6 +264,11 @@ function interruptsParagraph(line: string, owner: ContainerOwner): boolean {
 
 function interruptsParagraphAtCursor(cursor: Cursor): boolean {
   const line = cursor.peek()!.text
+  if (cursor.owner.kind === 'root' && line[0] === '{' && !parseBlockAttributeRun(line)) {
+    const lexer = lexerForCursor(cursor)
+    lexer.pos = cursor.at
+    if (probeBlockAttributes(lexer)) return true
+  }
   if (cursor.owner.kind === 'root' && (line[0] === '`' || line[0] === '~')) {
     const fence = fenceOpen(line)
     if (fence && !hasLaterFenceCloser(cursor, fence.marker)) return false

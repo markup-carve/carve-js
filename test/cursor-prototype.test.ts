@@ -160,6 +160,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('lets wrapped root attributes interrupt an open paragraph', () => {
+    const source = 'text\n{.c\n.d}\npara\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
