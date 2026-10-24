@@ -9,7 +9,7 @@ import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
 import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
-import { RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
+import { RE_CAPTION, RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
@@ -418,12 +418,17 @@ function takeCaption(cursor: Cursor, inline: CursorInline):
   { children: InlineNode[]; line: SourceLine } | undefined {
   const blank = cursor.peek()?.text === '' ? 1 : 0
   const line = cursor.peek(blank)
-  const match = line && /^\^ +(.+)$/.exec(line.text)
+  const match = line && RE_CAPTION.exec(line.text)
   if (!match) return undefined
   if (blank) cursor.take()
   cursor.take()
   const column = line.text.length - match[1]!.length + 1
   return { children: inline.inlines([{ line, column, text: match[1]! }], true), line }
+}
+
+function takeQuoteCaption(cursor: Cursor, inline: CursorInline, quote: BlockQuote):
+  { children: InlineNode[]; line: SourceLine } | undefined {
+  return quote.children.length ? takeCaption(cursor, inline) : undefined
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
@@ -854,7 +859,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     if (first.text.startsWith('>')) {
       const quote = parseQuote(cursor, inline, definitionNodes, depth)
-      const caption = takeCaption(cursor, inline)
+      const caption = takeQuoteCaption(cursor, inline, quote)
       emit(caption ? { type: 'figure', target: quote, caption: caption.children,
         pos: position(first, caption.line) } : quote)
       continue

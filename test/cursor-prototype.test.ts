@@ -89,6 +89,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a caption line after an empty quote as paragraph text', () => {
+    const source = '>\n^ cap\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a table in a list until list-owned rows are mapped', () => {
     expect(() => parseCursorPrototype('- | a |\n  | b |\n')).toThrow(UnsupportedCursorSyntax)
   })
