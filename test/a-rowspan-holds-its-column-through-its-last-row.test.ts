@@ -102,21 +102,13 @@ describe('a rowspan holds its column through its last row', () => {
     expect(back(inHead)).toContain('<td style="text-align: center;">p</td>')
   })
 
-  /**
-   * THE MEASUREMENT FOR THE OTHER HALF of markup-carve/carve-js#1503: a colspan
-   * header seeding every column it covers. It is not a defect here, because
-   * `renderHtml` seeds the same run - the source below carries no body marker
-   * at all and still renders three centred columns - so a body cell repeating
-   * `center` under any of them is spelling what the document already says.
-   * Recorded so the next sweep does not re-find it.
-   */
-  it('seeds a colspan header across its span, because the renderer reads it back', () => {
+  it('keeps a covered column alignment when a header spans across it', () => {
     expect(renderHtml(parse('|~ H | < | < |< K |\n|---|---|---|---|\n| p | q | s | t |\n')).replace(/\n\s*/g, ''))
-      .toContain('<td style="text-align: center;">p</td><td style="text-align: center;">q</td><td style="text-align: center;">s</td>')
+      .toContain('<td style="text-align: center;">p</td><td>q</td><td>s</td>')
 
     const html = '<table><thead><tr><th colspan="3" style="text-align:center">H</th><th style="text-align:left">K</th></tr></thead>'
       + '<tbody><tr><td style="text-align:center">p</td><td style="text-align:center">q</td><td style="text-align:right">s</td><td style="text-align:left">t</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|~ H | < | < |< K |\n|---|---|---|---|\n| p | q |> s | t |\n')
+    expect(carve(html)).toBe('|~ H | < | < |< K |\n|---|---|---|---|\n| p |~ q |> s | t |\n')
     const rendered = back(html)
     for (const [cell, css] of [['p', 'center'], ['q', 'center'], ['s', 'right'], ['t', 'left']] as const) {
       expect(rendered).toContain(`<td style="text-align: ${css};">${cell}</td>`)

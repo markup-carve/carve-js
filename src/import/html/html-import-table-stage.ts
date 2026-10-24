@@ -138,9 +138,9 @@ export class TableStage {
    * ONLY WHERE THE VALUE AGREES. A body cell that differs from its column keeps
    * its own marker, because that is the only thing that overrides the default.
    *
-   * The column walk is the renderer's: a colspan seeds every column it covers,
-   * a rowspan holds its columns in the rows below, and among several header
-   * rows the last one to state an axis wins.
+   * The column walk is the renderer's: a header cell seeds only its starting
+   * column, while a rowspan holds its columns in the rows below. Among
+   * several header rows the last marker in a column wins.
    *
    * THE HOLD BEGINS IN THE NEXT ROW, WHICH IS `spanGrid`'S BOOKKEEPING. A
    * rowspan opens its columns while the row it starts in is still being
@@ -185,22 +185,10 @@ export class TableStage {
     for (let r = 0; r < built.length; r++) {
       walk(built[r]!, (entry, column) => {
         if (r < leadingHeaderRows) {
-          // A COLSPAN HEADER SEEDS EVERY COLUMN IT COVERS, and that is not a
-          // guess about tables in general - it is what THIS renderer reads
-          // back. Given `|~ H | < | < |< K |` with no marker on any body cell,
-          // `renderHtml` writes `text-align: center` on all three columns the
-          // header spans, because its own column defaults seed the same run.
-          // So a body cell under any of them that repeats `center` spells what
-          // the document already says, and dropping it is lossless HERE.
-          // Another engine whose renderer stops the default at the header's
-          // own column must keep those markers instead - the walk is only ever
-          // sound against the renderer it is paired with, and this half of
-          // markup-carve/carve-js#1503 was measured, not inherited.
-          for (let k = column; k < column + entry.colspan; k++) {
-            columns[k] ??= {}
-            if (entry.cell.align) columns[k]!.align = entry.cell.align
-            if (entry.cell.valign) columns[k]!.valign = entry.cell.valign
-          }
+          if (!entry.cell.header) return
+          columns[column] ??= {}
+          if (entry.cell.align) columns[column]!.align = entry.cell.align
+          if (entry.cell.valign) columns[column]!.valign = entry.cell.valign
           return
         }
         if (entry.cell.align && columns[column]?.align === entry.cell.align) delete entry.cell.align

@@ -80,9 +80,9 @@ export function parseCellMarkers(src: string): {
   attrs?: Attrs
   content: string
 } {
-  // `|<|` and the padded `| < |` are colspan markers. A glued `<` followed
-  // by a space (`|< |`) is an alignment run on an empty cell.
-  if (trimCellPadding(src) === '<' && (src === '<' || (src.startsWith(' ') && src.endsWith(' ')))) return { header: false, span: 'colspan', content: '' }
+  // A lone `<` may have leading or trailing padding. Only a glued `<`
+  // followed by a space (`|< |`) is an empty left-alignment run.
+  if (trimCellPadding(src) === '<' && !src.startsWith('< ')) return { header: false, span: 'colspan', content: '' }
 
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0

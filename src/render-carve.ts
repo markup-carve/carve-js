@@ -4288,12 +4288,9 @@ class CarveRenderSession {
 
   private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true, alignIsColonSpelled = false): string {
     const attrs = renderAttrs(cell.attrs)
-    // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
-    // is also the left-alignment sigil, and the two readings differ: the
-    // executable spec reads `|<|` as alignment where all three engines read a
-    // colspan (markup-carve/carve#710). The padded form is unambiguous under either
-    // reading - `alignment_marker` is defined as glued, `colspan_marker` allows
-    // surrounding whitespace - so the writer should never emit the ambiguous one.
+    // A lone span marker keeps a space before it. `|< |` is an empty
+    // left-aligned cell; `|<|` and `| <|` are colspan markers. Padding the
+    // marker makes the writer's intent clear.
     // `^` is not an alignment sigil and needs no disambiguation, but it takes the
     // same shape so a row of span cells stays readable.
     //
