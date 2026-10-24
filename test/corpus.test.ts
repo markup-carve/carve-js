@@ -473,6 +473,7 @@ const IMPLEMENTED = new Set([
   'colon-fence-separator-must-be-a-space',
   'colon-fence-metadata-slots-must-be-a-space-too',
   'table-cell-padding-must-be-a-space',
+  'table-spans-keep-alignment-defaults-in-physical-columns',
   'link-and-image-title-slots-must-be-a-space',
   'code-fence-metadata-slots-must-be-a-space-too',
   'a-tab-continues-a-list-item-just-as-two-spaces-do',
