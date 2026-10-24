@@ -4073,6 +4073,11 @@ class Importer {
     const attrs = this.attrs(node, path)
     const fromCarrier = this.carriedInline(node, tag, children, carried, attrs)
     if (fromCarrier) return fromCarrier
+    // An element the HTML left empty holds nothing a reader sees, so it is
+    // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
+    // pair reads back as literal text, and `{--}` as the braced en dash. Its
+    // attributes can still matter (an `id` is a link target), and an empty span
+    // is spellable, so they move onto one.
     if (EMPTY_DROPPED_MARKS.has(tag) && children.length === 0) {
       return attrs ? [{ type: 'span', children: [], attrs }] : []
     }
@@ -4304,11 +4309,6 @@ class Importer {
     if (tag === 'span' && carried?.names.has('escaped')) {
       return [{ type: 'escaped_text', value: this.flatText(node) }]
     }
-    // An element the HTML left empty holds nothing a reader sees, so it is
-    // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
-    // pair reads back as literal text, and `{--}` as the braced en dash. Its
-    // attributes can still matter (an `id` is a link target), and an empty span
-    // is spellable, so they move onto one.
     return undefined
   }
 
