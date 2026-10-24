@@ -481,6 +481,11 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && text === text.trimEnd() &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
       end++
+    } else if (mayWrapDefinition && text === '+' &&
+        plainQuoteText(cursor.lines[end + 1]?.text ?? '') &&
+        (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
+      end += 2
+      mayWrapDefinition = false
     }
     break
   }
@@ -516,7 +521,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const blockBody = isBlockStart(definition[1]!)
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
-      if (cursor.at < end && !/^(?:::|:) +\S/.test(cursor.peek()!.text)) {
+      if (cursor.at < end && cursor.peek()!.text !== '+' &&
+          !/^(?:::|:) +\S/.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         const followerColumn = /^ */.exec(follower.text)![0].length + 1
         parts.push({ line: follower, column: followerColumn,
@@ -534,6 +540,13 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       current.definitionLines.push(line.number)
       current.definitionSpans.push(position(line, line))
       last = definitionLast
+    } else if (line.text === '+' && current?.definitions.length && cursor.at < end) {
+      const follower = cursor.take()
+      const paragraph: Paragraph = { type: 'paragraph',
+        children: inline.inlines([{ line: follower, column: 1, text: follower.text }]),
+        pos: position(follower, follower) }
+      current.definitions.at(-1)!.push(paragraph)
+      last = follower
     } else throw new UnsupportedCursorSyntax('definition list body')
     if (term) last = line
   }

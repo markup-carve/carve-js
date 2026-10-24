@@ -177,6 +177,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    ':: term\n: A first paragraph,\n+\nthen a flush-left block joined with +.\n',
+    ':: term\n:  intro\n+\nmore\n',
+  ])('attaches one plain paragraph after a root definition continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     'text\n```js\ncode\n',
     'text\n~~~\ncode\n# Heading\n',
     'text\n```js\ncode\n```\n',
