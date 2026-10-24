@@ -47,6 +47,28 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    'text\n- a\n- b\n',
+    'text\n1. x\n2. y\n',
+    '- a\n\n+\n- s\n',
+  ])('keeps a list marker in the open paragraph when its owner does not claim it: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '[x][r]\n\n[r]: /url "Title"\n',
+    '[x][r]\n\n[r]: /url {.external}\n',
+    '[x][r]\n\n[r]: /first\n\n[r]: /last\n',
+    '[x][r]\n\n[r]: \ufeffhttps://example.com/\n',
+  ])('matches root reference definition metadata and winner selection: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('uses the canonical table reader for span-marked simple rows', () => {
+    const source = '| < | b |\n|---|---|\n| c | d |\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

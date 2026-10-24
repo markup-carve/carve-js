@@ -248,6 +248,12 @@ function isBlockStart(line: string): boolean {
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
 
+function interruptsParagraph(line: string, owner: ContainerOwner): boolean {
+  const marker = listMarker(line)
+  if (marker) return owner.kind === 'list' && marker.indent === 0
+  return isBlockStart(line)
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -512,7 +518,8 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const parts: ContentLine[] = []
   let last = first
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
-      (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
+      (parts.length === 0 || (!interruptsParagraph(cursor.peek()!.text, cursor.owner) &&
+        !(parts.length === 1 && parts[0]!.text.trim() === '+' && listMarker(cursor.peek()!.text))))) {
     if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
       const lead = inline.inlines(parts)
       if (lead.length === 1 && lead[0]?.type === 'image' &&
