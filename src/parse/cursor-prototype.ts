@@ -387,7 +387,8 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   return table
 }
 
-function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {
+function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
+  commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
   const first = cursor.peek()!
   let end = cursor.at
   let mayWrapDefinition = false
@@ -407,7 +408,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): Defini
     }
     break
   }
-  if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '')) {
+  if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '' &&
+      !commentOpeners?.has(cursor.lines[end]!.start))) {
     throw new UnsupportedCursorSyntax('definition list body')
   }
   let next = end
@@ -1135,7 +1137,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (/^:: +\S/.test(first.text) && atDocumentLevel) {
-      emit(parseSimpleDefinitionList(cursor, inline))
+      emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
       continue
     }
     if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)

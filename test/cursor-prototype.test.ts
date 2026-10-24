@@ -312,6 +312,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('ends a definition before a closed root comment block', () => {
+    const source = ':: term\n:  body\n%%%\nhidden\n%%%\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(() => parseCursorPrototype(':: term\n:  body\n%%%\nhidden\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [+] plain\n'])
   ('preserves authored task list state: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
