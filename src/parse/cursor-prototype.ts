@@ -177,7 +177,7 @@ function fenceOpen(line: string) {
 }
 const COLON_OPEN = /^(:{3,})(?: +([A-Za-z0-9][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: *\[([A-Za-z0-9_/-]+)\])?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
-const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
+const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\P{White_Space}+)[ \t]*$/u
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
 const ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 const LINE_COMMENT = /^[ \t]*%%/
