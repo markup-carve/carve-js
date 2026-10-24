@@ -608,7 +608,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const first = cursor.peek()!
   const parts: ContentLine[] = []
   let last = first
-  const literalColonOpener = /^:{3,}(?: *\t| +\{)/.test(first.text)
+  const literalColonOpener = /^:{3,}(?: *\t| +\{|>)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || (!interruptsParagraphAtCursor(cursor) &&
         !(parts.length === 1 && parts[0]!.text.trim() === '+' && listMarker(cursor.peek()!.text))) ||
@@ -1507,6 +1507,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (/^::[ \t]*$/.test(first.text)) {
+      emit(parseParagraphAtCursor(cursor, inline))
+      continue
+    }
+    if (/^:{3,}>/.test(first.text)) {
       emit(parseParagraphAtCursor(cursor, inline))
       continue
     }
