@@ -107,6 +107,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    'text\n>>= operator\n>=3 items\n>_< face\n',
+    'text\n>\tprose\n',
+  ])('does not open a quote from an invalid quote marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
