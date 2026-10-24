@@ -124,6 +124,12 @@ function position(first: SourceLine, last: SourceLine, firstColumn = 1, lastColu
   }
 }
 
+function contentEndColumn(line: SourceLine): number {
+  let end = line.text.length
+  while (end > 0 && (line.text.charCodeAt(end - 1) === 32 || line.text.charCodeAt(end - 1) === 9)) end--
+  return end + 1
+}
+
 type ContentLine = { line: SourceLine; column: number; text: string }
 
 class CursorInline extends InlineParseSession {
@@ -687,6 +693,8 @@ function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
+  const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
+    position(from, to, column, contentEndColumn(to))
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
     ordered: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
@@ -773,7 +781,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       cursor.take()
       appendBody(top, next, 0)
       top.last = next
-      if (top.itemFirst) top.item.pos = position(top.itemFirst, next, top.indent + 1)
+      if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.indent + 1)
       continue
     }
     if (marker && top.fenceMarker && top.contentColumn !== undefined &&
@@ -781,7 +789,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       cursor.take()
       appendBody(top, line, top.contentColumn - 1)
       top.last = line
-      if (top.item && top.itemFirst) top.item.pos = position(top.itemFirst, line, top.indent + 1)
+      if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.indent + 1)
       continue
     }
     if (marker) {
@@ -792,13 +800,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         cursor.take()
         appendBody(top, line, top.contentColumn - 1)
         top.last = line
-        if (top.item && top.itemFirst) top.item.pos = position(top.itemFirst, line, top.indent + 1)
+        if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.indent + 1)
         continue
       }
       while (stack.length > 1 && marker.indent < stack.at(-1)!.indent) {
         const done = stack.pop()!
         flush(done)
-        done.list.pos = position(done.first, done.last, done.indent + 1)
+        done.list.pos = listSpan(done.first, done.last, done.indent + 1)
       }
       const host = stack.at(-1)!
       if (marker.indent > host.indent) {
@@ -814,7 +822,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       applyInvisibleTail(current)
       flush(current)
       cursor.take()
-      const item: ListItem = { type: 'list_item', children: [], pos: position(line, line, marker.indent + 1) }
+      const item: ListItem = { type: 'list_item', children: [], pos: listSpan(line, line, marker.indent + 1) }
       const task = /^\[([ xX-])\] /.exec(marker.content)
       if (task) {
         item.checked = task[1]!.toLowerCase() === 'x'
@@ -831,7 +839,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       appendBody(current, line, marker.width + (task ? task[0].length : 0))
       for (const frame of stack) {
         frame.last = line
-        if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)
+        if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
       }
       continue
     }
@@ -860,7 +868,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         while (stack.at(-1) !== continuationFrame) {
           const done = stack.pop()!
           flush(done)
-          done.list.pos = position(done.first, done.last, done.indent + 1)
+          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
         }
         for (let i = 0; i < blanks; i++) {
           const blank = cursor.lines[cursor.at - blanks + i]!
@@ -907,13 +915,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       listContinuationPrefix(line.text, bodyPrefix) : bodyPrefix)
     for (const frame of stack) {
       frame.last = line
-      if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)
+      if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
     }
   }
   for (let i = stack.length - 1; i >= 0; i--) {
     const frame = stack[i]!
     flush(frame)
-    frame.list.pos = position(frame.first, frame.last, frame.indent + 1)
+    frame.list.pos = listSpan(frame.first, frame.last, frame.indent + 1)
   }
   return stack[0]!.list
 }
@@ -953,7 +961,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   return { type: 'block_quote',
     children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote')),
       inline, definitionNodes, depth + 1, false),
-    pos: position(first, last) }
+    pos: position(first, last, 1, contentEndColumn(last)) }
 }
 
 function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
@@ -1174,7 +1182,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit({ type: 'heading', level: heading[1]!.length as HeadingLevel,
         children: inline.inlines([{ line: first, column,
           text: heading[3] ? first.text.slice(column - 1) : heading[2]! }]),
-        pos: position(first, first) })
+        pos: position(first, first, 1, contentEndColumn(first)) })
       continue
     }
     if (BREAK.test(first.text)) {
