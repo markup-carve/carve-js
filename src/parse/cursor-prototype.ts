@@ -1092,6 +1092,24 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (!line.text.startsWith(prefix)) {
+      let ancestor: Frame | undefined
+      for (let index = stack.length - 2; index >= 0; index--) {
+        const frame = stack[index]!
+        if (frame.contentColumn !== undefined &&
+            line.text.startsWith(' '.repeat(frame.contentColumn - 1))) {
+          ancestor = frame
+          break
+        }
+      }
+      if (ancestor) {
+        rejectListQuoteBoundary(top.body, line)
+        while (stack.at(-1) !== ancestor) {
+          const done = stack.pop()!
+          flush(done)
+          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+        }
+        continue
+      }
       rejectListQuoteBoundary(top.body, line)
       break
     }

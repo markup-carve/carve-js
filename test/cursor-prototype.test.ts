@@ -543,6 +543,19 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  - b\n    # N\n  lazy\n',
+    '> - a\n>     - child\n>     ```\n>     code\n>     ```\nafter\n',
+    '- x\n  - text\n  > q\n\n  ^ cap\n- c\n'])
+  ('returns to an ancestor list frame when a line reaches its column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n  - > +\n   b\n', '- a\n  - > +\n  # h\n',
+    '- a\n  - > +\n  b\n'])
+  ('declines an unresolved quote boundary while returning to an ancestor: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
