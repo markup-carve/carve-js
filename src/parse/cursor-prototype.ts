@@ -1191,7 +1191,9 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
   const firstText = first.text.slice(firstIndent)
   const heading = RE_HEADING.test(firstText)
   const quote = RE_BLOCKQUOTE.test(firstText)
-  if (!heading && !quote) return undefined
+  const fence = fenceOpen(firstText)?.marker ?? RE_RAW_FENCE.exec(firstText)?.[1]
+  const table = firstText[0] === '|' && isTableRow(firstText)
+  if (!heading && !quote && !fence && !table) return undefined
   const source = [first]
   const body = [{ text: firstText, start: first.start + firstIndent, number: first.number,
     baseColumn: (first.baseColumn ?? 1) + firstIndent }]
@@ -1203,6 +1205,29 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
       source.push(second)
       body.push({ text, start: second.start + indent, number: second.number,
         baseColumn: (second.baseColumn ?? 1) + indent })
+    }
+  }
+  if (fence) {
+    let closed = false
+    for (let offset = nextIndex + 1; cursor.peek(offset); offset++) {
+      const line = cursor.peek(offset)!
+      if (!line.text.startsWith(' '.repeat(firstIndent))) return undefined
+      const text = line.text.slice(firstIndent)
+      source.push(line)
+      body.push({ text, start: line.start + firstIndent, number: line.number,
+        baseColumn: (line.baseColumn ?? 1) + firstIndent })
+      if (closesFence(text, fence)) { closed = true; break }
+    }
+    if (!closed) return undefined
+  } else if (table) {
+    for (let offset = nextIndex + 1; cursor.peek(offset); offset++) {
+      const line = cursor.peek(offset)!
+      if (!line.text.startsWith(' '.repeat(firstIndent))) break
+      const text = line.text.slice(firstIndent)
+      if (!isTableRow(text)) break
+      source.push(line)
+      body.push({ text, start: line.start + firstIndent, number: line.number,
+        baseColumn: (line.baseColumn ?? 1) + firstIndent })
     }
   }
   const after = cursor.peek(nextIndex + source.length)

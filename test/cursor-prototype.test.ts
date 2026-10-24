@@ -482,6 +482,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['[^a]: note\n\n  ```=html\n  <b>x</b>\n  ```\n\nsee[^a]\n',
+    '[^a]: note\n\n  | a |\n  | - |\n  | b |\n\nsee[^a]\n',
+    '[^a]: note\n  ```\n  code\n  ```\n'])
+  ('keeps one fenced or table block in a footnote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
