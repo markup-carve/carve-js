@@ -1176,6 +1176,12 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
   throw new UnsupportedCursorSyntax('unclosed fence')
 }
 
+function simpleFootnoteParagraphLine(line: SourceLine | undefined): boolean {
+  if (!line?.text.startsWith('  ')) return false
+  const content = line.text.slice(/^[ ]*/.exec(line.text)![0].length)
+  return plainQuoteText(content)
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
@@ -1186,8 +1192,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const separated = hasBodyLine && nextIndex === 2
   let bodyLength = 0
   if (hasBodyLine) {
-    while (cursor.peek(nextIndex + bodyLength)?.text.startsWith('  ') &&
-      plainQuoteText(cursor.peek(nextIndex + bodyLength)!.text.slice(2))) bodyLength++
+    while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength))) bodyLength++
   }
   if (!footnote[2] || (footnote[2] !== '{empty}' && isBlockStart(footnote[2])) ||
       (hasBodyLine && (nextIndex > 2 || footnote[2] === '{empty}' ||
@@ -1212,15 +1217,20 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const column = first.text.length - footnote[2]!.length + bodyIndent + 1
   const parts: ContentLine[] = [{ line: first, column, text: footnote[2]!.slice(bodyIndent) }]
   if (!separated) for (const line of continuation) {
-    parts.push({ line, column: 3, text: line.text.slice(2) })
+    const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
+    parts.push({ line, column: nextColumn, text: line.text.slice(nextColumn - 1) })
   }
   const bodyLast = continuation.at(-1) ?? first
   const last = attached ?? bodyLast
   const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
     pos: position(first, separated ? first : bodyLast, column) }
   const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
-    children: inline.inlines(continuation.map((line) => ({ line, column: 3, text: line.text.slice(2) }))),
-    pos: position(continuation[0]!, continuation.at(-1)!, 3) } : undefined
+    children: inline.inlines(continuation.map((line) => {
+      const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
+      return { line, column: nextColumn, text: line.text.slice(nextColumn - 1) }
+    })),
+    pos: position(continuation[0]!, continuation.at(-1)!,
+      /^[ ]*/.exec(continuation[0]!.text)![0].length + 1) } : undefined
   const attachedBody: Paragraph | undefined = attached ? { type: 'paragraph',
     children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
     pos: position(attached, attached) } : undefined
