@@ -10,7 +10,10 @@ const boundaryFiles = JSON.parse(readFileSync(join(root, 'tsconfig.boundaries.js
 const lintFiles = config.flatMap((entry) => entry.files ?? [])
 assert.deepEqual(boundaryFiles, ['src/**/*.ts'], 'Indexed-access checking covers production source')
 const command = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts.lint
-for (const file of lintFiles) assert.ok(command.split(' ').includes(file), `Lint command omits ${file}`)
+const complexityCommand = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['complexity-check']
+for (const file of lintFiles) {
+  assert.ok([command, complexityCommand].some(script => script.split(' ').some(arg => arg.replace(/^['"]|['"]$/g, '') === file)), `Lint commands omit ${file}`)
+}
 const result = spawnSync(process.execPath, [
   join(root, 'node_modules/eslint/bin/eslint.js'),
   '--stdin', '--stdin-filename', 'src/source/source-positions.ts', '--format', 'json',
