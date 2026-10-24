@@ -1226,16 +1226,11 @@ function escapedIn(nodes: InlineNode[], from: number, texts: string[]): (index: 
 }
 
 /**
- * Escape a cell payload that would otherwise re-read as a span marker.
- *
- * A cell emitted with the glued header marker or an alignment run does not NEED
- * the escape - `|= ^ |` is already a header cell holding a caret - and it gets
- * one anyway, because which prefix a cell takes is settled after the payload is
- * rendered. That spends one idle backslash on a rare cell and renders
- * identically; the other direction deletes the cell.
+ * Escape a bare cell payload that would otherwise re-read as a span marker.
+ * A valid marker run or attribute block keeps the payload in the content slot.
  */
-export function escapeSpanMarkerPayload(payload: string, attrs?: Attrs): string {
-  if (attrs !== undefined || !cellPayloadIsSpanMarker(payload)) return payload
+export function escapeSpanMarkerPayload(payload: string, prefix = ''): string {
+  if (prefix !== '' || !cellPayloadIsSpanMarker(payload)) return payload
   return '\\' + payload
 }
 
@@ -4320,7 +4315,7 @@ class CarveRenderSession {
       const content = cell.blocks === undefined
         ? this.renderInlines(cell.children ?? [], ctx)
         : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
-      return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
+      return padCell(prefix, escapeSpanMarkerPayload(content, prefix))
     } finally {
       ctx.tableCellDepth--
     }

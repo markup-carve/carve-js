@@ -2821,7 +2821,8 @@ function writeTableRow(
   let row = ''
   for (let c = 0; c < width; c++) {
     const cell = convertInline((cells[c] ?? '').replace(/\\\|/g, '|'), dialect, false, false, undefined, true, true, reportEmptyLosses)
-    row += '|' + padCell(prefixes[c] ?? '', escapeSpanMarkerPayload(cell))
+    const prefix = prefixes[c] ?? ''
+    row += '|' + padCell(prefix, escapeSpanMarkerPayload(cell, prefix))
   }
   return row + '|'
 }
