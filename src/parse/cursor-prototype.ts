@@ -1,4 +1,5 @@
 import type { Attrs, BlockNode, BlockQuote, CodeBlock, DefinitionItem, DefinitionList, Document, HeadingLevel, InlineNode, List, ListItem, Paragraph, Position, Table, TableRow } from '../ast.js'
+import type { InlineSource } from '../parse.js'
 import { GENERATED_CONTENT_KINDS } from '../ast.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
 import { toCodepointPositions } from '../source/source-positions.js'
@@ -14,6 +15,8 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { Lexer } from './parse-lexer.js'
+import { parseTableBlock } from './parse-core.js'
 
 /**
  * An isolated block-cursor experiment. It deliberately fails on syntax that has
@@ -25,7 +28,8 @@ interface SourceLine { text: string; start: number; number: number; baseColumn?:
 
 class Cursor {
   at = 0
-  constructor(readonly lines: SourceLine[]) {}
+  rootLexer?: Lexer
+  constructor(readonly lines: SourceLine[], readonly rootSource?: string) {}
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
   take(): SourceLine { return this.lines[this.at++]! }
 }
@@ -88,8 +92,11 @@ type ContentLine = { line: SourceLine; column: number; text: string }
 class CursorInline extends InlineParseSession {
   // Image promotion only changes paragraphs whose first inline node is an image.
   hasLeadingImage = false
-  constructor(private readonly linkDefinitions: Map<string, LinkDef>,
-    private readonly abbreviations: Map<string, string>) { super() }
+  constructor(readonly linkDefinitions: Map<string, LinkDef>,
+    readonly abbreviations: Map<string, string>) { super() }
+  tableInlines(text: string, source?: InlineSource): InlineNode[] {
+    return this.parseInline(text, this.abbreviations, this.linkDefinitions, source)
+  }
   inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
     const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
     const first = parts[0]!
@@ -259,35 +266,26 @@ function parseSimpleTable(cursor: Cursor, inline: CursorInline): Table {
   return { type: 'table', rows, separatorWidths: widths, pos: position(header, last) }
 }
 
-function parseCanonicalTable(cursor: Cursor, inline: CursorInline): Table {
+function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInline): Table {
+  if (!cursor.rootSource) throw new UnsupportedCursorSyntax('nested canonical table')
   const first = cursor.peek()!
-  const rows: TableRow[] = []
-  let last = first
-  while (cursor.peek()?.text.startsWith('|')) {
-    const line = cursor.take()
-    const segments = pipeSegments(line)
-    const cells = segments.map((part) => {
-      const header = part.text.startsWith('= ')
-      const raw = header ? part.text.slice(1) : part.text
-      const content = raw.trim()
-      if (!content || /[\\`*_{}<>^~\[\]|\t]/.test(raw) ||
-          (part.text.startsWith('=') && !header)) {
-        throw new UnsupportedCursorSyntax('table cell marker')
-      }
-      const lead = raw.length - raw.trimStart().length
-      const column = part.from + (header ? 1 : 0) + lead + 1
-      return { type: 'table_cell' as const, header,
-        children: inline.inlines([{ line, column, text: raw.trim() }]),
-        pos: position(line, line, part.from + 1, part.to + 1) }
-    })
-    rows.push({ type: 'table_row', cells, pos: position(line, line) })
-    last = line
+  const lexer = cursor.rootLexer ??= new Lexer(cursor.rootSource)
+  lexer.pos = cursor.at
+  lexer.abbrDefs = inline.abbreviations
+  lexer.linkDefs = inline.linkDefinitions
+  const table = parseTableBlock({
+    parseInline: (text, _abbrDefs, _linkDefs, source) => inline.tableInlines(text, source),
+    recordAttachedCaption: () => {},
+    parseCaptionInline: () => { throw new UnsupportedCursorSyntax('canonical table caption') },
+  }, lexer)
+  if (table.type !== 'table' || lexer.pos <= cursor.at) {
+    throw new UnsupportedCursorSyntax('canonical table adapter')
   }
-  if (cursor.peek()?.text.startsWith('+') || /^\^ /.test(cursor.peek()?.text ?? '') ||
-      (cursor.peek()?.text === '' && /^\^ /.test(cursor.peek(1)?.text ?? ''))) {
-    throw new UnsupportedCursorSyntax('table continuation or caption')
-  }
-  return { type: 'table', rows, pos: position(first, last) }
+  const last = cursor.lines[lexer.pos - 1]
+  if (!last) throw new UnsupportedCursorSyntax('canonical table source range')
+  cursor.at = lexer.pos
+  table.pos = position(first, last)
+  return table
 }
 
 function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
@@ -303,7 +301,7 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline, depth: number,
     throw new UnsupportedCursorSyntax('canonical table header')
   }
   if (depth !== 0) throw new UnsupportedCursorSyntax('nested canonical table')
-  return parseCanonicalTable(cursor, inline)
+  return parseCanonicalTableWithExistingRules(cursor, inline)
 }
 
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): DefinitionList {
@@ -602,6 +600,9 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     }
     break
   }
+  if (body.at(-1)?.text.trim() === '+' && cursor.peek()?.text.startsWith('|')) {
+    throw new UnsupportedCursorSyntax('quote continuation into table')
+  }
   if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text)) {
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
@@ -817,7 +818,7 @@ export function parseCursorPrototype(source: string): Document {
   if (source.includes('\r') || source.includes('\0') || source.charCodeAt(0) === 0xfeff) {
     throw new UnsupportedCursorSyntax('source normalization is not migrated')
   }
-  const cursor = new Cursor(scanLines(source))
+  const cursor = new Cursor(scanLines(source), source)
   const commentOpeners = source.includes('%%%') ? commentOpenersWithCloser(cursor.lines) : new Set<number>()
   const linkDefinitions = new Map<string, LinkDef>()
   const abbreviations = new Map<string, string>()
