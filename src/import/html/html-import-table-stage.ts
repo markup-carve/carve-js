@@ -527,7 +527,11 @@ export class TableStage {
       })
       return listTableOf(kept, ownAlignment, caption, attrs, this.context.writing)
     }
-    const separatorWidths = this.separatorWidths(node, path)
+    let separatorWidths = this.separatorWidths(node, path)
+    if (localHeadAlignment && this.context.writing && separatorWidths) {
+      this.context.report.add('attribute-dropped', 'Dropped col-widths carrier: its delimiter row would turn local header alignment into a column default', 'warning', path, node)
+      separatorWidths = undefined
+    }
     return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(tableAttrs ? { attrs: tableAttrs } : {}) }
   }
 
