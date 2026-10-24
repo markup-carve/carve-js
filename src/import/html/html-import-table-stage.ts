@@ -426,6 +426,13 @@ export class TableStage {
       }),
     )
     const localHeadAlignment = this.dropInheritedCellAlignment(built, columnHeadRows)
+    for (let r = 0; r < columnHeadRows; r++) {
+      built[r]?.forEach(({ cell }, c) => {
+        if (cell.header && cell.valign === 'top' && !cell.children?.length && !cell.blocks?.length) {
+          this.context.report.add('table-degraded', 'Dropped top alignment on an empty header cell: a delimiter row cannot carry vertical alignment', 'warning', `${path}/tr[${r + 1}]/th[${c + 1}]`, tr[r]!)
+        }
+      })
+    }
     // A `<tr>`'s own attributes have a slot - `table_row.attrs`, which the
     // writer spells on the closing pipe and every renderer emits on the `<tr>`
     // - and went in silence before this.

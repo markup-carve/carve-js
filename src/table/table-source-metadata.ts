@@ -135,6 +135,7 @@ export function preservesTableColumns(table: Table, attrs: Attrs | undefined): b
 export function tableNeedsDelimiterHeader(table: Table): boolean {
   const first = table.rows[0]
   if (!first?.cells.length || !first.cells.every(cell => cell.header)) return false
+  if (first.cells.some(cell => cell.align === 'left' && !cell.span && !cell.blocks?.length && !cell.children?.length)) return true
   const firstSpan = first.cells.findIndex(cell => cell.span !== undefined)
   return firstSpan >= 0 && !(firstSpan >= 1 && first.cells.slice(firstSpan).every(cell => cell.span === 'colspan'))
 }

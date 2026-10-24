@@ -4290,8 +4290,7 @@ class CarveRenderSession {
     const attrs = renderAttrs(cell.attrs)
     // A lone span marker is padded for readability. Every padding form is a
     // span, including `|< |`.
-    // `^` is not an alignment sigil and needs no disambiguation, but it takes the
-    // same shape so a row of span cells stays readable.
+    // Both span glyphs take the same padded shape.
     //
     // With a cell attribute the block stays GLUED to the pipe, which is where the
     // grammar puts it, and the space goes between it and the marker.
@@ -4301,7 +4300,6 @@ class CarveRenderSession {
     }
     const align = alignIsColonSpelled ? '' : alignMarker(cell.align)
     const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
-    const inheritedHorizontal = !align && valign ? '?' : ''
     // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
     // after the kind marker and after the alignment marker, so `|={.x} h |` is
     // an attributed header cell. Writing the block ahead of the markers instead
@@ -4314,9 +4312,11 @@ class CarveRenderSession {
       const content = cell.blocks === undefined
         ? this.renderInlines(cell.children ?? [], ctx)
         : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
-      const markerRun = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-      // A lone `<` would re-read as a colspan. It aligns no content here.
-      const prefix = markerRun === '<' && trimCellPadding(content) === '' ? '' : markerRun
+      const empty = trimCellPadding(content) === ''
+      const writtenAlign = empty && align === '<' ? '' : align
+      const writtenValign = empty && valign === '^' ? '' : valign
+      const writtenInherited = !writtenAlign && writtenValign ? '?' : ''
+      const prefix = `${cell.header && markHeader ? '=' : ''}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
       return padCell(prefix, escapeSpanMarkerPayload(content, prefix))
     } finally {
       ctx.tableCellDepth--
