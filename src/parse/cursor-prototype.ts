@@ -1195,7 +1195,8 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
   const table = firstText[0] === '|' && isTableRow(firstText)
   const list = listMarker(firstText)
   const attrs = firstText[0] === '{' && parseBlockAttributeRun(firstText)
-  if (!heading && !quote && !fence && !table && !list && !attrs) return undefined
+  const comment = LINE_COMMENT.test(firstText)
+  if (!heading && !quote && !fence && !table && !list && !attrs && !comment) return undefined
   const source = [first]
   const body: SourceLine[] = [{ text: firstText, start: first.start + firstIndent, number: first.number,
     baseColumn: (first.baseColumn ?? 1) + firstIndent }]
@@ -1232,6 +1233,33 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
       source.push(line)
       body.push({ text, start: line.start + firstIndent, number: line.number,
         baseColumn: (line.baseColumn ?? 1) + firstIndent })
+    }
+  } else if (comment) {
+    const opener = RE_COMMENT_BLOCK_ANY.exec(firstText)
+    if (opener) {
+      let closed = false
+      for (let offset = nextIndex + 1; cursor.peek(offset); offset++) {
+        const line = cursor.peek(offset)!
+        if (!line.text.startsWith(' '.repeat(firstIndent))) return undefined
+        const text = line.text.slice(firstIndent)
+        source.push(line)
+        body.push({ text, start: line.start + firstIndent, number: line.number,
+          baseColumn: (line.baseColumn ?? 1) + firstIndent })
+        if (RE_COMMENT_BLOCK_ANY.exec(text)?.[1]?.length === opener[1]!.length) {
+          closed = true
+          break
+        }
+      }
+      if (!closed) return undefined
+    }
+    const trailing = cursor.peek(nextIndex + source.length)
+    const afterTrailing = cursor.peek(nextIndex + source.length + 1)
+    if (trailing?.text.startsWith(' '.repeat(firstIndent)) &&
+        plainQuoteText(trailing.text.slice(firstIndent)) &&
+        (!afterTrailing || isBlankLine(afterTrailing.text))) {
+      source.push(trailing)
+      body.push({ text: trailing.text.slice(firstIndent), start: trailing.start + firstIndent,
+        number: trailing.number, baseColumn: (trailing.baseColumn ?? 1) + firstIndent })
     }
   }
   if (table) {

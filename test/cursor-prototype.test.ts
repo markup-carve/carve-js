@@ -501,6 +501,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['[^a]: intro\n  %% c\n  more\n\nsee[^a]\n',
+    '[^a]: intro\n  %%%\n  c\n  %%%\n  more\n\nsee[^a]\n'])
+  ('keeps a comment before a plain footnote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
