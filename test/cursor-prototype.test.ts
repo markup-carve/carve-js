@@ -52,8 +52,44 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['[^f]: note\n\nSee [^f].\n', '[^f]:   note\n', '[^f]: {empty}\n',
+    '[^__proto__]: note\n', '[^f]: a\n\n[^f]: b\n'])
+  ('keeps a one-line footnote definition in the document sidecar: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a multiline footnote until its body collector is migrated', () => {
+    expect(() => parseCursorPrototype('[^f]: note\n  more\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('[^f]: note\n\n  more\n')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [+] plain\n'])
+  ('preserves authored task list state: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['---\n', '***\n', '___\n'])('preserves thematic break spelling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('carries block attributes over an invisible comment and blank line', () => {
     const source = '{.chapter}{#first}\n\n%% note\n# Title\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('consumes a loose-list attribute before publishing the AST', () => {
+    const source = '{loose}\n1. Note text.\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['  text\n', '   # H\n', 'a\n  b\n', '  a\n  b\n'])
+  ('trims paragraph indentation without changing source positions: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a heading marker without text as a paragraph', () => {
+    const source = '#  \n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
@@ -87,6 +123,41 @@ describe('experimental block cursor', () => {
 
   it('continues the outer list item after a blank below a nested list', () => {
     const source = '- a\n  - b\n\n  c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps markers on a marker line in one nested list', () => {
+    const source = '- - A\n\n    second\n  - B\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- ```\n  a\n\n  b\n  ```\n',
+    '- ```\n  - x\n  ```\n',
+    '- a\n\n  b\n',
+  ])('keeps a list item body intact across its lines: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> [a]: /x\n\nSee [t][a].\n',
+    '- [a]: /x\n\nSee [t][a].\n',
+  ])('declines a nested reference definition until its prepass is migrated: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('parses nested blocks through the same cursor inside a quote', () => {
+    const source = '> # Heading\n>\n> - one\n> - two\n>\n> > nested quote\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- > quote\n',
+    '- ```\n  code\n  ```\n',
+    '- # Heading\n',
+    '- | a |\n  |---|\n  | b |\n',
+    '- first\n  > quote\n',
+  ])('parses a block inside a list item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

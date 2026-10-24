@@ -6,11 +6,11 @@ import { promoteBlockImages } from '../heading/heading-ids.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
 import { dropTrailingWhitespace } from './block/parse-block-boundaries.js'
-import { commentLineContent } from './block/parse-block-scan-core.js'
+import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ORDERED, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
 
 /**
  * An isolated block-cursor experiment. It deliberately fails on syntax that has
@@ -18,7 +18,7 @@ import { RE_ORDERED, parseBlockAttributeRun } from './parse-prepass-core.js'
  */
 export class UnsupportedCursorSyntax extends Error {}
 
-interface SourceLine { text: string; start: number; number: number }
+interface SourceLine { text: string; start: number; number: number; baseColumn?: number }
 
 class Cursor {
   at = 0
@@ -45,8 +45,8 @@ function position(first: SourceLine, last: SourceLine, firstColumn = 1, lastColu
   return {
     startLine: first.number,
     endLine: last.number,
-    startColumn: firstColumn,
-    endColumn: lastColumn,
+    startColumn: (first.baseColumn ?? 1) + firstColumn - 1,
+    endColumn: (last.baseColumn ?? 1) + lastColumn - 1,
     startOffset: first.start + firstColumn - 1,
     endOffset: last.start + lastColumn - 1,
   }
@@ -61,24 +61,26 @@ class CursorInline extends InlineParseSession {
     const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
     const first = parts[0]!
     const lineAnchors = parts.map((part) => {
-      const anchor = { offset: part.line.start + part.column - 1, column: part.column, line: part.line.number }
+      const anchor = { offset: part.line.start + part.column - 1,
+        column: (part.line.baseColumn ?? 1) + part.column - 1, line: part.line.number }
       return anchor
     })
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, {
       anchored: true,
       baseOffset: first.line.start + first.column - 1,
       startLine: first.line.number,
-      startColumn: first.column,
+      startColumn: (first.line.baseColumn ?? 1) + first.column - 1,
       ...(parts.length > 1 ? { lineAnchors } : {}),
     })
   }
 }
 
-const HEADING = /^(#{1,6}) +(.+)$/
+const HEADING = /^(#{1,6}) +(\S.*)$/
 const BULLET = /^( *)([-*]) +(.*)$/
 const FENCE = /^(`{3,}|~{3,})([A-Za-z0-9_-]+)?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
-const LINK_DEF = /^\[([^\]]+)\]: +(\S+)[ \t]*$/
+const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
+const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
 const ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 const LINE_COMMENT = /^[ \t]*%%/
 
@@ -105,7 +107,7 @@ function listMarker(line: string) {
 function isBlockStart(line: string): boolean {
   return HEADING.test(line) || FENCE.test(line) || BREAK.test(line) || !!listMarker(line) ||
     line.startsWith('>') || line.startsWith('|') || line.startsWith('::') ||
-    LINK_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
+    LINK_DEF.test(line) || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
 
@@ -168,11 +170,12 @@ function takeCaption(cursor: Cursor, inline: CursorInline):
   return { children: inline.inlines([{ line, column, text: match[1]! }]), line }
 }
 
-function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
-  firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
+function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
+  first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
     ordered: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
-    item?: ListItem; itemFirst?: SourceLine; contentColumn?: number; parts: ContentLine[] }
+    item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
+    fenceMarker: string | undefined; body: SourceLine[] }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -194,24 +197,48 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
     return { list, first: line, last: line, indent: marker.indent, ordered: marker.ordered,
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
-      ...(marker.bullet ? { bullet: marker.bullet } : {}), parts: [] }
+      ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined, body: [] }
   }
   const stack = [newFrame(first, firstMarker)]
   const flush = (frame: Frame) => {
-    if (!frame.item || !frame.itemFirst || !frame.parts.length) return
-    const firstPart = frame.parts[0]!
-    const lastPart = frame.parts.at(-1)!
-    const para: Paragraph = { type: 'paragraph', children: inline.inlines(frame.parts),
-      pos: position(firstPart.line, lastPart.line, firstPart.column) }
-    frame.item.children.push(para)
-    frame.parts = []
+    if (!frame.item || !frame.body.length) return
+    frame.item.children.push(...parseBlocks(new Cursor(frame.body), inline, definitionNodes, depth + 1, false))
+    frame.body = []
+  }
+  const appendBody = (frame: Frame, line: SourceLine, prefix: number) => {
+    const text = line.text.slice(prefix)
+    frame.body.push({ text, start: line.start + prefix, number: line.number,
+      baseColumn: (line.baseColumn ?? 1) + prefix })
+    if (frame.fenceMarker) {
+      if (closesFence(text, frame.fenceMarker)) frame.fenceMarker = undefined
+    } else {
+      const opener = FENCE.exec(text)
+      if (opener) frame.fenceMarker = opener[1]!
+    }
   }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
     const top = stack.at(-1)!
+    if (marker && top.fenceMarker && top.contentColumn !== undefined &&
+        line.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+      cursor.take()
+      appendBody(top, line, top.contentColumn - 1)
+      top.last = line
+      if (top.item && top.itemFirst) top.item.pos = position(top.itemFirst, line, top.indent + 1)
+      continue
+    }
     if (marker) {
       if (marker.indent < firstMarker.indent) break
+      if (marker.indent > top.indent && top.contentColumn !== undefined &&
+          top.body.length > 0 && listMarker(top.body[0]!.text) &&
+          line.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+        cursor.take()
+        appendBody(top, line, top.contentColumn - 1)
+        top.last = line
+        if (top.item && top.itemFirst) top.item.pos = position(top.itemFirst, line, top.indent + 1)
+        continue
+      }
       while (stack.length > 1 && marker.indent < stack.at(-1)!.indent) {
         const done = stack.pop()!
         flush(done)
@@ -231,11 +258,18 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
       flush(current)
       cursor.take()
       const item: ListItem = { type: 'list_item', children: [], pos: position(line, line, marker.indent + 1) }
+      const task = /^\[([ xX-])\] /.exec(marker.content)
+      if (task) {
+        item.checked = task[1]!.toLowerCase() === 'x'
+        if (task[1] === '-') item.taskState = '-'
+      }
       current.list.items.push(item)
       current.item = item
       current.itemFirst = line
       current.contentColumn = marker.width + 1
-      current.parts = [{ line, column: marker.width + 1, text: marker.content }]
+      current.body = []
+      current.fenceMarker = undefined
+      appendBody(current, line, marker.width + (task ? task[0].length : 0))
       for (const frame of stack) {
         frame.last = line
         if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)
@@ -246,6 +280,11 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
       const next = cursor.peek(blanks)
+      if (top.fenceMarker && next && top.contentColumn !== undefined &&
+          next.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+        for (let i = 0; i < blanks; i++) appendBody(top, cursor.take(), 0)
+        continue
+      }
       if (blanks >= 3 || !next) break
       const nextMarker = listMarker(next.text)
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
@@ -263,8 +302,14 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
           flush(done)
           done.list.pos = position(done.first, done.last, done.indent + 1)
         }
-        flush(continuationFrame)
-        continuationFrame.list.tight = false
+        for (let i = 0; i < blanks; i++) {
+          const blank = cursor.lines[cursor.at - blanks + i]!
+          appendBody(continuationFrame, blank, 0)
+        }
+        const firstNested = listMarker(continuationFrame.body[0]?.text ?? '')
+        const nestedContinuation = firstNested && continuationFrame.contentColumn !== undefined &&
+          next.text.startsWith(' '.repeat(continuationFrame.contentColumn - 1 + firstNested.width))
+        if (!nestedContinuation) continuationFrame.list.tight = false
       } else if (sibling) target.list.tight = false
       continue
     }
@@ -273,7 +318,7 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
     const prefix = ' '.repeat(contentColumn - 1)
     if (!line.text.startsWith(prefix)) break
     cursor.take()
-    top.parts.push({ line, column: contentColumn, text: line.text.slice(prefix.length) })
+    appendBody(top, line, prefix.length)
     for (const frame of stack) {
       frame.last = line
       if (frame.item && frame.itemFirst) frame.item.pos = position(frame.itemFirst, line, frame.indent + 1)
@@ -285,6 +330,173 @@ function parseList(cursor: Cursor, inline: CursorInline, first: SourceLine,
     frame.list.pos = position(frame.first, frame.last, frame.indent + 1)
   }
   return stack[0]!.list
+}
+
+function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
+  depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
+  footnoteDefPos?: Record<string, Position>): BlockNode[] {
+  if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
+  const children: BlockNode[] = []
+  let pendingAttrs: Attrs | null = null
+  const emit = (node: BlockNode) => {
+    if (node.type !== 'comment' && node.type !== 'abbreviation_def' && pendingAttrs) {
+      node.attrs = mergeAttrs(pendingAttrs, node.attrs ?? {})
+      pendingAttrs = null
+    }
+    consumeLooseKey(node)
+    children.push(node)
+  }
+  while (cursor.peek()) {
+    const first = cursor.peek()!
+    if (first.text === '') { cursor.take(); continue }
+    const attrs = first.text.startsWith('{') ? parseBlockAttributeRun(first.text) : null
+    if (attrs) {
+      cursor.take()
+      pendingAttrs = pendingAttrs ? mergeAttrs(pendingAttrs, attrs) : attrs
+      continue
+    }
+    const footnote = FOOTNOTE_DEF.exec(first.text)
+    if (footnote) {
+      let nextIndex = 1
+      while (cursor.peek(nextIndex)?.text === '') nextIndex++
+      const next = cursor.peek(nextIndex)?.text
+      if (!atDocumentLevel || !footnote[2] || next?.startsWith('  ') || next?.startsWith('\t')) {
+        throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
+      }
+      cursor.take()
+      const label = footnote[1]!
+      if (footnoteDefs && footnoteDefPos && !Object.hasOwn(footnoteDefs, label)) {
+        const column = first.text.length - footnote[2]!.length + 1
+        const body: Paragraph = { type: 'paragraph',
+          children: inline.inlines([{ line: first, column, text: footnote[2]! }]),
+          pos: position(first, first, column) }
+        Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] : [body],
+          enumerable: true, configurable: true, writable: true })
+        Object.defineProperty(footnoteDefPos, label, { value: position(first, first),
+          enumerable: true, configurable: true, writable: true })
+      }
+      continue
+    }
+    const definition = LINK_DEF.exec(first.text)
+    if (definition) {
+      if (!atDocumentLevel) throw new UnsupportedCursorSyntax('nested link definition')
+      cursor.take()
+      definitionNodes.push({ type: 'link_reference_definition', label: definition[1]!, href: definition[2]!,
+        pos: position(first, first) })
+      continue
+    }
+    const abbreviation = ABBR_DEF.exec(first.text)
+    if (abbreviation && atDocumentLevel) {
+      cursor.take()
+      emit({ type: 'abbreviation_def', abbr: abbreviation[1]!,
+        expansion: dropTrailingWhitespace(abbreviation[2]!), pos: position(first, first) })
+      continue
+    }
+    if (LINE_COMMENT.test(first.text)) {
+      if (first.text.trimStart().startsWith('%%%')) throw new UnsupportedCursorSyntax('block comment')
+      cursor.take()
+      emit({ type: 'comment', block: false, content: commentLineContent(first.text),
+        pos: position(first, first) })
+      continue
+    }
+    const heading = HEADING.exec(first.text)
+    if (heading) {
+      cursor.take()
+      const column = /^#{1,6} +/.exec(first.text)![0].length + 1
+      emit({ type: 'heading', level: heading[1]!.length as HeadingLevel,
+        children: inline.inlines([{ line: first, column, text: first.text.slice(column - 1) }]),
+        pos: position(first, first) })
+      continue
+    }
+    if (BREAK.test(first.text)) {
+      cursor.take()
+      emit({ type: 'thematic_break',
+        ...(first.text[0] === '-' ? {} : { marker: first.text[0] as '*' | '_' }),
+        pos: position(first, first) })
+      continue
+    }
+    const fence = FENCE.exec(first.text)
+    if (fence) {
+      cursor.take()
+      const payload: string[] = []
+      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence[1]!)) payload.push(cursor.take().text)
+      if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed fence')
+      const close = cursor.take()
+      const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
+        ...(fence[2] ? { lang: fence[2] } : {}),
+        pos: position(first, close) }
+      const caption = takeCaption(cursor, inline)
+      emit(caption ? { type: 'figure', target: block, caption: caption.children,
+        pos: position(first, caption.line) } : block)
+      continue
+    }
+    if (first.text.startsWith('>')) {
+      const body: SourceLine[] = []
+      let last = first
+      while (cursor.peek()?.text.startsWith('>')) {
+        const line = cursor.take()
+        const prefix = line.text.startsWith('> ') ? 2 : 1
+        body.push({ text: line.text.slice(prefix), start: line.start + prefix,
+          number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
+        last = line
+      }
+      const quote: BlockQuote = { type: 'block_quote',
+        children: parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false), pos: position(first, last) }
+      const caption = takeCaption(cursor, inline)
+      emit(caption ? { type: 'figure', target: quote, caption: caption.children,
+        pos: position(first, caption.line) } : quote)
+      continue
+    }
+    if (first.text.startsWith('|')) {
+      if (!cursor.peek(1)?.text.startsWith('|')) throw new UnsupportedCursorSyntax('table header')
+      const table = parseSimpleTable(cursor, inline)
+      const caption = takeCaption(cursor, inline)
+      if (caption) {
+        table.caption = caption.children
+        table.pos = position(first, caption.line)
+      }
+      emit(table)
+      continue
+    }
+    const firstMarker = listMarker(first.text)
+    if (firstMarker) {
+      emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
+      continue
+    }
+    if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)
+    const parts: ContentLine[] = []
+    let last = first
+    while (cursor.peek() && cursor.peek()!.text !== '' && (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
+      if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
+        const lead = inline.inlines(parts)
+        if (lead.length === 1 && lead[0]?.type === 'image' &&
+            lead[0].pos?.startOffset === parts[0]!.line.start &&
+            lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
+      }
+      const line = cursor.take()
+      const column = /^[ \t]*/.exec(line.text)![0].length + 1
+      parts.push({ line, column, text: line.text.slice(column - 1) })
+      last = line
+    }
+    const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
+      pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
+    if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
+      const caption = takeCaption(cursor, inline)
+      if (caption) {
+        emit({ type: 'figure', target: paragraph.children[0],
+          caption: caption.children, pos: position(first, caption.line) })
+        continue
+      }
+      const image = paragraph.children[0]
+      if (!image.ref && image.pos?.startColumn === 1 &&
+          image.pos.endColumn === first.text.length + 1) {
+        emit(image)
+        continue
+      }
+    }
+    emit(paragraph)
+  }
+  return children
 }
 
 export function parseCursorPrototype(source: string): Document {
@@ -309,148 +521,25 @@ export function parseCursorPrototype(source: string): Document {
     if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
   }
   const inline = new CursorInline(linkDefinitions, abbreviations)
-  const children: BlockNode[] = []
   const definitionNodes: BlockNode[] = []
-  let pendingAttrs: Attrs | null = null
-  const emit = (node: BlockNode) => {
-    if (node.type !== 'comment' && node.type !== 'abbreviation_def' && pendingAttrs) {
-      node.attrs = mergeAttrs(pendingAttrs, node.attrs ?? {})
-      pendingAttrs = null
-    }
-    children.push(node)
-  }
-  const document: Document = { type: 'document', children, srcByteLength: utf8ByteLength(source) }
+  const footnoteDefs: Record<string, BlockNode[]> = {}
+  const footnoteDefPos: Record<string, Position> = {}
+  let frontmatter: Document['frontmatter']
   if (cursor.peek()?.text === '---yaml') {
     const open = cursor.take()
     const contents: string[] = []
     while (cursor.peek() && cursor.peek()!.text !== '---') contents.push(cursor.take().text)
     if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed frontmatter')
     const close = cursor.take()
-    document.frontmatter = { format: 'yaml', content: contents.join('\n'), pos: position(open, close) }
+    frontmatter = { format: 'yaml', content: contents.join('\n'), pos: position(open, close) }
   }
-  while (cursor.peek()) {
-    const first = cursor.peek()!
-    if (first.text === '') { cursor.take(); continue }
-    const attrs = first.text.startsWith('{') ? parseBlockAttributeRun(first.text) : null
-    if (attrs) {
-      cursor.take()
-      pendingAttrs = pendingAttrs ? mergeAttrs(pendingAttrs, attrs) : attrs
-      continue
-    }
-    const definition = LINK_DEF.exec(first.text)
-    if (definition) {
-      cursor.take()
-      definitionNodes.push({ type: 'link_reference_definition', label: definition[1]!, href: definition[2]!,
-        pos: position(first, first) })
-      continue
-    }
-    const abbreviation = ABBR_DEF.exec(first.text)
-    if (abbreviation) {
-      cursor.take()
-      emit({ type: 'abbreviation_def', abbr: abbreviation[1]!,
-        expansion: dropTrailingWhitespace(abbreviation[2]!), pos: position(first, first) })
-      continue
-    }
-    if (LINE_COMMENT.test(first.text)) {
-      if (first.text.trimStart().startsWith('%%%')) throw new UnsupportedCursorSyntax('block comment')
-      cursor.take()
-      emit({ type: 'comment', block: false, content: commentLineContent(first.text),
-        pos: position(first, first) })
-      continue
-    }
-    const heading = HEADING.exec(first.text)
-    if (heading) {
-      cursor.take()
-      const column = /^#{1,6} +/.exec(first.text)![0].length + 1
-      emit({ type: 'heading', level: heading[1]!.length as HeadingLevel,
-        children: inline.inlines([{ line: first, column, text: first.text.slice(column - 1) }]),
-        pos: position(first, first) })
-      continue
-    }
-    if (BREAK.test(first.text)) {
-      cursor.take()
-      emit({ type: 'thematic_break', pos: position(first, first) })
-      continue
-    }
-    const fence = FENCE.exec(first.text)
-    if (fence) {
-      cursor.take()
-      const payload: string[] = []
-      while (cursor.peek() && !closesFence(cursor.peek()!.text, fence[1]!)) payload.push(cursor.take().text)
-      if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed fence')
-      const close = cursor.take()
-      const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
-        ...(fence[2] ? { lang: fence[2] } : {}),
-        pos: position(first, close) }
-      const caption = takeCaption(cursor, inline)
-      emit(caption ? { type: 'figure', target: block, caption: caption.children,
-        pos: position(first, caption.line) } : block)
-      continue
-    }
-    if (first.text.startsWith('>')) {
-      const parts: ContentLine[] = []
-      let last = first
-      while (cursor.peek()?.text.startsWith('>')) {
-        const line = cursor.take()
-        const column = line.text.startsWith('> ') ? 3 : 2
-        parts.push({ line, column, text: line.text.slice(column - 1) })
-        last = line
-      }
-      const para: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
-        pos: position(first, last, parts[0]!.column) }
-      const quote: BlockQuote = { type: 'block_quote', children: [para], pos: position(first, last) }
-      const caption = takeCaption(cursor, inline)
-      emit(caption ? { type: 'figure', target: quote, caption: caption.children,
-        pos: position(first, caption.line) } : quote)
-      continue
-    }
-    if (first.text.startsWith('|')) {
-      if (!cursor.peek(1)?.text.startsWith('|')) throw new UnsupportedCursorSyntax('table header')
-      const table = parseSimpleTable(cursor, inline)
-      const caption = takeCaption(cursor, inline)
-      if (caption) {
-        table.caption = caption.children
-        table.pos = position(first, caption.line)
-      }
-      emit(table)
-      continue
-    }
-    const firstMarker = listMarker(first.text)
-    if (firstMarker) {
-      emit(parseList(cursor, inline, first, firstMarker))
-      continue
-    }
-    if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)
-    const parts: ContentLine[] = []
-    let last = first
-    while (cursor.peek() && cursor.peek()!.text !== '' && (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
-      if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
-        const lead = inline.inlines(parts)
-        if (lead.length === 1 && lead[0]?.type === 'image' &&
-            lead[0].pos?.startOffset === parts[0]!.line.start &&
-            lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
-      }
-      const line = cursor.take()
-      parts.push({ line, column: 1, text: line.text })
-      last = line
-    }
-    const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts), pos: position(first, last) }
-    if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
-      const caption = takeCaption(cursor, inline)
-      if (caption) {
-        emit({ type: 'figure', target: paragraph.children[0],
-          caption: caption.children, pos: position(first, caption.line) })
-        continue
-      }
-      const image = paragraph.children[0]
-      if (!image.ref && image.pos?.startColumn === 1 &&
-          image.pos.endColumn === first.text.length + 1) {
-        emit(image)
-        continue
-      }
-    }
-    emit(paragraph)
+  const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos)
+  const document: Document = { type: 'document', children, srcByteLength: utf8ByteLength(source) }
+  if (Object.keys(footnoteDefs).length) {
+    document.footnoteDefs = footnoteDefs
+    document.footnoteDefPos = footnoteDefPos
   }
+  if (frontmatter) document.frontmatter = frontmatter
   children.push(...definitionNodes)
   toCodepointPositions(document, source)
   promoteBlockImages(children, true)
