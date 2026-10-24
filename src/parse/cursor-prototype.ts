@@ -243,7 +243,7 @@ function isBlockStart(line: string): boolean {
     ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
     RE_RAW_FENCE.test(line) ||
     BREAK.test(line) || !!listMarker(line) ||
-    RE_BLOCKQUOTE.test(line) || isTableRow(line) || line.startsWith('::') ||
+    RE_BLOCKQUOTE.test(line) || (line[0] === '|' && isTableRow(line)) || line.startsWith('::') ||
     rootLinkDef(line) !== null || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
     (line.startsWith('{') && parseBlockAttributeRun(line) !== null)
 }
@@ -1193,7 +1193,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         pos: position(first, caption.line) } : quote)
       continue
     }
-    if (isTableRow(first.text)) {
+    if (first.text[0] === '|' && isTableRow(first.text)) {
       const table = parseTableAtCursor(cursor, inline)
       const caption = takeCaption(cursor, inline)
       if (caption) {
