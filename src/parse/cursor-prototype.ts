@@ -252,6 +252,25 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const line = cursor.peek()!
     const marker = listMarker(line.text)
     const top = stack.at(-1)!
+    if (line.text === '+' && top.item) {
+      if (depth !== 0 || top.indent !== 0 || top.fenceMarker) {
+        throw new UnsupportedCursorSyntax('nested list continuation')
+      }
+      const next = cursor.peek(1)
+      const after = cursor.peek(2)
+      if (!next || next.text === '' || next.text[0] === ' ' || next.text[0] === '\t' ||
+          isBlockStart(next.text) ||
+          (after && after.text !== '' && !listMarker(after.text))) {
+        throw new UnsupportedCursorSyntax('multiline list continuation')
+      }
+      cursor.take()
+      flush(top)
+      cursor.take()
+      appendBody(top, next, 0)
+      top.last = next
+      if (top.itemFirst) top.item.pos = position(top.itemFirst, next, top.indent + 1)
+      continue
+    }
     if (marker && top.fenceMarker && top.contentColumn !== undefined &&
         line.text.startsWith(' '.repeat(top.contentColumn - 1))) {
       cursor.take()
@@ -341,7 +360,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         const firstNested = listMarker(continuationFrame.body[0]?.text ?? '')
         const nestedContinuation = firstNested && continuationFrame.contentColumn !== undefined &&
           next.text.startsWith(' '.repeat(continuationFrame.contentColumn - 1 + firstNested.width))
-        if (!nestedContinuation) continuationFrame.list.tight = false
+        const prefixLength = continuationFrame.contentColumn! - 1
+        let lookahead = 0
+        let blockText = next.text.slice(prefixLength)
+        while (parseBlockAttributeRun(blockText)) {
+          lookahead++
+          const following = cursor.peek(lookahead)
+          if (!following?.text.startsWith(' '.repeat(prefixLength))) break
+          blockText = following.text.slice(prefixLength)
+        }
+        if (!nestedContinuation && !isBlockStart(blockText)) continuationFrame.list.tight = false
       } else if (sibling) target.list.tight = false
       continue
     }

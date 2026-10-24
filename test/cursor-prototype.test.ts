@@ -136,11 +136,27 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n+\nc\n- b\n', '1. a\n+\nc\n2. b\n'])
+  ('attaches a single paragraph after a root list continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a plus that precedes an indented line', () => {
+    expect(() => parseCursorPrototype('- a\n+\n  c\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- ```\n  a\n\n  b\n  ```\n',
     '- ```\n  - x\n  ```\n',
     '- a\n\n  b\n',
   ])('keeps a list item body intact across its lines: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n\n  > q\n', '- a\n\n  # H\n',
+    '- a\n\n  b\n', '- > a\n\n  > b\n',
+    '- a\n\n  {.x}\n  b\n', '- a\n\n  {.x}\n  # H\n'])
+  ('classifies a blank before a new item block: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
