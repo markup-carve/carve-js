@@ -2512,6 +2512,8 @@ function collectSilentFailures(
     if (!isTableRow(row)) continue
     const { body } = rowAttrsFromLine(row)
     for (const { text, start } of splitTableRowSpans(body)) {
+      // A whole-cell ^ or < is a span marker (T4), not a marker run (T11).
+      if (/^[ \t]*[<^][ \t]*$/.test(text)) continue
       // The run's terminator is a space, and the attribute block is INSIDE the
       // run rather than after it (§5 T11) - so `|>{#x}value |` is as unpadded as
       // `|>value |` is, and reporting only the second left the first silent.
