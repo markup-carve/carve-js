@@ -83,6 +83,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('treats an unterminated triple-percent opener as a line comment', () => {
+    const source = 'before\n\n%%%\nsecret\n\nafter\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(() => parseCursorPrototype('- x\n%%%%\ny\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['[^f]: note\n\nSee [^f].\n', '[^f]:   note\n', '[^f]: {empty}\n',
     '[^__proto__]: note\n', '[^f]: a\n\n[^f]: b\n'])
   ('keeps a one-line footnote definition in the document sidecar: %s', (source) => {

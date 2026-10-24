@@ -593,7 +593,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       }
     }
     if (LINE_COMMENT.test(first.text)) {
-      if (first.text.trimStart().startsWith('%%%')) throw new UnsupportedCursorSyntax('block comment')
+      if ((!atDocumentLevel || children.at(-1)?.type === 'list') &&
+          first.text.trimStart().startsWith('%%%')) {
+        throw new UnsupportedCursorSyntax('nested degraded block comment')
+      }
       cursor.take()
       emit({ type: 'comment', block: false, content: commentLineContent(first.text),
         pos: position(first, first) })
