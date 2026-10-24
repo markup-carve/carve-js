@@ -162,6 +162,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['# \u00a0 Title\n', '# \u00a0 ab\n\n[ab][]\n',
+    '#   Heading\n', '# Title {#id}\n'])
+  ('uses the canonical heading opener and content boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     'a. apple\nb. banana\n',
     'iii. three\niv. four\n',

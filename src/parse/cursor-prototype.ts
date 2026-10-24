@@ -14,7 +14,7 @@ import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_FENCE, RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_FENCE, RE_HEADING, RE_ORDERED, consumeLooseKey, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer } from './parse-lexer.js'
 import { parseTableBlock } from './parse-core.js'
 
@@ -117,7 +117,6 @@ class CursorInline extends InlineParseSession {
   }
 }
 
-const HEADING = /^(#{1,6}) +(\S.*)$/
 const BULLET = /^( *)([-*]) +(.*)$/
 function fenceOpen(line: string) {
   if (line[0] !== '`' && line[0] !== '~') return null
@@ -183,7 +182,8 @@ function listMarker(line: string) {
 }
 
 function isBlockStart(line: string): boolean {
-  return HEADING.test(line) || ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
+  return (line[0] === '#' && RE_HEADING.test(line)) ||
+    ((line[0] === '`' || line[0] === '~') && RE_FENCE.test(line)) ||
     BREAK.test(line) || !!listMarker(line) ||
     line.startsWith('>') || line.startsWith('|') || line.startsWith('::') ||
     LINK_DEF.test(line) || FOOTNOTE_DEF.test(line) || ABBR_DEF.test(line) || LINE_COMMENT.test(line) ||
@@ -208,7 +208,7 @@ function listContinuationPrefix(line: string, base: number): number {
   let column = base
   while (line[column] === ' ') column++
   const block = line.slice(column)
-  return column > base && (block.startsWith('>') || HEADING.test(block)) ? column : base
+  return column > base && (block.startsWith('>') || RE_HEADING.test(block)) ? column : base
 }
 
 function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number): number {
@@ -729,12 +729,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         pos: position(first, first) })
       continue
     }
-    const heading = HEADING.exec(first.text)
+    const heading = first.text[0] === '#' ? RE_HEADING.exec(first.text) : null
     if (heading) {
       cursor.take()
       const column = /^#{1,6} +/.exec(first.text)![0].length + 1
       emit({ type: 'heading', level: heading[1]!.length as HeadingLevel,
-        children: inline.inlines([{ line: first, column, text: first.text.slice(column - 1) }]),
+        children: inline.inlines([{ line: first, column,
+          text: heading[3] ? first.text.slice(column - 1) : heading[2]! }]),
         pos: position(first, first) })
       continue
     }
