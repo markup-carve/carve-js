@@ -443,7 +443,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         throw new UnsupportedCursorSyntax('shifted fence continuation')
       }
       bodyPrefix = top.fencePrefix
-    } else if (!top.fenceMarker && stack.length === 1 && !listMarker(top.body[0]?.text ?? '')) {
+    } else if (!top.fenceMarker && line.text[bodyPrefix] === ' ' && stack.length === 1 &&
+        !listMarker(top.body[0]?.text ?? '')) {
       bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix)
     }
     cursor.take()
