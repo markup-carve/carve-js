@@ -136,6 +136,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '|{.highlight} Total | 99 |\n|---|---|\n| a | b |\n',
+    '| Name | Score |{.head}\n|------|-------|\n| Ann | 9 |{.win}\n',
+  ])('uses the canonical table reader for authored cell or row attributes: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('ends heading, list and quote spans before trailing spaces', () => {
     const source = '# Title \n\n- item \n\n> quoted \n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

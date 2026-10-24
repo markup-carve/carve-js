@@ -426,12 +426,12 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   const gfm = second?.startsWith('|') && /^\|(?: *:?-{3,}:? *\|)+$/.test(second)
   if (gfm) {
     let row = 0
-    let hasSpanMarker = false
+    let needsCanonicalReader = false
     while (cursor.peek(row)?.text.startsWith('|')) {
-      hasSpanMarker ||= /\|[ \t]*[<^][ \t]*\|/.test(cursor.peek(row)!.text)
+      needsCanonicalReader ||= /\|[ \t]*[<^][ \t]*\||\|[ \t]*\{/.test(cursor.peek(row)!.text)
       row++
     }
-    return hasSpanMarker ? parseCanonicalTableWithExistingRules(cursor, inline) :
+    return needsCanonicalReader ? parseCanonicalTableWithExistingRules(cursor, inline) :
       parseSimpleTable(cursor, inline)
   }
   const headed = first.text.startsWith('|=')
