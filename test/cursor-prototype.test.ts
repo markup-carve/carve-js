@@ -276,6 +276,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n: > quote\n', ':: t\n: # Heading\n',
+    ':: t\n: - item\n'])
+  ('parses a one-line block in a definition body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([':: term\n: A definition wrapped\nonto the next line.\n',
     ':: term\n: a\n  continuation\n'])
   ('keeps one plain wrapped definition paragraph: %s', (source) => {

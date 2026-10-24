@@ -432,7 +432,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): Defini
       current.termSpans.push(position(line, line))
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
-      if (isBlockStart(definition[1]!)) throw new UnsupportedCursorSyntax('definition block body')
+      const blockBody = isBlockStart(definition[1]!)
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
       if (cursor.at < end && !/^(?:::|:) +\S/.test(cursor.peek()!.text)) {
@@ -442,9 +442,14 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline): Defini
           text: follower.text.slice(followerColumn - 1) })
         definitionLast = follower
       }
-      current.definitions.push([{ type: 'paragraph',
-        children: inline.inlines(parts),
-        pos: position(line, definitionLast, column) }])
+      if (blockBody && parts.length > 1) throw new UnsupportedCursorSyntax('definition block body')
+      const blocks = blockBody ? parseBlocks(new Cursor([{
+        text: definition[1]!, start: line.start + column - 1,
+        number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1,
+      }], undefined, childOwner(cursor.owner, 'colon')), inline, [], 1, false) :
+        [{ type: 'paragraph' as const, children: inline.inlines(parts),
+          pos: position(line, definitionLast, column) }]
+      current.definitions.push(blocks)
       current.definitionLines.push(line.number)
       current.definitionSpans.push(position(line, line))
       last = definitionLast
