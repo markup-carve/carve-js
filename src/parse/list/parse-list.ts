@@ -153,8 +153,376 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     return { markerSource, plusColumn, listPlusOwner, listPlusReason, blankBeforeNestedContinuation }
   }
 
+  type ListShape = ReturnType<typeof classifyList>
+
+  /** The marker line that opens one item, read before any of its body is. */
+  interface ItemHead {
+    startLineIndex: number
+    line: string
+    terminatorFree: boolean
+    attr: ReturnType<typeof extractItemAttr>
+    markerLine: string
+    content: string
+    markerContentLength: number
+    checked: boolean | undefined
+    taskState: TaskState | undefined
+    leadOrigin: StrippedLineOrigin | undefined
+  }
+
+  /** Where an item sits in its source, measured once its marker line is read. */
+  interface ItemPlacement {
+    contentCol: number
+    itemSource: string
+    itemMarkerColumn: number
+    physicalItemMarkerColumn: number
+    itemQuoteDepth: number
+  }
+
+  type AttachBoundary = (line: string) => boolean
+
+  type FirstBlockOutcome =
+    | { kind: 'none' }
+    | { kind: 'refused' }
+    | { kind: 'item'; item: ListItem; next: 'continue' | 'loose' | 'end' }
+
+  /** Is `line` a marker that continues this list at its base column (§11)? */
+  function isSiblingMarker(shape: ListShape, line: string): boolean {
+    return indentColumns(line, shape.baseIndent + 1) === shape.baseIndent &&
+      matchListMarker(line, shape.isTask, shape.isOrdered) !== null &&
+      (shape.isOrdered
+        ? orderedContinues(line, shape.orderedKind, shape.orderedDelim)
+        : unorderedMarkerChar(line) === shape.firstMarkerChar)
+  }
+
+  function markItem(item: ListItem, head: ItemHead): ListItem {
+    if (head.checked !== undefined) item.checked = head.checked
+    if (head.taskState !== undefined) item.taskState = head.taskState
+    if (head.attr?.attrs) item.attrs = head.attr.attrs
+    return item
+  }
+
+  /** Reads the marker line of the next item, or null where the list ends. */
+  function readItemHead(lexer: Lexer, shape: ListShape): ItemHead | null {
+    const { baseIndent, isTask, isOrdered } = shape
+    const startLineIndex = lexer.pos
+    const line = lexer.peek()!
+    // Blank lines between siblings are handled by the per-item collector
+    // below; a stray leading blank just ends the list.
+    if (isBlankLine(line)) return null
+    if (indentColumns(line, baseIndent + 1) !== baseIndent) return null
+    // Strip an abutting `{...}` attribute block off the marker so the bare
+    // marker regexes match; remember its attributes to attach to the <li>.
+    const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
+    const attr = extractItemAttr(line, terminatorFree)
+    const markerLine = attr ? (attr.markerLine ?? attr.stripped) : line
+    const m = matchListMarker(markerLine, isTask, isOrdered, terminatorFree)
+    if (!m) return null
+    // §11: a sibling with a different marker character (unordered) or a
+    // different delimiter (ordered) is a new list.
+    if (!isOrdered && unorderedMarkerChar(markerLine) !== shape.firstMarkerChar) return null
+    if (isOrdered && !orderedContinues(markerLine, shape.orderedKind, shape.orderedDelim, terminatorFree)) return null
+
+    let content: string
+    let checked: boolean | undefined
+    let taskState: TaskState | undefined
+    if (isTask) {
+      checked = m[2]!.toLowerCase() === 'x'
+      taskState = authoredTaskState(m[2]!, checked)
+      content = m[3]!
+    } else if (isOrdered) {
+      content = m[4]!
+    } else {
+      content = m[2]!
+    }
+    const markerContentLength = content.length
+    if (attr?.contentOffset !== undefined && attr.headWidth !== undefined) {
+      content = line.slice(attr.contentOffset + markerLine.length - markerContentLength - attr.headWidth)
+    }
+    const leadOrigin = terminatorFree ? { text: content, parentIndex: startLineIndex, prefix: line.length - content.length } : undefined
+    return { startLineIndex, line, terminatorFree, attr, markerLine, content, markerContentLength, checked, taskState, leadOrigin }
+  }
+
+  // A plain lead followed immediately by a compatible sibling has no
+  // continuation lines to collect. Parse its one-line body as an ordinary
+  // nested block stream, while the next loop iteration owns the sibling.
+  function oneLineItem(lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead): ListItem | null {
+    const { content, startLineIndex: itemStartLineIndex, leadOrigin } = head
+    const nextLine = lexer.peek(1)
+    if (!((!session.recordPositions || leadOrigin !== undefined) && session.activeMatchers.length === 0 && !head.attr &&
+        content.length > 0 && !RE_FIRST_BLOCK_MARKER.test(content) &&
+        nextLine !== undefined && isSiblingMarker(shape, nextLine))) return null
+    lexer.consume()
+    const simpleParagraph = /^\p{L}/u.test(content) && !lineOpensBlock(content)
+    if (!session.recordPositions && simpleParagraph) {
+      return markItem({ type: 'list_item', children: [session.parseSimpleListParagraph(content, lexer)] }, head)
+    }
+    const origins = session.recordPositions && leadOrigin
+      ? new Map<number, StrippedLineOrigin>([[0, leadOrigin]]) : undefined
+    const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)], origins)
+    if (session.recordPositions) {
+      sub.markerOpensSublist = true
+      sub.hostBody = 'list'
+      sub.hostMarkerColumn = sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? head.line)
+    }
+    if (session.recordPositions && simpleParagraph) {
+      const paragraph = session.parseSimpleListParagraph(content, sub)
+      attachBlockPos(sub, paragraph, 0, 1)
+      const item: ListItem = { type: 'list_item', children: [paragraph] }
+      attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
+      return markItem(item, head)
+    }
+    const item: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
+    if (session.recordPositions) attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
+    return markItem(item, head)
+  }
+
+  // item (continuation paragraphs or nested lists). Visual content column:
+  // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
+  // `{...}` block is item metadata and contributes zero, so changing a class
+  // or Unicode value cannot restructure the body (carve#1701, carve#1698). The leading
+  // whitespace may be a tab, so it is measured in columns (baseIndent) rather
+  // than characters. For a TASK item the
+  // checkbox is content, not marker, so the content column is the bullet
+  // width (`- `/`* ` = 2) -- not the full
+  // `- [x] ` width (matching the spec's task attribute/continuation
+  // convention `- [x] x` / `  {.c}`).
+  function placeItem(lexer: Lexer, shape: ListShape, head: ItemHead): ItemPlacement {
+    const { baseIndent } = shape
+    const contentCol = shape.isTask
+      ? baseIndent + 2
+      : baseIndent + (head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength)
+    const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(head.startLineIndex) - 1] ?? head.line
+    const itemMarkerColumn = sourceColumn(itemSource)
+    const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.lineStartColumn(head.startLineIndex) - 1 + baseIndent)
+    const itemQuoteDepth = quotePrefixDepth(itemSource)
+    return { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth }
+  }
+
+  // A top-level item with only indented prose before its next sibling has
+  // no container decision to make. Parse that body once as a paragraph.
+  function wrappedParagraphItem(
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
+  ): ListItem | null {
+    const { content } = head
+    const { contentCol } = placement
+    if (!(!session.recordPositions && session.activeMatchers.length === 0 && !head.attr && !shape.isTask &&
+        shape.baseIndent === 0 && placement.itemQuoteDepth === 0 && content.length > 0 &&
+        !RE_FIRST_BLOCK_MARKER.test(content) && /^\p{L}/u.test(content) &&
+        !lineOpensBlock(content))) return null
+    const wrapped: string[] = []
+    let offset = 0
+    while (true) {
+      const candidate = lexer.peek(offset)
+      if (candidate === undefined || isBlankLine(candidate) ||
+          indentColumns(candidate, contentCol) < contentCol) break
+      const body = sliceColumns(candidate, contentCol, true)
+      if (leadingWhitespace(body) !== 0 || !/^\p{L}/u.test(body) ||
+          lineOpensBlock(body)) break
+      wrapped.push(body)
+      offset++
+    }
+    const follower = lexer.peek(offset)
+    if (wrapped.length === 0 || (follower !== undefined && !isSiblingMarker(shape, follower))) return null
+    for (let index = 0; index < wrapped.length; index++) lexer.consume()
+    return { type: 'list_item', children: [session.parseSimpleListParagraph(
+      [content, ...wrapped].join('\n'), lexer,
+    )] }
+  }
+
+  /** An item whose first block is attached by a `+` on the marker line, or stacked behind a quote marker. */
+  function firstBlockItem(
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
+    isItemAttachBoundary: AttachBoundary, firstItemAttachBoundary: AttachBoundary,
+  ): FirstBlockOutcome {
+    const { content, line, startLineIndex: itemStartLineIndex } = head
+    const { itemSource, itemMarkerColumn, itemQuoteDepth } = placement
+    const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
+    const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+    const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
+    const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
+      (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
+        isStackedFirstBlockQuoteMarker(itemSource) &&
+          stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
+        isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
+          sourceColumn(firstBlockSource, 0) === 0) &&
+      !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
+    if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
+        isStackedFirstBlockQuoteMarker(itemSource)) &&
+        !firstItemAttachBoundary(lexer.peek()!)) {
+      return stackedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
+    }
+    if (!firstBlockMarker) return { kind: 'none' }
+    if (!firstBlockEligible || firstItemAttachBoundary(lexer.peek()!)) {
+      const reason: RefusedContinuationMarker['reason'] = firstBlockSource === undefined ? 'document'
+        : isBlankLine(firstBlockSource) ? 'blank'
+          : isListMarkerLine((lexer.peek() ?? '').trimStart()) ? 'sibling'
+            : firstBlockColumn > itemMarkerColumn ? 'right' : 'left'
+      lexer.reportRefusedContinuationMarker(itemStartLineIndex,
+        lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', reason, true)
+      return { kind: 'refused' }
+    }
+    lexer.reportRefusedContinuationMarker(itemStartLineIndex,
+      lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', undefined, true)
+    return attachedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
+  }
+
+  function stackedFirstBlockItem(
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead,
+    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
+  ): FirstBlockOutcome {
+    const itemStartLineIndex = head.startLineIndex
+    const attached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, shape.baseIndent, false, firstBlockColumn, itemQuoteDepth)
+    const lines = [head.content, ...attached.lines]
+    const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
+    const sub = nestedSubLexer(lexer, lines, itemStartLineIndex, numbers)
+    const stackedItem: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
+    attachBlockPos(lexer, stackedItem, itemStartLineIndex, lexer.pos)
+    markItem(stackedItem, head)
+    let blanks = 0
+    while (isBlankLine(lexer.peek(blanks))) blanks++
+    const sibling = lexer.peek(blanks)
+    if (blanks === 0 || sibling === undefined || !isSiblingMarker(shape, sibling)) {
+      return { kind: 'item', item: stackedItem, next: 'continue' }
+    }
+    for (let k = 0; k < blanks; k++) lexer.consume()
+    return { kind: 'item', item: stackedItem, next: blanks >= 3 ? 'end' : 'loose' }
+  }
+
+  // The attached block is a block: a boundary line inside a fence it opened
+  // is that fence's body, not a boundary (see the indented loop's note on
+  // carve#975 and corpus category 279). Without this the opener came out an
+  // EMPTY code block and the closer an inline code span, which is the same
+  // damage category 278 pins one level in.
+  function attachedFirstBlockItem(
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead,
+    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
+  ): FirstBlockOutcome {
+    const { baseIndent } = shape
+    const {
+      lines: attached,
+      lineNumbers: attachedLineNumbers,
+      startLineIndex: attachedStartLineIndex,
+    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
+    // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
+    // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
+    // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
+    // as soon as it had ONE block, so the second marker was left at the top
+    // level and rendered as a paragraph of its own - `<p>+</p>` on the page,
+    // with the block it was written for outside the item (§17 L3, corpus
+    // 327-…-that-block-s-extent-7).
+    //
+    // The blank between two attached blocks is a SEPARATOR, not a loosener:
+    // the author wrote no blank line, so the item stays tight, which is the
+    // same carve-out `plusSeparators` makes in the indented body.
+    while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
+      const plusLineIndex = lexer.pos
+      lexer.consume()
+      lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
+      const more = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
+      // An empty result is the column gate's refusal as well as an exhausted
+      // boundary set, and a second marker that attaches nothing ends the run
+      // either way (markup-carve/carve#1814).
+      if (more.lines.length === 0) break
+      attached.push('')
+      attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
+      attached.push(...more.lines)
+      attachedLineNumbers.push(...more.lineNumbers)
+    }
+    const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
+    const fbChildren = session.parseBlocks(sub, 0)
+    const fbItem: ListItem = { type: 'list_item', children: fbChildren }
+    attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
+    markItem(fbItem, head)
+    return { kind: 'item', item: fbItem, next: 'continue' }
+  }
+
+  function leadLazyState(
+    lexer: Lexer, session: ParseSession, content: string, itemStartLineIndex: number, markerLineTerm: boolean,
+  ): { leadState: ReturnType<typeof markerLineState>; lazyState: ItemLazyState } {
+    // Track whether the item's collected content currently ends in an open
+    // paragraph (family-D lazy continuation). The lead text opens one.
+    // ONE WALK for the three questions the lead line answers.
+    // At EOF no following line can consult the item's continuation state.
+    // Descendants parse the marker content themselves; walking their prefixes
+    // here repeats the same classification once per enclosing item.
+    const noFollower = lexer.eof() || (lexer.peek() === '' && lexer.peek(1) === undefined)
+    const leadState = noFollower ? {
+      leavesParagraphOpen: false,
+      endsOnTableRow: false,
+      bottomIsContinuationMarker: false,
+      wrappedAttributeRun: null,
+      quote: null,
+    } : markerLineState(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
+    const lazyState: ItemLazyState = {
+      opaque: null,
+      invisibleAtColumn: false,
+      commentAtColumn: false,
+      inFootnoteBody: false,
+      absorbingFence: false,
+      divDepth: 0,
+      // The lead text opens a paragraph unless it is one of the shapes that
+      // open nothing - PART 1 S4's one question, asked of the block the marker
+      // line holds. See `markerLineState`.
+      lazyFoldable: leadState.leavesParagraphOpen,
+      inTable: leadState.endsOnTableRow,
+      quoteInner: leadState.quote,
+      inDefList: markerLineTerm
+        ? 'term'
+        : RE_DEFLIST_DEF.test(content)
+          ? 'description'
+          : false,
+      attrRun: leadState.wrappedAttributeRun,
+      // A container may open on the marker line itself, which never reaches
+      // `trackItemLazyState`, so the first line collected below it has to be
+      // read in that container's coordinate system. Off the memoized prefix
+      // walk `markerLineState` already made, never a second marker match.
+      // A QUOTE OWNS BY ITS MARKER, NOT BY INDENT, so a run that starts with
+      // one seeds nothing: a bare indented line below it is not the quote's
+      // content, and whether it is the quote's lazy text is the question
+      // `quoteInner` answers.
+      ownedColumn: noFollower || RE_BLOCKQUOTE.test(content)
+        ? -1
+        : walkContainerPrefix(content, session.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
+      ownedAuthored: false,
+    }
+    return { leadState, lazyState }
+  }
+
+  /** The column of the outermost marker holding a fence opened on a nested marker line, memoized per document line. */
+  function markerFenceHolderColumn(
+    lexer: Lexer, session: ParseSession, content: string, contentCol: number, itemStartLineIndex: number,
+  ): number {
+    const root = lexer.rootLines ?? lexer.lines
+    const lineNumber = lexer.lineNumber(itemStartLineIndex)
+    const cache = lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)
+      ? session.markerFenceHolderColumns.get(root) : undefined
+    let holderColumn = cache?.get(lineNumber)
+    if (holderColumn === undefined) {
+      let at = 0
+      let holder = 0
+      const bound = prefixWalkBound(content)
+      while (at < bound) {
+        const quote = quotePrefixLength(content, at, bound)
+        if (quote > 0) { at += quote; continue }
+        const marker = markerPrefixLength(content, at, bound)
+        if (marker === 0) break
+        holder = at
+        at += marker
+      }
+      holderColumn = contentCol
+      for (const char of content.slice(0, holder)) holderColumn = char === '\t' ? holderColumn + 4 - holderColumn % 4 : holderColumn + 1
+      if (lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)) {
+        const columns = cache ?? new Map<number, number>()
+        columns.set(lineNumber, holderColumn)
+        if (!cache) session.markerFenceHolderColumns.set(root, columns)
+      }
+    }
+    return holderColumn
+  }
+
   return function parseList(lexer: Lexer, session: ParseSession): List {
-    const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = classifyList(lexer, helpers)
+    const shape = classifyList(lexer, helpers)
+    const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = shape
     const items: ListItem[] = []
     let loose = false
     // §11 N1 hard boundary: a run of three or more blank lines before a
@@ -190,232 +558,32 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !isBlankLine(a) && !isContinuationMarker(a))
 
     while (!lexer.eof()) {
-      const itemStartLineIndex = lexer.pos
-      const line = lexer.peek()!
-      if (isBlankLine(line)) {
-        // Blank lines between siblings are handled by the per-item collector
-        // below; a stray leading blank just ends the list.
-        break
-      }
-      if (indentColumns(line, baseIndent + 1) !== baseIndent) break
-      // Strip an abutting `{...}` attribute block off the marker so the bare
-      // marker regexes match; remember its attributes to attach to the <li>.
-      const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
-      const la = extractItemAttr(line, terminatorFree)
-      const mline = la ? (la.markerLine ?? la.stripped) : line
-      const m = matchListMarker(mline, isTask, isOrdered, terminatorFree)
-      if (!m) break
-      // §11: a sibling with a different marker character (unordered) or a
-      // different delimiter (ordered) is a new list.
-      if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
-      if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim, terminatorFree)) break
-
-      let content: string
-      let checked: boolean | undefined
-      let taskState: TaskState | undefined
-      if (isTask) {
-        checked = m[2]!.toLowerCase() === 'x'
-        taskState = authoredTaskState(m[2]!, checked)
-        content = m[3]!
-      } else if (isOrdered) {
-        content = m[4]!
-      } else {
-        content = m[2]!
-      }
-      const markerContentLength = content.length
-      if (la?.contentOffset !== undefined && la.headWidth !== undefined) {
-        content = line.slice(la.contentOffset + mline.length - markerContentLength - la.headWidth)
-      }
-      const leadOrigin = terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
-      const itemAttrs = la ? la.attrs : undefined
-
-      // A plain lead followed immediately by a compatible sibling has no
-      // continuation lines to collect. Parse its one-line body as an ordinary
-      // nested block stream, while the next loop iteration owns the sibling.
-      const nextLine = lexer.peek(1)
-      if ((!session.recordPositions || leadOrigin !== undefined) && session.activeMatchers.length === 0 && !la &&
-          content.length > 0 && !RE_FIRST_BLOCK_MARKER.test(content) &&
-          nextLine !== undefined && indentColumns(nextLine, baseIndent + 1) === baseIndent &&
-          matchListMarker(nextLine, isTask, isOrdered) !== null &&
-          (isOrdered ? orderedContinues(nextLine, orderedKind, orderedDelim) : unorderedMarkerChar(nextLine) === firstMarkerChar)) {
-        lexer.consume()
-        const simpleParagraph = /^\p{L}/u.test(content) && !lineOpensBlock(content)
-        if (!session.recordPositions && simpleParagraph) {
-          items.push({ type: 'list_item', children: [session.parseSimpleListParagraph(content, lexer)],
-            ...(checked !== undefined ? { checked } : {}),
-            ...(taskState !== undefined ? { taskState } : {}) })
-          continue
-        }
-        const origins = session.recordPositions && leadOrigin
-          ? new Map<number, StrippedLineOrigin>([[0, leadOrigin]]) : undefined
-        const sub = nestedSubLexer(lexer, [content], itemStartLineIndex, [lexer.lineNumber(itemStartLineIndex)], origins)
-        if (session.recordPositions) {
-          sub.markerOpensSublist = true
-          sub.hostBody = 'list'
-          sub.hostMarkerColumn = sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line)
-        }
-        if (session.recordPositions && simpleParagraph) {
-          const paragraph = session.parseSimpleListParagraph(content, sub)
-          attachBlockPos(sub, paragraph, 0, 1)
-          const item: ListItem = { type: 'list_item', children: [paragraph] }
-          attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
-          if (checked !== undefined) item.checked = checked
-          if (taskState !== undefined) item.taskState = taskState
-          items.push(item)
-          continue
-        }
-        const item: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
-        if (session.recordPositions) attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
-        if (checked !== undefined) item.checked = checked
-        if (taskState !== undefined) item.taskState = taskState
-        items.push(item)
+      const head = readItemHead(lexer, shape)
+      if (!head) break
+      const { startLineIndex: itemStartLineIndex, line, terminatorFree, checked, taskState, leadOrigin } = head
+      const itemAttrs = head.attr ? head.attr.attrs : undefined
+      const oneLine = oneLineItem(lexer, session, shape, head)
+      if (oneLine) {
+        items.push(oneLine)
         continue
       }
-
-      // item (continuation paragraphs or nested lists). Visual content column:
-      // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
-      // `{...}` block is item metadata and contributes zero, so changing a class
-      // or Unicode value cannot restructure the body (carve#1701, carve#1698). The leading
-      // whitespace may be a tab, so it is measured in columns (baseIndent) rather
-      // than characters. For a TASK item the
-      // checkbox is content, not marker, so the content column is the bullet
-      // width (`- `/`* ` = 2) -- not the full
-      // `- [x] ` width (matching the spec's task attribute/continuation
-      // convention `- [x] x` / `  {.c}`).
-      const contentCol = isTask
-        ? baseIndent + 2
-        : baseIndent + (mline.length - leadingWhitespace(mline) - markerContentLength)
-      const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(itemStartLineIndex) - 1] ?? line
-      const itemMarkerColumn = sourceColumn(itemSource)
-      const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.lineStartColumn(itemStartLineIndex) - 1 + baseIndent)
-      const itemQuoteDepth = quotePrefixDepth(itemSource)
+      const placement = placeItem(lexer, shape, head)
+      const { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth } = placement
       lexer.consume()
 
-      // A top-level item with only indented prose before its next sibling has
-      // no container decision to make. Parse that body once as a paragraph.
-      if (!session.recordPositions && session.activeMatchers.length === 0 && !la && !isTask &&
-          baseIndent === 0 && itemQuoteDepth === 0 && content.length > 0 &&
-          !RE_FIRST_BLOCK_MARKER.test(content) && /^\p{L}/u.test(content) &&
-          !lineOpensBlock(content)) {
-        const wrapped: string[] = []
-        let offset = 0
-        while (true) {
-          const candidate = lexer.peek(offset)
-          if (candidate === undefined || isBlankLine(candidate) ||
-              indentColumns(candidate, contentCol) < contentCol) break
-          const body = sliceColumns(candidate, contentCol, true)
-          if (leadingWhitespace(body) !== 0 || !/^\p{L}/u.test(body) ||
-              lineOpensBlock(body)) break
-          wrapped.push(body)
-          offset++
-        }
-        const follower = lexer.peek(offset)
-        if (wrapped.length > 0 && (follower === undefined ||
-            indentColumns(follower, baseIndent + 1) === baseIndent &&
-            matchListMarker(follower, isTask, isOrdered) !== null &&
-            (isOrdered ? orderedContinues(follower, orderedKind, orderedDelim) :
-              unorderedMarkerChar(follower) === firstMarkerChar))) {
-          for (let index = 0; index < wrapped.length; index++) lexer.consume()
-          items.push({ type: 'list_item', children: [session.parseSimpleListParagraph(
-            [content, ...wrapped].join('\n'), lexer,
-          )] })
-          continue
-        }
-      }
-
-      const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
-      const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
-      const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
-      const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
-        (firstBlockColumn === itemMarkerColumn || firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
-          isStackedFirstBlockQuoteMarker(itemSource) &&
-            stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
-          isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
-            sourceColumn(firstBlockSource, 0) === 0) &&
-        !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
-      if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
-          isStackedFirstBlockQuoteMarker(itemSource)) &&
-          !firstItemAttachBoundary(lexer.peek()!)) {
-        const attached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
-        const lines = [content, ...attached.lines]
-        const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
-        const sub = nestedSubLexer(lexer, lines, itemStartLineIndex, numbers)
-        const stackedItem: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
-        attachBlockPos(lexer, stackedItem, itemStartLineIndex, lexer.pos)
-        if (checked !== undefined) stackedItem.checked = checked
-        if (taskState !== undefined) stackedItem.taskState = taskState
-        if (itemAttrs) stackedItem.attrs = itemAttrs
-        items.push(stackedItem)
-        let blanks = 0
-        while (isBlankLine(lexer.peek(blanks))) blanks++
-        const sibling = lexer.peek(blanks)
-        if (blanks > 0 && sibling !== undefined && indentColumns(sibling, baseIndent + 1) === baseIndent &&
-            matchListMarker(sibling, isTask, isOrdered) !== null &&
-            (isOrdered ? orderedContinues(sibling, orderedKind, orderedDelim) : unorderedMarkerChar(sibling) === firstMarkerChar)) {
-          for (let k = 0; k < blanks; k++) lexer.consume()
-          if (blanks >= 3) break
-          loose = true
-        }
+      const wrappedItem = wrappedParagraphItem(lexer, session, shape, head, placement)
+      if (wrappedItem) {
+        items.push(wrappedItem)
         continue
       }
-      if (firstBlockMarker &&
-        (!firstBlockEligible || firstItemAttachBoundary(lexer.peek()!))) {
-        const reason: RefusedContinuationMarker['reason'] = firstBlockSource === undefined ? 'document'
-          : isBlankLine(firstBlockSource) ? 'blank'
-            : isListMarkerLine((lexer.peek() ?? '').trimStart()) ? 'sibling'
-              : firstBlockColumn > itemMarkerColumn ? 'right' : 'left'
-        lexer.reportRefusedContinuationMarker(itemStartLineIndex,
-          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', reason, true)
-        content = ''
-      } else if (firstBlockMarker) {
-        lexer.reportRefusedContinuationMarker(itemStartLineIndex,
-          lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', undefined, true)
-        // The attached block is a block: a boundary line inside a fence it opened
-        // is that fence's body, not a boundary (see the indented loop's note on
-        // carve#975 and corpus category 279). Without this the opener came out an
-        // EMPTY code block and the closer an inline code span, which is the same
-        // damage category 278 pins one level in.
-        const {
-          lines: attached,
-          lineNumbers: attachedLineNumbers,
-          startLineIndex: attachedStartLineIndex,
-        } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
-        // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
-        // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
-        // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
-        // as soon as it had ONE block, so the second marker was left at the top
-        // level and rendered as a paragraph of its own - `<p>+</p>` on the page,
-        // with the block it was written for outside the item (§17 L3, corpus
-        // 327-…-that-block-s-extent-7).
-        //
-        // The blank between two attached blocks is a SEPARATOR, not a loosener:
-        // the author wrote no blank line, so the item stays tight, which is the
-        // same carve-out `plusSeparators` makes in the indented body.
-        while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
-          const plusLineIndex = lexer.pos
-          lexer.consume()
-          lexer.reportRefusedContinuationMarker(plusLineIndex, baseIndent + 1, 'list item')
-          const more = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
-          // An empty result is the column gate's refusal as well as an exhausted
-          // boundary set, and a second marker that attaches nothing ends the run
-          // either way (markup-carve/carve#1814).
-          if (more.lines.length === 0) break
-          attached.push('')
-          attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
-          attached.push(...more.lines)
-          attachedLineNumbers.push(...more.lineNumbers)
-        }
-        const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
-        const fbChildren = session.parseBlocks(sub, 0)
-        const fbItem: ListItem = { type: 'list_item', children: fbChildren }
-        attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
-        if (checked !== undefined) fbItem.checked = checked
-        if (taskState !== undefined) fbItem.taskState = taskState
-        if (itemAttrs) fbItem.attrs = itemAttrs
-        items.push(fbItem)
+      const firstBlock = firstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, firstItemAttachBoundary)
+      if (firstBlock.kind === 'item') {
+        items.push(firstBlock.item)
+        if (firstBlock.next === 'end') break
+        if (firstBlock.next === 'loose') loose = true
         continue
       }
-
+      const content = firstBlock.kind === 'refused' ? '' : head.content
       const nested: string[] = []
       let commentPayloadCandidates: Map<number, string> | undefined
       const nestedLineNumbers: number[] = []
@@ -729,52 +897,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       let blankBeforeNestedContinuation = false
       const continuationFenceBreaks = new Set<number>()
       let authoredDescendantFenceBlanks = 0
-      // Track whether the item's collected content currently ends in an open
-      // paragraph (family-D lazy continuation). The lead text opens one.
-      // ONE WALK for the three questions the lead line answers.
-      // At EOF no following line can consult the item's continuation state.
-      // Descendants parse the marker content themselves; walking their prefixes
-      // here repeats the same classification once per enclosing item.
-      const noFollower = lexer.eof() || (lexer.peek() === '' && lexer.peek(1) === undefined)
-      const leadState = noFollower ? {
-        leavesParagraphOpen: false,
-        endsOnTableRow: false,
-        bottomIsContinuationMarker: false,
-        wrappedAttributeRun: null,
-        quote: null,
-      } : markerLineState(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
-      const lazyState: ItemLazyState = {
-        opaque: null,
-        invisibleAtColumn: false,
-        commentAtColumn: false,
-        inFootnoteBody: false,
-        absorbingFence: false,
-        divDepth: 0,
-        // The lead text opens a paragraph unless it is one of the shapes that
-        // open nothing - PART 1 S4's one question, asked of the block the marker
-        // line holds. See `markerLineState`.
-        lazyFoldable: leadState.leavesParagraphOpen,
-        inTable: leadState.endsOnTableRow,
-        quoteInner: leadState.quote,
-        inDefList: markerLineTerm
-          ? 'term'
-          : RE_DEFLIST_DEF.test(content)
-            ? 'description'
-            : false,
-        attrRun: leadState.wrappedAttributeRun,
-        // A container may open on the marker line itself, which never reaches
-        // `trackItemLazyState`, so the first line collected below it has to be
-        // read in that container's coordinate system. Off the memoized prefix
-        // walk `markerLineState` already made, never a second marker match.
-        // A QUOTE OWNS BY ITS MARKER, NOT BY INDENT, so a run that starts with
-        // one seeds nothing: a bare indented line below it is not the quote's
-        // content, and whether it is the quote's lazy text is the question
-        // `quoteInner` answers.
-        ownedColumn: noFollower || RE_BLOCKQUOTE.test(content)
-          ? -1
-          : walkContainerPrefix(content, session.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
-        ownedAuthored: false,
-      }
+      const { leadState, lazyState } = leadLazyState(lexer, session, content, itemStartLineIndex, markerLineTerm)
       // X2: track an authored quote's paragraph without changing the item's block state.
       let authoredQuoteClaim: BlockQuoteLazyState | null = null
       let authoredQuoteParagraphOpen = false
@@ -800,31 +923,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         ? RE_FENCE.exec(descendantLead) ?? RE_RAW_FENCE.exec(descendantLead) : null
       if (descendantLeadFence) {
         lazyState.lazyFoldable = false
-        const root = lexer.rootLines ?? lexer.lines
-        const lineNumber = lexer.lineNumber(itemStartLineIndex)
-        const cache = lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)
-          ? session.markerFenceHolderColumns.get(root) : undefined
-        let holderColumn = cache?.get(lineNumber)
-        if (holderColumn === undefined) {
-          let at = 0
-          let holder = 0
-          const bound = prefixWalkBound(content)
-          while (at < bound) {
-            const quote = quotePrefixLength(content, at, bound)
-            if (quote > 0) { at += quote; continue }
-            const marker = markerPrefixLength(content, at, bound)
-            if (marker === 0) break
-            holder = at
-            at += marker
-          }
-          holderColumn = contentCol
-          for (const char of content.slice(0, holder)) holderColumn = char === '\t' ? holderColumn + 4 - holderColumn % 4 : holderColumn + 1
-          if (lexer.hasDocumentOffsets && lexer.prefixMemoAllowed(itemStartLineIndex)) {
-            const columns = cache ?? new Map<number, number>()
-            columns.set(lineNumber, holderColumn)
-            if (!cache) session.markerFenceHolderColumns.set(root, columns)
-          }
-        }
+        const holderColumn = markerFenceHolderColumn(lexer, session, content, contentCol, itemStartLineIndex)
         descendantOpaque = {
           close: fenceCloseRe(RE_FENCE.test(descendantLead) ? descendantLeadFence[2]! : descendantLeadFence[1]!),
           base: lazyState.ownedColumn,
