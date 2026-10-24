@@ -312,6 +312,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['``` graphviz\ndigraph { A -> B }\n```\n',
+    '``` php\ncode\n```\n', '~~~ php\ncode\n~~~\n'])
+  ('parses a fence language after one ASCII space: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['```  php\ncode\n```\n', '```\tphp\ncode\n```\n',
+    '~~~  php\ncode\n~~~\n'])
+  ('declines a fence language with an invalid separator: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines source forms that have not been migrated', () => {
     expect(() => parseCursorPrototype('::: note\n::: tip\nBody\n:::\n:::')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('::: note\nBody\n')).toThrow(UnsupportedCursorSyntax)

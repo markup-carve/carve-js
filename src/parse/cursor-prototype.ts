@@ -119,7 +119,7 @@ class CursorInline extends InlineParseSession {
 
 const HEADING = /^(#{1,6}) +(\S.*)$/
 const BULLET = /^( *)([-*]) +(.*)$/
-const FENCE = /^(`{3,}|~{3,})([A-Za-z0-9_-]+)?[ \t]*$/
+const FENCE = /^(`{3,}|~{3,})(?: ?([A-Za-z0-9_-]+))?[ \t]*$/
 const COLON_OPEN = /^(:{3,}) +([A-Za-z][A-Za-z0-9_-]*)[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
