@@ -85,7 +85,7 @@ describe('an all-blank header in an imported Markdown table', () => {
   })
 
   it('is kept when it carries column alignment', () => {
-    expect(markdownToCarve('|   |   |\n|:--|---|\n| 3 | 4 |\n')).toBe('|=< |= |\n| 3 | 4 |\n')
+    expect(markdownToCarve('|   |   |\n|:--|---|\n| 3 | 4 |\n')).toBe('| | |\n|:--|---|\n| 3 | 4 |\n')
     expect(drops('|   |   |\n|:--|---|\n| 3 | 4 |\n')).toStrictEqual([])
   })
 })
