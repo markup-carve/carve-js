@@ -517,11 +517,11 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const first = cursor.peek()!
   const parts: ContentLine[] = []
   let last = first
-  const invalidColonSeparator = /^:{3,} *\t/.test(first.text)
+  const literalColonOpener = /^:{3,}(?: *\t| +\{)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || (!interruptsParagraph(cursor.peek()!.text, cursor.owner) &&
         !(parts.length === 1 && parts[0]!.text.trim() === '+' && listMarker(cursor.peek()!.text))) ||
-        invalidColonSeparator && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
+        literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
     if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
       const lead = inline.inlines(parts)
       if (lead.length === 1 && lead[0]?.type === 'image' &&
@@ -1253,7 +1253,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
       continue
     }
-    if (/^(?::::|::)/.test(first.text) && !/^:{3,} *\t/.test(first.text)) {
+    if (/^(?::::|::)/.test(first.text) && !/^:{3,}(?: *\t| +\{)/.test(first.text)) {
       throw new UnsupportedCursorSyntax(`block at line ${first.number}`)
     }
     emit(parseParagraphAtCursor(cursor, inline))
