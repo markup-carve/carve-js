@@ -516,6 +516,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n\n  *[A]: a\n', '- a\n\n  *[A]: a\n  - b\n',
+    '- a\n\n  *[A]: a\n  - b\n- c\n'])
+  ('treats an abbreviation-shaped list line as paragraph text: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
     '![a][ref]\n^ cap\n\n[ref]: /u\n'])
   ('attaches an image caption only when its reference resolves: %s', (source) => {

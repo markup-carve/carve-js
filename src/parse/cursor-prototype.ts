@@ -561,6 +561,7 @@ function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | un
 }
 
 function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
+  if (ABBR_DEF.test(text)) return false
   if (!RE_CAPTION.test(text)) return isBlockStart(text)
   let only: string | undefined
   for (const line of body) {
