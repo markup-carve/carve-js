@@ -659,9 +659,35 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     pos: position(first, last) }
 }
 
+function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
+  const body: SourceLine[] = []
+  const closer = new RegExp(`^:{${openerLength}}[ \t]*$`)
+  const nestedClosers: RegExp[] = []
+  while (cursor.peek()) {
+    const text = cursor.peek()!.text
+    if ((nestedClosers.at(-1) ?? closer).test(text)) {
+      if (nestedClosers.length === 0) break
+      nestedClosers.pop()
+      body.push(cursor.take())
+      continue
+    }
+    const nested = COLON_OPEN.exec(text)
+    if (nested) {
+      if (nested[2] === 'figure' || nested[2] === 'list-table') {
+        throw new UnsupportedCursorSyntax('nested specialized colon container')
+      }
+      nestedClosers.push(new RegExp(`^:{${nested[1]!.length}}[ \t]*$`))
+    } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
+    body.push(cursor.take())
+  }
+  if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed colon container')
+  return body
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
-  footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>): BlockNode[] {
+  footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
+  colonDepth = 0): BlockNode[] {
   if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
   const children: BlockNode[] = []
   let pendingAttrs: Attrs | null = null
@@ -812,19 +838,14 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const colon = COLON_OPEN.exec(first.text)
     if (colon) {
-      if (!atDocumentLevel || colon[2] === 'figure' || colon[2] === 'list-table') {
+      if ((!atDocumentLevel && colonDepth === 0) || colon[2] === 'figure' || colon[2] === 'list-table') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }
       cursor.take()
-      const body: SourceLine[] = []
-      const closer = new RegExp(`^:{${colon[1]!.length}}[ \\t]*$`)
-      while (cursor.peek() && !closer.test(cursor.peek()!.text)) {
-        if (cursor.peek()!.text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
-        body.push(cursor.take())
-      }
-      if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed colon container')
+      const body = takeColonBody(cursor, colon[1]!.length)
       const close = cursor.take()
-      const children = parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false)
+      const children = parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false,
+        undefined, undefined, undefined, colonDepth + 1)
       const kind = colon[2]!
       const pos = position(first, close)
       const node: BlockNode = GENERATED_CONTENT_KINDS.has(kind) ?
