@@ -30,11 +30,25 @@ interface SourceLine { text: string; start: number; number: number; baseColumn?:
 
 class Cursor {
   at = 0
-  rootLexer?: Lexer
+  sharedLexer?: Lexer
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
     readonly tableHost: 'root' | 'quote' | 'colon' | 'list' = 'root') {}
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
   take(): SourceLine { return this.lines[this.at++]! }
+}
+
+function lexerForCursor(cursor: Cursor): Lexer {
+  if (cursor.sharedLexer) return cursor.sharedLexer
+  const lexer = cursor.rootSource ? new Lexer(cursor.rootSource) :
+    new Lexer(cursor.lines.map((line) => line.text))
+  if (!cursor.rootSource) {
+    lexer.nested = true
+    lexer.sourceLineMap = cursor.lines.map((line) => line.number)
+    lexer.sourceOffsetMap = cursor.lines.map((line) => line.start)
+    lexer.linePrefixWidths = cursor.lines.map((line) => (line.baseColumn ?? 1) - 1)
+  }
+  cursor.sharedLexer = lexer
+  return lexer
 }
 
 function scanLines(source: string): SourceLine[] {
@@ -291,14 +305,7 @@ function parseSimpleTable(cursor: Cursor, inline: CursorInline): Table {
 function parseCanonicalTableWithExistingRules(cursor: Cursor, inline: CursorInline): Table {
   if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list table source mapping')
   const first = cursor.peek()!
-  const lexer = cursor.rootSource ? cursor.rootLexer ??= new Lexer(cursor.rootSource) :
-    new Lexer(cursor.lines.map((line) => line.text))
-  if (!cursor.rootSource) {
-    lexer.nested = true
-    lexer.sourceLineMap = cursor.lines.map((line) => line.number)
-    lexer.sourceOffsetMap = cursor.lines.map((line) => line.start)
-    lexer.linePrefixWidths = cursor.lines.map((line) => (line.baseColumn ?? 1) - 1)
-  }
+  const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
   lexer.abbrDefs = inline.abbreviations
   lexer.linkDefs = inline.linkDefinitions
@@ -482,9 +489,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
 function parseRawAtCursor(cursor: Cursor): BlockNode {
   if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list raw block')
   const first = cursor.peek()!
-  const lexer = cursor.rootSource ? cursor.rootLexer ??= new Lexer(cursor.rootSource) :
-    new Lexer(cursor.lines.map((line) => line.text))
-  if (!cursor.rootSource) lexer.nested = true
+  const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
   const raw = parseRawBlock(lexer)
   if (cursor.tableHost === 'quote' && lexer.pos === cursor.lines.length &&
@@ -1015,7 +1020,7 @@ export function parseCursorPrototype(source: string): Document {
   const footnoteDefPos: Record<string, Position> = {}
   let frontmatter: Document['frontmatter']
   if (source.startsWith('---')) {
-    const lexer = cursor.rootLexer ??= new Lexer(source)
+    const lexer = lexerForCursor(cursor)
     lexer.consumeFrontmatter()
     cursor.at = lexer.pos
     frontmatter = lexer.frontmatter
