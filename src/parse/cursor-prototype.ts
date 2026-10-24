@@ -557,9 +557,14 @@ function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | un
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
   if (!commentBlockHasCloser(lexer, run)) return undefined
-  if (cursor.owner.inList) throw new UnsupportedCursorSyntax('list comment source ownership')
+  if (cursor.owner.inList && (cursor.at === 0 || cursor.peek()?.text[0] !== '%')) {
+    throw new UnsupportedCursorSyntax('list comment source ownership')
+  }
   const first = cursor.peek()!
   const comment = parseCommentBlock(lexer)
+  if (cursor.owner.inList && cursor.lines.slice(cursor.at, lexer.pos).some((line) => line.text === '')) {
+    throw new UnsupportedCursorSyntax('list comment blank ownership')
+  }
   cursor.at = lexer.pos
   comment.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
   return comment
@@ -588,6 +593,15 @@ function rejectRaisedColonContinuation(text: string, frame: { contentColumn?: nu
   if (contentColumn === undefined) return
   if (/^ {3,}:{3,}(?:[ \t]|$)/.test(text.slice(contentColumn - 1))) {
     throw new UnsupportedCursorSyntax('raised colon list ownership')
+  }
+}
+
+function rejectBelowColumnMarkerAfterComment(marker: ReturnType<typeof listMarker>,
+  frame: { indent: number; contentColumn?: number; body: SourceLine[] }): void {
+  if (!marker || frame.contentColumn === undefined) return
+  if (marker.indent > frame.indent && marker.indent < frame.contentColumn - 1 &&
+      RE_COMMENT_BLOCK_ANY.test(frame.body.at(-1)?.text ?? '')) {
+    throw new UnsupportedCursorSyntax('marker after list comment')
   }
 }
 
@@ -656,6 +670,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const marker = listMarker(line.text)
     rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
+    rejectBelowColumnMarkerAfterComment(marker, top)
     if (line.text === '+' && top.item) {
       if (depth !== 0 || top.indent !== 0 || top.fenceMarker) {
         throw new UnsupportedCursorSyntax('nested list continuation')

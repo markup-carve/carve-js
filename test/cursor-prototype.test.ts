@@ -539,6 +539,19 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- item\n  %%%\n  [r]: /url\n  %%%\n\n[r][]\n',
+    '- a\n  %%%\n  x\n  %%%\n # h\n'])
+  ('maps a closed list comment at the item content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n  %%%\n  x\n  %%%\n - s\n',
+    '- x\n  %%%\n  a\n\n  b\n  %%%\n',
+    '- intro\n\n   %%%\n   hidden\n   %%%\n'])
+  ('declines list comments with unresolved line ownership: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
     '![a][ref]\n^ cap\n\n[ref]: /u\n'])
   ('attaches an image caption only when its reference resolves: %s', (source) => {
