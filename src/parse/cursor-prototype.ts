@@ -1040,8 +1040,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         payload.push(line.text)
         payloadLines.push(line)
       }
-      if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed fence')
-      const close = cursor.take()
+      if (!cursor.peek() && (cursor.owner.kind !== 'root' || first.number !== 1 ||
+          !/^(?:`{3,}|~{3,})$/.test(first.text))) {
+        throw new UnsupportedCursorSyntax('unclosed fence')
+      }
+      const close = cursor.peek() ? cursor.take() : payloadLines.at(-1) ?? first
       const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
         ...(fence.lang ? { lang: fence.lang } : {}),
         ...(fence.header !== undefined ? { header: fence.header } : {}),

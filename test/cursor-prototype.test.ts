@@ -574,6 +574,15 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['```\ncode\n', '~~~\ncode\n'])
+  ('parses a bare fence opened at document start through EOF: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unclosed fence after open paragraph text', () => {
+    expect(() => parseCursorPrototype('Text\n```\ncode\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines source forms that have not been migrated', () => {
     expect(() => parseCursorPrototype('A\r\nB')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
