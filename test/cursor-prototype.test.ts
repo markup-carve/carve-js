@@ -277,8 +277,10 @@ describe('experimental block cursor', () => {
   })
 
   it('keeps a plain footnote continuation and its source positions', () => {
-    const source = '[^f]: note\n  more\n\nbody[^f]\n'
-    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    for (const source of ['[^f]: note\n  more\n\nbody[^f]\n',
+      '[^f]: note\n  more text.\n', '[^f]: note\n  Äpfel und Öl.\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
   })
 
   it.each([':: t\n', ':: t\n: d\n', ':: t\n:  d\n',

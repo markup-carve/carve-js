@@ -924,7 +924,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
   const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
-  if (!footnote[2] || (hasBodyLine && (nextIndex !== 1 || !/^  [A-Za-z0-9][A-Za-z0-9 ]*$/.test(next!) ||
+  if (!footnote[2] || (hasBodyLine && (nextIndex !== 1 || !next!.startsWith('  ') ||
+      !plainQuoteText(next!.slice(2)) ||
       (cursor.peek(2) && cursor.peek(2)!.text !== '')))) {
     throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
   }
