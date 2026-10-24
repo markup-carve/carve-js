@@ -17,7 +17,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
-import { RE_ADMONITION_OPEN, RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, matchLinkDef, parseBlockAttributeRun } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -1176,6 +1176,20 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const firstMarker = listMarker(first.text)
     if (firstMarker) {
       emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
+      continue
+    }
+    const quoteFence = RE_QUOTE_BLOCK_OPEN.exec(first.text)
+    if (quoteFence) {
+      cursor.take()
+      const body = takeColonBody(cursor, quoteFence[1]!.length)
+      const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
+      const quote: BlockQuote = { type: 'block_quote', fenced: true,
+        children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote')),
+          inline, definitionNodes, depth + 1, false),
+        pos: position(first, close) }
+      const caption = takeQuoteCaption(cursor, inline, quote)
+      emit(caption ? { type: 'figure', target: quote, caption: caption.children,
+        pos: position(first, caption.line) } : quote)
       continue
     }
     const simpleColon = COLON_OPEN.exec(first.text)

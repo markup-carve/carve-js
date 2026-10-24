@@ -85,6 +85,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '::: >\nhello\n:::\n',
+    '::: >\nhello\n:::\n^ Caption\n',
+  ])('builds a fenced quote and optional caption through the shared body reader: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['a\n \nb\n', 'a\n\t\nb\n'])
   ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
