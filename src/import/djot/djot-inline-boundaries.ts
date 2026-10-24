@@ -81,107 +81,201 @@ export function djotTableRows(source: string, mask: string): boolean[] {
 }
 
 
+type BoundaryItem = { column: number; depth: number }
+type BoundaryDiv = { width: number; column: number; depth: number; itemColumn: number | undefined; itemDepth: number; minimumWidth: number; scopeStart: number; start: number }
+type BoundaryFence = { ch: string; width: number; depth: number; itemColumn: number | undefined }
+type BoundaryLine = { line: string; depth: number; trimmed: string; indent: number; marker: RegExpExecArray | null; active: BoundaryItem | undefined; startsItem: boolean; blank: boolean }
+type ScopedBody = { body: string; column: number; bodyDepth: number; canOpen: boolean }
+
+const SCOPED_BLOCK_START = /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/
+const SCOPED_CODE_FENCE = /^(`{3,}|~{3,})(.*)$/
+
 export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>, divOwners?: Map<number, { column: number | undefined; depth: number }>): number[] {
-  const boundaries: number[] = []
-  const rows = djotTableRows(source, mask)
-  const items: Array<{ column: number; depth: number }> = []
-  const divs: Array<{ width: number; column: number; depth: number; itemColumn: number | undefined; itemDepth: number; minimumWidth: number; scopeStart: number; start: number }> = []
-  let previousBlock = true, previousDepth = 0
-  let codeFence: { ch: string; width: number; depth: number; itemColumn: number | undefined } | undefined
-  let offset = 0, previousBlank = true, row = 0
-  for (const rawLine of source.split('\n')) {
-    const line = codeScopes && rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+  return new InlineBoundaryScanner(source, mask, codeScopes, divClosers, divOwners).scan()
+}
+
+class InlineBoundaryScanner {
+  private readonly boundaries: number[] = []
+  private readonly rows: boolean[]
+  private readonly items: BoundaryItem[] = []
+  private readonly divs: BoundaryDiv[] = []
+  private codeFence: BoundaryFence | undefined
+  private previousBlock = true
+  private previousDepth = 0
+  private previousBlank = true
+  private offset = 0
+  private row = 0
+
+  constructor(
+    private readonly source: string,
+    private readonly mask: string,
+    private readonly codeScopes: boolean,
+    private readonly divClosers?: Map<number, number[]>,
+    private readonly divOwners?: Map<number, { column: number | undefined; depth: number }>,
+  ) {
+    this.rows = djotTableRows(source, mask)
+  }
+
+  scan(): number[] {
+    for (const rawLine of this.source.split('\n')) {
+      this.scanLine(this.codeScopes && rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine)
+      this.row++
+      this.offset += rawLine.length + 1
+    }
+    return this.boundaries
+  }
+
+  private scanLine(line: string): void {
+    const facts = this.readLine(line)
+    if (this.codeScopes) this.trackCodeScopes(facts)
+    if (this.previousBlank || facts.startsItem) this.openItemBoundary(facts)
+    if (this.rows[this.row]) this.pushCellBoundaries(line)
+    this.previousBlank = facts.blank
+    this.previousDepth = facts.depth
+  }
+
+  private readLine(line: string): BoundaryLine {
     const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
     const depth = (prefix.match(/>/g) ?? []).length
     const content = line.slice(prefix.length), trimmed = content.replace(/^[ \t]*/, ''), indent = content.length - trimmed.length
     const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)/.exec(trimmed)
-    const active = items.at(-1)
-    const startsItem: boolean = !!marker && ((previousBlank || codeScopes && previousBlock) || (!!active && depth <= active.depth && indent < active.column))
+    const active = this.items.at(-1)
+    const startsItem: boolean = !!marker && ((this.previousBlank || this.codeScopes && this.previousBlock) || (!!active && depth <= active.depth && indent < active.column))
     const blank = trimmed === '' || trimmed === '\r'
-    if (codeScopes) {
-      if (previousBlock && !blank) {
-        while (items.length && depth === items.at(-1)!.depth && indent < items.at(-1)!.column && !startsItem) items.pop()
-      }
-      const blockStart = /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(trimmed) || !!marker
-      while (divs.length) {
-        const owner = divs.at(-1)!
-        const outsideQuote = depth < owner.depth && (blank || previousBlank || startsItem || blockStart)
-        const outsideItem = owner.itemColumn !== undefined && depth === owner.itemDepth &&
-          indent < owner.itemColumn && !blank && (previousBlank || startsItem || blockStart)
-        if (!outsideQuote && !outsideItem) break
-        divs.pop()
-      }
-      let body = startsItem ? trimmed.slice(marker![0].length) : trimmed
-      let column = indent + (startsItem ? marker![0].length : 0)
-      if (startsItem && /^[-*+] $/.test(marker![0])) {
-        const task = /^\[[ xX]\][ \t]+/.exec(body)
-        if (task) { body = body.slice(task[0].length); column += task[0].length }
-      }
-
-      const padding = /^[ \t]*/.exec(body)![0].length
-      body = body.slice(padding)
-      column += padding
-      const nestedQuote = /^(?:>[ \t]+)*/.exec(body)![0]
-      const bodyDepth = depth + (nestedQuote.match(/>/g) ?? []).length
-      body = body.slice(nestedQuote.length)
-      if (nestedQuote) column = 0
-      const canOpen: boolean = previousBlock || previousBlank || !!startsItem || (blockStart && (depth < previousDepth || !!items.at(-1) && depth === items.at(-1)!.depth && indent < items.at(-1)!.column))
-      if (codeFence && (depth < codeFence.depth || codeFence.itemColumn !== undefined && depth === codeFence.depth && indent < codeFence.itemColumn && !blank)) {
-        codeFence = undefined
-        while (items.length && depth === items.at(-1)!.depth && indent < items.at(-1)!.column) items.pop()
-      }
-      const ticks = /^(`{3,}|~{3,})(.*)$/.exec(body)
-      if (codeFence) {
-        if (ticks && ticks[1]![0] === codeFence.ch && ticks[1]!.length >= codeFence.width &&
-            /^[ \t]*$/.test(ticks[2]!) && bodyDepth === codeFence.depth) {
-          codeFence = undefined
-          previousBlock = true
-        } else previousBlock = false
-      } else if (ticks && canOpen && (ticks[1]![0] !== '`' || !ticks[2]!.includes('`'))) {
-        codeFence = { ch: ticks[1]![0]!, width: ticks[1]!.length, depth: bodyDepth, itemColumn: startsItem ? indent + marker![0].length : active && depth === active.depth && indent >= active.column ? active.column : undefined }
-        previousBlock = false
-      } else {
-        const fence = /^(:{3,})(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.exec(body)
-        const owner = divs.at(-1)
-        const visible = mask[offset + line.length - body.length] === ':'
-        if (fence && visible && owner && /^[ \t]*$/.test(body.slice(fence[1]!.length)) &&
-            bodyDepth === owner.depth && fence[1]!.length >= owner.minimumWidth) {
-          boundaries.push(offset)
-          let low = owner.scopeStart, high = divs.length - 1
-          while (low < high) {
-            const mid = (low + high) >>> 1
-            if (divs[mid]!.minimumWidth <= fence[1]!.length) high = mid
-            else low = mid + 1
-          }
-          divClosers?.set(offset, divs.slice(low).map(owner => owner.start).reverse())
-          divOwners?.set(offset, { column: divs[low]!.itemColumn, depth: divs[low]!.itemDepth })
-          divs.length = low
-          previousBlock = true
-        } else if (fence && visible && canOpen) {
-          boundaries.push(offset)
-          divs.push({ width: fence[1]!.length, column, depth: bodyDepth,
-            itemColumn: startsItem ? indent + (marker![0].startsWith('[^') ? 2 : marker![0].length) : (active && depth === active.depth && indent >= active.column ? active.column : undefined),
-            itemDepth: depth, start: offset, minimumWidth: owner?.depth === bodyDepth ? Math.min(owner.minimumWidth, fence[1]!.length) : fence[1]!.length, scopeStart: owner?.depth === bodyDepth ? owner.scopeStart : divs.length })
-          previousBlock = true
-        } else {
-          const attrs = body.startsWith('{') ? readAttributes(body, 0) : undefined
-          previousBlock = blank || rows[row] || (canOpen && (/^(?:#{1,6}(?: |$)|(?:[*-][ \t]*){3,}$|\[[^\]]+\]:)/.test(body) || !!attrs && /^[ \t]*$/.test(body.slice(attrs.end))))
-        }
-      }
-    }
-    if (previousBlank || startsItem) {
-      boundaries.push(offset)
-      if (!blank) {
-        while (items.length) { const item = items.at(-1)!; if (depth > item.depth || (depth === item.depth && indent >= item.column)) break; items.pop() }
-        if (startsItem) items.push({ column: indent + (marker![0].startsWith('[^') ? 2 : marker![0].length), depth })
-      }
-    }
-    if (rows[row]) for (let at = 0; at < line.length; at++) if (line[at] === '|' && mask[offset + at] === '|' && line[at - 1] !== '\\') boundaries.push(offset + at)
-    previousBlank = blank
-    previousDepth = depth
-    row++; offset += rawLine.length + 1
+    return { line, depth, trimmed, indent, marker, active, startsItem, blank }
   }
-  return boundaries
+
+  private trackCodeScopes(facts: BoundaryLine): void {
+    if (this.previousBlock && !facts.blank) {
+      while (this.items.length && facts.depth === this.items.at(-1)!.depth && facts.indent < this.items.at(-1)!.column && !facts.startsItem) this.items.pop()
+    }
+    const blockStart = SCOPED_BLOCK_START.test(facts.trimmed) || !!facts.marker
+    this.closeOutsideDivs(facts, blockStart)
+    const scoped = this.scopedBody(facts, blockStart)
+    this.closeOutdentedFence(facts)
+    const ticks = SCOPED_CODE_FENCE.exec(scoped.body)
+    if (this.codeFence) this.previousBlock = this.closesCodeFence(this.codeFence, ticks, scoped.bodyDepth)
+    else if (ticks && scoped.canOpen && (ticks[1]![0] !== '`' || !ticks[2]!.includes('`'))) this.openCodeFence(facts, ticks, scoped.bodyDepth)
+    else this.scanDivFence(facts, scoped)
+  }
+
+  private closeOutsideDivs(facts: BoundaryLine, blockStart: boolean): void {
+    const { depth, indent, blank, startsItem } = facts
+    while (this.divs.length) {
+      const owner = this.divs.at(-1)!
+      const outsideQuote = depth < owner.depth && (blank || this.previousBlank || startsItem || blockStart)
+      const outsideItem = owner.itemColumn !== undefined && depth === owner.itemDepth &&
+        indent < owner.itemColumn && !blank && (this.previousBlank || startsItem || blockStart)
+      if (!outsideQuote && !outsideItem) break
+      this.divs.pop()
+    }
+  }
+
+  private scopedBody(facts: BoundaryLine, blockStart: boolean): ScopedBody {
+    const { depth, indent, marker, startsItem } = facts
+    let body = startsItem ? facts.trimmed.slice(marker![0].length) : facts.trimmed
+    let column = indent + (startsItem ? marker![0].length : 0)
+    if (startsItem && /^[-*+] $/.test(marker![0])) {
+      const task = /^\[[ xX]\][ \t]+/.exec(body)
+      if (task) { body = body.slice(task[0].length); column += task[0].length }
+    }
+    const padding = /^[ \t]*/.exec(body)![0].length
+    body = body.slice(padding)
+    column += padding
+    const nestedQuote = /^(?:>[ \t]+)*/.exec(body)![0]
+    const bodyDepth = depth + (nestedQuote.match(/>/g) ?? []).length
+    body = body.slice(nestedQuote.length)
+    if (nestedQuote) column = 0
+    const item = this.items.at(-1)
+    const canOpen: boolean = this.previousBlock || this.previousBlank || !!startsItem || (blockStart && (depth < this.previousDepth || !!item && depth === item.depth && indent < item.column))
+    return { body, column, bodyDepth, canOpen }
+  }
+
+  private closeOutdentedFence(facts: BoundaryLine): void {
+    const fence = this.codeFence
+    const { depth, indent } = facts
+    if (!fence || !(depth < fence.depth || fence.itemColumn !== undefined && depth === fence.depth && indent < fence.itemColumn && !facts.blank)) return
+    this.codeFence = undefined
+    while (this.items.length && depth === this.items.at(-1)!.depth && indent < this.items.at(-1)!.column) this.items.pop()
+  }
+
+  private closesCodeFence(fence: BoundaryFence, ticks: RegExpExecArray | null, bodyDepth: number): boolean {
+    if (!ticks || ticks[1]![0] !== fence.ch || ticks[1]!.length < fence.width || !/^[ \t]*$/.test(ticks[2]!) || bodyDepth !== fence.depth) return false
+    this.codeFence = undefined
+    return true
+  }
+
+  private openCodeFence(facts: BoundaryLine, ticks: RegExpExecArray, bodyDepth: number): void {
+    this.codeFence = { ch: ticks[1]![0]!, width: ticks[1]!.length, depth: bodyDepth, itemColumn: this.ownerItemColumn(facts, facts.marker?.[0].length ?? 0) }
+    this.previousBlock = false
+  }
+
+  /** The item column a fence or div opened on this line belongs to. */
+  private ownerItemColumn(facts: BoundaryLine, markerWidth: number): number | undefined {
+    const { active, depth, indent } = facts
+    if (facts.startsItem) return indent + markerWidth
+    return active && depth === active.depth && indent >= active.column ? active.column : undefined
+  }
+
+  private scanDivFence(facts: BoundaryLine, scoped: ScopedBody): void {
+    const { body, bodyDepth } = scoped
+    const fence = /^(:{3,})(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.exec(body)
+    const owner = this.divs.at(-1)
+    const visible = this.mask[this.offset + facts.line.length - body.length] === ':'
+    if (fence && visible && owner && /^[ \t]*$/.test(body.slice(fence[1]!.length)) &&
+        bodyDepth === owner.depth && fence[1]!.length >= owner.minimumWidth) this.closeDivs(owner, fence[1]!.length)
+    else if (fence && visible && scoped.canOpen) this.openDiv(facts, scoped, owner, fence[1]!.length)
+    else this.previousBlock = this.endsBlock(facts, scoped)
+  }
+
+  private closeDivs(owner: BoundaryDiv, width: number): void {
+    this.boundaries.push(this.offset)
+    let low = owner.scopeStart, high = this.divs.length - 1
+    while (low < high) {
+      const mid = (low + high) >>> 1
+      if (this.divs[mid]!.minimumWidth <= width) high = mid
+      else low = mid + 1
+    }
+    this.divClosers?.set(this.offset, this.divs.slice(low).map(owner => owner.start).reverse())
+    this.divOwners?.set(this.offset, { column: this.divs[low]!.itemColumn, depth: this.divs[low]!.itemDepth })
+    this.divs.length = low
+    this.previousBlock = true
+  }
+
+  private openDiv(facts: BoundaryLine, scoped: ScopedBody, owner: BoundaryDiv | undefined, width: number): void {
+    this.boundaries.push(this.offset)
+    const sameScope = owner?.depth === scoped.bodyDepth
+    this.divs.push({ width, column: scoped.column, depth: scoped.bodyDepth,
+      itemColumn: this.ownerItemColumn(facts, facts.marker ? itemMarkerWidth(facts.marker) : 0),
+      itemDepth: facts.depth, start: this.offset, minimumWidth: sameScope ? Math.min(owner.minimumWidth, width) : width, scopeStart: sameScope ? owner.scopeStart : this.divs.length })
+    this.previousBlock = true
+  }
+
+  private endsBlock(facts: BoundaryLine, scoped: ScopedBody): boolean {
+    const { body } = scoped
+    const attrs = body.startsWith('{') ? readAttributes(body, 0) : undefined
+    return facts.blank || this.rows[this.row]! || (scoped.canOpen && (/^(?:#{1,6}(?: |$)|(?:[*-][ \t]*){3,}$|\[[^\]]+\]:)/.test(body) || !!attrs && /^[ \t]*$/.test(body.slice(attrs.end))))
+  }
+
+  private openItemBoundary(facts: BoundaryLine): void {
+    this.boundaries.push(this.offset)
+    if (facts.blank) return
+    const { depth, indent } = facts
+    while (this.items.length) {
+      const item = this.items.at(-1)!
+      if (depth > item.depth || (depth === item.depth && indent >= item.column)) break
+      this.items.pop()
+    }
+    if (facts.startsItem) this.items.push({ column: indent + itemMarkerWidth(facts.marker!), depth })
+  }
+
+  private pushCellBoundaries(line: string): void {
+    for (let at = 0; at < line.length; at++) if (line[at] === '|' && this.mask[this.offset + at] === '|' && line[at - 1] !== '\\') this.boundaries.push(this.offset + at)
+  }
+}
+
+function itemMarkerWidth(marker: RegExpExecArray): number {
+  return marker[0].startsWith('[^') ? 2 : marker[0].length
 }
 
 export function djotSimpleDestinationRanges(source: string): Map<number, number> | undefined {

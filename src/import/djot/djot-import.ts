@@ -21,6 +21,7 @@ import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js
 import { maskDjotOpaque } from './djot-opaque.js'
 import { djotBlockLayout, djotCodePadding, djotInlineLayout, hasDjotCodeLayoutCandidates } from './djot-block-layout.js'
 import { djotReferenceLayout } from './djot-reference-layout.js'
+import { foldDjotReferences } from './djot-reference-fold.js'
 import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
@@ -1947,81 +1948,6 @@ function normalizeDjotAttributeLines(source: string): string {
   }
   parts.push(source.slice(copied))
   return parts.join('')
-}
-
-function foldDjotReferences(source: string, accepted?: Map<number, { label: string; target: string; end: number }>, originalMask?: string, originalRows?: readonly boolean[]): string {
-  if (!source.includes(']:')) return source
-  const lines = source.split('\n'),
-    mask = originalMask ?? maskDjotCodeAndDestinations(source, false, true, false)
-  const rows = originalRows ? [...originalRows] : djotTableRows(source, mask)
-  const removed = new Set<number>()
-  let offset = 0, previous = '', previousDepth = 0, previousAttributeBlock = false
-  const definitionOwners: Array<{ start: number; depth: number }> = []
-  let fenceMask: string | undefined
-  for (let n = 0; n < lines.length; n++) {
-    const line = lines[n]!,
-      [depth] = quoted(line),
-      at = djotContentStart(line),
-      content = line.slice(at)
-    const definition = /^\[(?!\^[^\]\n]+\]:(?:[ \t\r]|$))([^\]\n]*)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
-    const previousLine = lines[n - 1] ?? '', previousAt = djotContentStart(previousLine)
-    const previousNote = previousLine.slice(0, previousAt).indexOf('[^')
-    const previousOwner = previousNote < 0 ? previousAt : previousNote + 1
-    const prefix = line.slice(0, at)
-    const noteAt = prefix.indexOf('[^')
-    const ownerMarker = noteAt < 0 ? /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(prefix) : null
-    const physicalPrefix = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(line)![0]
-    const definitionOwner = definitionOwners.at(-1)
-    const ownerExit = definitionOwner !== undefined && (depth < definitionOwner.depth || depth === definitionOwner.depth && physicalPrefix.length < definitionOwner.start)
-    const metadata = definition !== null || content.startsWith('{') && readAttributes(content, 0)?.end === content.trimEnd().length
-    if (ownerExit && metadata && mask[offset + at] === ' ') fenceMask ??= maskDjotFences(source, undefined, rows, true)
-    const metadataExit = ownerExit && metadata && (mask[offset + at] !== ' ' || fenceMask?.[offset + at] !== ' ')
-    const outdented = metadataExit || at < previousOwner && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousNote < 0 ? previousAt : previousNote))
-    const boundary: boolean = previous === '' || previousAttributeBlock || rows[n - 1] || depth !== previousDepth || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || outdented || /^(?:#{1,6} |:{3,}|[`~]{3,}|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
-    const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(noteAt < 0 ? prefix : prefix.slice(0, noteAt))
-    const rowEnd = line.trimEnd().length - 1
-    const boundaryRow = (ownerExit || rows[n - 1]) && line[physicalPrefix.length] === '|' && rowEnd > physicalPrefix.length && mask[offset + physicalPrefix.length] === '|' && mask[offset + rowEnd] === '|' && line[rowEnd - 1] !== '\\'
-    const rowEntry = boundaryRow && ownerExit && !rows[n]
-    if (boundaryRow) rows[n] = true
-    const closesOwner = boundaryRow || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[-*][ \t]*){3,}$)/.test(line.slice(physicalPrefix.length)) && mask[offset + physicalPrefix.length] !== ' ' || rows[n] || /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(line.slice(physicalPrefix.length))
-    if (ownerExit && (metadataExit || previous === '' || closesOwner || rows[n - 1])) while (definitionOwners.at(-1) && (depth < definitionOwners.at(-1)!.depth || depth === definitionOwners.at(-1)!.depth && physicalPrefix.length < definitionOwners.at(-1)!.start)) definitionOwners.pop()
-    if (boundary && (noteAt >= 0 || ownerMarker !== null)) {
-      const start = noteAt >= 0 ? noteAt : ownerMarker!.index
-      if (mask[offset + start] !== ' ' && (definitionOwners.at(-1)?.start !== start + 1 || definitionOwners.at(-1)?.depth !== depth)) definitionOwners.push({ start: start + 1, depth })
-    }
-    const separator = (metadataExit && !marker || rowEntry || definition !== null && rows[n - 1] && !marker && (ownerExit || definitionOwner === undefined)) && previous !== '' ? physicalPrefix + '\n' : ''
-    if (separator) lines[n] = separator + line
-    if (definition && (mask[offset + at] === '[' || metadataExit && fenceMask?.[offset + at] === '[') && (boundary || marker)) {
-      let target = definition[2] ?? '',
-        end = n
-      while (end + 1 < lines.length) {
-        const next = lines[end + 1]!,
-          [nextDepth] = quoted(next),
-          nextAt = djotContentStart(next)
-        const nextPrefix = next.slice(0, nextAt), nextToken = next.slice(nextAt).replace(/\r$/, '')
-        if (nextDepth !== depth || nextAt <= at || nextPrefix.includes('[^') || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(nextPrefix) || !/^[^ \t\r\n]+$/.test(nextToken)) break
-        target += nextToken
-        end++
-      }
-      accepted?.set(n, { label: definition[1]!, target, end })
-      const nextByte = content[definition[1]!.length + 3]
-      if (end > n || target !== '' && nextByte !== ' ')
-        lines[n] = separator + line.slice(0, at) + `[${definition[1]}]:${target ? ' ' + target : ''}`
-      if (end > n) {
-        for (let k = n + 1; k <= end; k++) {
-          offset += lines[k]!.length + 1
-          removed.add(k)
-        }
-        n = end
-      }
-    }
-    const invalidDefinition = definition === null && /^\[(?!\^)[^\]\n]*\]:/.test(content)
-    if ((invalidDefinition || definition && !(boundary || marker)) && mask[offset + at] === '[') lines[n] = line.slice(0, at) + line.slice(at).replace(']:', ']\\:')
-    const attrs = content[0] === '{' ? readAttributes(content, 0) : undefined
-    previousAttributeBlock = !!(boundary || marker) && attrs?.end === content.trimEnd().length
-    previous = content.trim(); previousDepth = depth; offset += line.length + 1
-  }
-  return lines.filter((_line, n) => !removed.has(n)).join('\n')
 }
 
 function normalizeDjotParagraphFences(source: string): string {
