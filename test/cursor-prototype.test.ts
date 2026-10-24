@@ -534,6 +534,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype('- a\n  - +\f\n\nb\n')).toStrictEqual(parse('- a\n  - +\f\n\nb\n'))
   })
 
+  it('declines a raised colon container whose list ownership is unresolved', () => {
+    expect(() => parseCursorPrototype('- head\n\n      ::: note\n      a\n- second\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
     '![a][ref]\n^ cap\n\n[ref]: /u\n'])
   ('attaches an image caption only when its reference resolves: %s', (source) => {

@@ -583,6 +583,14 @@ function rejectAmbiguousNestedPlus(marker: ReturnType<typeof listMarker>): void 
   }
 }
 
+function rejectRaisedColonContinuation(text: string, frame: { contentColumn?: number } | undefined): void {
+  const contentColumn = frame?.contentColumn
+  if (contentColumn === undefined) return
+  if (/^ {3,}:{3,}(?:[ \t]|$)/.test(text.slice(contentColumn - 1))) {
+    throw new UnsupportedCursorSyntax('raised colon list ownership')
+  }
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -744,6 +752,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const continuationFrame = !nextMarker ? [...stack].reverse().find((frame) =>
         frame.contentColumn !== undefined &&
         next.text.startsWith(' '.repeat(frame.contentColumn - 1))) : undefined
+      rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
       for (let i = 0; i < blanks; i++) cursor.take()
       if (continuationFrame) {
