@@ -51,6 +51,7 @@ describe('experimental block cursor', () => {
     'text\n- a\n- b\n',
     'text\n1. x\n2. y\n',
     '- a\n\n+\n- s\n',
+    '> quoted\n- item\n',
   ])('keeps a list marker in the open paragraph when its owner does not claim it: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

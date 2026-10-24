@@ -261,7 +261,7 @@ function mayContinueQuoteLazily(follower: string | undefined, innerLast: string 
     finalBlock = finalBlock.slice(finalBlock[1] === ' ' ? 2 : 1).trimStart()
   }
   if (finalBlock === '' || (isBlockStart(finalBlock) && !finalBlock.startsWith(':: '))) return false
-  return !isBlockStart(follower)
+  return !interruptsParagraph(follower, ROOT_OWNER)
 }
 
 function plainQuoteText(line: string): boolean {
@@ -900,7 +900,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       last = line
       continue
     }
-    if (!cursor.owner.inList && plainParagraph && plainQuoteText(line.text) &&
+    if (!cursor.owner.inList && plainParagraph &&
+        (plainQuoteText(line.text) || listMarker(line.text)) &&
         mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
       body.push(cursor.take())
       last = line
