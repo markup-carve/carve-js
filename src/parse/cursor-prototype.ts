@@ -1,4 +1,5 @@
 import type { Attrs, BlockNode, BlockQuote, CodeBlock, Document, HeadingLevel, InlineNode, List, ListItem, Paragraph, Position, Table, TableRow } from '../ast.js'
+import { GENERATED_CONTENT_KINDS } from '../ast.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
 import { toCodepointPositions } from '../source/source-positions.js'
 import { normalizeRefLabel } from '../label-key.js'
@@ -108,6 +109,7 @@ class CursorInline extends InlineParseSession {
 const HEADING = /^(#{1,6}) +(\S.*)$/
 const BULLET = /^( *)([-*]) +(.*)$/
 const FENCE = /^(`{3,}|~{3,})([A-Za-z0-9_-]+)?[ \t]*$/
+const COLON_OPEN = /^(:{3,}) +([A-Za-z][A-Za-z0-9_-]*)[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
@@ -509,6 +511,28 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const firstMarker = listMarker(first.text)
     if (firstMarker) {
       emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
+      continue
+    }
+    const colon = COLON_OPEN.exec(first.text)
+    if (colon) {
+      if (!atDocumentLevel || colon[2] === 'figure' || colon[2] === 'list-table') {
+        throw new UnsupportedCursorSyntax('nested or specialized colon container')
+      }
+      cursor.take()
+      const body: SourceLine[] = []
+      const closer = new RegExp(`^:{${colon[1]!.length}}[ \\t]*$`)
+      while (cursor.peek() && !closer.test(cursor.peek()!.text)) {
+        if (cursor.peek()!.text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
+        body.push(cursor.take())
+      }
+      if (!cursor.peek()) throw new UnsupportedCursorSyntax('unclosed colon container')
+      const close = cursor.take()
+      const children = parseBlocks(new Cursor(body), inline, definitionNodes, depth + 1, false)
+      const kind = colon[2]!
+      const pos = position(first, close)
+      const node: BlockNode = GENERATED_CONTENT_KINDS.has(kind) ?
+        { type: 'directive', kind, children, pos } : { type: 'admonition', kind, children, pos }
+      emit(node)
       continue
     }
     if (/^(?::::|::)/.test(first.text)) throw new UnsupportedCursorSyntax(`block at line ${first.number}`)

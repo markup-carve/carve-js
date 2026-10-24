@@ -156,6 +156,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['::: note\nBody\n:::\n', '::: toc\nBody\n:::\n',
+    '::: note\n# Heading\n\n- item\n:::\n'])
+  ('parses a simple named container through the shared block cursor: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
+    '> ::: note\n> Body\n> :::\n', '::: note\n```\n:::\n```\n:::\n'])
+  ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- > quote\n',
     '- ```\n  code\n  ```\n',
@@ -176,8 +188,8 @@ describe('experimental block cursor', () => {
   })
 
   it('declines source forms that have not been migrated', () => {
-    expect(() => parseCursorPrototype('::: note\nBody\n:::')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('Text\n::: note\nBody\n:::')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('::: note\n::: tip\nBody\n:::\n:::')).toThrow(UnsupportedCursorSyntax)
+    expect(() => parseCursorPrototype('::: note\nBody\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('A\r\nB')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
   })
