@@ -932,26 +932,33 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const next = cursor.peek(nextIndex)?.text
   const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
   const separated = hasBodyLine && nextIndex === 2
+  let bodyLength = 0
+  if (hasBodyLine) {
+    while (cursor.peek(nextIndex + bodyLength)?.text.startsWith('  ') &&
+      plainQuoteText(cursor.peek(nextIndex + bodyLength)!.text.slice(2))) bodyLength++
+  }
   if (!footnote[2] || (hasBodyLine && (nextIndex > 2 || footnote[2] === '{empty}' ||
-      !next!.startsWith('  ') ||
-      !plainQuoteText(next!.slice(2)) ||
-      (cursor.peek(nextIndex + 1) && cursor.peek(nextIndex + 1)!.text !== '')))) {
+      bodyLength === 0 ||
+      (cursor.peek(nextIndex + bodyLength) && cursor.peek(nextIndex + bodyLength)!.text !== '')))) {
     throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
   }
   cursor.take()
   if (separated) cursor.take()
-  const continuation = hasBodyLine ? cursor.take() : undefined
+  const continuation: SourceLine[] = []
+  for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
   const column = first.text.length - footnote[2]!.length + 1
   const parts: ContentLine[] = [{ line: first, column, text: footnote[2]! }]
-  if (continuation && !separated) parts.push({ line: continuation, column: 3, text: continuation.text.slice(2) })
-  const last = continuation ?? first
+  if (!separated) for (const line of continuation) {
+    parts.push({ line, column: 3, text: line.text.slice(2) })
+  }
+  const last = continuation.at(-1) ?? first
   const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
     pos: position(first, separated ? first : last, column) }
-  const separateBody: Paragraph | undefined = separated && continuation ? { type: 'paragraph',
-    children: inline.inlines([{ line: continuation, column: 3, text: continuation.text.slice(2) }]),
-    pos: position(continuation, continuation, 3) } : undefined
+  const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
+    children: inline.inlines(continuation.map((line) => ({ line, column: 3, text: line.text.slice(2) }))),
+    pos: position(continuation[0]!, last, 3) } : undefined
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
     separateBody ? [body, separateBody] : [body],
     enumerable: true, configurable: true, writable: true })
