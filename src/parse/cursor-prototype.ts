@@ -376,7 +376,16 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
   const first = cursor.peek()!
   const second = cursor.peek(1)?.text
   const gfm = second?.startsWith('|') && /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+$/.test(second)
-  if (gfm) return parseSimpleTable(cursor, inline)
+  if (gfm) {
+    let row = 0
+    let hasSpanMarker = false
+    while (cursor.peek(row)?.text.startsWith('|')) {
+      hasSpanMarker ||= /\|[ \t]*[<^][ \t]*\|/.test(cursor.peek(row)!.text)
+      row++
+    }
+    return hasSpanMarker ? parseCanonicalTableWithExistingRules(cursor, inline) :
+      parseSimpleTable(cursor, inline)
+  }
   const headed = first.text.startsWith('|=')
   if (!first.text.startsWith('|') ||
       (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '' &&
