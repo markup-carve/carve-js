@@ -1280,6 +1280,24 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
       body.push({ text: trailing.text.slice(firstIndent), start: trailing.start + firstIndent,
         number: trailing.number, baseColumn: (trailing.baseColumn ?? 1) + firstIndent })
     }
+  } else if (list) {
+    let offset = nextIndex + source.length
+    let blanks = 0
+    while (cursor.peek(offset + blanks)?.text === '') blanks++
+    const trailing = cursor.peek(offset + blanks)
+    const afterTrailing = cursor.peek(offset + blanks + 1)
+    if (blanks > 0 && trailing?.text.startsWith(' '.repeat(firstIndent + 2)) &&
+        RE_BLOCKQUOTE.test(trailing.text.slice(firstIndent + 2)) &&
+        (!afterTrailing || isBlankLine(afterTrailing.text))) {
+      for (let i = 0; i < blanks; i++) {
+        const blank = cursor.peek(offset + i)!
+        source.push(blank)
+        body.push(blank)
+      }
+      source.push(trailing)
+      body.push({ text: trailing.text.slice(firstIndent), start: trailing.start + firstIndent,
+        number: trailing.number, baseColumn: (trailing.baseColumn ?? 1) + firstIndent })
+    }
   }
   const after = cursor.peek(nextIndex + source.length)
   if (after && isBlankLine(after.text)) {

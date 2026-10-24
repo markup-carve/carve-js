@@ -507,6 +507,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a nested quote in one footnote list item', () => {
+    const source = '[^n]: intro\n\n  - item\n\n    > quote\n\nsee[^n]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a structural note with another indented block after a blank', () => {
     expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
