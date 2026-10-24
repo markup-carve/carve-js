@@ -138,8 +138,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines raw fences in containers until their source owner is mapped', () => {
-    expect(() => parseCursorPrototype('> ```=html\n> x\n> ```\n'))
+  it.each([
+    '> ```=html\n> x\n> ```\n',
+    '::: note\na\n\n```=html\n\n```\n:::\n',
+    '> a\n>\n> ```=html\n\nb\n',
+  ])('uses the raw reader inside mapped quote and named containers: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unclosed quote raw block with a quoted blank payload', () => {
+    expect(() => parseCursorPrototype('> a\n>\n> ```=html\n>\n\nb\n'))
       .toThrow(UnsupportedCursorSyntax)
   })
 

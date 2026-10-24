@@ -479,6 +479,23 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   return paragraph
 }
 
+function parseRawAtCursor(cursor: Cursor): BlockNode {
+  if (cursor.tableHost === 'list') throw new UnsupportedCursorSyntax('list raw block')
+  const first = cursor.peek()!
+  const lexer = cursor.rootSource ? cursor.rootLexer ??= new Lexer(cursor.rootSource) :
+    new Lexer(cursor.lines.map((line) => line.text))
+  if (!cursor.rootSource) lexer.nested = true
+  lexer.pos = cursor.at
+  const raw = parseRawBlock(lexer)
+  if (cursor.tableHost === 'quote' && lexer.pos === cursor.lines.length &&
+      cursor.lines.at(-1)?.text === '') {
+    throw new UnsupportedCursorSyntax('quote raw block boundary')
+  }
+  cursor.at = lexer.pos
+  raw.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  return raw
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -878,13 +895,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (RE_RAW_FENCE.test(first.text)) {
-      if (!cursor.rootSource) throw new UnsupportedCursorSyntax('nested raw block')
-      const lexer = cursor.rootLexer ??= new Lexer(cursor.rootSource)
-      lexer.pos = cursor.at
-      const raw = parseRawBlock(lexer)
-      cursor.at = lexer.pos
-      raw.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
-      emit(raw)
+      emit(parseRawAtCursor(cursor))
       continue
     }
     const fence = fenceOpen(first.text)
