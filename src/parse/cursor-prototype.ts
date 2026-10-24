@@ -11,6 +11,7 @@ import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-bou
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { RE_CAPTION, RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
+import { replaceLoneSurrogates } from '../well-formed.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
@@ -1192,6 +1193,7 @@ export function parseCursorPrototype(source: string): Document {
   const strippedBom = source.charCodeAt(0) === 0xfeff
   if (strippedBom) source = source.slice(1)
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
+  source = replaceLoneSurrogates(source)
   const lines = scanLines(source)
   if (strippedBom) for (let i = 0; i < lines.length; i++) {
     lines[i]!.start++

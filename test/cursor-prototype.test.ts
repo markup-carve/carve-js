@@ -72,6 +72,12 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('replaces lone surrogates before scanning without changing raw byte length', () => {
+    for (const source of ['a\ud800b\n', '# H\udfff\n', '- a\ud800\n- b\n']) {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    }
+  })
+
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
   ('parses a canonical table row without a GFM separator: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
