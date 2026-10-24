@@ -251,6 +251,12 @@ function plainQuoteText(line: string): boolean {
   return /^(?:[\p{L}\p{N}]|\\#)/u.test(line) && !line.includes('\t') && !isBlockStart(line)
 }
 
+function nestedQuoteParagraphText(text: string): boolean {
+  let inner = text
+  while (inner.startsWith('>')) inner = inner.slice(inner[1] === ' ' ? 2 : 1)
+  return plainQuoteText(inner)
+}
+
 function listContinuationPrefix(line: string, base: number): number {
   let column = base
   while (line[column] === ' ') column++
@@ -781,11 +787,11 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const text = line.text.slice(prefix)
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      plainParagraph &&= plainQuoteText(text)
+      plainParagraph &&= nestedQuoteParagraphText(text)
       last = line
       continue
     }
-    if (depth === 0 && plainParagraph && plainQuoteText(line.text) &&
+    if (!cursor.owner.inList && plainParagraph && plainQuoteText(line.text) &&
         mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
       body.push(cursor.take())
       last = line

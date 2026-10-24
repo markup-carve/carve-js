@@ -171,6 +171,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('assigns a lazy quote line to a quote inside a named container', () => {
+    const source = '::: note\n> a\nb\n:::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
+  ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '> %%%\n> hidden\n> %%%\n',
     '::: note\n%%%\nhidden\n%%%\n:::\n',
@@ -401,7 +411,6 @@ describe('experimental block cursor', () => {
   it('declines an unmarked quote follower while its paragraph may still be open', () => {
     expect(() => parseCursorPrototype('> :: term\nlazy\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('> +\nlazy\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('> > nested\nlazy\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('> quote\n\tlazy\n')).toThrow(UnsupportedCursorSyntax)
   })
 
