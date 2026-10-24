@@ -117,6 +117,10 @@ class CursorInline extends InlineParseSession {
   }
 }
 
+function imageReferenceResolved(image: Extract<InlineNode, { type: 'image' }>, inline: CursorInline): boolean {
+  return !image.ref || inline.linkDefinitions.has(normalizeRefLabel(image.ref))
+}
+
 const BULLET = /^( *)([-*]) +(.*)$/
 function fenceOpen(line: string) {
   if (line[0] !== '`' && line[0] !== '~') return null
@@ -818,6 +822,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
         const lead = inline.inlines(parts)
         if (lead.length === 1 && lead[0]?.type === 'image' &&
+            imageReferenceResolved(lead[0], inline) &&
             lead[0].pos?.startOffset === parts[0]!.line.start &&
             lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
       }
@@ -829,13 +834,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
       pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
     if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
-      const caption = takeCaption(cursor, inline)
+      const image = paragraph.children[0]
+      const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
       if (caption) {
         emit({ type: 'figure', target: paragraph.children[0],
           caption: caption.children, pos: position(first, caption.line) })
         continue
       }
-      const image = paragraph.children[0]
       if (!image.ref && image.pos?.startColumn === 1 &&
           image.pos.endColumn === first.text.length + 1) {
         emit(image)

@@ -318,6 +318,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
+    '![a][ref]\n^ cap\n\n[ref]: /u\n'])
+  ('attaches an image caption only when its reference resolves: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['``` graphviz\ndigraph { A -> B }\n```\n',
     '``` php\ncode\n```\n', '~~~ php\ncode\n~~~\n',
     '```php "src/Auth.php" [Composer]\ncomposer require x\n```\n',
