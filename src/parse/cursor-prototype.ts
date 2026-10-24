@@ -605,6 +605,13 @@ function rejectBelowColumnMarkerAfterComment(marker: ReturnType<typeof listMarke
   }
 }
 
+function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
+  if (body.at(-1)?.text.startsWith('>') &&
+      mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
+    throw new UnsupportedCursorSyntax('quote continuation across list boundary')
+  }
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
@@ -802,7 +809,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
-    if (!line.text.startsWith(prefix)) break
+    if (!line.text.startsWith(prefix)) {
+      rejectListQuoteBoundary(top.body, line)
+      break
+    }
     let bodyPrefix = prefix.length
     if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
       if (!line.text.startsWith(' '.repeat(top.fencePrefix))) {
