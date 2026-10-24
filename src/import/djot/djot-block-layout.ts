@@ -69,6 +69,13 @@ function compactDjotListPrefix(text: string, canonicalBullets = false): string {
   return parts.join('')
 }
 
+function quoteOpeningColumn(prefix: string, previousDepth: number, depth: number): number {
+  if (depth <= previousDepth) return 0
+  let end = 0
+  for (let level = 0; level < previousDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(end))![0].length
+  return /^[ \t]*/.exec(prefix.slice(end))![0].length
+}
+
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 function deepQuotedItemAttributes(source: string, hold: (attributes: string, block?: boolean) => string): string {
   if (!source.includes('{') || !source.includes('>')) return source
@@ -86,12 +93,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     const text = body.slice(indent), visible = masks[row]!.slice(prefix.length + indent)
     const at = offset + prefix.length + indent
     offset += line.length + 1
-    let openingColumn = 0
-    if (depth > previousDepth) {
-      let end = 0
-      for (let level = 0; level < previousDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(end))![0].length
-      openingColumn = /^[ \t]*/.exec(prefix.slice(end))![0].length
-    }
+    const openingColumn = quoteOpeningColumn(prefix, previousDepth, depth)
     const endsItem = masks[row]![prefix.lastIndexOf('>')] === '>' && frames.get(previousDepth)?.some(owner => owner.column >= openingColumn)
     if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
     if (depth > previousDepth && previousParagraph && !endsItem) literalDepth ??= previousDepth
