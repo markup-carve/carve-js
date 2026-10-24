@@ -1193,15 +1193,19 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
   const quote = RE_BLOCKQUOTE.test(firstText)
   const fence = fenceOpen(firstText)?.marker ?? RE_RAW_FENCE.exec(firstText)?.[1]
   const table = firstText[0] === '|' && isTableRow(firstText)
-  if (!heading && !quote && !fence && !table) return undefined
+  const list = listMarker(firstText)
+  const attrs = firstText[0] === '{' && parseBlockAttributeRun(firstText)
+  if (!heading && !quote && !fence && !table && !list && !attrs) return undefined
   const source = [first]
   const body = [{ text: firstText, start: first.start + firstIndent, number: first.number,
     baseColumn: (first.baseColumn ?? 1) + firstIndent }]
   const second = cursor.peek(nextIndex + 1)
-  if (quote && second?.text.startsWith('  ')) {
+  if ((quote || attrs) && second?.text.startsWith('  ')) {
     const indent = /^[ ]*/.exec(second.text)![0].length
     const text = second.text.slice(indent)
-    if (plainQuoteText(text)) {
+    if ((quote && (plainQuoteText(text) ||
+        (indent === firstIndent && RE_HEADING.test(text)))) ||
+        (attrs && indent === firstIndent && plainQuoteText(text))) {
       source.push(second)
       body.push({ text, start: second.start + indent, number: second.number,
         baseColumn: (second.baseColumn ?? 1) + indent })
