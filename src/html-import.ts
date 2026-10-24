@@ -2480,113 +2480,8 @@ class Importer {
       if (group) return [group]
     }
     const attrs = this.attrs(node, path)
-    if (/^h[1-6]$/.test(tag)) {
-      this.headingDepth++
-      let raw: InlineNode[]
-      try {
-        raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
-      } finally {
-        this.headingDepth--
-      }
-      const children = trimBlockEdges(raw)
-      // Carve spells no empty heading; even without attributes, dropping it loses its level.
-      if (children.length === 0) {
-        this.report.add(
-          'element-dropped',
-          raw.length > 0
-            ? `Dropped whitespace-only <${tag}> holding no content character`
-            : `Dropped <${tag}> holding no content`,
-          'warning',
-          path,
-          node,
-        )
-        return []
-      }
-      let held = attrs
-      if (held?.id !== undefined) {
-        if (this.carrierReads.get(node)?.names.has('generated-id')) {
-          const { id: _dropped, ...rest } = held
-          held = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-        } else if (this.writing || this.carrierReads.get(node)?.names.has('explicit-id')) {
-          held.order = slotOrderFromElement(node, held)
-        }
-      }
-      const heading: BlockNode = { type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }
-      this.headingOrigins.set(heading, node)
-      return [heading]
-    }
-    if (tag === 'p') {
-      /*
-       * PART 11 §7 DECIDES WHAT AN IMPORT KEEPS, and it draws the line at
-       * the two-character `whitespace` terminal. A block whose every
-       * character is layout builds NO node - a lone space or tab line is a
-       * blank line, so a paragraph there is a node no Carve source spells -
-       * while a block holding a character §7 calls content keeps both the
-       * character and its paragraph. A NO-BREAK space is content, and so are
-       * U+202F and U+3000: a lone one of those reads back as a paragraph.
-       *
-       * The drop is REPORTED, because an element left the document.
-       *
-       * READ OFF THE BUILT CHILDREN, not off the element's text. A second
-       * walk of the subtree to weigh its characters is a recursion the
-       * depth counter does not cover, and it overflowed the stack on the
-       * nesting the counter exists to survive. `inlines()` is already
-       * guarded, and the trim already removes exactly the characters §7
-       * calls layout - so what it leaves answers the question by itself.
-       *
-       * A block that held NOTHING is untouched, and the distinction is the
-       * point: §7 weighs the characters a block holds, and an empty one
-       * holds none for the clause to call layout.
-       */
-      const raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
-      const children = trimBlockEdges(raw)
-      if (children.length === 0 && raw.length > 0) {
-        this.report.add(
-          'element-dropped',
-          `Dropped whitespace-only <${tag}> holding no content character`,
-          'warning',
-          path,
-          node,
-        )
-        return []
-      }
-      // An empty paragraph has no spelling, and its attribute line alone would
-      // attach to the next block, so it is dropped with one row covering them.
-      if (children.length === 0 && attrs) {
-        this.report.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
-        return []
-      }
-      // A bare one carries nothing, and the writer writes nothing for it.
-      if (children.length === 0) return []
-      const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
-      /*
-       * CARVE SOURCE CANNOT SPELL THIS PARAGRAPH, so a writer loses it and
-       * §16 says the writing exit reports that (carve-js#1419).
-       *
-       * `spec/resources/examples/edge-cases.md` is what rules the shape: "a
-       * paragraph whose whole content is one image is still the standalone
-       * image shape, not a wrapped one". So `![G](g.jpg)` re-reads as a BLOCK
-       * image and the `<p>` is gone - the mirror of carve-js#1411, where the
-       * paragraph was OURS and the tree was the wrong exit. This one is the
-       * author's, the tree is right, and the loss belongs to the writer.
-       *
-       * NOT A CHANGE OF OUTPUT, because there is no other output to write.
-       * ` ![G](g.jpg)` does parse as a paragraph holding one image, but the
-       * canonical writer normalizes the indent away, and inside a list item or
-       * a definition description the marker absorbs it at every width - so the
-       * device does not exist for `list_item > paragraph > image` at all.
-       */
-      if (children.length === 1 && children[0]!.type === 'image') {
-        this.loneImageParagraphs.push({
-          node,
-          path,
-          block: paragraph,
-          attributed: attrs !== undefined,
-          overwritten: overwrittenAttrNames(attrs, (children[0] as { attrs?: Attrs }).attrs),
-        })
-      }
-      return [paragraph]
-    }
+    if (/^h[1-6]$/.test(tag)) return this.headingBlock(node, tag, path, depth, attrs)
+    if (tag === 'p') return this.paragraphBlock(node, tag, path, depth, attrs)
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(domChildren(node) ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
@@ -2660,203 +2555,8 @@ class Importer {
     }
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
       const container = carriedDiv ? undefined : this.containerFrom(tag, attrs)
-      if (container) {
-        /*
-         * THE TITLE PARAGRAPH IS THE CONTAINER'S TITLE, not its first body
-         * block. `::: note "A"` renders the title as a
-         * `<p class="admonition-title">` inside the aside, so leaving it in the
-         * body wrote it back as an ordinary paragraph carrying the renderer's
-         * own class - source that renders a SECOND title element on the next
-         * pass, and a document whose opening line is no longer the callout's
-         * name. Lifted here, and the `aria-labelledby` that pointed at it is
-         * dropped as derived, so nothing is left naming an element that no
-         * longer exists.
-         */
-        const children0 = domChildren(node) ?? []
-        // A directive has NO title slot (CARVE-P12-057 closes the node without
-        // one), so nothing is lifted out of a generated-content container: a
-        // `<p class="admonition-title">` inside one stays the ordinary paragraph
-        // it reads as, rather than being lifted into a field that does not exist
-        // and dropped on the way.
-        const generated = GENERATED_CONTENT_KINDS.has(container.kind)
-        const titleAt = generated ? -1 : children0.findIndex((child) => this.isAdmonitionTitle(child))
-        const titleNode = titleAt < 0 ? undefined : children0[titleAt]
-        // The paths stay the ones the elements arrived under: filtering the
-        // title out renumbers everything after it, the same reason `details`
-        // keeps its summary's siblings numbered where the author put them.
-        const body: P5Node[] = []
-        const bodyPaths: string[] = []
-        children0.forEach((child, index) => {
-          if (child === titleNode) return
-          body.push(child)
-          bodyPaths.push(this.childPath(path, child, index))
-        })
-        let title: InlineNode[] | undefined
-        if (titleNode) {
-          // The element itself, not only its children - an empty title is a DOM
-          // node the caller's `maxNodes` is counting, exactly as `<summary>` is.
-          //
-          // AT THE DEPTH THE BLOCK WALK WOULD HAVE USED. The body goes to
-          // `blocks(..., depth + 1)`, which enters each child through
-          // `block(..., depth + 2)`, so charging the lifted title a level
-          // shallower let a titled container pass a `maxDepth` the same DOM
-          // without a title is refused at. Found while giving the grouping
-          // label the same accounting (markup-carve/carve-js#1413); the node
-          // charge here was already right, only the depth was short.
-          this.enter(depth + 2)
-          const titlePath = this.childPath(path, titleNode, titleAt)
-          /*
-           * A TITLE HOLDS INLINE CONTENT AND HAS NO ATTRIBUTE SLOT, so whatever
-           * the paragraph carried cannot come with it - the same shape as a
-           * `<summary>`, and reported the same way rather than in silence
-           * (carve-js#1332). The structural `admonition-title` class is the
-           * exception and is consumed rather than reported, because the renderer
-           * writes it back from the title itself, exactly as the container's own
-           * `admonition` class is.
-           */
-          const own = this.attrs(titleNode, titlePath)
-          const leftover = own && { ...own, classes: (own.classes ?? []).filter((c) => c !== 'admonition-title') }
-          if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
-          if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
-            this.report.add(
-              'attribute-dropped',
-              `Dropped ${this.attrNames(leftover).join(', ')} on <p>: an admonition title has no attribute slot`,
-              'warning',
-              titlePath,
-              titleNode,
-            )
-          }
-          title = this.blockInlines(domChildren(titleNode) ?? [], titlePath, depth + 3)
-        }
-        // THE GROUPING LABEL IS THE CONTAINER'S TOO, and it sits after the
-        // title the renderer wrote, so it is lifted off what the title lift
-        // left behind (markup-carve/carve-js#1413).
-        const lifted = this.containerLabel(body, bodyPaths, depth)
-        const containerChildren = this.blocks(
-          lifted?.body ?? body,
-          path,
-          depth + 1,
-          lifted?.bodyPaths ?? bodyPaths,
-        )
-        if (generated) {
-          return [
-            {
-              type: 'directive',
-              kind: container.kind,
-              ...(lifted ? { label: lifted.label } : {}),
-              children: containerChildren,
-              ...(container.attrs ? { attrs: container.attrs } : {}),
-            },
-          ]
-        }
-        return [
-          {
-            type: 'admonition',
-            kind: container.kind,
-            ...(title ? { title } : {}),
-            ...(lifted ? { label: lifted.label } : {}),
-            children: containerChildren,
-            ...(container.attrs ? { attrs: container.attrs } : {}),
-          },
-        ]
-      }
-      // The ELEMENT row is the one a derived wrapper does not earn. What it
-      // still CARRIED is reported below, as it always was: `attrs` there is
-      // what survived `dropDerived`, so an author's `class` on the section, or
-      // an `aria-label` the default does not match, still goes out with a row.
-      // Suppressing both together silenced two real losses.
-      //
-      // WHICH ROW IT EARNS FOLLOWS THE CONTENT, like every other unsupported
-      // element (markup-carve/carve#1738): an empty `<section>` had nothing an
-      // unwrap could preserve. The two exemptions come FIRST and read as
-      // unwrapped, because neither writes an element row at all and the
-      // attribute rows below them keep the sentence they already had.
-      const unwrapped =
-        tag === 'div' || this.isDerivedWrapper(node, tag) || this.reportUnsupportedElement(node, tag, path)
-      // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
-      // arm never had a lift at all - it lived only on the container-CLASS arm
-      // above, so `::: figure [g]` reached it and a plain `<div>` never did.
-      const own = domChildren(node) ?? []
-      const lifted =
-        tag === 'div'
-          ? this.containerLabel(
-              own,
-              own.map((child, index) => this.childPath(path, child, index)),
-              depth,
-            )
-          : undefined
-      const children = lifted
-        ? this.blocks(lifted.body, path, depth + 1, lifted.bodyPaths)
-        : this.blocks(own, path, depth + 1)
-      // THE BODY IS BUILT BEFORE THE ATTRIBUTE ROWS so the wrapper's id has a
-      // heading to land on. Whether that id is the renderer's or the author's
-      // is a question about the HEADING's own text, and only the imported node
-      // carries the inline projection that answers it.
-      //
-      // This does not reorder the report. Rows sort by the position of the
-      // LOSING ELEMENT, and a wrapper stands before everything it wraps, so
-      // moving one call across another only changes the order rows were
-      // CONSTRUCTED in - which the sort keeps only as a tie-break between rows
-      // at the same position, and the wrapper's own two rows keep their
-      // relative order because `element-unwrapped` is still added first.
-      let hoistedChildren = children
-      if (tag === 'section') {
-        const firstHeading = this.attr(node, 'id') === undefined ? undefined : this.firstHeadingWithin(node)
-        const heading = children[0]
-        const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
-          this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
-        if (!mapped) hoistedChildren = []
-        // No heading took the id, so nothing was rebuilt from the wrapper's carriers.
-        for (const read of ['explicit-id', 'id-slot', 'generated-id'] as const) {
-          if (mapped || !this.carrierReads.get(node)?.names.delete(read)) continue
-          const name = this.carrierName(node, read)!
-          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
-        }
-      }
-      const sectionReads = this.carrierReads.get(node)?.names
-      const headingElement = tag === 'section' ? this.firstHeadingWithin(node) : undefined
-      const heading = hoistedChildren[0]
-      if (sectionReads?.has('id-slot') && heading?.type === 'heading' && headingElement) {
-        const slots = slotOrderFromElement(headingElement, heading.attrs ?? {}).filter((slot) => slot !== '#id')
-        if (Number(this.carrierValue(node, 'id-slot')) > slots.length) {
-          sectionReads.delete('id-slot')
-          this.report.refuseAttribute(node, path, `round-trip marker attribute ${this.carrierName(node, 'id-slot')!}`, '', 'info', false)
-        }
-      }
-      if (tag !== 'div') {
-        this.reportUnwrappedAttributes(
-          node,
-          restoreHoistedSectionId(
-            tag,
-            attrs,
-            hoistedChildren,
-            sectionReads?.has('explicit-id') === true,
-            sectionReads?.has('generated-id') === true,
-            this.writing,
-            sectionReads?.has('id-slot') ? Number(this.carrierValue(node, 'id-slot')) : 0,
-            (held) => (headingElement ? slotOrderFromElement(headingElement, held) : []),
-          ),
-          tag,
-          path,
-          unwrapped,
-        )
-      }
-      /*
-       * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
-       * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
-       * written (markup-carve/carve#1578). A bare `<div>` carries no meaning of
-       * its own: the fence buys the reader nothing and costs two lines of markup
-       * nobody asked for.
-       */
-      if (tag !== 'div' || (!attrs && !lifted && !carriedDiv)) return children
-      return [
-        {
-          type: 'div',
-          ...(lifted ? { label: lifted.label } : {}),
-          children,
-          ...(attrs ? { attrs } : {}),
-        },
-      ]
+      if (container) return this.containerBlock(node, path, depth, container)
+      return this.wrapperBlock(node, tag, path, depth, attrs, carriedDiv)
     }
     // The four block tags with no mapping: `address`, `fieldset`, `form` and
     // `hgroup`. The EMBEDS do not reach here - none of them is in `BLOCK`, so
@@ -2869,6 +2569,323 @@ class Importer {
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
     return this.blocks(domChildren(node) ?? [], path, depth + 1)
+  }
+
+  private headingBlock(node: P5Node, tag: string, path: string, depth: number, attrs: Attrs | undefined): BlockNode[] {
+    this.headingDepth++
+    let raw: InlineNode[]
+    try {
+      raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
+    } finally {
+      this.headingDepth--
+    }
+    const children = trimBlockEdges(raw)
+    // Carve spells no empty heading; even without attributes, dropping it loses its level.
+    if (children.length === 0) {
+      this.report.add(
+        'element-dropped',
+        raw.length > 0
+          ? `Dropped whitespace-only <${tag}> holding no content character`
+          : `Dropped <${tag}> holding no content`,
+        'warning',
+        path,
+        node,
+      )
+      return []
+    }
+    let held = attrs
+    if (held?.id !== undefined) {
+      if (this.carrierReads.get(node)?.names.has('generated-id')) {
+        const { id: _dropped, ...rest } = held
+        held = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
+      } else if (this.writing || this.carrierReads.get(node)?.names.has('explicit-id')) {
+        held.order = slotOrderFromElement(node, held)
+      }
+    }
+    const heading: BlockNode = { type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }
+    this.headingOrigins.set(heading, node)
+    return [heading]
+  }
+
+  private paragraphBlock(node: P5Node, tag: string, path: string, depth: number, attrs: Attrs | undefined): BlockNode[] {
+    /*
+     * PART 11 §7 DECIDES WHAT AN IMPORT KEEPS, and it draws the line at
+     * the two-character `whitespace` terminal. A block whose every
+     * character is layout builds NO node - a lone space or tab line is a
+     * blank line, so a paragraph there is a node no Carve source spells -
+     * while a block holding a character §7 calls content keeps both the
+     * character and its paragraph. A NO-BREAK space is content, and so are
+     * U+202F and U+3000: a lone one of those reads back as a paragraph.
+     *
+     * The drop is REPORTED, because an element left the document.
+     *
+     * READ OFF THE BUILT CHILDREN, not off the element's text. A second
+     * walk of the subtree to weigh its characters is a recursion the
+     * depth counter does not cover, and it overflowed the stack on the
+     * nesting the counter exists to survive. `inlines()` is already
+     * guarded, and the trim already removes exactly the characters §7
+     * calls layout - so what it leaves answers the question by itself.
+     *
+     * A block that held NOTHING is untouched, and the distinction is the
+     * point: §7 weighs the characters a block holds, and an empty one
+     * holds none for the clause to call layout.
+     */
+    const raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
+    const children = trimBlockEdges(raw)
+    if (children.length === 0 && raw.length > 0) {
+      this.report.add(
+        'element-dropped',
+        `Dropped whitespace-only <${tag}> holding no content character`,
+        'warning',
+        path,
+        node,
+      )
+      return []
+    }
+    // An empty paragraph has no spelling, and its attribute line alone would
+    // attach to the next block, so it is dropped with one row covering them.
+    if (children.length === 0 && attrs) {
+      this.report.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
+      return []
+    }
+    // A bare one carries nothing, and the writer writes nothing for it.
+    if (children.length === 0) return []
+    const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
+    /*
+     * CARVE SOURCE CANNOT SPELL THIS PARAGRAPH, so a writer loses it and
+     * §16 says the writing exit reports that (carve-js#1419).
+     *
+     * `spec/resources/examples/edge-cases.md` is what rules the shape: "a
+     * paragraph whose whole content is one image is still the standalone
+     * image shape, not a wrapped one". So `![G](g.jpg)` re-reads as a BLOCK
+     * image and the `<p>` is gone - the mirror of carve-js#1411, where the
+     * paragraph was OURS and the tree was the wrong exit. This one is the
+     * author's, the tree is right, and the loss belongs to the writer.
+     *
+     * NOT A CHANGE OF OUTPUT, because there is no other output to write.
+     * ` ![G](g.jpg)` does parse as a paragraph holding one image, but the
+     * canonical writer normalizes the indent away, and inside a list item or
+     * a definition description the marker absorbs it at every width - so the
+     * device does not exist for `list_item > paragraph > image` at all.
+     */
+    if (children.length === 1 && children[0]!.type === 'image') {
+      this.loneImageParagraphs.push({
+        node,
+        path,
+        block: paragraph,
+        attributed: attrs !== undefined,
+        overwritten: overwrittenAttrNames(attrs, (children[0] as { attrs?: Attrs }).attrs),
+      })
+    }
+    return [paragraph]
+  }
+
+  private containerBlock(node: P5Node, path: string, depth: number, container: { kind: string; attrs?: Attrs }): BlockNode[] {
+    /*
+     * THE TITLE PARAGRAPH IS THE CONTAINER'S TITLE, not its first body
+     * block. `::: note "A"` renders the title as a
+     * `<p class="admonition-title">` inside the aside, so leaving it in the
+     * body wrote it back as an ordinary paragraph carrying the renderer's
+     * own class - source that renders a SECOND title element on the next
+     * pass, and a document whose opening line is no longer the callout's
+     * name. Lifted here, and the `aria-labelledby` that pointed at it is
+     * dropped as derived, so nothing is left naming an element that no
+     * longer exists.
+     */
+    const children0 = domChildren(node) ?? []
+    // A directive has NO title slot (CARVE-P12-057 closes the node without
+    // one), so nothing is lifted out of a generated-content container: a
+    // `<p class="admonition-title">` inside one stays the ordinary paragraph
+    // it reads as, rather than being lifted into a field that does not exist
+    // and dropped on the way.
+    const generated = GENERATED_CONTENT_KINDS.has(container.kind)
+    const titleAt = generated ? -1 : children0.findIndex((child) => this.isAdmonitionTitle(child))
+    const titleNode = titleAt < 0 ? undefined : children0[titleAt]
+    // The paths stay the ones the elements arrived under: filtering the
+    // title out renumbers everything after it, the same reason `details`
+    // keeps its summary's siblings numbered where the author put them.
+    const body: P5Node[] = []
+    const bodyPaths: string[] = []
+    children0.forEach((child, index) => {
+      if (child === titleNode) return
+      body.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    let title: InlineNode[] | undefined
+    if (titleNode) {
+      // The element itself, not only its children - an empty title is a DOM
+      // node the caller's `maxNodes` is counting, exactly as `<summary>` is.
+      //
+      // AT THE DEPTH THE BLOCK WALK WOULD HAVE USED. The body goes to
+      // `blocks(..., depth + 1)`, which enters each child through
+      // `block(..., depth + 2)`, so charging the lifted title a level
+      // shallower let a titled container pass a `maxDepth` the same DOM
+      // without a title is refused at. Found while giving the grouping
+      // label the same accounting (markup-carve/carve-js#1413); the node
+      // charge here was already right, only the depth was short.
+      this.enter(depth + 2)
+      const titlePath = this.childPath(path, titleNode, titleAt)
+      /*
+       * A TITLE HOLDS INLINE CONTENT AND HAS NO ATTRIBUTE SLOT, so whatever
+       * the paragraph carried cannot come with it - the same shape as a
+       * `<summary>`, and reported the same way rather than in silence
+       * (carve-js#1332). The structural `admonition-title` class is the
+       * exception and is consumed rather than reported, because the renderer
+       * writes it back from the title itself, exactly as the container's own
+       * `admonition` class is.
+       */
+      const own = this.attrs(titleNode, titlePath)
+      const leftover = own && { ...own, classes: (own.classes ?? []).filter((c) => c !== 'admonition-title') }
+      if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
+      if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
+        this.report.add(
+          'attribute-dropped',
+          `Dropped ${this.attrNames(leftover).join(', ')} on <p>: an admonition title has no attribute slot`,
+          'warning',
+          titlePath,
+          titleNode,
+        )
+      }
+      title = this.blockInlines(domChildren(titleNode) ?? [], titlePath, depth + 3)
+    }
+    // THE GROUPING LABEL IS THE CONTAINER'S TOO, and it sits after the
+    // title the renderer wrote, so it is lifted off what the title lift
+    // left behind (markup-carve/carve-js#1413).
+    const lifted = this.containerLabel(body, bodyPaths, depth)
+    const containerChildren = this.blocks(
+      lifted?.body ?? body,
+      path,
+      depth + 1,
+      lifted?.bodyPaths ?? bodyPaths,
+    )
+    if (generated) {
+      return [
+        {
+          type: 'directive',
+          kind: container.kind,
+          ...(lifted ? { label: lifted.label } : {}),
+          children: containerChildren,
+          ...(container.attrs ? { attrs: container.attrs } : {}),
+        },
+      ]
+    }
+    return [
+      {
+        type: 'admonition',
+        kind: container.kind,
+        ...(title ? { title } : {}),
+        ...(lifted ? { label: lifted.label } : {}),
+        children: containerChildren,
+        ...(container.attrs ? { attrs: container.attrs } : {}),
+      },
+    ]
+  }
+
+  private wrapperBlock(
+    node: P5Node,
+    tag: string,
+    path: string,
+    depth: number,
+    attrs: Attrs | undefined,
+    carriedDiv: boolean,
+  ): BlockNode[] {
+  // The ELEMENT row is the one a derived wrapper does not earn. What it
+  // still CARRIED is reported below, as it always was: `attrs` there is
+  // what survived `dropDerived`, so an author's `class` on the section, or
+  // an `aria-label` the default does not match, still goes out with a row.
+  // Suppressing both together silenced two real losses.
+  //
+  // WHICH ROW IT EARNS FOLLOWS THE CONTENT, like every other unsupported
+  // element (markup-carve/carve#1738): an empty `<section>` had nothing an
+  // unwrap could preserve. The two exemptions come FIRST and read as
+  // unwrapped, because neither writes an element row at all and the
+  // attribute rows below them keep the sentence they already had.
+  const unwrapped =
+    tag === 'div' || this.isDerivedWrapper(node, tag) || this.reportUnsupportedElement(node, tag, path)
+  // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
+  // arm never had a lift at all - it lived only on the container-CLASS arm
+  // above, so `::: figure [g]` reached it and a plain `<div>` never did.
+  const own = domChildren(node) ?? []
+  const lifted =
+    tag === 'div'
+      ? this.containerLabel(
+          own,
+          own.map((child, index) => this.childPath(path, child, index)),
+          depth,
+        )
+      : undefined
+  const children = lifted
+    ? this.blocks(lifted.body, path, depth + 1, lifted.bodyPaths)
+    : this.blocks(own, path, depth + 1)
+  // THE BODY IS BUILT BEFORE THE ATTRIBUTE ROWS so the wrapper's id has a
+  // heading to land on. Whether that id is the renderer's or the author's
+  // is a question about the HEADING's own text, and only the imported node
+  // carries the inline projection that answers it.
+  //
+  // This does not reorder the report. Rows sort by the position of the
+  // LOSING ELEMENT, and a wrapper stands before everything it wraps, so
+  // moving one call across another only changes the order rows were
+  // CONSTRUCTED in - which the sort keeps only as a tie-break between rows
+  // at the same position, and the wrapper's own two rows keep their
+  // relative order because `element-unwrapped` is still added first.
+  let hoistedChildren = children
+  if (tag === 'section') {
+    const firstHeading = this.attr(node, 'id') === undefined ? undefined : this.firstHeadingWithin(node)
+    const heading = children[0]
+    const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
+      this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
+    if (!mapped) hoistedChildren = []
+    // No heading took the id, so nothing was rebuilt from the wrapper's carriers.
+    for (const read of ['explicit-id', 'id-slot', 'generated-id'] as const) {
+      if (mapped || !this.carrierReads.get(node)?.names.delete(read)) continue
+      const name = this.carrierName(node, read)!
+      this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
+    }
+  }
+  const sectionReads = this.carrierReads.get(node)?.names
+  const headingElement = tag === 'section' ? this.firstHeadingWithin(node) : undefined
+  const heading = hoistedChildren[0]
+  if (sectionReads?.has('id-slot') && heading?.type === 'heading' && headingElement) {
+    const slots = slotOrderFromElement(headingElement, heading.attrs ?? {}).filter((slot) => slot !== '#id')
+    if (Number(this.carrierValue(node, 'id-slot')) > slots.length) {
+      sectionReads.delete('id-slot')
+      this.report.refuseAttribute(node, path, `round-trip marker attribute ${this.carrierName(node, 'id-slot')!}`, '', 'info', false)
+    }
+  }
+  if (tag !== 'div') {
+    this.reportUnwrappedAttributes(
+      node,
+      restoreHoistedSectionId(
+        tag,
+        attrs,
+        hoistedChildren,
+        sectionReads?.has('explicit-id') === true,
+        sectionReads?.has('generated-id') === true,
+        this.writing,
+        sectionReads?.has('id-slot') ? Number(this.carrierValue(node, 'id-slot')) : 0,
+        (held) => (headingElement ? slotOrderFromElement(headingElement, held) : []),
+      ),
+      tag,
+      path,
+      unwrapped,
+    )
+  }
+  /*
+   * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
+   * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
+   * written (markup-carve/carve#1578). A bare `<div>` carries no meaning of
+   * its own: the fence buys the reader nothing and costs two lines of markup
+   * nobody asked for.
+   */
+  if (tag !== 'div' || (!attrs && !lifted && !carriedDiv)) return children
+  return [
+    {
+      type: 'div',
+      ...(lifted ? { label: lifted.label } : {}),
+      children,
+      ...(attrs ? { attrs } : {}),
+    },
+  ]
   }
 
   /**
@@ -4043,35 +4060,7 @@ class Importer {
      * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
      * TeX that is already in the source, and no MathML-to-TeX converter.
      */
-    if (tag === 'math') {
-      /*
-       * Charged once, before anything reads the subtree: every arm below
-       * returns without walking the children, so `inlines()` never counts a
-       * descendant, and `maxNodes`/`maxDepth` must not depend on which branch
-       * an element takes. Before the counter, so a limit is reached by the
-       * counter rather than by the read - and once, because charging in the
-       * tier lookup as well counted an empty-annotation element's descendants
-       * twice.
-       */
-      this.budget(node, depth)
-      const math = this.mathml(node, path)
-      if (math) return [math]
-      if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
-        // The same answer the generic arm below gave a `<math>` before this
-        // branch existed, and byte for byte the same output. Reported once for
-        // the element rather than once per descendant, because the descendants
-        // are not preserved separately - they are inside this one raw span.
-        this.keepRaw(node, path, 'Preserved unsupported <math> element as raw HTML')
-        return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node) }]
-      }
-      const text = this.mode === 'roundtrip' ? undefined : linearMathText(node)
-      if (text !== undefined) {
-        this.report.add('element-unwrapped', 'Imported <math> as its text: no TeX annotation and no alttext, and its tokens read in order', 'warning', path, node)
-        return [{ type: 'text', value: text }]
-      }
-      this.report.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
-      return []
-    }
+    if (tag === 'math') return this.mathElement(node, path, depth)
     if (tag === 'ruby') return this.ruby(node, path, depth)
     if (tag === 'code') return this.codeSpan(node, path, depth)
     const beforeWalk = this.mark()
@@ -4082,35 +4071,8 @@ class Importer {
     this.readInlineCarriers(node, tag, children, path)
     const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
-    if (tag === 'a' && carried?.names.has('xref')) {
-      return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
-    }
-    if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
-    if (tag === 'span' && carried?.names.has('substitution')) {
-      const [removed, added] = children as [Extract<InlineNode, { type: 'delete' }>, Extract<InlineNode, { type: 'insert' }>]
-      return [{ type: 'substitution', old: removed.children, new: added.children }]
-    }
-    if (tag === 'span' && carried?.names.has('raw')) {
-      // §13a `data-carve-raw`. Without this the carrier span was read as raw
-      // HTML, so `` `x`{=tex} `` came back as
-      // `` `<span data-carve-raw="tex">x</span>`{=html} `` - the carrier buried
-      // inside a raw inline of the WRONG format, which is worse than losing it.
-      // `readInlineCarriers` has already settled that this span can hold one.
-      const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
-      return [{
-        type: 'raw_inline',
-        format: this.carrierValue(node, 'raw') ?? '',
-        content: holdsElements ? serializeInner(node as never) : this.flatText(node),
-      }]
-    }
-    if (tag === 'span' && carried?.names.has('escaped')) {
-      return [{ type: 'escaped_text', value: this.flatText(node) }]
-    }
-    // An element the HTML left empty holds nothing a reader sees, so it is
-    // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
-    // pair reads back as literal text, and `{--}` as the braced en dash. Its
-    // attributes can still matter (an `id` is a link target), and an empty span
-    // is spellable, so they move onto one.
+    const fromCarrier = this.carriedInline(node, tag, children, carried, attrs)
+    if (fromCarrier) return fromCarrier
     if (EMPTY_DROPPED_MARKS.has(tag) && children.length === 0) {
       return attrs ? [{ type: 'span', children: [], attrs }] : []
     }
@@ -4134,74 +4096,8 @@ class Importer {
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'a') {
-      // An absent href unwraps the anchor. An explicit empty href has a
-      // native Carve link spelling and reaches the link branch below.
-      //
-      // AND THE DESTINATION IS NOT REBUILT, which is the normative half. This
-      // is what Carve's own renderer emits: PART 9 section 25 blanks a
-      // dangerous destination and writes no provenance for it, keeping the
-      // visible text, so any route from a `title`, from the anchor's text or
-      // from a round-trip attribute back to a destination would reconstruct the
-      // exact value a security rule removed. The round trip owes the text.
-      if (this.attr(node, 'href') !== '' && destinationIsEmpty(this.attr(node, 'href'))) {
-        return this.unwrapDestinationLess(node, 'Unwrapped <a> with no destination', children, attrs, path)
-      }
-      if (destinationIsDenied(this.attr(node, 'href'))) {
-        return this.dropDeniedDestination(node, 'href', children, attrs, path)
-      }
-      const title = this.attr(node, 'title')
-      // §13a `data-carve-autolink`: HTML writes `<https://e>` and
-      // `[https://e](https://e)` as the same bytes, and the AST tells them
-      // apart - an autolink is its own node type.
-      if (carried?.names.has('autolink')) {
-        return [{
-          type: 'autolink',
-          href: this.attr(node, 'href') ?? '',
-          ...(carried.autolinkText !== undefined ? { text: carried.autolinkText } : {}),
-          ...(attrs ? { attrs } : {}),
-        }]
-      }
-      // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
-      // and the writer spells the empty one `[x](u "")`. Under a truthiness test
-      // it vanished with no diagnostic, because `attrs()` treats a link's title
-      // as consumed here rather than keeping it as `{title=…}`.
-      return [{
-        type: 'link',
-        href: this.attr(node, 'href') ?? '',
-        children,
-        ...(title !== undefined ? { title } : {}),
-        ...this.referenceFields(carried, attrs),
-        ...(attrs ? { attrs } : {}),
-      }]
-    }
-    if (tag === 'img') {
-      // An absent src unwraps the image to its alt text. An explicit empty
-      // src reaches the image branch below.
-      //
-      // The alt arrives as a raw attribute value rather than through the node
-      // walk, so it becomes a TEXT node and the writer escapes it for the prose
-      // slot it lands in, the same as any other imported text.
-      if (this.attr(node, 'src') !== '' && destinationIsEmpty(this.attr(node, 'src'))) {
-        const alt = this.attr(node, 'alt') ?? ''
-        const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
-        return this.unwrapDestinationLess(node, 'Unwrapped <img> with no source', stands, attrs, path)
-      }
-      if (destinationIsDenied(this.attr(node, 'src'))) {
-        const alt = this.attr(node, 'alt') ?? ''
-        const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
-        return this.dropDeniedDestination(node, 'src', stands, attrs, path)
-      }
-      const title = this.attr(node, 'title')
-      return [{
-        type: 'image',
-        src: this.attr(node, 'src') ?? '',
-        alt: this.attr(node, 'alt') ?? '',
-        ...(title !== undefined ? { title } : {}),
-        ...this.referenceFields(carried, attrs),
-        ...(attrs ? { attrs } : {}),
-      }]
-    }
+    if (tag === 'a') return this.anchorInline(node, children, carried, attrs, path)
+    if (tag === 'img') return this.imageInline(node, carried, attrs, path)
     if (tag === 'br') {
       // A hard break has no `attrs` slot, so anything `attrs()` kept for this
       // element is lost here and has to say so - the alternative is the silence
@@ -4213,17 +4109,7 @@ class Importer {
     }
     // The synthetic element the adapter footnote pass leaves at each
     // reference site (adapterFootnotes); never present in real HTML input.
-    if (tag === 'carve-footnote-ref') {
-      const label = this.attr(node, 'label') ?? ''
-      const inline = this.footnotes.inlineFootnoteBodies.get(label)
-      if (attrs?.keyValues) {
-        delete attrs.keyValues.label
-        if (Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
-      }
-      const authored = attrs && (attrs.id !== undefined || attrs.classes || attrs.keyValues) ? { attrs } : {}
-      if (inline !== undefined) return [{ type: 'inline_footnote', inline, ...authored }]
-      return [{ type: 'footnote_ref', label, ...authored }]
-    }
+    if (tag === 'carve-footnote-ref') return this.footnoteRefInline(node, attrs)
     if (tag === 'abbr') {
       // A use of an abbreviation the document DEFINED is prose: the expansion
       // belongs on the definition line, not on every use, and writing it on
@@ -4272,6 +4158,158 @@ class Importer {
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
     return children
+  }
+
+  private mathElement(node: P5Node, path: string, depth: number): InlineNode[] {
+    /*
+     * Charged once, before anything reads the subtree: every arm below
+     * returns without walking the children, so `inlines()` never counts a
+     * descendant, and `maxNodes`/`maxDepth` must not depend on which branch
+     * an element takes. Before the counter, so a limit is reached by the
+     * counter rather than by the read - and once, because charging in the
+     * tier lookup as well counted an empty-annotation element's descendants
+     * twice.
+     */
+    this.budget(node, depth)
+    const math = this.mathml(node, path)
+    if (math) return [math]
+    if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
+      // The same answer the generic arm below gave a `<math>` before this
+      // branch existed, and byte for byte the same output. Reported once for
+      // the element rather than once per descendant, because the descendants
+      // are not preserved separately - they are inside this one raw span.
+      this.keepRaw(node, path, 'Preserved unsupported <math> element as raw HTML')
+      return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node) }]
+    }
+    const text = this.mode === 'roundtrip' ? undefined : linearMathText(node)
+    if (text !== undefined) {
+      this.report.add('element-unwrapped', 'Imported <math> as its text: no TeX annotation and no alttext, and its tokens read in order', 'warning', path, node)
+      return [{ type: 'text', value: text }]
+    }
+    this.report.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
+    return []
+  }
+
+  private anchorInline(node: P5Node, children: InlineNode[], carried: CarrierRead | undefined, attrs: Attrs | undefined, path: string): InlineNode[] {
+    // An absent href unwraps the anchor. An explicit empty href has a
+    // native Carve link spelling and reaches the link branch below.
+    //
+    // AND THE DESTINATION IS NOT REBUILT, which is the normative half. This
+    // is what Carve's own renderer emits: PART 9 section 25 blanks a
+    // dangerous destination and writes no provenance for it, keeping the
+    // visible text, so any route from a `title`, from the anchor's text or
+    // from a round-trip attribute back to a destination would reconstruct the
+    // exact value a security rule removed. The round trip owes the text.
+    if (this.attr(node, 'href') !== '' && destinationIsEmpty(this.attr(node, 'href'))) {
+      return this.unwrapDestinationLess(node, 'Unwrapped <a> with no destination', children, attrs, path)
+    }
+    if (destinationIsDenied(this.attr(node, 'href'))) {
+      return this.dropDeniedDestination(node, 'href', children, attrs, path)
+    }
+    const title = this.attr(node, 'title')
+    // §13a `data-carve-autolink`: HTML writes `<https://e>` and
+    // `[https://e](https://e)` as the same bytes, and the AST tells them
+    // apart - an autolink is its own node type.
+    if (carried?.names.has('autolink')) {
+      return [{
+        type: 'autolink',
+        href: this.attr(node, 'href') ?? '',
+        ...(carried.autolinkText !== undefined ? { text: carried.autolinkText } : {}),
+        ...(attrs ? { attrs } : {}),
+      }]
+    }
+    // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
+    // and the writer spells the empty one `[x](u "")`. Under a truthiness test
+    // it vanished with no diagnostic, because `attrs()` treats a link's title
+    // as consumed here rather than keeping it as `{title=…}`.
+    return [{
+      type: 'link',
+      href: this.attr(node, 'href') ?? '',
+      children,
+      ...(title !== undefined ? { title } : {}),
+      ...this.referenceFields(carried, attrs),
+      ...(attrs ? { attrs } : {}),
+    }]
+  }
+
+  private imageInline(node: P5Node, carried: CarrierRead | undefined, attrs: Attrs | undefined, path: string): InlineNode[] {
+    // An absent src unwraps the image to its alt text. An explicit empty
+    // src reaches the image branch below.
+    //
+    // The alt arrives as a raw attribute value rather than through the node
+    // walk, so it becomes a TEXT node and the writer escapes it for the prose
+    // slot it lands in, the same as any other imported text.
+    if (this.attr(node, 'src') !== '' && destinationIsEmpty(this.attr(node, 'src'))) {
+      const alt = this.attr(node, 'alt') ?? ''
+      const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
+      return this.unwrapDestinationLess(node, 'Unwrapped <img> with no source', stands, attrs, path)
+    }
+    if (destinationIsDenied(this.attr(node, 'src'))) {
+      const alt = this.attr(node, 'alt') ?? ''
+      const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
+      return this.dropDeniedDestination(node, 'src', stands, attrs, path)
+    }
+    const title = this.attr(node, 'title')
+    return [{
+      type: 'image',
+      src: this.attr(node, 'src') ?? '',
+      alt: this.attr(node, 'alt') ?? '',
+      ...(title !== undefined ? { title } : {}),
+      ...this.referenceFields(carried, attrs),
+      ...(attrs ? { attrs } : {}),
+    }]
+  }
+
+  private footnoteRefInline(node: P5Node, attrs: Attrs | undefined): InlineNode[] {
+    const label = this.attr(node, 'label') ?? ''
+    const inline = this.footnotes.inlineFootnoteBodies.get(label)
+    if (attrs?.keyValues) {
+      delete attrs.keyValues.label
+      if (Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
+    }
+    const authored = attrs && (attrs.id !== undefined || attrs.classes || attrs.keyValues) ? { attrs } : {}
+    if (inline !== undefined) return [{ type: 'inline_footnote', inline, ...authored }]
+    return [{ type: 'footnote_ref', label, ...authored }]
+  }
+
+  /** An inline the §13a carriers already identified, or undefined when none did. */
+  private carriedInline(
+    node: P5Node,
+    tag: string,
+    children: InlineNode[],
+    carried: CarrierRead | undefined,
+    attrs: Attrs | undefined,
+  ): InlineNode[] | undefined {
+    if (tag === 'a' && carried?.names.has('xref')) {
+      return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
+    }
+    if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
+    if (tag === 'span' && carried?.names.has('substitution')) {
+      const [removed, added] = children as [Extract<InlineNode, { type: 'delete' }>, Extract<InlineNode, { type: 'insert' }>]
+      return [{ type: 'substitution', old: removed.children, new: added.children }]
+    }
+    if (tag === 'span' && carried?.names.has('raw')) {
+      // §13a `data-carve-raw`. Without this the carrier span was read as raw
+      // HTML, so `` `x`{=tex} `` came back as
+      // `` `<span data-carve-raw="tex">x</span>`{=html} `` - the carrier buried
+      // inside a raw inline of the WRONG format, which is worse than losing it.
+      // `readInlineCarriers` has already settled that this span can hold one.
+      const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
+      return [{
+        type: 'raw_inline',
+        format: this.carrierValue(node, 'raw') ?? '',
+        content: holdsElements ? serializeInner(node as never) : this.flatText(node),
+      }]
+    }
+    if (tag === 'span' && carried?.names.has('escaped')) {
+      return [{ type: 'escaped_text', value: this.flatText(node) }]
+    }
+    // An element the HTML left empty holds nothing a reader sees, so it is
+    // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
+    // pair reads back as literal text, and `{--}` as the braced en dash. Its
+    // attributes can still matter (an `id` is a link target), and an empty span
+    // is spellable, so they move onto one.
+    return undefined
   }
 
   private ruby(node: P5Node, path: string, depth: number): InlineNode[] {

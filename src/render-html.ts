@@ -2455,6 +2455,8 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
   }
 }
 
+type InlineOf<T extends InlineNode['type']> = Extract<InlineNode, { type: T }>
+
 function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
@@ -2489,37 +2491,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return `<mark${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</mark>`
     case 'code':
       return `<code${renderAttrs(node.attrs)}>${escapeHtml(node.value)}</code>`
-    case 'link': {
-      // An unresolved reference is literal source, not a link (PART 12 §3a):
-      // the node survives serialization so the reference is not lost from the
-      // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return escapeHtml(referenceSourceText(node.rawRef))
-      // LINKS NEVER NEST, AT THE RENDER SEAM (PART 12 §3a,
-      // markup-carve/carve#817). An anchor may not contain another anchor, and
-      // that is a RENDERING rule: the node reaches the serialized tree as the
-      // author wrote it, and the unwrap happens here. Only the outermost
-      // destination applies, so the inner link contributes its display text.
-      //
-      // This used to run in the resolver, which flattened the tree itself and
-      // lost the inner destination from every consumer of the AST.
-      if (insideLink) return renderInlines(node.children, opts)
-      const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
-      const sanitizedHref = sanitizeUrl(node.href, opts)
-      destinationDenied(opts, 'link', 'html', node.href, sanitizedHref, node.pos)
-      const href = escapeAttr(sanitizedHref)
-      // The sanitized structural href wins; never re-emit an author-supplied
-      // `href` from an attribute block, which would bypass sanitization.
-      const label = withinLink(() => renderInlines(node.children, opts))
-      let attrs = stripKeyValue(node.attrs, 'href')
-      if (node.title !== undefined) attrs = stripKeyValue(attrs, 'title')
-      // §13a: the reference label the link resolved by. PART 12 §3a keeps it on
-      // a RESOLVED reference, so the carrier reads the tree rather than
-      // guessing from the destination.
-      const refAttr = roundtripExport(opts) && node.ref !== undefined
-        ? ` ${carrier('ref')}="${escapeAttr(node.ref)}"`
-        : ''
-      return `<a href="${href}"${titleAttr}${refAttr}${renderAttrs(attrs)}>${label}</a>`
-    }
+    case 'link':
+      return renderLinkNode(node, opts)
     case 'image':
       return renderImage(node, opts)
     case 'span':
@@ -2528,44 +2501,10 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return `<ruby${renderAttrs(node.attrs)}>${node.pairs.map((pair) => `${renderInlines(pair.base, opts)}<rp>(</rp><rt>${renderInlines(pair.annotation, opts)}</rt><rp>)</rp>`).join('')}</ruby>`
     case 'small_caps':
       return `<span${renderAttrs2(node.attrs, { baseClass: 'smallcaps' })}>${renderInlines(node.children, opts)}</span>`
-    case 'math': {
-      const base = node.display ? 'math display' : 'math inline'
-      // Static mode: if a build-time math renderer is supplied, emit its
-      // server-side output (MathML/HTML) inside the math span so the page needs
-      // no client KaTeX/MathJax. Absent a renderer, fall back to the same
-      // delimiter-wrapped source the interactive path emits (never blank).
-      const authoredRole = Object.keys(node.attrs?.keyValues ?? {}).some(
-        (name) => name.toLowerCase() === 'role',
-      )
-      const role = authoredRole ? '' : ' role="math"'
-      if (opts.mode === 'static' && opts.renderers?.math) {
-        const ssr = opts.renderers.math(node.content, node.display)
-        const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
-        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>${suffix}`
-      }
-      const body = node.display
-        ? `\\[${escapeHtml(node.content)}\\]`
-        : `\\(${escapeHtml(node.content)}\\)`
-      const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
-      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>${suffix}`
-    }
+    case 'math':
+      return renderMathNode(node, opts)
     case 'raw_inline':
-      // Verbatim only when the format matches this output; else dropped.
-      // Escape it instead when raw HTML is disabled (untrusted input).
-      // §13a wraps it in a `<span data-carve-raw="{format}">`; the span holds
-      // the content. A format this target does not emit is STILL REPORTED as
-      // dropped under roundtrip - the carrier preserves the bytes, but the
-      // document no longer renders what the author asked for, and a
-      // preservation mode that silences the diagnostic is the one mode that
-      // loses a raw inline quietly (markup-carve/carve#2902 ruling 7).
-      if (node.format !== 'html') {
-        rawFormatDropped(opts, node, 'html')
-        return roundtripExport(opts)
-          ? `<span ${carrier('raw')}="${escapeAttr(node.format)}">${escapeHtml(node.content)}</span>`
-          : ''
-      }
-      const rawBody = opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
-      return roundtripExport(opts) ? `<span ${carrier('raw')}="html">${opts.allowRawHtml === false ? rawBody : node.content.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)}</span>` : rawBody
+      return renderRawInlineNode(node, opts)
     case 'literal_inline': {
       // §27: content is escaped and ALWAYS emitted (never target-routed like
       // raw passthrough), with the `<code>` wrapper dropped. An element is
@@ -2581,50 +2520,12 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // then the `symbols` map (emitted raw, trusted processor config), then
       // the literal `:name:`. Attributes wrap the resolved body in a span so
       // they have a target.
-      let body: string | undefined
-      const isStatic = opts.mode === 'static'
-      if (opts.extensions?.length) {
-        const ctx = inlineCtx(opts)
-        for (const e of opts.extensions) {
-          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
-          if (staticFn) {
-            const out = staticFn(node, ctx)
-            if (out !== undefined) { body = out; break }
-          }
-          const fn = ownValue(e.inlineRenderers, node.type)
-          if (fn) {
-            const out = fn(node, ctx)
-            if (out !== undefined) { body = out; break }
-          }
-        }
-      }
-      if (body === undefined) body = ownValue(opts.symbols, node.name) ?? escapeHtml(`:${node.name}:`)
+      const body = renderInlineByExtensions(node, opts, (e, ctx) => ownValue(e.inlineRenderers, node.type)?.(node, ctx))
+        ?? ownValue(opts.symbols, node.name) ?? escapeHtml(`:${node.name}:`)
       return node.attrs ? `<span${renderAttrs(node.attrs)}>${body}</span>` : body
     }
-    case 'autolink': {
-      // Display the raw autolink content (a URI autolink keeps its scheme);
-      // fall back to stripping an auto-added `mailto:` for nodes without `text`.
-      const display =
-        node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
-      // Inside a link it is plain text, for the reason the `link` arm above
-      // gives. The `mailto:` scheme comes off here whatever `text` said, which
-      // is what the resolver's unwrap did and what the corpus pins: an author
-      // writing `<mailto:a@b.c>` in a label sees the address, not the scheme.
-      if (insideLink) {
-        return escapeHtml(node.href.startsWith('mailto:') ? node.href.slice(7) : display)
-      }
-      // The structural href always wins; never re-emit an author-supplied
-      // `href` from an attribute block (it would duplicate the attribute).
-      const sanitizedAutolink = sanitizeUrl(node.href, opts)
-      destinationDenied(opts, 'autolink', 'html', node.href, sanitizedAutolink, node.pos)
-      const href = escapeAttr(sanitizedAutolink)
-      // §13a presence carrier: HTML has no spelling that distinguishes
-      // `<https://e>` from `[https://e](https://e)`, and the AST does - the
-      // autolink is its own node type.
-      const autoAttr = roundtripExport(opts) ? ` ${carrier('autolink')}="1"` : ''
-      const autoAttrs = stripKeyValue(node.attrs, 'href')
-      return `<a href="${href}"${autoAttr}${renderAttrs(autoAttrs)}>${escapeHtml(display)}</a>`
-    }
+    case 'autolink':
+      return renderAutolinkNode(node, opts)
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
       const href = insideLink ? null : socialDestination('mention', node.user, node.attrs, opts)
@@ -2639,30 +2540,14 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         return `<span${renderLeadingBaseClassAttrs(node.attrs, 'tag')}><strong>${text}</strong></span>`
       return `<a${renderSocialLinkAttrs(node.attrs, 'tag', href)}>${text}</a>`
     }
-    case 'inline_extension': {
+    case 'inline_extension':
       // Per-extension resolution in registration order (mirrors the block
       // path): for each extension, static mode tries its `staticInlineRenderers`
       // (the inline `renderStatic` hook, keyed by node type `extension`) first,
       // then its name-keyed `renderers`; interactive tries only `renderers`.
       // Fall through to the generic inline fallback.
-      const isStatic = opts.mode === 'static'
-      if (opts.extensions?.length) {
-        const ctx = inlineCtx(opts)
-        for (const e of opts.extensions) {
-          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
-          if (staticFn) {
-            const out = staticFn(node, ctx)
-            if (out !== undefined) return out
-          }
-          const fn = ownValue(e.renderers, node.name)
-          if (fn) {
-            const out = fn(node, ctx)
-            if (out !== undefined) return out
-          }
-        }
-      }
-      return renderExtension(node.name, node.content, node.attrs, opts)
-    }
+      return renderInlineByExtensions(node, opts, (e, ctx) => ownValue(e.renderers, node.name)?.(node, ctx))
+        ?? renderExtension(node.name, node.content, node.attrs, opts)
     case 'abbreviation': {
       if (suppressAutomaticAbbreviation) return escapeHtml(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
@@ -2674,20 +2559,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     }
     case 'footnote_ref':
     case 'inline_footnote':
-      // number is assigned by collectFootnotes for refs with a matching
-      // definition; an unresolved ref falls back to literal source.
-      if (node.number === undefined) return escapeHtml(`[^${node.label ?? ''}]`)
-      else {
-        // §13a: the AUTHORED label, on the reference and on the endnote item.
-        // The rendered `<sup>1</sup>` publishes the NUMBER, assigned by
-        // reference order, so the label the author wrote has no other home.
-        const labelAttr = roundtripExport(opts) && node.label !== undefined
-          ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
-          : ''
-        if (insideLink)
-          return `<sup id="${escapeAttr(node.refId!)}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
-        return `<a id="${escapeAttr(node.refId!)}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
-      }
+      return renderFootnoteRefNode(node, opts)
     case 'non_breaking_space':
       return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'
     case 'soft_break':
@@ -2705,38 +2577,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'critic_comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'heading_ref':
-      // Inside a link's text an anchor may not nest (CommonMark), and the node
-      // is still in the tree because PART 12 §3a keeps it there - so the
-      // suppression is here, at the point of rendering, rather than by
-      // dropping the node during resolution.
-      if (node.href && insideLink)
-        return chargeCrossrefLabel(
-          node.resolvedText,
-          () => renderInlines(node.resolvedText ?? [], opts),
-          node.target,
-        )
-      // Resolved: the anchor this crossref always rendered as. The node keeps
-      // the authored `target` (PART 12 §3a) and carries the destination in
-      // `href`, so the rendering is unchanged - only the tree moved.
-      if (node.href) {
-        const sanitizedCrossref = sanitizeUrl(node.href, opts)
-        destinationDenied(opts, 'crossref', 'html', node.href, sanitizedCrossref, node.pos)
-        const crossrefHref = escapeAttr(sanitizedCrossref)
-        // The cloned display text renders INSIDE this anchor, so it renders in
-        // the link context: a heading holding a link would otherwise nest one
-        // here. The resolver used to unwrap the clone before the renderer saw
-        // it; with that pass gone (markup-carve/carve#817) the seam has to say
-        // so itself, exactly as the `link` arm does for an authored label.
-        const label = chargeCrossrefLabel(
-          node.resolvedText,
-          () => withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
-          node.target,
-        )
-        const xrefAttr = roundtripExport(opts) ? ` ${carrier('xref')}` : ''
-        return `<a href="${crossrefHref}"${xrefAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
-      }
-      // Unresolved: literal source, the same as an unresolved reference link.
-      return `&lt;/#${escapeHtml(node.target)}&gt;`
+      return renderHeadingRefNode(node, opts)
     case 'caption_number':
       // Filled by resolve(); an unresolved placeholder renders its authored
       // spelling - the unresolved-reference precedent (PART 12 §3a), the
@@ -2745,29 +2586,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // caption keeps its placeholder un-numbered by design (PART 9 §4c), so
       // this arm is what makes it render as the literal `#` the author wrote.
       return node.n === undefined ? '#' : roundtripExport(opts) ? `<span ${carrier('caption-number')}>${node.n}</span>` : String(node.n)
-    case 'citation_group': {
+    case 'citation_group':
       // Extension-produced node: per-extension resolution in registration order
       // (mirrors the block path). For each extension, static mode tries its
       // `staticInlineRenderers` first, then its `inlineRenderers`; each may
       // return undefined to defer. Fall back to the verbatim source.
-      const isStatic = opts.mode === 'static'
-      if (opts.extensions?.length) {
-        const ctx = inlineCtx(opts)
-        for (const e of opts.extensions) {
-          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
-          if (staticFn) {
-            const out = staticFn(node, ctx)
-            if (out !== undefined) return out
-          }
-          const fn = ownValue(e.inlineRenderers, node.type)
-          if (fn) {
-            const out = fn(node, ctx)
-            if (out !== undefined) return out
-          }
-        }
-      }
-      return escapeHtml(node.raw)
-    }
+      return renderInlineByExtensions(node, opts, (e, ctx) => ownValue(e.inlineRenderers, node.type)?.(node, ctx))
+        ?? escapeHtml(node.raw)
     case 'comment':
       // Comments are not rendered (§4.13); inline form mirrors the block one.
       return ''
@@ -2784,6 +2609,181 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       throw new Error(`renderHtml: unknown inline ${(t as { type: string }).type}`)
     }
   }
+}
+
+/**
+ * Per-extension inline resolution in registration order: static mode tries
+ * each extension's `staticInlineRenderers` first, then `interactive`; either
+ * may return undefined to defer to the next extension.
+ */
+function renderInlineByExtensions(
+  node: InlineNode,
+  opts: RenderOptions,
+  interactive: (e: CarveExtension, ctx: ExtensionRenderContext) => string | undefined,
+): string | undefined {
+  if (!opts.extensions?.length) return undefined
+  const isStatic = opts.mode === 'static'
+  const ctx = inlineCtx(opts)
+  for (const e of opts.extensions) {
+    const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
+    if (staticFn) {
+      const out = staticFn(node, ctx)
+      if (out !== undefined) return out
+    }
+    const out = interactive(e, ctx)
+    if (out !== undefined) return out
+  }
+  return undefined
+}
+
+function renderLinkNode(node: InlineOf<'link'>, opts: RenderOptions): string {
+  // An unresolved reference is literal source, not a link (PART 12 §3a):
+  // the node survives serialization so the reference is not lost from the
+  // tree, and every render target writes it back out as written.
+  if (isUnresolvedReference(node)) return escapeHtml(referenceSourceText(node.rawRef))
+  // LINKS NEVER NEST, AT THE RENDER SEAM (PART 12 §3a,
+  // markup-carve/carve#817). An anchor may not contain another anchor, and
+  // that is a RENDERING rule: the node reaches the serialized tree as the
+  // author wrote it, and the unwrap happens here. Only the outermost
+  // destination applies, so the inner link contributes its display text.
+  //
+  // This used to run in the resolver, which flattened the tree itself and
+  // lost the inner destination from every consumer of the AST.
+  if (insideLink) return renderInlines(node.children, opts)
+  const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
+  const sanitizedHref = sanitizeUrl(node.href, opts)
+  destinationDenied(opts, 'link', 'html', node.href, sanitizedHref, node.pos)
+  const href = escapeAttr(sanitizedHref)
+  // The sanitized structural href wins; never re-emit an author-supplied
+  // `href` from an attribute block, which would bypass sanitization.
+  const label = withinLink(() => renderInlines(node.children, opts))
+  let attrs = stripKeyValue(node.attrs, 'href')
+  if (node.title !== undefined) attrs = stripKeyValue(attrs, 'title')
+  // §13a: the reference label the link resolved by. PART 12 §3a keeps it on
+  // a RESOLVED reference, so the carrier reads the tree rather than
+  // guessing from the destination.
+  const refAttr = roundtripExport(opts) && node.ref !== undefined
+    ? ` ${carrier('ref')}="${escapeAttr(node.ref)}"`
+    : ''
+  return `<a href="${href}"${titleAttr}${refAttr}${renderAttrs(attrs)}>${label}</a>`
+}
+
+function renderMathNode(node: InlineOf<'math'>, opts: RenderOptions): string {
+  const base = node.display ? 'math display' : 'math inline'
+  // Static mode: if a build-time math renderer is supplied, emit its
+  // server-side output (MathML/HTML) inside the math span so the page needs
+  // no client KaTeX/MathJax. Absent a renderer, fall back to the same
+  // delimiter-wrapped source the interactive path emits (never blank).
+  const authoredRole = Object.keys(node.attrs?.keyValues ?? {}).some(
+    (name) => name.toLowerCase() === 'role',
+  )
+  const role = authoredRole ? '' : ' role="math"'
+  if (opts.mode === 'static' && opts.renderers?.math) {
+    const ssr = opts.renderers.math(node.content, node.display)
+    const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+    return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>${suffix}`
+  }
+  const body = node.display
+    ? `\\[${escapeHtml(node.content)}\\]`
+    : `\\(${escapeHtml(node.content)}\\)`
+  const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+  return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>${suffix}`
+}
+
+function renderRawInlineNode(node: InlineOf<'raw_inline'>, opts: RenderOptions): string {
+  // Verbatim only when the format matches this output; else dropped.
+  // Escape it instead when raw HTML is disabled (untrusted input).
+  // §13a wraps it in a `<span data-carve-raw="{format}">`; the span holds
+  // the content. A format this target does not emit is STILL REPORTED as
+  // dropped under roundtrip - the carrier preserves the bytes, but the
+  // document no longer renders what the author asked for, and a
+  // preservation mode that silences the diagnostic is the one mode that
+  // loses a raw inline quietly (markup-carve/carve#2902 ruling 7).
+  if (node.format !== 'html') {
+    rawFormatDropped(opts, node, 'html')
+    return roundtripExport(opts)
+      ? `<span ${carrier('raw')}="${escapeAttr(node.format)}">${escapeHtml(node.content)}</span>`
+      : ''
+  }
+  const rawBody = opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
+  return roundtripExport(opts) ? `<span ${carrier('raw')}="html">${opts.allowRawHtml === false ? rawBody : node.content.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)}</span>` : rawBody
+}
+
+function renderAutolinkNode(node: InlineOf<'autolink'>, opts: RenderOptions): string {
+  // Display the raw autolink content (a URI autolink keeps its scheme);
+  // fall back to stripping an auto-added `mailto:` for nodes without `text`.
+  const display =
+    node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
+  // Inside a link it is plain text, for the reason `renderLinkNode`
+  // gives. The `mailto:` scheme comes off here whatever `text` said, which
+  // is what the resolver's unwrap did and what the corpus pins: an author
+  // writing `<mailto:a@b.c>` in a label sees the address, not the scheme.
+  if (insideLink) {
+    return escapeHtml(node.href.startsWith('mailto:') ? node.href.slice(7) : display)
+  }
+  // The structural href always wins; never re-emit an author-supplied
+  // `href` from an attribute block (it would duplicate the attribute).
+  const sanitizedAutolink = sanitizeUrl(node.href, opts)
+  destinationDenied(opts, 'autolink', 'html', node.href, sanitizedAutolink, node.pos)
+  const href = escapeAttr(sanitizedAutolink)
+  // §13a presence carrier: HTML has no spelling that distinguishes
+  // `<https://e>` from `[https://e](https://e)`, and the AST does - the
+  // autolink is its own node type.
+  const autoAttr = roundtripExport(opts) ? ` ${carrier('autolink')}="1"` : ''
+  const autoAttrs = stripKeyValue(node.attrs, 'href')
+  return `<a href="${href}"${autoAttr}${renderAttrs(autoAttrs)}>${escapeHtml(display)}</a>`
+}
+
+function renderFootnoteRefNode(node: InlineOf<'footnote_ref' | 'inline_footnote'>, opts: RenderOptions): string {
+  // number is assigned by collectFootnotes for refs with a matching
+  // definition; an unresolved ref falls back to literal source.
+  if (node.number === undefined) return escapeHtml(`[^${node.label ?? ''}]`)
+  else {
+    // §13a: the AUTHORED label, on the reference and on the endnote item.
+    // The rendered `<sup>1</sup>` publishes the NUMBER, assigned by
+    // reference order, so the label the author wrote has no other home.
+    const labelAttr = roundtripExport(opts) && node.label !== undefined
+      ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
+      : ''
+    if (insideLink)
+      return `<sup id="${escapeAttr(node.refId!)}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
+    return `<a id="${escapeAttr(node.refId!)}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
+  }
+}
+
+function renderHeadingRefNode(node: InlineOf<'heading_ref'>, opts: RenderOptions): string {
+  // Inside a link's text an anchor may not nest (CommonMark), and the node
+  // is still in the tree because PART 12 §3a keeps it there - so the
+  // suppression is here, at the point of rendering, rather than by
+  // dropping the node during resolution.
+  if (node.href && insideLink)
+    return chargeCrossrefLabel(
+      node.resolvedText,
+      () => renderInlines(node.resolvedText ?? [], opts),
+      node.target,
+    )
+  // Resolved: the anchor this crossref always rendered as. The node keeps
+  // the authored `target` (PART 12 §3a) and carries the destination in
+  // `href`, so the rendering is unchanged - only the tree moved.
+  if (node.href) {
+    const sanitizedCrossref = sanitizeUrl(node.href, opts)
+    destinationDenied(opts, 'crossref', 'html', node.href, sanitizedCrossref, node.pos)
+    const crossrefHref = escapeAttr(sanitizedCrossref)
+    // The cloned display text renders INSIDE this anchor, so it renders in
+    // the link context: a heading holding a link would otherwise nest one
+    // here. The resolver used to unwrap the clone before the renderer saw
+    // it; with that pass gone (markup-carve/carve#817) the seam has to say
+    // so itself, exactly as the `link` arm does for an authored label.
+    const label = chargeCrossrefLabel(
+      node.resolvedText,
+      () => withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
+      node.target,
+    )
+    const xrefAttr = roundtripExport(opts) ? ` ${carrier('xref')}` : ''
+    return `<a href="${crossrefHref}"${xrefAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
+  }
+  // Unresolved: literal source, the same as an unresolved reference link.
+  return `&lt;/#${escapeHtml(node.target)}&gt;`
 }
 
 function renderExtension(

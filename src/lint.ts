@@ -1587,6 +1587,54 @@ function collectDescriptionSeparatorBelowContentColumn(
   }
 }
 
+interface ListBlockGroup { item: LintItemColumn; kind: string; column: number; line: number }
+
+/**
+ * The item a block-shaped line at `column` misplaces, and how. `blankSince`
+ * says whether only blank lines separate an ended item from this line.
+ */
+function listItemBlockRule(
+  containing: LintItemColumn | undefined,
+  lastEnded: LintItemColumn | undefined,
+  column: number,
+  blankSince: (item: LintItemColumn) => boolean,
+): { item: LintItemColumn; rule: 'list-item-block-overindented' | 'list-item-body-detached' } | undefined {
+  if (containing) {
+    return column > containing.contentColumn ? { item: containing, rule: 'list-item-block-overindented' } : undefined
+  }
+  if (!lastEnded) return undefined
+  // Definitions render no AST child, so an item's reported span can end
+  // before their source line even though the source collector still owns
+  // it. Preserve that ownership across only the intervening blank run.
+  if (column > lastEnded.contentColumn && blankSince(lastEnded)) {
+    return { item: lastEnded, rule: 'list-item-block-overindented' }
+  }
+  if (lastEnded.baseColumn < column && column < lastEnded.contentColumn && blankSince(lastEnded)) {
+    return { item: lastEnded, rule: 'list-item-body-detached' }
+  }
+  return undefined
+}
+
+/** The block kind whose consecutive lines report once, as one group. */
+function listBlockGroupKind(
+  rest: string,
+  column: number,
+  item: LintItemColumn,
+  lineNo: number,
+  previousGroup: ListBlockGroup | undefined,
+): string | undefined {
+  if (/^>(?: |$)/.test(rest)) return 'quote'
+  if (isTableRow(rest)) return 'table'
+  if (/^::(?: |$)/.test(rest) || /^: /.test(rest)) return 'definition-list'
+  if (FOOTNOTE_DEF.test(rest)) return 'footnote-definition'
+  return previousGroup?.kind === 'footnote-definition' &&
+    previousGroup.item === item &&
+    previousGroup.column === column &&
+    previousGroup.line === lineNo - 1
+    ? 'footnote-definition'
+    : undefined
+}
+
 /**
  * Report block-shaped lines below an item's minimum column, and compatibility
  * spellings authored past its canonical column. The AST supplies item ownership/ranges; source is read only for the
@@ -1652,6 +1700,9 @@ function collectListItemIndentWarnings(
     const chars = prefixChars + indent.chars
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
+  // Every line between an ended item and `index` is blank in its quote context.
+  const blankSince = (item: LintItemColumn, index: number): boolean =>
+    lines.slice(item.endLine, index).every((between) => blockView(between, item.quoteDepth).rest.trim() === '')
   const items: LintItemColumn[] = []
   const descriptions: Array<{ startLine: number; endLine: number; contentColumn: number }> = []
   const blockRuns = new Map<string, Array<{ first: number; column: number }>>()
@@ -1736,7 +1787,7 @@ function collectListItemIndentWarnings(
   const reported = new Set<number>()
   const active: LintItemColumn[] = []
   const ambiguousFences = new Map<LintItemColumn, { kind: 'code' | 'colon'; run: string }>()
-  let previousGroup: { item: LintItemColumn; kind: string; column: number; line: number } | undefined
+  let previousGroup: ListBlockGroup | undefined
   let nextItem = 0
   let lastEnded: LintItemColumn | undefined
   for (let index = 0; index < lines.length; index++) {
@@ -1769,8 +1820,7 @@ function collectListItemIndentWarnings(
       const host = opened && items.filter((item) =>
         item.startLine < lineNo && item.quoteDepth === opened.quoteDepth &&
         item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn &&
-        lines.slice(item.endLine, index).every((between) =>
-          blockView(between, item.quoteDepth).rest.trim() === ''))
+        blankSince(item, index))
         .sort((a, b) => b.contentColumn - a.contentColumn)[0]
       if (host) {
         const start = (starts[index] ?? 0) + authored.chars
@@ -1835,66 +1885,27 @@ function collectListItemIndentWarnings(
         (!LINT_BLOCK_OPENER.test(authored.rest) &&
          !isBlockAttributeLine(authored.rest) &&
          !isTableRow(authored.rest))) continue
-    let item: LintItemColumn | undefined = containing
-    let rule: string | undefined
     // A description inside the item is the innermost container: its content
     // column, not the item's, places a block in its body.
     const outer = containing ?? lastEnded
     if (outer && descriptions.some((d) => d.startLine >= outer.startLine && d.startLine < lineNo &&
         lineNo <= d.endLine && d.contentColumn > outer.contentColumn && authored.column >= d.contentColumn)) continue
-    if (item && authored.column > item.contentColumn) {
-      rule = 'list-item-block-overindented'
-    } else if (
-      !item &&
-      lastEnded &&
-      authored.column > lastEnded.contentColumn &&
-      lines.slice(lastEnded.endLine, index).every((between) =>
-        blockView(between, lastEnded!.quoteDepth).rest.trim() === '',
-      )
-    ) {
-      // Definitions render no AST child, so an item's reported span can end
-      // before their source line even though the source collector still owns
-      // it. Preserve that ownership across only the intervening blank run.
-      item = lastEnded
-      rule = 'list-item-block-overindented'
-    } else if (!item) {
-      const candidate = lastEnded
-      if (candidate && candidate.baseColumn < authored.column &&
-          authored.column < candidate.contentColumn &&
-          lines.slice(candidate.endLine, index).every((between) =>
-            blockView(between, candidate.quoteDepth).rest.trim() === '',
-          )) {
-        item = candidate
-      }
-      if (item) rule = 'list-item-body-detached'
-    }
-    if (!item || !rule) {
+    const resolved = listItemBlockRule(containing, lastEnded, authored.column, (candidate) => blankSince(candidate, index))
+    if (!resolved) {
       if (owner && authored.column >= owner.contentColumn) {
         if (authoredCodeFence) ambiguousFences.set(owner, { kind: 'code', run: authoredCodeFence[1]! })
         else if (authoredColonFence) ambiguousFences.set(owner, { kind: 'colon', run: authoredColonFence[1]! })
       }
       continue
     }
+    const { item, rule } = resolved
 
     if (rule === 'list-item-block-overindented' && continuingRun) {
       reported.add(lineNo)
       continue
     }
 
-    const groupKind = /^>(?: |$)/.test(authored.rest)
-      ? 'quote'
-      : isTableRow(authored.rest)
-        ? 'table'
-        : (/^::(?: |$)/.test(authored.rest) || /^: /.test(authored.rest))
-          ? 'definition-list'
-          : (FOOTNOTE_DEF.test(authored.rest) || (
-              previousGroup?.kind === 'footnote-definition' &&
-              previousGroup.item === item &&
-              previousGroup.column === authored.column &&
-              previousGroup.line === lineNo - 1
-            ))
-            ? 'footnote-definition'
-          : undefined
+    const groupKind = listBlockGroupKind(authored.rest, authored.column, item, lineNo, previousGroup)
     if (
       groupKind !== undefined &&
       previousGroup?.item === item &&
@@ -2201,6 +2212,295 @@ function collectVerbatimLines(doc: Document): Set<number> {
   return verbatim
 }
 
+type SilentFailurePush = (lineNo: number, col: number, len: number, rule: string, message: string) => void
+
+/** Rule 4a's targeted hint for a fence opener line, or undefined when none applies. */
+function fenceTitleSyntaxMessage(lineText: string): string | undefined {
+  const fm = /[\r\n\u2028\u2029]/.test(lineText) ? null : /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)[ \t]+(.+)$/.exec(lineText)
+  if (!fm) return undefined
+  fm[3] = trimEndSpaceTab(fm[3]!) || fm[3]![0]!
+  const fence = fm[1]!
+  const type = fm[2]!
+  const trailing = fm[3]!
+  // A trailing [label] is valid on its own - split it off so the
+  // suggested fix quotes only the title part and keeps the label.
+  const lm = trailingContainerLabel(trailing)
+  const titlePart = lm ? lm[1]! : trailing
+  const label = lm ? ` ${lm[2]!}` : ''
+  const curly = /^[“”](.*)[“”]$/.exec(titlePart)
+  if (curly) {
+    return `The title after "${type}" uses typographic quotes - usually a CMS ` +
+      `"smart quote" filter rewrote the source before Carve parsed it. A fence ` +
+      `title needs straight double quotes: ${fence} ${type} "${curly[1]}"${label}.`
+  }
+  if (titlePart.startsWith('{')) {
+    return `A "{…}" on the fence line is not an attribute block - it makes the whole ` +
+      `line plain text. Put attributes on their own line directly above the ` +
+      `":::" opener.`
+  }
+  if (!titlePart.startsWith('"') && !titlePart.startsWith('[')) {
+    return `Text after the "${type}" fence type must be a quoted "title" or a ` +
+      `[label] - unquoted it makes the whole line plain text. Did you mean ` +
+      `${fence} ${type} "${titlePart}"${label}?`
+  }
+  return undefined
+}
+
+function collectFenceOpenerFallbacks(
+  lines: readonly string[],
+  lineStart: readonly number[],
+  paragraphs: readonly Positioned[],
+  verbatimLines: ReadonlySet<number>,
+  out: LintWarning[],
+): Set<number> {
+  const fallbackLines = new Set<number>()
+  for (const p of paragraphs) {
+    const first = p.pos?.startLine
+    if (!first) continue
+    const last = p.pos?.endLine ?? first
+    for (let ln = first; ln <= last; ln++) {
+      if (verbatimLines.has(ln) || fallbackLines.has(ln)) continue
+      const line = (lines[ln - 1] ?? '').replace(/\r$/, '')
+      const stripped = stripContainerPrefixesKeepIndent(line)
+      const view = stripped.trimStart()
+      const m = FENCE_RUN.exec(view)
+      if (!m) continue
+      const fence = m[1]!
+      const info = view.slice(fence.length).trim()
+      // A closer-shaped or otherwise valid line did not fail on its info string.
+      if (opensCodeFence(view)) continue
+      if (LEGACY_RAW_FENCE.test(view)) continue
+      // A run closed again on the same line is deliberate inline code.
+      if (view.slice(fence.length).includes(fence)) continue
+      const effect =
+        `The fence does not open: the ${fence[0] === '`' ? 'backtick run becomes an inline code span' : 'line stays plain text'}, ` +
+        `the block renders as a paragraph, and its closing fence can open a new block that swallows what follows.`
+      const respaced = `${fence}${info.replace(/[ \t]+/g, ' ')}`
+      const attr = trailingFenceAttributes(info)
+      const opener = attr ? `${fence}${attr[1]!}` : undefined
+      let message: string
+      let data: Record<string, string> | undefined
+      if (attr && opensCodeFence(opener!)) {
+        message =
+          `A code fence carries no inline attributes, so "${attr[2]}" after the info string ` +
+          `is not valid. ${effect} (use: "${attr[2]}" on its own line directly above the fence, then "${opener}").`
+        data = { attributes: attr[2]!, opener: opener! }
+      } else if (opensCodeFence(respaced)) {
+        message =
+          `The whitespace in this fence opener is not valid: at most one space follows the ` +
+          `fence, and the parts of the info string are separated by spaces, never tabs. ` +
+          `${effect} (use: "${respaced}").`
+      } else {
+        message =
+          `This line starts like a fenced code block, but "${info}" is not a valid info ` +
+          `string (a language, then an optional "title", then an optional [label]). ${effect}`
+      }
+      fallbackLines.add(ln)
+      out.push({
+        line: ln,
+        column: line.length - view.length + 1,
+        rule: 'fence-opener-fallback',
+        message,
+        start: (lineStart[ln - 1] ?? 0) + line.length - view.length,
+        end: (lineStart[ln - 1] ?? 0) + line.length,
+        ...(data ? { data } : {}),
+      })
+    }
+  }
+  return fallbackLines
+}
+
+/** Table cell marker runs whose spelling makes them literal content. */
+function collectTableCellMarkerWarnings(
+  lines: readonly string[],
+  verbatimLines: ReadonlySet<number>,
+  push: SilentFailurePush,
+): void {
+  for (let i = 0; i < lines.length; i++) {
+    if (verbatimLines.has(i + 1)) continue
+    const line = lines[i]!
+    // A table opens inside a blockquote and inside a list item too, so the row
+    // is found through the container prefixes rather than only at the top
+    // level. Every strip is anchored at the start, so what it removed is a
+    // prefix and its WIDTH maps the column back onto the source line.
+    const stripped = stripContainerPrefixesKeepIndent(line)
+    const prefixWidth = line.length - stripped.length
+    const indent = stripped.length - stripped.trimStart().length
+    const row = stripped.slice(indent)
+    // A COMPLETE row, gated by the parser's own predicate. A leading `|` with
+    // no closing one is a paragraph (`|{#x}< content` renders as text), and
+    // reporting cell syntax there would be reporting a cell that does not
+    // exist. A `+` continuation row is out of scope for the same reason the
+    // parser only reads one inside an open table: whether it is a row at all is
+    // a question about the lines above it.
+    if (!isTableRow(row)) continue
+    const { body } = rowAttrsFromLine(row)
+    for (const { text, start } of splitTableRowSpans(body)) {
+      // A whole-cell ^ or < is a span marker (T4), not a marker run (T11).
+      if (/^[ \t]*[<^][ \t]*$/.test(text)) continue
+      // The run's terminator is a space, and the attribute block is INSIDE the
+      // run rather than after it (§5 T11) - so `|>{#x}value |` is as unpadded as
+      // `|>value |` is, and reporting only the second left the first silent.
+      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?\s])/.exec(text)
+      if (unpadded) {
+        const at = text.startsWith('=') ? 1 : 0
+        const marksEnd = at + unpadded[1]!.length
+        const block = text[marksEnd] === '{' ? readCellAttributeBlock(text, marksEnd) : undefined
+        const runEnd = marksEnd + (block?.length ?? 0)
+        if (text[runEnd] !== ' ') {
+          push(
+            i + 1,
+            prefixWidth + indent + start + at + 1,
+            unpadded[1]!.length,
+            'table-alignment-run-padding',
+            `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${block ? ' and its attribute block' : ''} to make it alignment.`,
+          )
+        }
+      }
+      const block = readCellAttributeBlock(text)
+      if (!block) continue
+      const marker = text[block.length]
+      if (marker === undefined || !TABLE_ALIGNMENT_MARKERS.has(marker)) continue
+      const spelling = text.slice(0, block.length + 1)
+      push(
+        i + 1,
+        prefixWidth + indent + start + 1,
+        block.length + 1,
+        'table-cell-attribute-before-marker',
+        `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
+          `which Carve no longer reads as one. The block is part of the cell's marker run ` +
+          `and the run ends at a space, so with the "${marker}" glued to it there is no run: ` +
+          `the braces are content and the cell is neither attributed nor aligned. Write ` +
+          `"${marker}${text.slice(0, block.length)} " to align it, or "${text.slice(0, block.length)} ` +
+          `${marker}" to keep the "${marker}" as content deliberately.`,
+      )
+    }
+  }
+}
+
+/** Span markers that resolve to a cell of their own instead of extending one. */
+function collectTableSpanMarkerWarnings(
+  source: string,
+  spanTables: readonly Table[],
+  toUtf16: (offset: number) => number,
+  out: LintWarning[],
+): void {
+  // The parser also breaks lines at a lone CR, which `lines` does not.
+  const breakLines = source.split(/\r\n|\r|\n/)
+  const breakStart: number[] = []
+  for (let off = 0, i = 0; i < breakLines.length; i++) {
+    breakStart[i] = off
+    off += breakLines[i]!.length + (source.startsWith('\r\n', off + breakLines[i]!.length) ? 2 : 1)
+  }
+  for (const table of spanTables) {
+    const grid = resolveTableSpans(table.rows)
+    for (let r = 0; r < grid.length; r++) {
+      for (let c = 0; c < grid[r]!.length; c++) {
+        const entry = grid[r]![c]!
+        if (entry.skip || !entry.cell.span) continue
+        const marker = entry.cell.span === 'rowspan' ? '^' : '<'
+        const reason = marker === '^'
+          ? r === 0 || grid[r - 1]![c] === undefined
+            ? 'There is no cell above it to extend.'
+            : 'Extending the cell above would cover another cell.'
+          : c === 0
+            ? 'There is no cell to its left to widen.'
+            : 'The cell to its left starts in an earlier row, so widening it would cover cells already placed.'
+        const pos = entry.cell.pos
+        const line = pos?.startLine ?? entry.row.pos?.startLine ?? table.pos?.startLine ?? 1
+        const sourceLine = breakLines[line - 1] ?? ''
+        const cellStart = pos?.startOffset === undefined ? undefined : toUtf16(pos.startOffset)
+        const cellEnd = pos?.endOffset === undefined ? undefined : toUtf16(pos.endOffset)
+        const markerAt = cellStart === undefined || cellEnd === undefined
+          ? -1
+          : source.slice(cellStart, cellEnd).indexOf(marker)
+        const stripped = stripContainerPrefixesKeepIndent(sourceLine)
+        const prefixWidth = sourceLine.length - stripped.length
+        const indent = stripped.length - stripped.trimStart().length
+        const rowText = stripped.slice(indent)
+        const sourceCell = isTableRow(rowText)
+          ? splitTableRowSpans(rowAttrsFromLine(rowText).body)[c]
+          : undefined
+        const fallbackMarkerAt = sourceCell?.text.indexOf(marker) ?? -1
+        const fallbackColumn = sourceCell && fallbackMarkerAt >= 0
+          ? prefixWidth + indent + sourceCell.start + fallbackMarkerAt + 1
+          : 0
+        const column = markerAt >= 0
+          ? cellStart! + markerAt - (breakStart[line - 1] ?? 0) + 1
+          : fallbackColumn
+        if (column < 1) continue
+        const start = (breakStart[line - 1] ?? 0) + column - 1
+        out.push({
+          line,
+          column,
+          rule: 'table-span-marker-blocked',
+          start,
+          end: start + 1,
+          message: `The "${marker}" span marker cannot extend a cell. ${reason} It renders as a cell of its own; escape it as "\\${marker}" to keep the character as text, or remove it.`,
+        })
+      }
+    }
+  }
+}
+
+/** Table attribute lists that disagree with the table they describe. */
+function collectTableAttributeWarnings(
+  source: string,
+  lineStart: readonly number[],
+  tables: readonly Table[],
+  out: LintWarning[],
+): void {
+  for (const table of tables) {
+    const kv = table.attrs?.keyValues ?? {}
+    const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
+    const lineNo = table.pos?.startLine ?? 1
+    const tableStart = lineStart[lineNo - 1] ?? source.length
+    const addTableWarning = (rule: string, key: string, message: string): void => {
+      const found = source.lastIndexOf(key, tableStart)
+      const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
+      let low = 0
+      let high = lineStart.length
+      while (low + 1 < high) {
+        const mid = (low + high) >> 1
+        if (lineStart[mid]! <= start) low = mid
+        else high = mid
+      }
+      const warningLine = low + 1
+      const warningColumn = start - lineStart[low]! + 1
+      out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
+    }
+    for (const key of ['aligns', 'valigns', 'widths'] as const) {
+      if (kv[key] === undefined) continue
+      const values = kv[key]!.split(',')
+      if (values.length < widest) {
+        addTableWarning(
+          'table-column-arity',
+          key,
+          `${key} supplies ${values.length} column entries for a ${widest}-column table; the unset tail is valid but may be accidental.`,
+        )
+      }
+    }
+    const widths = kv.widths?.split(',').map((raw) => Number(raw.trim())).filter(Number.isFinite) ?? []
+    if (widths.reduce((sum, width) => sum + width, 0) > 100) {
+      addTableWarning('table-width-total', 'widths', 'The specified table column widths total more than 100%.')
+    }
+    const aligns = kv.aligns?.split(',') ?? []
+    const valigns = kv.valigns?.split(',') ?? []
+    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
+    for (let column = 0; column < widest; column++) {
+      const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
+      const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
+      if ((markerAlign && aligns[column]?.trim()) || (markerValign && valigns[column]?.trim())) {
+        addTableWarning(
+          'table-column-overlap',
+          markerAlign && aligns[column]?.trim() ? 'aligns' : 'valigns',
+          `Column ${column + 1} supplies the same alignment axis both in the table and in a table attribute; the in-table marker wins.`,
+        )
+      }
+    }
+  }
+}
+
 /**
  * Source-line checks for constructs that parsed into the wrong node. Each is
  * anchored to a parsed node so verbatim regions (code/raw blocks) are skipped
@@ -2221,7 +2521,7 @@ function collectSilentFailures(
     lineStart[i] = off
     off += lines[i]!.length + 1
   }
-  const push = (lineNo: number, col: number, len: number, rule: string, message: string): void => {
+  const push: SilentFailurePush = (lineNo, col, len, rule, message) => {
     const start = (lineStart[lineNo - 1] ?? 0) + (col - 1)
     out.push({ line: lineNo, column: col, rule, message, start, end: start + len })
   }
@@ -2334,46 +2634,17 @@ function collectSilentFailures(
       // already rewritten straight quotes to typographic ones in the AST text,
       // which would make an unterminated straight quote look like a curly one.
       const lineText = lines[loc.line - 1] ?? ''
-      const fm = /[\r\n\u2028\u2029]/.test(lineText) ? null : /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)[ \t]+(.+)$/.exec(lineText)
-      if (fm) {
-        fm[3] = trimEndSpaceTab(fm[3]!) || fm[3]![0]!
-        const fence = fm[1]!
-        const type = fm[2]!
-        const trailing = fm[3]!
-        // A trailing [label] is valid on its own - split it off so the
-        // suggested fix quotes only the title part and keeps the label.
-        const lm = trailingContainerLabel(trailing)
-        const titlePart = lm ? lm[1]! : trailing
-        const label = lm ? ` ${lm[2]!}` : ''
-        let message: string | undefined
-        const curly = /^[“”](.*)[“”]$/.exec(titlePart)
-        if (curly) {
-          message =
-            `The title after "${type}" uses typographic quotes - usually a CMS ` +
-            `"smart quote" filter rewrote the source before Carve parsed it. A fence ` +
-            `title needs straight double quotes: ${fence} ${type} "${curly[1]}"${label}.`
-        } else if (titlePart.startsWith('{')) {
-          message =
-            `A "{…}" on the fence line is not an attribute block - it makes the whole ` +
-            `line plain text. Put attributes on their own line directly above the ` +
-            `":::" opener.`
-        } else if (!titlePart.startsWith('"') && !titlePart.startsWith('[')) {
-          message =
-            `Text after the "${type}" fence type must be a quoted "title" or a ` +
-            `[label] - unquoted it makes the whole line plain text. Did you mean ` +
-            `${fence} ${type} "${titlePart}"${label}?`
-        }
-        if (message) {
-          out.push({
-            line: loc.line,
-            column: loc.column,
-            rule: 'fence-title-syntax',
-            message,
-            start: loc.start,
-            end: loc.start + lineText.length,
-          })
-          continue
-        }
+      const message = fenceTitleSyntaxMessage(lineText)
+      if (message) {
+        out.push({
+          line: loc.line,
+          column: loc.column,
+          rule: 'fence-title-syntax',
+          message,
+          start: loc.start,
+          end: loc.start + lineText.length,
+        })
+        continue
       }
     }
     const what = m[2]!.startsWith(':')
@@ -2394,60 +2665,7 @@ function collectSilentFailures(
   // 4b. A fence-shaped line the parser read as paragraph text: its info string
   //     fails code_fence_info, so the INVALID-FENCE FALLBACK (CARVE-P2-005)
   //     turned the would-be block into an inline code span or plain text.
-  const fallbackLines = new Set<number>()
-  for (const p of paragraphs) {
-    const first = p.pos?.startLine
-    if (!first) continue
-    const last = p.pos?.endLine ?? first
-    for (let ln = first; ln <= last; ln++) {
-      if (verbatimLines.has(ln) || fallbackLines.has(ln)) continue
-      const line = (lines[ln - 1] ?? '').replace(/\r$/, '')
-      const stripped = stripContainerPrefixesKeepIndent(line)
-      const view = stripped.trimStart()
-      const m = FENCE_RUN.exec(view)
-      if (!m) continue
-      const fence = m[1]!
-      const info = view.slice(fence.length).trim()
-      // A closer-shaped or otherwise valid line did not fail on its info string.
-      if (opensCodeFence(view)) continue
-      if (LEGACY_RAW_FENCE.test(view)) continue
-      // A run closed again on the same line is deliberate inline code.
-      if (view.slice(fence.length).includes(fence)) continue
-      const effect =
-        `The fence does not open: the ${fence[0] === '`' ? 'backtick run becomes an inline code span' : 'line stays plain text'}, ` +
-        `the block renders as a paragraph, and its closing fence can open a new block that swallows what follows.`
-      const respaced = `${fence}${info.replace(/[ \t]+/g, ' ')}`
-      const attr = trailingFenceAttributes(info)
-      const opener = attr ? `${fence}${attr[1]!}` : undefined
-      let message: string
-      let data: Record<string, string> | undefined
-      if (attr && opensCodeFence(opener!)) {
-        message =
-          `A code fence carries no inline attributes, so "${attr[2]}" after the info string ` +
-          `is not valid. ${effect} (use: "${attr[2]}" on its own line directly above the fence, then "${opener}").`
-        data = { attributes: attr[2]!, opener: opener! }
-      } else if (opensCodeFence(respaced)) {
-        message =
-          `The whitespace in this fence opener is not valid: at most one space follows the ` +
-          `fence, and the parts of the info string are separated by spaces, never tabs. ` +
-          `${effect} (use: "${respaced}").`
-      } else {
-        message =
-          `This line starts like a fenced code block, but "${info}" is not a valid info ` +
-          `string (a language, then an optional "title", then an optional [label]). ${effect}`
-      }
-      fallbackLines.add(ln)
-      out.push({
-        line: ln,
-        column: line.length - view.length + 1,
-        rule: 'fence-opener-fallback',
-        message,
-        start: (lineStart[ln - 1] ?? 0) + line.length - view.length,
-        end: (lineStart[ln - 1] ?? 0) + line.length,
-        ...(data ? { data } : {}),
-      })
-    }
-  }
+  const fallbackLines = collectFenceOpenerFallbacks(lines, lineStart, paragraphs, verbatimLines, out)
 
   // 5. An indented fenced-code OPENER. A Carve fence is column-exact - it sits
   //    at its container's content column (column 0 at the top level), like every
@@ -2492,173 +2710,11 @@ function collectSilentFailures(
     )
   }
 
-  for (let i = 0; i < lines.length; i++) {
-    if (verbatimLines.has(i + 1)) continue
-    const line = lines[i]!
-    // A table opens inside a blockquote and inside a list item too, so the row
-    // is found through the container prefixes rather than only at the top
-    // level. Every strip is anchored at the start, so what it removed is a
-    // prefix and its WIDTH maps the column back onto the source line.
-    const stripped = stripContainerPrefixesKeepIndent(line)
-    const prefixWidth = line.length - stripped.length
-    const indent = stripped.length - stripped.trimStart().length
-    const row = stripped.slice(indent)
-    // A COMPLETE row, gated by the parser's own predicate. A leading `|` with
-    // no closing one is a paragraph (`|{#x}< content` renders as text), and
-    // reporting cell syntax there would be reporting a cell that does not
-    // exist. A `+` continuation row is out of scope for the same reason the
-    // parser only reads one inside an open table: whether it is a row at all is
-    // a question about the lines above it.
-    if (!isTableRow(row)) continue
-    const { body } = rowAttrsFromLine(row)
-    for (const { text, start } of splitTableRowSpans(body)) {
-      // A whole-cell ^ or < is a span marker (T4), not a marker run (T11).
-      if (/^[ \t]*[<^][ \t]*$/.test(text)) continue
-      // The run's terminator is a space, and the attribute block is INSIDE the
-      // run rather than after it (§5 T11) - so `|>{#x}value |` is as unpadded as
-      // `|>value |` is, and reporting only the second left the first silent.
-      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?\s])/.exec(text)
-      if (unpadded) {
-        const at = text.startsWith('=') ? 1 : 0
-        const marksEnd = at + unpadded[1]!.length
-        const block = text[marksEnd] === '{' ? readCellAttributeBlock(text, marksEnd) : undefined
-        const runEnd = marksEnd + (block?.length ?? 0)
-        if (text[runEnd] !== ' ') {
-          push(
-            i + 1,
-            prefixWidth + indent + start + at + 1,
-            unpadded[1]!.length,
-            'table-alignment-run-padding',
-            `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${block ? ' and its attribute block' : ''} to make it alignment.`,
-          )
-        }
-      }
-      const block = readCellAttributeBlock(text)
-      if (!block) continue
-      const marker = text[block.length]
-      if (marker === undefined || !TABLE_ALIGNMENT_MARKERS.has(marker)) continue
-      const spelling = text.slice(0, block.length + 1)
-      push(
-        i + 1,
-        prefixWidth + indent + start + 1,
-        block.length + 1,
-        'table-cell-attribute-before-marker',
-        `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
-          `which Carve no longer reads as one. The block is part of the cell's marker run ` +
-          `and the run ends at a space, so with the "${marker}" glued to it there is no run: ` +
-          `the braces are content and the cell is neither attributed nor aligned. Write ` +
-          `"${marker}${text.slice(0, block.length)} " to align it, or "${text.slice(0, block.length)} ` +
-          `${marker}" to keep the "${marker}" as content deliberately.`,
-      )
-    }
-  }
+  collectTableCellMarkerWarnings(lines, verbatimLines, push)
 
-  // The parser also breaks lines at a lone CR, which `lines` does not.
-  const breakLines = source.split(/\r\n|\r|\n/)
-  const breakStart: number[] = []
-  for (let off = 0, i = 0; i < breakLines.length; i++) {
-    breakStart[i] = off
-    off += breakLines[i]!.length + (source.startsWith('\r\n', off + breakLines[i]!.length) ? 2 : 1)
-  }
-  for (const table of spanTables) {
-    const grid = resolveTableSpans(table.rows)
-    for (let r = 0; r < grid.length; r++) {
-      for (let c = 0; c < grid[r]!.length; c++) {
-        const entry = grid[r]![c]!
-        if (entry.skip || !entry.cell.span) continue
-        const marker = entry.cell.span === 'rowspan' ? '^' : '<'
-        const reason = marker === '^'
-          ? r === 0 || grid[r - 1]![c] === undefined
-            ? 'There is no cell above it to extend.'
-            : 'Extending the cell above would cover another cell.'
-          : c === 0
-            ? 'There is no cell to its left to widen.'
-            : 'The cell to its left starts in an earlier row, so widening it would cover cells already placed.'
-        const pos = entry.cell.pos
-        const line = pos?.startLine ?? entry.row.pos?.startLine ?? table.pos?.startLine ?? 1
-        const sourceLine = breakLines[line - 1] ?? ''
-        const cellStart = pos?.startOffset === undefined ? undefined : toUtf16(pos.startOffset)
-        const cellEnd = pos?.endOffset === undefined ? undefined : toUtf16(pos.endOffset)
-        const markerAt = cellStart === undefined || cellEnd === undefined
-          ? -1
-          : source.slice(cellStart, cellEnd).indexOf(marker)
-        const stripped = stripContainerPrefixesKeepIndent(sourceLine)
-        const prefixWidth = sourceLine.length - stripped.length
-        const indent = stripped.length - stripped.trimStart().length
-        const rowText = stripped.slice(indent)
-        const sourceCell = isTableRow(rowText)
-          ? splitTableRowSpans(rowAttrsFromLine(rowText).body)[c]
-          : undefined
-        const fallbackMarkerAt = sourceCell?.text.indexOf(marker) ?? -1
-        const fallbackColumn = sourceCell && fallbackMarkerAt >= 0
-          ? prefixWidth + indent + sourceCell.start + fallbackMarkerAt + 1
-          : 0
-        const column = markerAt >= 0
-          ? cellStart! + markerAt - (breakStart[line - 1] ?? 0) + 1
-          : fallbackColumn
-        if (column < 1) continue
-        const start = (breakStart[line - 1] ?? 0) + column - 1
-        out.push({
-          line,
-          column,
-          rule: 'table-span-marker-blocked',
-          start,
-          end: start + 1,
-          message: `The "${marker}" span marker cannot extend a cell. ${reason} It renders as a cell of its own; escape it as "\\${marker}" to keep the character as text, or remove it.`,
-        })
-      }
-    }
-  }
+  collectTableSpanMarkerWarnings(source, spanTables, toUtf16, out)
 
-  for (const table of tables) {
-    const kv = table.attrs?.keyValues ?? {}
-    const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
-    const lineNo = table.pos?.startLine ?? 1
-    const tableStart = lineStart[lineNo - 1] ?? source.length
-    const addTableWarning = (rule: string, key: string, message: string): void => {
-      const found = source.lastIndexOf(key, tableStart)
-      const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
-      let low = 0
-      let high = lineStart.length
-      while (low + 1 < high) {
-        const mid = (low + high) >> 1
-        if (lineStart[mid]! <= start) low = mid
-        else high = mid
-      }
-      const warningLine = low + 1
-      const warningColumn = start - lineStart[low]! + 1
-      out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
-    }
-    for (const key of ['aligns', 'valigns', 'widths'] as const) {
-      if (kv[key] === undefined) continue
-      const values = kv[key]!.split(',')
-      if (values.length < widest) {
-        addTableWarning(
-          'table-column-arity',
-          key,
-          `${key} supplies ${values.length} column entries for a ${widest}-column table; the unset tail is valid but may be accidental.`,
-        )
-      }
-    }
-    const widths = kv.widths?.split(',').map((raw) => Number(raw.trim())).filter(Number.isFinite) ?? []
-    if (widths.reduce((sum, width) => sum + width, 0) > 100) {
-      addTableWarning('table-width-total', 'widths', 'The specified table column widths total more than 100%.')
-    }
-    const aligns = kv.aligns?.split(',') ?? []
-    const valigns = kv.valigns?.split(',') ?? []
-    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
-    for (let column = 0; column < widest; column++) {
-      const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
-      const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
-      if ((markerAlign && aligns[column]?.trim()) || (markerValign && valigns[column]?.trim())) {
-        addTableWarning(
-          'table-column-overlap',
-          markerAlign && aligns[column]?.trim() ? 'aligns' : 'valigns',
-          `Column ${column + 1} supplies the same alignment axis both in the table and in a table attribute; the in-table marker wins.`,
-        )
-      }
-    }
-  }
+  collectTableAttributeWarnings(source, lineStart, tables, out)
 }
 
 function collectFootnoteDefinitionWarnings(
