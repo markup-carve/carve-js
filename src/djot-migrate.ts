@@ -691,6 +691,36 @@ function tableContinuationLines(source: string): Set<number> {
   return lines
 }
 
+/** Source offsets of caret cells the Carve parser consumed as rowspans. */
+function nativeRowspanCarets(source: string): Set<number> {
+  const utf16At = [0]
+  for (let at = 0; at < source.length;) {
+    at += source.codePointAt(at)! > 0xffff ? 2 : 1
+    utf16At.push(at)
+  }
+  const carets = new Set<number>()
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    const node = value as Record<string, unknown>
+    if (node.type === 'table_cell' && node.span === 'rowspan') {
+      const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+      const start = pos?.startOffset === undefined ? undefined : utf16At[pos.startOffset]
+      const end = pos?.endOffset === undefined ? undefined : utf16At[pos.endOffset]
+      if (start !== undefined && end !== undefined) {
+        const at = source.indexOf('^', start)
+        if (at >= start && at < end) carets.add(at)
+      }
+    }
+    for (const [key, child] of Object.entries(node)) if (key !== 'pos') visit(child)
+  }
+  visit(parse(source))
+  return carets
+}
+
 export const migrateBracedSteps = { count: 0 }
 export const migrateCandidateChecks = { count: 0 }
 export const migrateBareSteps = { count: 0 }
@@ -870,6 +900,14 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
       offset += line.length + 1
     })
     masked = chars.join('')
+    // Djot's row scan stops after a Carve + continuation line. Check any
+    // remaining whole-cell carets against the Carve tree before pairing them
+    // as superscript delimiters.
+    if (/\|[ \t]*\^[ \t]*\|/.test(masked)) {
+      const chars = masked.split('')
+      for (const at of nativeRowspanCarets(norm)) if (chars[at] === '^') chars[at] = ' '
+      masked = chars.join('')
+    }
   }
   if (nativeDjotCode && norm.includes('{')) {
     const chars = masked.split('')
