@@ -168,7 +168,7 @@ function fenceOpen(line: string) {
   return { marker: match[2]!, lang: match[3],
     header: headerRaw?.slice(1, -1), label: labelRaw?.slice(1, -1) }
 }
-const COLON_OPEN = /^(:{3,})(?: +([A-Za-z][A-Za-z0-9_-]*)[ \t]*)?$/
+const COLON_OPEN = /^(:{3,})(?: +([A-Za-z][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: +\[([A-Za-z0-9_-]+)\])?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
@@ -1058,9 +1058,19 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         undefined, undefined, undefined, colonDepth + 1)
       const kind = colon[2]
       const pos = position(first, close)
-      const node: BlockNode = kind === undefined ? { type: 'div', children, pos } :
+      if (colon[3] && kind === undefined) throw new UnsupportedCursorSyntax('bare div title')
+      if (colon[4] && kind && GENERATED_CONTENT_KINDS.has(kind)) {
+        throw new UnsupportedCursorSyntax('directive label')
+      }
+      const title = colon[3] ? inline.inlines([{ line: first,
+        column: first.text.indexOf('"') + 2, text: colon[3] }]) : undefined
+      const label = colon[4]
+      const node: BlockNode = kind === undefined ? { type: 'div', children,
+        ...(label ? { label } : {}), pos } :
         GENERATED_CONTENT_KINDS.has(kind) ?
-          { type: 'directive', kind, children, pos } : { type: 'admonition', kind, children, pos }
+          { type: 'directive', kind, children, ...(title ? { title } : {}), pos } :
+          { type: 'admonition', kind, children, ...(title ? { title } : {}),
+            ...(label ? { label } : {}), pos }
       emit(node)
       continue
     }

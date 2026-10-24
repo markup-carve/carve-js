@@ -455,6 +455,11 @@ describe('experimental block cursor', () => {
     ':::\nA plain box.\n:::\n',
     ':::\n:::\n',
     ':::\nOuter\n::::\nInner\n::::\n:::\n',
+    '::: note "Careful"\nVisible body.\n:::\n',
+    '::: note [plain]\nBody\n:::\n',
+    '::: [g]\na\n:::\n',
+    '::: details "Baseline Wide"\nb\n:::\n',
+    '::: note "Careful" [x]\nBody\n:::\n',
     '::: note\n# Heading\n\n- item\n:::\n',
     '::: note\nouter\n::: tip\ninner\n:::\n:::\n',
     '::: note\n::: tip\nBody\n:::\n:::',
@@ -468,6 +473,7 @@ describe('experimental block cursor', () => {
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
     '> ::: references\n> :::\n', '- ::: note\n  body\n  :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
+    '::: "Careful"\nBody\n:::\n',
     '::: note\n```\n:::\n```\n:::\n'])
   ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
