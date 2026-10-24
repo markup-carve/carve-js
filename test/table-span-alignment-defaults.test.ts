@@ -8,7 +8,7 @@ describe('table span alignment defaults', () => {
     expect(carveToHtml(source)).toContain('<td colspan="2">a</td>')
     expect(carveToCarve(source)).toBe('| a | < |\n')
     expect(lintCarve(source)).toEqual([])
-    expect(carveToHtml('|a|< |\n')).toContain('<td style="text-align: left;"></td>')
+    expect(carveToHtml('|a|< |\n')).toContain('<td colspan="2">a</td>')
   })
 
   it('keeps a header cell containing a span glyph literal', () => {

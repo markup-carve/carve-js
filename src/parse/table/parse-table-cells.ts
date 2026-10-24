@@ -17,16 +17,13 @@ export const trimCellPadding = (text: string): string => {
 /**
  * Parse a table cell's leading markers from its raw between-pipe text.
  *
- * Disambiguation follows the spec's writing convention: markers are
- * written *tight* against the pipe (`|=`, `|=>`, `|>`, `|<`, `|~`) with
- * no separating space, so they are only recognized at index 0 of the
- * raw cell text. A normal cell always has a space after the pipe
- * (`| Alice`, `| <https://x>`, `| >10`), so content that merely begins
- * with `<`/`>`/`~`/`=` is preserved verbatim.
+ * Kind, alignment and attribute runs start against the opening pipe.
+ * A leading padding space keeps content out of those runs. A lone `<` or
+ * `^` is a span before those runs are considered.
  *
- * A cell whose trimmed content is exactly `^` or `<` (always written
- * spaced, e.g. `| ^ |`, `| < |`) is a rowspan/colspan marker. The tight
- * prefix is an optional `=` (header) followed by an optional alignment
+ * A cell whose trimmed content is exactly `^` or `<`, with any space padding,
+ * is a rowspan/colspan marker. The other tight prefixes may contain an
+ * optional `=` (header) followed by an optional alignment
  * marker (`>` right, `<` left, `~` center).
  */
 /**
@@ -80,9 +77,9 @@ export function parseCellMarkers(src: string): {
   attrs?: Attrs
   content: string
 } {
-  // A lone `<` may have leading or trailing padding. Only a glued `<`
-  // followed by a space (`|< |`) is an empty left-alignment run.
-  if (trimCellPadding(src) === '<' && !src.startsWith('< ')) return { header: false, span: 'colspan', content: '' }
+  // A lone span glyph takes precedence over an empty alignment run.
+  const trimmedSource = trimCellPadding(src)
+  if (trimmedSource === '<' || trimmedSource === '^') return { header: false, span: trimmedSource === '<' ? 'colspan' : 'rowspan', content: '' }
 
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
@@ -185,10 +182,8 @@ export function parseCellMarkers(src: string): {
     return { header, content }
   }
 
-  // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;
-  // otherwise the whole trimmed text is content.
+  // No tight prefix: the whole trimmed text is content.
   const trimmed = trimCellPadding(src)
-  if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
   return { header: false, content: trimmed }
 }
 
@@ -212,13 +207,10 @@ export function parseCellMarkers(src: string): {
  *     colspan_marker = {space}, '<', {space} ;
  *
  * so a cell whose whole payload is `^` or `<` needs an escape when written
- * with span padding. A glued `<` followed by a space reads as alignment, but
- * the writer cannot rely on that spelling for every cell shape.
+ * with span padding. A lone `<` takes priority over an empty alignment run.
  *
- * The predicate is over the PAYLOAD, so it answers the question the writer can
- * ask before it has decided which prefix the cell takes. Both of the parser's
- * span decisions above are reached with `i === 0`. A leading `^` sets
- * `invalidAxis`; a padded `<` is caught before the alignment run scan.
+ * The predicate is over the payload, so the writer can ask before it chooses
+ * the cell prefix. The parser checks the same glyphs before marker runs.
  */
 export function cellPayloadIsSpanMarker(payload: string): boolean {
   const trimmed = trimCellPadding(payload)
