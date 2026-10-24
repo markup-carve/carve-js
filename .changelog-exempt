@@ -50,3 +50,8 @@
 3432: Shares one indentation admission loop across list, description and footnote bodies. No parser output changes.
 3434: Moves continuation-marker classification into a helper. No parser output changes.
 3457: Splits the HTML import table and footnote stages into modules. No import output changes.
+
+# 0.1.14. These source changes do not change installed behavior.
+3527: Moves the spec corpus pin used by tests; runtime source changes only to accommodate the pinned fixtures.
+3531: Refactors parser and importer paths without changing public output.
+3535: Splits complex TypeScript paths to satisfy the complexity gate without changing public output.

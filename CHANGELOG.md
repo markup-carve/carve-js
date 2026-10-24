@@ -9,6 +9,27 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-24
+
+Carve 0.1.14 follows the spec 0.1.12 table, list, and wrapped attribute rulings. It also improves common parsing, rendering, and import paths.
+
+### Fixes
+
+- Table spans retain their intended header alignment, and padded lone span glyphs are read consistently without false diagnostics (#3520, #3525, #3526, #3532, #3533; markup-carve/carve#3573, markup-carve/carve#3576, markup-carve/carve#3586, markup-carve/carve#3587).
+- Nested wrapped attributes close at the owning container column, and a separator below an over-indented term stays in that term (#3507, #3537; markup-carve/carve#3592).
+- List items and descriptions keep blocks at their proper columns across empty nested items, comments, footnotes, lazy lines, and continuation markers (#3498, #3499, #3500, #3501, #3503, #3504, #3505, #3506, #3514; markup-carve/carve#3548, markup-carve/carve#3551, markup-carve/carve#3570, markup-carve/carve#3572, markup-carve/carve#3575, markup-carve/carve#3578).
+- The writer preserves a literal plus below nested fences and writes fences after nested compact lists and quoted raw blocks at the right column (#3502, #3513).
+- Markdown import keeps literal definition text, and Djot import preserves heading IDs through collisions and plain quote pairs after forced openers (#3511, #3517, #3519, #3522, #3524).
+- HTML output escapes text consistently, and smart quotes close correctly after a trailing slash (#3491, #3496; markup-carve/carve#3555).
+- Open constructs parse at their intended boundaries, included content reports accurate problems, and Markdown export reports lost structure (#3492; markup-carve/carve#3553).
+
+### Improvements
+
+- Common HTML output and documents with YAML frontmatter avoid unnecessary AST work (#3528, #3529).
+- Wrapped lists, isolated items, inline text, destinations, and plain HTML output take less repeated work (#3478, #3481, #3485, #3486, #3487, #3488, #3493, #3494, #3508).
+
+**Full Changelog**: https://github.com/markup-carve/carve-js/compare/0.1.13...0.1.14
+
 ## [0.1.13] - 2026-10-23
 
 ### Fixes
