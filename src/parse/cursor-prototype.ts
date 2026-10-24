@@ -893,6 +893,15 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
   return body
 }
 
+function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
+  if (cursor.peek()) return cursor.take()
+  if (cursor.owner.kind === 'root' && /^(?:`{3,}|~{3,})$/.test(first.text) &&
+      (first.number === 1 || cursor.lines[first.number - 2]?.text === '')) {
+    return payload.at(-1) ?? first
+  }
+  throw new UnsupportedCursorSyntax('unclosed fence')
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -1040,11 +1049,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         payload.push(line.text)
         payloadLines.push(line)
       }
-      if (!cursor.peek() && (cursor.owner.kind !== 'root' || first.number !== 1 ||
-          !/^(?:`{3,}|~{3,})$/.test(first.text))) {
-        throw new UnsupportedCursorSyntax('unclosed fence')
-      }
-      const close = cursor.peek() ? cursor.take() : payloadLines.at(-1) ?? first
+      const close = takeFenceCloseAtCursor(cursor, first, payloadLines)
       const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
         ...(fence.lang ? { lang: fence.lang } : {}),
         ...(fence.header !== undefined ? { header: fence.header } : {}),
