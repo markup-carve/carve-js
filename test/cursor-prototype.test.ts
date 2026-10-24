@@ -460,6 +460,8 @@ describe('experimental block cursor', () => {
     '::: [g]\na\n:::\n',
     '::: details "Baseline Wide"\nb\n:::\n',
     '::: note "Careful" [x]\nBody\n:::\n',
+    '::: 2col\ny\n:::\n',
+    ':::[/i/]\ny\n:::\n',
     '::: note\n# Heading\n\n- item\n:::\n',
     '::: note\nouter\n::: tip\ninner\n:::\n:::\n',
     '::: note\n::: tip\nBody\n:::\n:::',

@@ -168,7 +168,7 @@ function fenceOpen(line: string) {
   return { marker: match[2]!, lang: match[3],
     header: headerRaw?.slice(1, -1), label: labelRaw?.slice(1, -1) }
 }
-const COLON_OPEN = /^(:{3,})(?: +([A-Za-z][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: +\[([A-Za-z0-9_-]+)\])?[ \t]*$/
+const COLON_OPEN = /^(:{3,})(?: +([A-Za-z0-9][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: *\[([A-Za-z0-9_/-]+)\])?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 const LINK_DEF = /^\[(?!\^)([^\]]+)\]: +(\S+)[ \t]*$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
