@@ -47,6 +47,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['a\n \nb\n', 'a\n\t\nb\n'])
+  ('treats a whitespace-only line as a paragraph boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['|= Name |= Value |\n| a | 1 |\n', '|= Name |= Value |\n'])
   ('parses a canonical table row without a GFM separator: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -575,14 +580,14 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['```\ncode\n', '~~~\ncode\n',
-    'Intro\n\n```\ncode\n', 'Intro\n\n~~~\ncode\n'])
+    'Intro\n\n```\ncode\n', 'Intro\n\n~~~\ncode\n',
+    'Intro\n  \n```\ncode\n', 'Intro\n\t\n~~~\ncode\n'])
   ('parses a bare root fence opened at a block boundary through EOF: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('declines an unclosed fence after open paragraph text', () => {
     expect(() => parseCursorPrototype('Text\n```\ncode\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('Text\n  \n```\ncode\n')).toThrow(UnsupportedCursorSyntax)
   })
 
   it('declines source forms that have not been migrated', () => {

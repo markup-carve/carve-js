@@ -16,7 +16,7 @@ import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_FENCE, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, parseBlockAttributeRun } from './parse-prepass-core.js'
-import { Lexer } from './parse-lexer.js'
+import { Lexer, isBlankLine } from './parse-lexer.js'
 import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
@@ -480,7 +480,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const first = cursor.peek()!
   const parts: ContentLine[] = []
   let last = first
-  while (cursor.peek() && cursor.peek()!.text !== '' &&
+  while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || !isBlockStart(cursor.peek()!.text))) {
     if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
       const lead = inline.inlines(parts)
@@ -896,7 +896,7 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   if (cursor.owner.kind === 'root' && /^(?:`{3,}|~{3,})$/.test(first.text) &&
-      (first.number === 1 || cursor.lines[first.number - 2]?.text === '')) {
+      (first.number === 1 || isBlankLine(cursor.lines[first.number - 2]?.text))) {
     return payload.at(-1) ?? first
   }
   throw new UnsupportedCursorSyntax('unclosed fence')
@@ -938,7 +938,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   }
   while (cursor.peek()) {
     const first = cursor.peek()!
-    if (first.text === '') { cursor.take(); continue }
+    if (isBlankLine(first.text)) { cursor.take(); continue }
     const attrs = first.text.startsWith('{') ? parseBlockAttributeRun(first.text) : null
     if (attrs) {
       cursor.take()
