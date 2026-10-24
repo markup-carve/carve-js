@@ -1183,6 +1183,37 @@ function simpleFootnoteParagraphLine(line: SourceLine | undefined): boolean {
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
 }
 
+function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
+  { source: SourceLine[]; body: SourceLine[] } | undefined {
+  const first = cursor.peek(nextIndex)
+  if (!first?.text.startsWith('  ')) return undefined
+  const firstIndent = /^[ ]*/.exec(first.text)![0].length
+  const firstText = first.text.slice(firstIndent)
+  const heading = RE_HEADING.test(firstText)
+  const quote = RE_BLOCKQUOTE.test(firstText)
+  if (!heading && !quote) return undefined
+  const source = [first]
+  const body = [{ text: firstText, start: first.start + firstIndent, number: first.number,
+    baseColumn: (first.baseColumn ?? 1) + firstIndent }]
+  const second = cursor.peek(nextIndex + 1)
+  if (quote && second?.text.startsWith('  ')) {
+    const indent = /^[ ]*/.exec(second.text)![0].length
+    const text = second.text.slice(indent)
+    if (plainQuoteText(text)) {
+      source.push(second)
+      body.push({ text, start: second.start + indent, number: second.number,
+        baseColumn: (second.baseColumn ?? 1) + indent })
+    }
+  }
+  const after = cursor.peek(nextIndex + source.length)
+  if (after && isBlankLine(after.text)) {
+    let offset = nextIndex + source.length
+    while (cursor.peek(offset) && isBlankLine(cursor.peek(offset)!.text)) offset++
+    if (cursor.peek(offset)?.text.startsWith('  ')) return undefined
+  }
+  return !after || isBlankLine(after.text) ? { source, body } : undefined
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
@@ -1191,20 +1222,23 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const next = cursor.peek(nextIndex)?.text
   const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
   const separated = hasBodyLine && nextIndex > 1
+  const structural = hasBodyLine ? simpleFootnoteStructuralLines(cursor, nextIndex) : undefined
   let bodyLength = 0
-  if (hasBodyLine) {
+  if (hasBodyLine && !structural) {
     while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength))) bodyLength++
   }
   if (!footnote[2] || (footnote[2] !== '{empty}' && isBlockStart(footnote[2])) ||
       (hasBodyLine && (footnote[2] === '{empty}' ||
-      bodyLength === 0 ||
-      (cursor.peek(nextIndex + bodyLength) && cursor.peek(nextIndex + bodyLength)!.text !== '')))) {
+      (bodyLength === 0 && !structural) ||
+      (!structural && cursor.peek(nextIndex + bodyLength) &&
+        cursor.peek(nextIndex + bodyLength)!.text !== '')))) {
     throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
   }
   cursor.take()
   if (separated) for (let i = 1; i < nextIndex; i++) cursor.take()
   const continuation: SourceLine[] = []
   for (let i = 0; i < bodyLength; i++) continuation.push(cursor.take())
+  if (structural) for (let i = 0; i < structural.source.length; i++) cursor.take()
   const plusFollower = cursor.peek()?.text === '+' ? cursor.peek(1) : undefined
   if (footnote[2] === '{empty}' && plusFollower) {
     throw new UnsupportedCursorSyntax('empty footnote continuation')
@@ -1221,10 +1255,10 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
     parts.push({ line, column: nextColumn, text: line.text.slice(nextColumn - 1) })
   }
-  const bodyLast = continuation.at(-1) ?? first
+  const bodyLast = structural?.source.at(-1) ?? continuation.at(-1) ?? first
   const last = attached ?? bodyLast
   const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
-    pos: position(first, separated ? first : bodyLast, column) }
+    pos: position(first, separated || structural ? first : bodyLast, column) }
   const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
     children: inline.inlines(continuation.map((line) => {
       const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
@@ -1235,9 +1269,12 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const attachedBody: Paragraph | undefined = attached ? { type: 'paragraph',
     children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
     pos: position(attached, attached) } : undefined
+  const structuralBody = structural ? parseBlocks(new Cursor(structural.body, undefined,
+    childOwner(cursor.owner, 'colon')), inline, [], 1, false) : []
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
-    attachedBody ? separateBody ? [body, separateBody, attachedBody] : [body, attachedBody] :
-      separateBody ? [body, separateBody] : [body],
+    attachedBody ? separateBody ? [body, separateBody, ...structuralBody, attachedBody] :
+      [body, ...structuralBody, attachedBody] :
+      separateBody ? [body, separateBody, ...structuralBody] : [body, ...structuralBody],
     enumerable: true, configurable: true, writable: true })
   Object.defineProperty(footnoteDefPos, label, { value: position(first, last),
     enumerable: true, configurable: true, writable: true })

@@ -468,11 +468,22 @@ describe('experimental block cursor', () => {
   })
 
   it('declines a multiline footnote until its body collector is migrated', () => {
-    expect(() => parseCursorPrototype('[^f]: note\n  # heading\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('[^f]: note\n  # heading\n'))
+      .toStrictEqual(parse('[^f]: note\n  # heading\n'))
     expect(parseCursorPrototype('[^f]: note\n\n\n  more\n'))
       .toStrictEqual(parse('[^f]: note\n\n\n  more\n'))
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype('[^f]: %% comment\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['[^a]: note\n  > quoted\n\nsee[^a]\n',
+    '[^n]: intro\n  > quote\n    ordinary line\n\nsee[^n]\n'])
+  ('keeps a single structural footnote continuation: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a structural note with another indented block after a blank', () => {
+    expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
   })
 
   it('keeps a plain footnote continuation and its source positions', () => {
