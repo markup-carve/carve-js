@@ -401,6 +401,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('lets a quote own a flush-left list through its continuation marker', () => {
+    const source = '> quoted\n+\n- item\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a quote that resumes after an attached list until both owners are tracked', () => {
+    expect(() => parseCursorPrototype('> quoted\n+\n- item\n> more\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

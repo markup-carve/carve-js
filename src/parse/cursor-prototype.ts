@@ -2030,6 +2030,17 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       last = line
       continue
     }
+    if (!cursor.owner.inList && line.text === '+' && body.length > 0 &&
+        listMarker(cursor.peek(1)?.text ?? '')?.indent === 0 &&
+        (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) {
+      const marker = cursor.take()
+      body.push({ ...marker, text: '' })
+      const attached = cursor.take()
+      body.push(attached)
+      last = attached
+      plainParagraph = false
+      continue
+    }
     const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')
     const refusedFirstBlock = (quoteEndsInPlus(body.at(-1)?.text ?? '') ||
       quoteListEndsInPlus(body.at(-1)?.text ?? '')) &&
