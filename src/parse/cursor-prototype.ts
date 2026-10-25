@@ -352,16 +352,22 @@ function retainedListFollower(text: string, body: SourceLine[]):
 
 function quoteListLazyLine(body: SourceLine[], line: SourceLine, prefix: number):
   { line: SourceLine; prefix: number } {
-  const first = body[0]?.text ?? ''
+  if (body[0]?.text.charCodeAt(0) !== 62) return { line, prefix }
   const previous = body.at(-1)
-  if (!first.startsWith('>') || previous?.number !== line.number - 1 ||
+  if (previous?.number !== line.number - 1 ||
       !(nestedQuoteParagraphText(previous.text) || plainQuoteText(previous.text))) {
     return { line, prefix }
   }
   const text = line.text.trimStart()
-  if (!plainQuoteText(text)) return { line, prefix }
+  const indent = line.text.length - text.length
+  const first = text.charCodeAt(0)
+  const lazyBlock = (indent === 1 || indent >= 4) &&
+    (first === 35 && RE_HEADING.test(text) || first === 62 && RE_BLOCKQUOTE.test(text) ||
+      (first === 45 || first === 42 || first === 43 || first >= 48 && first <= 57) &&
+        listMarker(text))
+  if (!plainQuoteText(text) && !lazyBlock) return { line, prefix }
   return { line: { ...line, lazyText: true },
-    prefix: Math.max(prefix, line.text.length - text.length) }
+    prefix: Math.max(prefix, indent) }
 }
 
 function rejectAmbiguousQuoteLazyFollower(body: SourceLine[], line: SourceLine): void {
@@ -397,6 +403,8 @@ function quoteListMarkerPrefix(line: SourceLine,
   if (frame.contentColumn !== undefined && marker.indent === frame.contentColumn - 1) {
     return frame.contentColumn - 1
   }
+  if (frame.contentColumn !== undefined && frame.body[0]?.text.startsWith('>') &&
+      marker.indent >= frame.contentColumn + 1) return marker.indent
   return undefined
 }
 
@@ -1726,7 +1734,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let plainParagraph = true
   while (cursor.peek()) {
     const line = cursor.peek()!
-    if (line.text[0] === '>' && RE_BLOCKQUOTE.test(line.text)) {
+    if (!line.lazyText && line.text[0] === '>' && RE_BLOCKQUOTE.test(line.text)) {
       cursor.take()
       const prefix = line.text.startsWith('> ') ? 2 : 1
       const text = line.text.slice(prefix)
@@ -1743,8 +1751,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       listMarker(line.text) !== undefined
     if (((!cursor.owner.inList || line.lazyText) && plainParagraph) || refusedFirstBlock) {
       if ((plainQuoteText(line.text) || listMarker(line.text) || lazyColon ||
+          line.lazyText && (RE_HEADING.test(line.text) || RE_BLOCKQUOTE.test(line.text)) ||
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
-          (lazyColon || refusedFirstBlock || line.lazyText && listMarker(line.text) ||
+          (lazyColon || refusedFirstBlock || line.lazyText &&
+            (listMarker(line.text) || RE_HEADING.test(line.text) || RE_BLOCKQUOTE.test(line.text)) ||
             mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
         const lazyLine = cursor.take()
         body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)

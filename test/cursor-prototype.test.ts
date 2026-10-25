@@ -1223,6 +1223,13 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- > intro\n # tail\n', '- > intro\n > tail\n',
+    '- > intro\n    # tail\n', '- > intro\n    - tail\n',
+    '- > intro\n    > tail\n'])
+  ('keeps a structural-looking lazy line in a list item quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> - intro\n>  - tail\n', '> - intro\n> %% c\n>  - tail\n'])
   ('keeps a below-column marker literal in a quote-owned item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
