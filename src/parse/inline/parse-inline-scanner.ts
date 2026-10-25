@@ -1119,7 +1119,9 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   ): InlineNode[] {
     // Non-ASCII text and ASCII letters/digits have no core inline openers.
     // Extension matchers can claim ordinary text, so they retain the full scan.
-    if (!source.cellWraps && session.activeMatchers.length === 0 && /^[A-Za-z0-9 \t\u0080-\uFFFF]+$/.test(text)) {
+    // A period is ordinary only when it has no adjacent period.
+    if (!source.cellWraps && session.activeMatchers.length === 0 && !text.includes('..') &&
+        /^[A-Za-z0-9 \t),;.?\u0080-\uFFFF]+$/.test(text)) {
       return [session.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
     const s = createInlineScan(session, text, source, inFootnote, captionContext, atHostRunStart)
