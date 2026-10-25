@@ -114,11 +114,6 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['> ok\n>bad\n', '> q\n>+\n> para\n'])
-  ('declines ambiguous invalid markers after an open quote: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
-  })
-
   it.each(['| a | b\n', '|\n'])
   ('keeps an invalid pipe row as paragraph text: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -903,6 +898,11 @@ describe('experimental block cursor', () => {
     '> a\n\\# escaped heading\n', '> first\n> second\nlazy\n',
     '> quote\nlazy\n\n', '> quote\nlazy\n^ Attribution\n'])
   ('keeps a plain quote paragraph open for its unmarked next line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> ok\n>bad\n', '> q\n>+\n> para\n'])
+  ('keeps an unspaced quote-like line as lazy paragraph text: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

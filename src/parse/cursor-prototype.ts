@@ -1250,7 +1250,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       continue
     }
     if (!cursor.owner.inList && plainParagraph &&
-        (plainQuoteText(line.text) || listMarker(line.text)) &&
+        (plainQuoteText(line.text) || listMarker(line.text) ||
+          (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
         mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
       body.push(cursor.take())
       last = line
