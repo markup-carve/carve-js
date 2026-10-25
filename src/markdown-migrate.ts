@@ -1452,9 +1452,11 @@ function flattenHtmlAnchorsInLinkLabels(
     for (const token of line.slice(range.start, range.end).matchAll(/\x00P(\d+)\x00/g)) {
       const at = range.start + token.index
       const source = sources[Number(token[1])] ?? ''
-      const start = source.indexOf('<')
-      const tag = start >= 0 ? scanHtmlTag(source, start) : null
-      if (tag?.name !== 'a' || source.slice(0, start) !== '`' || source.slice(tag.end) !== '`{=html}') continue
+      const fence = /^`+/.exec(source)?.[0]
+      if (!fence || !source.endsWith(`${fence}{=html}`)) continue
+      const html = source.slice(fence.length, -fence.length - 7)
+      const tag = scanHtmlTag(html, 0)
+      if (tag?.name !== 'a' || tag.end !== html.length) continue
       if (!tag.closing && !tag.selfClosing) openings.push(at)
       else if (tag.closing && openings.length) {
         removed.add(openings.pop()!)
