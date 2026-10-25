@@ -339,6 +339,10 @@ function retainedCommentFollower(text: string): boolean {
   return plainQuoteText(text) || text[0] === ' ' && text[1] !== ' '
 }
 
+function retainedFencePrefix(text: string): number {
+  return /^(?:`{3,}|~{3,})$/.test(text.trimStart()) ? 1 : 0
+}
+
 function quoteEndsInPlus(text: string): boolean {
   while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
   return text === '+'
@@ -1217,6 +1221,15 @@ function markerFallsBetweenListColumns(marker: ReturnType<typeof listMarker>,
     marker.indent > top.indent && marker.indent < top.contentColumn - 1
 }
 
+function allowsEmptyRetainedFence(frame: { bareFenceAfterRetainedComment: boolean;
+  fenceMarker: string | undefined; body: SourceLine[]; contentColumn?: number },
+next: SourceLine | undefined): boolean {
+  return frame.bareFenceAfterRetainedComment && frame.fenceMarker !== undefined &&
+    /^(?:`{3,}|~{3,})$/.test(frame.body.at(-1)?.text ?? '') &&
+    frame.contentColumn !== undefined &&
+    !next?.text.startsWith(' '.repeat(frame.contentColumn - 1))
+}
+
 function updateListFrameEnds(frames: Array<{ last: SourceLine; indent: number;
   item?: ListItem; itemFirst?: SourceLine }>, line: SourceLine,
 listSpan: (from: SourceLine, to: SourceLine, column: number) => Position): void {
@@ -1236,7 +1249,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
     fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
     blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
-    retainedBelowColumnComment: boolean }
+    retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -1262,7 +1275,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
       fencePrefix: undefined, body: [], blankBeforeInvisible: false,
-      lazyRootParagraph: false, retainedBelowColumnComment: false }
+      lazyRootParagraph: false, retainedBelowColumnComment: false,
+      bareFenceAfterRetainedComment: false }
   }
   const stack = [newFrame(first, firstMarker)]
   const reachedFrame = (text: string, excludeTop = false): Frame | undefined => {
@@ -1289,7 +1303,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const flush = (frame: Frame) => {
     if (!frame.item || !frame.body.length) return
-    let allowEmptyFence = false
+    let allowEmptyFence = allowsEmptyRetainedFence(frame, cursor.peek())
     const firstText = frame.body[0]!.text
     if (frame.body.length === 1 && (firstText[0] === '`' || firstText[0] === '~') &&
         /^(?:`{3,}|~{3,})$/.test(firstText) &&
@@ -1321,6 +1335,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     return host
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
+    frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
     frame.lazyRootParagraph = rootLazy || frame.lazyRootParagraph && plainQuoteText(text)
     const previous = frame.body.at(-1)?.text ?? ''
@@ -1535,7 +1550,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (top.retainedBelowColumnComment && retainedCommentFollower(line.text)) {
         cursor.take()
-        appendBody(top, line, 0, true)
+        const retainedPrefix = retainedFencePrefix(line.text)
+        appendBody(top, line, retainedPrefix, retainedPrefix === 0)
+        top.bareFenceAfterRetainedComment = retainedPrefix !== 0
         top.retainedBelowColumnComment = false
         updateListFrameEnds(stack, line, listSpan)
         continue

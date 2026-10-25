@@ -1175,6 +1175,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- intro\n%% c\n ```\n x\n ```\n',
+    '- intro\n%% c\n ~~~\n x\n ~~~\n'])
+  ('closes a retained below-column fence before its body misses the item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an at-column unclosed fence behind the prototype guard', () => {
+    expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
