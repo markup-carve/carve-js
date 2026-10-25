@@ -34,6 +34,11 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // New corpus categories from the spec main sync onto next-ast2.
+  'a-line-at-the-marker-column-leaves-a-closed-nested-body',
+  'empty-heading-slugs-use-the-ordinary-duplicate-suffix',
+  'escaped-space-in-inline-text',
+  'lazy-text-stays-in-an-unclosed-quoted-admonition',
   // New corpus categories in spec 32d724d; all six match this engine byte for byte.
   'a-display-math-span-with-trailing-attributes-takes-a-caption',
   'a-styled-display-math-span-takes-a-caption-across-one-blank-line',
