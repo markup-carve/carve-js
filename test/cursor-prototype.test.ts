@@ -1211,6 +1211,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > intro\ntail\n', '- > intro\n tail\n',
+    '- > intro\n  tail\n', '- > intro\n    tail\n'])
+  ('keeps a plain lazy line in a quote opened on the item marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- > a\nlazy\n    > b\n', '- > a\n  x\n    > b\n',
+    '- > a\n  b\n [r]: /u\n'])
+  ('declines an unresolved block owner after a lazy item quote: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> - intro\n>  - tail\n', '> - intro\n> %% c\n>  - tail\n'])
   ('keeps a below-column marker literal in a quote-owned item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

@@ -350,6 +350,30 @@ function retainedListFollower(text: string, body: SourceLine[]):
   return { prefix, rootLazy: prefix === 0 }
 }
 
+function quoteListLazyLine(body: SourceLine[], line: SourceLine, prefix: number):
+  { line: SourceLine; prefix: number } {
+  const first = body[0]?.text ?? ''
+  const previous = body.at(-1)
+  if (!first.startsWith('>') || previous?.number !== line.number - 1 ||
+      !(nestedQuoteParagraphText(previous.text) || plainQuoteText(previous.text))) {
+    return { line, prefix }
+  }
+  const text = line.text.trimStart()
+  if (!plainQuoteText(text)) return { line, prefix }
+  return { line: { ...line, lazyText: true },
+    prefix: Math.max(prefix, line.text.length - text.length) }
+}
+
+function rejectAmbiguousQuoteLazyFollower(body: SourceLine[], line: SourceLine): void {
+  if (!body[0]?.text.startsWith('>') || !body.at(-1)?.lazyText ||
+      body.at(-1)?.number !== line.number - 1) return
+  const indent = /^[ ]*/.exec(line.text)![0].length
+  const text = line.text.slice(indent)
+  if (indent >= 4 && RE_BLOCKQUOTE.test(text)) {
+    throw new UnsupportedCursorSyntax('quote continuation across list boundary')
+  }
+}
+
 function quoteEndsInPlus(text: string): boolean {
   while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
   return text === '+'
@@ -960,12 +984,17 @@ function rejectRaisedColonContinuation(text: string, frame: { contentColumn?: nu
   }
 }
 
-function rejectBelowColumnMarkerAfterComment(marker: ReturnType<typeof listMarker>,
-  frame: { indent: number; contentColumn?: number; body: SourceLine[] }): void {
-  if (!marker || frame.contentColumn === undefined) return
-  if (marker.indent > frame.indent && marker.indent < frame.contentColumn - 1 &&
+function rejectAmbiguousListBoundary(marker: ReturnType<typeof listMarker>,
+  frame: { indent: number; contentColumn?: number; body: SourceLine[] },
+  line: SourceLine): void {
+  if (marker && frame.contentColumn !== undefined &&
+      marker.indent > frame.indent && marker.indent < frame.contentColumn - 1 &&
       RE_COMMENT_BLOCK_ANY.test(frame.body.at(-1)?.text ?? '')) {
     throw new UnsupportedCursorSyntax('marker after list comment')
+  }
+  if (frame.body[0]?.text.startsWith('>') && frame.body.at(-1)?.lazyText &&
+      line.text.startsWith(' ') && rootLinkDef(line.text.trimStart())) {
+    throw new UnsupportedCursorSyntax('quote continuation across list boundary')
   }
 }
 
@@ -1383,6 +1412,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     return host
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
+    rejectAmbiguousQuoteLazyFollower(frame.body, line)
+    const claimed = quoteListLazyLine(frame.body, line, prefix)
+    line = claimed.line
+    prefix = claimed.prefix
     frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
     frame.lazyRootParagraph = rootLazy || frame.lazyRootParagraph && plainQuoteText(text)
@@ -1430,7 +1463,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const marker = listMarker(line.text)
     rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
-    rejectBelowColumnMarkerAfterComment(marker, top)
+    rejectAmbiguousListBoundary(marker, top, line)
     const nestedPlus = line.text.charCodeAt(line.text.length - 1) === 43 ?
       nestedPlusDisposition(cursor, top, stack.length) : undefined
     if (nestedPlus) {
