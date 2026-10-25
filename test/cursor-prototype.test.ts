@@ -548,6 +548,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n:  body\n   > q\n',
+    ':: term\n:  definition\n   > quote\n'])
+  ('keeps one quote after a plain definition at its body column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a quote follower after a definition already starts with a quote', () => {
+    expect(() => parseCursorPrototype(':: t\n:  > a\n   > + b |\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- a\n  - b\n    # N\n  lazy\n',
     '> - a\n>     - child\n>     ```\n>     code\n>     ```\nafter\n',
     '- x\n  - text\n  > q\n\n  ^ cap\n- c\n'])

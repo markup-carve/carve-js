@@ -492,6 +492,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let mayTermPlus = false
   let mayFirstBlockQuote = false
   let definitionContentColumn = 0
+  let definitionContentPlain = false
   let endedOnStructural = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
@@ -504,6 +505,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       if (definition) {
         const body = /^: +[ \t]*([^ \t].*)$/.exec(text)![1]!
         definitionContentColumn = text.length - body.length + 1
+        definitionContentPlain = !isBlockStart(body)
       }
       mayWrapTerm = term
       mayTermPlus = term
@@ -529,9 +531,10 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       break
     }
-    if (mayWrapDefinition && definitionContentColumn > 1 &&
+    if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1 &&
         text.startsWith(' '.repeat(definitionContentColumn - 1)) &&
-        RE_HEADING.test(text.slice(definitionContentColumn - 1)) &&
+        (RE_HEADING.test(text.slice(definitionContentColumn - 1)) ||
+          RE_BLOCKQUOTE.test(text.slice(definitionContentColumn - 1))) &&
         (!cursor.lines[end + 1] || !cursor.lines[end + 1]!.text.startsWith(' '.repeat(
           definitionContentColumn - 1)))) {
       end++
@@ -594,18 +597,20 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
       const following = cursor.at < end ? cursor.peek() : undefined
-      if (following?.text.startsWith(' '.repeat(column - 1)) &&
-          RE_HEADING.test(following.text.slice(column - 1))) {
-        const heading = cursor.take()
+      if (!isBlockStart(definition[1]!) &&
+          following?.text.startsWith(' '.repeat(column - 1)) &&
+          (RE_HEADING.test(following.text.slice(column - 1)) ||
+            RE_BLOCKQUOTE.test(following.text.slice(column - 1)))) {
+        const block = cursor.take()
         current.definitions.push(parseBlocks(new Cursor([
           { text: definition[1]!, start: line.start + column - 1,
             number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 },
-          { text: heading.text.slice(column - 1), start: heading.start + column - 1,
-            number: heading.number, baseColumn: (heading.baseColumn ?? 1) + column - 1 },
+          { text: block.text.slice(column - 1), start: block.start + column - 1,
+            number: block.number, baseColumn: (block.baseColumn ?? 1) + column - 1 },
         ], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
-        last = heading
+        last = block
         continue
       }
       if (definition[1] === '+' && cursor.at < end &&
