@@ -601,6 +601,12 @@ function definitionTermWrapText(cursor: Cursor, text: string): boolean {
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
 }
 
+function startsRootBlockAfterDefinition(text: string): boolean {
+  return RE_BLOCKQUOTE.test(text) || RE_HEADING.test(text) ||
+    fenceOpen(text) !== null || COLON_OPEN.test(text) ||
+    (text[0] === '|' && isTableRow(text))
+}
+
 function hasExposedDefinitionReference(body: SourceLine[]): boolean {
   let fence: string | undefined
   let commentRun: number | undefined
@@ -742,7 +748,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       !(endedOnStructural && !cursor.lines[end]!.text.startsWith(' '.repeat(
         definitionContentColumn - 1))) &&
       !(cursor.owner.kind === 'root' && (rootLinkDef(cursor.lines[end]!.text) ||
-        rootBlockAttributeAt(cursor, end))))) {
+        rootBlockAttributeAt(cursor, end) ||
+        startsRootBlockAfterDefinition(cursor.lines[end]!.text))))) {
     throw new UnsupportedCursorSyntax('definition list body')
   }
   let next = end

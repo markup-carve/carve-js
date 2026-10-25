@@ -915,6 +915,20 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n:  body\n> q\n',
+    ':: c\n# H\n',
+    ':: t\n: a\n```\nb\n```\n',
+    ':: t\n: a\n| t |\n'])
+  ('ends a root definition list before a block at the document column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([':: t\n: a\n- x\n',
+    ':: t\n: a\n::: note\nx\n:::\n'])
+  ('declines a definition follower whose owner remains unresolved: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['[^n]: First paragraph.\n\n    Second paragraph.\n',
     '[^n]: first\n   continuation\n'])
   ('keeps a simply indented footnote paragraph at its source column: %s', (source) => {
