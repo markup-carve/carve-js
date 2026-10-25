@@ -1211,7 +1211,7 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   return innerMarker !== undefined && plainQuoteText(innerMarker.content)
 }
 
-function markerCannotNestAfterBlank(marker: ReturnType<typeof listMarker>,
+function markerFallsBetweenListColumns(marker: ReturnType<typeof listMarker>,
   top: { indent: number; contentColumn?: number }): boolean {
   return marker !== undefined && top.contentColumn !== undefined &&
     marker.indent > top.indent && marker.indent < top.contentColumn - 1
@@ -1411,6 +1411,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         updateListFrameEnds(stack, line, listSpan)
         continue
       }
+      if (markerFallsBetweenListColumns(marker, top)) break
       if (marker.indent < firstMarker.indent) break
       if (marker.indent > top.indent && top.contentColumn !== undefined &&
           top.body.length > 0 && listMarker(top.body[0]!.text) &&
@@ -1472,7 +1473,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (endsListBlankRun(blanks, next, firstMarker.indent)) break
       const nextMarker = listMarker(next.text)
-      if (markerCannotNestAfterBlank(nextMarker, top)) break
+      if (markerFallsBetweenListColumns(nextMarker, top)) break
       if (startsNestedListAfterLongBlankRun(blanks, nextMarker, firstMarker.indent)) {
         while (stack.length > 1) {
           const done = stack.pop()!

@@ -1168,6 +1168,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- intro\n  %% c\n - next\n',
+    '- - intro\n  %% c\n - next\n',
+    '- > intro\n  %% c\n - next\n'])
+  ('clears list retention after an at-column comment: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
