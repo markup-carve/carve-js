@@ -53,7 +53,10 @@ class Cursor {
   simpleRootListDefinitions?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
     readonly owner: ContainerOwner = ROOT_OWNER,
-    readonly physicalLines: SourceLine[] = lines) {}
+    readonly physicalLines: SourceLine[] = lines,
+    simpleListDefinitions?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>) {
+    if (simpleListDefinitions) this.simpleRootListDefinitions = simpleListDefinitions
+  }
   peek(n = 0): SourceLine | undefined { return this.lines[this.at + n] }
   take(): SourceLine { return this.lines[this.at++]! }
 }
@@ -1789,12 +1792,18 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
   const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
-    cursor.physicalLines), inline, definitionNodes, depth + 1, false)
+    cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
   const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
     rootLinkDef(body[0]!.text) !== null
+  const lastBodyLine = body.at(-1)
+  const terminalListDefinition = lastBodyLine &&
+    cursor.simpleRootListDefinitions?.has(lastBodyLine.number)
+  const placedEndLine = children.at(-1)?.pos?.endLine
+  const quoteLast = terminalListDefinition && placedEndLine ?
+    cursor.physicalLines[placedEndLine - 1] ?? last : last
   return { type: 'block_quote', children,
-    pos: position(first, last, 1, onlyLinkDefinition ?
-      body[0]!.baseColumn ?? contentEndColumn(last) : contentEndColumn(last)) }
+    pos: position(first, quoteLast, 1, onlyLinkDefinition ?
+      body[0]!.baseColumn ?? contentEndColumn(quoteLast) : contentEndColumn(quoteLast)) }
 }
 
 function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
@@ -2115,7 +2124,8 @@ function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,
   }
   cursor.take()
   if (inline.linkDefinitions.get(normalizeRefLabel(definition.label))?.line !== first.number - 1) return
-  const definitionLine = atDocumentLevel ? first : cursor.physicalLines[first.number - 1] ?? first
+  const definitionLine = atDocumentLevel && cursor.owner.kind === 'root' ? first :
+    cursor.physicalLines[first.number - 1] ?? first
   definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
     ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
     ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
@@ -2380,7 +2390,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   let openFence: string | undefined
   let openComment: number | undefined
   let simpleRootListOpen = false
-  const mayHaveNestedListDefinition = source.includes('  [')
+  let simpleQuoteListOpen = false
+  const mayHaveNestedListDefinition = source.includes('  [') || source.includes('>   [')
   const simpleRootListDefinitions = mayHaveNestedListDefinition ?
     new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
   for (const line of cursor.lines) {
@@ -2391,6 +2402,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
           isBlockStart(line.text.slice(2)) && !rootLinkDef(line.text.slice(2))) {
         simpleRootListOpen = false
       }
+      if (line.text.startsWith('> - ')) simpleQuoteListOpen = true
+      else if (line.text !== '> ' && !line.text.startsWith('>   ')) simpleQuoteListOpen = false
     }
     if (openComment !== undefined) {
       const closer = RE_COMMENT_BLOCK_ANY.exec(line.text)
@@ -2413,8 +2426,13 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListOpen &&
       line.text.startsWith('  [') &&
       cursor.lines[line.number - 2]?.text === '' ? rootLinkDef(line.text.slice(2)) : null
-    if (simpleListDefinition) simpleRootListDefinitions!.set(line.number, simpleListDefinition)
-    const match = rootLinkDef(line.text) || simpleListDefinition ||
+    const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListOpen &&
+      line.text.startsWith('>   [') &&
+      cursor.lines[line.number - 2]?.text === '> ' ? rootLinkDef(line.text.slice(4)) : null
+    if (simpleListDefinition || quoteListDefinition) {
+      simpleRootListDefinitions!.set(line.number, (simpleListDefinition ?? quoteListDefinition)!)
+    }
+    const match = rootLinkDef(line.text) || simpleListDefinition || quoteListDefinition ||
       (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
     if (match) linkDefinitions.set(normalizeRefLabel(match.label),
       { rawLabel: match.label, line: line.number - 1, href: match.href,

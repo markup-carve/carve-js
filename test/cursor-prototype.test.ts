@@ -548,7 +548,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> - a\n> \n>   [r]: /target\n',
+    '> - a\n> \n>   [r]: /target\n> \n> - b\n',
+    '> - a\n> \n>   [r]: /target\n> \n>   tail\n',
+    '> - [x][r]\n> \n>   [r]: /target\n'])
+  ('hoists a reference definition owned by a simple quoted list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['[x][r]\n\n  [r]: /target\n',
+    '> [x][r]\n> \n>   [r]: /target\n',
     '- a\n```\n- b\n```\n\n  [r]: /target\n'])
   ('does not index an indented root line as a list reference definition: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
