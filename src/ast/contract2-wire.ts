@@ -97,7 +97,7 @@ function tableToContract2(node: Item): void {
     if (footRows || groups.footAttrs) children.push({ type: 'table_foot', children: take(footRows), ...(groups.footAttrs ? { attrs: groups.footAttrs } : {}) })
   } else {
     let head = 0
-    while (head < rows.length && (rows[head]?.children as Item[] | undefined)?.every(cell => cell.header) && (rows[head]?.children as Item[]).length) head++
+    while (head < rows.length && (rows[head]?.children as Item[] | undefined)?.every(cell => cell.header || cell.span === 'colspan' || cell.span === 'rowspan') && (rows[head]?.children as Item[]).length) head++
     if (head) children.push({ type: 'table_head', children: rows.slice(0, head) })
     children.push({ type: 'table_body', children: rows.slice(head) })
   }
