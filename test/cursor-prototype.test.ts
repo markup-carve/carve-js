@@ -1087,7 +1087,7 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- - a\ntail\n', '- - a\nb\nc\n'])
+  it.each(['- - a\ntail\n', '- - a\nb\nc\n', '- - a\n - b\n', '- - a\n - b\nc\n'])
   ('keeps a marker-line nested item open for lazy plain text: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

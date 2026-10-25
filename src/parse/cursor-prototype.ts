@@ -978,10 +978,15 @@ function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength
 
 function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarker>>,
   top: { indent: number; contentColumn?: number; fenceMarker: string | undefined; body: SourceLine[] },
-  depth: number, lineNumber: number): boolean {
-  return depth === 0 && !top.fenceMarker && top.contentColumn !== undefined &&
-    marker.indent > top.indent && marker.indent < top.contentColumn - 1 &&
-    top.body.at(-1)?.number === lineNumber - 1 && plainQuoteText(top.body.at(-1)?.text ?? '')
+  depth: number, lineNumber: number, owner: ContainerOwner, stackLength: number): boolean {
+  if (!(depth === 0 || depth === 1 && owner.kind === 'list') || stackLength !== 1 ||
+      top.fenceMarker || top.contentColumn === undefined ||
+      marker.indent <= top.indent || marker.indent >= top.contentColumn - 1 ||
+      top.body.at(-1)?.number !== lineNumber - 1) return false
+  const last = top.body.at(-1)!.text
+  if (plainQuoteText(last)) return true
+  const innerMarker = depth === 0 && top.body.length === 1 ? listMarker(last) : undefined
+  return innerMarker !== undefined && plainQuoteText(innerMarker.content)
 }
 
 function markerCannotNestAfterBlank(marker: ReturnType<typeof listMarker>,
@@ -1136,9 +1141,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         updateListFrameEnds(stack, line, listSpan)
         continue
       }
-      if (isBelowListMarkerColumn(marker, top, depth, line.number)) {
+      if (isBelowListMarkerColumn(marker, top, depth, line.number, cursor.owner, stack.length)) {
         cursor.take()
-        appendBody(top, line, 0)
+        appendBody(top, line, 0, true)
         updateListFrameEnds(stack, line, listSpan)
         continue
       }
