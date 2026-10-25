@@ -175,6 +175,7 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 table-header-cell-demoted,
                                 markdown-container-flattened,
                                 markdown-caption-flattened,
+                                fence-title-dropped,
                                 markdown-attributes-dropped, raw-html-escaped)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
@@ -1003,7 +1004,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed', 'table-span-flattened', 'table-header-row-demoted', 'table-header-row-hoisted', 'table-header-cell-demoted', 'markdown-container-flattened', 'markdown-caption-flattened', 'markdown-attributes-dropped', 'raw-html-escaped']
+  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'list-style-dropped', 'list-delimiter-changed', 'table-span-flattened', 'table-header-row-demoted', 'table-header-row-hoisted', 'table-header-cell-demoted', 'markdown-container-flattened', 'markdown-caption-flattened', 'fence-title-dropped', 'markdown-attributes-dropped', 'raw-html-escaped']
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
     io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)
