@@ -121,7 +121,7 @@ function tableToContract2(node: Item): void {
 }
 
 export function runtimeWireToContract2(input: Item, doc: Document): Item {
-  const names = new Set<string>()
+  const names = new Map<string, string | undefined>()
   const transform = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(transform)
     if (value === null || typeof value !== 'object') return value
@@ -240,7 +240,9 @@ export function runtimeWireToContract2(input: Item, doc: Document): Item {
         node.pairs = (node.pairs as Item[]).map(pair => ({ type: 'ruby_pair', ...pair }))
         break
       case 'inline_extension': case 'block_extension': {
-        if (String(node.name).includes('.')) names.add(node.name as string)
+        if (String(node.name).includes('.') && names.get(node.name as string) === undefined) {
+          names.set(node.name as string, typeof node.version === 'string' ? node.version : undefined)
+        }
         if (node.type === 'inline_extension') {
           relocateSlot(node, 'inline_extension', 'children', true)
         } else if (node.payload !== undefined) {
@@ -259,7 +261,8 @@ export function runtimeWireToContract2(input: Item, doc: Document): Item {
   const result = transform(input) as Item
   if (names.size) {
     const declared = new Map(((result.extensions as Item[] | undefined) ?? []).map(entry => [String(entry.name), entry]))
-    for (const name of names) if (!declared.has(name)) declared.set(name, { name, version: '0', required: false })
+    // An unversioned node still needs a declared version (CARVE-P12-024); '0' stays until that is ruled.
+    for (const [name, version] of names) if (!declared.has(name)) declared.set(name, { name, version: version ?? '0', required: false })
     result.extensions = [...declared.values()].sort((left, right) => String(left.name).localeCompare(String(right.name)))
   }
   return result

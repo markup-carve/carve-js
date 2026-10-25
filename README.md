@@ -184,7 +184,6 @@ accepts a validated AST JSON tree for callers that already have one.
 `toAstJson(parse(source))` and `carve --json` write AST contract 2.0. The root
 contains `astVersion: "2.0"`; node offsets count UTF-8 bytes, while columns
 count codepoints. `fromAstJson` refuses contract 1.2 trees with
-`AstJsonMigrationError`. Migrate stored 1.2 trees before reading them with this
-version. See [AST sidecars](docs/ast-sidecars.md) for envelope and sidecar use.
+`AstJsonMigrationError`. Use `migrateAstJson(tree12, { source })` or `carve migrate-ast --source document.crv tree.json` before reading stored 1.2 trees. The migration returns the 2.0 tree and a list of losses; omit the source only when byte positions can be discarded. See [AST sidecars](docs/ast-sidecars.md) for envelope and sidecar use.
 
 Table alignment checks treat an unset alignment as left alignment. Host CSS and default header styling are outside the assessment.
