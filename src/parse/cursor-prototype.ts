@@ -1183,10 +1183,7 @@ function mayFoldNestedListParagraph(cursor: Cursor,
     body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
   if (depth !== 0 || stackLength < 2 || top.fenceMarker ||
       !plainQuoteText(cursor.peek()!.text) || !plainQuoteText(top.body.at(-1)?.text ?? '')) return false
-  const following = cursor.peek(1)
-  if (!following) return true
-  const next = listMarker(following.text)
-  return next !== undefined && next.indent === top.indent && sameListKind(next, top)
+  return true
 }
 
 function mayFoldRootListParagraph(cursor: Cursor,

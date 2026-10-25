@@ -1237,7 +1237,8 @@ describe('experimental block cursor', () => {
 
   it.each(['- a\n  - b\ntail\n', '- a\n  - b\n    text\nlazy\n',
     '- a\n  - b\n    - c\nlazy\n',
-    '- a\n  - b\n    ```\n    ::: note\n    ```\n    text\nlazy\n'])
+    '- a\n  - b\n    ```\n    ::: note\n    ```\n    text\nlazy\n',
+    '- a\n  - c\nb\n    ```\n    y\n    ```\nflush\n'])
   ('keeps a final plain line in the deepest open list paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
