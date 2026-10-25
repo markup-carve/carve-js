@@ -1401,6 +1401,10 @@ function loosensListGap(cursor: Cursor, body: SourceLine[], text: string,
   return text[0] !== '{' || wrappedListAttributeCount(cursor, prefix) <= 1
 }
 
+function markInvisibleListGap(frame: ListCursorFrame, attrsSeen: boolean, text: string): void {
+  if (attrsSeen || LINE_COMMENT.test(text)) frame.blankBeforeInvisible = true
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -1529,6 +1533,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.list.tight = false
       frame.blankBeforeInvisible = false
     }
+    if (frame.blankBeforeInvisible && parseBlockAttributeRun(previous) &&
+        isBlockStart(text) && !parseBlockAttributeRun(text)) {
+      frame.blankBeforeInvisible = false
+    }
     frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix,
       ...(line.lazyText ? { lazyText: true } : {}),
@@ -1653,6 +1661,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         const nested = newFrame(line, marker,
           nestedListSpanColumn(cursor.owner, host.contentColumn, marker.indent))
         attachTrailingListAttrs(host.body, nested.list)
+        host.blankBeforeInvisible = false
         flush(host)
         host.item.children.push(nested.list)
         stack.push(nested)
@@ -1738,7 +1747,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           if (!following?.text.startsWith(' '.repeat(prefixLength))) break
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
-        if (LINE_COMMENT.test(blockText)) continuationFrame.blankBeforeInvisible = true
+        markInvisibleListGap(continuationFrame, lookahead > 0, blockText)
         if (loosensListGap(cursor, continuationFrame.body, blockText,
           prefixLength, nestedContinuation === true)) {
           blankLooseFrame(continuationFrame, top, next).list.tight = false

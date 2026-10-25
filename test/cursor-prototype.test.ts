@@ -1466,4 +1466,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- a\n\n  %% note\n  - b\n- c\n', '- a\n\n  {.c}\n- b\n',
+    '- a\n\n  {.x}\n  > q\n- c\n',
+    '- a\n\n  {.x}\n  ```\n  code\n  ```\n- c\n'])
+  ('keeps list tightness across an invisible line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
