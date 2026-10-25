@@ -483,6 +483,12 @@ function rootBlockAttributeAt(cursor: Cursor, index: number): boolean {
   return found
 }
 
+function definitionStructuralLine(text: string, column: number): boolean {
+  if (!text.startsWith(' '.repeat(column - 1))) return false
+  const content = text.slice(column - 1)
+  return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content)
+}
+
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
   const first = cursor.peek()!
@@ -532,14 +538,16 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       break
     }
     if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1 &&
-        text.startsWith(' '.repeat(definitionContentColumn - 1)) &&
-        (RE_HEADING.test(text.slice(definitionContentColumn - 1)) ||
-          RE_BLOCKQUOTE.test(text.slice(definitionContentColumn - 1))) &&
-        (!cursor.lines[end + 1] || !cursor.lines[end + 1]!.text.startsWith(' '.repeat(
-          definitionContentColumn - 1)))) {
-      end++
-      endedOnStructural = true
-      break
+        definitionStructuralLine(text, definitionContentColumn)) {
+      let after = end + 1
+      while (cursor.lines[after] && definitionStructuralLine(
+        cursor.lines[after]!.text, definitionContentColumn)) after++
+      if (!cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(
+        definitionContentColumn - 1))) {
+        end = after
+        endedOnStructural = true
+        break
+      }
     }
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
@@ -598,19 +606,21 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const column = line.text.length - definition[1]!.length + 1
       const following = cursor.at < end ? cursor.peek() : undefined
       if (!isBlockStart(definition[1]!) &&
-          following?.text.startsWith(' '.repeat(column - 1)) &&
-          (RE_HEADING.test(following.text.slice(column - 1)) ||
-            RE_BLOCKQUOTE.test(following.text.slice(column - 1)))) {
-        const block = cursor.take()
-        current.definitions.push(parseBlocks(new Cursor([
+          following && definitionStructuralLine(following.text, column)) {
+        const body: SourceLine[] = [
           { text: definition[1]!, start: line.start + column - 1,
             number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 },
-          { text: block.text.slice(column - 1), start: block.start + column - 1,
-            number: block.number, baseColumn: (block.baseColumn ?? 1) + column - 1 },
-        ], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
+        ]
+        while (cursor.at < end && definitionStructuralLine(cursor.peek()!.text, column)) {
+          const block = cursor.take()
+          body.push({ text: block.text.slice(column - 1), start: block.start + column - 1,
+            number: block.number, baseColumn: (block.baseColumn ?? 1) + column - 1 })
+          last = block
+        }
+        current.definitions.push(parseBlocks(new Cursor(body, undefined,
+          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
-        last = block
         continue
       }
       if (definition[1] === '+' && cursor.at < end &&

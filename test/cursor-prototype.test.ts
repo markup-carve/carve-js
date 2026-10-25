@@ -554,6 +554,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('reads adjacent quote and heading blocks in a definition body', () => {
+    const source = ':: term\n:  intro\n   > quote\n   # heading\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a quote follower after a definition already starts with a quote', () => {
     expect(() => parseCursorPrototype(':: t\n:  > a\n   > + b |\ntail\n'))
       .toThrow(UnsupportedCursorSyntax)
