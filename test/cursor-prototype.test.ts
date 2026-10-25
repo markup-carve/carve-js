@@ -439,6 +439,16 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it('places a closed comment with the outer item after a nested list marker', () => {
+    const source = '- - a\n   %%%\n   x\n   %%%\n  t'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines the shifted comment after a blank until the owner is explicit', () => {
+    expect(() => parseCursorPrototype('- - a\n\n   %%%\n   x\n   %%%\n  t'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

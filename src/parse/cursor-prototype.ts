@@ -1083,16 +1083,21 @@ function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | un
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
   if (!commentBlockHasCloser(lexer, run)) return undefined
-  if (cursor.owner.inList && (cursor.at === 0 || cursor.peek()?.text[0] !== '%')) {
+  const first = cursor.peek()!
+  const previous = cursor.lines[cursor.at - 1]
+  const shiftedAfterNestedList = previous && listMarker(previous.text) &&
+    first.number === previous.number + 1 && /^ %%%/.test(first.text)
+  if (cursor.owner.inList && (cursor.at === 0 ||
+      first.text[0] !== '%' && !shiftedAfterNestedList)) {
     throw new UnsupportedCursorSyntax('list comment source ownership')
   }
-  const first = cursor.peek()!
   const comment = parseCommentBlock(lexer)
   if (cursor.owner.inList && cursor.lines.slice(cursor.at, lexer.pos).some((line) => line.text === '')) {
     throw new UnsupportedCursorSyntax('list comment blank ownership')
   }
   cursor.at = lexer.pos
-  comment.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  const openerColumn = first.text.length - first.text.trimStart().length + 1
+  comment.pos = position(first, cursor.lines[cursor.at - 1] ?? first, openerColumn)
   return comment
 }
 
