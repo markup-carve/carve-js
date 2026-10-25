@@ -1067,6 +1067,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\ntail\n', '- a\ntail\nbar\n',
+    '- a\ntail\n  other\nbar\n', '1. a\ntail\n'])
+  ('keeps a root list paragraph open across lazy plain lines: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
     '> [a]: /x\n\nSee [t][a].\n'])
   ('indexes a simple root quote reference definition: %s', (source) => {

@@ -923,6 +923,25 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   return next !== undefined && next.indent === top.indent && sameListKind(next, top)
 }
 
+function mayFoldRootListParagraph(cursor: Cursor,
+  frame: { indent: number; fenceMarker: string | undefined; body: SourceLine[];
+    lazyRootParagraph: boolean },
+  stackLength: number, depth: number): boolean {
+  const first = frame.body[0]
+  return depth === 0 && stackLength === 1 && frame.indent === 0 && !frame.fenceMarker &&
+    frame.body.at(-1)?.number === cursor.peek()!.number - 1 &&
+    (frame.lazyRootParagraph || frame.body.length === 1 &&
+      first !== undefined && plainQuoteText(first.text)) && plainQuoteText(cursor.peek()!.text)
+}
+
+function mayFoldListParagraph(cursor: Cursor,
+  frame: { indent: number; ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*';
+    taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
+    lazyRootParagraph: boolean }, stackLength: number, depth: number): boolean {
+  return mayFoldNestedListParagraph(cursor, frame, stackLength, depth) ||
+    mayFoldRootListParagraph(cursor, frame, stackLength, depth)
+}
+
 function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength: number):
   'fold' | 'decline' | undefined {
   const line = cursor.peek()!.text
@@ -963,7 +982,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
     fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
-    blankBeforeInvisible: boolean }
+    blankBeforeInvisible: boolean; lazyRootParagraph: boolean }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -988,7 +1007,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
-      fencePrefix: undefined, body: [], blankBeforeInvisible: false }
+      fencePrefix: undefined, body: [], blankBeforeInvisible: false,
+      lazyRootParagraph: false }
   }
   const stack = [newFrame(first, firstMarker)]
   const reachedFrame = (text: string, excludeTop = false): Frame | undefined => {
@@ -1023,9 +1043,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
     frame.body = []
+    frame.lazyRootParagraph = false
   }
-  const appendBody = (frame: Frame, line: SourceLine, prefix: number) => {
+  const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
     const text = line.text.slice(prefix)
+    frame.lazyRootParagraph = (rootLazy || frame.lazyRootParagraph) && plainQuoteText(text)
     const previous = frame.body.at(-1)?.text ?? ''
     if (frame.blankBeforeInvisible && text !== '' && !LINE_COMMENT.test(text) &&
         LINE_COMMENT.test(previous) && !RE_COMMENT_BLOCK_ANY.test(previous)) {
@@ -1131,6 +1153,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.itemFirst = line
       current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
+      current.lazyRootParagraph = false
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       appendBody(current, line, marker.width + taskWidth)
@@ -1207,9 +1230,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
-    if (mayFoldNestedListParagraph(cursor, top, stack.length, depth)) {
+    if (mayFoldListParagraph(cursor, top, stack.length, depth)) {
       cursor.take()
-      appendBody(top, line, 0)
+      appendBody(top, line, 0, true)
       updateListFrameEnds(stack, line, listSpan)
       continue
     }
