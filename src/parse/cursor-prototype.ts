@@ -1432,6 +1432,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence),
         cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
+    const placedEndLine = frame.item.children.at(-1)?.pos?.endLine
+    if (placedEndLine && placedEndLine < frame.last.number && frame.itemFirst) {
+      const placed = cursor.physicalLines[placedEndLine - 1]
+      if (placed) {
+        frame.last = placed
+        frame.item.pos = listSpan(frame.itemFirst, placed, frame.spanColumn)
+      }
+    }
     frame.body = []
     frame.lazyRootParagraph = false
     frame.retainedBelowColumnComment = false

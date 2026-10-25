@@ -1422,4 +1422,11 @@ describe('experimental block cursor', () => {
   it('declines a table form that has not been migrated', () => {
     expect(() => parseCursorPrototype('| a\\|b | c |\n|---|---|\n| x | y |')).toThrow(UnsupportedCursorSyntax)
   })
+
+  it.each(['- a\n  {.k}\n# H\n', '- a\n\n  {.x}\n\ntail\n'])
+  ('ends a list span at its last placed child: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
