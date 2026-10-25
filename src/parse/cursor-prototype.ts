@@ -964,7 +964,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         definitionLast = follower
       }
       if (blockBody && parts.length > 1) throw new UnsupportedCursorSyntax('definition block body')
-      const blocks = blockBody ? parseBlocks(new Cursor([{
+      const mappedImageLine = parts.length === 1 && definition[1]!.startsWith('![')
+      const blocks = blockBody || mappedImageLine ? parseBlocks(new Cursor([{
         text: definition[1]!, start: line.start + column - 1,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1,
       }], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) :
