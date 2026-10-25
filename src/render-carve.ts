@@ -4317,7 +4317,8 @@ class CarveRenderSession {
       const writtenValign = empty && valign === '^' ? '' : valign
       const writtenInherited = !writtenAlign && writtenValign ? '?' : ''
       const prefix = `${cell.header && markHeader ? '=' : ''}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
-      return padCell(prefix, escapeSpanMarkerPayload(content, prefix))
+      const paddedContent = !cell.header && content.startsWith('\\= ') ? content.slice(1) : content
+      return padCell(prefix, escapeSpanMarkerPayload(paddedContent, prefix))
     } finally {
       ctx.tableCellDepth--
     }
@@ -5760,6 +5761,10 @@ class CarveRenderSession {
       // omitting it would change the re-parse. Mid-line the colon is left to
       // the symbol pass below, which is the one channel it still opens there.
       if (char === ':' && !opensLine(subject, offset)) return ':'
+      if (char === '\\' && offset + 1 < subject.length) {
+        const next = subject.charCodeAt(offset + 1)
+        if (!((next >= 33 && next <= 47) || (next >= 58 && next <= 64) || (next >= 91 && next <= 96) || (next >= 123 && next <= 126))) return '\\'
+      }
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
       // A TAB after the marker is not a caption opener: PART 10 §231 leaves
