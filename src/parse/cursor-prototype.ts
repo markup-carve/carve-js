@@ -889,6 +889,14 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   return next !== undefined && next.indent === top.indent && sameListKind(next, top)
 }
 
+function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength: number):
+  'fold' | 'decline' | undefined {
+  const line = cursor.peek()!.text
+  if (stackLength < 3 || !/^[ ]+\S/.test(line) ||
+      !plainQuoteText(body.at(-1)?.text ?? '') || !plainQuoteText(line.trimStart())) return undefined
+  return cursor.peek(1) ? 'decline' : 'fold'
+}
+
 function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarker>>,
   top: { indent: number; contentColumn?: number; fenceMarker: string | undefined; body: SourceLine[] },
   depth: number, lineNumber: number): boolean {
@@ -1166,6 +1174,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (!line.text.startsWith(prefix)) {
       const ancestor = reachedFrame(line.text, true)
       if (ancestor) {
+        const lazy = finalNestedListLazyLine(cursor, top.body, stack.length)
+        if (lazy === 'decline') {
+          throw new UnsupportedCursorSyntax('nested list lazy paragraph owner')
+        }
+        if (lazy === 'fold') {
+          cursor.take()
+          appendBody(top, line, 0)
+          updateListFrameEnds(stack, line, listSpan)
+          continue
+        }
         rejectListQuoteBoundary(top.body, line)
         while (stack.at(-1) !== ancestor) {
           const done = stack.pop()!

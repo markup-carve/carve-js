@@ -571,6 +571,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a final under-column lazy line in the deepest open list paragraph', () => {
+    const source = '- a\n  - b\n    - c\n   d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- ```\nx\n```\n', '- ```\n x\n ```\n', '- ~~~\nx\n~~~\n',
     '- a\n  - ```\n  x\n  +\n', '- a\n  - ```\n  x\n    +\n'])
   ('bounds an empty marker-line fence using the next physical line: %s', (source) => {
