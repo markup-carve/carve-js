@@ -1237,6 +1237,13 @@ function markerFallsBetweenListColumns(marker: ReturnType<typeof listMarker>,
     marker.indent > top.indent && marker.indent < top.contentColumn - 1
 }
 
+function preservesNestedListGap(frame: { indent: number; contentColumn?: number;
+  body: SourceLine[] }, nextMarker: ReturnType<typeof listMarker>): boolean {
+  return nextMarker !== undefined && frame.contentColumn !== undefined &&
+    nextMarker.indent > frame.indent && nextMarker.indent === frame.contentColumn - 1 &&
+    listMarker(frame.body[0]?.text ?? '') !== undefined
+}
+
 function allowsEmptyRetainedFence(frame: { bareFenceAfterRetainedComment: boolean;
   fenceMarker: string | undefined; body: SourceLine[]; contentColumn?: number },
 next: SourceLine | undefined): boolean {
@@ -1382,6 +1389,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.fenceMarker = marker
         frame.fencePrefix = prefix
       }
+    }
+  }
+  const appendNestedListGap = (frame: Frame, nextMarker: ReturnType<typeof listMarker>,
+    blanks: number): void => {
+    if (!preservesNestedListGap(frame, nextMarker)) return
+    for (let i = 0; i < blanks; i++) {
+      appendBody(frame, cursor.lines[cursor.at - blanks + i]!, 0)
     }
   }
   const attachFirstBlock = (frame: Frame, item: ListItem,
@@ -1530,6 +1544,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
       for (let i = 0; i < blanks; i++) cursor.take()
+      appendNestedListGap(top, nextMarker, blanks)
       if (continuationFrame) {
         while (stack.at(-1) !== continuationFrame) {
           const done = stack.pop()!

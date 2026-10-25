@@ -1235,6 +1235,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- - intro\n\n  - tail\n',
+    '- - intro\n%% c\n\n  - tail\n'])
+  ('keeps a nested list loose after a blank before its sibling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps an at-column unclosed fence behind the prototype guard', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })
