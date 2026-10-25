@@ -224,6 +224,8 @@ describe('experimental block cursor', () => {
     const frontmatter = '---\ntitle: X\n---\nText\n'
     expect(parseCursorPrototype(frontmatter, { defaultFrontmatterFormat: 'toml' })).toStrictEqual(
       parse(frontmatter, { defaultFrontmatterFormat: 'toml' }))
+    const rendererOnly = { extensions: [{ name: 'renderer-only', renderers: {} }] }
+    expect(parseCursorPrototype('Text\n', rendererOnly)).toStrictEqual(parse('Text\n', rendererOnly))
     expect(() => parseCursorPrototype('Text\n', { onUnclosedContainer: () => {} }))
       .toThrow(UnsupportedCursorSyntax)
   })

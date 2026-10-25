@@ -2084,7 +2084,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
 }
 
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
-  if (opts.extensions?.length || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
+  if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
+      extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
       opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata ||
       opts.onDanglingBlockAttributes) {
     throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
