@@ -1145,6 +1145,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > intro\n ```\n tail\n ```\n',
+    '* > intro\n ````\n tail\n ````\n'])
+  ('keeps a bounded multiline inline code span in its quoted list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> ```\n> x', '- > ```\n  x\nx'])
   ('declines a quoted fence with an unresolved continuation owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)

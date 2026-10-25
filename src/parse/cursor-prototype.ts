@@ -1963,6 +1963,24 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   return stack[0]!.list
 }
 
+function takeQuotedInlineCodeContinuation(cursor: Cursor, body: SourceLine[]): SourceLine[] | undefined {
+  if (!cursor.owner.inList || body.length !== 1 || !plainQuoteText(body[0]!.text)) return undefined
+  const opener = /^( +)(`{3,})[ \t]*$/.exec(cursor.peek()?.text ?? '')
+  if (!opener) return undefined
+  const prefix = opener[1]!
+  let count = 1
+  while (cursor.peek(count)?.text.startsWith(prefix)) {
+    if (cursor.peek(count)!.text.slice(prefix.length).trimEnd() === opener[2]) {
+      if (cursor.peek(count + 1) && !isBlankLine(cursor.peek(count + 1)!.text)) return undefined
+      const lines: SourceLine[] = []
+      for (let i = 0; i <= count; i++) lines.push(cursor.take())
+      return lines
+    }
+    count++
+  }
+  return undefined
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
@@ -2025,7 +2043,11 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     body.at(-2)!.text.trimStart().startsWith('{') &&
     probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), body.at(-1)!.text.trimStart()]))
   if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail) {
-    throw new UnsupportedCursorSyntax('lazy quote continuation')
+    const inlineCode = cursor.peek()?.text[0] === ' ' && cursor.peek()!.text.includes('`') ?
+      takeQuotedInlineCodeContinuation(cursor, body) : undefined
+    if (!inlineCode) throw new UnsupportedCursorSyntax('lazy quote continuation')
+    body.push(...inlineCode)
+    last = inlineCode.at(-1)!
   }
   const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
     cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
