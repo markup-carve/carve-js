@@ -1438,6 +1438,34 @@ function restoreInlineCarriers(source: string): string {
   return renderCarve(tree)
 }
 
+function flattenHtmlAnchorsInLinkLabels(
+  line: string,
+  spans: readonly string[],
+  sources: readonly string[],
+  isReference: (label: string) => boolean,
+): string {
+  if (!line.includes('[') || !line.includes('\x00P')) return line
+  const removed = new Set<number>()
+  const ranges = markdownActiveLinkLabelRanges(line, spans, isReference)
+  for (const range of ranges) {
+    const openings: number[] = []
+    for (const token of line.slice(range.start, range.end).matchAll(/\x00P(\d+)\x00/g)) {
+      const at = range.start + token.index
+      const source = sources[Number(token[1])] ?? ''
+      const start = source.indexOf('<')
+      const tag = start >= 0 ? scanHtmlTag(source, start) : null
+      if (tag?.name !== 'a' || source.slice(0, start) !== '`' || source.slice(tag.end) !== '`{=html}') continue
+      if (!tag.closing && !tag.selfClosing) openings.push(at)
+      else if (tag.closing && openings.length) {
+        removed.add(openings.pop()!)
+        removed.add(at)
+        importLosses.push({ code: 'structure-unspellable', message: 'Flattened an HTML link inside a Markdown link label; its text was kept' })
+      }
+    }
+  }
+  return line.replace(/\x00P\d+\x00/g, (token, at: number) => removed.has(at) ? '' : token)
+}
+
 function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
@@ -2420,6 +2448,8 @@ function convertInline(
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
+  line = flattenHtmlAnchorsInLinkLabels(line, protectedSpans, protectedSources,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
