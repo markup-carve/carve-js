@@ -486,6 +486,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- a\n  *[HTML]: Hyper Text\n',
+    '> a\n> *[HTML]: Hyper Text\n',
+  ])('keeps a nested abbreviation-shaped line in its open paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

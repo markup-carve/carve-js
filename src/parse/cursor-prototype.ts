@@ -292,6 +292,7 @@ function isBlockStart(line: string): boolean {
 function interruptsParagraph(line: string, owner: ContainerOwner): boolean {
   const marker = listMarker(line)
   if (marker) return owner.kind === 'list' && marker.indent === 0
+  if (owner.kind !== 'root' && ABBR_DEF.test(line)) return false
   return isBlockStart(line)
 }
 
