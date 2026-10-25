@@ -1160,6 +1160,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- intro\n%% c\n tail\n', '- intro\n%% c\n # tail\n',
+    '- intro\n%% c\n - tail\n', '- intro\n%% c\n > tail\n',
+    '- - intro\n%% c\n - tail\n', '- > intro\n%% c\n - tail\n',
+    '- intro\n%% c\n- next\n', '- inner\n  %% c\n code\n'])
+  ('applies retained comment ownership to a below-column follower: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
