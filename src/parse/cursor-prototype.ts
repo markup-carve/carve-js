@@ -593,7 +593,8 @@ function definitionStructuralLine(text: string, column: number): boolean {
   if (!text.startsWith(' '.repeat(column - 1))) return false
   const content = text.slice(column - 1)
   return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content) ||
-    (LINE_COMMENT.test(content) && !RE_COMMENT_BLOCK_ANY.test(content))
+    (LINE_COMMENT.test(content) && !RE_COMMENT_BLOCK_ANY.test(content)) ||
+    (content[0] === '{' && parseBlockAttributeRun(content) !== null)
 }
 
 function definitionTermWrapText(cursor: Cursor, text: string): boolean {
@@ -668,6 +669,12 @@ function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: Sour
   }
   return { blocks: parseBlocks(new Cursor(body, undefined,
     childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false), last }
+}
+
+function lastPlacedDefinitionLine(blocks: BlockNode[], last: SourceLine,
+  physicalLines: SourceLine[]): SourceLine {
+  const placedEnd = blocks.at(-1)?.pos?.endLine
+  return placedEnd && placedEnd < last.number ? physicalLines[placedEnd - 1] ?? last : last
 }
 
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
@@ -802,8 +809,10 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
             number: block.number, baseColumn: (block.baseColumn ?? 1) + column - 1 })
           last = block
         }
-        current.definitions.push(parseBlocks(new Cursor(body, undefined,
-          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
+        const blocks = parseBlocks(new Cursor(body, undefined,
+          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)
+        current.definitions.push(blocks)
+        last = lastPlacedDefinitionLine(blocks, last, cursor.physicalLines)
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
         continue
