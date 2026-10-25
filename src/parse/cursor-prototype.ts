@@ -837,6 +837,16 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       const blockEnd = definitionBlockFollowerEnd(cursor, end, definitionContentColumn)
       if (blockEnd !== undefined) { end = blockEnd; break }
     }
+    if (mayWrapDefinition && definitionContentPlain && /^:{1,2}[ \t]*$/.test(text)) {
+      const afterEmptyMarker = cursor.lines[end + 1]?.text
+      const nextDefinitionItem = afterEmptyMarker !== undefined &&
+        /^::? +[ \t]*[^ \t]/.test(afterEmptyMarker)
+      if (afterEmptyMarker === undefined || afterEmptyMarker === '' || nextDefinitionItem) {
+        end++
+        if (nextDefinitionItem) continue
+        break
+      }
+    }
     if (mayWrapDefinition && definitionBodyWrapText(text, definitionContentColumn) &&
         !/[ \t]$/.test(text)) {
       const boundary = boundedDefinitionParagraphEnd(cursor.lines, end)
@@ -971,7 +981,9 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1,
       }], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) :
         [{ type: 'paragraph' as const, children: inline.inlines(parts),
-          pos: position(line, definitionLast, column) }]
+          pos: position(line, definitionLast, column,
+            /^:{1,2}[ \t]*$/.test(definitionLast.text) ?
+              contentEndColumn(definitionLast) : definitionLast.text.length + 1) }]
       current.definitions.push(blocks)
       current.definitionLines.push(line.number)
       current.definitionSpans.push(position(line, line))
