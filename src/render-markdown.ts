@@ -1826,7 +1826,9 @@ function markdownDestination(url: string): string {
   if (url === '') return '<>'
   const probed = sanitizeMdUrl(stripDestinationControls(url))
   const pipeDestination = url.includes('|')
-  const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>\\|]/g, (ch) => {
+  const safe = probed === '' ? probed : stripControls(url)
+  let openParens = 0
+  const encoded = safe.replace(/[ ()<>\\|]/g, (ch) => {
     switch (ch) {
       case '\\':
         return pipeDestination ? '%5C' : ch
@@ -1835,8 +1837,11 @@ function markdownDestination(url: string): string {
       case ' ':
         return '%20'
       case '(':
+        openParens++
         return '%28'
       case ')':
+        if (openParens === 0) return '\\)'
+        openParens--
         return '%29'
       case '<':
         return '%3C'
