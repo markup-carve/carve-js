@@ -342,6 +342,20 @@ export class TableStage {
       remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
     }
 
+    // The leading all-th run is only an inferred head if no native thead owns it.
+    // Keep a span in its HTML row group by spelling this table with no inferred
+    // header rows; the grid builder can then carry its continuation cells.
+    const crossedInferredHead = leadingHeaderRows > 0 && tr.slice(0, leadingHeaderRows).some((row, r) =>
+      domTag(group.get(row)) !== 'thead' && headerCells(row).some((cell) => {
+        const declared = this.spanCount(cell, 'rowspan', 65534, 0)
+        const left = remainingInGroup.get(row) ?? 1
+        return r + (declared === 0 ? left : Math.min(declared, left)) > leadingHeaderRows
+      }))
+    if (crossedInferredHead) {
+      leadingHeaderRows = 0
+      columnHeadRows = 0
+    }
+
     const ownAlignment = new Map<TableCell, Pick<TableCell, 'align' | 'valign'>>()
     const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
       (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th').map((cell, c) => {
@@ -465,7 +479,7 @@ export class TableStage {
     }
     const unspellableBefore = this.context.unspellable.length
     const rowGroups = this.rowGroups.run(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
-    const tableAttrs = localHeadAlignment
+    const tableAttrs = localHeadAlignment || crossedInferredHead
       ? { ...(attrs ?? {}), keyValues: { ...(attrs?.keyValues ?? {}), 'header-rows': String(columnHeadRows) } }
       : attrs
     if (localHeadAlignment && this.context.writing && !listForm) {
