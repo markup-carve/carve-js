@@ -451,6 +451,14 @@ function openColonRun(body: SourceLine[], quoted: boolean): number | undefined {
   return opener[1]!.length
 }
 
+function openDegradedQuoteCommentParagraph(body: SourceLine[], quoted: boolean): boolean {
+  if (body.length < 2) return false
+  const content = (text: string): string => quoted && text.startsWith('>') ?
+    text.slice(text[1] === ' ' ? 2 : 1) : text
+  return content(body[0]!.text) === '%%%' &&
+    plainQuoteText(content(body.at(-1)!.text))
+}
+
 function beginsOpenQuotedParagraph(body: SourceLine[]): boolean {
   if (body.length !== 1 || !body[0]!.text.startsWith('>')) return false
   const first = body[0]!.text
@@ -1105,6 +1113,10 @@ function ambiguousDegradedComment(cursor: Cursor, first: SourceLine,
   atDocumentLevel: boolean, afterList: boolean): boolean {
   if ((atDocumentLevel && !afterList) || !first.text.trimStart().startsWith('%%%')) return false
   const physical = cursor.physicalLines
+  const marker = listMarker(physical[first.number - 1]?.text ?? '')
+  if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list' &&
+      cursor.lines[0]?.number === first.number && marker?.content === '> %%%' &&
+      plainQuoteText(cursor.lines[1]?.text ?? '')) return false
   if (!/^[ \t]+%%%/.test(physical[first.number - 1]?.text ?? '')) return true
   const previousMarker = listMarker(physical[first.number - 2]?.text ?? '')
   if (previousMarker && listMarker(previousMarker.content)) return true
@@ -2065,6 +2077,19 @@ function takeQuotedInlineCodeContinuation(cursor: Cursor, body: SourceLine[]): S
   return undefined
 }
 
+function takeDegradedQuoteLazyLine(cursor: Cursor, first: SourceLine,
+  body: SourceLine[]): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!line?.lazyText || !line.text.startsWith('>') ||
+      (line.baseColumn ?? 1) <= (first.baseColumn ?? 1) ||
+      !openDegradedQuoteCommentParagraph(body, false)) return undefined
+  const afterMarker = line.text.slice(line.text[1] === ' ' ? 2 : 1)
+  if (rootLinkDef(afterMarker) || FOOTNOTE_DEF.test(afterMarker) || ABBR_DEF.test(afterMarker)) {
+    throw new UnsupportedCursorSyntax('degraded quote definition owner')
+  }
+  return cursor.take()
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
@@ -2088,6 +2113,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let plainParagraph = true
   while (cursor.peek()) {
     const line = cursor.peek()!
+    const degraded = takeDegradedQuoteLazyLine(cursor, first, body)
+    if (degraded) {
+      body.push(degraded)
+      last = degraded
+      continue
+    }
     if (!line.lazyText && line.text[0] === '>' && RE_BLOCKQUOTE.test(line.text)) {
       cursor.take()
       const prefix = line.text.startsWith('> ') ? 2 : 1

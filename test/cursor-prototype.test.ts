@@ -454,6 +454,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a raised degraded comment in the open quoted paragraph', () => {
+    const source = '- > %%%\n  > x\n    > %%%\n  > b'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a raised quoted reference until its definition owner is indexed', () => {
+    expect(() => parseCursorPrototype('- > %%%\n  > x\n    > [r]: /url\n  > b'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
