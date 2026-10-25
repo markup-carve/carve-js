@@ -262,8 +262,8 @@ export function runtimeWireToContract2(input: Item, doc: Document): Item {
   const result = transform(input) as Item
   if (names.size) {
     const declared = new Map(((result.extensions as Item[] | undefined) ?? []).map(entry => [String(entry.name), entry]))
-    // An unversioned node still needs a declared version (CARVE-P12-024); '0' stays until that is ruled.
-    for (const [name, version] of names) if (!declared.has(name)) declared.set(name, { name, version: version ?? '0', required: false })
+    // An unversioned extension declares no version rather than a placeholder (CARVE-P12-024).
+    for (const [name, version] of names) if (!declared.has(name)) declared.set(name, { name, ...(version === undefined ? {} : { version }), required: false })
     result.extensions = [...declared.values()].sort((left, right) => String(left.name).localeCompare(String(right.name)))
   }
   return result

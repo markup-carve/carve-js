@@ -80,3 +80,11 @@ describe('extension declarations', () => {
     expect((tree as unknown as { extensions: unknown[] }).extensions).toEqual([{ name: 'org.example.chart', version: '1', required: false }])
   })
 })
+
+describe('unversioned extensions', () => {
+  it('declare no placeholder version', () => {
+    const tree12 = { type: 'document', astVersion: '1.2', srcByteLength: 0, children: [{ type: 'block_extension', name: 'org.example.chart', fallback: { type: 'paragraph', children: [{ type: 'text', value: 'chart' }] } }] }
+    const { tree } = migrateAstJson(tree12 as never)
+    expect((tree as unknown as { extensions: unknown[] }).extensions).toEqual([{ name: 'org.example.chart', required: false }])
+  })
+})
