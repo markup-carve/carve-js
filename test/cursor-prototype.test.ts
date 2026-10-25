@@ -1243,6 +1243,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  - b\n  +\npara\n', '- a\n  - b\n  +\nleft\n'])
+  ('keeps a refused plus and the following lazy line in one nested paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> - intro\n>  - tail\n', '> - intro\n> %% c\n>  - tail\n'])
   ('keeps a below-column marker literal in a quote-owned item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

@@ -1182,8 +1182,9 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   top: { indent: number; ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
     body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
   if (depth !== 0 || stackLength < 2 || top.fenceMarker ||
-      !plainQuoteText(cursor.peek()!.text) || !plainQuoteText(top.body.at(-1)?.text ?? '')) return false
-  return true
+      !plainQuoteText(cursor.peek()!.text)) return false
+  const last = top.body.at(-1)?.text ?? ''
+  return plainQuoteText(last) || last === '+' && plainQuoteText(top.body.at(-2)?.text ?? '')
 }
 
 function mayFoldRootListParagraph(cursor: Cursor,
