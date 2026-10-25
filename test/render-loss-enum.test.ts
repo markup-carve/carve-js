@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
-  carveToMarkdownWithReport, fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
+  carveToMarkdownWithReport, fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml, toAstJson,
 } from '../src/index.js'
 import type { RenderLoss } from '../src/render/render-loss.js'
 import { renderCarveWithConversionReport } from '../src/import/markdown/conversion-diagnostics.js'
@@ -100,7 +100,7 @@ const collect = (
   opts: Record<string, unknown> = {},
 ): RenderLoss[] => {
   const losses: RenderLoss[] = []
-  render(resolve(fromAstJson(wire as never)) as never, { ...opts, onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
+  render(resolve(fromAstJson(toAstJson(wire as never))) as never, { ...opts, onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
   return losses
 }
 
@@ -194,7 +194,7 @@ describe('the render-loss code enum', () => {
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {
-    const { report } = renderCarveWithConversionReport(resolve(fromAstJson(interchangeOnly() as never)) as never, renderCarve as never)
+    const { report } = renderCarveWithConversionReport(resolve(fromAstJson(toAstJson(interchangeOnly() as never))) as never, renderCarve as never)
     expect(report.diagnostics.filter(d => d.code === 'structure-unspellable').map(d => d.node)).toContain('section')
     expect(report.diagnostics.filter(d => d.code === 'field-unspellable').map(d => `${d.node}.${d.field}`).sort()).toEqual([
       'math.label',

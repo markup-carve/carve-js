@@ -58,8 +58,8 @@ describe('a serialized footnote definition', () => {
 })
 
 describe('what the root carries', () => {
-  it('is exactly three fields', () => {
-    expect(Object.keys(serialized()).sort()).toEqual(['children', 'srcByteLength', 'type'])
+  it('has the 2.0 root fields', () => {
+    expect(Object.keys(serialized()).sort()).toEqual(['astVersion', 'children', 'srcByteLength', 'stages', 'type'])
   })
 
   it('leaves the parse tree alone', () => {

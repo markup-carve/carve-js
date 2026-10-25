@@ -100,7 +100,7 @@ describe('a host half that merges with nothing', () => {
     ])
   })
 
-  it('counts the offsets and columns in codepoints', () => {
+  it('counts offsets in bytes and columns in codepoints', () => {
     const tail = (toAstJson(expanded('😀 {{ c.crv }} ü😀.\n', { 'c.crv': '*b*\n' })).children[0] as unknown as {
       children: Array<Record<string, unknown>>
     }).children[2]!
@@ -108,7 +108,7 @@ describe('a host half that merges with nothing', () => {
     expect(tail).toEqual({
       type: 'text',
       value: ' ü😀.',
-      pos: { startLine: 1, endLine: 1, startColumn: 14, endColumn: 18, startOffset: 13, endOffset: 17 },
+      pos: { startLine: 1, endLine: 1, startColumn: 14, endColumn: 18, startOffset: 16, endOffset: 24 },
     })
   })
 

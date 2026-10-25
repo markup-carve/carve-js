@@ -3,14 +3,17 @@ import {
   citations,
   codeCallouts,
   fromAstJson,
+  toAstJson,
   renderAnsi,
   renderHtml,
   renderPlainText,
 } from '../src/index.js'
 
+const ingest = (document: unknown) => fromAstJson(toAstJson(document as never))
+
 describe('nested interchange content', () => {
   it('lifts footnotes from sections and table cells before rendering', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [{
       type: 'section', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
         type: 'table_cell', header: false, blocks: [
           { type: 'paragraph', children: [{ type: 'footnote_ref', label: 'note' }] }, {
@@ -26,7 +29,7 @@ describe('nested interchange content', () => {
     const note = (value: string) => ({ type: 'footnote', label: 'same', children: [
       { type: 'paragraph', children: [{ type: 'text', value }] },
     ] })
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [
       { type: 'section', children: [note('first')] },
       { type: 'section', children: [note('second')] },
       note('third'),
@@ -35,7 +38,7 @@ describe('nested interchange content', () => {
   })
 
   it('does not treat nested frontmatter as document frontmatter', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [
       { type: 'div', children: [{ type: 'frontmatter', format: 'yaml', content: 'nested: true' }] },
       { type: 'frontmatter', format: 'toml', content: 'root = true' },
     ] } as never)
@@ -43,7 +46,7 @@ describe('nested interchange content', () => {
   })
 
   it('finds citation definitions and code callouts in block cells', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [
       { type: 'paragraph', children: [{ type: 'citation_group', raw: '[@ref]', items: [
         { type: 'citation', key: 'ref', suppressAuthor: false },
       ] }] },
@@ -69,7 +72,7 @@ describe('nested interchange content', () => {
   })
 
   it('finds citation definitions inside lifted footnote bodies', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [
       { type: 'paragraph', children: [{ type: 'citation_group', raw: '[@ref]', items: [
         { type: 'citation', key: 'ref', suppressAuthor: false },
       ] }] },
@@ -84,7 +87,7 @@ describe('nested interchange content', () => {
   })
 
   it('lets document citation definitions override footnote definitions', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [
       { type: 'paragraph', children: [{ type: 'citation_group', raw: '[@ref]', items: [
         { type: 'citation', key: 'ref', suppressAuthor: false },
       ] }] },
@@ -102,7 +105,7 @@ describe('nested interchange content', () => {
   })
 
   it('keeps nonbreaking spaces when flattening block cells', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [{
       type: 'table', rows: [{ type: 'table_row', cells: [
         { type: 'table_cell', header: false, blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'A\u00a0' }] }] },
         { type: 'table_cell', header: false, children: [{ type: 'text', value: 'B' }] },
@@ -113,7 +116,7 @@ describe('nested interchange content', () => {
   })
 
   it('preserves code spaces while replacing each newline in plain cells', () => {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{
+    const doc = ingest({ type: 'document', srcByteLength: 0, children: [{
       type: 'table', rows: [{ type: 'table_row', cells: [{
         type: 'table_cell', header: false, blocks: [{ type: 'code_block', content: 'a\n   \nb' }],
       }] }],

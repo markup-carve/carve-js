@@ -22,10 +22,11 @@ describe('explicit empty destinations', () => {
   it('distinguishes an empty definition from an unresolved reference on the wire', () => {
     const defined = carveToAstJson('[t][r]\n\n[r]:')
     const undefinedRef = carveToAstJson('[t][r]')
-    const definedLink = (defined.children[0] as { children: { href: string; ref: string; rawRef: string }[] }).children[0]!
-    const missingLink = (undefinedRef.children[0] as { children: { href: string; ref: string; rawRef: string }[] }).children[0]!
-    expect(definedLink).toMatchObject({ href: '', ref: 'r', rawRef: '[t][r]' })
-    expect(missingLink).toMatchObject({ href: '', ref: 'r', rawRef: '[t][r]' })
+    const definedLink = (defined.children[0] as unknown as { children: { href?: string; key: string; namespace: string; rawRef: string }[] }).children[0]!
+    const missingLink = (undefinedRef.children[0] as unknown as { children: { href?: string; key: string; namespace: string; rawRef: string }[] }).children[0]!
+    expect(definedLink).toMatchObject({ href: '', key: 'r', namespace: 'link', rawRef: '[t][r]' })
+    expect(missingLink).toMatchObject({ key: 'r', namespace: 'link', rawRef: '[t][r]' })
+    expect(missingLink.href).toBeUndefined()
     expect(defined.children.some((node) => node.type === 'link_reference_definition' && node.href === '')).toBe(true)
     expect(undefinedRef.children.some((node) => node.type === 'link_reference_definition')).toBe(false)
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(defined))))).toBe('<p><a href="">t</a></p>')

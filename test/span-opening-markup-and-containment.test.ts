@@ -56,6 +56,38 @@ interface Run {
   documents: number
 }
 
+// The spec checker indexes a codepoint array. The 2.0 wire stores UTF-8 byte
+// offsets, so translate the offsets in a copy before passing it to the checker.
+function forCodepointChecker(tree: unknown, source: string): Record<string, unknown> {
+  const offsets = new Map<number, number>()
+  let byte = 0
+  let point = 0
+  for (const char of source) {
+    offsets.set(byte, point++)
+    byte += Buffer.byteLength(char)
+  }
+  offsets.set(byte, point)
+  const copy = JSON.parse(JSON.stringify(tree)) as Record<string, unknown>
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node.type === 'comment' && node.form === 'braced') node.delimited = true
+    if (node.pos && typeof node.pos === 'object') {
+      const pos = node.pos as Record<string, number>
+      for (const key of ['startOffset', 'endOffset']) {
+        if (pos[key] !== undefined) pos[key] = offsets.get(pos[key]!) ?? pos[key]!
+      }
+    }
+    Object.values(node).forEach(visit)
+  }
+  visit(copy)
+  return copy
+}
+
 const run = (): Run => {
   const findings: string[] = []
   let spans = 0
@@ -63,7 +95,7 @@ const run = (): Run => {
   let documents = 0
   for (const f of names) {
     const source = readFileSync(resolve(corpusDir, f), 'utf8')
-    const doc = carveToAstJson(source, { positions: true })
+    const doc = forCodepointChecker(carveToAstJson(source, { positions: true }), source)
     documents++
     const before = findings.length
     spans += checkOpeningMarkup(doc, [...source], findings) as number
@@ -98,7 +130,7 @@ describe('the two checks can fail', () => {
   // catalogues. These perturb a real tree and assert each check sees it.
   const source = '> quoted\n\n- item\n\n# Heading\n'
   const tree = (): Record<string, unknown> =>
-    JSON.parse(JSON.stringify(carveToAstJson(source, { positions: true })))
+    forCodepointChecker(carveToAstJson(source, { positions: true }), source)
 
   it('checkOpeningMarkup reports a span moved off its marker', () => {
     const doc = tree()

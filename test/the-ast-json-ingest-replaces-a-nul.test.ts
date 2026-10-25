@@ -47,7 +47,7 @@ const VT = '\u000b'
 
 function textDoc(value: string): never {
   return {
-    type: 'document',
+    type: 'document', astVersion: '2.0',
     srcByteLength: 3,
     children: [{ type: 'paragraph', children: [{ type: 'text', value }] }],
   } as never
@@ -56,15 +56,15 @@ function textDoc(value: string): never {
 /** Two abbreviation pairs that collide on a NUL-joined key, plus one use. */
 function abbrDoc(separator: string): never {
   return {
-    type: 'document',
+    type: 'document', astVersion: '2.0',
     srcByteLength: 40,
     children: [
-      { type: 'abbreviation_def', abbr: `A${separator}b`, expansion: 'c' },
-      { type: 'abbreviation_def', abbr: 'A', expansion: `b${separator}c` },
+      { type: 'abbreviation_def', key: `A${separator}b`, namespace: 'abbr', expansion: 'c' },
+      { type: 'abbreviation_def', key: 'A', namespace: 'abbr', expansion: `b${separator}c` },
       {
         type: 'paragraph',
         children: [
-          { type: 'abbreviation', abbr: `A${separator}b`, expansion: 'c' },
+          { type: 'abbreviation', key: `A${separator}b`, namespace: 'abbr', expansion: 'c' },
           { type: 'text', value: ' only.' },
         ],
       },
@@ -134,7 +134,7 @@ describe('the AST-JSON ingest replaces U+0000, as the parse boundary does', () =
     // "every string value it ingests", so an identifier, a class, an attribute
     // value and a code block's content are all in scope.
     const doc = {
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 3,
       children: [
         {
@@ -147,7 +147,7 @@ describe('the AST-JSON ingest replaces U+0000, as the parse boundary does', () =
           },
           children: [{ type: 'text', value: 'q' }],
         },
-        { type: 'code_block', lang: 'js', content: `a${NUL}b` },
+        { type: 'code_block', syntax: 'js', value: `a${NUL}b` },
       ],
     } as never
 
@@ -203,7 +203,7 @@ describe('the AST-JSON ingest replaces U+0000, as the parse boundary does', () =
     // payload that names one over a deep nesting.
     let deep: unknown = { leaf: true }
     for (let i = 0; i < 200_000; i++) deep = { nested: deep }
-    const doc = { type: 'document', srcByteLength: 0, children: [], x: deep } as never
+    const doc = { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [], x: deep } as never
 
     expect(() => fromAstJson(doc)).toThrow(/"x", which the schema does not name/)
   })
@@ -213,7 +213,7 @@ describe('the AST-JSON ingest replaces U+0000, as the parse boundary does', () =
     // nothing: a NUL in a type name is not a known type, and it is not one with
     // the NUL replaced either.
     const doc = {
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
       children: [{ type: `paragraph\u0000`, children: [] }],
     } as never

@@ -1,5 +1,6 @@
 import { WIRE_FIELDS } from '../src/ast/wire-fields.js'
 import { ownedChildFields } from '../src/ast/owned-child-fields.js'
+import { RUNTIME_TYPE_FOR_WIRE, WIRE_ONLY_TYPES } from '../src/ast/contract2-wire.js'
 import { expect, it, vi } from 'vitest'
 import { parse, resolve, renderHtml } from '../src/index.js'
 import type { Document } from '../src/ast.js'
@@ -55,7 +56,12 @@ it('collects deeply nested ids without consuming the call stack', () => {
 it('covers every schema node kind and all its owned child slots', () => {
   // Text-only array skipping requires text to remain a leaf.
   expect(DOCUMENT_ID_CHILD_FIELDS.text).toEqual([])
-  expect(Object.keys(DOCUMENT_ID_CHILD_FIELDS).sort()).toEqual(Object.keys(WIRE_FIELDS).sort())
+  // 2.0 names and wire-only containers exist at the boundary only; the runtime keeps its own.
+  const runtimeTypes = Object.keys(WIRE_FIELDS)
+    .filter(type => !WIRE_ONLY_TYPES.has(type))
+    .map(type => RUNTIME_TYPE_FOR_WIRE[type] ?? type)
+  expect(Object.keys(DOCUMENT_ID_CHILD_FIELDS).sort()).toEqual(runtimeTypes.sort())
+  for (const type of WIRE_ONLY_TYPES) expect(WIRE_FIELDS[type], type).toBeDefined()
   for (const [type, fields] of Object.entries(DOCUMENT_ID_CHILD_FIELDS)) {
     expect([...fields].sort(), type).toEqual([...ownedChildFields({ type })].sort())
   }

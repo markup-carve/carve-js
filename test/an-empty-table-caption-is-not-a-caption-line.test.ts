@@ -47,7 +47,7 @@ describe('an empty table caption is not a caption line', () => {
   }
 
   /*
-   * THE OTHER DOOR. A tree carrying `caption: []` reaches the same writer
+   * THE OTHER DOOR. A tree carrying an empty caption reaches the same writer
    * without passing the importer at all, so a fix guarding only the HTML path
    * leaves this one open.
    */
@@ -67,7 +67,7 @@ describe('an empty table caption is not a caption line', () => {
 
   it('writes no caret for an empty caption arriving over the wire', () => {
     const wire = carveToAstJson('| a |\n^ Cap\n') as unknown as { children: Array<{ caption?: unknown }> }
-    wire.children[0]!.caption = []
+    wire.children[0]!.caption = { type: 'caption', children: [{ type: 'paragraph', children: [] }] }
     const written = renderCarve(fromAstJson(wire as never))
     expect(written).toBe('| a |\n')
     expect(carveToHtml(written)).not.toContain('^')

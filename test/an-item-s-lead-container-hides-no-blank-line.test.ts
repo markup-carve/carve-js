@@ -8,9 +8,9 @@ describe("an item's lead container hides no blank line", () => {
   const formatted = '- ::: d\n  b\n\n  tail\n  :::\n'
 
   const tightness = (src: string): boolean => {
-    const first = carveToAstJson(src).children[0] as { type: string; tight?: boolean }
+    const first = carveToAstJson(src).children[0] as { type: string; spacing?: string }
     expect(first.type).toBe('list')
-    return first.tight === true
+    return first.spacing === 'tight'
   }
 
   it('supplies the closer and nothing else', () => {

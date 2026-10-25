@@ -27,7 +27,7 @@ function nestedLists(k: number): string {
 function wrapped(n: number): ReturnType<typeof toAstJson> {
   let node: unknown = { type: 'paragraph', children: [{ type: 'text', value: 'X' }] }
   for (let i = 0; i < n; i++) node = { type: 'div', children: [node] }
-  return { type: 'document', srcByteLength: 0, children: [node] } as ReturnType<typeof toAstJson>
+  return { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [node] } as ReturnType<typeof toAstJson>
 }
 
 describe('fromAstJson depth cap', () => {
@@ -98,7 +98,7 @@ describe('a payload with no nodes in it at all', () => {
 
     let thrown: unknown
     try {
-      fromAstJson({ type: 'document', srcByteLength: 0, children: arrays } as never)
+      fromAstJson({ type: 'document', astVersion: '2.0', srcByteLength: 0, children: arrays } as never)
     } catch (error) {
       thrown = error
     }

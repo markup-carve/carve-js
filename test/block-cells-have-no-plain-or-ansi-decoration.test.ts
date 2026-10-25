@@ -1,15 +1,15 @@
 import { MAX_RENDER_DEPTH } from '../src/render/render-depth.js'
 import { expect, it } from 'vitest'
-import { fromAstJson, renderPlainText, renderAnsi, renderMarkdown, renderCarve, renderHtml, parse } from '../src/index.js'
+import { fromAstJson, renderPlainText, renderAnsi, renderMarkdown, renderCarve, renderHtml, parse, toAstJson } from '../src/index.js'
 
 const text = (value: string) => ({ type: 'text', value })
 const paragraph = (value: string) => ({ type: 'paragraph', children: [text(value)] })
-const table = (cell: object) => fromAstJson({
+const table = (cell: object) => fromAstJson(toAstJson({
   type: 'document', srcByteLength: 0,
   children: [{ type: 'table', rows: [{ type: 'table_row', cells: [
     { type: 'table_cell', header: false, ...cell },
   ] }] }],
-} as never)
+} as never))
 
 for (const render of [renderPlainText, renderAnsi, renderMarkdown]) {
   it(`${render.name} omits block markers and joins only contributing content`, () => {
@@ -57,7 +57,7 @@ it('refuses a padded leading-newline span before following content or a link clo
     [text('before '), code, text(' after')],
     [{ type: 'link', href: 'u', children: [text('before '), code] }],
   ]) {
-    const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'paragraph', children }] } as never)
+    const doc = fromAstJson(toAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'paragraph', children }] } as never))
     expect(() => renderCarve(doc)).toThrow(/cannot spell code/)
   }
 })

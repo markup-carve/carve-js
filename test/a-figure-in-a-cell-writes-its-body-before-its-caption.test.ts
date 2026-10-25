@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText } from '../src/index.js'
+import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText, toAstJson } from '../src/index.js'
 
 // carve-js#2239. A cell flattens to one line, so the order the blocks
 // contribute in is the only thing that says which text is the body and which is
 // the caption. The Carve target read the caption first, so a quote attributed
 // to someone came back as if the author had written the name into the quote.
-const cellDoc = (target: unknown) => fromAstJson({
+const cellDoc = (target: unknown) => fromAstJson(toAstJson({
   type: 'document',
   srcByteLength: 0,
   children: [{
@@ -19,7 +19,7 @@ const cellDoc = (target: unknown) => fromAstJson({
       }],
     }],
   }],
-} as never)
+} as never))
 
 const quoteTarget = {
   type: 'block_quote',

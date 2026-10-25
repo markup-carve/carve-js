@@ -70,7 +70,8 @@ describe('footnote refId', () => {
     const republished = JSON.stringify(toAstJson(fromAstJson(carveToAstJson(SOURCE) as never)))
 
     expect(republished).toContain('"footnote_ref"')
-    expect(republished).toContain('"label":"a"')
+    expect(republished).toContain('"key":"a"')
+    expect(republished).toContain('"namespace":"footnote"')
     expect(republished).toContain('"number":1')
     expect(republished).not.toContain('refId')
   })

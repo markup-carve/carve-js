@@ -151,7 +151,7 @@ describe('bare-dot ordered marker', () => {
       // exactly like. Before that it was stripped, and a JSON round trip
       // silently renumbered the list.
       const wire = JSON.parse(JSON.stringify(toAstJson(parse('. a\n. b'))))
-      expect(JSON.stringify(wire)).toContain('bareMarker')
+      expect(wire.children[0].marker).toMatchObject({ kind: 'ordered', bare: true })
       expect(renderCarve(fromAstJson(wire))).toBe('. a\n. b\n')
     })
 

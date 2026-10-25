@@ -60,7 +60,8 @@ describe('a resolved reference link', () => {
     }
     walk(json)
     expect(found).toHaveLength(1)
-    expect(found[0]!.ref).toBe('r')
+    expect(found[0]!.key).toBe('r')
+    expect(found[0]!.namespace).toBe('link')
     expect(found[0]!.rawRef).toBe('[t][r]')
     expect(found[0]!.href).toBe('/u')
   })

@@ -21,22 +21,30 @@ import { fromAstJson, parse, renderMarkdown } from '../src/index.js'
  */
 
 /** A one-row table whose first cell holds `children`, as `table_cell` does. */
+const inlineCell = (children: unknown[]) => ({
+  type: 'table_cell', header: false, sourceContent: 'inline',
+  children: [{ type: 'cell_paragraph', children }],
+})
+
 const cellTable = (children: unknown[]): ReturnType<typeof fromAstJson> =>
   fromAstJson({
     type: 'document',
+    astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
     srcByteLength: 0,
     children: [
       {
         type: 'table',
-        rows: [
+        columns: [{ type: 'table_column' }, { type: 'table_column' }],
+        children: [{ type: 'table_body', children: [
           {
             type: 'table_row',
-            cells: [
-              { type: 'table_cell', header: false, children },
-              { type: 'table_cell', header: false, children: [{ type: 'text', value: 'x' }] },
+            children: [
+              inlineCell(children),
+              inlineCell([{ type: 'text', value: 'x' }]),
             ],
           },
-        ],
+        ] }],
       },
     ],
   } as never)
@@ -81,18 +89,22 @@ describe('a soft break in a plain pipe-table cell', () => {
 describe('a soft break in a block cell', () => {
   const blocks = fromAstJson({
     type: 'document',
+    astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
     srcByteLength: 0,
     children: [
       {
         type: 'table',
-        rows: [
+        columns: [{ type: 'table_column' }, { type: 'table_column' }],
+        children: [{ type: 'table_body', children: [
           {
             type: 'table_row',
-            cells: [
+            children: [
               {
                 type: 'table_cell',
                 header: false,
-                blocks: [
+                sourceContent: 'blocks',
+                children: [
                   {
                     type: 'paragraph',
                     children: [
@@ -103,10 +115,10 @@ describe('a soft break in a block cell', () => {
                   },
                 ],
               },
-              { type: 'table_cell', header: false, children: [{ type: 'text', value: 'x' }] },
+              inlineCell([{ type: 'text', value: 'x' }]),
             ],
           },
-        ],
+        ] }],
       },
     ],
   } as never)

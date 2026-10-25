@@ -23,15 +23,17 @@ describe('toAstEnvelope (PART 12 §34)', () => {
   })
 
   it('emits the contract version, which is not the language version', () => {
-    expect(wrap('Hi\n').astVersion).toBe('1.2')
-    expect(AST_CONTRACT_VERSION).toBe('1.2')
+    expect(wrap('Hi\n').astVersion).toBe('2.0')
+    expect(AST_CONTRACT_VERSION).toBe('2.0')
   })
 
   it('leaves the tree exactly as toAstJson writes it', () => {
     const envelope = wrap('# H\n\nPara\n')
     expect(Object.keys(envelope.document).sort()).toEqual([
+      'astVersion',
       'children',
       'srcByteLength',
+      'stages',
       'type',
     ])
     expect(envelope.document.type).toBe('document')
@@ -46,17 +48,17 @@ describe('toAstEnvelope (PART 12 §34)', () => {
 
   it('carries the extensions it was given', () => {
     const envelope = toAstEnvelope(parse('Hi\n'), {
-      extensions: [{ id: 'https://markup-carve.org/ext/citations', version: '1' }],
+      extensions: [{ name: 'org.markup-carve.citations', version: '1', required: false }],
     })
     expect(envelope.extensions).toEqual([
-      { id: 'https://markup-carve.org/ext/citations', version: '1' },
+      { name: 'org.markup-carve.citations', version: '1', required: false },
     ])
   })
 
   it('emits its own version rather than echoing what it read', () => {
     // §34: re-emitting an ingested `astVersion` republishes a claim the
     // producer cannot keep.
-    const incoming: AstEnvelope = { ...wrap('Hi\n'), astVersion: '1.0' }
+    const incoming: AstEnvelope = { ...wrap('Hi\n'), astVersion: '2.1', document: { ...wrap('Hi\n').document, astVersion: '2.1' } }
     expect(toAstEnvelope(fromAstEnvelope(incoming)).astVersion).toBe(AST_CONTRACT_VERSION)
   })
 })
@@ -77,49 +79,35 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
     }
     expect(thrown).toBeInstanceOf(AstEnvelopeVersionError)
     expect((thrown as AstEnvelopeVersionError).found).toBe('3.0')
-    expect((thrown as AstEnvelopeVersionError).implemented).toBe('1.2')
+    expect((thrown as AstEnvelopeVersionError).implemented).toBe('2.0')
     expect((thrown as Error).message).toContain('3.0')
-    expect((thrown as Error).message).toContain('1.2')
+    expect((thrown as Error).message).toContain('2.0')
   })
 
-  it('refuses a higher MINOR too, naming both versions', () => {
-    // §34(b), as rewritten by markup-carve/carve#2915. A minor adds a FIELD
-    // and the node schema below stays closed, so a reader handed a tree one
-    // minor up fails on the field itself - as a schema error naming no version.
-    // Accepting the envelope and then refusing its payload is the worse
-    // failure. The reader accepts its own version or lower.
-    const envelope: AstEnvelope = { ...wrap('Hi\n'), astVersion: '1.3' }
-    let thrown: unknown
-    try {
-      fromAstEnvelope(envelope)
-    } catch (error) {
-      thrown = error
-    }
-    expect(thrown).toBeInstanceOf(AstEnvelopeVersionError)
-    expect((thrown as AstEnvelopeVersionError).found).toBe('1.3')
-    expect((thrown as AstEnvelopeVersionError).implemented).toBe('1.2')
+  it('accepts a higher minor with no unknown core additions', () => {
+    const envelope: AstEnvelope = { ...wrap('Hi\n'), astVersion: '2.1', document: { ...wrap('Hi\n').document, astVersion: '2.1' } }
+    expect(fromAstEnvelope(envelope).type).toBe('document')
   })
 
-  it('accepts its own version and a lower minor', () => {
-    for (const astVersion of ['1.2', '1.1', '1.0']) {
-      expect(fromAstEnvelope({ ...wrap('Hi\n'), astVersion }).type).toBe('document')
-    }
+  it('accepts its own version and refuses the old contract', () => {
+    expect(fromAstEnvelope(wrap('Hi\n')).type).toBe('document')
+    expect(() => fromAstEnvelope({ ...wrap('Hi\n'), astVersion: '1.2', document: { type: 'document', children: [], astVersion: '1.2' } })).toThrow()
   })
 
   it('reports the version before a required extension it does not implement', () => {
-    // The version check comes first: a 1.3 payload is refused as a version
+    // The version check comes first: a 3.0 payload is refused as a version
     // whatever its extensions say, and the extension error is what a payload
     // at a readable version gets.
     const higher: AstEnvelope = {
       ...wrap('Hi\n'),
-      astVersion: '1.3',
-      extensions: [{ id: 'https://example.org/ext/tables-2' }],
+      astVersion: '3.0',
+      extensions: [{ name: 'example.org.tables-2', version: '1', required: true }],
     }
     expect(() => fromAstEnvelope(higher)).toThrow(AstEnvelopeVersionError)
     const readable: AstEnvelope = {
       ...wrap('Hi\n'),
-      astVersion: '1.0',
-      extensions: [{ id: 'https://example.org/ext/tables-2' }],
+      astVersion: '2.0',
+      extensions: [{ name: 'example.org.tables-2', version: '1', required: true }],
     }
     expect(() => fromAstEnvelope(readable)).toThrow(AstEnvelopeExtensionError)
   })
@@ -127,7 +115,7 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
   it('names the required extension it does not implement', () => {
     const envelope: AstEnvelope = {
       ...wrap('Hi\n'),
-      extensions: [{ id: 'https://example.org/ext/diagram', required: true }],
+      extensions: [{ name: 'example.org.diagram', version: '1', required: true }],
     }
     let thrown: unknown
     try {
@@ -137,34 +125,68 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
     }
     expect(thrown).toBeInstanceOf(AstEnvelopeExtensionError)
     expect((thrown as AstEnvelopeExtensionError).extension).toBe(
-      'https://example.org/ext/diagram',
+      'example.org.diagram',
     )
-    expect((thrown as Error).message).toContain('https://example.org/ext/diagram')
+    expect((thrown as Error).message).toContain('example.org.diagram')
   })
 
-  it('reads an absent `required` as true', () => {
-    const envelope: AstEnvelope = {
+  it('refuses an extension missing `required`', () => {
+    const envelope = {
       ...wrap('Hi\n'),
-      extensions: [{ id: 'https://example.org/ext/diagram' }],
-    }
-    expect(() => fromAstEnvelope(envelope)).toThrow(AstEnvelopeExtensionError)
+      extensions: [{ name: 'example.org.diagram', version: '1' }],
+    } as unknown as AstEnvelope
+    expect(() => fromAstEnvelope(envelope)).toThrow(AstEnvelopeShapeError)
   })
 
   it('ignores an extension the payload marks optional', () => {
     const envelope: AstEnvelope = {
       ...wrap('Hi\n'),
-      extensions: [{ id: 'https://example.org/ext/diagram', required: false }],
+      extensions: [{ name: 'example.org.diagram', version: '1', required: false }],
     }
     expect(fromAstEnvelope(envelope).type).toBe('document')
+  })
+
+  it('keeps unknown optional data across a round trip', () => {
+    const envelope = wrap('Hi\n')
+    envelope.extensions = [{ name: 'example.org.notes', version: '1', required: false }]
+    ;(envelope.document.children[0] as unknown as Record<string, unknown>).data = { 'example.org.notes': { color: 'blue' } }
+    const back = toAstEnvelope(fromAstEnvelope(envelope))
+    expect(back.document.children[0]).toMatchObject({ data: { 'example.org.notes': { color: 'blue' } } })
+  })
+
+  it('accepts an extension node with a core fallback', () => {
+    const envelope = wrap('Hi\n')
+    envelope.extensions = [{ name: 'example.org.notes', version: '1', required: false }]
+    envelope.document.children[0] = {
+      type: 'block_extension', name: 'example.org.notes', fallback: { type: 'paragraph', children: [{ type: 'text', value: 'Hi' }] },
+    } as never
+    const back = toAstEnvelope(fromAstEnvelope(envelope))
+    expect(back.document.children[0]).toMatchObject({ type: 'block_extension', name: 'example.org.notes' })
+  })
+
+  it('keeps a qualified extension when its fallback needs normalization', () => {
+    const envelope = wrap('Hi\n')
+    envelope.extensions = [{ name: 'example.org.notes', version: '1', required: false }]
+    envelope.document.children[0] = {
+      type: 'block_extension', name: 'example.org.notes',
+      data: { 'example.org.notes': { color: 'blue' } },
+      fallback: { type: 'paragraph', children: [{ type: 'text', value: 'Hi\0\r' }] },
+    } as never
+    const back = toAstEnvelope(fromAstEnvelope(envelope))
+    expect(back.document.children[0]).toMatchObject({
+      type: 'block_extension', name: 'example.org.notes',
+      data: { 'example.org.notes': { color: 'blue' } },
+      fallback: { type: 'paragraph', children: [{ type: 'text', value: 'Hi\ufffd\n' }] },
+    })
   })
 
   it('accepts a required extension the reader declares', () => {
     const envelope: AstEnvelope = {
       ...wrap('Hi\n'),
-      extensions: [{ id: 'https://example.org/ext/diagram' }],
+      extensions: [{ name: 'example.org.diagram', version: '1', required: true }],
     }
     expect(
-      fromAstEnvelope(envelope, { extensions: ['https://example.org/ext/diagram'] }).type,
+      fromAstEnvelope(envelope, { extensions: ['example.org.diagram'] }).type,
     ).toBe('document')
   })
 
@@ -209,7 +231,7 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
     it('refuses an extension property the schema does not name', () => {
       const envelope = {
         ...wrap('Hi\n'),
-        extensions: [{ id: 'https://example.org/ext/x', level: 2 }],
+        extensions: [{ name: 'example.org.x', version: '1', required: false, level: 2 }],
       } as unknown as AstEnvelope
       expect(() => fromAstEnvelope(envelope)).toThrow(AstEnvelopeShapeError)
     })
@@ -225,7 +247,7 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
       ['a non-array extensions', { ...wrap('Hi\n'), extensions: {} }],
       ['a non-object extension', { ...wrap('Hi\n'), extensions: ['x'] }],
       ['an extension with no id', { ...wrap('Hi\n'), extensions: [{ version: '1' }] }],
-      ['a non-boolean required', { ...wrap('Hi\n'), extensions: [{ id: 'x', required: 'yes' }] }],
+      ['a non-boolean required', { ...wrap('Hi\n'), extensions: [{ name: 'example.org.x', version: '1', required: 'yes' }] }],
       ['an array', []],
       ['null', null],
     ])('refuses %s', (_label, value) => {
@@ -278,7 +300,7 @@ describe('the envelope this engine writes matches the pinned schema', () => {
   it('names the same envelope fields the schema does', () => {
     const full = toAstEnvelope(parse('Hi\n'), {
       vocabulary: CORE_AST_VOCABULARY,
-      extensions: [{ id: 'https://example.org/ext/x', version: '1', required: false }],
+      extensions: [{ name: 'example.org.x', version: '1', required: false }],
     })
     expect(Object.keys(full).sort()).toEqual(Object.keys(schema.properties).sort())
     expect(Object.keys(full.extensions![0]!).sort()).toEqual(
@@ -289,7 +311,7 @@ describe('the envelope this engine writes matches the pinned schema', () => {
   it('keeps both objects closed, which is what the refusals above rest on', () => {
     expect(schema.additionalProperties).toBe(false)
     expect(extensionItems.additionalProperties).toBe(false)
-    expect(extensionItems.required).toEqual(['id'])
+    expect(extensionItems.required).toEqual(['name', 'version', 'required'])
   })
 
   it('refuses exactly the versions the schema pattern refuses', () => {

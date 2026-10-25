@@ -75,7 +75,7 @@ describe('a figure carries its own position', () => {
     // The reason the sites call attachBlockPos in the first place: the wrapped
     // block must not lose its span to the wrapper.
     const figure = figureOf('![a](p.png)\n^ cap\n')
-    const target = figure!.target as Record<string, unknown>
+    const target = (figure!.children as Array<Record<string, unknown>>)[0]
     expect(target.pos, 'the wrapped block lost its position').toBeDefined()
   })
 })

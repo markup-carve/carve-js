@@ -73,7 +73,7 @@ describe('delimited inline comments (PART 9 §21a)', () => {
       content: ' bar ',
     })
     const wire = carveToAstJson('{%bar%}') as any
-    expect(wire.children[0].children[0]).toMatchObject({ delimited: true, content: 'bar' })
+    expect(wire.children[0].children[0]).toMatchObject({ form: 'braced', value: 'bar' })
     expect(renderCarve(fromAstJson(wire))).toBe('{% bar %}\n')
   })
 
@@ -87,7 +87,7 @@ describe('delimited inline comments (PART 9 §21a)', () => {
 
   it('does not change the %% form or emit delimited false', () => {
     const wire = carveToAstJson('foo %% bar') as any
-    expect(wire.children[0].children.at(-1)).toMatchObject({ type: 'comment', content: 'bar' })
+    expect(wire.children[0].children.at(-1)).toMatchObject({ type: 'comment', form: 'line', value: 'bar' })
     expect(wire.children[0].children.at(-1)).not.toHaveProperty('delimited')
   })
 })

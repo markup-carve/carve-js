@@ -39,7 +39,7 @@ describe('a bracket run bounds its trailing comment (#2359)', () => {
       type: 'paragraph',
       children: [
         { type: 'text', value: '[a' },
-        { type: 'comment', content: 'hidden', pos: { startOffset: 3, endOffset: 12 } },
+        { type: 'comment', value: 'hidden', pos: { startOffset: 3, endOffset: 12 } },
         { type: 'text', value: '] tail', pos: { startOffset: 12, endOffset: 18 } },
       ],
     })

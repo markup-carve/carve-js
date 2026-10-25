@@ -142,9 +142,9 @@ describe('labeled display equations', () => {
     math.number = 1
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
     math.display = true
-    delete math.label
+    ;(math as unknown as Record<string, unknown>).numberPrefix = ''
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
-    math.label = ' Equation '
+    ;(math as unknown as Record<string, unknown>).numberPrefix = ' Equation '
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
   })
 

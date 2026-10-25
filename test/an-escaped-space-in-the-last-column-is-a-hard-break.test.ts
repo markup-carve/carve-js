@@ -103,7 +103,7 @@ describe('an escaped space in the last column of a line', () => {
 describe('an ingested text node ending in a no-break space', () => {
   const ingested = (value: string) =>
     JSON.stringify({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 3,
       children: [{ type: 'paragraph', children: [{ type: 'text', value }] }],
     })

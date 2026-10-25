@@ -14,6 +14,8 @@ const CARVE = 'click here and [a named one]{#k}\n\nlogo\n'
 
 const AST = {
   type: 'document',
+  astVersion: '2.0',
+  stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
   children: [
     {
       type: 'paragraph',

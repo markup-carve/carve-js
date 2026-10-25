@@ -8,7 +8,7 @@ import { carveToCarve, fromAstJson, parse, renderCarve, SourceUnspellableError, 
 // refused one brace too many; carve#2877's parser follows the grammar.
 
 const commentText = (source: string): unknown =>
-  (toAstJson(parse(source)).children[0] as unknown as { children: Array<{ text?: string }> }).children[0]!.text
+  (toAstJson(parse(source)).children[0] as unknown as { children: Array<{ value?: string }> }).children[0]!.value
 
 describe('the Carve writer on an editorial comment', () => {
   it.each(['{#{-#}', '{#a\\b#}', '{# x #}', '{#a#b#}', '{#a}b#}'])('writes %s back unchanged', (source) => {
@@ -24,8 +24,10 @@ describe('the Carve writer on an editorial comment', () => {
   it('refuses a comment whose text holds its own closing sequence', () => {
     const document = fromAstJson({
       type: 'document',
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       srcByteLength: 0,
-      children: [{ type: 'paragraph', children: [{ type: 'critic_comment', text: 'a#}b' }] }],
+      children: [{ type: 'paragraph', children: [{ type: 'critic_comment', value: 'a#}b' }] }],
     } as never)
     let thrown: unknown
     try {

@@ -33,6 +33,7 @@ import type {
   TableBlockHost,
   ThematicBreak,
 } from './parse-core.js'
+import { rememberAstSource } from '../ast/source-bytes.js'
 import {
   AttachmentFenceClosers,
   FOOTNOTE_BODY_COLUMN,
@@ -335,6 +336,7 @@ export class ParseSession extends InlineParseSession {
   private skipPositionDrop = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
+    const originalSource = source
     const sourceByteLength = utf8ByteLength(source)
     this.recordPositions = opts.positions !== false
     this.blockLineSpans = new WeakMap()
@@ -399,6 +401,7 @@ export class ParseSession extends InlineParseSession {
     const children = this.parseBlocks(lexer, 0)
     appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }
+    rememberAstSource(doc, originalSource)
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = sourceByteLength

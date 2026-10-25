@@ -39,24 +39,26 @@ describe('a task state survives a format cycle', () => {
   })
 })
 
-describe('the two task fields cannot disagree on ingest', () => {
+describe('the task mark and status cannot disagree on ingest', () => {
   const payload = (item: Record<string, unknown>) => ({
     type: 'document',
+    astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
     srcByteLength: 0,
     children: [
-      { type: 'list', ordered: false, tight: true, items: [{ type: 'list_item', children: [], ...item }] },
+      { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [{ type: 'list_item', children: [], ...item }] },
     ],
   })
 
   it('refuses a dropped state on a ticked box', () => {
-    expect(() => fromAstJson(payload({ checked: true, taskState: '-' }))).toThrow(/taskState/)
+    expect(() => fromAstJson(payload({ task: { mark: 'x', status: 'cancelled' } }))).toThrow(/task/)
   })
 
   it('refuses a state on an item that is not a task', () => {
-    expect(() => fromAstJson(payload({ taskState: '?' }))).toThrow(/taskState/)
+    expect(() => fromAstJson(payload({ task: { status: 'other' } }))).toThrow(/task/)
   })
 
   it('accepts the pair the schema admits', () => {
-    expect(() => fromAstJson(payload({ checked: false, taskState: '?' }))).not.toThrow()
+    expect(() => fromAstJson(payload({ task: { mark: '?', status: 'other' } }))).not.toThrow()
   })
 })

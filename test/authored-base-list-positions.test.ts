@@ -9,8 +9,8 @@ describe('authored-base list source spans', () => {
 
     expect(list.type).toBe('list')
     expect(list.pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 24 })
-    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 24 })
-    expect(list.items[0].children[0].pos).toMatchObject({
+    expect(list.children[0].pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 24 })
+    expect(list.children[0].children[0].pos).toMatchObject({
       startLine: 6,
       startColumn: 7,
       startOffset: 26,
@@ -23,6 +23,6 @@ describe('authored-base list source spans', () => {
     const list = ast.children[1].children[1]
 
     expect(list.pos).toMatchObject({ startLine: 6, startColumn: 4, startOffset: 23 })
-    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 4, startOffset: 23 })
+    expect(list.children[0].pos).toMatchObject({ startLine: 6, startColumn: 4, startOffset: 23 })
   })
 })

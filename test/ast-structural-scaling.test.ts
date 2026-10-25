@@ -10,7 +10,7 @@ function tree(depth: number, first = 'a', second = 'b'): AstJsonDocument {
     { type: 'paragraph', children: [{ type: 'text', value: second }] },
   ] }
   for (let i = 0; i < depth; i++) node = { type: 'block_quote', children: [node] }
-  return { type: 'document', srcByteLength: 0, children: [node] } as AstJsonDocument
+  return { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [node] } as AstJsonDocument
 }
 
 it('interns metadata and JSON scalar semantics without conflating array and object values', () => {
@@ -77,7 +77,7 @@ function lineBlock(lines: number): AstJsonDocument {
     }
   }
   boundaries.push('/children/-')
-  return {type: 'document', srcByteLength: 0, children: [{type: 'line_block', children: [{type: 'paragraph', children}], lines: [boundaries]}]} as AstJsonDocument
+  return {type: 'document', astVersion: '2.0', srcByteLength: 0, children: [{type: 'line_block', children: [{type: 'paragraph', children}], lines: [boundaries]}]} as AstJsonDocument
 }
 
 it('validates line-block boundaries and rejects reordered pointers', () => {
@@ -96,9 +96,9 @@ perfIt('line-block boundary validation scans once', () => {
 
 perfIt('envelope extension membership scans once', () => {
   expectBuiltInputScansLinearly(input => {
-    const extensions = JSON.parse(input) as Array<{id: string}>
-    fromAstEnvelope({ astVersion: '1.0', extensions, document: tree(0) }, { extensions: extensions.map(extension => extension.id) })
-  }, n => JSON.stringify(Array.from({length: n}, (_, i) => ({id: `extension${i}`}))),
+    const extensions = JSON.parse(input) as Array<{name: string; version: string; required: boolean}>
+    fromAstEnvelope({ astVersion: '2.0', extensions, document: tree(0) }, { extensions: extensions.map(extension => extension.name) })
+  }, n => JSON.stringify(Array.from({length: n}, (_, i) => ({name: `extension${i}`, version: '1', required: true}))),
   { smallRepeats: 2_000, minSampleMs: 15, label: 'envelope extensions' })
 })
 

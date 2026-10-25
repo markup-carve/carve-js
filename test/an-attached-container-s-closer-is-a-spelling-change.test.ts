@@ -6,9 +6,9 @@ describe("an attached container's closer is a spelling change", () => {
   const closed = '- x\n  :::\n  a\n\n  b\n  :::\n'
 
   const tightness = (src: string): boolean => {
-    const first = carveToAstJson(src).children[0] as { type: string; tight?: boolean }
+    const first = carveToAstJson(src).children[0] as { type: string; spacing?: string }
     expect(first.type).toBe('list')
-    return first.tight === true
+    return first.spacing === 'tight'
   }
 
   it('reads both spellings tight', () => {

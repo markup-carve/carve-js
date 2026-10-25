@@ -118,7 +118,7 @@ describe('the consumed `loose` boolean', () => {
   it('publishes the spelled looseness for a definition list', () => {
     expect(carveToAstJson('{loose}\n:: T\n:  a\n').children[0]).toMatchObject({
       type: 'definition_list',
-      loose: true,
+      spacing: 'loose',
     })
   })
 
@@ -129,7 +129,7 @@ describe('the consumed `loose` boolean', () => {
   it('publishes no looseness for a definition list that did not spell it', () => {
     const derived = carveToAstJson(':: T\n:  a\n\n:: U\n:  b\n').children[0]!
     expect(derived).toMatchObject({ type: 'definition_list' })
-    expect(Object.keys(derived)).not.toContain('loose')
+    expect(derived).toMatchObject({ spacing: 'tight' })
   })
 
   it('leaves the list half publishing `tight`, not `loose`', () => {
@@ -177,12 +177,14 @@ describe('the definition-list looseness survives an AST JSON round trip', () => 
     expect(() =>
       fromAstJson({
         type: 'document',
+        astVersion: '2.0',
+        stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
         srcByteLength: 0,
         children: [
           {
             type: 'definition_list',
-            loose: true,
-            items: [
+            spacing: 'loose',
+            children: [
               { type: 'definition_term', children: [{ type: 'text', value: 'T' }] },
               {
                 type: 'definition_description',

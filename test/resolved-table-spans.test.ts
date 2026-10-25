@@ -3,11 +3,9 @@ import { carveToAstJson, carveToHtml, fromAstJson, toAstJson } from '../src/inde
 import { resolveTableSpans } from '../src/table/table-spans.js'
 
 const cellsOf = (source: string) => {
-  const tree = carveToAstJson(source) as unknown as {
-    children: Array<{ rows: Array<{ cells: Array<Record<string, unknown>> }> }>
-  }
-  return tree.children[0]!.rows.map((row) =>
-    row.cells.map((cell) => ({ span: cell['span'], colspan: cell['colspan'], rowspan: cell['rowspan'] })),
+  const tree = carveToAstJson(source) as any
+  return tree.children[0]!.children.flatMap((group: any) => group.children).map((row: any) =>
+    row.children.map((cell: any) => ({ span: cell['span'], colspan: cell['colspan'], rowspan: cell['rowspan'] })),
   )
 }
 
@@ -48,10 +46,8 @@ describe('PART 12 §26: a spanning cell publishes its resolved extent', () => {
 
   it('survives its own ingest and is re-emitted rather than dropped', () => {
     const tree = carveToAstJson('| a | < | b |\n| ^ | < | d |\n')
-    const again = toAstJson(fromAstJson(JSON.parse(JSON.stringify(tree)))) as unknown as {
-      children: Array<{ rows: Array<{ cells: Array<Record<string, unknown>> }> }>
-    }
-    expect(again.children[0]!.rows[0]!.cells[0]).toMatchObject({ colspan: 2, rowspan: 2 })
+    const again = toAstJson(fromAstJson(JSON.parse(JSON.stringify(tree)))) as any
+    expect(again.children[0]!.children[0]!.children[0]!.children[0]).toMatchObject({ colspan: 2, rowspan: 2 })
   })
 
   it('does not recompute a count an ingested tree already carries', () => {
@@ -69,10 +65,8 @@ describe('PART 12 §26: a spanning cell publishes its resolved extent', () => {
         },
       ],
     }
-    const again = toAstJson(fromAstJson(tree as never)) as unknown as {
-      children: Array<{ rows: Array<{ cells: Array<Record<string, unknown>> }> }>
-    }
-    expect(again.children[0]!.rows[0]!.cells[0]!['colspan']).toBe(3)
+    const again = toAstJson(fromAstJson(toAstJson(tree as never))) as any
+    expect(again.children[0]!.children[0]!.children[0]!.children[0]!['colspan']).toBe(3)
   })
 
   it('exposes one implementation of the walk', () => {

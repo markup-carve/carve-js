@@ -21,7 +21,7 @@ describe('fromAstJson checks the root type', () => {
   }
 
   it('accepts a document root', () => {
-    const doc = fromAstJson({ type: 'document', children: [para], srcByteLength: 1 } as never)
+    const doc = fromAstJson({ type: 'document', astVersion: '2.0', children: [para], srcByteLength: 1 } as never)
     expect(doc.type).toBe('document')
     expect(doc.children).toHaveLength(1)
   })

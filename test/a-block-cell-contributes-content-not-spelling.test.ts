@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText, SourceUnspellableError } from '../src/index.js'
+import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText, SourceUnspellableError, toAstJson } from '../src/index.js'
 
 // carve-js#2125. PART 12 §27 (CARVE-P12-049): a block in `table_cell.blocks`
 // contributes its inline content and no markers, and a code block contributes
 // its payload with each newline becoming one space. Every kind that used to
 // reach the fallback arm contributed its own SOURCE SPELLING instead.
-const table = (blocks: unknown[]) => fromAstJson({
+const table = (blocks: unknown[]) => fromAstJson(toAstJson({
   type: 'document',
   srcByteLength: 0,
   children: [{
@@ -15,7 +15,7 @@ const table = (blocks: unknown[]) => fromAstJson({
       { type: 'table_row', cells: [{ type: 'table_cell', header: false, blocks }] },
     ],
   }],
-} as never)
+} as never))
 
 const bodyRow = (blocks: unknown[]) => renderMarkdown(table(blocks)).split('\n')[2]
 
@@ -89,7 +89,7 @@ describe('a block cell contributes content, not spelling', () => {
  * every cell is blank, which a one-cell row would become.
  */
 describe('a block cell contributes no invented spelling to Carve', () => {
-  const pair = (blocks: unknown[]) => fromAstJson({
+  const pair = (blocks: unknown[]) => fromAstJson(toAstJson({
     type: 'document',
     srcByteLength: 0,
     children: [{
@@ -105,7 +105,7 @@ describe('a block cell contributes no invented spelling to Carve', () => {
         ] },
       ],
     }],
-  } as never)
+  } as never))
   const bodyRow = (blocks: unknown[]) => renderCarve(pair(blocks)).split('\n')[1]
 
   it('refuses a thematic break even when the row has other content', () => {

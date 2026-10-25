@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
-import { carveToMarkdown } from '../src/index.js'
+import { carveToMarkdown, toAstJson } from '../src/index.js'
 import { fromAstJson } from '../src/ast-json.js'
 import { renderMarkdown } from '../src/render-markdown.js'
 
@@ -32,11 +32,11 @@ describe('adjacent lists across unmarked wrappers (PART 11 section 10o)', () => 
       bulletChar: '-',
       items: [{ type: 'list_item', children: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }] }],
     })
-    const doc = fromAstJson({
+    const doc = fromAstJson(toAstJson({
       type: 'document',
       srcByteLength: 0,
       children: [list('a'), { type: 'div', children: [list('b')] }, { type: 'block_quote', children: [list('c')] }],
-    })
+    } as never))
     expect(renderMarkdown(doc)).toBe('- a\n\n* b\n\n> - c\n')
   })
 })

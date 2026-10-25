@@ -1,15 +1,39 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
-import { carveToAstJson, carveToHtml, renderHtml, AstJsonSchemaError } from '../src/index.js'
+import { carveToAstJson, carveToHtml, renderHtml, AstJsonSchemaError, AstJsonMigrationError } from '../src/index.js'
 import { renderCarve } from '../src/render-carve.js'
 import { AstEnvelopeVersionError } from '../src/ast-envelope.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
-  it('emits a root of exactly type, children and srcByteLength', () => {
+  it.each([':kbd[Ctrl]', ':my_note[x *y*]'])('keeps source extension names in %s', (source) => {
+    const parsed = parse(source)
+    const wire = toAstJson(parsed)
+    const extension = (wire.children[0] as unknown as { children: Record<string, unknown>[] }).children[0]
+    expect(extension).toMatchObject({ type: 'inline_extension', name: source.slice(1, source.indexOf('[')) })
+    expect(extension).not.toHaveProperty('fallback')
+    expect(wire).not.toHaveProperty('extensions')
+    const roundTrip = fromAstJson(wire)
+    expect(renderHtml(roundTrip)).toBe(renderHtml(parsed))
+    expect(renderCarve(roundTrip)).toBe(renderCarve(parsed))
+  })
+
+  it('refuses a qualified inline extension without a fallback', () => {
+    const wire = toAstJson(parse(':kbd[Ctrl]'))
+    const extension = (wire.children[0] as unknown as { children: Record<string, unknown>[] }).children[0]!
+    extension.name = 'example.org.kbd'
+    expect(() => fromAstJson(wire)).toThrow(AstJsonSchemaError)
+  })
+  it('emits the versioned root and completed stages', () => {
     const doc = parse('---\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n')
     const json = toAstJson(doc)
-    expect(Object.keys(json).sort()).toEqual(['children', 'srcByteLength', 'type'])
+    expect(Object.keys(json).sort()).toEqual(['astVersion', 'children', 'srcByteLength', 'stages', 'type'])
+  })
+
+  it('keeps an unmeasured source length absent through a round trip', () => {
+    const json = toAstJson({ type: 'document', children: [] } as never)
+    expect(json).not.toHaveProperty('srcByteLength')
+    expect(toAstJson(fromAstJson(json))).not.toHaveProperty('srcByteLength')
   })
 
   it('keeps the runtime document untouched', () => {
@@ -29,7 +53,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
     expect(json.children[0]).toMatchObject({
       type: 'frontmatter',
       format: 'toml',
-      content: 'x = 1',
+      value: 'x = 1',
     })
     // And it is placed - slicing the source with its span returns the block.
     const pos = (json.children[0] as { pos: { startOffset: number; endOffset: number } }).pos
@@ -48,7 +72,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
     const json = toAstJson(parse('Para[^a]\n\n[^a]: note\n'))
     const def = json.children.find((c) => c.type === 'footnote')
     expect(def).toBeDefined()
-    expect(def).toMatchObject({ type: 'footnote', label: 'a' })
+    expect(def).toMatchObject({ type: 'footnote', key: 'a', namespace: 'footnote' })
     expect(def).not.toHaveProperty('id')
   })
 
@@ -57,7 +81,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
     // container that held it, which then renders empty.
     const json = toAstJson(parse('Text[^a]\n\n> quoted\n>\n> [^a]: inside a quote\n'))
     const def = json.children.find((c) => c.type === 'footnote')
-    expect(def).toMatchObject({ type: 'footnote', label: 'a' })
+    expect(def).toMatchObject({ type: 'footnote', key: 'a', namespace: 'footnote' })
     const quote = json.children.find((c) => c.type === 'block_quote')
     expect(JSON.stringify(quote)).not.toContain('inside a quote')
   })
@@ -94,9 +118,9 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
   it('preserves structural short captions without rendering them', () => {
     const json = toAstJson(parse('![alt](/i.png)\n^ Full caption\n'))
     const figure = json.children[0] as typeof json.children[number] & {
-      shortCaption?: Array<{ type: 'text'; value: string }>
+      caption: { short?: Array<{ type: 'text'; value: string }> }
     }
-    figure.shortCaption = [{ type: 'text', value: 'Navigation label' }]
+    figure.caption.short = [{ type: 'text', value: 'Navigation label' }]
 
     const back = fromAstJson(JSON.parse(JSON.stringify(json)))
     expect(toAstJson(back)).toEqual(json)
@@ -126,7 +150,7 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     // payload while this engine took it (carve-js#907).
     expect(() =>
       fromAstJson({
-        type: 'document',
+        type: 'document', astVersion: '2.0',
         srcByteLength: 0,
         children: [
           { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
@@ -136,15 +160,15 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     ).toThrow(/"id"/)
   })
 
-  it('accepts the same definition spelled `label`', () => {
+  it('accepts the same definition with a qualified key', () => {
     // The CONTROL on the row above: the refusal has to be about the spelling,
     // not about the node.
     const doc = fromAstJson({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
       children: [
         { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
-        { type: 'footnote', label: 'a', children: [] } as never,
+        { type: 'footnote', key: 'a', namespace: 'footnote', children: [] } as never,
       ],
     })
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['a'])
@@ -158,20 +182,20 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     // it avoided a renderer crash - and refusing is what the clause asks for.
     for (const child of [
       { type: 'footnote', children: [] },
-      { type: 'footnote', label: 'b', children: 'bad' },
+      { type: 'footnote', key: 'b', namespace: 'footnote', children: 'bad' },
     ]) {
       expect(() =>
-        fromAstJson({ type: 'document', srcByteLength: 0, children: [child] } as never),
-      ).toThrow(AstJsonSchemaError)
+        fromAstJson({ type: 'document', astVersion: '2.0', srcByteLength: 0, children: [child] } as never),
+      ).toThrow()
     }
 
     // A definition the schema DOES describe still decodes, and still drops out
     // of `children` into `footnoteDefs` - which is what the rest of this
     // assertion was for.
     const doc = fromAstJson({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
-      children: [{ type: 'footnote', label: 'b', children: [] } as never],
+      children: [{ type: 'footnote', key: 'b', namespace: 'footnote', children: [] } as never],
     })
     // It is a real definition now, so it goes to `footnoteDefs` rather than
     // being dropped - and it leaves `children` either way, which is the part
@@ -183,11 +207,11 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
 
   it('keeps only the FIRST frontmatter node', () => {
     const doc = fromAstJson({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
       children: [
-        { type: 'frontmatter', format: 'yaml', content: 'a: 1' },
-        { type: 'frontmatter', format: 'toml', content: 'b = 2' },
+        { type: 'frontmatter', format: 'yaml', value: 'a: 1' },
+        { type: 'frontmatter', format: 'toml', value: 'b = 2' },
       ],
     })
     expect(doc.frontmatter).toEqual({ format: 'yaml', content: 'a: 1' })
@@ -213,8 +237,8 @@ describe('carveToAstJson', () => {
     // and a consumer never has to reimplement PART 9R to get one. See
     // test/footnote-numbering.test.ts for the footnote-specific coverage.
     const json = carveToAstJson('![a](/i.png)\n\n^ Figure #: caption\n')
-    const figure = json.children[0] as { caption: Array<{ type: string; n?: number }> }
-    const number = figure.caption.find((c) => c.type === 'caption_number')
+    const figure = json.children[0] as unknown as { caption: { children: Array<{ children: Array<{ type: string; n?: number }> }> } }
+    const number = figure.caption.children[0]?.children.find((c) => c.type === 'caption_number')
     expect(number?.n).toBe(1)
   })
 })
@@ -230,11 +254,11 @@ describe('definition lists on the wire (PART 12)', () => {
     // agree on.
     const list = carveToAstJson(source).children[0] as unknown as {
       type: string
-      items: { type: string }[]
+      children: { type: string }[]
     }
 
     expect(list.type).toBe('definition_list')
-    expect(list.items.map((i) => i.type)).toEqual([
+    expect(list.children.map((i) => i.type)).toEqual([
       'definition_term',
       'definition_term',
       'definition_description',
@@ -248,11 +272,11 @@ describe('definition lists on the wire (PART 12)', () => {
     // §4's point: a term is content an editor navigates to and a language
     // server renames. PART 12 §4 includes the term marker that opens it.
     const list = carveToAstJson(source).children[0] as unknown as {
-      items: { type: string; pos?: { startLine: number; startColumn: number } }[]
+      children: { type: string; pos?: { startLine: number; startColumn: number } }[]
     }
 
-    expect(list.items[0]?.pos).toMatchObject({ startLine: 1, startColumn: 1 })
-    expect(list.items[1]?.pos).toMatchObject({ startLine: 2 })
+    expect(list.children[0]?.pos).toMatchObject({ startLine: 1, startColumn: 1 })
+    expect(list.children[1]?.pos).toMatchObject({ startLine: 2 })
   })
 
   it('round trips back to the runtime grouping', () => {
@@ -284,9 +308,9 @@ describe('definition lists on the wire (PART 12)', () => {
     expect(renderHtml(doc)).toBe(carveToHtml(source))
   })
 
-  it('still decodes the older grouping form, which stored trees carry', () => {
-    const doc = fromAstJson({
-      type: 'document',
+  it('refuses the older grouping form, which needs migrating', () => {
+    expect(() => fromAstJson({
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
       children: [
         {
@@ -296,9 +320,7 @@ describe('definition lists on the wire (PART 12)', () => {
           ],
         } as never,
       ],
-    }) as unknown as { children: { items: { terms: unknown[] }[] }[] }
-
-    expect(doc.children[0]?.items[0]?.terms).toHaveLength(1)
+    })).toThrow(AstJsonMigrationError)
   })
 
   it('leaves the runtime document untouched', () => {
@@ -320,14 +342,14 @@ describe('author-choice list fields on the wire (PART 12)', () => {
     // to be stripped here only because the schema had no field to hold it.
     const wire = carveToAstJson('. a\n. b\n')
 
-    expect((wire.children[0] as unknown as Record<string, unknown>).bareMarker).toBe(true)
+    expect((wire.children[0] as unknown as { marker: { bare?: boolean } }).marker.bare).toBe(true)
   })
 
   it('omits it when the author numbered the list', () => {
     // Absent at the default, exactly like `delim` and `bulletChar`.
     const wire = carveToAstJson('1. a\n2. b\n')
 
-    expect((wire.children[0] as unknown as Record<string, unknown>).bareMarker).toBeUndefined()
+    expect((wire.children[0] as unknown as { marker: { bare?: boolean } }).marker.bare).toBeUndefined()
   })
 
   it('still records it on the runtime tree, so fmt keeps the spelling', () => {
@@ -353,24 +375,24 @@ describe('unknown input at the AST boundary', () => {
   })
 
   it('validates an unknown object before decoding', () => {
-    const input: unknown = { type: 'document', srcByteLength: 0, children: [] }
+    const input: unknown = { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [] }
     expect(fromAstJson(input).children).toEqual([])
   })
 })
 
-describe('AST contract 1.2 additions', () => {
+describe('AST contract 2.0 migration', () => {
   it.each(['[t][r]\n\n[r]:\n', '![a][r]\n\n[r]:\n'])('preserves resolved empty references through JSON: %s', source => {
     const doc = parse(source)
     const json = toAstJson(doc)
     const use = (json.children[0] as unknown as { children: Array<Record<string, unknown>> }).children[0]!
-    expect(use.resolved).toBe(true)
+    expect(use).toMatchObject({ [use.type === 'image' ? 'src' : 'href']: '', namespace: 'link' })
     expect(renderCarve(fromAstJson(json))).toEqual(renderCarve(doc))
   })
 
   it('restores a resolved empty reference inside a footnote body', () => {
     const doc = parse('x[^n]\n\n[^n]: [t][r]\n\n[r]:\n')
     const wire = JSON.stringify(toAstJson(doc))
-    expect(wire).toContain('"resolved":true')
+    expect(wire).toContain('"href":""')
     expect(renderHtml(fromAstJson(JSON.parse(wire)))).toEqual(renderHtml(doc))
     expect(JSON.stringify(toAstJson(fromAstJson(JSON.parse(wire))))).toEqual(wire)
     // The marker becomes runtime state; none is left on a footnote body's node.
@@ -389,33 +411,46 @@ describe('AST contract 1.2 additions', () => {
     const json = toAstJson(parse('[t][r]\n\n[r]:\n'))
     const use = (json.children[0] as unknown as { children: Array<Record<string, unknown>> }).children[0]!
     use.resolved = false
-    expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
-    use.resolved = true
-    use.href = '/x'
+    expect(() => fromAstJson(json)).toThrow(AstJsonMigrationError)
+    delete use.resolved
+    use.namespace = 'invalid'
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
   })
 
   it('checks bare root versions and stays closed', () => {
     const base = toAstJson(parse('x'))
     for (const astVersion of ['1.0', '1.1', '1.2']) {
-      expect(() => fromAstJson({ ...base, astVersion })).not.toThrow()
+      expect(() => fromAstJson({ ...base, astVersion })).toThrow(AstJsonMigrationError)
     }
-    for (const astVersion of ['1.3', '2.0']) {
+    expect(() => fromAstJson(base)).not.toThrow()
+    expect(() => fromAstJson({ ...base, astVersion: '2.1' })).not.toThrow()
+    for (const astVersion of ['3.0']) {
       expect(() => fromAstJson({ ...base, astVersion })).toThrow(AstEnvelopeVersionError)
     }
     expect(() => fromAstJson({ ...base, astVersion: '01.2' })).toThrow()
     expect(() => fromAstJson({ ...base, extra: true })).toThrow()
   })
 
-  it('publishes comment forms and refuses disagreement', () => {
+  it('publishes comment forms and refuses an unknown form', () => {
     for (const [source, form] of [['%%%\nx\n%%%\n', 'block'], ['a {% x %}\n', 'braced'], ['a %% x\n', 'line']]) {
       const json = toAstJson(parse(source))
       const node = form === 'block' ? json.children[0] : (json.children[0] as { children: unknown[] }).children[1]
       expect(node).toMatchObject({ type: 'comment', form })
       const invalid = structuredClone(json)
       const comment = form === 'block' ? invalid.children[0] : (invalid.children[0] as { children: unknown[] }).children[1]
-      ;(comment as { form: string }).form = form === 'block' ? 'line' : 'block'
+      ;(comment as { form: string }).form = 'unknown'
       expect(() => fromAstJson(invalid)).toThrow(AstJsonSchemaError)
     }
+  })
+})
+
+describe('wire offsets are UTF-8 bytes (contract 2.0)', () => {
+  it('slices the source bytes exactly after astral and two-byte characters', () => {
+    const source = '😀 *b*\n\nä x'
+    const json = toAstJson(parse(source)) as unknown as { children: { pos: { startOffset: number, endOffset: number }, children: { pos: { startOffset: number, endOffset: number } }[] }[] }
+    const bytes = Buffer.from(source)
+    const slice = (pos: { startOffset: number, endOffset: number }) => bytes.subarray(pos.startOffset, pos.endOffset).toString()
+    expect(slice(json.children[0]!.children[1]!.pos)).toBe('*b*')
+    expect(slice(json.children[1]!.pos)).toBe('ä x')
   })
 })

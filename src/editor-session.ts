@@ -30,15 +30,20 @@ export class EditorChangeError extends RangeError {
 
 type Positioned = { type?: unknown; attrs?: unknown; pos?: { startOffset?: unknown; endOffset?: unknown } }
 
-function codepointToUtf16(source: string): number[] {
+function byteToUtf16(source: string): number[] {
   const result = [0]
+  let byte = 0
   let utf16 = 0
-  for (const point of source) { utf16 += point.length; result.push(utf16) }
+  for (const point of source) {
+    byte += new TextEncoder().encode(point).length
+    utf16 += point.length
+    result[byte] = utf16
+  }
   return result
 }
 
 function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
-  const offsets = codepointToUtf16(source)
+  const offsets = byteToUtf16(source)
   const lineStarts = new Int32Array(source.length + 1)
   let lineStart = 0
   for (let i = 0; i < source.length; i++) {
@@ -205,7 +210,7 @@ function reparseParagraph(
   if (changes.length !== 1) return undefined
   const change = changes[0]!
   if (!/^[\p{L}\p{N}\p{M} .,!?]*$/u.test(change.insert) || change.insert.includes('\n')) return undefined
-  const offsets = codepointToUtf16(previous.source)
+  const offsets = byteToUtf16(previous.source)
   for (const [index, block] of previous.ast.children.entries()) {
     if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined || block.pos.endOffset === undefined) return undefined
     const start = offsets[block.pos.startOffset]!, end = offsets[block.pos.endOffset]!
@@ -214,7 +219,7 @@ function reparseParagraph(
     if (!fragment || fragment.includes('\n') || fragment.startsWith(' ') || fragment.endsWith(' ')) return undefined
     const replacement = parseDocument(fragment)
     if (replacement.children.length !== 1 || !reusableParagraphs(fragment, replacement)) return undefined
-    const delta = [...fragment].length - (block.pos.endOffset - block.pos.startOffset)
+    const delta = new TextEncoder().encode(fragment).length - (block.pos.endOffset - block.pos.startOffset)
     const children = [...previous.ast.children]
     const edited = replacement.children[0]!
     shiftParagraph(edited, block.pos.startOffset, block.pos.startLine - 1)

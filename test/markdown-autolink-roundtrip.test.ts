@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { carveToMarkdown, markdownToCarve, renderMarkdown } from '../src/index.js'
+import { carveToMarkdown, markdownToCarve, renderMarkdown, toAstJson } from '../src/index.js'
 import { fromAstJson } from '../src/ast-json.js'
 
 it.each([
@@ -31,9 +31,9 @@ it('keeps an authored explicit link explicit even when its label is the destinat
 })
 
 it('falls back when an email destination needs encoding', () => {
-  const document = fromAstJson({
+  const document = fromAstJson(toAstJson({
     type: 'document', srcByteLength: 0,
     children: [{ type: 'paragraph', children: [{ type: 'autolink', text: 'a|b@example.com', href: 'mailto:a|b@example.com' }] }],
-  })
+  } as never))
   expect(renderMarkdown(document)).toBe('[a|b@example.com](mailto:a%7Cb@example.com)\n')
 })

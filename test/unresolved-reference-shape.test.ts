@@ -8,6 +8,7 @@ import {
   carveToPlainText,
   carveToAnsi,
   carveToCarve,
+  renderCarve,
 } from '../src/index.js'
 
 /**
@@ -35,11 +36,12 @@ describe('an unresolved reference stays a link on the wire (PART 12 §3a)', () =
 
   it('carries the reference and its source', () => {
     const json = carveToAstJson('see [a][] here')
-    const link = (json.children[0] as { children: { ref?: string; rawRef?: string; href?: string }[] })
+    const link = (json.children[0] as { children: { key?: string; namespace?: string; rawRef?: string; href?: string }[] })
       .children[1]!
-    expect(link.ref).toBe('a')
+    expect(link.key).toBe('a')
+    expect(link.namespace).toBe('link')
     expect(link.rawRef).toBe('[a][]')
-    expect(link.href).toBe('')
+    expect(link.href).toBeUndefined()
   })
 
   it('does not publish adjacent text runs (PART 12 §1a)', () => {
@@ -60,9 +62,12 @@ describe('an unresolved reference stays a link on the wire (PART 12 §3a)', () =
     expect(inlineTypes(carveToAstJson('see [a][] here'))).toEqual(parsed.map((c) => c.type))
   })
 
-  it('encodes and decodes back to an identical tree', () => {
+  it('encodes and decodes back to an identical wire tree and source', () => {
     const doc = parse('see [a][] here')
-    expect(fromAstJson(toAstJson(doc))).toEqual(doc)
+    const restored = fromAstJson(toAstJson(doc))
+    expect(toAstJson(restored)).toEqual(toAstJson(doc))
+    expect(renderCarve(restored)).toBe(renderCarve(doc))
+    expect((restored.children[0] as { children: { href?: string }[] }).children[1]?.href).toBe('')
   })
 
   it('still resolves a reference that has a definition, and keeps the reference', () => {
@@ -73,10 +78,11 @@ describe('an unresolved reference stays a link on the wire (PART 12 §3a)', () =
     // `[a](/url)` the same tree (carve#596).
     const json = carveToAstJson('see [a][] here\n\n[a]: /url\n')
     const link = (
-      json.children[0] as { children: { ref?: string; rawRef?: string; href?: string }[] }
+      json.children[0] as { children: { key?: string; namespace?: string; rawRef?: string; href?: string }[] }
     ).children[1]!
     expect(link.href).toBe('/url')
-    expect(link.ref).toBe('a')
+    expect(link.key).toBe('a')
+    expect(link.namespace).toBe('link')
     expect(link.rawRef).toBe('[a][]')
   })
 })

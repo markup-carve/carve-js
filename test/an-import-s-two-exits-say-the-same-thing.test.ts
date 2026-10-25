@@ -79,10 +79,10 @@ function normalize(value: unknown): unknown {
     const out: unknown[] = []
     for (const item of value.map(normalize)) {
       const previous = out.at(-1) as { type?: string; value?: string } | undefined
-      const next = item as { type?: string; value?: string; delimited?: boolean; block?: boolean; content?: string } | null
+      const next = item as { type?: string; value?: string; form?: string } | null
       // §10k N3: an empty delimited comment compares equal to nothing, which is
       // what lets a writer separate two touching backtick runs.
-      if (next?.type === 'comment' && next.delimited === true && next.block === false && next.content === '') continue
+      if (next?.type === 'comment' && next.form === 'braced' && next.value === '') continue
       if (previous?.type === 'text' && next?.type === 'text') {
         out[out.length - 1] = { type: 'text', value: previous.value! + next.value! }
         continue
@@ -160,8 +160,8 @@ const terminateCodePayloads = (value: unknown): unknown => {
   if (!value || typeof value !== 'object') return value
   const node = value as Record<string, unknown>
   const mapped = Object.fromEntries(Object.entries(node).map(([key, child]) => [key, terminateCodePayloads(child)]))
-  if (node.type === 'code_block' && typeof node.content === 'string' && node.content !== '' && !node.content.endsWith('\n')) {
-    mapped.content = `${node.content}\n`
+  if (node.type === 'code_block' && typeof node.value === 'string' && node.value !== '' && !node.value.endsWith('\n')) {
+    mapped.value = `${node.value}\n`
   }
   return mapped
 }
@@ -422,7 +422,7 @@ describe('an imported code payload without a final break', () => {
       return out
     }
     const node = value as Record<string, unknown>
-    if (node.type === 'code_block') out.push(node.content)
+    if (node.type === 'code_block') out.push(node.value)
     for (const key of Object.keys(node)) contents(node[key], out)
     return out
   }
@@ -461,8 +461,8 @@ describe('an imported code payload without a final break', () => {
   it('the sweep above cannot see which exit is short, so these assertions carry it', () => {
     // Both arms normalize to the same tree, so `disagreement` reports nothing
     // either way. The clause-conforming pair is the second one.
-    const appended = { type: 'code_block', content: 'x\n' }
-    const kept = { type: 'code_block', content: 'x' }
+    const appended = { type: 'code_block', value: 'x\n' }
+    const kept = { type: 'code_block', value: 'x' }
     expect(terminateCodePayloads(appended)).toEqual(terminateCodePayloads(kept))
     expect(terminateCodePayloads(kept)).toEqual(appended)
   })

@@ -58,6 +58,13 @@ for (const [name, g] of Object.entries(golden)) {
 }
 
 describe('non-html renderer parity fixes', () => {
+  it('does not repeat a resolved image reference definition after a caption', () => {
+    const source = '![a][ok]\n^ cap\n\n[ok]: /p.png\n'
+    expect(carveToMarkdown(source)).toBe('![a](/p.png)\ncap\n')
+    expect(carveToPlainText(source)).toBe('a\ncap\n')
+    expect(carveToAnsi(source)).toBe('\x1b[35m[img:\x1b[0m a\x1b[35m]\x1b[0m\n\x1b[3m\x1b[2mcap\x1b[0m\n')
+  })
+
   it('renders a captioned quote through the generic figure path', () => {
     const src = '> q\n^ Attr'
 

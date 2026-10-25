@@ -53,13 +53,13 @@ describe("the generated wire-field map", () => {
   it("names every closed record the schema nests, not a hand-picked two", () => {
     // The control that was missing when `attrs` and `pos` were listed in the
     // generator by name: asserting the map held exactly those two PASSED while
-    // `table.rowGroups` was validated as `"object"` and nothing more, because
+    // a nested record was validated as `"object"` and nothing more, because
     // the assertion restated the hard-coded list rather than the schema.
     //
     // So this walks the schema for the shape instead: an object with named
     // properties and `additionalProperties: false`, written INLINE under a
     // property rather than as a typed node. `citation` is absent by design -
-    // `citation_group.items` is a NODE position, ruled on by
+    // `citation_group.children` is a NODE position, ruled on by
     // `NODE_POSITION_KIND`, and claiming it here too would be two producers of
     // one rule.
     const schema = JSON.parse(
@@ -90,17 +90,15 @@ describe("the generated wire-field map", () => {
     expect(inlineRecords.sort()).toEqual([
       "block_extension.payload",
       "code.cellWraps",
+      "inline_extension.payload",
       "math.cellWraps",
       "raw_inline.cellWraps",
-      "table.columns",
-      "table.rowGroups",
-      "table.rowGroups.bodies",
     ]);
     // Sorted, because the left side is: until `block_extension.payload` the
     // derived names all happened to fall after `rubyPair`, so the literal
     // order read as intentional when it was an accident of the schema.
     expect(Object.keys(WIRE_RECORD_FIELDS).sort()).toEqual(
-      ["attrs", "pos", "rubyPair", ...inlineRecords].sort(),
+      ["attrs", "pos", "extensionDeclaration", "resource", "taskState", ...inlineRecords].sort(),
     );
 
     // And every record is REACHABLE, which is what actually validates it: a

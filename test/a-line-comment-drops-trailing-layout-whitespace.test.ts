@@ -8,7 +8,7 @@ function commentContents(source: string): string[] {
       value.forEach(visit)
     } else if (value !== null && typeof value === 'object') {
       const node = value as Record<string, unknown>
-      if (node.type === 'comment') contents.push(node.content as string)
+      if (node.type === 'comment') contents.push(node.value as string)
       Object.values(node).forEach(visit)
     }
   }

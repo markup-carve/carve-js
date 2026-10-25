@@ -28,15 +28,15 @@ import { carveToAstJson, fromAstJson, parse, renderCarve, renderHtml, toAstJson 
 function payload(start: number): Record<string, unknown> {
   return {
     type: 'document',
+    astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
     srcByteLength: 0,
     children: [
       {
         type: 'list',
-        ordered: true,
-        tight: true,
-        delim: '.',
-        start,
-        items: [
+        marker: { kind: 'ordered', delimiter: '.', start },
+        spacing: 'tight',
+        children: [
           {
             type: 'list_item',
             children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }] }],
@@ -52,7 +52,7 @@ function republishedStart(start: number): unknown {
   const wire = toAstJson(fromAstJson(payload(start) as never)) as unknown as {
     children: Array<Record<string, unknown>>
   }
-  return wire.children[0]!['start']
+  return (wire.children[0]!['marker'] as Record<string, unknown>)['start']
 }
 
 describe('an ingested ordered-list start of 1', () => {
@@ -68,7 +68,7 @@ describe('an ingested ordered-list start of 1', () => {
       children: Array<Record<string, unknown>>
     }
 
-    expect(wire.children[0]).toMatchObject({ type: 'list', ordered: true, tight: true, delim: '.' })
+    expect(wire.children[0]).toMatchObject({ type: 'list', marker: { kind: 'ordered', delimiter: '.' }, spacing: 'tight' })
     expect(JSON.stringify(wire)).toContain('"value":"a"')
   })
 
@@ -87,14 +87,12 @@ describe('an ingested ordered-list start of 1', () => {
     // would leave an inner list publishing the default.
     const tree = payload(2)
     const item = (tree['children'] as Array<Record<string, unknown>>)[0]!
-    const inner = (item['items'] as Array<Record<string, unknown>>)[0]!
+    const inner = (item['children'] as Array<Record<string, unknown>>)[0]!
     ;(inner['children'] as unknown[]).push({
       type: 'list',
-      ordered: true,
-      tight: true,
-      delim: '.',
-      start: 1,
-      items: [
+      marker: { kind: 'ordered', delimiter: '.', start: 1 },
+      spacing: 'tight',
+      children: [
         {
           type: 'list_item',
           children: [{ type: 'paragraph', children: [{ type: 'text', value: 'b' }] }],

@@ -14,7 +14,7 @@ describe('a substitution', () => {
       type: 'paragraph',
       children: [
         {
-          type: 'substitution',
+          type: 'critic_substitution',
           old: [{ type: 'emphasis', children: [{ type: 'text', value: 'old' }] }],
           new: [{ type: 'strong', children: [{ type: 'text', value: 'new' }] }],
         },

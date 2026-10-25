@@ -13,7 +13,7 @@ interface Vector {
   canonical?: string
   remainingInlineDepth?: number
 }
-const vectors = JSON.parse(readFileSync(new URL('./fixtures/nested-braced-emphasis.json', import.meta.url), 'utf8')) as {
+const vectors = JSON.parse(readFileSync(new URL('../spec/resources/spec/nested-braced-emphasis-cases.json', import.meta.url), 'utf8')) as {
   cases: Vector[]; depthCases: Vector[]; hostCases: Vector[]
 }
 const semantic = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, item: unknown) =>

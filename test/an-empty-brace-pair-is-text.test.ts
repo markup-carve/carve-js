@@ -100,7 +100,7 @@ describe('a braced hyphen pair is an en dash', () => {
     const inlines = (carveToAstJson('a {--} b\n') as any).children[0].children
     expect(inlines[1].type).toBe('smart_punctuation')
     expect(inlines[1].kind).toBe('en_dash')
-    expect(inlines[1].value).toBe('{--}')
+    expect(inlines[1].source).toBe('{--}')
     expect(inlines[1].pos.startOffset).toBe(2)
     expect(inlines[1].pos.endOffset).toBe(6)
 

@@ -28,6 +28,10 @@ import { CANONICAL_BLOCK_TYPES, CANONICAL_INLINE_TYPES, Profile } from '../src/i
 
 const here = dirname(fileURLToPath(import.meta.url))
 const page = readFileSync(resolve(here, '../spec/docs/profiles.md'), 'utf8')
+const runtimeInline = (type: string) =>
+  type === 'xref' ? 'heading_ref' : type === 'critic_substitution' ? 'substitution' : type
+const wireInline = (type: string) =>
+  type === 'heading_ref' ? 'xref' : type === 'substitution' ? 'critic_substitution' : type
 
 /** The page's own list for one axis, as data. */
 function specVocabulary(axis: 'Block' | 'Inline'): string[] {
@@ -50,7 +54,7 @@ describe('the canonical vocabulary matches the spec page', () => {
   })
 
   it('names every inline type the spec lists, and no others', () => {
-    expect([...CANONICAL_INLINE_TYPES].sort()).toEqual(specVocabulary('Inline'))
+    expect([...CANONICAL_INLINE_TYPES].map(wireInline).sort()).toEqual(specVocabulary('Inline'))
   })
 })
 
@@ -60,7 +64,8 @@ describe('a deny reaches the string-only API for every spec-listed type', () => 
   // must not be told yes.
   for (const type of specVocabulary('Inline')) {
     it(`denyInline(['${type}']) makes isTypeAllowed('${type}') false`, () => {
-      expect(Profile.full().denyInline([type]).isTypeAllowed(type)).toBe(false)
+      const runtime = runtimeInline(type)
+      expect(Profile.full().denyInline([runtime]).isTypeAllowed(runtime)).toBe(false)
     })
   }
 

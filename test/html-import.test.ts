@@ -1345,7 +1345,10 @@ describe('table row groups on import', () => {
     const written = htmlToCarve(html)
     expect(written.report.diagnostics).toEqual([])
     expect(written.value).toContain('body-rows=1,1')
-    expect(toAstJson(parse(written.value)).children[0]).toMatchObject({ rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 } })
+    expect(toAstJson(parse(written.value)).children[0]).toMatchObject({ children: [
+      { type: 'table_body', children: [{ type: 'table_row' }] },
+      { type: 'table_body', children: [{ type: 'table_row' }] },
+    ] })
   })
 
   it.each([
@@ -1432,59 +1435,46 @@ describe('table row groups on import', () => {
   it('survives the wire in both directions', () => {
     const doc = htmlToAst('<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>').value
     const wire = toAstJson(doc)
-    expect((wire.children[0] as { rowGroups?: unknown }).rowGroups).toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 })
+    expect((wire.children[0] as { children?: unknown }).children).toMatchObject([
+      { type: 'table_head', children: [{ type: 'table_row' }] },
+      { type: 'table_body', children: [{ type: 'table_row' }] },
+      { type: 'table_foot', children: [{ type: 'table_row' }] },
+    ])
     expect((fromAstJson(JSON.parse(JSON.stringify(wire))).children[0] as { rowGroups?: unknown }).rowGroups)
       .toEqual((doc.children[0] as { rowGroups?: unknown }).rowGroups)
   })
 })
 
-describe('a row-group partition arriving from outside', () => {
-  const payload = (rowGroups: unknown) => ({
-    type: 'document',
-    srcByteLength: 0,
-    children: [
-      {
-        type: 'table',
-        rows: [
-          { type: 'table_row', cells: [{ type: 'table_cell', header: true, children: [{ type: 'text', value: 'h' }] }] },
-          { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value: 'b' }] }] },
-        ],
-        rowGroups,
-      },
-    ],
+describe('a table-body header boundary arriving from outside', () => {
+  const payload = (headRows: number, rows = 2) => ({
+    type: 'document', astVersion: '2.0', stages: [],
+    children: [{ type: 'table', columns: [], children: [{
+      type: 'table_body', headRows,
+      children: Array.from({ length: rows }, () => ({
+        type: 'table_row', children: [{ type: 'table_cell', header: false, children: [] }],
+      })),
+    }] }],
   })
 
-  it('is refused when the counts do not consume the rows', () => {
-    /*
-     * PART 12 section 15 makes it a MUST, and JSON SCHEMA CANNOT SAY SO: there
-     * is no way to relate one field's value to the length of another's, so
-     * `headRows: 5` on a two-row table validates cleanly. A green validator is
-     * not evidence, which is why this is checked here.
-     */
-    expect(() => fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never))
-      .toThrow(AstJsonPartitionError)
-    expect(() => fromAstJson(payload({ headRows: 0, bodies: [], footRows: 0 }) as never)).toThrow(AstJsonPartitionError)
-    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 }) as never))
-      .toThrow(AstJsonPartitionError)
+  it('refuses a boundary beyond the body rows', () => {
+    expect(() => fromAstJson(payload(3))).toThrow(AstJsonPartitionError)
   })
 
-  it('names both numbers, so the payload can be fixed', () => {
+  it('names the boundary and row count', () => {
     try {
-      fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)
-      expect.unreachable('the partition should have been refused')
+      fromAstJson(payload(3))
+      expect.unreachable('the boundary should have been refused')
     } catch (error) {
       expect(error).toBeInstanceOf(AstJsonPartitionError)
-      expect((error as AstJsonPartitionError).counted).toBe(6)
+      expect((error as AstJsonPartitionError).counted).toBe(3)
       expect((error as AstJsonPartitionError).rows).toBe(2)
-      expect((error as Error).message).toContain('account for 6 rows of 2')
     }
   })
 
-  it('CONTROL: a partition that does consume them is accepted', () => {
-    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
-    expect(() => fromAstJson(payload({ headRows: 0, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
-    // And a table with no grouping at all is not asked the question.
-    expect(() => fromAstJson(payload(undefined) as never)).not.toThrow()
+  it('accepts boundaries within the body', () => {
+    expect(() => fromAstJson(payload(0))).not.toThrow()
+    expect(() => fromAstJson(payload(1))).not.toThrow()
+    expect(() => fromAstJson(payload(2))).not.toThrow()
   })
 })
 

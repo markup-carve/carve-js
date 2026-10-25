@@ -59,10 +59,12 @@ describe('an ingested cross-reference keeps its text', () => {
   it('leaves a crossref unresolved when the payload published no id for it', () => {
     const doc = fromAstJson({
       type: 'document',
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       srcByteLength: 0,
       children: [
         { type: 'heading', level: 1, children: [{ type: 'text', value: 'Title Here' }] },
-        { type: 'paragraph', children: [{ type: 'heading_ref', target: 'title-here' }] },
+        { type: 'paragraph', children: [{ type: 'xref', key: 'title-here', namespace: 'heading' }] },
       ],
     } as never)
     expect(renderHtml(doc)).toContain('&lt;/#title-here&gt;')

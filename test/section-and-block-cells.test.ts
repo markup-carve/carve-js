@@ -21,18 +21,31 @@ const payload = () => ({
     ],
   }],
 })
+const ingest = (document: unknown) => fromAstJson(toAstJson(document as never))
+const cellIn = (node: unknown): Record<string, unknown> => {
+  if (node && typeof node === 'object') {
+    const record = node as Record<string, unknown>
+    if (record.type === 'table_cell') return record
+    for (const value of Object.values(record)) {
+      if (value && typeof value === 'object') {
+        try { return cellIn(value) } catch { /* keep looking */ }
+      }
+    }
+  }
+  throw new Error('missing table cell')
+}
 
 describe('interchange sections and block-content cells', () => {
   it('preserves both shapes through AST JSON', () => {
     const tree = payload()
-    expect(toAstJson(fromAstJson(tree as never))).toEqual(tree)
+    expect(toAstJson(ingest(tree))).toEqual(toAstJson(tree as never))
     const changed = payload()
     changed.children[0].children[1].rows![0].cells[0].blocks[1].children[0].value = 'Third'
     expect(diffAst(tree as never, changed as never).some((change) => JSON.stringify(change).includes('blocks'))).toBe(true)
   })
 
   it('renders nested structure on HTML and keeps its content on other targets', () => {
-    const doc = fromAstJson(payload() as never)
+    const doc = ingest(payload())
     const html = renderHtml(doc)
     expect(html).toContain('<section id="s">')
     expect(html).toContain('<td><p>First</p>\n<p>Second</p></td>')
@@ -43,10 +56,10 @@ describe('interchange sections and block-content cells', () => {
   })
 
   it('reports source structures Carve cannot spell on the diagnostics channel, not as render losses', () => {
-    const report = renderCarveWithReport(fromAstJson(payload() as never))
+    const report = renderCarveWithReport(ingest(payload()))
     expect(report.value).toContain('First Second')
     expect(report.losses).toEqual([])
-    const { report: diagnostics } = renderCarveWithConversionReport(fromAstJson(payload() as never))
+    const { report: diagnostics } = renderCarveWithConversionReport(ingest(payload()))
     expect(diagnostics.diagnostics.map((entry) => [entry.code, entry.node, entry.field])).toEqual([
       ['structure-unspellable', 'section', undefined],
       ['field-unspellable', 'table_cell', 'blocks'],
@@ -54,13 +67,13 @@ describe('interchange sections and block-content cells', () => {
   })
 
   it('lets profiles deny sections and visit blocks inside cells', () => {
-    const doc = fromAstJson(payload() as never)
+    const doc = ingest(payload())
     expect(() => applyProfile(structuredClone(doc), Profile.full().denyBlock(['section']).onDisallowed('error'))).toThrow(/section/)
     expect(() => applyProfile(structuredClone(doc), Profile.full().denyBlock(['paragraph']).onDisallowed('error'))).toThrow(/paragraph/)
   })
 
   it('resolves headings and references inside block cells', () => {
-    const doc = fromAstJson({
+    const doc = ingest({
       type: 'document', srcByteLength: 0, children: [
         { type: 'table', rows: [{ type: 'table_row', cells: [{
           type: 'table_cell', header: false, blocks: [
@@ -76,7 +89,7 @@ describe('interchange sections and block-content cells', () => {
   })
 
   it('omits raw HTML when Markdown flattens block cells', () => {
-    const doc = fromAstJson({
+    const doc = ingest({
       type: 'document', srcByteLength: 0, children: [{
         type: 'table', rows: [{ type: 'table_row', cells: [{
           type: 'table_cell', header: false, blocks: [
@@ -158,27 +171,25 @@ describe('interchange sections and block-content cells', () => {
     expect(doc.footnoteDefs.image[0]?.type).toBe('paragraph')
   })
 
-  it.each([
-    { children: [], blocks: [] },
-    {},
-    { blocks: 'text' },
-  ])('rejects a cell without exactly one content array: %j', (content) => {
-    const tree = payload() as Record<string, any>
-    Object.assign(tree.children[0].children[1].rows![0].cells[0], content)
-    if (!('blocks' in content)) delete tree.children[0].children[1].rows![0].cells[0].blocks
-    expect(() => fromAstJson(tree as never)).toThrow(AstJsonSchemaError)
+  it.each(['missing', 'string', 'inline child'])('rejects an invalid cell content array: %s', (shape) => {
+    const tree = toAstJson(payload() as never)
+    const cell = cellIn(tree)
+    if (shape === 'missing') delete cell.children
+    if (shape === 'string') cell.children = 'text'
+    if (shape === 'inline child') cell.children = [{ type: 'text', value: 'x' }]
+    expect(() => fromAstJson(tree)).toThrow(AstJsonSchemaError)
   })
 
   it.each([0, 7, 1.5])('rejects section level %s', (level) => {
-    const tree = payload()
-    tree.children[0].level = level
+    const tree = toAstJson(payload() as never)
+    ;(tree.children[0] as unknown as { level: number }).level = level
     expect(() => fromAstJson(tree as never)).toThrow(AstJsonSchemaError)
   })
 
   it('bounds deeply nested sections at ingest and render', () => {
     let nested: Record<string, unknown> = { type: 'paragraph', children: [] }
     for (let i = 0; i < 1000; i++) nested = { type: 'section', children: [nested] }
-    const tree = { type: 'document', srcByteLength: 0, children: [nested] }
+    const tree = { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [nested] }
     expect(() => fromAstJson(tree as never)).toThrow()
     expect(() => renderHtml({ type: 'document', children: [nested] } as never)).toThrow()
   })

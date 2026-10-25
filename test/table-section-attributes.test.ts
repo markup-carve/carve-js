@@ -17,7 +17,7 @@ const document = (headRows = 1, footRows = 1) => ({ type: 'document', srcByteLen
 
 describe('table section attributes', () => {
   it('preserves attributes in AST exchange and places them on HTML sections', () => {
-    const wire = document()
+    const wire = toAstJson(document() as never)
     const ast = fromAstJson(wire)
     expect(toAstJson(ast)).toEqual(wire)
     const html = renderHtml(ast)
@@ -29,29 +29,29 @@ describe('table section attributes', () => {
     expect(report.diagnostics.map(d => d.field)).toEqual(expect.arrayContaining(['rowGroups.headAttrs', 'rowGroups.footAttrs', 'rowGroups.bodies[0].attrs']))
   })
   it('renders attributed empty head and foot sections', () => {
-    const html = renderHtml(fromAstJson(document(0, 0)))
+    const html = renderHtml(fromAstJson(toAstJson(document(0, 0) as never)))
     expect(html).toContain('<thead id="head" title="&quot;&amp;">\n  </thead>')
     expect(html).toContain('<tfoot class="foot">\n  </tfoot>')
   })
   it('rejects malformed section attributes', () => {
-    const wire = document()
-    ;(wire.children[0].rowGroups as any).headAttrs = { classes: 7 }
+    const wire = toAstJson(document() as never) as any
+    wire.children[0].children[0].attrs = { classes: 7 }
     expect(() => fromAstJson(wire)).toThrow()
   })
   it('diagnoses each dropped attributes field and names no render loss on text targets', () => {
     for (const render of [renderCarve, renderPlainText, renderMarkdown, renderAnsi]) {
       const losses: any[] = []
-      render(fromAstJson(document()), { onRenderLoss: loss => losses.push(loss) })
+      render(fromAstJson(toAstJson(document() as never)), { onRenderLoss: loss => losses.push(loss) })
       expect(losses).toEqual([])
-      const { report } = renderCarveWithConversionReport(fromAstJson(document()), render as never)
+      const { report } = renderCarveWithConversionReport(fromAstJson(toAstJson(document() as never)), render as never)
       expect(report.diagnostics.filter(d => d.code === 'field-unspellable').map(d => d.field)).toEqual([
         'rowGroups.headAttrs', 'rowGroups.footAttrs', 'rowGroups.bodies[0].attrs',
       ])
     }
   })
   it('keeps section attributes when a span meets a boundary without mutating the AST', () => {
-    const wire = document()
-    ;(wire.children[0].rows[1].cells[0] as any).span = 'rowspan'
+    const wire = toAstJson(document() as never) as any
+    wire.children[0].children[1].children[0].children[0].span = 'rowspan'
     const ast = fromAstJson(wire)
     const before = toAstJson(ast)
     const html = renderHtml(ast)

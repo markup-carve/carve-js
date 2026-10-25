@@ -39,11 +39,11 @@ describe('a lone surrogate', () => {
   })
 
   it('keeps positions on the original offsets', () => {
-    // One code unit for one, so the span after it is unmoved.
+    // Wire offsets count UTF-8 bytes after the ingest replacement.
     const source = 'a\uD800b *x*'
     const doc = carveToAstJson(source) as any
     const strong = doc.children[0].children.at(-1)
-    expect(source.slice(strong.pos.startOffset, strong.pos.endOffset)).toBe('*x*')
+    expect(Buffer.from(replaceLoneSurrogates(source)).subarray(strong.pos.startOffset, strong.pos.endOffset).toString()).toBe('*x*')
   })
 })
 

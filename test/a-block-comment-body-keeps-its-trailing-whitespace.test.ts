@@ -8,8 +8,8 @@ function blockCommentContents(source: string): string[] {
       value.forEach(visit);
     } else if (value !== null && typeof value === "object") {
       const node = value as Record<string, unknown>;
-      if (node.type === "comment" && node.block === true)
-        contents.push(node.content as string);
+      if (node.type === "comment" && node.form === "block")
+        contents.push(node.value as string);
       Object.values(node).forEach(visit);
     }
   }

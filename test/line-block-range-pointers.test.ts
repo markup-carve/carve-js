@@ -6,6 +6,8 @@ import { NODE_POSITION_KIND } from '../src/ast/wire-fields.js'
 
 const payload = (lines: unknown) => ({
   type: 'document',
+  astVersion: '2.0',
+  stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
   srcByteLength: 0,
   children: [{
     type: 'line_block',

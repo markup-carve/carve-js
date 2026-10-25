@@ -155,9 +155,9 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // guard's point survives: the run's own span is what carve-js#1145 moved,
     // and it is asserted above; the term's end comes from §4, not from the run.
     const list = toAstJson(parse(TICKET)).children[0] as unknown as {
-      items: Array<{ type: string; pos?: { startOffset: number; endOffset: number } }>
+      children: Array<{ type: string; pos?: { startOffset: number; endOffset: number } }>
     }
-    const term = list.items.find((item) => item.type === 'definition_term')
+    const term = list.children.find((item) => item.type === 'definition_term')
 
     expect(term?.pos && TICKET.slice(term.pos.startOffset, term.pos.endOffset)).toBe(':: `a\nb')
   })

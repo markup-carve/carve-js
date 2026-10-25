@@ -8,8 +8,10 @@ import type { Document } from '../src/ast.js'
 
 it.each(vectors)('retains literal raw payload: $id', ({raw, codeContent, rawPassthrough}) => {
   const doc = {type: 'document', srcByteLength: 0, children: [raw]} as Document
-  const back = fromAstJson(toAstJson(doc))
-  expect(toAstJson(back).children).toEqual([raw])
+  const published = toAstJson(doc)
+  const back = fromAstJson(published)
+  expect(toAstJson(back).children).toEqual(published.children)
+  expect(published.children[0]).toMatchObject({type: 'raw_block', value: raw.content})
   const code = {...doc, children: [{type: 'code_block', lang: 'html', content: codeContent}]} as Document
   expect(renderHtml(back, {allowRawHtml: false})).toBe(renderHtml(code))
   expect(renderHtml(back)).toBe(rawPassthrough)

@@ -126,6 +126,9 @@ function identityHint(value: unknown): string | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const node = value as Record<string, unknown>
   if (typeof node['type'] !== 'string') return undefined
+  if (typeof node['key'] === 'string' && typeof node['namespace'] === 'string') {
+    return `${node['type']}:key:${node['namespace']}:${node['key']}`
+  }
   for (const field of ['label', 'ref', 'name'] as const) {
     if (typeof node[field] === 'string') return `${node['type']}:${field}:${node[field]}`
   }

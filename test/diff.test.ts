@@ -119,12 +119,12 @@ describe('reporting', () => {
   })
 })
 
-it('reports short-caption edits at their text child path', () => {
-  const tree = (value: string) => ({ type: 'document', srcByteLength: 0, children: [
-    { type: 'table', rows: [], shortCaption: [{ type: 'text', value }] },
-  ] }) as Parameters<typeof diffAst>[0]
+it('reports short-caption edits inside a caption node', () => {
+  const tree = (value: string) => ({ type: 'document', astVersion: '2.0', srcByteLength: 0, children: [
+    { type: 'table', children: [], caption: { type: 'caption', children: [], short: [{ type: 'text', value }] } },
+  ] }) as unknown as Parameters<typeof diffAst>[0]
   expect(diffAst(tree('before'), tree('after'))).toMatchObject([
-    { kind: 'changed', type: 'text', path: '/children[0]/shortCaption[0]' },
+    { kind: 'changed', type: 'text', path: '/children[0]/caption[0]/short[0]' },
   ])
 })
 
@@ -142,13 +142,13 @@ describe('a default marker reads back in the report', () => {
   const detail = (before: string, after: string) => diff(before, after).map((c) => c.detail)
 
   it('names both characters when the default is on the left', () => {
-    expect(detail('1. a\n', '1) a\n')).toEqual(['delim: "." -> ")"'])
-    expect(detail('- a\n', '* a\n')).toEqual(['bulletChar: "-" -> "*"'])
+    expect(detail('1. a\n', '1) a\n')).toEqual(['marker: {"kind":"ordered"} -> {"kind":"ordered","delimiter":")"}'])
+    expect(detail('- a\n', '* a\n')).toEqual(['marker: {"kind":"bullet","char":"-"} -> {"kind":"bullet","char":"*"}'])
   })
 
   it('names both characters when the default is on the right', () => {
-    expect(detail('1) a\n', '1. a\n')).toEqual(['delim: ")" -> "."'])
-    expect(detail('* a\n', '- a\n')).toEqual(['bulletChar: "*" -> "-"'])
+    expect(detail('1) a\n', '1. a\n')).toEqual(['marker: {"kind":"ordered","delimiter":")"} -> {"kind":"ordered"}'])
+    expect(detail('* a\n', '- a\n')).toEqual(['marker: {"kind":"bullet","char":"*"} -> {"kind":"bullet","char":"-"}'])
   })
 
   it('reports nothing for a field neither document spells', () => {

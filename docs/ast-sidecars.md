@@ -2,6 +2,12 @@
 
 Sidecars sit beside the canonical AST JSON. They are not part of the document tree. Pass the same tree to each reader so it can check node paths and references.
 
+AST JSON uses contract 2.0. `toAstJson` writes `astVersion: "2.0"` on the
+document root. Source offsets and annotation ranges count UTF-8 bytes; source
+columns count codepoints. `fromAstJson` raises `AstJsonMigrationError` for a
+contract 1.2 tree, including an unversioned tree in the old shape. Extension
+declarations in an envelope contain `name`, `version`, and `required`.
+
 ```ts
 const ast = toAstJson(parse(source))
 const identity = toNodeIdentity(ast, 'editing-session-1')
@@ -17,11 +23,11 @@ const parsed = parseWithProvenance(source, 'file:///doc.crv')
 
 `renderCarveWithConversionReport(ast)` returns `{ value, report }`. `value` is absent if the writer refuses an unspellable structure. The report names fields or structures that Carve source cannot spell. Pass writer options as the second argument and a stored-diagnostic limit as the third. `totalDiagnostics` still counts every diagnostic.
 
-The canonical writer emits pipe tables. It adds `header-rows` and `footer-rows` attributes to preserve a leading head, one body without intermediate headers, and a footer. These attributes also preserve an explicit single body with no head or foot. Multiple bodies and body-level row headers still receive `field-unspellable` for `rowGroups`. Section attributes receive separate diagnostics.
+The canonical writer emits pipe tables. It adds `header-rows` and `footer-rows` attributes to preserve a leading head, one body without intermediate headers, and a footer. These attributes also preserve an explicit single body with no head or foot. Multiple bodies and body-level row headers still receive `field-unspellable` for `table.children`. Section attributes receive separate diagnostics.
 
-Column alignment, vertical alignment, and fractional widths reparse as `columns` through their source attributes. Decimal widths retain their precision through percentage conversion. The writer keeps authored attributes; when they conflict with a partition or columns, the report names the affected `rowGroups` or `columns` field. Generated source attributes are a spelling change. AST JSON exchange and HTML rendering preserve the original metadata.
+Column alignment, vertical alignment, and fractional widths reparse as `columns` through their source attributes. Decimal widths retain their precision through percentage conversion. The writer keeps authored attributes; when they conflict with a partition or columns, the report names the affected table group or `columns` field. Generated source attributes are a spelling change. AST JSON exchange and HTML rendering preserve the original metadata.
 
-The two reports never overlap. `renderCarveWithReport` answers what the selected renderer dropped. Its codes include `raw-format-dropped`, `ruby-flattened`, `editorial-comment-flattened`, `destination-denied`, `carrier-attribute-dropped`, `list-style-dropped`, `list-delimiter-changed`, `list-tightness-lost`, the table loss codes, and Markdown's `markdown-container-flattened`, `markdown-caption-flattened`, `markdown-attributes-dropped`, and `raw-html-escaped` (PART 11 §1d). A dropped field or an interchange-only structure belongs to the conversion report: table section attributes (`rowGroups.headAttrs`, `rowGroups.footAttrs`, `rowGroups.bodies[N].attrs`), `table_cell.blocks`, `math.label`, `math.number`, and `section`. `--strict-losses` and `--allow-loss` apply only to render losses.
+The two reports never overlap. `renderCarveWithReport` answers what the selected renderer dropped. Its codes include `raw-format-dropped`, `ruby-flattened`, `editorial-comment-flattened`, `destination-denied`, `carrier-attribute-dropped`, `list-style-dropped`, `list-delimiter-changed`, `list-tightness-lost`, the table loss codes, and Markdown's `markdown-container-flattened`, `markdown-caption-flattened`, `markdown-attributes-dropped`, and `raw-html-escaped` (PART 11 §1d). A dropped field or an interchange-only structure belongs to the conversion report: table group attributes (`table_head.attrs`, `table_body.attrs`, `table_foot.attrs`), block content in `table_cell.children`, `math.numberPrefix`, `math.number`, and `section`. `--strict-losses` and `--allow-loss` apply only to render losses.
 
 A nested tight item whose blocks cannot be written tight without an indented `+` is written loose and reports `list-tightness-lost`.
 
