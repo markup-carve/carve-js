@@ -470,6 +470,29 @@ function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number,
   return base
 }
 
+function shiftedClosedListColon(cursor: Cursor, base: number):
+  { prefix: number; count: number } | undefined {
+  const line = cursor.peek()?.text
+  if (!line?.startsWith(' '.repeat(base))) return undefined
+  let prefix = base
+  while (line[prefix] === ' ') prefix++
+  if (prefix === base) return undefined
+  const opener = COLON_OPEN.exec(line.slice(prefix))
+  if (!opener) return undefined
+  const closer = new RegExp(`^:{${opener[1]!.length}}[ \\t]*$`)
+  for (let count = 1; cursor.peek(count); count++) {
+    const follower = cursor.peek(count)!.text
+    if (!follower.startsWith(' '.repeat(prefix))) return undefined
+    if (closer.test(follower.slice(prefix))) return { prefix, count: count + 1 }
+  }
+  return undefined
+}
+
+function listGapBlockText(cursor: Cursor, next: SourceLine, base: number): string {
+  const shiftedColon = shiftedClosedListColon(cursor, base)
+  return next.text.slice(shiftedColon?.prefix ?? listContinuationPrefix(next.text, base))
+}
+
 function pipeSegments(line: SourceLine): Array<{ text: string; from: number; to: number }> {
   if (!line.text.startsWith('|') || !line.text.endsWith('|')) throw new UnsupportedCursorSyntax('table edge')
   if (line.text.includes('\\|')) throw new UnsupportedCursorSyntax('escaped table pipe')
@@ -1890,7 +1913,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           next.text.startsWith(' '.repeat(continuationFrame.contentColumn - 1 + firstNested.width))
         const prefixLength = continuationFrame.contentColumn! - 1
         let lookahead = 0
-        let blockText = next.text.slice(listContinuationPrefix(next.text, prefixLength))
+        let blockText = listGapBlockText(cursor, next, prefixLength)
         while (parseBlockAttributeRun(blockText.trimStart())) {
           lookahead++
           const following = cursor.peek(lookahead)
@@ -1962,6 +1985,17 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
     if (nestedDefinition) {
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
+      continue
+    }
+    const shiftedColon = stack.length === 1 && !top.fenceMarker &&
+      !beginsOpenQuotedParagraph(top.body) ?
+      shiftedClosedListColon(cursor, prefix.length) : undefined
+    if (shiftedColon) {
+      for (let count = 0; count < shiftedColon.count; count++) {
+        const owned = cursor.take()
+        appendBody(top, owned, shiftedColon.prefix)
+        updateListFrameEnds(stack, owned, listSpan)
+      }
       continue
     }
     let bodyPrefix = prefix.length
@@ -2434,7 +2468,7 @@ function takeBlockAttrsAtCursor(cursor: Cursor, atDocumentLevel: boolean): Attrs
   return wrapped.attrs
 }
 
-function simpleClosedListColon(cursor: Cursor, run: string): boolean {
+function simpleClosedListColon(cursor: Cursor, run: string, kind: string | undefined): boolean {
   if (cursor.owner.kind !== 'list') return false
   const body = cursor.peek(1)?.text
   const close = cursor.peek(2)?.text
@@ -2445,7 +2479,8 @@ function simpleClosedListColon(cursor: Cursor, run: string): boolean {
   const closer = new RegExp(`^:{${run.length}}[ \\t]*$`)
   if (body !== undefined && closer.test(body) &&
       (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) return true
-  if (body !== undefined && plainQuoteText(body) && close !== undefined &&
+  if (body !== undefined && (plainQuoteText(body) || kind === 'html' && body[0] === '<') &&
+      close !== undefined &&
       closer.test(close) && (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))) return true
   if (!listMarker(body ?? '')) return false
   for (let offset = 1; cursor.peek(offset); offset++) {
@@ -2654,7 +2689,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
     if (colon) {
       if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
-          !simpleClosedListColon(cursor, colon[1]!)) ||
+          !simpleClosedListColon(cursor, colon[1]!, colon[2])) ||
           colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }

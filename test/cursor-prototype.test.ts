@@ -416,6 +416,19 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- : d\n    ::: html\n    <b>x</b>\n    :::',
+    '- : d\n\n    ::: html\n    <b>x</b>\n    :::',
+    '- one\n   ::: note\n   b\n   :::',
+  ])('assigns a shifted closed colon block to its list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a shifted colon body with a reference until definitions share its owner', () => {
+    expect(() => parseCursorPrototype('- a\n  ::: note\n   [r]: /url\n  :::\n\n[r][]'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
