@@ -1085,7 +1085,9 @@ function mayFoldMarkerLineNestedFollower(cursor: Cursor,
   const first = frame.body[0]!
   const marker = listMarker(first.text)
   const follower = cursor.peek()!
-  return marker !== undefined && first.number === cursor.peek()!.number - 1 &&
+  if (first.number !== follower.number - 1) return false
+  if (first.text === '> +' && RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1)) return true
+  return marker !== undefined &&
     (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
       (marker.content === '+' || /^\[[ xX_>?-]\] \+$/.test(marker.content)) &&
       RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1))
@@ -1482,10 +1484,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
 
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
-  if (first.text === '> +' && depth === 0) {
+  const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
+  if (first.text === '> +' && (depth === 0 || markerLineNested)) {
     const follower = cursor.peek(1)
     const after = cursor.peek(2)
-    if (follower && plainQuoteText(follower.text) &&
+    if (follower && (plainQuoteText(follower.text) ||
+        markerLineNested && RE_BLOCKQUOTE.test(follower.text)) &&
         (!after || isBlankLine(after.text))) {
       cursor.take()
       cursor.take()

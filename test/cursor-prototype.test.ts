@@ -1129,6 +1129,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > +\n> q\n', '- a\n  > +\n  q\n'])
+  ('attaches a list-owned quote first-block marker to its next line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
