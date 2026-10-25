@@ -1429,4 +1429,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['-{#k} {#h}\n # h\n', '1.{#k} {#h}\n  # h\n',
+    '-{#k} [x] {#h}\n # h\n', '- {.k}\ntail\n'])
+  ('keeps an empty list item span at its marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

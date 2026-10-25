@@ -1432,6 +1432,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence),
         cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
+    if (frame.item.children.length === 0 && frame.itemFirst) {
+      const marker = listMarker(frame.itemFirst.text)
+      if (marker) {
+        frame.last = { ...frame.itemFirst,
+          spanEndColumn: 'continuationWidth' in marker ? marker.continuationWidth : marker.width + 1 }
+        frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+      }
+    }
     const placedEndLine = frame.item.children.at(-1)?.pos?.endLine
     if (placedEndLine && placedEndLine < frame.last.number && frame.itemFirst) {
       const placed = cursor.physicalLines[placedEndLine - 1]
@@ -1603,7 +1611,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
       const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
-      const spanLine = refusedFirstBlock ? { ...line, spanEndColumn: marker.width + 1 } : line
+      const emptyAttributedItem = 'attrs' in marker && current.body.length === 0
+      const spanLine = refusedFirstBlock || emptyAttributedItem ?
+        { ...line, spanEndColumn: 'continuationWidth' in marker ? marker.continuationWidth : marker.width + 1 } : line
       if (refusedFirstBlock) current.body = []
       const attachedLast = attachFirstBlock(current, item, line, firstBlock)
       updateListFrameEnds(stack, attachedLast ?? spanLine, listSpan)
