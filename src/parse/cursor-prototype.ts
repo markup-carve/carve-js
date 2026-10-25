@@ -1223,7 +1223,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
     fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
-    blankBeforeInvisible: boolean; lazyRootParagraph: boolean }
+    blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
+    retainedBelowColumnComment: boolean }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
@@ -1249,7 +1250,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
       fencePrefix: undefined, body: [], blankBeforeInvisible: false,
-      lazyRootParagraph: false }
+      lazyRootParagraph: false, retainedBelowColumnComment: false }
   }
   const stack = [newFrame(first, firstMarker)]
   const reachedFrame = (text: string, excludeTop = false): Frame | undefined => {
@@ -1295,6 +1296,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       inline, definitionNodes, depth + 1, false))
     frame.body = []
     frame.lazyRootParagraph = false
+    frame.retainedBelowColumnComment = false
   }
   const mixedNestedHost = (marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
     let host = stack.at(-1)!
@@ -1434,6 +1436,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
       current.lazyRootParagraph = false
+      current.retainedBelowColumnComment = false
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       appendBody(current, line, marker.width + taskWidth)
@@ -1446,6 +1449,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (line.text === '') {
+      top.retainedBelowColumnComment = false
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
       const next = cursor.peek(blanks)!
@@ -1504,6 +1508,24 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
+    if (depth === 0 && stack.length === 1 && top.indent === 0 &&
+        !line.text.startsWith(prefix) && top.body.at(-1)?.number === line.number - 1) {
+      if (LINE_COMMENT.test(line.text) && !RE_COMMENT_BLOCK_ANY.test(line.text) &&
+          (top.retainedBelowColumnComment || plainQuoteText(top.body.at(-1)!.text))) {
+        cursor.take()
+        appendBody(top, line, 0)
+        top.retainedBelowColumnComment = true
+        updateListFrameEnds(stack, line, listSpan)
+        continue
+      }
+      if (top.retainedBelowColumnComment && plainQuoteText(line.text)) {
+        cursor.take()
+        appendBody(top, line, 0, true)
+        top.retainedBelowColumnComment = false
+        updateListFrameEnds(stack, line, listSpan)
+        continue
+      }
+    }
     if (mayFoldListParagraph(cursor, top, stack.length, depth)) {
       cursor.take()
       appendBody(top, line, 0, true)
@@ -1547,6 +1569,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     cursor.take()
     appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
       listContinuationPrefix(line.text, bodyPrefix) : bodyPrefix)
+    top.retainedBelowColumnComment = false
     updateListFrameEnds(stack, line, listSpan)
   }
   for (let i = stack.length - 1; i >= 0; i--) {
