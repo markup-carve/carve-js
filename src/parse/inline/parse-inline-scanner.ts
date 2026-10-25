@@ -174,6 +174,21 @@ function ordinaryAt(text: string, i: number): boolean {
     (code === 46 && text[i - 1] !== '.' && text[i + 1] !== '.')
 }
 
+function ordinaryLines(session: InlineScannerSession, text: string, source: InlineSource): InlineNode[] {
+  const out: InlineNode[] = []
+  let from = 0
+  for (let at = 0; at < text.length; at++) {
+    if (text.charCodeAt(at) !== 10) continue
+    if (at > from) out.push(session.withPos({ type: 'text', value: text.slice(from, at) } as Text,
+      source, text, from, at))
+    out.push(session.withPos({ type: 'soft_break' }, source, text, at, at + 1))
+    from = at + 1
+  }
+  if (from < text.length) out.push(session.withPos({ type: 'text', value: text.slice(from) } as Text,
+    source, text, from, text.length))
+  return out
+}
+
 // The `}` / `"'` stop tables the attribute-validity probes read, built on first use.
 function attributeStops(text: string): { quoteEnd: (start: number) => number; valueEnd: (start: number) => number } {
   let valueStops: Int32Array | undefined
@@ -1123,6 +1138,11 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     if (!source.cellWraps && session.activeMatchers.length === 0 && !text.includes('..') &&
         /^[A-Za-z0-9 \t),;.?\u0080-\uFFFF]+$/.test(text)) {
       return [session.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
+    }
+    if (!source.cellWraps && session.activeMatchers.length === 0 && text.includes('\n') &&
+        !text.includes('..') && !/[ \t]\n/.test(text) &&
+        /^[A-Za-z0-9 \t),;.?\n\u0080-\uFFFF]+$/.test(text)) {
+      return ordinaryLines(session, text, source)
     }
     const s = createInlineScan(session, text, source, inFootnote, captionContext, atHostRunStart)
     while (s.i < text.length) {
