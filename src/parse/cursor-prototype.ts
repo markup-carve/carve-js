@@ -897,6 +897,21 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
     text.startsWith(' '.repeat(contentColumn - 1))
 }
 
+function nestedPlusFollower(cursor: Cursor,
+  frame: { indent: number; item?: ListItem; fenceMarker: string | undefined },
+  stackLength: number): SourceLine | undefined {
+  if (stackLength < 2 || !frame.item || frame.fenceMarker) return undefined
+  const line = cursor.peek()!
+  if (line.text.length !== frame.indent + 1 || line.text.at(-1) !== '+' ||
+      line.text !== `${' '.repeat(frame.indent)}+`) return undefined
+  const follower = cursor.peek(1)
+  if (!follower || !follower.text.startsWith(' '.repeat(frame.indent))) return undefined
+  const content = follower.text.slice(frame.indent)
+  if (!RE_BLOCKQUOTE.test(content) && !plainQuoteText(content)) return undefined
+  const after = cursor.peek(2)
+  return !after || isBlankLine(after.text) ? follower : undefined
+}
+
 function isTaskMarkerContent(content: string, ordered: boolean): boolean {
   return !ordered && /^\[([ xX_>?-])\] /.test(content)
 }
@@ -919,6 +934,13 @@ function sameListKind(marker: NonNullable<ReturnType<typeof listMarker>>,
 function endsListBlankRun(blanks: number, next: SourceLine | undefined, rootIndent: number): boolean {
   const marker = next ? listMarker(next.text) : undefined
   return next === undefined || (blanks >= 3 && marker !== undefined && marker.indent <= rootIndent)
+}
+
+function isFenceBlankContinuation(frame: { fenceMarker: string | undefined; contentColumn?: number },
+  next: SourceLine | undefined): boolean {
+  return frame.fenceMarker !== undefined && next !== undefined &&
+    frame.contentColumn !== undefined &&
+    next.text.startsWith(' '.repeat(frame.contentColumn - 1))
 }
 
 function startsNestedListAfterLongBlankRun(blanks: number,
@@ -1119,6 +1141,15 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
     rejectBelowColumnMarkerAfterComment(marker, top)
+    const nestedPlus = nestedPlusFollower(cursor, top, stack.length)
+    if (nestedPlus) {
+      cursor.take()
+      flush(top)
+      cursor.take()
+      appendBody(top, nestedPlus, top.indent)
+      updateListFrameEnds(stack, nestedPlus, listSpan)
+      continue
+    }
     if (line.text === '+' && top.item) {
       if (depth !== 0 || top.indent !== 0 || top.fenceMarker) {
         throw new UnsupportedCursorSyntax('nested list continuation')
@@ -1217,8 +1248,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
       const next = cursor.peek(blanks)!
-      if (top.fenceMarker && next && top.contentColumn !== undefined &&
-          next.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+      if (isFenceBlankContinuation(top, next)) {
         for (let i = 0; i < blanks; i++) appendBody(top, cursor.take(), 0)
         continue
       }

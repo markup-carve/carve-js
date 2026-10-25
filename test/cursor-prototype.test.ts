@@ -1103,6 +1103,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  - b\n  +\n  > q\n', '- foo\n  - [ ] task\n  +\n  > q\n',
+    '- a\n  - b\n  +\n  para\n'])
+  ('attaches a block after a nested item continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
     '> [a]: /x\n\nSee [t][a].\n'])
   ('indexes a simple root quote reference definition: %s', (source) => {
