@@ -1451,6 +1451,13 @@ function isFenceBlankContinuation(cursor: Cursor, frame: ListCursorFrame, next: 
     next.text.startsWith(' '.repeat(frame.contentColumn - 1))
 }
 
+function isListContinuationMarker(cursor: Cursor, line: SourceLine, frame: ListCursorFrame): boolean {
+  if (!frame.item) return false
+  if (line.text === '+' || line.text === `${' '.repeat(frame.indent)}+`) return true
+  return line.text === '+ ' && plainQuoteText(cursor.peek(1)?.text ?? '') &&
+    (!cursor.peek(2) || cursor.peek(2)!.text === '')
+}
+
 function startsNestedListAfterLongBlankRun(blanks: number,
   marker: ReturnType<typeof listMarker>, rootIndent: number): boolean {
   return blanks >= 3 && marker !== undefined && marker.indent > rootIndent
@@ -1943,7 +1950,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       continue
     }
-    if ((line.text === '+' || line.text === `${' '.repeat(top.indent)}+`) && top.item) {
+    if (isListContinuationMarker(cursor, line, top)) {
       const attached = listContinuationFollower(cursor, top.indent,
         top.fenceMarker, depth)
       cursor.take()

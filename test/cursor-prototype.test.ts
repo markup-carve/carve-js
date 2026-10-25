@@ -1061,8 +1061,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- a\n+\nc\n- b\n', '1. a\n+\nc\n2. b\n'])
+  it.each(['- a\n+\nc\n- b\n', '1. a\n+\nc\n2. b\n',
+    '- a\n+ \nb\n\nx\n', '- a\n+ \nb\n'])
   ('attaches a single paragraph after a root list continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a trailing-space continuation marker literal before a list marker', () => {
+    const source = '- a\n+ \n- b\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
