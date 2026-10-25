@@ -8,7 +8,7 @@ import { readAttributes } from './djot-word-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
 
 export type DjotImportLoss = {
-  code: 'structure-unspellable'
+  code: 'structure-unspellable' | 'djot-attribute-dropped'
   message: string
   line: number
 }
