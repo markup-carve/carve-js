@@ -1224,6 +1224,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- - intro\n    # tail\n', '- - intro\n    > tail\n',
+    '- - intro\n%% c\n\n    # tail\n'])
+  ('preserves indentation for a marker-line nested list block: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps the existing opaque quote indentation rule', () => {
+    const source = '- > ~~~\n  > x\n  > ~~~\n\n    > y\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps an at-column unclosed fence behind the prototype guard', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })

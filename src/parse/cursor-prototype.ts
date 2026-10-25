@@ -369,7 +369,9 @@ function quoteListMarkerPrefix(line: SourceLine,
   return undefined
 }
 
-function listContinuationPrefix(line: string, base: number): number {
+function listContinuationPrefix(line: string, base: number, body?: SourceLine[]): number {
+  const firstBlockText = body?.[0]?.text
+  if (firstBlockText && listMarker(firstBlockText)) return base
   let column = base
   while (line[column] === ' ') column++
   const block = line.slice(column)
@@ -1623,7 +1625,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     cursor.take()
     appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
-      listContinuationPrefix(line.text, bodyPrefix) : bodyPrefix)
+      listContinuationPrefix(line.text, bodyPrefix, top.body) : bodyPrefix)
     top.retainedBelowColumnComment = false
     updateListFrameEnds(stack, line, listSpan)
   }
