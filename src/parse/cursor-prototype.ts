@@ -1321,20 +1321,31 @@ listSpan: (from: SourceLine, to: SourceLine, column: number) => Position): void 
   }
 }
 
+type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent: number;
+  spanColumn: number;
+  ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
+  item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
+  fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
+  blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
+  retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
+
+function deepestReachableFrame<T extends { contentColumn?: number }>(frames: readonly T[],
+  text: string, excludeTop = false): T | undefined {
+  for (let index = frames.length - 1 - (excludeTop ? 1 : 0); index >= 0; index--) {
+    const frame = frames[index]!
+    if (frame.contentColumn !== undefined &&
+        text.startsWith(' '.repeat(frame.contentColumn - 1))) return frame
+  }
+  return undefined
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
     position(from, to, depth === 0 && from.baseColumn === undefined &&
       column === firstMarker.indent + 1 ? 1 : column, contentEndColumn(to))
-  type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
-    spanColumn: number;
-    ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
-    item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
-    fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
-    blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
-    retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>,
-    hostColumn = marker.indent + 1): Frame => {
+    hostColumn = marker.indent + 1): ListCursorFrame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
     if (marker.ordered) {
@@ -1364,29 +1375,22 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       bareFenceAfterRetainedComment: false }
   }
   const stack = [newFrame(first, firstMarker)]
-  const reachedFrame = (text: string, excludeTop = false): Frame | undefined => {
-    for (let index = stack.length - 1 - (excludeTop ? 1 : 0); index >= 0; index--) {
-      const frame = stack[index]!
-      if (frame.contentColumn !== undefined &&
-          text.startsWith(' '.repeat(frame.contentColumn - 1))) return frame
-    }
-    return undefined
-  }
   const blankContinuationFrame = (next: SourceLine,
-    marker: ReturnType<typeof listMarker>, top: Frame): Frame | undefined => {
+    marker: ReturnType<typeof listMarker>, top: ListCursorFrame): ListCursorFrame | undefined => {
     if (marker) return undefined
     if (stack.length > 1 && top.item && next.text === `${' '.repeat(top.indent)}+`) return top
-    return reachedFrame(next.text)
+    return deepestReachableFrame(stack, next.text)
   }
-  const blankLooseFrame = (continued: Frame, top: Frame, next: SourceLine): Frame => {
+  const blankLooseFrame = (continued: ListCursorFrame, top: ListCursorFrame,
+    next: SourceLine): ListCursorFrame => {
     return stack.length > 1 && continued === top &&
       next.text === `${' '.repeat(top.indent)}+` ? stack.at(-2)! : continued
   }
-  const applyInvisibleTail = (frame: Frame): void => {
+  const applyInvisibleTail = (frame: ListCursorFrame): void => {
     if (frame.blankBeforeInvisible) frame.list.tight = false
     frame.blankBeforeInvisible = false
   }
-  const flush = (frame: Frame) => {
+  const flush = (frame: ListCursorFrame) => {
     if (!frame.item || !frame.body.length) return
     let allowEmptyFence = allowsEmptyRetainedFence(frame, cursor.peek())
     const firstText = frame.body[0]!.text
@@ -1409,7 +1413,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     frame.lazyRootParagraph = false
     frame.retainedBelowColumnComment = false
   }
-  const mixedNestedHost = (marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
+  const mixedNestedHost = (marker: NonNullable<ReturnType<typeof listMarker>>): ListCursorFrame => {
     let host = stack.at(-1)!
     if (stack.length > 1 && marker.indent === host.indent && !sameListKind(marker, host)) {
       const done = stack.pop()!
@@ -1419,7 +1423,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     return host
   }
-  const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
+  const appendBody = (frame: ListCursorFrame, line: SourceLine, prefix: number,
+    rootLazy = false) => {
     rejectAmbiguousQuoteLazyFollower(frame.body, line)
     const claimed = quoteListLazyLine(frame.body, line, prefix)
     line = claimed.line
@@ -1449,14 +1454,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     }
   }
-  const appendNestedListGap = (frame: Frame, nextMarker: ReturnType<typeof listMarker>,
+  const appendNestedListGap = (frame: ListCursorFrame, nextMarker: ReturnType<typeof listMarker>,
     blanks: number): void => {
     if (!preservesNestedListGap(frame, nextMarker)) return
     for (let i = 0; i < blanks; i++) {
       appendBody(frame, cursor.lines[cursor.at - blanks + i]!, 0)
     }
   }
-  const attachFirstBlock = (frame: Frame, item: ListItem,
+  const attachFirstBlock = (frame: ListCursorFrame, item: ListItem,
     line: SourceLine,
     firstBlock: Array<{ line: SourceLine; prefix: number }> | undefined): SourceLine | undefined => {
     if (!firstBlock) return undefined
@@ -1664,7 +1669,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (!line.text.startsWith(prefix)) {
-      const ancestor = reachedFrame(line.text, true)
+      const ancestor = deepestReachableFrame(stack, line.text, true)
       if (ancestor) {
         const lazy = finalNestedListLazyLine(cursor, top.body, stack.length)
         if (lazy === 'decline') {
