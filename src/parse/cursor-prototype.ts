@@ -428,8 +428,27 @@ function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
   let column = base
   while (line[column] === ' ') column++
   const block = line.slice(column)
+  if (block.startsWith('>') && body && openColonRun(body, true) !== undefined) return base
   return column > base && (!closedQuoteFence && block.startsWith('>') ||
     RE_HEADING.test(block)) ? column : base
+}
+
+function openColonRun(body: SourceLine[], quoted: boolean): number | undefined {
+  let first = body[0]?.text
+  if (!first) return undefined
+  if (quoted) {
+    if (!first.startsWith('>')) return undefined
+    first = first.slice(first[1] === ' ' ? 2 : 1)
+  }
+  const opener = COLON_OPEN.exec(first)
+  if (!opener) return undefined
+  const closer = new RegExp(`^:{${opener[1]!.length}}[ \\t]*$`)
+  for (let index = 1; index < body.length; index++) {
+    let text = body[index]!.text
+    if (quoted && text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
+    if (closer.test(text)) return undefined
+  }
+  return opener[1]!.length
 }
 
 function beginsOpenQuotedParagraph(body: SourceLine[]): boolean {
@@ -2073,6 +2092,18 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       plainParagraph &&= nestedQuoteParagraphText(text) || /^: +/.test(text) ||
         /^:: +[^ ]/.test(text)
       last = line
+      continue
+    }
+    if (openColonRun(body, false) !== undefined && /^ +>/.test(line.text)) {
+      const afterMarker = line.text.trimStart().replace(/^> ?/, '')
+      if (rootLinkDef(afterMarker) || FOOTNOTE_DEF.test(afterMarker) || ABBR_DEF.test(afterMarker)) {
+        throw new UnsupportedCursorSyntax('quoted colon definition owner')
+      }
+      const owned = cursor.take()
+      const prefix = /^ +/.exec(owned.text)![0].length
+      body.push({ text: owned.text.slice(prefix), start: owned.start + prefix,
+        number: owned.number, baseColumn: (owned.baseColumn ?? 1) + prefix, lazyText: true })
+      last = owned
       continue
     }
     if (!cursor.owner.inList && line.text === '+' && body.length > 0 &&

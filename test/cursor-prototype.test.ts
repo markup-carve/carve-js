@@ -429,6 +429,16 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it('keeps a raised quote marker literal inside its open colon body', () => {
+    const source = '- > ::: html\n  > <b>x</b>\n    > y\n  > :::'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a raised quoted-colon definition until its owner is indexed', () => {
+    expect(() => parseCursorPrototype('- > ::: html\n  > <b>x</b>\n    > [r]: /url\n  > :::'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
