@@ -974,7 +974,9 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['[^n]: First paragraph.\n\n    Second paragraph.\n',
-    '[^n]: first\n   continuation\n'])
+    '[^n]: first\n   continuation\n',
+    '[^a]: note\n\tmore\n\nsee[^a]\n',
+    '[^a]: note\n\n\tmore\n\nsee[^a]\n'])
   ('keeps a simply indented footnote paragraph at its source column: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

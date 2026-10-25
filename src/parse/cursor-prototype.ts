@@ -2085,9 +2085,13 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
   throw new UnsupportedCursorSyntax('unclosed fence')
 }
 
+function footnotePlainColumn(line: SourceLine): number {
+  return line.text[0] === '\t' ? 2 : /^[ ]*/.exec(line.text)![0].length + 1
+}
+
 function simpleFootnoteParagraphLine(line: SourceLine | undefined): boolean {
-  if (!line?.text.startsWith('  ')) return false
-  const content = line.text.slice(/^[ ]*/.exec(line.text)![0].length)
+  if (!line || !(line.text.startsWith('  ') || line.text[0] === '\t')) return false
+  const content = line.text.slice(footnotePlainColumn(line) - 1)
   return plainQuoteText(content) ||
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
 }
@@ -2257,7 +2261,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const column = first.text.length - footnote[2]!.length + bodyIndent + 1
   const parts: ContentLine[] = [{ line: first, column, text: footnote[2]!.slice(bodyIndent) }]
   if (!separated) for (const line of continuation) {
-    const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
+    const nextColumn = footnotePlainColumn(line)
     parts.push({ line, column: nextColumn, text: line.text.slice(nextColumn - 1) })
   }
   const bodyLast = structural?.source.at(-1) ?? continuation.at(-1) ?? first
@@ -2270,11 +2274,11 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     pos: position(first, separated || structural ? first : bodyLast, column) }]
   const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
     children: inline.inlines(continuation.map((line) => {
-      const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
+      const nextColumn = footnotePlainColumn(line)
       return { line, column: nextColumn, text: line.text.slice(nextColumn - 1) }
     })),
     pos: position(continuation[0]!, continuation.at(-1)!,
-      /^[ ]*/.exec(continuation[0]!.text)![0].length + 1) } : undefined
+      footnotePlainColumn(continuation[0]!)) } : undefined
   const attachedBody: Paragraph | undefined = attached ? { type: 'paragraph',
     children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
     pos: position(attached, attached) } : undefined
