@@ -3345,7 +3345,7 @@ class Importer {
 
   /** Whether the renderer derives this wrapper rather than the author writing it. */
   private isDerivedWrapper(node: P5Node, tag: string): boolean {
-    return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
+    return tag === 'section' && (this.attr(node, 'role') === 'doc-endnotes' || this.attr(node, 'data-footnotes') !== undefined)
   }
 
   /**
