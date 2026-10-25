@@ -49,8 +49,8 @@ const EXTENSION_FIELDS = ['name', 'version', 'required'] as const
 export interface AstEnvelopeExtension {
   /** Globally qualified, so two extensions cannot collide. */
   name: string
-  /** The extension's own version, opaque to the envelope. */
-  version: string
+  /** The extension's own version, opaque to the envelope; absent means it does not version its payload. */
+  version?: string
   /**
    * Whether the document's MEANING depends on it. Absent means true: a reader
    * that drops a required extension has rendered a different document.
@@ -198,10 +198,11 @@ function readEnvelopeExtensions(value: unknown): AstEnvelopeExtension[] {
     const name = ownValue(record, 'name')
     if (typeof name !== 'string') throw new AstEnvelopeShapeError(`extension ${index} has no "name"`)
     const version = ownValue(record, 'version')
-    if (typeof version !== 'string') throw new AstEnvelopeShapeError(`extension ${JSON.stringify(name)} has no string "version"`)
+    // An unversioned extension declares no version (CARVE-P12-024); a present one is a string.
+    if (version !== undefined && typeof version !== 'string') throw new AstEnvelopeShapeError(`extension ${JSON.stringify(name)} has a non-string "version"`)
     const required = ownValue(record, 'required')
     if (typeof required !== 'boolean') throw new AstEnvelopeShapeError(`extension ${JSON.stringify(name)} has no boolean "required"`)
-    return { name, version, required }
+    return { name, ...(version === undefined ? {} : { version }), required }
   })
 }
 

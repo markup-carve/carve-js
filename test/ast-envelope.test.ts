@@ -311,7 +311,7 @@ describe('the envelope this engine writes matches the pinned schema', () => {
   it('keeps both objects closed, which is what the refusals above rest on', () => {
     expect(schema.additionalProperties).toBe(false)
     expect(extensionItems.additionalProperties).toBe(false)
-    expect(extensionItems.required).toEqual(['name', 'version', 'required'])
+    expect(extensionItems.required).toEqual(['name', 'required'])
   })
 
   it('refuses exactly the versions the schema pattern refuses', () => {
@@ -332,5 +332,18 @@ describe('the envelope this engine writes matches the pinned schema', () => {
         AstEnvelopeShapeError,
       )
     }
+  })
+})
+
+describe('extension declaration versions (CARVE-P12-024)', () => {
+  const withExtension = (extension: Record<string, unknown>): AstEnvelope =>
+    ({ ...wrap('a\n'), extensions: [extension] }) as unknown as AstEnvelope
+
+  it('accepts an unversioned declaration', () => {
+    expect(() => fromAstEnvelope(withExtension({ name: 'org.example.notes', required: false }))).not.toThrow()
+  })
+
+  it('refuses a version that is not a string', () => {
+    expect(() => fromAstEnvelope(withExtension({ name: 'org.example.notes', version: 1, required: false }))).toThrow(AstEnvelopeShapeError)
   })
 })

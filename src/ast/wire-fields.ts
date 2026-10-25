@@ -258,7 +258,7 @@ export const WIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   "document": ["astVersion", "children", "type"],
   "emphasis": ["children", "type"],
   "escaped_text": ["type", "value"],
-  "extensionDeclaration": ["name", "required", "version"],
+  "extensionDeclaration": ["name", "required"],
   "figure": ["children", "type"],
   "figure_group": ["children", "type"],
   "footnote": ["children", "key", "namespace", "type"],
