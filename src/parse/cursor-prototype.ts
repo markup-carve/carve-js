@@ -39,16 +39,19 @@ interface ContainerOwner {
   readonly allowEmptyFence?: boolean
   readonly allowUnclosedFence?: boolean
   readonly fenceBoundary?: SourceLine
+  readonly listRootPrefix?: number
   readonly parent?: ContainerOwner
 }
 const ROOT_OWNER: ContainerOwner = { kind: 'root', inList: false }
 
 function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>,
-  allowEmptyFence = false, allowUnclosedFence = false, fenceBoundary?: SourceLine): ContainerOwner {
+  allowEmptyFence = false, allowUnclosedFence = false, fenceBoundary?: SourceLine,
+  listRootPrefix = parent.listRootPrefix): ContainerOwner {
   return { kind, inList: kind === 'list' || parent.inList, parent,
     ...(allowEmptyFence ? { allowEmptyFence } : {}),
     ...(allowUnclosedFence ? { allowUnclosedFence } : {}),
-    ...(fenceBoundary ? { fenceBoundary } : {}) }
+    ...(fenceBoundary ? { fenceBoundary } : {}),
+    ...(listRootPrefix === undefined ? {} : { listRootPrefix }) }
 }
 
 class Cursor {
@@ -1600,7 +1603,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     } else {
       frame.item.children.push(...parseBlocks(
         new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
-          frame.fenceMayDedent),
+          frame.fenceMayDedent, undefined, cursor.owner.kind === 'root' ? firstMarker.width : undefined),
           cursor.physicalLines),
         inline, definitionNodes, depth + 1, false))
     }
@@ -2088,10 +2091,21 @@ function boundedQuoteFence(cursor: Cursor, first: SourceLine, payload: SourceLin
   return !next || !plainQuoteText(next.text)
 }
 
+function boundedListFence(cursor: Cursor, first: SourceLine, payload: SourceLine[], marker: string): boolean {
+  if (cursor.owner.kind !== 'list' || cursor.owner.listRootPrefix === undefined) return false
+  const index = cursor.lines.findIndex((line) => line.number === first.number)
+  if (index <= 0 || cursor.lines[index - 1]?.text !== '') return false
+  const next = cursor.physicalLines[(payload.at(-1) ?? first).number]
+  if (!next || !closesFence(next.text.trimStart(), marker)) return false
+  const indent = /^ */.exec(next.text)![0].length
+  return indent <= cursor.owner.listRootPrefix
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
-  if ((cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload)) && marker &&
+  if (marker && (cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload) ||
+      boundedListFence(cursor, first, payload, marker)) &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
     const last = payload.at(-1)
     return cursor.owner.fenceBoundary && last && isBlankLine(last.text) ?

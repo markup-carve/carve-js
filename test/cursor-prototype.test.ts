@@ -1144,6 +1144,18 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- a\n  - b\n\n    ```\n    p\n ```\n\n    tail\n',
+    '- a\n  - b\n\n    ~~~\n    p\n ~~~\n\n    tail\n'])
+  ('ends a nested list fence before a closer owned by its root list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- outer\n  - head\n\n    ```\n    a\n   ```\n\n  tail\n',
+    '- a\n  - b\n    - c\n\n      ```\n      x\n   ```\n'])
+  ('declines a fence closer still owned by an intermediate list: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
     '> ::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
