@@ -1084,6 +1084,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     return undefined
   }
+  const blankContinuationFrame = (next: SourceLine,
+    marker: ReturnType<typeof listMarker>, top: Frame): Frame | undefined => {
+    if (marker) return undefined
+    if (stack.length > 1 && top.item && next.text === `${' '.repeat(top.indent)}+`) return top
+    return reachedFrame(next.text)
+  }
+  const blankLooseFrame = (continued: Frame, top: Frame, next: SourceLine): Frame => {
+    return stack.length > 1 && continued === top &&
+      next.text === `${' '.repeat(top.indent)}+` ? stack.at(-2)! : continued
+  }
   const applyInvisibleTail = (frame: Frame): void => {
     if (frame.blankBeforeInvisible) frame.list.tight = false
     frame.blankBeforeInvisible = false
@@ -1109,6 +1119,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       inline, definitionNodes, depth + 1, false))
     frame.body = []
     frame.lazyRootParagraph = false
+  }
+  const mixedNestedHost = (marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
+    let host = stack.at(-1)!
+    if (stack.length > 1 && marker.indent === host.indent && !sameListKind(marker, host)) {
+      const done = stack.pop()!
+      flush(done)
+      done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+      host = stack.at(-1)!
+    }
+    return host
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
     const text = line.text.slice(prefix)
@@ -1211,7 +1231,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         flush(done)
         done.list.pos = listSpan(done.first, done.last, done.indent + 1)
       }
-      const host = stack.at(-1)!
+      const host = mixedNestedHost(marker)
       if (marker.indent > host.indent) {
         if (!host.item) break
         flush(host)
@@ -1273,7 +1293,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
       const sibling = nextMarker && target && sameListKind(nextMarker, target)
       const nested = nextMarker && nextMarker.indent > top.indent
-      const continuationFrame = !nextMarker ? reachedFrame(next.text) : undefined
+      const continuationFrame = blankContinuationFrame(next, nextMarker, top)
       rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
       for (let i = 0; i < blanks; i++) cursor.take()
@@ -1301,7 +1321,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         }
         if (LINE_COMMENT.test(blockText)) continuationFrame.blankBeforeInvisible = true
         if (!nestedContinuation && !isListGapBlockStart(blockText, continuationFrame.body)) {
-          continuationFrame.list.tight = false
+          blankLooseFrame(continuationFrame, top, next).list.tight = false
         }
       } else if (sibling) target.list.tight = false
       continue

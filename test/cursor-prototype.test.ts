@@ -1115,6 +1115,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- foo\n  - [ ] task\n  +\n  - x\n',
+    '- foo\n  - [ ] task\n    +\n  - x\n',
+    '- foo\n  - [ ] task\n  +\n  1. x\n'])
+  ('keeps mixed nested list kinds under their parent item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('loosens the parent list before a nested item continuation marker', () => {
+    const source = '- a\n  - b\n\n  +\n  > q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
     '> [a]: /x\n\nSee [t][a].\n'])
   ('indexes a simple root quote reference definition: %s', (source) => {
