@@ -563,6 +563,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> 1. a\n> \n>    [r]: /target\n',
+    '> 10. a\n> \n>     [r]: /target\n',
+    '> * a\n> \n>   [r]: /target\n'])
+  ('hoists a quoted list definition at its authored content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['[x][r]\n\n  [r]: /target\n',
     '> [x][r]\n> \n>   [r]: /target\n',
     '- a\n```\n- b\n```\n\n  [r]: /target\n'])
