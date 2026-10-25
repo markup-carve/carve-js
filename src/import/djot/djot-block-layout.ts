@@ -56,7 +56,7 @@ function compactDjotListPrefix(text: string, canonicalBullets = false): string {
     parts.push(item[0].replace(canonicalBullets ? /^[-*+](?=[ \t])/ : /^\+(?=[ \t])/, '-').replace(/^(\(?)0+(?=[0-9])/, '$1').replace(/^\(([^)]+)\)/, '$1.').replace(/\t/g, ' '))
     at += item[0].length
     if (/^[-*+]/.test(item[0])) {
-      const task = /^\[[ xX\-_>?]\](?:[ \t]+|$)/.exec(text.slice(at))
+      const task = /^\[[ xX\-_>/!?]\](?:[ \t]+|$)/.exec(text.slice(at))
       if (task) {
         const accepted = /^[-*+] $/.test(item[0]) && /^[ xX]$/.test(task[0][1]!)
         parts.push(accepted ? task[0].replace(/\t/g, ' ') : '\\' + task[0])

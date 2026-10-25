@@ -1441,7 +1441,7 @@ export const RE_UNORDERED_HEAD = /^(?=([ \t]*))\1[-*] +[ \t]*(?=[^ \t])/
 
 export const RE_ORDERED_HEAD = /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*(?=[^ \t])/
 
-export const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+export const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>/!?])\] +[ \t]*(?=[^ \t])/
 
 export function markerMatch(line: string, full: RegExp, head: RegExp, terminatorFree: boolean): RegExpExecArray | null {
   if (!terminatorFree) return full.exec(line)

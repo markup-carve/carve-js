@@ -354,7 +354,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "link": { "attrs": "object", "children": "array", "href": "string", "pos": "object", "rawRef": "string", "ref": "string", "resolved": "const:true", "title": "string" },
   "link_reference_definition": { "attrs": "object", "href": "string", "label": "string", "pos": "object", "title": "string" },
   "list": { "attrs": "object", "bareMarker": "const:true", "bulletChar": "enum:-\u0000*", "delim": "enum:.\u0000)", "items": "array", "olType": "enum:a\u0000A\u0000i\u0000I", "ordered": "boolean", "pos": "object", "start": "integer", "tight": "boolean" },
-  "list_item": { "attrs": "object", "checked": "boolean", "children": "array", "pos": "object", "taskState": "enum: \u0000x\u0000-\u0000_\u0000>\u0000?" },
+  "list_item": { "attrs": "object", "checked": "boolean", "children": "array", "pos": "object", "taskState": "enum: \u0000x\u0000-\u0000_\u0000/\u0000!\u0000>\u0000?" },
   "literal_inline": { "attrs": "object", "content": "string", "pos": "object" },
   "math": { "attrs": "object", "cellWraps": "array", "content": "string", "display": "boolean", "label": "string>=1", "number": "integer>=1", "pos": "object" },
   "math.cellWraps": { "col": "integer>=1", "line": "integer>=1", "offset": "integer>=0", "row": "integer>=1" },

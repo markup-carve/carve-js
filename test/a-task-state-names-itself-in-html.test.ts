@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml, carveToCarve, htmlToCarve } from '../src/index.js'
 
 /**
- * PART 10 §11 / carve#1870. All five unchecked spellings render the same box,
- * so the item names the state it was written with.
+ * PART 10 §11 / carve#1870. The item names its authored task marker so
+ * serializers and stylesheets can distinguish it.
  */
 describe('an extended task state names itself in the HTML', () => {
   it.each([
     ['-', 'dropped'],
-    ['_', 'paused'],
+    ['_', 'open alias'],
+    ['/', 'in progress'],
+    ['!', 'blocked'],
     ['?', 'maybe'],
   ])('writes data-task-state for [%s]', (state, word) => {
     expect(carveToHtml(`- [${state}] ${word}`)).toContain(`<li data-task-state="${state}">`)
@@ -41,13 +43,13 @@ describe('an extended task state names itself in the HTML', () => {
   })
 
   it('reads the attribute as state rather than keeping it as one', () => {
-    const back = htmlToCarve('<ul><li data-task-state="_"><input type="checkbox" disabled> paused</li></ul>').value
-    expect(carveToCarve(back)).toBe('- [_] paused\n')
+    const back = htmlToCarve('<ul><li data-task-state="_"><input type="checkbox" disabled> open alias</li></ul>').value
+    expect(carveToCarve(back)).toBe('- [_] open alias\n')
   })
 
   it('keeps a value outside the enumeration as the author attribute it is', () => {
-    const back = htmlToCarve('<ul><li data-task-state="/"><input type="checkbox" disabled> odd</li></ul>').value
-    expect(carveToCarve(back)).toBe('-{data-task-state=/} [ ] odd\n')
+    const back = htmlToCarve('<ul><li data-task-state="%"><input type="checkbox" disabled> odd</li></ul>').value
+    expect(carveToCarve(back)).toBe('-{data-task-state=%} [ ] odd\n')
   })
 
   it('does not let a state the box contradicts tick the box', () => {
