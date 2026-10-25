@@ -871,13 +871,15 @@ function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
 
 function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   depth: number, contentColumn: number): Array<{ line: SourceLine; prefix: number }> | undefined {
-  if (depth !== 0 || marker.indent !== 0 || marker.content !== '+') return undefined
+  const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
+  if (!(depth === 0 || markerLineNested) || marker.indent !== 0 || marker.content !== '+') return undefined
   const follower = cursor.peek()
   if (!follower) return undefined
   const after = cursor.peek(1)
   const prefix = ' '.repeat(contentColumn - 1)
   const atContentColumn = prefix.length > 0 && follower.text.startsWith(prefix)
   if (!(plainQuoteText(follower.text) ||
+      (markerLineNested && RE_BLOCKQUOTE.test(follower.text)) ||
       (atContentColumn && plainQuoteText(follower.text.slice(prefix.length))))) return undefined
   if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0) return undefined
   cursor.take()
@@ -886,11 +888,15 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
 
 function takeTaskFirstBlockQuote(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
-  if (depth !== 0 || marker.indent === 0 || marker.content.slice(taskWidth) !== '+') return undefined
+  const markerLineNested = depth === 1 && cursor.owner.kind === 'list' && marker.indent === 0
+  if (!(depth === 0 && marker.indent > 0 || markerLineNested) ||
+      marker.content.slice(taskWidth) !== '+') return undefined
   const follower = cursor.peek()
   if (!follower) return undefined
   const indent = /^ */.exec(follower.text)![0].length
-  if (indent !== 0 && indent !== marker.indent && indent !== marker.width) return undefined
+  if (indent !== 0 && (!markerLineNested && indent !== marker.indent && indent !== marker.width)) {
+    return undefined
+  }
   if (!RE_BLOCKQUOTE.test(follower.text.slice(indent))) return undefined
   const after = cursor.peek(1)
   if (after && !isBlankLine(after.text)) return undefined
@@ -1053,14 +1059,17 @@ function mayFoldRootListParagraph(cursor: Cursor,
   return continues
 }
 
-function mayFoldMarkerLineNestedParagraph(cursor: Cursor,
+function mayFoldMarkerLineNestedFollower(cursor: Cursor,
   frame: { body: SourceLine[]; fenceMarker: string | undefined },
   stackLength: number, depth: number): boolean {
   if (depth !== 0 || stackLength !== 1 || frame.fenceMarker || frame.body.length !== 1) return false
   const first = frame.body[0]!
   const marker = listMarker(first.text)
+  const follower = cursor.peek()!
   return marker !== undefined && first.number === cursor.peek()!.number - 1 &&
-    plainQuoteText(marker.content) && plainQuoteText(cursor.peek()!.text)
+    (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
+      (marker.content === '+' || /^\[[ xX_>?-]\] \+$/.test(marker.content)) &&
+      RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1))
 }
 
 function mayFoldListParagraph(cursor: Cursor,
@@ -1070,7 +1079,7 @@ function mayFoldListParagraph(cursor: Cursor,
     lazyRootParagraph: boolean }, stackLength: number, depth: number): boolean {
   return mayFoldNestedListParagraph(cursor, frame, stackLength, depth) ||
     mayFoldRootListParagraph(cursor, frame, stackLength, depth) ||
-    mayFoldMarkerLineNestedParagraph(cursor, frame, stackLength, depth)
+    mayFoldMarkerLineNestedFollower(cursor, frame, stackLength, depth)
 }
 
 function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength: number):

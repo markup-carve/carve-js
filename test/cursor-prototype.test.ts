@@ -1117,6 +1117,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- - +\n> q\n', '- - [ ] +\n> q\n', '1. - +\n> q\n'])
+  ('attaches a quote through a marker-line nested first-block marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- a\n  - b\n  +\n  > q\n', '- foo\n  - [ ] task\n  +\n  > q\n',
     '- a\n  - b\n  +\n  para\n'])
   ('attaches a block after a nested item continuation marker: %s', (source) => {
