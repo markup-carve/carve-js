@@ -899,7 +899,7 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
 
 function nestedPlusDisposition(cursor: Cursor,
   frame: { indent: number; item?: ListItem; fenceMarker: string | undefined },
-  stackLength: number): SourceLine | 'literal' | undefined {
+  stackLength: number): SourceLine[] | 'literal' | undefined {
   const text = cursor.peek()!.text
   if (text.charCodeAt(text.length - 1) !== 43 || stackLength < 2 || !frame.item ||
       frame.fenceMarker || text.length !== frame.indent + 1 ||
@@ -907,9 +907,22 @@ function nestedPlusDisposition(cursor: Cursor,
   const follower = cursor.peek(1)
   if (!follower || !follower.text.startsWith(' '.repeat(frame.indent))) return 'literal'
   const content = follower.text.slice(frame.indent)
+  const fence = fenceOpen(content)?.marker
+  if (fence) {
+    const lines = [follower]
+    for (let offset = 2; cursor.peek(offset); offset++) {
+      const next = cursor.peek(offset)!
+      if (!next.text.startsWith(' '.repeat(frame.indent))) {
+        throw new UnsupportedCursorSyntax('nested attached fence owner')
+      }
+      lines.push(next)
+      if (closesFence(next.text.slice(frame.indent), fence)) return lines
+    }
+    throw new UnsupportedCursorSyntax('unclosed nested attached fence')
+  }
   if (!RE_BLOCKQUOTE.test(content) && !plainQuoteText(content)) return 'literal'
   const after = cursor.peek(2)
-  return !after || isBlankLine(after.text) ? follower : 'literal'
+  return !after || isBlankLine(after.text) ? [follower] : 'literal'
 }
 
 function isTaskMarkerContent(content: string, ordered: boolean): boolean {
@@ -1170,9 +1183,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         updateListFrameEnds(stack, line, listSpan)
       } else {
         flush(top)
-        cursor.take()
-        appendBody(top, nestedPlus, top.indent)
-        updateListFrameEnds(stack, nestedPlus, listSpan)
+        for (const attached of nestedPlus) {
+          cursor.take()
+          appendBody(top, attached, top.indent)
+          updateListFrameEnds(stack, attached, listSpan)
+        }
       }
       continue
     }

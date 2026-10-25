@@ -1127,6 +1127,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('attaches a closed fence through a nested item continuation marker', () => {
+    const source = '- foo\n  - [ ] task\n  +\n  ```sh\n  npm test\n  ```\n  - [ ] more\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
     '> [a]: /x\n\nSee [t][a].\n'])
   ('indexes a simple root quote reference definition: %s', (source) => {
