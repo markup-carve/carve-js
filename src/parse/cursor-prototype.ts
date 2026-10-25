@@ -653,7 +653,12 @@ function rootBlockAttributeAt(cursor: Cursor, index: number): boolean {
 }
 
 function definitionStructuralOffset(text: string, column: number): number | undefined {
-  if (!text.startsWith(' '.repeat(column - 1))) return undefined
+  if (!text.startsWith(' '.repeat(column - 1))) {
+    const indent = /^ */.exec(text)![0].length
+    const content = text.slice(indent)
+    return indent > 0 && indent < column - 1 && LINE_COMMENT.test(content) &&
+      !RE_COMMENT_BLOCK_ANY.test(content) ? indent : undefined
+  }
   let offset = column - 1
   while (text.charCodeAt(offset) === 32) offset++
   const content = text.slice(offset)
