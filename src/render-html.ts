@@ -2007,14 +2007,14 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       break
     }
   }
-  const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
-  let contextStart = headerEnd
-  for (const body of node.rowGroups?.bodies ?? []) {
-    const end = contextStart + body.headRows + body.bodyRows
-    for (let row = contextStart; row < end; row++) rowContexts[row] = { header: row < contextStart + body.headRows, columns: body.rowHeadColumns ?? 0 }
-    contextStart = end
-  }
   if (crossesSection) {
+    const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
+    let contextStart = headerEnd
+    for (const body of node.rowGroups?.bodies ?? []) {
+      const end = contextStart + body.headRows + body.bodyRows
+      for (let row = contextStart; row < end; row++) rowContexts[row] = { header: row < contextStart + body.headRows, columns: body.rowHeadColumns ?? 0 }
+      contextStart = end
+    }
     lines.push(`${pad}  <tbody>`)
     for (let r = 0; r < grid.length; r++) {
       const context = rowContexts[r]!
