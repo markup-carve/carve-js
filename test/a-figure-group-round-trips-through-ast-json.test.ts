@@ -34,14 +34,14 @@ describe('a figure group round-trips through AST JSON', () => {
     const json = carveToAstJson(
       '::: figure\n![one](a.png)\n^ Figure #: panel tries a number\n:::\n^ Figure #: Group\n',
     )
-    const group = json.children[0] as {
-      children: Array<{ caption: Array<{ type: string; n?: number }> }>
-      caption: Array<{ type: string; n?: number }>
+    const group = json.children[0] as unknown as {
+      children: Array<{ caption: { children: Array<{ children: Array<{ type: string; n?: number }> }> } }>
+      caption: { children: Array<{ children: Array<{ type: string; n?: number }> }> }
     }
-    const panelNumber = group.children[0]!.caption.find((c) => c.type === 'caption_number')
+    const panelNumber = group.children[0]!.caption.children[0]!.children.find((c) => c.type === 'caption_number')
     expect(panelNumber).toBeDefined()
     expect(panelNumber!.n).toBeUndefined()
-    const groupNumber = group.caption.find((c) => c.type === 'caption_number')
+    const groupNumber = group.caption.children[0]!.children.find((c) => c.type === 'caption_number')
     expect(groupNumber?.n).toBe(1)
   })
 

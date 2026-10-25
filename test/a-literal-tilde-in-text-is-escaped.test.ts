@@ -69,6 +69,8 @@ describe('a nested strike still grows the run it sits in', () => {
   it('falls back to inline HTML for a strike whose first child is a strike', () => {
     const doc = fromAstJson({
       type: 'document',
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       srcByteLength: 0,
       children: [
         {

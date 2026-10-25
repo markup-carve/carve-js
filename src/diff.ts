@@ -1,4 +1,4 @@
-import { ALL_OWNED_CHILD_FIELDS, OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './ast/owned-child-fields.js'
+import { NODE_POSITION_KIND } from './ast/wire-fields.js'
 /*
  * Structural diff over the PART 12 AST.
  *
@@ -73,7 +73,15 @@ interface Node {
 const IGNORED = new Set(['pos', 'srcByteLength', 'lines'])
 
 /** Schema child lists in document order, including record-valued slots. */
-const CHILD_FIELDS = OWNED_CHILD_FIELDS
+const wireSlotsByType = new Map<string, string[]>()
+for (const slot of Object.keys(NODE_POSITION_KIND)) {
+  const dot = slot.indexOf('.')
+  const type = slot.slice(0, dot)
+  const fields = wireSlotsByType.get(type) ?? []
+  fields.push(slot.slice(dot + 1))
+  wireSlotsByType.set(type, fields)
+}
+const wireChildFields = (type: string): readonly string[] => wireSlotsByType.get(type) ?? []
 
 function isNode(value: unknown): value is Node {
   return (
@@ -140,7 +148,7 @@ function childrenOf(node: Node): { field: string; nodes: Node[] }[] {
       }
     })
   }
-  for (const field of ALL_OWNED_CHILD_FIELDS) {
+  for (const field of wireChildFields(node.type)) {
     const value = node[field]
     if (isNode(value)) {
       out.push({ field, nodes: [value] })
@@ -163,8 +171,7 @@ function scalars(node: Node): [string, unknown][] {
   return Object.entries(node)
     .filter(([key, value]) => {
       if (IGNORED.has(key) || key === 'type') return false
-      if (CHILD_FIELDS.includes(key) && Array.isArray(value)) return false
-      if (OWNED_SINGLE_CHILD_FIELDS.includes(key) && isNode(value)) return false
+      if (wireChildFields(node.type).includes(key) && (Array.isArray(value) || isNode(value))) return false
       return true
     })
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

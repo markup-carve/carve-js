@@ -286,7 +286,10 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
     mark = block.ordered ? (mark === '.' ? ')' : '.') : mark === '-' ? '*' : '-'
   }
   if (block.ordered) listDelimiterChanged(ctx.options, block, block.delim === ')' ? ')' : '.', mark as '.' | ')')
-  const rendered = renderList(block, ctx, mark)
+  const delimiterCarrier = ctx.roundtrip && block.ordered && mark !== (block.delim === ')' ? ')' : '.') &&
+    (ctx.footnoteBlockDepth === undefined ||
+      ctx.blockDepth === ctx.footnoteBlockDepth && ctx.listDepth === 0 && block !== ctx.footnoteOpeningList)
+  const rendered = renderList(block, ctx, mark, delimiterCarrier)
   if (rendered !== '') ctx.lastList = { ordered: block.ordered, mark }
   return attributeMarker(block, ctx) + rendered
 }
@@ -633,8 +636,8 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
   }
 }
 
-function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
-  const styleCarrier = carriesListStyle(node, ctx)
+function renderList(node: List, ctx: MarkdownContext, mark?: string, delimiterCarrier = false): string {
+  const styleCarrier = carriesListStyle(node, ctx) || delimiterCarrier
   if (node.ordered && !styleCarrier) listStyleDropped(ctx.options, node)
   ctx.listDepth++
   let out = ''
@@ -692,7 +695,7 @@ function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
   }
   ctx.listDepth--
   const listDelim = node.delim === ')' ? ')' : '.'
-  const firstMarker = node.ordered && node.olType !== undefined ? orderedMarker(node.start ?? 1, node.olType) : ''
+  const firstMarker = node.ordered && (node.olType !== undefined || delimiterCarrier) ? orderedMarker(node.start ?? 1, node.olType) : ''
   const secondMarker = /^[ivxlcdm]$/i.test(firstMarker) && node.items.length > 1
     ? ` ${orderedMarker((node.start ?? 1) + 1, node.olType)}${listDelim}` : ''
   const styleMarker = styleCarrier

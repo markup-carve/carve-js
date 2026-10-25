@@ -5,35 +5,37 @@ import { WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
 const cases = [
   { owner: 'admonition', field: 'kind', node: { type: 'admonition', children: [] } },
   {
-    owner: 'block_extension', field: 'name',
-    node: { type: 'block_extension', fallback: { type: 'paragraph', children: [] } },
+    owner: 'image', field: 'resourceId',
+    node: { type: 'image', src: '/a.png', alt: 'a' },
   },
   {
-    owner: 'block_extension.payload', field: 'format',
-    node: {
-      type: 'block_extension', name: 'org.example.test',
-      fallback: { type: 'paragraph', children: [] }, payload: {},
-    },
+    owner: 'resource', field: 'id',
+    node: { mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` },
   },
-  { owner: 'math', field: 'label', node: { type: 'math', display: true, content: '' } },
+  { owner: 'math', field: 'numberPrefix', node: { type: 'math', display: true, value: '' } },
 ]
 
 function documentWith(spec: (typeof cases)[number], value: unknown) {
   const node = structuredClone(spec.node) as Record<string, unknown>
-  const target = spec.owner === 'block_extension.payload'
-    ? node.payload as Record<string, unknown>
-    : node
-  target[spec.field] = value
-  const child = spec.owner === 'math' ? { type: 'paragraph', children: [node] } : node
-  return { type: 'document', srcByteLength: 0, children: [child] }
+  node[spec.field] = value
+  const child = spec.owner === 'math' || spec.owner === 'image' ? { type: 'paragraph', children: [node] } : node
+  return {
+    type: 'document', astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
+    srcByteLength: 0,
+    children: spec.owner === 'resource' ? [] : [child],
+    ...(spec.owner === 'resource' ? { resources: [node] } : {}),
+  }
 }
 
 describe('a string minimum is checked at decode', () => {
   it('accepts an empty reference destination and rejects non-strings', () => {
     const wire = JSON.parse(`{
       "type": "document",
+      "astVersion": "2.0",
+      "stages": ["blockImagePromotion", "referenceResolution", "tableAlignment"],
       "srcByteLength": 0,
-      "children": [{"type": "link_reference_definition", "label": "a", "href": ""}]
+      "children": [{"type": "link_reference_definition", "key": "a", "namespace": "link", "href": ""}]
     }`)
     expect(() => fromAstJson(wire)).not.toThrow()
     expect(WIRE_VALUE_KINDS.link_reference_definition.href).toBe('string')
@@ -56,8 +58,8 @@ describe('a string minimum is checked at decode', () => {
         decode()
       } catch (error) {
         expect((error as AstJsonSchemaError).path).toBe(
-          spec.owner === 'block_extension.payload' ? 'children[0].payload'
-            : spec.owner === 'math' ? 'children[0].children[0]' : 'children[0]',
+          spec.owner === 'resource' ? '.resources[0]'
+            : spec.owner === 'math' || spec.owner === 'image' ? 'children[0].children[0]' : 'children[0]',
         )
       }
     }
@@ -71,10 +73,10 @@ describe('a string minimum is checked at decode', () => {
 
   it('keeps optional labels optional and unconstrained strings empty', () => {
     expect(() => fromAstJson({
-      type: 'document', srcByteLength: 0,
+      type: 'document', astVersion: '2.0', stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'], srcByteLength: 0,
       children: [
-        { type: 'paragraph', children: [{ type: 'math', display: true, content: '' }] },
-        { type: 'link_reference_definition', label: '', href: 'a', title: '' },
+        { type: 'paragraph', children: [{ type: 'math', display: true, value: '' }] },
+        { type: 'link_reference_definition', key: '', namespace: 'link', href: 'a', title: '' },
       ],
     })).not.toThrow()
   })

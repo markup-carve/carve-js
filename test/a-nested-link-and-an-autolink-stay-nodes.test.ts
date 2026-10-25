@@ -69,7 +69,7 @@ describe('a nested link and an autolink stay nodes', () => {
       href: 'z',
       children: [
         { type: 'text', value: 'a ' },
-        { type: 'link', href: '/dd', children: [{ type: 'text', value: 'r' }], ref: 'd', rawRef: '[r][d]' },
+        { type: 'link', href: '/dd', children: [{ type: 'text', value: 'r' }], key: 'd', namespace: 'link', rawRef: '[r][d]' },
         { type: 'text', value: ' b' },
       ],
     })

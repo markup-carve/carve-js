@@ -43,6 +43,13 @@ const PROTOTYPE_KEYS = [
   'propertyIsEnumerable',
   'toLocaleString',
 ] as const
+const root = (children: unknown[]) => ({
+  type: 'document',
+  astVersion: '2.0',
+  stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
+  srcByteLength: 1,
+  children,
+})
 
 describe('a footnote label that names a prototype key', () => {
   for (const key of PROTOTYPE_KEYS) {
@@ -91,7 +98,7 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
       // this type" check said yes and the closed-field walk then threw a bare
       // `TypeError: known is not iterable` - an untyped crash where an unknown
       // type has a named error.
-      const payload = { type: 'document', srcByteLength: 1, children: [{ type: key }] }
+      const payload = root([{ type: key }])
 
       expect(() => fromAstJson(JSON.parse(JSON.stringify(payload)))).toThrow(
         AstJsonUnknownNodeTypeError,
@@ -101,7 +108,7 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
 
   it('refuses an ordinary unknown node type the same way (control)', () => {
     expect(() =>
-      fromAstJson({ type: 'document', srcByteLength: 1, children: [{ type: 'widget' }] } as never),
+      fromAstJson(root([{ type: 'widget' }]) as never),
     ).toThrow(AstJsonUnknownNodeTypeError)
   })
 
@@ -112,18 +119,15 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
       // definition was discarded with no error and the reference then rendered
       // as literal text - the silent repair strict ingest exists to stop.
       const payload = JSON.parse(
-        JSON.stringify({
-          type: 'document',
-          srcByteLength: 1,
-          children: [
+        JSON.stringify(root([
             {
               type: 'footnote',
-              label: key,
+              key,
+              namespace: 'footnote',
               children: [{ type: 'paragraph', children: [{ type: 'text', value: 'the body' }] }],
             },
-            { type: 'paragraph', children: [{ type: 'footnote_ref', label: key }] },
-          ],
-        }),
+            { type: 'paragraph', children: [{ type: 'footnote_ref', key, namespace: 'footnote' }] },
+          ])),
       )
       const html = renderHtml(fromAstJson(payload))
 
@@ -133,11 +137,7 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
 
     it(`leaves a reference to an undefined ${key} unresolved`, () => {
       const payload = JSON.parse(
-        JSON.stringify({
-          type: 'document',
-          srcByteLength: 1,
-          children: [{ type: 'paragraph', children: [{ type: 'footnote_ref', label: key }] }],
-        }),
+        JSON.stringify(root([{ type: 'paragraph', children: [{ type: 'footnote_ref', key, namespace: 'footnote' }] }])),
       )
 
       expect(renderHtml(fromAstJson(payload))).toContain(`[^${key}]`)

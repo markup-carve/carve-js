@@ -18,7 +18,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "seed<br>\n",
     "nativeHtml": "<p>seed<br></p>\n"
@@ -38,7 +44,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<br><!---->\n",
     "nativeHtml": "<p><br><!----></p>\n"
@@ -65,7 +77,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "seed\\\n<br>\n",
     "nativeHtml": "<p>seed<br />\n<br></p>\n"
@@ -93,7 +111,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "seed\\\ntail\n",
     "nativeHtml": "<p>seed<br />\ntail</p>\n"
@@ -121,7 +145,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "seed<br>\n",
     "nativeHtml": "<p>seed<br></p>\n"
@@ -148,7 +178,13 @@
           ]
         }
       ],
-      "srcByteLength": 4
+      "srcByteLength": 4,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "seed<br>\n",
     "nativeHtml": "<p>seed<br></p>\n"
@@ -161,9 +197,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -184,7 +223,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- seed<br>\n",
     "nativeHtml": "<ul>\n<li>seed<br></li>\n</ul>\n"
@@ -197,9 +242,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -216,7 +264,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- <br><!---->\n",
     "nativeHtml": "<ul>\n<li><br><!----></li>\n</ul>\n"
@@ -229,9 +283,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -255,7 +312,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- seed\\\n  <br>\n",
     "nativeHtml": "<ul>\n<li>seed<br />\n<br></li>\n</ul>\n"
@@ -268,9 +331,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -295,7 +361,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- seed\\\n  tail\n",
     "nativeHtml": "<ul>\n<li>seed<br />\ntail</li>\n</ul>\n"
@@ -308,9 +380,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -335,7 +410,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- seed<br>\n",
     "nativeHtml": "<ul>\n<li>seed<br></li>\n</ul>\n"
@@ -348,9 +429,12 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
@@ -374,7 +458,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- seed<br>\n",
     "nativeHtml": "<ul>\n<li>seed<br></li>\n</ul>\n"
@@ -387,17 +477,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -422,7 +518,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - seed<br>\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li>seed<br></li>\n</ul>\n</li>\n</ul>\n"
@@ -435,17 +537,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -466,7 +574,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - <br><!---->\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li><br><!----></li>\n</ul>\n</li>\n</ul>\n"
@@ -479,17 +593,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -517,7 +637,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - seed\\\n    <br>\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li>seed<br />\n<br></li>\n</ul>\n</li>\n</ul>\n"
@@ -530,17 +656,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -569,7 +701,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - seed\\\n    tail\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li>seed<br />\ntail</li>\n</ul>\n</li>\n</ul>\n"
@@ -582,17 +720,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -621,7 +765,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - seed<br>\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li>seed<br></li>\n</ul>\n</li>\n</ul>\n"
@@ -634,17 +784,23 @@
       "children": [
         {
           "type": "list",
-          "ordered": false,
-          "tight": true,
-          "items": [
+          "marker": {
+            "kind": "bullet",
+            "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
             {
               "type": "list_item",
               "children": [
                 {
                   "type": "list",
-                  "ordered": false,
-                  "tight": true,
-                  "items": [
+                  "marker": {
+                    "kind": "bullet",
+                    "char": "-"
+                  },
+                  "spacing": "tight",
+                  "children": [
                     {
                       "type": "list_item",
                       "children": [
@@ -672,7 +828,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "- - seed<br>\n",
     "nativeHtml": "<ul>\n<li>\n<ul>\n<li>seed<br></li>\n</ul>\n</li>\n</ul>\n"
@@ -701,7 +863,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> seed<br>\n",
     "nativeHtml": "<blockquote>\n<p>seed<br></p>\n</blockquote>\n"
@@ -726,7 +894,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> <br><!---->\n",
     "nativeHtml": "<blockquote>\n<p><br><!----></p>\n</blockquote>\n"
@@ -758,7 +932,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> seed\\\n> <br>\n",
     "nativeHtml": "<blockquote>\n<p>seed<br />\n<br></p>\n</blockquote>\n"
@@ -791,7 +971,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> seed\\\n> tail\n",
     "nativeHtml": "<blockquote>\n<p>seed<br />\ntail</p>\n</blockquote>\n"
@@ -824,7 +1010,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> seed<br>\n",
     "nativeHtml": "<blockquote>\n<p>seed<br></p>\n</blockquote>\n"
@@ -856,7 +1048,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "> seed<br>\n",
     "nativeHtml": "<blockquote>\n<p>seed<br></p>\n</blockquote>\n"
@@ -885,7 +1083,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n"
@@ -910,7 +1114,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**<br><!---->**\n",
     "nativeHtml": "<p><strong><br><!----></strong></p>\n"
@@ -942,7 +1152,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\n<br>**\n",
     "nativeHtml": "<p><strong>seed<br />\n<br></strong></p>\n"
@@ -975,7 +1191,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\ntail**\n",
     "nativeHtml": "<p><strong>seed<br />\ntail</strong></p>\n"
@@ -1008,7 +1230,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n"
@@ -1040,7 +1268,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n"
@@ -1069,7 +1303,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*seed<br>*\n",
     "nativeHtml": "<p><em>seed<br></em></p>\n"
@@ -1094,7 +1334,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*<br><!---->*\n",
     "nativeHtml": "<p><em><br><!----></em></p>\n"
@@ -1126,7 +1372,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*seed\\\n<br>*\n",
     "nativeHtml": "<p><em>seed<br />\n<br></em></p>\n"
@@ -1159,7 +1411,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*seed\\\ntail*\n",
     "nativeHtml": "<p><em>seed<br />\ntail</em></p>\n"
@@ -1192,7 +1450,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*seed<br>*\n",
     "nativeHtml": "<p><em>seed<br></em></p>\n"
@@ -1224,7 +1488,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "*seed<br>*\n",
     "nativeHtml": "<p><em>seed<br></em></p>\n"
@@ -1253,7 +1523,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup>seed<br></sup>\n",
     "nativeHtml": "<p><sup>seed<br></sup></p>\n"
@@ -1278,7 +1554,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup><br><!----></sup>\n",
     "nativeHtml": "<p><sup><br><!----></sup></p>\n"
@@ -1310,7 +1592,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup>seed\\\n<br></sup>\n",
     "nativeHtml": "<p><sup>seed<br />\n<br></sup></p>\n"
@@ -1343,7 +1631,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup>seed\\\ntail</sup>\n",
     "nativeHtml": "<p><sup>seed<br />\ntail</sup></p>\n"
@@ -1376,7 +1670,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup>seed<br> </sup>\n",
     "nativeHtml": "<p><sup>seed<br> </sup></p>\n"
@@ -1408,7 +1708,13 @@
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "<sup>seed<br>\n</sup>\n",
     "nativeHtml": "<p><sup>seed<br>\n</sup></p>\n"
@@ -1438,7 +1744,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[seed<br>](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\">seed<br></a></p>\n"
@@ -1464,7 +1776,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[<br><!---->](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\"><br><!----></a></p>\n"
@@ -1497,7 +1815,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[seed\\\n<br>](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\">seed<br />\n<br></a></p>\n"
@@ -1531,7 +1855,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[seed\\\ntail](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\">seed<br />\ntail</a></p>\n"
@@ -1565,7 +1895,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[seed<br> ](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\">seed<br> </a></p>\n"
@@ -1598,7 +1934,13 @@
           ]
         }
       ],
-      "srcByteLength": 28
+      "srcByteLength": 28,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "[seed<br>\n](https://example.test)\n",
     "nativeHtml": "<p><a href=\"https://example.test\">seed<br>\n</a></p>\n"
@@ -1623,7 +1965,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# seed<br>\n",
     "nativeHtml": "<h1>seed<br></h1>\n"
@@ -1644,7 +1992,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# <br>\n",
     "nativeHtml": "<h1><br></h1>\n"
@@ -1672,7 +2026,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# seed<br><br>\n",
     "nativeHtml": "<h1>seed<br><br></h1>\n"
@@ -1701,7 +2061,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# seed<br>tail\n",
     "nativeHtml": "<h1>seed<br>tail</h1>\n"
@@ -1730,7 +2096,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# seed<br>\n",
     "nativeHtml": "<h1>seed<br></h1>\n"
@@ -1758,7 +2130,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# seed<br>\n",
     "nativeHtml": "<h1>seed<br></h1>\n"
@@ -1771,29 +2149,51 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "seed"
-                    },
-                    {
-                      "type": "hard_break"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "seed"
+                            },
+                            {
+                              "type": "hard_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| seed<br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br></td>\n</tr>\n</tbody>\n</table>\n"
@@ -1806,25 +2206,47 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "hard_break"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "hard_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| <br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><br></td>\n</tr>\n</tbody>\n</table>\n"
@@ -1837,32 +2259,54 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "seed"
-                    },
-                    {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "hard_break"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "seed"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "hard_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| seed<br><br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br><br></td>\n</tr>\n</tbody>\n</table>\n"
@@ -1875,33 +2319,55 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "seed"
-                    },
-                    {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "text",
-                      "value": "tail"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "seed"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "text",
+                              "value": "tail"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| seed<br>tail |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br>tail</td>\n</tr>\n</tbody>\n</table>\n"
@@ -1914,33 +2380,55 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "seed"
-                    },
-                    {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "text",
-                      "value": " "
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "seed"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "text",
+                              "value": " "
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| seed<br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br></td>\n</tr>\n</tbody>\n</table>\n"
@@ -1953,32 +2441,54 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "seed"
-                    },
-                    {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "soft_break"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "seed"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "soft_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
       ],
-      "srcByteLength": 8
+      "srcByteLength": 8,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "|  |\n| --- |\n| seed<br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br></td>\n</tr>\n</tbody>\n</table>\n"
@@ -2014,7 +2524,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2046,7 +2562,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**<br><!---->**\n\nbody\n",
     "nativeHtml": "<p><strong><br><!----></strong></p>\n<p>body</p>\n"
@@ -2085,7 +2607,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\n<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br />\n<br></strong></p>\n<p>body</p>\n"
@@ -2125,7 +2653,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\ntail**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br />\ntail</strong></p>\n<p>body</p>\n"
@@ -2165,7 +2699,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2204,7 +2744,13 @@
           ]
         }
       ],
-      "srcByteLength": 24
+      "srcByteLength": 24,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2240,7 +2786,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2272,7 +2824,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**<br><!---->**\n\nbody\n",
     "nativeHtml": "<p><strong><br><!----></strong></p>\n<p>body</p>\n"
@@ -2311,7 +2869,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\n<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br />\n<br></strong></p>\n<p>body</p>\n"
@@ -2351,7 +2915,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed\\\ntail**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br />\ntail</strong></p>\n<p>body</p>\n"
@@ -2391,7 +2961,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2430,7 +3006,13 @@
           ]
         }
       ],
-      "srcByteLength": 27
+      "srcByteLength": 27,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "**seed<br>**\n\nbody\n",
     "nativeHtml": "<p><strong>seed<br></strong></p>\n<p>body</p>\n"
@@ -2459,7 +3041,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# a b\n",
     "nativeHtml": "<h1>a b</h1>\n"
@@ -2488,7 +3076,13 @@
           ]
         }
       ],
-      "srcByteLength": 6
+      "srcByteLength": 6,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# a b\n",
     "nativeHtml": "<h1>a b</h1>\n"
@@ -2538,7 +3132,13 @@
           ]
         }
       ],
-      "srcByteLength": 37
+      "srcByteLength": 37,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# A<br>B\n\n[heading](#ab)\n",
     "nativeHtml": "<h1>A<br>B</h1>\n<p><a href=\"#ab\">heading</a></p>\n"
@@ -2593,7 +3193,13 @@
           ]
         }
       ],
-      "srcByteLength": 37
+      "srcByteLength": 37,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# **A<br>B**\n\n[heading](#ab)\n",
     "nativeHtml": "<h1><strong>A<br>B</strong></h1>\n<p><a href=\"#ab\">heading</a></p>\n"
@@ -2643,7 +3249,13 @@
           ]
         }
       ],
-      "srcByteLength": 37
+      "srcByteLength": 37,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# A<br> B\n\n[heading](#a-b)\n",
     "nativeHtml": "<h1>A<br> B</h1>\n<p><a href=\"#a-b\">heading</a></p>\n"
@@ -2696,7 +3308,13 @@
           ]
         }
       ],
-      "srcByteLength": 37
+      "srcByteLength": 37,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# A<br><br>B\n\n[heading](#ab)\n",
     "nativeHtml": "<h1>A<br><br>B</h1>\n<p><a href=\"#ab\">heading</a></p>\n"
@@ -2746,7 +3364,13 @@
           ]
         }
       ],
-      "srcByteLength": 37
+      "srcByteLength": 37,
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
+      ]
     },
     "markdown": "# A B\n\n[heading](#a-b)\n",
     "nativeHtml": "<h1>A B</h1>\n<p><a href=\"#a-b\">heading</a></p>\n"

@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { AstJsonMisplacedNodeTypeError, fromAstJson, renderHtml } from '../src/index.js'
 
 /**
- * A `citation` outside `citation_group.items` is refused AT DECODE
+ * A `citation` outside `citation_group.children` is refused AT DECODE
  * (markup-carve/carve#2227).
  *
- * The type is one the schema names - `citation_group.items` holds it - so the
+ * The type is one the schema names - `citation_group.children` holds it - so the
  * walk accepted it anywhere a node goes, and a paragraph holding one directly
  * reached `renderHtml: unknown inline citation` one step later. PART 12 §12(c)
  * puts that refusal at decode: a formatter, a linter or an indexer holds the
@@ -19,20 +19,22 @@ import { AstJsonMisplacedNodeTypeError, fromAstJson, renderHtml } from '../src/i
  */
 const paragraph = (children: unknown[]) => ({
   type: 'document',
+  astVersion: '2.0',
+  stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
   srcByteLength: 0,
   children: [{ type: 'paragraph', children }],
 })
 
-const citation = { type: 'citation', key: 'x', suppressAuthor: false }
+const citation = { type: 'citation', key: 'x', namespace: 'citation', suppressAuthor: false }
 
 describe('a citation outside its group', () => {
   it('is refused at decode, naming the position the schema admits', () => {
     expect(() => fromAstJson(paragraph([citation]))).toThrow(AstJsonMisplacedNodeTypeError)
-    expect(() => fromAstJson(paragraph([citation]))).toThrow(/only in citation_group\.items/)
+    expect(() => fromAstJson(paragraph([citation]))).toThrow(/only in citation_group\.children/)
   })
 
   it('is refused inside another inline, not only at the top of a paragraph', () => {
-    const nested = paragraph([{ type: 'emphasis', emphasisType: 'strong', children: [citation] }])
+    const nested = paragraph([{ type: 'strong', children: [citation] }])
 
     expect(() => fromAstJson(nested)).toThrow(AstJsonMisplacedNodeTypeError)
   })
@@ -47,7 +49,7 @@ describe('a citation outside its group', () => {
     const doc = fromAstJson(
       paragraph([
         { type: 'text', value: 'see ' },
-        { type: 'citation_group', raw: '[@x]', items: [citation] },
+        { type: 'citation_group', raw: '[@x]', children: [citation] },
         { type: 'text', value: ' here' },
       ]),
     )

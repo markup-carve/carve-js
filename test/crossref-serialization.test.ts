@@ -18,7 +18,7 @@ import type { CrossRef, Paragraph } from '../src/ast.js'
  * unresolved one to text. Both are shapes §3a rules out: `target` is the
  * spelling the author wrote, which the round trip needs back. carve-js#605.
  */
-describe('a crossref serializes as a heading_ref', () => {
+describe('a crossref serializes as an xref', () => {
   const inlines = (source: string) => {
     const json = carveToAstJson(source) as unknown as {
       children: Array<{ type: string; children?: Array<Record<string, unknown>> }>
@@ -29,23 +29,23 @@ describe('a crossref serializes as a heading_ref', () => {
 
   it('publishes the authored target and the resolved destination', () => {
     const [, ref] = inlines('# Intro\n\nSee </#Intro>.\n')
-    expect(ref).toMatchObject({ type: 'heading_ref', target: 'Intro', href: '#Intro' })
+    expect(ref).toMatchObject({ type: 'xref', key: 'Intro', namespace: 'heading', href: '#Intro' })
   })
 
   it('keeps the spelling the author used, which resolves only in the exact case', () => {
     const [, lower] = inlines('# Intro\n\nSee </#intro>.\n')
     const [, upper] = inlines('# Intro\n\nSee </#Intro>.\n')
-    expect(lower).toMatchObject({ target: 'intro' })
+    expect(lower).toMatchObject({ key: 'intro', namespace: 'heading' })
     expect(lower!['href']).toBeUndefined()
-    expect(upper).toMatchObject({ target: 'Intro', href: '#Intro' })
+    expect(upper).toMatchObject({ key: 'Intro', namespace: 'heading', href: '#Intro' })
   })
 
   it('publishes an unresolved crossref as a node, not as text', () => {
     // Flattening discards the fact that the author wrote a reference at all,
     // and gives the same document two node counts depending on the engine.
     const kids = inlines('See </#Nope>.\n')
-    expect(kids.map((n) => n['type'])).toEqual(['text', 'heading_ref', 'text'])
-    expect(kids[1]).toMatchObject({ type: 'heading_ref', target: 'Nope' })
+    expect(kids.map((n) => n['type'])).toEqual(['text', 'xref', 'text'])
+    expect(kids[1]).toMatchObject({ type: 'xref', key: 'Nope', namespace: 'heading' })
     expect(kids[1]!['href']).toBeUndefined()
   })
 

@@ -697,7 +697,7 @@ describe('fmt keeps a heading on one line', () => {
     const para = j.children.find((c) => c.type === 'paragraph')!
     heading.children = para.children
     const out = renderCarve(
-      fromAstJson({ type: 'document', srcByteLength: 0, children: [heading] }),
+      fromAstJson({ type: 'document', astVersion: '2.0', children: [heading] }),
     )
     expect(out).toBe('{#a-b}\n# para x y\n')
     expect(carveToHtml(out)).toBe('<section id="a-b">\n  <h1>para x y</h1>\n</section>')
@@ -710,7 +710,7 @@ describe('fmt keeps a heading on one line', () => {
     const { fromAstJson, renderCarve } = await import('../src/index.js')
     const doc = fromAstJson({
       type: 'document',
-      srcByteLength: 0,
+      astVersion: '2.0',
       children: [
         {
           type: 'heading',

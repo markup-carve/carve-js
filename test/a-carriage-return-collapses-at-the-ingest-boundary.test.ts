@@ -55,9 +55,11 @@ function everyString(node: unknown, out: string[] = []): string[] {
  */
 const crlfPayload = () => ({
   type: 'document',
+  astVersion: '2.0',
+  stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
   srcByteLength: 0,
   children: [
-    { type: 'code_block', content: `a${CRLF}b${CR}c` },
+    { type: 'code_block', value: `a${CRLF}b${CR}c` },
     {
       type: 'paragraph',
       children: [
@@ -65,7 +67,7 @@ const crlfPayload = () => ({
         { type: 'code', value: `p${CRLF}q` },
       ],
     },
-    { type: 'raw_block', format: 'html', content: `<i>${CRLF}</i>` },
+    { type: 'raw_block', format: 'html', value: `<i>${CRLF}</i>` },
   ],
 })
 
@@ -104,9 +106,9 @@ describe('a carriage return collapses at the ingest boundary', () => {
 
   it('does not disturb the NUL replacement sharing the same walk', () => {
     const doc = fromAstJson({
-      type: 'document',
+      ...crlfPayload(),
       srcByteLength: 0,
-      children: [{ type: 'code_block', content: `a\0b${CRLF}c` }],
+      children: [{ type: 'code_block', value: `a\0b${CRLF}c` }],
     } as never) as Document
 
     expect((doc.children[0] as { content: string }).content).toBe('a\ufffdb\nc')
@@ -119,7 +121,7 @@ describe('a carriage return collapses at the ingest boundary', () => {
     const payload = crlfPayload()
     fromAstJson(payload as never)
 
-    expect((payload.children[0] as { content: string }).content).toBe(`a${CRLF}b${CR}c`)
+    expect((payload.children[0] as { value: string }).value).toBe(`a${CRLF}b${CR}c`)
   })
 
   it('leaves a payload carrying neither character alone', () => {
@@ -165,7 +167,7 @@ describe('a carriage return collapses at the ingest boundary', () => {
       expect(refusalReason(inParagraph({ type: 'code', value: `a${CR}b` }))).toBeUndefined()
 
       const ingested = fromAstJson({
-        type: 'document',
+        ...crlfPayload(),
         srcByteLength: 0,
         children: [
           {

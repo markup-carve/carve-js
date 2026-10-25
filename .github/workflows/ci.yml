@@ -42,6 +42,9 @@ jobs:
 
       - name: Spec pin ancestry
         run: ./scripts/check-spec-pin-ancestry.sh spec
+        # The AST 2.0 integration branch pins spec next-ast2; drop this when next-ast2 merges into main.
+        env:
+          SPEC_DEFAULT_BRANCH: next-ast2
 
   typecheck:
     name: typecheck

@@ -41,6 +41,7 @@ type Doc = Record<string, unknown>
 /** The valid document every shape below is a single mutation away from. */
 const valid = (): Doc => ({
   type: 'document',
+  astVersion: '2.0',
   children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }],
   srcByteLength: 1,
 })
@@ -137,6 +138,7 @@ describe('a node position is checked for WHICH node, not only that it is one', (
     expect(() =>
       fromAstJson({
         type: 'document',
+        astVersion: '2.0',
         srcByteLength: 1,
         children: [{ type: 'paragraph', children: [{ type: 'paragraph', children: [] }] }],
       } as never),
@@ -147,6 +149,7 @@ describe('a node position is checked for WHICH node, not only that it is one', (
     expect(() =>
       fromAstJson({
         type: 'document',
+        astVersion: '2.0',
         srcByteLength: 1,
         children: [{ type: 'text', value: 'x' }],
       } as never),
@@ -154,18 +157,13 @@ describe('a node position is checked for WHICH node, not only that it is one', (
   })
 
   it('refuses a scalar in a oneOf node slot', () => {
-    // `figure.target` is spelled `oneOf` of five concrete node refs, a shape the
-    // first version of the generator skipped entirely. Threw
-    // `TypeError: Cannot read properties of undefined`.
-    //
-    // Measured with `caption` PRESENT: without it the payload is refused for a
-    // missing required field instead, which looks like this rule working and is
-    // not - the first probe of this finding made exactly that mistake.
+    // A figure's children are block nodes. A scalar must be refused there.
     expect(() =>
       fromAstJson({
         type: 'document',
+        astVersion: '2.0',
         srcByteLength: 1,
-        children: [{ type: 'figure', target: 'x', caption: [] }],
+        children: [{ type: 'figure', children: ['x'] }],
       } as never),
     ).toThrow(AstJsonSchemaError)
   })
@@ -173,16 +171,16 @@ describe('a node position is checked for WHICH node, not only that it is one', (
   it('CONTROL: accepts each node type the position DOES admit', () => {
     // Otherwise the rule could be "refuse every node position".
     for (const target of [
-      { type: 'image', src: '/a.png', alt: '' },
       { type: 'paragraph', children: [] },
-      { type: 'code_block', content: '' },
+      { type: 'code_block', value: '' },
       { type: 'block_quote', children: [] },
     ]) {
       expect(() =>
         fromAstJson({
           type: 'document',
+          astVersion: '2.0',
           srcByteLength: 1,
-          children: [{ type: 'figure', target, caption: [] }],
+          children: [{ type: 'figure', children: [target] }],
         } as never),
       ).not.toThrow()
     }

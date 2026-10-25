@@ -6,10 +6,10 @@ const row = (value: string) => ({
   cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value }] }],
 })
 const partition = { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 }
-const document = (rowGroups: object = partition) => fromAstJson({
+const document = (rowGroups: object = partition) => fromAstJson(toAstJson({
   type: 'document', srcByteLength: 0,
   children: [{ type: 'table', rows: [row('body'), row('total')], rowGroups }],
-})
+} as never))
 
 const diagnostic = {
   code: 'field-unspellable', node: 'table', field: 'rowGroups',
@@ -25,7 +25,7 @@ describe('table row-group conversion diagnostics', () => {
     const before = toAstJson(ast)
     const result = renderCarveWithConversionReport(ast)
     expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 0, truncated: false })
-    const reparsed = toAstJson(parse(result.value!))
+    const reparsed = parse(result.value!)
     expect(reparsed.children[0]).toMatchObject({ rowGroups: groups })
     expect(reparsed.children[0]).toMatchObject({ rows: [row('body'), row('total')] })
     expect(toAstJson(ast)).toEqual(before)
@@ -41,7 +41,7 @@ describe('table row-group conversion diagnostics', () => {
     const before = toAstJson(ast)
     const result = renderCarveWithConversionReport(ast)
     expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 0, truncated: false })
-    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ rowGroups: groups, rows: [row('body'), row('total')] })
+    expect(parse(result.value!).children[0]).toMatchObject({ rowGroups: groups, rows: [row('body'), row('total')] })
     expect(toAstJson(ast)).toEqual(before)
   })
 
@@ -68,7 +68,7 @@ describe('table row-group conversion diagnostics', () => {
   })
 
   it('does not report a partition loss for ordinary pipe tables', () => {
-    const ordinary = fromAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'table', rows: [row('body'), row('total')] }] })
+    const ordinary = fromAstJson(toAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'table', rows: [row('body'), row('total')] }] } as never))
     expect(renderCarveWithConversionReport(ordinary).report).toEqual({ diagnostics: [], totalDiagnostics: 0, truncated: false })
   })
 })

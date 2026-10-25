@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { AstJsonSchemaError, fromAstJson } from '../src/index.js'
 
 const ruby = {
-  type: 'document', srcByteLength: 0,
+  type: 'document', astVersion: '2.0', srcByteLength: 0,
   children: [{ type: 'paragraph', children: [{
-    type: 'ruby', pairs: [{ base: [{ type: 'text', value: 'a' }], annotation: [] }],
+    type: 'ruby', pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: 'a' }], annotation: [] }],
   }] }],
 }
 
@@ -27,7 +27,7 @@ describe('schema array length bounds', () => {
   })
 
   it('rejects an empty array nested inside a stanza map', () => {
-    const wire = { type: 'document', srcByteLength: 0, children: [{
+    const wire = { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [{
       type: 'line_block', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }] }],
       lines: [[]],
     }] }
@@ -35,7 +35,7 @@ describe('schema array length bounds', () => {
   })
 
   it('allows an empty unbounded stanza list', () => {
-    const wire = { type: 'document', srcByteLength: 0, children: [{
+    const wire = { type: 'document', astVersion: '2.0', srcByteLength: 0, children: [{
       type: 'line_block', children: [], lines: [],
     }] }
     expect(() => fromAstJson(wire as never)).not.toThrow()

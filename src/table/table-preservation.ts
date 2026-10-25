@@ -54,7 +54,7 @@ export function assessTablePreservation(
     totalDiagnostics++
     if (diagnostics.length < maximum) diagnostics.push({ code: 'table-field-degraded', path, field, message })
   }
-  const normalized = toAstJson(fromAstJson(ast as AstJsonDocument))
+  const normalized = fromAstJson(toAstJson(fromAstJson(ast as AstJsonDocument)))
   const stack: [unknown, string][] = [[normalized, '']]
   while (stack.length) {
     const [value, path] = stack.pop()!
@@ -124,6 +124,10 @@ export function assessTablePreservation(
       } else if (populated(value.shortCaption)) {
         add(path, 'shortCaption', 'The short caption is not emitted by the HTML renderer.')
       }
+    }
+    if (value.type === 'document' && record(value.footnoteDefs)) {
+      let index = Array.isArray(value.children) ? value.children.length : 0
+      for (const body of Object.values(value.footnoteDefs)) stack.push([body, `/children/${index++}/children`])
     }
     if (typeof value.type === 'string') {
       for (let i = AST_CHILD_FIELDS.length - 1; i >= 0; i--) {

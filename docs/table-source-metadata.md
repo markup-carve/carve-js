@@ -24,16 +24,16 @@ row exactly once. Invalid body metadata creates no explicit partition and all
 row-group attributes remain ordinary HTML attributes.
 
 Canonical export adds missing metadata attributes. It retains authored values
-and diagnoses conflicts as `field-unspellable` for `rowGroups`. Table section
+and diagnoses conflicts as `field-unspellable` for `table.children`. Table section
 attributes and block cell content still have separate source limitations.
 
 An authored separator row records its dash counts in `table.separatorWidths`.
-For example, `|:-----|---:|` records `[5, 3]`; alignment remains on the header
-cells. The array must contain at least one positive integer. Its entry count
+For example, `|:-----|---:|` records `[5, 3]`; resolved alignment is published on `table.columns`. The array must contain at least one positive integer. Its entry count
 controls the separator cell count, including ragged rows.
 
-AST envelopes use contract version `1.1`, independently of package releases.
-Readers accept supported older contracts and refuse higher minor versions.
+AST envelopes use contract version `2.0`, independently of package releases.
+Readers refuse 1.2 trees and higher major versions. A higher minor is accepted
+when its additions stay in namespaced `data` or optional extensions with fallbacks.
 Canonical output reproduces the recorded separator. Widths that would promote
 non-header cells, or exceed native string capacity, produce a typed source
 refusal.

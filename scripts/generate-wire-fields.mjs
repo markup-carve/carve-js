@@ -62,8 +62,8 @@ export function wireFieldsSource(schema) {
     for (const [key, value] of Object.entries(schemaNode)) {
       if (key === "$ref" && typeof value === "string") {
         const target = value.replace("#/$defs/", "");
-        if (target === "attrs" || target === "pos") continue;
-        return true;
+        if (target === "blockNode" || target === "inlineNode") return true;
+        return typeof defs[target]?.properties?.type?.const === "string";
       }
       if (holdsNode(value)) return true;
     }
@@ -244,6 +244,8 @@ export function wireFieldsSource(schema) {
       if (!holdsNode(property)) continue;
       const kind = refsPlainRecord(property)
         ? "records"
+        : property.type === "object" && property.additionalProperties?.type === "array"
+          ? "node-sequence-map"
         : property.type === "array"
           ? property.items?.type === "array"
             ? "node-matrix"
@@ -321,8 +323,7 @@ export function wireFieldsSource(schema) {
       // `type`, so requiring one there would refuse a tree this engine's own
       // parser produced (section 9(a)). `WIRE_NESTED_RECORDS` is what says which
       // record, and checks its contents.
-      if (isPlainRecordDef(defs[target])) return "object";
-      return "node";
+      return holdsNode(property) ? "node" : "object";
     }
     return undefined;
   };
@@ -488,7 +489,7 @@ export function wireFieldsSource(schema) {
     " * The owning type is part of the key because one field name means different",
     " * things in different places.",
     " */",
-    "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'node-matrix' | 'records'>> = {",
+    "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'node-matrix' | 'node-sequence-map' | 'records'>> = {",
   ].join("\n");
   const kindList = [...positionKind.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))

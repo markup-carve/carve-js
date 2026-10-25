@@ -56,6 +56,8 @@ describe('the Markdown target carries attributes on an unspellable inline', () =
   it('leaves small_caps and ruby carrying their attributes', () => {
     const inline = (node: unknown) => renderMarkdown(fromAstJson({
       type: 'document',
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       srcByteLength: 0,
       children: [{ type: 'paragraph', children: [node] }],
     } as never))
@@ -69,7 +71,7 @@ describe('the Markdown target carries attributes on an unspellable inline', () =
     expect(inline({
       type: 'ruby',
       attrs: { classes: ['c'] },
-      pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'r' }] }],
+      pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'r' }] }],
     })).toBe('<ruby class="c">x<rp>(</rp><rt>r</rt><rp>)</rp></ruby>\n')
   })
 })

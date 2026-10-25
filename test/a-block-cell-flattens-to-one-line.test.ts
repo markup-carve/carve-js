@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { fromAstJson, renderAnsi, renderMarkdown, renderPlainText } from '../src/index.js'
+import { fromAstJson, renderAnsi, renderMarkdown, renderPlainText, toAstJson } from '../src/index.js'
 
 // carve-js#2119. PART 12 §27 (CARVE-P12-049): Markdown, plain and ANSI each
 // write a cell on ONE LINE, so `blocks` flattens under PART 11 §1b with the
 // blocks separated by one space.
-const table = (blocks: unknown[]) => fromAstJson({
+const table = (blocks: unknown[]) => fromAstJson(toAstJson({
   type: 'document',
   srcByteLength: 0,
   children: [{
@@ -14,7 +14,7 @@ const table = (blocks: unknown[]) => fromAstJson({
       { type: 'table_row', cells: [{ type: 'table_cell', header: false, blocks }] },
     ],
   }],
-} as never)
+} as never))
 
 const paragraph = (value: string) => ({ type: 'paragraph', children: [{ type: 'text', value }] })
 

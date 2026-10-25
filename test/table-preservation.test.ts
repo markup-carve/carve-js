@@ -46,7 +46,7 @@ it('offers a checked output API beside the render-loss report', () => {
 
 it('normalizes span markers and assesses header order and effective alignment', () => {
   const ast = carveToAstJson(source) as any
-  delete ast.children[0].rows[0].cells[1].colspan
+  delete ast.children[0].children[0].children[0].children[1].colspan
   expect(assessTablePreservation(ast, 'markdown').diagnostics.some(d => d.field === 'colspan')).toBe(true)
   const moved = assessTablePreservation(carveToAstJson('| 1 | 2 |\n|= A |= B |\n'), 'markdown')
   expect(moved.diagnostics.map(d => d.field)).toContain('rowOrder')

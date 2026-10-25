@@ -18,6 +18,8 @@ describe('thematic break', () => {
   it('retains an ingested marker and defaults an absent one to hyphens', () => {
     const tree = (marker?: '*' | '_') => ({
       type: 'document' as const,
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       srcByteLength: 3,
       children: [{ type: 'thematic_break' as const, ...(marker ? { marker } : {}) }],
     })

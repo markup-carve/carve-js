@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, fromAstJson, htmlToAst, htmlToCarve, renderCarve } from '../src/index.js'
+import { carveToHtml, fromAstJson, htmlToAst, htmlToCarve, renderCarve, toAstJson } from '../src/index.js'
 
 /**
  * Two rulings, one line between them: which characters are CONTENT and which
@@ -99,7 +99,7 @@ describe('PART 11 §10j: a block that spells nothing keeps the list boundary', (
     srcByteLength: 0,
     children: [list('a'), ...(between === null ? [] : [between]), list('b')],
   })
-  const written = (between: unknown) => renderCarve(fromAstJson(JSON.parse(JSON.stringify(payload(between)))))
+  const written = (between: unknown) => renderCarve(fromAstJson(JSON.parse(JSON.stringify(toAstJson(payload(between) as never)))))
   const lists = (between: unknown) => (carveToHtml(written(between)).match(/<ul[\s>]/g) ?? []).length
 
   it('writes the boundary across a whitespace-only paragraph', () => {

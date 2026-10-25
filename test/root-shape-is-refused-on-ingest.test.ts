@@ -36,7 +36,7 @@ describe("an ingest refuses a root that deviates from PART 12 §7", () => {
     expect(renderHtml(fromAstJson(wire("hi") as never))).toBe("<p>hi</p>");
   });
 
-  for (const field of ["children", "srcByteLength"] as const) {
+  for (const field of ["children"] as const) {
     it(`refuses a root with no \`${field}\`, naming it`, () => {
       const payload = wire("hi");
       delete payload[field];
@@ -48,8 +48,7 @@ describe("an ingest refuses a root that deviates from PART 12 §7", () => {
       }
       expect(thrown).toBeInstanceOf(AstJsonRootFieldError);
       // The VALUE, not the shape: before this, a missing `children` produced a
-      // valid empty document and a missing `srcByteLength` produced a valid
-      // document with the field absent. Both "returned a Document", so any
+      // valid empty document. A missing source length is valid in 2.0. Both "returned a Document", so any
       // assertion about the returned shape passed against the defect.
       expect((thrown as AstJsonRootFieldError).field).toBe(field);
       expect((thrown as Error).message).toContain(field);
@@ -62,6 +61,12 @@ describe("an ingest refuses a root that deviates from PART 12 §7", () => {
     const payload = wire("hi");
     delete payload.type;
     expect(() => fromAstJson(payload as never)).toThrow(/is not "document"/);
+  });
+
+  it("accepts a root without an unmeasured source length", () => {
+    const payload = wire("hi");
+    delete payload.srcByteLength;
+    expect(renderHtml(fromAstJson(payload as never))).toBe("<p>hi</p>");
   });
 
   it("does not check the VALUE of `srcByteLength`", () => {
@@ -138,18 +143,14 @@ describe("the unknown-type check never reaches attrs.keyValues", () => {
 
   it("names every node-bearing field the schema has, not a hardcoded few", () => {
     // A list that missed a field would leave an unknown type under it accepted.
-    // `content` and `title` are the ones a hand-written list gets wrong: both
-    // hold nodes on one type and a plain string on another.
-    for (const field of ["caption", "cells", "content", "inline", "items", "rows", "target", "title"]) {
-      expect(NODE_FIELDS, field).toContain(field);
-    }
+    expect(NODE_FIELDS).toEqual(["annotation", "base", "caption", "children", "columns", "fallback", "locator", "new", "old", "pairs", "prefix", "short", "slots", "suffix", "title"]);
     // Derived from the same schema as the field map beside it.
-    expect(WIRE_FIELDS.document).toEqual(["astVersion", "children", "srcByteLength", "type"]);
+    expect(WIRE_FIELDS.document).toEqual(["astVersion", "attrs", "children", "data", "dir", "extensions", "lang", "metadata", "pos", "resources", "segments", "srcByteLength", "stages", "type"]);
   });
 });
 
 describe("the encoder always publishes the field the decoder now requires", () => {
-  it("emits `srcByteLength` for a Document that never came from parse", () => {
+  it("omits `srcByteLength` for a Document that never came from parse", () => {
     // §9(a): ingest must accept anything this engine can produce. `parse` is not
     // the only producer - an editor, a language server or an extension hands a
     // Document over too, and `srcByteLength` is optional on the runtime type. The
@@ -162,8 +163,8 @@ describe("the encoder always publishes the field the decoder now requires", () =
     const encoded = toAstJson(handBuilt as never);
     // The VALUE, not just presence: a check for the key alone passes against an
     // encoder that writes `undefined`, which JSON.stringify then drops again.
-    expect(encoded.srcByteLength).toBe(0);
-    expect(JSON.stringify(encoded)).toContain('"srcByteLength":0');
+    expect(encoded.srcByteLength).toBeUndefined();
+    expect(JSON.stringify(encoded)).not.toContain('"srcByteLength"');
     expect(() => fromAstJson(encoded)).not.toThrow();
   });
 
@@ -174,7 +175,7 @@ describe("the encoder always publishes the field the decoder now requires", () =
 });
 
 describe("the wire type says what the decoder enforces", () => {
-  it("declares all three §7 root fields as required", () => {
+  it("declares source length optional and the version required", () => {
     // A TypeScript consumer could build an `AstJsonDocument` with no
     // `srcByteLength`, satisfy the compiler, and only learn at runtime that
     // `fromAstJson` refuses it. A type check cannot run at runtime, so this
@@ -184,8 +185,8 @@ describe("the wire type says what the decoder enforces", () => {
       dts.indexOf("interface AstJsonDocument"),
       dts.indexOf("}", dts.indexOf("interface AstJsonDocument")),
     );
-    expect(root).toContain("srcByteLength: number");
-    expect(root).not.toContain("srcByteLength?");
+    expect(root).toContain("srcByteLength?: number");
+    expect(root).toContain("astVersion: string");
     expect(root).not.toContain("children?");
   });
 });

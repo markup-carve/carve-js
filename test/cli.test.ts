@@ -116,7 +116,7 @@ describe('carve render — loss reporting', () => {
   })
 
   it('does not name a dropped table section attribute as a render loss', async () => {
-    const ast = '{"type":"document","srcByteLength":0,"children":[{"type":"table","rows":[],"rowGroups":{"headRows":0,"footRows":0,"bodies":[],"headAttrs":{"id":"head"}}}]}'
+    const ast = '{"type":"document","astVersion":"2.0","srcByteLength":0,"children":[{"type":"table","children":[{"type":"table_head","children":[],"attrs":{"id":"head"}}],"columns":[]}]}'
     const strict = makeIO({ stdin: ast })
     expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0'], strict.io)).toBe(0)
     expect(strict.err).toBe('')
@@ -133,10 +133,10 @@ describe('carve render — loss reporting', () => {
 
   it('can allow ruby flattening from an encoded AST', async () => {
     const ast = JSON.stringify({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       children: [{ type: 'paragraph', children: [{
         type: 'ruby',
-        pairs: [{ base: [{ type: 'text', value: '漢' }], annotation: [{ type: 'text', value: 'かん' }] }],
+        pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: '漢' }], annotation: [{ type: 'text', value: 'かん' }] }],
       }] }],
       srcByteLength: 0,
     })
@@ -154,9 +154,9 @@ describe('carve render — loss reporting', () => {
 
   it('does not name a dropped math label or number as a render loss', async () => {
     const ast = JSON.stringify({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       children: [{ type: 'paragraph', children: [{
-        type: 'math', display: true, content: 'x', label: 'Equation', number: 1,
+        type: 'math', display: true, value: 'x', numberPrefix: 'Equation', number: 1,
       }] }],
       srcByteLength: 0,
     })
@@ -168,12 +168,12 @@ describe('carve render — loss reporting', () => {
 
   it('does not name a flattened section or block-content cell as a render loss', async () => {
     const ast = JSON.stringify({
-      type: 'document', srcByteLength: 0, children: [{
-        type: 'section', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
-          type: 'table_cell', header: false, blocks: [
+      type: 'document', astVersion: '2.0', srcByteLength: 0, children: [{
+        type: 'section', children: [{ type: 'table', columns: [{ type: 'table_column' }], children: [{ type: 'table_body', children: [{ type: 'table_row', children: [{
+          type: 'table_cell', header: false, sourceContent: 'blocks', children: [
             { type: 'paragraph', children: [{ type: 'text', value: 'Cell' }] },
           ],
-        }] }] }],
+        }] }] }] }],
       }],
     })
     const strict = makeIO({ stdin: ast })
@@ -185,13 +185,13 @@ describe('carve render — loss reporting', () => {
   it('does not let an allowed truncated loss hide a different code', async () => {
     const ruby = {
       type: 'ruby',
-      pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
+      pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
     }
     const ast = JSON.stringify({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       children: [
         { type: 'paragraph', children: [ruby, ruby, ruby] },
-        { type: 'raw_block', format: 'latex', content: 'lost' },
+        { type: 'raw_block', format: 'latex', value: 'lost' },
       ],
       srcByteLength: 0,
     })
@@ -802,7 +802,7 @@ describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
     expect(code).toBe(0)
     const json = JSON.parse(t.out)
     expect(json.type).toBe('document')
-    expect(Object.keys(json).sort()).toEqual(['astVersion', 'children', 'srcByteLength', 'type'])
+    expect(Object.keys(json).sort()).toEqual(['astVersion', 'children', 'srcByteLength', 'stages', 'type'])
     expect(json.children[0]).toMatchObject({ type: 'heading', level: 1 })
     expect(json.children[0].pos.startLine).toBe(1)
   })
@@ -886,7 +886,7 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     // refusal rather than an empty document. What this test is FOR is unchanged
     // and is what it still asserts: malformed input reaches the user as a
     // documented failure and never as a stack trace.
-    const t = makeIO({ stdin: '{"type":"document","srcByteLength":0,"children":{}}' })
+    const t = makeIO({ stdin: '{"type":"document","astVersion":"2.0","srcByteLength":0,"children":{}}' })
 
     expect(await run(['--from-json', '--html'], t.io)).toBe(2)
     expect(t.err).toContain('is not a Carve AST')
@@ -899,7 +899,7 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     // `fromAstJson` uncaught and surfaced as a stack trace.
     const t = makeIO({ stdin: '{"type":"document","children":[]}' })
     expect(await run(['--from-json', '--html'], t.io)).toBe(2)
-    expect(t.err).toContain('srcByteLength')
+    expect(t.err).toContain('astVersion')
     expect(t.err).not.toContain('at Object')
   })
 
@@ -908,7 +908,7 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     // fail in the renderer, which names a rendering problem for a payload one.
     const t = makeIO({
       stdin: JSON.stringify({
-        type: 'document',
+        type: 'document', astVersion: '2.0',
         srcByteLength: 0,
         children: [{ type: 'zzNotInTheSchema', children: [] }],
       }),
@@ -925,7 +925,7 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     // with a typed error the caller can act on.
     const t = makeIO({
       stdin: JSON.stringify({
-        type: 'document',
+        type: 'document', astVersion: '2.0',
         srcByteLength: 0,
         children: [
           { type: 'paragraph', children: [{ type: 'footnote_ref', id: 'a' }] },
@@ -944,7 +944,7 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     // to bound it; otherwise the flag stops meaning anything as soon as the
     // document arrives encoded.
     const big = JSON.stringify({
-      type: 'document',
+      type: 'document', astVersion: '2.0',
       srcByteLength: 0,
       children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x'.repeat(150_000) }] }],
     })
@@ -1344,11 +1344,11 @@ describe('carve render includes', () => {
   })
 })
 
-describe('CLI AST contract 1.2', () => {
+describe('CLI AST contract 2.0', () => {
   it('announces the version on bare JSON and accepts it back', async () => {
     const encoded = makeIO({ stdin: '[t][r]\n\n[r]:\n' })
     expect(await run(['--json'], encoded.io)).toBe(0)
-    expect(JSON.parse(encoded.out).astVersion).toBe('1.2')
+    expect(JSON.parse(encoded.out).astVersion).toBe('2.0')
     const decoded = makeIO({ stdin: encoded.out })
     expect(await run(['render', '--from-json', '--json'], decoded.io)).toBe(0)
     expect(JSON.parse(decoded.out)).toEqual(JSON.parse(encoded.out))

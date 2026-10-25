@@ -8,7 +8,7 @@ function contents(value: unknown): string[] {
   if (!value || typeof value !== 'object') return []
   if (Array.isArray(value)) return value.flatMap(contents)
   const node = value as Record<string, unknown>
-  if (node.type === 'code_block') return [node.content as string]
+  if (node.type === 'code_block') return [(node.value ?? node.content) as string]
   return Object.values(node).flatMap(contents)
 }
 

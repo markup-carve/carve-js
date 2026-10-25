@@ -11,8 +11,8 @@ const ast = () => toAstJson(parse('one\n\ntwo', { positions: true }))
 describe('AST sidecars', () => {
   it('visits replacement and ruby content in authored order', () => {
     const tree = { type: 'document', children: [{ type: 'paragraph', children: [
-      { type: 'substitution', old: [{ type: 'text', value: 'old' }], new: [{ type: 'text', value: 'new' }] },
-      { type: 'ruby', pairs: [{ base: [{ type: 'text', value: 'base' }], annotation: [{ type: 'text', value: 'reading' }] }] },
+      { type: 'critic_substitution', old: [{ type: 'text', value: 'old' }], new: [{ type: 'text', value: 'new' }] },
+      { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: 'base' }], annotation: [{ type: 'text', value: 'reading' }] }] },
     ] }] } as never
     const paths = astNodePaths(tree)
     expect(paths.indexOf('/children/0/children/0/old/0')).toBeLessThan(paths.indexOf('/children/0/children/0/new/0'))
@@ -25,7 +25,7 @@ describe('AST sidecars', () => {
     const sidecar = toNodeIdentity(tree, 'session-a')
     expect(sidecar.nodes.some((entry) => entry.path === '/children/1')).toBe(true)
     expect(readNodeIdentity(sidecar, tree)).toEqual(sidecar)
-    expect(() => readNodeIdentity({ ...sidecar, version: 2 }, tree)).toThrow(AstSidecarError)
+    expect(() => readNodeIdentity({ ...sidecar, version: 1 }, tree)).toThrow(AstSidecarError)
     expect(() => readNodeIdentity({ ...sidecar, nodes: [{ id: 'n', path: '/children/99' }] }, tree)).toThrow(AstSidecarError)
     expect(() => readNodeIdentity({ ...sidecar, nodes: [{ id: 'x', path: '' }, { id: 'x', path: '/children/0' }] }, tree)).toThrow(AstSidecarError)
     expect(toNodeIdentity(tree, 'session-b', new Map([['/children/0', 'n0']])).nodes.find((entry) => entry.path === '')?.id).not.toBe('n0')
@@ -51,15 +51,15 @@ describe('AST sidecars', () => {
     expect(next.identity.nodes.find((entry) => entry.path === '/children/1')?.id).toBe(old)
   })
 
-  it('checks annotation anchors in codepoints and allows overlapping ranges', () => {
+  it('checks annotation anchors in UTF-8 bytes and allows overlapping ranges', () => {
     const tree = toAstJson(parse('😀abc', { positions: true }))
     const textPath = '/children/0/children/0'
     const ranges = toAnnotationRanges(tree, [
-      { id: 'a', kind: 'org.example/comment', start: { path: textPath, offset: 0 }, end: { path: textPath, offset: 3 } },
-      { id: 'b', kind: 'org.example/comment', start: { path: textPath, offset: 2 }, end: { path: textPath, offset: 4 } },
+      { id: 'a', kind: 'org.example.comment', start: { path: textPath, offset: 0 }, end: { path: textPath, offset: 5 } },
+      { id: 'b', kind: 'org.example.comment', start: { path: textPath, offset: 4 }, end: { path: textPath, offset: 7 } },
     ])
     expect(readAnnotationRanges(ranges, tree)).toEqual(ranges)
-    expect(() => readAnnotationRanges({ ...ranges, ranges: [{ ...ranges.ranges[0], end: { path: textPath, offset: 5 } }] }, tree)).toThrow(AstSidecarError)
+    expect(() => readAnnotationRanges({ ...ranges, ranges: [{ ...ranges.ranges[0], end: { path: textPath, offset: 8 } }] }, tree)).toThrow(AstSidecarError)
     expect(() => readAnnotationRanges({ ...ranges, ranges: [{ ...ranges.ranges[0], start: { path: textPath, offset: 3 }, end: { path: textPath, offset: 1 } }] }, tree)).toThrow(AstSidecarError)
     expect(() => readAnnotationRanges({ ...ranges, ranges: [{ ...ranges.ranges[0], start: { path: '/children/0', offset: 3 }, end: { path: textPath, offset: 1 } }] }, tree)).toThrow(AstSidecarError)
   })
@@ -87,7 +87,7 @@ describe('AST sidecars', () => {
   it('does not treat an extension payload object as an AST node', () => {
     const tree = { type: 'document', srcByteLength: 0, children: [{ type: 'block_extension', name: 'org.example.diagram', fallback: { type: 'paragraph', children: [] }, payload: { format: 'application/json', value: { type: 'fake' } } }] } as never
     expect(astNodePaths(tree)).toEqual(['', '/children/0', '/children/0/fallback'])
-    expect(() => readNodeIdentity({ version: 1, session: 's', nodes: [{ id: 'x', path: '/children/0/payload/value' }] }, tree)).toThrow(AstSidecarError)
+    expect(() => readNodeIdentity({ version: 2, session: 's', nodes: [{ id: 'x', path: '/children/0/payload/value' }] }, tree)).toThrow(AstSidecarError)
   })
 })
 

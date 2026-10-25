@@ -15,11 +15,9 @@ import { WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
  *
  * WHY `false` IS NOT A LESSER SPELLING OF ABSENT, which is what makes this a
  * correctness bug rather than a strictness preference. The schema writes `const`
- * exactly where the field's PRESENCE is the fact: `definition_list.loose` is
- * `const: true` because absent means each description derives its own wrapper,
- * so there is no `false` to write and `loose: false` states the OPPOSITE of what
- * the field means. `strong.boldItalic`, `list.bareMarker` and
- * `citation_group.mode` are the same arrangement.
+ * exactly where the field's PRESENCE is the fact. `strong.boldItalic`,
+ * `paragraph.blockImage`, `table_column.authored` and `citation_group.mode`
+ * use this arrangement in contract 2.0.
  *
  * ALL FOUR are asserted, not just the one the defect was noticed on. They share
  * a single generated code path, so a fixture covering one would pass while the
@@ -30,7 +28,7 @@ import { WIRE_VALUE_KINDS } from '../src/ast/wire-fields.js'
 /** The four `const`-valued properties, and a document whose parse contains each. */
 const CONST_FIELDS = [
   { type: 'strong', field: 'boldItalic', legal: true, source: '/*bi*/\n', extensions: [] },
-  { type: 'list', field: 'bareMarker', legal: true, source: '. one\n. two\n', extensions: [] },
+  { type: 'paragraph', field: 'blockImage', legal: true, source: 'text\n', extensions: [] },
   {
     type: 'citation_group',
     field: 'mode',
@@ -38,7 +36,7 @@ const CONST_FIELDS = [
     source: 'See [@smith2020] here.\n',
     extensions: [citations()],
   },
-  { type: 'definition_list', field: 'loose', legal: true, source: ':: t\n:  d\n', extensions: [] },
+  { type: 'table_column', field: 'authored', legal: true, source: '| a |\n| --- |\n| b |\n', extensions: [] },
 ] as const
 
 /** The parser's own tree for a case, as plain JSON. */

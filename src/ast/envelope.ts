@@ -29,7 +29,7 @@ import { hasOwnKey, ownValue } from '../own-property.js'
  * removes, renames or reinterprets a field or a meaning; a minor bump adds a
  * field or a node type.
  */
-export const AST_CONTRACT_VERSION = '1.2'
+export const AST_CONTRACT_VERSION = '2.0'
 
 /** The vocabulary an envelope with no `vocabulary` is written in. */
 export const CORE_AST_VOCABULARY = 'https://markup-carve.org/ast/core'
@@ -43,19 +43,19 @@ export const CORE_AST_VOCABULARY = 'https://markup-carve.org/ast/core'
 const RE_AST_VERSION = /^[1-9][0-9]*\.(?:0|[1-9][0-9]*)$/
 
 const ENVELOPE_FIELDS = ['astVersion', 'vocabulary', 'extensions', 'document'] as const
-const EXTENSION_FIELDS = ['id', 'version', 'required'] as const
+const EXTENSION_FIELDS = ['name', 'version', 'required'] as const
 
 /** An extension whose node types or fields the enveloped document uses. */
 export interface AstEnvelopeExtension {
   /** Globally qualified, so two extensions cannot collide. */
-  id: string
+  name: string
   /** The extension's own version, opaque to the envelope. */
-  version?: string
+  version: string
   /**
    * Whether the document's MEANING depends on it. Absent means true: a reader
    * that drops a required extension has rendered a different document.
    */
-  required?: boolean
+  required: boolean
 }
 
 /** A Carve AST at a storage or process boundary. */
@@ -195,26 +195,13 @@ function readEnvelopeExtensions(value: unknown): AstEnvelopeExtension[] {
         )
       }
     }
-    const id = ownValue(record, 'id')
-    if (typeof id !== 'string') throw new AstEnvelopeShapeError(`extension ${index} has no "id"`)
-    const extension: AstEnvelopeExtension = { id }
+    const name = ownValue(record, 'name')
+    if (typeof name !== 'string') throw new AstEnvelopeShapeError(`extension ${index} has no "name"`)
     const version = ownValue(record, 'version')
-    if (version !== undefined) {
-      if (typeof version !== 'string') {
-        throw new AstEnvelopeShapeError(`extension ${JSON.stringify(id)} has a non-string "version"`)
-      }
-      extension.version = version
-    }
+    if (typeof version !== 'string') throw new AstEnvelopeShapeError(`extension ${JSON.stringify(name)} has no string "version"`)
     const required = ownValue(record, 'required')
-    if (required !== undefined) {
-      if (typeof required !== 'boolean') {
-        throw new AstEnvelopeShapeError(
-          `extension ${JSON.stringify(id)} has a non-boolean "required"`,
-        )
-      }
-      extension.required = required
-    }
-    return extension
+    if (typeof required !== 'boolean') throw new AstEnvelopeShapeError(`extension ${JSON.stringify(name)} has no boolean "required"`)
+    return { name, version, required }
   })
 }
 
@@ -270,7 +257,7 @@ export function fromAstEnvelope(
       // Absent means true. An extension a reader may ignore without misreading
       // the document has to say so.
       if (extension.required === false) continue
-      if (!implemented.has(extension.id)) throw new AstEnvelopeExtensionError(extension.id)
+      if (!implemented.has(extension.name)) throw new AstEnvelopeExtensionError(extension.name)
     }
   }
 
@@ -279,7 +266,7 @@ export function fromAstEnvelope(
   // condition. A minor adds, so the tree is readable except for what the
   // additions carry, and `required` is the payload's own statement of whether
   // those additions are load-bearing.
-  return fromAstJson(ownValue(record, 'document') as AstJsonDocument, options.payloadByteLength)
+  return fromAstJson(ownValue(record, 'document') as AstJsonDocument, options.payloadByteLength, options.extensions)
 }
 
 /** Validate a contract version on an envelope or bare root. */
@@ -289,10 +276,9 @@ export function checkAstVersion(astVersion: unknown): void {
       `"astVersion" is ${JSON.stringify(astVersion)}, which is not major.minor with no leading zero`,
     )
   }
-  const [major, minor] = astVersion.split('.') as [string, string]
-  const [ourMajor, ourMinor] = AST_CONTRACT_VERSION.split('.') as [string, string]
-  if (Number(major) > Number(ourMajor) ||
-      (Number(major) === Number(ourMajor) && Number(minor) > Number(ourMinor))) {
+  const [major] = astVersion.split('.') as [string, string]
+  const [ourMajor] = AST_CONTRACT_VERSION.split('.') as [string, string]
+  if (Number(major) > Number(ourMajor)) {
     throw new AstEnvelopeVersionError(astVersion)
   }
 }

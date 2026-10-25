@@ -79,6 +79,11 @@ export interface Attrs {
 export interface BaseNode {
   attrs?: Attrs
   pos?: Position
+  data?: Record<string, unknown>
+  metadata?: unknown
+  segments?: Position[]
+  dir?: 'ltr' | 'rtl' | 'auto'
+  lang?: string
 }
 
 // ----- Block nodes -----

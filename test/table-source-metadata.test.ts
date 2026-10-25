@@ -5,7 +5,7 @@ const row = (value: string) => ({ type: 'table_row', cells: [
   { type: 'table_cell', header: false, children: [{ type: 'text', value }] },
   { type: 'table_cell', header: false, children: [{ type: 'text', value: 'other' }] },
 ] })
-const document = (fields: object) => fromAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'table', rows: [row('body'), row('total')], ...fields }] })
+const document = (fields: object) => fromAstJson(toAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'table', rows: [row('body'), row('total')], ...fields }] } as never))
 
 const columnsDiagnostic = {
   code: 'field-unspellable', node: 'table', field: 'columns',
@@ -37,7 +37,7 @@ describe('table source metadata', () => {
     const before = toAstJson(ast)
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics).toEqual([])
-    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ columns })
+    expect(parse(result.value!).children[0]).toMatchObject({ columns })
     expect(renderHtml(parse(result.value!))).toBe(renderHtml(ast))
     expect(toAstJson(ast)).toEqual(before)
   })
@@ -53,7 +53,7 @@ describe('table source metadata', () => {
     const ast = document({ columns: [{ align: 'left', valign: 'top', width: 0.4 }, { align: 'right', valign: 'bottom', width: 0.6 }], attrs: { keyValues } })
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics).toEqual([columnsDiagnostic])
-    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ attrs: { keyValues } })
+    expect(parse(result.value!).children[0]).toMatchObject({ attrs: { keyValues } })
   })
 
   it('preserves matching authored metadata without new diagnostics', () => {
@@ -74,7 +74,7 @@ describe('table source metadata', () => {
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics).toEqual([])
     const reparsed = parse(result.value!, { positions: false })
-    expect(toAstJson(reparsed).children[0]).toMatchObject({ rowGroups: table.rowGroups, columns: table.columns, caption: table.caption })
+    expect(reparsed.children[0]).toMatchObject({ rowGroups: table.rowGroups, columns: table.columns, caption: table.caption })
     expect(renderHtml(reparsed)).toBe(renderHtml(ast))
     expect(toAstJson(ast)).toEqual(before)
     expect(renderCarveWithConversionReport(reparsed).value).toBe(result.value)
@@ -88,7 +88,7 @@ describe('table source metadata', () => {
     table.rows[0].cells[0].blocks = [{ type: 'paragraph', children: [{ type: 'text', value: 'body' }] }]
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics.map(({ field }) => field)).toEqual(['rowGroups.footAttrs', 'rowGroups.bodies[0].attrs', 'blocks'])
-    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ columns: table.columns, rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 } })
+    expect(parse(result.value!).children[0]).toMatchObject({ columns: table.columns, rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 } })
   })
 })
 
@@ -106,7 +106,7 @@ describe('table body source metadata', () => {
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics).toEqual([])
     const reparsed = parse(result.value!)
-    expect(toAstJson(reparsed).children[0]).toMatchObject({ rowGroups })
+    expect(reparsed.children[0]).toMatchObject({ rowGroups })
     expect(renderHtml(reparsed)).toBe(renderHtml(ast))
     expect(toAstJson(ast)).toEqual(before)
     expect(renderCarveWithConversionReport(reparsed).value).toBe(result.value)
@@ -118,9 +118,9 @@ describe('table body source metadata', () => {
     'body-header-rows=1', 'body-rows=9007199254740992',
     'body-rows=1,1 body-header-rows=1,0', 'header-rows=1 body-rows=x', 'header-rows=1 body-header-rows=1',
   ])('rejects invalid body metadata %s', (attrs) => {
-    const ast = toAstJson(parse(`{${attrs}}\n| a | b |\n| c | d |\n`))
+    const ast = parse(`{${attrs}}\n| a | b |\n| c | d |\n`)
     expect(ast.children[0]).not.toHaveProperty('rowGroups')
-    const html = renderHtml(parse(`{${attrs}}\n| a | b |\n| c | d |\n`))
+    const html = renderHtml(ast)
     expect(html).toContain('body-')
     if (/(?:^| )header-rows=1(?: |$)/.test(attrs)) expect(html).toContain('header-rows="1"')
   })
@@ -129,7 +129,7 @@ describe('table body source metadata', () => {
     const ast = document({ attrs: { keyValues: { 'body-rows': '2' } }, rowGroups: { headRows: 0, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 } })
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics.map(d => d.field)).toEqual(['rowGroups'])
-    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ attrs: { keyValues: { 'body-rows': '2' } } })
+    expect(parse(result.value!).children[0]).toMatchObject({ attrs: { keyValues: { 'body-rows': '2' } } })
   })
 })
 
@@ -146,7 +146,7 @@ it('promotes body row-header columns and keeps their scope across spans', () => 
 it('distinguishes implicit zero bodies from an explicit empty body', () => {
   const source = '{header-rows=1 footer-rows=1}\n| H | G |\n| F | T |\n'
   const ast = parse(source)
-  expect(toAstJson(ast).children[0]).toMatchObject({ rowGroups: { headRows: 1, bodies: [], footRows: 1 } })
+  expect(ast.children[0]).toMatchObject({ rowGroups: { headRows: 1, bodies: [], footRows: 1 } })
   expect(renderHtml(ast)).not.toContain('<tbody>')
   expect(renderCarveWithConversionReport(ast).value).toBe(source)
   const emptySource = source.replace('footer-rows=1}', 'footer-rows=1 body-rows=0}')
@@ -187,8 +187,8 @@ it.each([
   const ast = parse(source)
   const result = renderCarveWithConversionReport(ast)
   expect(result.report.diagnostics).toEqual([])
-  const before = toAstJson(ast).children[0]
-  const after = toAstJson(parse(result.value!)).children[0]
+  const before = ast.children[0]
+  const after = parse(result.value!).children[0]
   if (before.type !== 'table' || after.type !== 'table') throw new Error('Expected tables')
   expect(after.rows[0].cells.map(cell => cell.header)).toEqual(before.rows[0].cells.map(cell => cell.header))
 })

@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
-import { fromAstJson, renderCarveWithConversionReport, renderMarkdownWithReport } from '../src/index.js'
+import { fromAstJson, renderCarveWithConversionReport, renderMarkdownWithReport, toAstJson } from '../src/index.js'
 
 it('flattens heading, list, and code blocks in Markdown table cells with conversion diagnostics', () => {
   const text = (value: string) => ({ type: 'text', value })
   const cell = (blocks: object[]) => ({ type: 'table_cell', header: false, blocks })
-  const doc = fromAstJson({
+  const doc = fromAstJson(toAstJson({
     type: 'document', srcByteLength: 0, children: [{ type: 'table', rows: [{ type: 'table_row', cells: [
       cell([{ type: 'heading', level: 2, children: [text('Head')] }]),
       cell([{ type: 'list', ordered: false, tight: true, items: [
@@ -13,7 +13,7 @@ it('flattens heading, list, and code blocks in Markdown table cells with convers
       ] }]),
       cell([{ type: 'code_block', content: 'a\nb\n' }]),
     ] }] }],
-  } as never)
+  } as never))
 
   const markdown = renderMarkdownWithReport(doc)
   expect(markdown.value).toBe('|  |  |  |\n| --- | --- | --- |\n| Head | one two | a b |\n')

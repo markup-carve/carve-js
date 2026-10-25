@@ -8,8 +8,10 @@ const LAST = '<dl><dt>t1</dt><dd>d1</dd><dt>t2</dt><dd></dd></dl>'
 const ingested = (items: unknown[]) =>
   fromAstJson({
     type: 'document',
+    astVersion: '2.0',
+    stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
     srcByteLength: 0,
-    children: [{ type: 'definition_list', items }],
+    children: [{ type: 'definition_list', spacing: 'tight', children: items }],
   })
 
 const term = (value: string) => ({ type: 'definition_term', children: [{ type: 'text', value }] })
@@ -103,7 +105,7 @@ describe('an empty description body is written with the {empty} sentinel', () =>
   it.each([
     ['no children', []],
     ['an invisible paragraph', [{ type: 'paragraph', children: [] }]],
-    ['a list with no items', [{ type: 'list', ordered: false, tight: true, items: [] }]],
+    ['a list with no items', [{ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [] }]],
   ])('takes the sentinel for a description holding %s', (_name, children) => {
     const doc = ingested([term('t'), { type: 'definition_description', children }])
     expect(renderCarve(doc)).toBe(':: t\n: {empty}\n')

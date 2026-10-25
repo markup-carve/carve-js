@@ -29,7 +29,7 @@ import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph,
 import { resolveTableSpans } from '../table/table-spans.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { isResolvedEmptyReference, markResolvedEmptyReference } from '../parse/inline/reference-state.js'
-import { checkAstVersion } from './envelope.js'
+import { AstEnvelopeExtensionError, checkAstVersion } from './envelope.js'
 import { MAX_NESTING_DEPTH } from '../parse.js'
 import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from '../heading/heading-ids.js'
 import {
@@ -52,6 +52,7 @@ import {
 import { ownValue, setOwn } from '../own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
+import { contract2WireToRuntime, runtimeWireToContract2, savedExtension, saveExtension } from './contract2-wire.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -85,24 +86,64 @@ export interface FootnoteDefNode {
 }
 
 export type AstJsonBlock = BlockNode | FrontmatterNode | FootnoteDefNode
+const wireDocumentFacts = new WeakMap<Document, { extensions?: unknown; stages?: unknown }>()
 
 /**
- * The document root, per PART 12 §7: three required fields and optional astVersion.
- *
- * All three are REQUIRED, matching `resources/ast-schema.json`. `srcByteLength`
- * was optional here while §12 makes `fromAstJson` refuse a root without it, so
- * a TypeScript consumer could build a value the compiler accepted and the
- * decoder rejected - the mismatch this type exists to prevent.
+ * The document root. Source length is absent when it was not measured.
  */
 export interface AstJsonDocument {
   type: 'document'
   children: AstJsonBlock[]
-  srcByteLength: number
-  astVersion?: string
+  srcByteLength?: number
+  astVersion: string
+}
+
+export class AstJsonMigrationError extends Error {
+  constructor() {
+    super('AST tree is contract 1.2 and needs migrating to contract 2.0')
+    this.name = 'AstJsonMigrationError'
+  }
+}
+
+function containsContract12Shape(root: Record<string, unknown>): boolean {
+  const oldFields: Readonly<Record<string, readonly string[]>> = {
+    abbreviation: ['abbr'], abbreviation_def: ['abbr'], footnote: ['label'],
+    footnote_ref: ['label'], link_reference_definition: ['label'],
+    heading_ref: ['target'], substitution: ['old'], inline_footnote: ['inline'],
+    inline_extension: ['content'],
+    list: ['ordered', 'tight', 'items', 'bulletChar', 'olType', 'delim'],
+    definition_list: ['items', 'loose'], list_item: ['checked', 'taskState'],
+    table: ['rows', 'rowGroups', 'shortCaption'], table_row: ['cells'],
+    table_cell: ['blocks'], figure: ['target', 'shortCaption'],
+    citation_group: ['items'], comment: ['block', 'delimited', 'content'],
+    critic_comment: ['text'], code_block: ['content', 'header'],
+    math: ['content', 'label'], raw_block: ['content'], raw_inline: ['content'],
+    literal_inline: ['content'], frontmatter: ['content'],
+    mention: ['user'],
+    link: ['ref', 'resolved', 'title'], image: ['ref', 'resolved', 'title'],
+    smart_punctuation: ['value'],
+  }
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item)
+      continue
+    }
+    if (!value || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    const type = record.type
+    if (typeof type === 'string' && (Object.hasOwn(oldFields, type) ? oldFields[type]! : []).some(field => Object.hasOwn(record, field))) return true
+    for (const [field, child] of Object.entries(record)) {
+      if (field !== 'data' && field !== 'metadata' && field !== 'props') stack.push(child)
+    }
+  }
+  return false
 }
 
 /** Schema child slots include node arrays, matrices, and runtime records. */
-const CHILD_FIELDS = OWNED_CHILD_FIELDS
+const CHILD_FIELDS = [...new Set([...OWNED_CHILD_FIELDS, 'items', 'rows', 'cells', 'blocks', 'inline', 'content', 'terms', 'definitions'])]
+const RUNTIME_SINGLE_CHILD_FIELDS = [...new Set([...OWNED_SINGLE_CHILD_FIELDS, 'target'])]
 const ingestedLineBlockChildren = new WeakMap<object, string>()
 
 function rememberIngestedLineBlocks(root: Document): void {
@@ -119,7 +160,7 @@ function rememberIngestedLineBlocks(root: Document): void {
       ingestedLineBlockChildren.set(record, JSON.stringify(record['children']))
     }
     for (const field of CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
-    for (const field of OWNED_SINGLE_CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
+    for (const field of RUNTIME_SINGLE_CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
   }
 }
 
@@ -207,6 +248,7 @@ function definitionListsToWire<T>(node: T): T {
     return (changed ? mapped : node) as T
   }
   if (typeof node !== 'object' || node === null) return node
+  if (savedExtension(node)) return node
 
   const record = node as Record<string, unknown>
   let out: Record<string, unknown> | undefined
@@ -247,7 +289,7 @@ function definitionListsToWire<T>(node: T): T {
     out = { ...(out ?? record), lines }
   }
 
-  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+  for (const field of RUNTIME_SINGLE_CHILD_FIELDS) {
     const child = (out ?? record)[field]
     if (child === undefined) continue
     const mapped = definitionListsToWire(child)
@@ -314,6 +356,8 @@ function definitionListsFromWire<T>(node: T): T {
   if (typeof node !== 'object' || node === null) return node
 
   const record = { ...(node as Record<string, unknown>) }
+  const saved = savedExtension(node)
+  if (saved) saveExtension(record, saved)
 
   if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
     // A payload already in the runtime form decodes unchanged: older stored
@@ -343,7 +387,7 @@ function definitionListsFromWire<T>(node: T): T {
   for (const field of CHILD_FIELDS) {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
-  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+  for (const field of RUNTIME_SINGLE_CHILD_FIELDS) {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
 
@@ -437,18 +481,16 @@ export function toAstJson(doc: Document): AstJsonDocument {
 
   orderCollectedDefinitions(children)
 
-  // ALWAYS emitted, even when the runtime document has no length to report.
-  // `srcByteLength` is `required` in the schema, so a root without it is not a
-  // Carve AST - and `parse` is not the only way a `Document` gets built: an
-  // editor, a language server or an extension can hand one over, and this
-  // encoder used to publish an invalid tree for exactly those. §12 then refused
-  // this engine's OWN output, which §9(a) forbids.
-  //
-  // 0 is the honest answer to "how much source was this" for a tree that came
-  // from no source, and §12 explicitly does not check the value. carve-php took
-  // the same route for the same reason (carve-php#917).
-  const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
-  return out
+  const out: AstJsonDocument = { type: 'document', children, astVersion: '2.0' }
+  if (doc.srcByteLength !== undefined) out.srcByteLength = doc.srcByteLength
+  for (const field of ['attrs', 'pos', 'data', 'metadata', 'segments', 'dir', 'lang'] as const) {
+    const value = doc[field]
+    if (value !== undefined) (out as unknown as Record<string, unknown>)[field] = value
+  }
+  const facts = wireDocumentFacts.get(doc)
+  if (facts?.extensions !== undefined) (out as unknown as Record<string, unknown>).extensions = facts.extensions
+  if (facts?.stages !== undefined) (out as unknown as Record<string, unknown>).stages = facts.stages
+  return runtimeWireToContract2(out as unknown as Record<string, unknown>, doc) as unknown as AstJsonDocument
 }
 
 /** Preserve a published result; compute it only for legacy payloads that omit it. */
@@ -560,23 +602,19 @@ export class AstJsonRootError extends Error {
 /**
  * Thrown when the root omits one of the three fields PART 12 §7 fixes.
  *
- * §12(a): "A ROOT MISSING ANY OF THE THREE FIELDS. Not defaulted, not inferred.
+ * §12(a): "A ROOT MISSING A REQUIRED FIELD. Not defaulted, not inferred.
  * A reader that supplies `children: []` for a payload that carried no
  * `children` has turned a truncated document into an empty one and reported
  * success."
  *
- * This reader used to do exactly that - a missing `children` fell through to
- * `Array.isArray(json.children) ? json.children : []` and produced an empty
- * document, and a missing `srcByteLength` was simply left off the result. Both
- * handed the caller a valid-looking Carve document with no way to learn the
- * input had not been one, which is the same objection `AstJsonRootError` above
- * makes to accepting a foreign root type.
+ * A missing `children` previously fell through to an empty document. The
+ * required `astVersion` also has to be present before reading node fields.
  */
 export class AstJsonRootFieldError extends Error {
   constructor(readonly field: string) {
     super(
       `AST root is missing ${JSON.stringify(field)}; PART 12 §7 fixes the root at ` +
-        '"type", "children" and "srcByteLength", and §12 refuses a root without one',
+        '"type", "children" and "astVersion", and §12 refuses a root without one',
     )
     this.name = 'AstJsonRootFieldError'
   }
@@ -720,20 +758,7 @@ export class AstJsonSchemaError extends Error {
 }
 
 /**
- * A `table.rowGroups` that does not partition the table's rows.
- *
- * PART 12 §15 makes it a MUST: the counts consume `rows` in order - head first,
- * then each body, then the foot - and account for every row EXACTLY ONCE. The
- * schema cannot say so. JSON Schema has no way to relate one field's value to
- * the length of another's, so `headRows: 5` on a two-row table validates
- * cleanly, decodes, and reaches a consumer that then reads rows the table does
- * not have.
- *
- * Which is why this is checked on the INPUT path and given an error of its own:
- * a green validator is not evidence here, and a producer that has just built
- * both the rows and the counts from the same arrays cannot check it either -
- * that check could not fail. The payloads worth checking are the ones that
- * arrive from somewhere else.
+ * A table body's header boundary lies beyond its rows (PART 12 §15).
  */
 export class AstJsonPartitionError extends Error {
   constructor(
@@ -742,8 +767,7 @@ export class AstJsonPartitionError extends Error {
     readonly path: string,
   ) {
     super(
-      `AST payload has a table.rowGroups that does not partition its rows at ${path === '' ? '$' : path}: ` +
-        `the head, bodies and foot account for ${counted} row${counted === 1 ? '' : 's'} of ${rows}`,
+      `AST payload has table_body.headRows ${counted} beyond ${rows} rows at ${path === '' ? '$' : path}`,
     )
     this.name = 'AstJsonPartitionError'
   }
@@ -826,25 +850,20 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       if (field in record) continue
       throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
     }
+    if (type === 'inline_extension' && typeof record.name === 'string' && record.name.includes('.') && !Object.hasOwn(record, 'fallback')) {
+      throw new AstJsonSchemaError('qualified inline extension requires fallback', path)
+    }
     const kinds = ownValue(WIRE_VALUE_KINDS, type as string) ?? {}
     for (const [field, kind] of Object.entries(kinds)) {
+      if (type === 'document' && field === 'astVersion') continue
       if (!(field in record)) continue
       if (record[field] === undefined) continue
       if (!matchesKind(record[field], kind)) {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
-    if (type === 'comment' && record.form !== undefined) {
-      if (!['block', 'line', 'braced'].includes(record.form as string) ||
-          (record.block === true) !== (record.form === 'block') ||
-          (record.delimited === true) !== (record.form === 'braced')) {
-        throw new AstJsonSchemaError('comment form disagrees with block or delimited', path)
-      }
-    }
-    if ((type === 'link' || type === 'image') && record.resolved !== undefined &&
-        (record.resolved !== true || typeof record.ref !== 'string' ||
-         record[type === 'link' ? 'href' : 'src'] !== '')) {
-      throw new AstJsonSchemaError('resolved requires an empty reference destination', path)
+    if (type === 'comment' && !['block', 'line', 'braced'].includes(record.form as string)) {
+      throw new AstJsonSchemaError('comment form is invalid', path)
     }
     refuseArrayMinimums(record, type as string, path)
     if (type === 'table' && Array.isArray(record.separatorWidths)) {
@@ -910,7 +929,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       const at = path === '' ? key : `${path}.${key}`
       refuseNodePosition(value, positionKind, admitted, at)
     }
-    refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
+    if (key !== 'data' && key !== 'metadata' && key !== 'props') {
+      refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
+    }
   }
 }
 
@@ -922,12 +943,21 @@ function refuseSchemaViolations(node: unknown, path: string): void {
  */
 function refuseNodePosition(
   value: unknown,
-  kind: 'nodes' | 'node' | 'node-matrix' | 'records' | undefined,
+  kind: 'nodes' | 'node' | 'node-matrix' | 'node-sequence-map' | 'records' | undefined,
   admitted: readonly string[] | undefined,
   at: string,
 ): void {
   if (kind === 'node') {
     refuseNodeAt(value, admitted, at)
+    return
+  }
+  if (kind === 'node-sequence-map') {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [name, children] of Object.entries(value)) {
+        if (!Array.isArray(children)) throw new AstJsonSchemaError('extension slot must be an array', `${at}.${name}`)
+        children.forEach((child, index) => refuseNodeAt(child, admitted, `${at}.${name}[${index}]`))
+      }
+    }
     return
   }
   if (!Array.isArray(value)) return
@@ -1005,35 +1035,26 @@ function refuseNestedRecordShapes(
 }
 
 /**
- * §15's MUST, checked where the payload comes from outside: the group counts
- * partition `rows`.
- *
- * Runs after the shape checks, so every count it adds is already known to be a
- * non-negative integer and `bodies` is already known to be an array of records.
+ * A body's header rows must fit within that body's children (PART 12 §15).
  */
 function refusePartition(record: Record<string, unknown>, path: string): void {
-  if (record.type !== 'table') return
-  const groups = record.rowGroups as
-    | { headRows?: number; footRows?: number; bodies?: Array<{ headRows?: number; bodyRows?: number }> }
-    | undefined
-  if (groups === undefined) return
-  const rows = Array.isArray(record.rows) ? record.rows.length : 0
-  const counted = (groups.headRows ?? 0) + (groups.footRows ?? 0) +
-    (groups.bodies ?? []).reduce((total, body) => total + (body.headRows ?? 0) + (body.bodyRows ?? 0), 0)
-  if (counted !== rows) throw new AstJsonPartitionError(counted, rows, path)
+  if (record.type !== 'table_body') return
+  const rows = Array.isArray(record.children) ? record.children.length : 0
+  const headRows = Number(record.headRows ?? 0)
+  if (headRows > rows) throw new AstJsonPartitionError(headRows, rows, path)
 }
 
-/**
- * The schema's `if`/`then` on a task item. `WIRE_VALUE_KINDS` sees one field at
- * a time, so the PAIR is unchecked there.
- */
+/** The schema's task mark/status pair spans two fields in a nested record. */
 function refuseTaskState(record: Record<string, unknown>, path: string): void {
-  if (record.type !== 'list_item' || record.taskState === undefined) return
-  const implied = record.taskState === 'x'
-  if (record.checked !== implied) {
+  if (record.type !== 'list_item' || record.task === undefined) return
+  const task = record.task as Record<string, unknown>
+  const status: Readonly<Record<string, string>> = {
+    ' ': 'todo', x: 'done', '-': 'cancelled', _: 'partial', '>': 'partial', '?': 'other',
+  }
+  if (typeof task.mark === 'string' && task.status !== status[task.mark]) {
     throw new AstJsonSchemaError(
-      `taskState ${JSON.stringify(record.taskState)} needs checked ${implied}`,
-      path,
+      `task mark ${JSON.stringify(task.mark)} needs status ${JSON.stringify(status[task.mark])}`,
+      `${path}.task`,
     )
   }
 }
@@ -1044,9 +1065,8 @@ function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: 
       (typeof record.level !== 'number' || record.level > 6)) {
     throw new AstJsonSchemaError('section.level must be an integer from 1 through 6', path)
   }
-  if (record.type === 'table_cell' &&
-      (record.children === undefined) === (record.blocks === undefined)) {
-    throw new AstJsonSchemaError('table_cell requires exactly one of children or blocks', path)
+  if (record.type === 'table_cell' && !Array.isArray(record.children)) {
+    throw new AstJsonSchemaError('table_cell requires children', path)
   }
 }
 
@@ -1220,7 +1240,9 @@ function refuseUnknownFields(node: unknown, path: string): void {
     refuseUnknownRecordFields(type as string, record, path)
   }
   for (const [key, value] of Object.entries(record)) {
-    refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+    if (key !== 'data' && key !== 'metadata' && key !== 'props') {
+      refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+    }
   }
 }
 
@@ -1272,7 +1294,7 @@ const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
  * node inside its group, not an inline a paragraph may hold (CARVE-P12-038).
  */
 const OWNED_NODE_POSITIONS: ReadonlyMap<string, string> = new Map([
-  ['citation', 'citation_group.items'],
+  ['citation', 'citation_group.children'],
 ])
 
 function refuseUnknownNodeTypes(
@@ -1333,6 +1355,12 @@ function refuseUnknownNodeTypes(
     const legacy = position === undefined ? undefined : LEGACY_TYPELESS_POSITIONS.get(position)
     const kind =
       position === undefined ? 'nodes' : legacy !== undefined ? 'records' : NODE_POSITION_KIND[position]
+    if (kind === 'node-sequence-map' && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [name, children] of Object.entries(value)) {
+        refuseUnknownNodeTypes(children, `${path}.${field}.${name}`, Array.isArray(children), undefined, position)
+      }
+      continue
+    }
     refuseUnknownNodeTypes(
       value,
       path === '' ? field : `${path}.${field}`,
@@ -1412,7 +1440,9 @@ function astJsonDepth(
     // every level of a nested list, so measuring a 30-deep list took minutes and
     // a 40-deep one never finished. The fields are walked ONCE each.
     for (const field of DEPTH_WALK_FIELDS) {
-      if (record[field] !== undefined)
+      if (field === 'slots' && record.slots && typeof record.slots === 'object' && !Array.isArray(record.slots)) {
+        for (const value of Object.values(record.slots)) stack.push({ node: value, depth: depth + 1, walk: walk + 1 })
+      } else if (record[field] !== undefined)
         stack.push({ node: record[field], depth: depth + 1, walk: walk + 1 })
     }
   }
@@ -1460,10 +1490,15 @@ function normalizeIngestedValues<T>(node: T): T {
     // naming `__proto__` reaches the prototype setter through plain assignment.
     setOwn((out ??= { ...record }), key, next)
   }
+  const saved = savedExtension(record)
+  if (saved !== undefined) {
+    const normalized = normalizeIngestedValues(saved)
+    if (out !== undefined || normalized !== saved) saveExtension(out ??= { ...record }, normalized)
+  }
   return (out ?? record) as T
 }
 
-export function fromAstJson(input: unknown, payloadByteLength?: number): Document {
+export function fromAstJson(input: unknown, payloadByteLength?: number, knownExtensions: readonly string[] = []): Document {
   // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
   // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
   // CLI flag is `--from-json`; all three of those take text. This one takes the
@@ -1481,19 +1516,33 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
     ? input as Record<string, unknown>
     : undefined
   if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
+  if (typeof json.astVersion === 'string' && json.astVersion.startsWith('1.') ||
+      json.astVersion === undefined && Object.hasOwn(json, 'srcByteLength')) {
+    throw new AstJsonMigrationError()
+  }
   if (Object.hasOwn(json, 'astVersion')) checkAstVersion(json.astVersion)
   // PART 12 §12(a), and before the depth walk for the same reason the root type
   // is: a payload that is not this format should be turned away for that, not
   // for however deep it happens to be. `in` rather than a value test - (a) is
   // about the field being PRESENT, and the value of `srcByteLength` is
   // explicitly not this clause's business.
-  for (const field of ['children', 'srcByteLength'] as const) {
+  for (const field of ['children', 'astVersion'] as const) {
     if (!(field in json)) throw new AstJsonRootFieldError(field)
+  }
+  if (Array.isArray(json.extensions)) {
+    const known = new Set(knownExtensions)
+    for (const extension of json.extensions) {
+      if (extension && typeof extension === 'object' && (extension as Record<string, unknown>).required === true &&
+          !known.has(String((extension as Record<string, unknown>).name))) {
+        throw new AstEnvelopeExtensionError(String((extension as Record<string, unknown>).name))
+      }
+    }
   }
 
   const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
   if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
   if (walk > MAX_AST_JSON_WALK) throw new AstJsonDepthError(walk)
+  if (containsContract12Shape(json)) throw new AstJsonMigrationError()
 
   // AFTER the depth bound, so a payload built to blow the stack is turned away
   // by the cheap check rather than by a full walk of itself (PART 12 §9).
@@ -1520,7 +1569,7 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   // one over a deeply nested object would be walked in full here before the
   // cheap refusal ever ran.
   // The schema checks above establish the wire shape before this conversion.
-  const tree = normalizeIngestedValues(json as unknown as AstJsonDocument)
+  const tree = normalizeIngestedValues(contract2WireToRuntime(json)) as unknown as AstJsonDocument
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
@@ -1614,6 +1663,11 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   }
 
   const doc: Document = { type: 'document', children }
+  for (const field of ['attrs', 'pos', 'data', 'metadata', 'segments', 'dir', 'lang'] as const) {
+    const value = (json as Record<string, unknown>)[field]
+    if (value !== undefined) (doc as unknown as Record<string, unknown>)[field] = value
+  }
+  wireDocumentFacts.set(doc, { extensions: json.extensions, stages: json.stages })
   if (frontmatter !== undefined) doc.frontmatter = frontmatter
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
@@ -1626,7 +1680,7 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   // §3a leaves a cross-reference's display text off the wire, so the reader
   // derives it from the target in this same document (carve-js#2238). AFTER the
   // numbering, whose result the auto-text of a numbered caption's target is.
-  resolveIngestedCrossrefs(doc, captionTargets)
+  if (hasPublishedXrefHref(json)) resolveIngestedCrossrefs(doc, captionTargets)
 
   // WHAT THE SENDER ACTUALLY HAD TO SEND, recorded so the expansion budgets are
   // not sized from a number the payload supplies about itself. Exact when the
@@ -1704,10 +1758,10 @@ function refuseMathNumberConstraints(root: unknown): void {
     if (Array.isArray(value)) { value.forEach((child, i) => walk(child, `${path}[${i}]`)); return }
     const node = value as Record<string, unknown>
     if (node.type === 'math') {
-      if (typeof node.label === 'string' && (node.label.length === 0 || node.label.trim() !== node.label))
-        throw new AstJsonSchemaError('math.label must be non-empty and have no surrounding whitespace', path)
-      if (node.number !== undefined && (node.display !== true || node.label === undefined))
-        throw new AstJsonSchemaError('math.number requires display: true and label', path)
+      if (typeof node.numberPrefix === 'string' && (node.numberPrefix.length === 0 || node.numberPrefix.trim() !== node.numberPrefix))
+        throw new AstJsonSchemaError('math.numberPrefix must be non-empty and have no surrounding whitespace', path)
+      if (node.number !== undefined && (node.display !== true || node.numberPrefix === undefined))
+        throw new AstJsonSchemaError('math.number requires display: true and numberPrefix', path)
     }
     for (const [key, child] of Object.entries(node)) {
       if (key !== 'attrs' && key !== 'pos') walk(child, path ? `${path}.${key}` : key)
@@ -1733,6 +1787,24 @@ function hasPublishedCaptionNumber(blocks: unknown): boolean {
     }
   }
 
+  return false
+}
+
+function hasPublishedXrefHref(root: unknown): boolean {
+  const stack = [root]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+      continue
+    }
+    if (current === null || typeof current !== 'object') continue
+    const node = current as Record<string, unknown>
+    if (node.type === 'xref' && typeof node.href === 'string') return true
+    for (const field of NODE_FIELDS) {
+      if (node[field] !== undefined) stack.push(node[field])
+    }
+  }
   return false
 }
 

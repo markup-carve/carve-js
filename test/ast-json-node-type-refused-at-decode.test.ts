@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AstJsonMigrationError,
   AstJsonNodeTypeError,
   AstJsonUnknownNodeTypeError,
   citations,
@@ -25,7 +26,7 @@ import {
  * decode.
  */
 const doc = (child: unknown) => ({
-  type: 'document',
+  type: 'document', astVersion: '2.0',
   srcByteLength: 3,
   children: [child],
 }) as never
@@ -76,11 +77,10 @@ describe('an ingested node', () => {
       fromAstJson(
         doc({
           type: 'figure',
-          caption: [{ type: 'text', value: 'c' }],
-          target: { children: [{ type: 'text', value: 'x' }] },
+          children: [{ children: [{ type: 'text', value: 'x' }] }],
         }),
       ),
-    ).toThrow(/children\[0\]\.target/)
+    ).toThrow(/children\[0\]\.children\[0\]/)
   })
 
   it('describes the value it found rather than stringifying it', () => {
@@ -135,7 +135,7 @@ describe('a citation item is a node', () => {
             {
               type: 'citation_group',
               raw: '[@a]',
-              items: [{ key: 'a', suppressAuthor: false, pos: position }],
+              children: [{ key: 'a', suppressAuthor: false, pos: position }],
             },
           ],
         }),
@@ -153,12 +153,12 @@ describe('a citation item is a node', () => {
       doc({ type: 'definition_list', items: [{ terms, definitions }] })
     const ok = [[{ type: 'paragraph', children: [] }]]
 
-    expect(() => fromAstJson(legacy([[{ value: 'T' }]], ok))).toThrow(AstJsonNodeTypeError)
+    expect(() => fromAstJson(legacy([[{ value: 'T' }]], ok))).toThrow(AstJsonMigrationError)
     expect(() => fromAstJson(legacy([[{ type: 'wat' }]], ok))).toThrow(
-      AstJsonUnknownNodeTypeError,
+      AstJsonMigrationError,
     )
     expect(() => fromAstJson(legacy([[{ type: 'text', value: 'T' }]], [[{ children: [] }]]))).toThrow(
-      AstJsonNodeTypeError,
+      AstJsonMigrationError,
     )
   })
 
@@ -169,7 +169,7 @@ describe('a citation item is a node', () => {
     // was accepted and then silently dropped by `entriesFromWire`. Same for a
     // citation item with an invalid one.
     expect(() =>
-      fromAstJson(doc({ type: 'definition_list', items: [{ type: 7, children: [] }] })),
+      fromAstJson(doc({ type: 'definition_list', spacing: 'tight', children: [{ type: 7, children: [] }] })),
     ).toThrow(AstJsonNodeTypeError)
 
     expect(() =>
@@ -177,7 +177,7 @@ describe('a citation item is a node', () => {
         doc({
           type: 'paragraph',
           children: [
-            { type: 'citation_group', raw: '[@a]', items: [{ type: null, key: 'a' }] },
+            { type: 'citation_group', raw: '[@a]', children: [{ type: null, key: 'a' }] },
           ],
         }),
       ),
@@ -190,7 +190,7 @@ describe('a citation item is a node', () => {
     // `entriesFromWire` drops it, so exempting the whole POSITION would accept
     // the payload and make the content vanish.
     expect(() =>
-      fromAstJson(doc({ type: 'definition_list', items: [{ children: [] }] })),
+      fromAstJson(doc({ type: 'definition_list', spacing: 'tight', children: [{ children: [] }] })),
     ).toThrow(AstJsonNodeTypeError)
 
     // And the current typed form still decodes, which is what the schema
@@ -198,8 +198,8 @@ describe('a citation item is a node', () => {
     expect(() =>
       fromAstJson(
         doc({
-          type: 'definition_list',
-          items: [
+          type: 'definition_list', spacing: 'tight',
+          children: [
             { type: 'definition_term', children: [] },
             { type: 'definition_description', children: [] },
           ],
@@ -208,7 +208,7 @@ describe('a citation item is a node', () => {
     ).not.toThrow()
   })
 
-  it('is accepted in the older definition-list grouping form', () => {
+  it('refuses the older definition-list grouping form', () => {
     // A legacy acceptance, recorded as one: `items: [{terms, definitions}]` is
     // what this engine published before the wire shape settled, those trees are
     // stored, and `definitionListsFromWire` still maps them.
@@ -224,7 +224,7 @@ describe('a citation item is a node', () => {
           ],
         }),
       ),
-    ).not.toThrow()
+    ).toThrow(AstJsonMigrationError)
   })
 })
 
@@ -243,7 +243,7 @@ describe('the wrong-type rows, RULED by carve#881', () => {
     // "a reader that supplies a default has turned a truncated document into an
     // empty one". That is exactly what reading `{}` as an empty document did.
     expect(() =>
-      fromAstJson({ type: 'document', srcByteLength: 0, children: {} } as never),
+      fromAstJson({ type: 'document', astVersion: '2.0', srcByteLength: 0, children: {} } as never),
     ).toThrow(AstJsonSchemaError)
   })
 
@@ -259,7 +259,7 @@ describe('the wrong-type rows, RULED by carve#881', () => {
     // exactly like a clause being enforced.
     expect(() =>
       fromAstJson({
-        type: 'document',
+        type: 'document', astVersion: '2.0',
         srcByteLength: 1,
         children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }],
       } as never),

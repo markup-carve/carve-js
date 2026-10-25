@@ -3016,7 +3016,8 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
 const isDefinitionPayload = (payload: string): boolean => /^::[ \t]/.test(payload) || payload === ':' || payload === ''
 
 /** An ordered-list style carried by its first canonical Carve marker. */
-function carrierListStyle(payload: string, start?: number): List['olType'] | undefined {
+function carrierListStyle(payload: string, start?: number): List['olType'] | '1' | undefined {
+  if (/^[0-9]+[.)]$/.test(payload)) return '1'
   const markers = /^([A-Za-z]+[.)])(?: ([A-Za-z]+[.)]))?$/.exec(payload)
   if (!markers) return undefined
   if (markers[2] !== undefined) {
@@ -3612,14 +3613,16 @@ function restoreCarrierMarkers(carve: string): string {
           const list = value[at + 1] as BlockNode | undefined
           const style = slots.map(slot => slot && carrierListStyle(slot.payload, list?.type === 'list' ? list.start ?? 1 : undefined)).find(value => value !== undefined)
           if (style !== undefined && list?.type === 'list' && list.ordered && node.pos) {
+            const carrier = slots.find(slot => slot && carrierListStyle(slot.payload, list.start ?? 1) !== undefined)?.payload ?? ''
+            const delimiter = carrier.match(/[.)]$/)?.[0] ?? '.'
             removed.add(node.pos.startLine - 1)
             if (/^[ \t>]*$/.test(sourceLines[node.pos.endLine] ?? '')) removed.add(node.pos.endLine)
             if (node.pos.startLine > 1 && /^\s*>[\s>]*$/.test(sourceLines[node.pos.startLine - 2]!)) removed.add(node.pos.startLine - 2)
             for (const [index, item] of list.items.entries()) {
               if (!item.pos) continue
               const line = item.pos.startLine - 1
-              sourceLines[line] = sourceLines[line]!.replace(/^([ \t>]*?)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
-                `${lead}${orderedMarker((list.start ?? 1) + index, style)}${delim}`)
+              sourceLines[line] = sourceLines[line]!.replace(/^([ \t>]*?)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, authoredDelimiter: string) =>
+                `${lead}${orderedMarker((list.start ?? 1) + index, style === '1' ? undefined : style)}${style === '1' ? delimiter : authoredDelimiter}`)
             }
           }
         }
@@ -7321,7 +7324,7 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
         if (!item.pos) return undefined
         const line = item.pos.startLine - 1
         lines[line] = lines[line]!.replace(/^([ \t]*)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
-          `${lead}${orderedMarker((list.start ?? 1) + itemIndex, style)}${delim}`)
+          `${lead}${orderedMarker((list.start ?? 1) + itemIndex, style === '1' ? undefined : style)}${delim}`)
       }
     }
   }

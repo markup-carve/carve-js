@@ -15,6 +15,8 @@ import { carveToAstJson, carveToHtml } from '../src/index.js'
  */
 describe('a leading byte order mark', () => {
   const BOM = '\uFEFF'
+  const bytes = (source: string, start: number, end: number) =>
+    new TextDecoder().decode(new TextEncoder().encode(source).slice(start, end))
 
   it('leaves every offset indexing the original source', () => {
     // The property stated as a consumer would use it: slice the ORIGINAL text
@@ -24,8 +26,8 @@ describe('a leading byte order mark', () => {
     const heading = doc.children[0]
     const paragraph = doc.children[1]
 
-    expect(source.slice(heading.children[0].pos.startOffset, heading.children[0].pos.endOffset)).toBe('T')
-    expect(source.slice(paragraph.children[0].pos.startOffset, paragraph.children[0].pos.endOffset)).toBe('abc')
+    expect(bytes(source, heading.children[0].pos.startOffset, heading.children[0].pos.endOffset)).toBe('T')
+    expect(bytes(source, paragraph.children[0].pos.startOffset, paragraph.children[0].pos.endOffset)).toBe('abc')
   })
 
   it('puts the first line content one column in, since the mark occupies the first', () => {
@@ -41,7 +43,7 @@ describe('a leading byte order mark', () => {
     const doc = carveToAstJson(source) as any
 
     expect(doc.children[0].pos.startColumn).toBe(1)
-    expect(source.slice(doc.children[0].children[0].pos.startOffset, doc.children[0].children[0].pos.endOffset)).toBe('T')
+    expect(bytes(source, doc.children[0].children[0].pos.startOffset, doc.children[0].children[0].pos.endOffset)).toBe('T')
   })
 
   it('still strips the mark for parsing', () => {
@@ -56,7 +58,7 @@ describe('a leading byte order mark', () => {
     const source = `a${BOM}b\n`
     const doc = carveToAstJson(source) as any
 
-    expect(source.slice(doc.children[0].children[0].pos.startOffset, doc.children[0].children[0].pos.endOffset)).toBe(`a${BOM}b`)
+    expect(bytes(source, doc.children[0].children[0].pos.startOffset, doc.children[0].children[0].pos.endOffset)).toBe(`a${BOM}b`)
   })
 
   it('is not the only normalization that used to shift them', () => {
@@ -67,13 +69,13 @@ describe('a leading byte order mark', () => {
     const source = '# T\r\n\r\nabc\r\n'
     const doc = carveToAstJson(source) as any
 
-    expect([...source].slice(doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset).join('')).toBe('abc')
+    expect(bytes(source, doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset)).toBe('abc')
   })
 
   it('handles a lone carriage return the same way', () => {
     const source = '# T\r\rabc\r'
     const doc = carveToAstJson(source) as any
 
-    expect([...source].slice(doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset).join('')).toBe('abc')
+    expect(bytes(source, doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset)).toBe('abc')
   })
 })

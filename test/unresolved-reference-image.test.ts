@@ -7,6 +7,7 @@ import {
   carveToPlainText,
   fromAstJson,
   parse,
+  renderCarve,
   renderHtml,
   toAstJson,
 } from '../src/index.js'
@@ -29,9 +30,9 @@ describe('an unresolved reference image is an image node that renders as its sou
     expect(paragraph.children).toHaveLength(1)
     expect(paragraph.children[0]).toMatchObject({
       type: 'image',
-      src: '',
       alt: 'alt',
-      ref: 'nope',
+      key: 'nope',
+      namespace: 'link',
       rawRef: '![alt][nope]',
     })
   })
@@ -43,6 +44,14 @@ describe('an unresolved reference image is an image node that renders as its sou
       // §6: the decoded tree is the parsed tree, so it must render the same.
       expect(renderHtml(fromAstJson(toAstJson(parse(source))))).toBe(expected)
     }
+  })
+
+  it('keeps the runtime image unresolved before a caption-shaped line', () => {
+    const source = '![a][missing]\n^ cap\n'
+    const restored = fromAstJson(toAstJson(parse(source)))
+    const image = (restored.children[0] as { children: { src?: string }[] }).children[0]
+    expect(image?.src).toBe('')
+    expect(renderCarve(restored)).toBe(renderCarve(parse(source)))
   })
 
   it('escapes the source like any other literal text', () => {

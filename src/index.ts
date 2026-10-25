@@ -134,6 +134,7 @@ export {
   toAstJson,
   fromAstJson,
   AstJsonDepthError,
+  AstJsonMigrationError,
   AstJsonRootError,
   // PART 12 §9(b) and §12 both ask for a TYPED, DOCUMENTED refusal. A class a
   // consumer cannot import is neither, so every ingest error the decoder raises

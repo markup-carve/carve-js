@@ -8,6 +8,7 @@ import {
   renderHtml,
   renderMarkdown,
   renderPlainText,
+  toAstJson,
 } from '../src/index.js'
 import type { Document, Figure, FigureGroup } from '../src/index.js'
 
@@ -135,31 +136,20 @@ describe('constructed figure invariants', () => {
   })
 
   it.each(['targets', 'captions'])('refuses the plural %s field on the wire', (field) => {
-    const payload = {
-      type: 'document',
-      srcByteLength: 0,
-      children: [
-        {
-          ...figure(paragraph('target'), 'caption'),
-          [field]: [],
-        },
-      ],
-    }
+    const payload = toAstJson(document([figure(paragraph('target'), 'caption')])) as unknown as { children: Array<Record<string, unknown>> }
+    payload.children[0]![field] = []
 
     expect(() => fromAstJson(payload as never)).toThrow(AstJsonUnknownFieldError)
     expect(() => fromAstJson(payload as never)).toThrow(`carries "${field}"`)
   })
 
-  it('refuses an array in the singular target field', () => {
-    const payload = {
-      type: 'document',
-      srcByteLength: 0,
-      children: [{ ...figure(paragraph('target'), 'caption'), target: [paragraph('target')] }],
-    }
+  it('refuses an array where a figure child node belongs', () => {
+    const payload = toAstJson(document([figure(paragraph('target'), 'caption')])) as unknown as { children: Array<Record<string, unknown>> }
+    payload.children[0]!.children = [[paragraph('target')]]
 
     expect(() => fromAstJson(payload as never)).toThrow(AstJsonSchemaError)
     expect(() => fromAstJson(payload as never)).toThrow(
-      'children[0].target: an array sits where a node belongs',
+      'children[0].children[0]: an array sits where a node belongs',
     )
   })
 })

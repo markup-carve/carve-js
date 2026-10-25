@@ -8,10 +8,11 @@ const refOf = (source: string) => {
   return tree.children[0]!.children!.find((n) => n['type'] === 'footnote_ref')!
 }
 
-describe('PART 12 §25: a footnote reference spells its target `label`', () => {
-  it('publishes `label`, the name its definition uses', () => {
+describe('a footnote reference uses the 2.0 reference key', () => {
+  it('publishes the key and footnote namespace', () => {
     const ref = refOf('a[^1]\n\n[^1]: n\n')
-    expect(ref['label']).toBe('1')
+    expect(ref['key']).toBe('1')
+    expect(ref['namespace']).toBe('footnote')
     expect(ref['id']).toBeUndefined()
   })
 
@@ -26,6 +27,8 @@ describe('PART 12 §25: a footnote reference spells its target `label`', () => {
     expect(() =>
       fromAstJson({
         type: 'document',
+        astVersion: '2.0',
+        stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
         srcByteLength: 1,
         children: [{ type: 'paragraph', children: [{ type: 'footnote_ref', id: '1' }] }],
       } as never),
@@ -38,7 +41,8 @@ describe('PART 12 §25: a footnote reference spells its target `label`', () => {
       children: Array<{ children?: Array<Record<string, unknown>> }>
     }
     const ref = again.children[0]!.children!.find((n) => n['type'] === 'footnote_ref')!
-    expect(ref['label']).toBe('1')
+    expect(ref['key']).toBe('1')
+    expect(ref['namespace']).toBe('footnote')
   })
 
   it('leaves rendered output alone', () => {

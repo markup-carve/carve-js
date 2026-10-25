@@ -193,14 +193,14 @@ describe('the recorded extent is in the same unit as every other span', () => {
   // under any other name kept UTF-16 offsets while its neighbours were
   // converted: one document, two units.
   const EMOJI = '\u{1F600}'
-  const codepoints = (source: string, from: number, to: number) =>
-    [...source].slice(from, to).join('')
+  const bytes = (source: string, from: number, to: number) =>
+    new TextDecoder().decode(new TextEncoder().encode(source).slice(from, to))
 
-  it('an emptied description is placed in codepoints, not code units', () => {
+  it('an emptied description is placed in UTF-8 bytes', () => {
     const source = `${EMOJI}\n\n:: term\n:  [r]: /u\n\nsee [t][r]\n`
     const pos = descriptions(source)[0]!.pos!
 
-    expect(codepoints(source, pos.startOffset!, pos.endOffset!)).toBe(':  [r]: /u')
+    expect(bytes(source, pos.startOffset!, pos.endOffset!)).toBe(':  [r]: /u')
   })
 
   it('and a footnote definition is too, which it was not before', () => {
@@ -228,14 +228,12 @@ describe('the recorded extent is in the same unit as every other span', () => {
     // offsets are counted in, and the trailing newline was never part of that
     // claim - the emoji ahead of the definition is what makes a wrong unit
     // show up here.
-    expect(codepoints(astral, spanOf(astral).startOffset, spanOf(astral).endOffset)).toBe(
+    expect(bytes(astral, spanOf(astral).startOffset, spanOf(astral).endOffset)).toBe(
       '[^f]: body',
     )
-    // The astral document and the plain one differ by one CODEPOINT before the
-    // definition, so their spans must be equal - the emoji is one codepoint and
-    // `x` is one codepoint. Under the old conversion they differed by one,
-    // which is the whole defect stated as a comparison.
-    expect(spanOf(astral)).toEqual(spanOf(plain))
+    // An emoji uses three more UTF-8 bytes than the ASCII control.
+    expect(spanOf(astral).startOffset - spanOf(plain).startOffset).toBe(3)
+    expect(spanOf(astral).endOffset - spanOf(plain).endOffset).toBe(3)
   })
 })
 
@@ -300,7 +298,7 @@ describe('an emptied description survives the round trip through fromAstJson', (
     const list = (round as unknown as { children: Array<Record<string, unknown>> }).children.find(
       (c) => c['type'] === 'definition_list',
     )!
-    const dd = (list['items'] as Array<Record<string, unknown>>).find(
+    const dd = (list['children'] as Array<Record<string, unknown>>).find(
       (i) => i['type'] === 'definition_description',
     )!
     const pos = dd['pos'] as { startOffset: number; endOffset: number }
@@ -329,10 +327,13 @@ describe('an emptied description survives the round trip through fromAstJson', (
     // third. Written as a payload rather than as source for that reason.
     const wire = {
       type: 'document',
+      astVersion: '2.0',
+      stages: ['blockImagePromotion', 'referenceResolution', 'tableAlignment'],
       children: [
         {
           type: 'definition_list',
-          items: [
+          spacing: 'tight',
+          children: [
             { type: 'definition_term', children: [] },
             { type: 'definition_description', children: [] },
             {
@@ -353,9 +354,9 @@ describe('an emptied description survives the round trip through fromAstJson', (
       srcByteLength: 31,
     }
     const round = toAstJson(fromAstJson(wire)) as unknown as {
-      children: Array<{ items: Array<Record<string, unknown>> }>
+      children: Array<{ children: Array<Record<string, unknown>> }>
     }
-    const dds = round.children[0]!.items.filter((i) => i['type'] === 'definition_description')
+    const dds = round.children[0]!.children.filter((i) => i['type'] === 'definition_description')
 
     expect(dds).toHaveLength(2)
     expect(dds[0]!['pos']).toBeUndefined()

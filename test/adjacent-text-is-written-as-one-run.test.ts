@@ -7,7 +7,7 @@ import type { InlineNode } from '../src/ast.js'
 // are pinned in carve-rs and carve-php.
 const written = (inlines: string): string =>
   renderCarve(
-    fromAstJson(JSON.parse(`{"type":"document","children":[{"type":"paragraph","children":[${inlines}]}],"srcByteLength":0}`)),
+    fromAstJson(JSON.parse(`{"type":"document","astVersion":"2.0","stages":["blockImagePromotion","referenceResolution","tableAlignment"],"children":[{"type":"paragraph","children":[${inlines}]}],"srcByteLength":0}`)),
   )
 
 describe('adjacent text is written as one run', () => {
@@ -24,7 +24,7 @@ describe('adjacent text is written as one run', () => {
   })
 
   it('writes a flattened ruby as the text it flattens to', () => {
-    const ruby = '{"type":"ruby","pairs":[{"base":[{"type":"text","value":"["}],"annotation":[{"type":"text","value":"r"}]}]}'
+    const ruby = '{"type":"ruby","pairs":[{"type":"ruby_pair","base":[{"type":"text","value":"["}],"annotation":[{"type":"text","value":"r"}]}]}'
     expect(written(`{"type":"span","attrs":{"classes":["c"]},"children":[${ruby}]}`)).toBe('[\\[\\(r)]{.c}\n')
     expect(written(`{"type":"span","attrs":{"classes":["c"]},"children":[{"type":"emphasis","children":[${ruby}]}]}`)).toBe(
       '[/\\[\\(r)/]{.c}\n',

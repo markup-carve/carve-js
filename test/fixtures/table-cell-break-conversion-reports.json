@@ -7,31 +7,53 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "a"
-                    },
-                    {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "text",
-                      "value": "b"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "a"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "text",
+                              "value": "b"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -49,27 +71,49 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "hard_break"
-                    },
-                    {
-                      "type": "text",
-                      "value": "a"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "text",
+                              "value": "a"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -87,27 +131,49 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "a"
-                    },
-                    {
-                      "type": "hard_break"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "a"
+                            },
+                            {
+                              "type": "hard_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -125,43 +191,65 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "strong",
+                      "type": "table_cell",
+                      "header": false,
                       "children": [
                         {
-                          "type": "text",
-                          "value": "a"
-                        },
-                        {
-                          "type": "hard_break"
-                        },
-                        {
-                          "type": "text",
-                          "value": "b"
-                        },
-                        {
-                          "type": "hard_break"
-                        },
-                        {
-                          "type": "text",
-                          "value": "c"
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "strong",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "value": "a"
+                                },
+                                {
+                                  "type": "hard_break"
+                                },
+                                {
+                                  "type": "text",
+                                  "value": "b"
+                                },
+                                {
+                                  "type": "hard_break"
+                                },
+                                {
+                                  "type": "text",
+                                  "value": "c"
+                                }
+                              ]
+                            }
+                          ]
                         }
-                      ]
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -183,36 +271,53 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
-                  "blocks": [
+                  "type": "table_row",
+                  "children": [
                     {
-                      "type": "paragraph",
+                      "type": "table_cell",
+                      "header": false,
                       "children": [
                         {
-                          "type": "text",
-                          "value": "a"
-                        },
-                        {
-                          "type": "hard_break"
-                        },
-                        {
-                          "type": "text",
-                          "value": "b"
+                          "type": "paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "a"
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
+                              "type": "text",
+                              "value": "b"
+                            }
+                          ]
                         }
-                      ]
+                      ],
+                      "sourceContent": "blocks"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -249,6 +354,12 @@
             }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": []
@@ -261,25 +372,47 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "raw_inline",
-                      "format": "html",
-                      "content": "<br>"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "raw_inline",
+                              "format": "html",
+                              "value": "<br>"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": []
@@ -292,29 +425,60 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
-                  "children": []
-                },
-                {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "filler"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": []
+                        }
+                      ],
+                      "sourceContent": "inline"
+                    },
+                    {
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "filler"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            },
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": []
@@ -327,41 +491,58 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
-                  "blocks": [
+                  "type": "table_row",
+                  "children": [
                     {
-                      "type": "paragraph",
+                      "type": "table_cell",
+                      "header": false,
                       "children": [
                         {
-                          "type": "small_caps",
+                          "type": "paragraph",
                           "children": [
                             {
+                              "type": "small_caps",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "value": "a"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "hard_break"
+                            },
+                            {
                               "type": "text",
-                              "value": "a"
+                              "value": "b"
                             }
                           ]
-                        },
-                        {
-                          "type": "hard_break"
-                        },
-                        {
-                          "type": "text",
-                          "value": "b"
                         }
-                      ]
+                      ],
+                      "sourceContent": "blocks"
                     }
                   ]
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": [
@@ -388,34 +569,65 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "a"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "a"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
+                    },
+                    {
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "hard_break"
+                            }
+                          ]
+                        }
+                      ],
+                      "span": "colspan",
+                      "sourceContent": "inline"
                     }
                   ]
-                },
-                {
-                  "type": "table_cell",
-                  "header": false,
-                  "children": [
-                    {
-                      "type": "hard_break"
-                    }
-                  ],
-                  "span": "colspan"
                 }
               ]
             }
+          ],
+          "columns": [
+            {
+              "type": "table_column"
+            },
+            {
+              "type": "table_column"
+            }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": []
@@ -428,37 +640,67 @@
       "children": [
         {
           "type": "table",
-          "rows": [
+          "caption": {
+            "type": "caption",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "a"
+                  },
+                  {
+                    "type": "hard_break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          "children": [
             {
-              "type": "table_row",
-              "cells": [
+              "type": "table_body",
+              "children": [
                 {
-                  "type": "table_cell",
-                  "header": false,
+                  "type": "table_row",
                   "children": [
                     {
-                      "type": "text",
-                      "value": "cell"
+                      "type": "table_cell",
+                      "header": false,
+                      "children": [
+                        {
+                          "type": "cell_paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "cell"
+                            }
+                          ]
+                        }
+                      ],
+                      "sourceContent": "inline"
                     }
                   ]
                 }
               ]
             }
           ],
-          "caption": [
+          "columns": [
             {
-              "type": "text",
-              "value": "a"
-            },
-            {
-              "type": "hard_break"
-            },
-            {
-              "type": "text",
-              "value": "b"
+              "type": "table_column"
             }
           ]
         }
+      ],
+      "astVersion": "2.0",
+      "stages": [
+        "blockImagePromotion",
+        "referenceResolution",
+        "tableAlignment"
       ]
     },
     "diagnostics": []

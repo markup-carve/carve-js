@@ -19,15 +19,6 @@ type Positioned = { pos?: { startOffset?: number; endOffset?: number } }
 
 /** Build the optional PART 12 §13 sidecar without changing the AST payload. */
 export function toSourceLayout(source: string, ast: AstJsonDocument): SourceLayout {
-  const points = [...source]
-  const offsets = [0]
-  let bytes = 0
-  for (const point of points) {
-    const code = point.codePointAt(0)!
-    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4
-    offsets.push(bytes)
-  }
-  const byteAt = (offset: number): number => offsets[Math.min(Math.max(offset, 0), points.length)]!
   const nodes: SourceLayoutNode[] = []
   const escape = (key: string) => key.replace(/~/g, '~0').replace(/\//g, '~1')
   const walk = (value: unknown, path: string): void => {
@@ -36,7 +27,7 @@ export function toSourceLayout(source: string, ast: AstJsonDocument): SourceLayo
     const start = positioned.pos?.startOffset
     const end = positioned.pos?.endOffset
     if (Number.isInteger(start) && Number.isInteger(end)) {
-      nodes.push({ path, startByte: byteAt(start!), endByte: byteAt(end!) })
+      nodes.push({ path, startByte: start!, endByte: end! })
     }
     if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path}/${index}`))
     else Object.entries(value).forEach(([key, child]) => {

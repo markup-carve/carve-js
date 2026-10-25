@@ -142,9 +142,9 @@ describe('block image is a resolved-tree property', () => {
    */
   describe('on ingest', () => {
     const doc = (children: unknown[]): Document =>
-      fromAstJson({ type: 'document', srcByteLength: 0, children } as never)
+      fromAstJson({ type: 'document', astVersion: '2.0', stages: ['referenceResolution', 'tableAlignment'], srcByteLength: 0, children } as never)
 
-    it('promotes a legacy tree that omits the field', () => {
+    it('promotes a tree that omits the stage and field', () => {
       const ingested = doc([{ type: 'paragraph', children: [{ type: 'image', src: '/u', alt: 'a' }] }])
       expect(ingested.children[0]).toMatchObject({ type: 'paragraph', blockImage: true })
     })

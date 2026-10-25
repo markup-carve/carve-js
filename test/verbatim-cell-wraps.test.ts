@@ -34,7 +34,12 @@ describe('a continuation join inside a verbatim inline', () => {
     it(`matches the acceptance row ${row.id}`, () => {
       const tree = parse(row.source)
       expect((atPointer(tree, '/children/0/rows/0') as { continuationLines?: number }).continuationLines).toBe(row.continuationLines ?? 1)
-      expect(withoutPos(atPointer(tree, row.path))).toEqual(row.expected)
+      const actual = withoutPos(atPointer(toAstJson(tree), row.path)) as Record<string, unknown>
+      if (actual?.type === 'table_cell' && !(row.expected as Record<string, unknown>).sourceContent) {
+        expect(actual.sourceContent).toBe('inline')
+        delete actual.sourceContent
+      }
+      expect(actual).toEqual(row.expected)
     })
 
     it(`writes ${row.id} so it reads back the same`, () => {

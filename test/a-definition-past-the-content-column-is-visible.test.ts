@@ -3,7 +3,7 @@ import { parse, toAstJson } from '../src/index.js'
 
 const listTight = (source: string): boolean | undefined => {
   const children = toAstJson(parse(source)).children
-  return children.find((child) => child.type === 'list')?.tight as boolean | undefined
+  return (children.find((child) => child.type === 'list') as unknown as { spacing?: string } | undefined)?.spacing === 'tight'
 }
 
 /**

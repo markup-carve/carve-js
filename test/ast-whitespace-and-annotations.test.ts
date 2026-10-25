@@ -18,13 +18,13 @@ describe('AST whitespace and annotation contract', () => {
     expect(toAstJson(fromAstJson(ast))).toEqual(ast)
   })
 
-  it('uses codepoints and schema field order independently of JSON insertion order', () => {
+  it('uses UTF-8 bytes and schema field order independently of JSON insertion order', () => {
     const fixture = JSON.parse(readFileSync(new URL('../spec/tests/fixtures/annotation-projection.json', import.meta.url), 'utf8'))
     const reverseKeys = (v: any): any => Array.isArray(v) ? v.map(reverseKeys) : v && typeof v === 'object'
       ? Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, reverseKeys(x)])) : v
     for (const tree of [fixture.document, reverseKeys(fixture.document)]) {
-      for (const range of fixture.valid) expect(() => readAnnotationRanges({ version: 1, ranges: [{ id: 'r', kind: 'test', ...range }] }, tree)).not.toThrow()
-      for (const range of fixture.invalid) expect(() => readAnnotationRanges({ version: 1, ranges: [{ id: 'r', kind: 'test', ...range }] }, tree)).toThrow(AstSidecarError)
+      for (const range of fixture.valid) expect(() => readAnnotationRanges({ version: 2, ranges: [{ id: 'r', kind: 'org.example.test', ...range }] }, tree)).not.toThrow()
+      for (const range of fixture.invalid) expect(() => readAnnotationRanges({ version: 2, ranges: [{ id: 'r', kind: 'org.example.test', ...range }] }, tree)).toThrow(AstSidecarError)
     }
   })
 })
@@ -50,7 +50,7 @@ it('never publishes an internal line-block marker in string fields', () => {
 })
 
 it('preserves attributes on an ingested generated space through source', () => {
-  const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'paragraph', children: [
+  const doc = fromAstJson({ type: 'document', astVersion: '2.0', srcByteLength: 0, children: [{ type: 'paragraph', children: [
     { type: 'non_breaking_space', attrs: { classes: ['gap'] } },
   ] }] })
   expect(carveToHtml(renderCarve(doc))).toBe(renderHtml(doc))
