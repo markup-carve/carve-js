@@ -85,7 +85,7 @@ export const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
 export const RE_CAPTION = /^\^ +(.*[^ \t\n\r].*)$/
 
-export const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')?[ \t]*\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
+export const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')? *\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
 
 // The same fence seen from a position that CONSUMES it. A comment is recognized
 // at any column (carve#624), but where a line ENDS an item or opens a block the
