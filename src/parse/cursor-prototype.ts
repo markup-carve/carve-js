@@ -432,6 +432,12 @@ function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
     RE_HEADING.test(block)) ? column : base
 }
 
+function beginsOpenQuotedParagraph(body: SourceLine[]): boolean {
+  if (body.length !== 1 || !body[0]!.text.startsWith('>')) return false
+  const first = body[0]!.text
+  return plainQuoteText(first.slice(first[1] === ' ' ? 2 : 1))
+}
+
 function followsClosedListBlock(body: SourceLine[]): boolean {
   const last = body.at(-1)?.text
   return last !== undefined && (last === '' || parseBlockAttributeRun(last) !== null ||
@@ -1431,6 +1437,12 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean }
 
+function shouldMatchShiftedListFence(frame: ListCursorFrame, line: SourceLine,
+  prefix: number, stackLength: number): boolean {
+  return !frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
+    !listMarker(frame.body[0]?.text ?? '') && !beginsOpenQuotedParagraph(frame.body)
+}
+
 function continuedListFencePrefix(frame: ListCursorFrame, line: SourceLine, prefix: number): number {
   if (!line.text.startsWith(' '.repeat(frame.fencePrefix!))) {
     if (!frame.fenceMayDedent) throw new UnsupportedCursorSyntax('shifted fence continuation')
@@ -1955,8 +1967,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     let bodyPrefix = prefix.length
     if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
       bodyPrefix = continuedListFencePrefix(top, line, bodyPrefix)
-    } else if (!top.fenceMarker && line.text[bodyPrefix] === ' ' && stack.length === 1 &&
-        !listMarker(top.body[0]?.text ?? '')) {
+    } else if (shouldMatchShiftedListFence(top, line, bodyPrefix, stack.length)) {
       top.fenceMayDedent = cursor.owner.kind !== 'quote' && followsClosedListBlock(top.body)
       bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix, top.fenceMayDedent)
     }
@@ -2068,9 +2079,9 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     lastBodyText.trim() === '}' &&
     body.at(-2)!.text.trimStart().startsWith('{') &&
     probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), body.at(-1)!.text.trimStart()]))
-  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail) {
-    const inlineCode = cursor.peek()?.text[0] === ' ' && cursor.peek()!.text.includes('`') ?
-      takeQuotedInlineCodeContinuation(cursor, body) : undefined
+  const inlineCode = !wrappedAttributeTail && cursor.peek()?.text[0] === ' ' &&
+    cursor.peek()!.text.includes('`') ? takeQuotedInlineCodeContinuation(cursor, body) : undefined
+  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail || inlineCode) {
     if (!inlineCode) throw new UnsupportedCursorSyntax('lazy quote continuation')
     body.push(...inlineCode)
     last = inlineCode.at(-1)!
