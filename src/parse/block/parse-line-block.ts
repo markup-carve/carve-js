@@ -64,7 +64,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         const comment: Comment = {
           type: 'comment',
           block: false,
-          content: trimEndSpaceTab(ln.slice(2).replace(/^[ \t]/, '')),
+          content: trimEndSpaceTab(ln.slice(2).replace(/^ /, '')),
         }
         if (lexer.hasDocumentOffsets) {
           comment.pos = {

@@ -1051,8 +1051,7 @@ export function quotedFenceHasCloser(
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
 export function commentLineContent(line: string): string {
-  // ONE separator character, and it is `whitespace` (markup-carve/carve#977).
-  return trimEndSpaceTab(line.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, ''))
+  return trimEndSpaceTab(line.replace(/^[ \t]*%%/, '').replace(/^ /, ''))
 }
 
 export function parseCommentBlock(lexer: Lexer): Comment {

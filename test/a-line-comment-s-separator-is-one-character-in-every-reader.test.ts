@@ -28,9 +28,9 @@ const readers: Array<[string, (line: string) => string]> = [
 describe("a line comment's separator", () => {
   for (const [name, wrap] of readers) {
     describe(name, () => {
-      it("consumes exactly one space or tab, so a second one is content", () => {
+      it("consumes exactly one space, leaving a tab as content", () => {
         expect(commentContents(wrap("%%  x"))).toEqual([" x"]);
-        expect(commentContents(wrap("%%\t x"))).toEqual([" x"]);
+        expect(commentContents(wrap("%%\t x"))).toEqual(["\t x"]);
         expect(commentContents(wrap("%%x"))).toEqual(["x"]);
       });
 
@@ -44,7 +44,7 @@ describe("a line comment's separator", () => {
       });
 
       it("writes a form that reads back to the same content", () => {
-        for (const line of ["%%  x", "%% x", "%%  x \t ", "%% x  "]) {
+        for (const line of ["%%  x", "%%\t x", "%% x", "%%  x \t ", "%% x  "]) {
           const written = carveToCarve(wrap(line));
           expect(carveToCarve(written)).toBe(written);
           expect(commentContents(written)).toEqual(commentContents(wrap(line)));
