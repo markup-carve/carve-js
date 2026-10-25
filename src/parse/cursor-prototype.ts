@@ -916,6 +916,11 @@ function ambiguousDegradedComment(cursor: Cursor, first: SourceLine,
 
 function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
   if (ABBR_DEF.test(text)) return false
+  if (text[0] === ' ') {
+    const unindented = text.trimStart()
+    if ((unindented[0] === '`' || unindented[0] === '~') &&
+        (fenceOpen(unindented) || RE_RAW_FENCE.test(unindented))) return true
+  }
   if (!RE_CAPTION.test(text)) return isBlockStart(text)
   let only: string | undefined
   for (const line of body) {
