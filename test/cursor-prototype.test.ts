@@ -57,6 +57,14 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- item **bold** text\n',
+    '1. item [link](/u)\n',
+    '- item with trailing spaces  \n',
+  ])('builds a one-line list paragraph with its public inline and source positions: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '[x][r]\n\n[r]: /url "Title"\n',
     '[x][r]\n\n[r]: /url {.external}\n',
     '[x][r]\n\n[r]: /first\n\n[r]: /last\n',

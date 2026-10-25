@@ -1592,11 +1592,18 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           frame.contentColumn !== undefined &&
           !next.text.startsWith(' '.repeat(frame.contentColumn - 1))))
     }
-    frame.item.children.push(...parseBlocks(
-      new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
-        frame.fenceMayDedent),
-        cursor.physicalLines),
-      inline, definitionNodes, depth + 1, false))
+    if (frame.body.length === 1 && plainQuoteText(firstText) && !frame.body[0]!.lazyText) {
+      const line = frame.body[0]!
+      frame.item.children.push({ type: 'paragraph',
+        children: inline.inlines([{ line, column: 1, text: line.text }]),
+        pos: position(line, line, 1, line.text.replace(/[ \t]+$/, '').length + 1) })
+    } else {
+      frame.item.children.push(...parseBlocks(
+        new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
+          frame.fenceMayDedent),
+          cursor.physicalLines),
+        inline, definitionNodes, depth + 1, false))
+    }
     trimFrameEnd(frame)
     frame.body = []
     frame.possibleInvisibleTail = false
