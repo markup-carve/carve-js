@@ -1181,6 +1181,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> - intro\n> tail\n', '> - intro\n>  tail\n',
+    '> - intro\n>  # tail\n', '> - intro\n>  > tail\n',
+    '> - intro\n>  ```\n>  tail\n>  ```\n'])
+  ('keeps a quote-owned list paragraph open across its continuation: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps an at-column unclosed fence behind the prototype guard', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })

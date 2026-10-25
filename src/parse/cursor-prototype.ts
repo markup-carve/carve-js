@@ -1148,7 +1148,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
   const next = cursor.peek()!
   const first = frame.body[0]
   if (!(depth === 0 || depth === 1 &&
-      (cursor.owner.kind === 'list' || cursor.owner.kind === 'definition')) ||
+      (cursor.owner.kind === 'list' || cursor.owner.kind === 'definition' ||
+        cursor.owner.kind === 'quote')) ||
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       frame.body.at(-1)?.number !== next.number - 1 ||
       !(frame.lazyRootParagraph || frame.body.length === 1 &&
