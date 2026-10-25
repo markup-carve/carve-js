@@ -1508,8 +1508,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
-    if (depth === 0 && stack.length === 1 && top.indent === 0 &&
-        !line.text.startsWith(prefix) && top.body.at(-1)?.number === line.number - 1) {
+    if (!line.text.startsWith(prefix) && top.body.at(-1)?.number === line.number - 1) {
       if (LINE_COMMENT.test(line.text) && !RE_COMMENT_BLOCK_ANY.test(line.text) &&
           (top.retainedBelowColumnComment || plainQuoteText(top.body.at(-1)!.text))) {
         cursor.take()
