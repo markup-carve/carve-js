@@ -962,6 +962,24 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
     text.startsWith(' '.repeat(contentColumn - 1))
 }
 
+function listContinuationFollower(cursor: Cursor, indent: number,
+  fenceMarker: string | undefined, depth: number): { line: SourceLine; prefix: number } {
+  const next = cursor.peek(1)
+  const after = cursor.peek(2)
+  const ownColumnQuote = indent > 0 && next?.text.startsWith(' '.repeat(indent)) &&
+    RE_BLOCKQUOTE.test(next.text.slice(indent)) && !after
+  if (depth !== 0 || fenceMarker || indent !== 0 && !ownColumnQuote) {
+    throw new UnsupportedCursorSyntax('nested list continuation')
+  }
+  if (!next || next.text === '' || !ownColumnQuote &&
+      (next.text[0] === ' ' || next.text[0] === '\t') ||
+      isBlockStart(next.text) ||
+      (after && after.text !== '' && !listMarker(after.text))) {
+    throw new UnsupportedCursorSyntax('multiline list continuation')
+  }
+  return { line: next, prefix: ownColumnQuote ? indent : 0 }
+}
+
 function nestedPlusDisposition(cursor: Cursor,
   frame: { indent: number; item?: ListItem; fenceMarker: string | undefined },
   stackLength: number): SourceLine[] | 'literal' | undefined {
@@ -1269,21 +1287,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       continue
     }
-    if (line.text === '+' && top.item) {
-      if (depth !== 0 || top.indent !== 0 || top.fenceMarker) {
-        throw new UnsupportedCursorSyntax('nested list continuation')
-      }
-      const next = cursor.peek(1)
-      const after = cursor.peek(2)
-      if (!next || next.text === '' || next.text[0] === ' ' || next.text[0] === '\t' ||
-          isBlockStart(next.text) ||
-          (after && after.text !== '' && !listMarker(after.text))) {
-        throw new UnsupportedCursorSyntax('multiline list continuation')
-      }
+    if ((line.text === '+' || line.text === `${' '.repeat(top.indent)}+`) && top.item) {
+      const { line: next, prefix } = listContinuationFollower(cursor, top.indent,
+        top.fenceMarker, depth)
       cursor.take()
       flush(top)
       cursor.take()
-      appendBody(top, next, 0)
+      appendBody(top, next, prefix)
       top.last = next
       if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.indent + 1)
       continue
