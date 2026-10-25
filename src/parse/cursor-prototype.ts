@@ -667,7 +667,8 @@ function definitionStructuralLine(text: string, column: number): boolean {
 }
 
 function definitionTermWrapText(cursor: Cursor, text: string): boolean {
-  return /^ {1,3}[A-Za-z0-9]/.test(text) || /^:{1,2}[ \t]*$/.test(text) ||
+  return /^ {1,3}\S/.test(text) && !listMarker(text) && !LINE_COMMENT.test(text) ||
+    /^:{1,2}[ \t]*$/.test(text) ||
     (cursor.owner.kind === 'root' && plainQuoteText(text)) ||
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
 }

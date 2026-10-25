@@ -520,6 +520,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    ':: c\n  # H\n',
+    '> :: c\n>   # H\n',
+    ':: c\n  :::\n',
+    ':: c\n  ```\n',
+    ':: c\n  > q\n',
+  ])('keeps a below-column structural line in its open term: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
