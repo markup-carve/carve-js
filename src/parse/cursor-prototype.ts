@@ -615,6 +615,13 @@ function definitionTermWrapText(cursor: Cursor, text: string): boolean {
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
 }
 
+function definitionBodyWrapText(text: string, column: number): boolean {
+  if (/^ {0,3}[A-Za-z0-9]/.test(text)) return true
+  const indent = /^ */.exec(text)![0].length
+  return indent > 0 && indent < column - 1 &&
+    (text[indent] === '>' || text[indent] === '#')
+}
+
 function startsRootBlockAfterDefinition(text: string): boolean {
   return RE_BLOCKQUOTE.test(text) || RE_HEADING.test(text) ||
     fenceOpen(text) !== null || COLON_OPEN.test(text) ||
@@ -766,7 +773,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       const blockEnd = definitionBlockFollowerEnd(cursor, end, definitionContentColumn)
       if (blockEnd !== undefined) { end = blockEnd; break }
     }
-    if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
+    if (mayWrapDefinition && definitionBodyWrapText(text, definitionContentColumn) &&
+        !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
       end++
     } else if (mayWrapDefinition && text === '+' &&

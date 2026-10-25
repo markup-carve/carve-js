@@ -1151,6 +1151,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: term\n:  definition\n > quote\n',
+    ':: term\n:  definition\n  # H\n'])
+  ('keeps a below-column marker as definition paragraph text: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> ```\n> x', '- > ```\n  x\nx'])
   ('declines a quoted fence with an unresolved continuation owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
