@@ -1207,6 +1207,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > q\n\n   ```=html\n   <b>c</b>\n   ```\n',
+    '- > q\n\n        ```=html\n        <b>c</b>\n        ```\n'])
+  ('reads a shifted raw fence after a blank in a list-owned quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a shifted raw fence immediately after a nested quote', () => {
+    expect(() => parseCursorPrototype('- a\n  > q\n   ```=html\n   <b>r</b>\n   ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('keeps an at-column unclosed fence behind the prototype guard', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })

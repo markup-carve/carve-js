@@ -379,14 +379,20 @@ function listContinuationPrefix(line: string, base: number): number {
 function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number): number {
   let shifted = base
   while (line[shifted] === ' ') shifted++
-  const opener = shifted > base ? fenceOpen(line.slice(shifted)) : null
+  if (shifted === base) return base
+  const shiftedText = line.slice(shifted)
+  let opener = fenceOpen(shiftedText)?.marker
+  if (!opener && (shiftedText[0] === '`' || shiftedText[0] === '~') &&
+      cursor.lines[cursor.at - 1]?.text === '') {
+    opener = RE_RAW_FENCE.exec(shiftedText)?.[1]
+  }
   if (!opener) return base
   const baseSpaces = ' '.repeat(base)
   const shiftedSpaces = ' '.repeat(shifted)
   for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
     const candidate = cursor.lines[i]!.text
     if (candidate && !candidate.startsWith(baseSpaces)) break
-    if (candidate.startsWith(shiftedSpaces) && closesFence(candidate.slice(shifted), opener.marker)) {
+    if (candidate.startsWith(shiftedSpaces) && closesFence(candidate.slice(shifted), opener)) {
       return shifted
     }
   }
