@@ -2074,10 +2074,24 @@ function boundedColonFence(body: SourceLine[], cursor: Cursor, run: number): Sou
   return boundary
 }
 
+function boundedQuoteFence(cursor: Cursor, first: SourceLine, payload: SourceLine[]): boolean {
+  if (cursor.owner.kind !== 'quote' || cursor.lines[0]?.number !== first.number) return false
+  const firstPayload = payload[0]
+  if (!firstPayload) {
+    const next = cursor.physicalLines[first.number]
+    return !next || next.text !== '' && next.text[0] !== ' ' && next.text[0] !== '>'
+  }
+  const column = firstPayload.baseColumn ?? 1
+  if (column >= (first.baseColumn ?? 1) ||
+      payload.some((line) => (line.baseColumn ?? 1) < column)) return false
+  const next = cursor.physicalLines[(payload.at(-1) ?? first).number]
+  return !next || !plainQuoteText(next.text)
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
-  if (cursor.owner.allowUnclosedFence && marker &&
+  if ((cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload)) && marker &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
     const last = payload.at(-1)
     return cursor.owner.fenceBoundary && last && isBlankLine(last.text) ?

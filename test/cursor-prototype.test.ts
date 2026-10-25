@@ -1133,6 +1133,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> ```\nx\n```\n', '> > ```\nc\n', '> ```\n',
+    '> ```\ncode no marker\n> still\n'])
+  ('keeps a quote-first fence bounded by its physical owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> ```\n> x', '- > ```\n  x\nx'])
+  ('declines a quoted fence with an unresolved continuation owner: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
     '> ::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
