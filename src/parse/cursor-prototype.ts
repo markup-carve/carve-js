@@ -1153,7 +1153,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       frame.body.at(-1)?.number !== next.number - 1 ||
       !(frame.lazyRootParagraph || frame.body.length === 1 &&
-        first !== undefined && plainQuoteText(first.text))) return false
+        first !== undefined &&
+        (plainQuoteText(first.text) || listFirstBlockParagraphText(first.text)))) return false
   const follower = next.text
   let continues = plainQuoteText(follower)
   if (!continues && frame.contentColumn !== undefined) {
