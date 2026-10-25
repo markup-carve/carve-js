@@ -370,16 +370,6 @@ function quoteListLazyLine(body: SourceLine[], line: SourceLine, prefix: number)
     prefix: Math.max(prefix, indent) }
 }
 
-function rejectAmbiguousQuoteLazyFollower(body: SourceLine[], line: SourceLine): void {
-  if (!body[0]?.text.startsWith('>') || !body.at(-1)?.lazyText ||
-      body.at(-1)?.number !== line.number - 1) return
-  const indent = /^[ ]*/.exec(line.text)![0].length
-  const text = line.text.slice(indent)
-  if (indent >= 4 && RE_BLOCKQUOTE.test(text)) {
-    throw new UnsupportedCursorSyntax('quote continuation across list boundary')
-  }
-}
-
 function quoteEndsInPlus(text: string): boolean {
   while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
   return text === '+'
@@ -1425,7 +1415,6 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const appendBody = (frame: ListCursorFrame, line: SourceLine, prefix: number,
     rootLazy = false) => {
-    rejectAmbiguousQuoteLazyFollower(frame.body, line)
     const claimed = quoteListLazyLine(frame.body, line, prefix)
     line = claimed.line
     prefix = claimed.prefix

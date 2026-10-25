@@ -1217,9 +1217,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- > a\nlazy\n    > b\n', '- > a\n  x\n    > b\n',
-    '- > a\n  b\n [r]: /u\n'])
-  ('declines an unresolved block owner after a lazy item quote: %s', (source) => {
+  it.each(['- > a\nlazy\n    > b\n', '- > a\n  x\n    > b\n'])
+  ('keeps an overindented quote marker literal after a lazy item quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a reference-shaped line after a lazy item quote', () => {
+    const source = '- > a\n  b\n [r]: /u\n'
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
