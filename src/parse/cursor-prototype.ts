@@ -329,6 +329,12 @@ function nestedQuoteParagraphText(text: string): boolean {
   return plainQuoteText(inner)
 }
 
+function listFirstBlockParagraphText(text: string): boolean {
+  if (text.startsWith('>')) return nestedQuoteParagraphText(text)
+  const marker = listMarker(text)
+  return marker !== undefined && nestedQuoteParagraphText(marker.content)
+}
+
 function quoteEndsInPlus(text: string): boolean {
   while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
   return text === '+'
@@ -1509,8 +1515,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
     if (!line.text.startsWith(prefix) && top.body.at(-1)?.number === line.number - 1) {
+      const previousText = top.body.at(-1)!.text
       if (LINE_COMMENT.test(line.text) && !RE_COMMENT_BLOCK_ANY.test(line.text) &&
-          (top.retainedBelowColumnComment || plainQuoteText(top.body.at(-1)!.text))) {
+          (top.retainedBelowColumnComment || plainQuoteText(previousText) ||
+            listFirstBlockParagraphText(previousText))) {
         cursor.take()
         appendBody(top, line, 0)
         top.retainedBelowColumnComment = true
