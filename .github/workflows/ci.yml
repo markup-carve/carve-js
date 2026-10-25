@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, next-ast2]
   pull_request:
-    branches: [main]
+    branches: [main, next-ast2]
   workflow_dispatch:
 
 # PRs cancel their own superseded runs; every other event gets a unique group,
