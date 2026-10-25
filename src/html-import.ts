@@ -2971,7 +2971,7 @@ class Importer {
       const input = this.taskCheckbox(li)
       const liAttrs = this.attrs(li, liPath)
       // The state the renderer wrote (PART 10 §11), which is the only place an
-      // extended state survives: all five unchecked spellings render the same
+      // extended state survives: all seven unchecked spellings render the same
       // box, so without this `[-]` comes back as `[ ]` and nothing can see the
       // difference. It is READ rather than dropped as derived - the same
       // treatment the checkbox `<input>` already gets.
