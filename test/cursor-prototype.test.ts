@@ -493,6 +493,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '    1. y\n  | x |\n',
+    '- item\n\tmore\n\nx\n',
+    '- x\n  - a\n # H\n',
+    '- x\n  - a\n  # H\n',
+  ])('assigns a below-column line to its reachable list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

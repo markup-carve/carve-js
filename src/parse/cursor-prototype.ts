@@ -1388,6 +1388,21 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   return plainQuoteText(last) || last === '+' && plainQuoteText(top.body.at(-2)?.text ?? '')
 }
 
+function mayFoldBelowColumnParagraph(cursor: Cursor,
+  frame: { contentColumn?: number; fenceMarker: string | undefined; body: SourceLine[] },
+  stack: readonly ListCursorFrame[]): boolean {
+  const next = cursor.peek()!
+  const last = frame.body.at(-1)
+  if (!frame.contentColumn || frame.fenceMarker || !last ||
+      next.text.startsWith(' '.repeat(frame.contentColumn - 1)) ||
+      last.number !== next.number - 1 || isBlankLine(next.text) ||
+      !plainQuoteText(last.text) || isBlockStart(next.text)) return false
+  const raised = next.text.trimStart()
+  if (raised.startsWith('>') || raised.startsWith('`') || raised.startsWith('~') ||
+      raised.startsWith('{') || raised.startsWith('::')) return false
+  return deepestReachableFrame(stack, next.text, true) === undefined
+}
+
 function mayFoldRootListParagraph(cursor: Cursor,
   frame: { indent: number; contentColumn?: number;
     fenceMarker: string | undefined; body: SourceLine[];
@@ -1436,10 +1451,11 @@ function mayFoldListParagraph(cursor: Cursor,
   frame: { indent: number; contentColumn?: number; ordered: boolean;
     delim?: '.' | ')'; bullet?: '-' | '*';
     taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
-    lazyRootParagraph: boolean }, stackLength: number, depth: number): boolean {
-  return mayFoldNestedListParagraph(cursor, frame, stackLength, depth) ||
-    mayFoldRootListParagraph(cursor, frame, stackLength, depth) ||
-    mayFoldMarkerLineNestedFollower(cursor, frame, stackLength, depth)
+    lazyRootParagraph: boolean }, stack: readonly ListCursorFrame[], depth: number): boolean {
+  return mayFoldNestedListParagraph(cursor, frame, stack.length, depth) ||
+    mayFoldRootListParagraph(cursor, frame, stack.length, depth) ||
+    mayFoldMarkerLineNestedFollower(cursor, frame, stack.length, depth) ||
+    mayFoldBelowColumnParagraph(cursor, frame, stack)
 }
 
 function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength: number):
@@ -2023,7 +2039,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         continue
       }
     }
-    if (mayFoldListParagraph(cursor, top, stack.length, depth)) {
+    if (mayFoldListParagraph(cursor, top, stack, depth)) {
       cursor.take()
       appendBody(top, line, 0, true)
       updateListFrameEnds(stack, line, listSpan)
