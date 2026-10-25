@@ -1482,4 +1482,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['> q\n> {.k}\ntail\n', '> intro\n>\n\n  more\n',
+    '> intro\n>\n%% c\n  more\n', '> 1. para\n>    {#x}\ntail\n'])
+  ('ends a quote span at its last placed child: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

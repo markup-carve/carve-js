@@ -1918,11 +1918,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
   const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
     rootLinkDef(body[0]!.text) !== null
-  const lastBodyLine = body.at(-1)
-  const terminalListDefinition = lastBodyLine &&
-    cursor.simpleRootListDefinitions?.has(lastBodyLine.number)
   const placedEndLine = children.at(-1)?.pos?.endLine
-  const quoteLast = (terminalListDefinition || wrappedAttributeTail) && placedEndLine ?
+  const quoteLast = placedEndLine && placedEndLine < last.number ?
     cursor.physicalLines[placedEndLine - 1] ?? last : last
   return { type: 'block_quote', children,
     pos: position(first, quoteLast, 1, onlyLinkDefinition ?
