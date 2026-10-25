@@ -888,8 +888,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an unmarked quote follower while its paragraph may still be open', () => {
-    expect(() => parseCursorPrototype('> :: term\nlazy\n')).toThrow(UnsupportedCursorSyntax)
+  it('handles an unmarked quote follower according to its owning block', () => {
+    expect(parseCursorPrototype('> :: term\nlazy\n'))
+      .toStrictEqual(parse('> :: term\nlazy\n'))
     expect(parseCursorPrototype('> +\nlazy\n')).toStrictEqual(parse('> +\nlazy\n'))
     expect(() => parseCursorPrototype('> quote\n\tlazy\n')).toThrow(UnsupportedCursorSyntax)
   })
@@ -1045,6 +1046,16 @@ describe('experimental block cursor', () => {
   it('keeps an unclosed fence after open paragraph text in that paragraph', () => {
     const source = 'Text\n```\ncode\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> :: t\ntail\n', '> :: t\n> : d\n>   # H\ntail\n'])
+  ('keeps a lazy line in a quote-owned definition list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a list-owned quoted definition with unresolved line ownership', () => {
+    expect(() => parseCursorPrototype('- > :: t\n> : d\n>   [^f]: n\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
   })
 
   it('declines a table form that has not been migrated', () => {

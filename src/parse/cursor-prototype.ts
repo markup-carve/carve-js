@@ -489,6 +489,11 @@ function definitionStructuralLine(text: string, column: number): boolean {
   return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content)
 }
 
+function definitionTermWrapText(cursor: Cursor, text: string): boolean {
+  return /^ {1,3}[A-Za-z0-9]/.test(text) ||
+    (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
+}
+
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
   const first = cursor.peek()!
@@ -518,7 +523,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       continue
     }
-    if (mayWrapTerm && /^ {1,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
+    if (mayWrapTerm && definitionTermWrapText(cursor, text) &&
+        !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '' ||
           /^: +[ \t]*[^ \t]/.test(cursor.lines[end + 1]!.text) ||
           (cursor.lines[end + 1]!.text === '+' &&
@@ -591,7 +597,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const column = line.text.length - term[1]!.length + 1
       const parts: ContentLine[] = [{ line, column, text: term[1]! }]
       let termLast = line
-      if (cursor.at < end && /^ {1,3}[A-Za-z0-9]/.test(cursor.peek()!.text)) {
+      if (cursor.at < end && definitionTermWrapText(cursor, cursor.peek()!.text)) {
         termLast = cursor.take()
         parts.push({ line: termLast, column: 1, text: termLast.text })
       }
@@ -1245,7 +1251,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const text = line.text.slice(prefix)
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      plainParagraph &&= nestedQuoteParagraphText(text) || /^: +/.test(text)
+      plainParagraph &&= nestedQuoteParagraphText(text) || /^: +/.test(text) ||
+        /^:: +[^ ]/.test(text)
       last = line
       continue
     }
@@ -1782,7 +1789,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(node)
       continue
     }
-    if (/^:: +[ \t]*[^ \t]/.test(first.text) && atDocumentLevel) {
+    if (/^:: +[ \t]*[^ \t]/.test(first.text) &&
+        (atDocumentLevel || (cursor.owner.kind === 'quote' && !cursor.owner.inList))) {
       emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
       continue
     }
