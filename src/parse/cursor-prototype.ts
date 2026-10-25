@@ -623,6 +623,12 @@ function definitionBodyWrapText(text: string, column: number): boolean {
       text[indent] === '[' || text[indent] === '{' || text[indent] === '`')
 }
 
+function boundedDefinitionParagraphEnd(lines: SourceLine[], from: number): number | undefined {
+  let after = from + 1
+  while (lines[after] && plainQuoteText(lines[after]!.text)) after++
+  return !lines[after] || lines[after]!.text === '' ? after : undefined
+}
+
 function startsRootBlockAfterDefinition(text: string): boolean {
   return RE_BLOCKQUOTE.test(text) || RE_HEADING.test(text) ||
     fenceOpen(text) !== null || COLON_OPEN.test(text) ||
@@ -775,11 +781,9 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       if (blockEnd !== undefined) { end = blockEnd; break }
     }
     if (mayWrapDefinition && definitionBodyWrapText(text, definitionContentColumn) &&
-        !/[ \t]$/.test(text) &&
-        (cursor.lines[end + 1]?.text === undefined || cursor.lines[end + 1]!.text === '' ||
-          plainQuoteText(cursor.lines[end + 1]!.text) &&
-          (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === ''))) {
-      end += plainQuoteText(cursor.lines[end + 1]?.text ?? '') ? 2 : 1
+        !/[ \t]$/.test(text)) {
+      const boundary = boundedDefinitionParagraphEnd(cursor.lines, end)
+      if (boundary !== undefined) end = boundary
     } else if (mayWrapDefinition && text === '+' &&
         plainQuoteText(cursor.lines[end + 1]?.text ?? '') &&
         (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
