@@ -1053,6 +1053,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> +\n- s\n', '> - > +\n- s\n', '- > > +\n  - s\n'])
+  ('keeps an unmarked list marker as lazy text after a refused quoted plus: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a list-owned quoted definition with unresolved line ownership', () => {
     expect(() => parseCursorPrototype('- > :: t\n> : d\n>   [^f]: n\ntail\n'))
       .toThrow(UnsupportedCursorSyntax)

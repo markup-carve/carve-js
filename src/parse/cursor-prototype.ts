@@ -29,7 +29,8 @@ import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-tab
  */
 export class UnsupportedCursorSyntax extends Error {}
 
-interface SourceLine { text: string; start: number; number: number; baseColumn?: number; spanEndColumn?: number }
+interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
+  spanEndColumn?: number; lazyText?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -326,6 +327,27 @@ function nestedQuoteParagraphText(text: string): boolean {
   let inner = text
   while (inner.startsWith('>')) inner = inner.slice(inner[1] === ' ' ? 2 : 1)
   return plainQuoteText(inner)
+}
+
+function quoteEndsInPlus(text: string): boolean {
+  while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
+  return text === '+'
+}
+
+function quoteListEndsInPlus(text: string): boolean {
+  const marker = listMarker(text)
+  return marker !== undefined && quoteEndsInPlus(marker.content)
+}
+
+function quoteListMarkerPrefix(line: SourceLine,
+  marker: NonNullable<ReturnType<typeof listMarker>>,
+  frame: { contentColumn?: number; body: SourceLine[] }): number | undefined {
+  if (!quoteEndsInPlus(frame.body.at(-1)?.text ?? '')) return undefined
+  if (line.lazyText) return 0
+  if (frame.contentColumn !== undefined && marker.indent === frame.contentColumn - 1) {
+    return frame.contentColumn - 1
+  }
+  return undefined
 }
 
 function listContinuationPrefix(line: string, base: number): number {
@@ -696,8 +718,9 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   let last = first
   const literalColonOpener = /^:{3,}(?: *\t| +\{|>)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
-      (parts.length === 0 || (!interruptsParagraphAtCursor(cursor) &&
-        !(parts.length === 1 && parts[0]!.text.trim() === '+' && listMarker(cursor.peek()!.text))) ||
+      (parts.length === 0 || ((!interruptsParagraphAtCursor(cursor) || cursor.peek()!.lazyText) &&
+        !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
+          listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
     if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
       const lead = inline.inlines(parts)
@@ -1052,6 +1075,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (marker) {
+      const lazyQuotePrefix = quoteListMarkerPrefix(line, marker, top)
+      if (lazyQuotePrefix !== undefined) {
+        cursor.take()
+        appendBody(top, line, lazyQuotePrefix)
+        updateListFrameEnds(stack, line, listSpan)
+        continue
+      }
       if (isBelowListMarkerColumn(marker, top, depth, line.number)) {
         cursor.take()
         appendBody(top, line, 0)
@@ -1257,14 +1287,18 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       continue
     }
     const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')
-    if (!cursor.owner.inList && plainParagraph &&
-        (plainQuoteText(line.text) || listMarker(line.text) ||
-          lazyColon ||
+    const refusedFirstBlock = (quoteEndsInPlus(body.at(-1)?.text ?? '') ||
+      quoteListEndsInPlus(body.at(-1)?.text ?? '')) &&
+      listMarker(line.text) !== undefined
+    if ((!cursor.owner.inList && plainParagraph) || refusedFirstBlock) {
+      if ((plainQuoteText(line.text) || listMarker(line.text) || lazyColon ||
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
-        (lazyColon || mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
-      body.push(cursor.take())
-      last = line
-      continue
+          (lazyColon || refusedFirstBlock || mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
+        const lazyLine = cursor.take()
+        body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)
+        last = line
+        continue
+      }
     }
     break
   }
@@ -1608,6 +1642,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   while (cursor.peek()) {
     const first = cursor.peek()!
     if (isBlankLine(first.text)) { cursor.take(); continue }
+    if (first.lazyText) { emit(parseParagraphAtCursor(cursor, inline)); continue }
     const attrs = takeBlockAttrsAtCursor(cursor, atDocumentLevel)
     if (attrs) {
       pendingAttrs = pendingAttrs ? mergeAttrs(pendingAttrs, attrs) : attrs
