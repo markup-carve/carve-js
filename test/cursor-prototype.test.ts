@@ -1,8 +1,19 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('matches the physical-line ownership fixtures', () => {
+    for (const name of ['container-ownership.json', 'container-ownership-boundaries.json']) {
+      const path = new URL(`../spec/tests/fixtures/${name}`, import.meta.url)
+      const cases = JSON.parse(readFileSync(path, 'utf8')) as Array<{ id: string; source: string }>
+      for (const fixture of cases) {
+        expect(parseCursorPrototype(fixture.source), fixture.id).toStrictEqual(parse(fixture.source))
+      }
+    }
+  })
+
   it('matches the public AST and HTML across its migrated block families', () => {
     const source = [
       '# Unicode 😀',
