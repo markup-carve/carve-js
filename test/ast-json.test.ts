@@ -444,6 +444,30 @@ describe('AST contract 2.0 migration', () => {
   })
 })
 
+describe('task status (contract 2.0)', () => {
+  it.each([
+    [' ', 'todo'], ['_', 'todo'], ['x', 'done'], ['-', 'cancelled'],
+    ['/', 'in-progress'], ['!', 'blocked'], ['>', 'partial'], ['?', 'other'],
+  ])('writes [%s] as %s and reads it back', (mark, status) => {
+    const source = `- [${mark}] a\n`
+    const wire = toAstJson(parse(source))
+    const item = (wire.children[0] as unknown as { children: Record<string, unknown>[] }).children[0]
+    expect(item.task).toEqual({ mark, status })
+    expect(renderCarve(fromAstJson(wire))).toBe(source)
+  })
+
+  it('reads an uppercase done mark as checked', () => {
+    const item = (fromAstJson({
+      type: 'document', astVersion: '2.0', children: [{
+        type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
+        children: [{ type: 'list_item', task: { mark: 'X', status: 'done' }, children: [] }],
+      }],
+    } as never).children[0] as unknown as { items: Record<string, unknown>[] }).items[0]
+    expect(item.checked).toBe(true)
+    expect(item.taskState).toBeUndefined()
+  })
+})
+
 describe('wire offsets are UTF-8 bytes (contract 2.0)', () => {
   it('slices the source bytes exactly after astral and two-byte characters', () => {
     const source = '😀 *b*\n\nä x'

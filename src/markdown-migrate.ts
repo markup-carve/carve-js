@@ -2790,7 +2790,7 @@ function escapeUnreadTaskMarker(line: string): string {
     if (!marker.exec(line)) break
     at = marker.lastIndex
   }
-  const m = /^\[([ xX\-_>?])\](?= +[ \t]*\S)/.exec(line.slice(at))
+  const m = /^\[([ xX\-_>/!?])\](?= +[ \t]*\S)/.exec(line.slice(at))
   if (m === null) return line
   const prefix = line.slice(0, at)
   const markers = containerMarkersOnLine(prefix)
@@ -3976,7 +3976,7 @@ function opensInterruptingItem(line: string, paragraphOpen: boolean, paragraphCo
 /**
  * The item markers and task checkbox a line opens with, as CARVE reads them:
  * any nesting of item markers, the innermost a `-` or `*` bullet, then a box.
- * Mirrors `RE_TASK` in the parser, which takes `[ xX-_>?]` and neither `+` nor
+ * Mirrors `RE_TASK` in the parser, which takes `[ xX-_>/!?]` and neither `+` nor
  * an ordered marker.
  *
  * Markdown's own reading stops at the bullet: the box is the first paragraph's
@@ -3984,7 +3984,7 @@ function opensInterruptingItem(line: string, paragraphOpen: boolean, paragraphCo
  * what follows the box stands at a content position, and a marker there opens
  * exactly what the source said was text.
  */
-const RE_CARVE_TASK_LEAD = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*?[-*][ \t]+)\[[ xX\-_>?]\][ \t]+/
+const RE_CARVE_TASK_LEAD = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*?[-*][ \t]+)\[[ xX\-_>/!?]\][ \t]+/
 
 /**
  * `content` is the item's content column in the source and `shift` how far the

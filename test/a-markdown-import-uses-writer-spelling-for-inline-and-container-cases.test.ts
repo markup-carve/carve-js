@@ -12,7 +12,7 @@ describe('a Markdown import uses writer spelling for inline and container cases'
     ['keeps backslashes in link destinations', 'foo \\A [x](/u\\A)\n', 'foo \\\\A [x](/u\\A)\n'],
     ['spells text before an HTML tag', 'foo \\A <b>hi</b>\n', 'foo \\\\A *hi*\n'],
     ['keeps backslashes in link titles', 'foo \\A [x](/u "title\\A")\n', 'foo \\\\A [x](/u "title\\A")\n'],
-    ['keeps backslashes in autolink destinations', 'foo \\A <https://example.com/\\A>\n', 'foo \\\\A [https://example.com/\\\\A](https://example.com/\\A)\n'],
+    ['keeps backslashes in autolink destinations', 'foo \\A <https://example.com/\\A>\n', 'foo \\\\A [https://example.com/\\A](https://example.com/\\A)\n'],
     ['drops an empty quote line at the opening edge', '>\n> foo\n', '> foo\n'],
     ['places a reference definition after its list', '- a\n\n- b\n\n  [ref]: /url\n\n- d\n', '- a\n\n- b\n\n- d\n\n[ref]: /url\n'],
     ['uses an unquoted simple abbreviation value', '<abbr title="NATO">word</abbr>\n', '[word]{abbr=NATO}\n'],

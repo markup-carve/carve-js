@@ -492,7 +492,8 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       // (carve#352, corpus 11-fenced-code-10). The parser resolves the override
       // into `attrs`, so that is where the answer already is.
       const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
-      const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
+      const { info, titleDropped } = markdownFenceInfo(node.lang, effectiveTitle, node.label)
+      if (titleDropped && !ctx.roundtrip) markdownLoss(ctx.options, node, 'fence-title-dropped')
       const fence = safeFence(content, 3, info.includes('`') ? '~' : '`')
       // The payload is written without its own final break; the break before
       // the closer is the delimiter's. A payload of NO lines writes no line.
@@ -1637,7 +1638,7 @@ function markdownFenceInfo(
   lang: string | undefined,
   header: string | undefined,
   label: string | undefined,
-): string {
+): { info: string; titleDropped: boolean } {
   // Keep only the first whitespace-delimited token (the language word); drop it
   // if it still contains a backtick (would break the fence).
   // The info token ends at PART 7's four characters, as it does in the
@@ -1657,8 +1658,10 @@ function markdownFenceInfo(
   // dropping it beats emitting a bogus language; with a language present the
   // title is ignored by every consumer and rides along safely. carve-php had this
   // guard and was right about it (carve#352, corpus 11-fenced-code-8).
-  if (header === undefined || token === '') return `${token}${grouping}`
-  return `${token} "${escapeMdTitle(header)}"${grouping}`
+  if (header === undefined || token === '') {
+    return { info: `${token}${grouping}`, titleDropped: header !== undefined && token === '' }
+  }
+  return { info: `${token} "${escapeMdTitle(header)}"${grouping}`, titleDropped: false }
 }
 
 function escapeMarkdownLabel(text: string): string {
@@ -1830,7 +1833,6 @@ function markdownDestination(url: string): string {
   const probed = sanitizeMdUrl(stripDestinationControls(url))
   const pipeDestination = url.includes('|')
   const safe = probed === '' ? probed : stripControls(url)
-  let openParens = 0
   const encoded = safe.replace(/[ ()<>\\|]/g, (ch) => {
     switch (ch) {
       case '\\':
@@ -1840,12 +1842,9 @@ function markdownDestination(url: string): string {
       case ' ':
         return '%20'
       case '(':
-        openParens++
-        return '%28'
+        return '\\('
       case ')':
-        if (openParens === 0) return '\\)'
-        openParens--
-        return '%29'
+        return '\\)'
       case '<':
         return '%3C'
       case '>':

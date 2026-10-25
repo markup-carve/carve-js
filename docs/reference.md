@@ -23,6 +23,13 @@ npm install @markup-carve/carve
 Working on carve-js itself instead? See
 [docs/development.md](https://github.com/markup-carve/carve-js/blob/main/docs/development.md).
 
+## Task markers and AST state
+
+`[ ]` and `[_]` are open; `[/]` is progress; `[!]` is blocked; `[x]` and
+`[X]` are done; `[-]` is dropped; `[>]` is deferred; `[?]` is uncertain.
+Only done checks the box. `TaskState` and AST JSON keep a nondefault authored
+marker in `list_item.taskState`; `_` keeps its spelling but remains open.
+
 ## Usage
 
 ```ts

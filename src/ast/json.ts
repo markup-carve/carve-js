@@ -1049,7 +1049,8 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   if (record.type !== 'list_item' || record.task === undefined) return
   const task = record.task as Record<string, unknown>
   const status: Readonly<Record<string, string>> = {
-    ' ': 'todo', x: 'done', '-': 'cancelled', _: 'partial', '>': 'partial', '?': 'other',
+    ' ': 'todo', _: 'todo', x: 'done', X: 'done', '-': 'cancelled',
+    '/': 'in-progress', '!': 'blocked', '>': 'partial', '?': 'other',
   }
   if (typeof task.mark === 'string' && task.status !== status[task.mark]) {
     throw new AstJsonSchemaError(

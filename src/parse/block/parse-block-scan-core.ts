@@ -1051,8 +1051,7 @@ export function quotedFenceHasCloser(
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
 export function commentLineContent(line: string): string {
-  // ONE separator character, and it is `whitespace` (markup-carve/carve#977).
-  return trimEndSpaceTab(line.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, ''))
+  return trimEndSpaceTab(line.replace(/^[ \t]*%%/, '').replace(/^ /, ''))
 }
 
 export function parseCommentBlock(lexer: Lexer): Comment {
@@ -1442,7 +1441,7 @@ export const RE_UNORDERED_HEAD = /^(?=([ \t]*))\1[-*] +[ \t]*(?=[^ \t])/
 
 export const RE_ORDERED_HEAD = /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*(?=[^ \t])/
 
-export const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+export const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>/!?])\] +[ \t]*(?=[^ \t])/
 
 export function markerMatch(line: string, full: RegExp, head: RegExp, terminatorFree: boolean): RegExpExecArray | null {
   if (!terminatorFree) return full.exec(line)

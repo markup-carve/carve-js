@@ -166,7 +166,8 @@ or a list item as much as at the top level - is untouched.
 **A task checkbox GFM does not read stays text.** cmark-gfm's task-list
 extension takes a box off a line carrying one list marker, bullet or ordered,
 and off the states `[ ]`, `[x]` and `[X]`. Carve spells a task item only behind
-a bullet, while its parser accepts four more task states. A quoted item, two
+a bullet, while its parser accepts six more task-state spellings (`[_]` for open, `[/]`
+    for progress, `[!]` for blocked, `[-]`, `[>]`, and `[?]`). A quoted item, two
 markers on one line, or one of those extra states would otherwise grow a box
 the source never spelled. The pair is escaped there:
 

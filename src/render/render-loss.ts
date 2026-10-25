@@ -16,6 +16,7 @@ export type RenderLossCode =
   | 'list-tightness-lost'
   | 'markdown-container-flattened'
   | 'markdown-caption-flattened'
+  | 'fence-title-dropped'
   | 'markdown-attributes-dropped'
   | 'raw-html-escaped'
 
@@ -41,6 +42,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'table-header-row-hoisted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'table-header-cell-demoted'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'list-tightness-lost'; target: 'carve'; nodeType: 'block' })
+  | (RenderLossBase & { code: 'fence-title-dropped'; target: 'markdown'; nodeType: 'block' })
   | (RenderLossBase & { code: 'markdown-container-flattened' | 'markdown-caption-flattened' | 'markdown-attributes-dropped' | 'raw-html-escaped'; target: 'markdown'; nodeType: 'block' | 'inline' })
 
 export interface RenderResult<T = string> {
@@ -166,8 +168,18 @@ export function rawFormatDropped(
 export function markdownLoss(
   opts: RenderLossSinkOptions,
   node: { pos?: Position; type: string },
-  code: 'markdown-container-flattened' | 'markdown-caption-flattened' | 'markdown-attributes-dropped' | 'raw-html-escaped',
+  code: 'markdown-container-flattened' | 'markdown-caption-flattened' | 'fence-title-dropped' | 'markdown-attributes-dropped' | 'raw-html-escaped',
 ): void {
+  if (code === 'fence-title-dropped') {
+    opts.onRenderLoss?.({
+      code,
+      target: 'markdown',
+      nodeType: 'block',
+      message: 'Dropped a code fence title without a language in Markdown',
+      ...(node.pos ? { pos: node.pos } : {}),
+    })
+    return
+  }
   const messages = {
     'markdown-container-flattened': 'Flattened a container into Markdown blocks',
     'markdown-caption-flattened': 'Wrote a caption as ordinary Markdown text',

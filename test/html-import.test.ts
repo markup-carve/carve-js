@@ -1028,31 +1028,29 @@ describe('table spans on import', () => {
     expect(large).toBeLessThan(small * 8)
   })
 
-  it('clips a rowspan that would leave the head the renderer synthesizes', () => {
-    /*
-     * Carve derives the head from the LEADING RUN of all-header rows, so a span
-     * reaching out of that run is written into a `<thead>` with its other rows
-     * in the `<tbody>`. Browsers clip a rowspan across row groups, so keeping
-     * the number would produce a document claiming a grid it does not render.
-     *
-     * The grid fixtures cannot catch this one: their expander is the layout
-     * algorithm without the group rule, which is exactly the rule that bites.
-     */
+  it('keeps a header rowspan within its native body group across an inferred head', () => {
     const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><td>B</td></tr></table>'
-    expect(htmlToCarve(html).value).toBe('|= H |= A |\n| B |\n')
-    expect(htmlToCarve(html).report.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'table-degraded',
-        fidelity: 'degraded',
-        confidence: 'exact',
-        severity: 'warning',
-        message: expect.stringContaining('Clipped a rowspan at the header rows'),
-        path: '/table[1]/tr[1]/th[1]',
-      }),
-    ])
-    // The written table renders no rowspan at all, which is what a browser
-    // shows for the clipped one.
-    expect(carveToHtml(htmlToCarve(html).value)).not.toContain('rowspan')
+    const imported = htmlToCarve(html)
+    expect(imported.value).toContain('{header-rows=0')
+    expect(imported.value).toContain('| ^ | B |')
+    expect(imported.report.diagnostics).toEqual([])
+    expect(carveToHtml(imported.value)).toContain('rowspan="2"')
+  })
+
+  it('keeps a three-row header span and native column scope', () => {
+    const html = '<table><tbody><tr><th scope="col" rowspan="3">H</th><th scope="col">G</th></tr><tr><td>b</td></tr><tr><td>c</td></tr></tbody></table>'
+    const imported = htmlToCarve(html)
+    expect(imported.value).toContain('| ^ | b |\n| ^ | c |')
+    expect(imported.report.diagnostics).toEqual([])
+    expect(carveToHtml(imported.value)).toContain('<th scope="col" rowspan="3">H</th>')
+  })
+
+  it('keeps an inferred header span in a later column', () => {
+    const html = '<table><tbody><tr><th>A</th><th rowspan="2">H</th></tr><tr><td>B</td></tr></tbody></table>'
+    const imported = htmlToCarve(html)
+    expect(imported.value).toContain('| B | ^ |')
+    expect(imported.report.diagnostics).toEqual([])
+    expect(carveToHtml(imported.value)).toContain('rowspan="2"')
   })
 
   it('CONTROL: a span WITHIN the header rows is untouched', () => {

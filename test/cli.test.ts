@@ -122,7 +122,7 @@ describe('carve render — loss reporting', () => {
     expect(strict.err).toBe('')
     const refused = makeIO({ stdin: ast })
     expect(await run(['render', '--from-json', '--plain', '--allow-loss', 'table-section-attributes-dropped'], refused.io)).toBe(2)
-    expect(refused.err).toContain("unknown loss code 'table-section-attributes-dropped' (expected raw-format-dropped, ruby-flattened, editorial-comment-flattened, carrier-attribute-dropped, list-style-dropped, list-delimiter-changed, table-span-flattened, table-header-row-demoted, table-header-row-hoisted, table-header-cell-demoted, markdown-container-flattened, markdown-caption-flattened, markdown-attributes-dropped, raw-html-escaped)")
+    expect(refused.err).toContain("unknown loss code 'table-section-attributes-dropped' (expected raw-format-dropped, ruby-flattened, editorial-comment-flattened, carrier-attribute-dropped, list-style-dropped, list-delimiter-changed, table-span-flattened, table-header-row-demoted, table-header-row-hoisted, table-header-cell-demoted, markdown-container-flattened, markdown-caption-flattened, fence-title-dropped, markdown-attributes-dropped, raw-html-escaped)")
   })
 
   it('refuses the retired definition-list-flattened loss code', async () => {

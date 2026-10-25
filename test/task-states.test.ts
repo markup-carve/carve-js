@@ -4,8 +4,8 @@ import { carveToHtml } from '../src/index.js'
 const h = (s: string) => carveToHtml(s)
 
 /**
- * Task-list states (grammar PART 2 task_state; matches djot-php): `x`
- * and `X` render a checked checkbox; ` `, `-`, `_`, `>`, `?` are all
+ * Task-list states (grammar PART 2 task_state): `x`
+ * and `X` render a checked checkbox; ` `, `_`, `-`, `/`, `!`, `>`, `?` are all
  * accepted and render an unchecked checkbox.
  */
 describe('task-list states', () => {
@@ -18,14 +18,21 @@ describe('task-list states', () => {
     expect(h('- [ ] a')).toContain('<input type="checkbox" disabled aria-label="a"> a')
   })
 
-  it.each(['-', '_', '>', '?'])('renders [%s] as an unchecked checkbox', (s) => {
+  it.each(['-', '_', '/', '!', '>', '?'])('renders [%s] as an unchecked checkbox', (s) => {
     const html = h(`- [${s}] item`)
     expect(html).toContain('<input type="checkbox" disabled aria-label="item"> item')
     expect(html).not.toContain('checked')
   })
 
+  it.each(['_', '-', '/', '!', '>', '?'])('attaches a quote after a stacked [%s] continuation', (state) => {
+    const html = h(`- - [${state}] +\n> attached`)
+    expect(html).toContain(`<li data-task-state="${state === '>' ? '&gt;' : state}">`)
+    expect(html).toContain('<blockquote><p>attached</p></blockquote>')
+  })
+
   it('still treats a non-state bracket as plain text', () => {
     // `[ab]` is not a single-char task state.
     expect(h('- [ab] x')).toBe('<ul>\n  <li>[ab] x</li>\n</ul>')
+    expect(h('- [|] paused')).toBe('<ul>\n  <li>[|] paused</li>\n</ul>')
   })
 })

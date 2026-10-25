@@ -152,7 +152,7 @@ const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture']
  * The states an item can be READ into (PART 10 §11). Not ` `: the bare box
  * says that, and `x` is the done state, read only beside a ticked box.
  */
-const READABLE_TASK_STATES = new Set(['-', '_', '>', '?'])
+const READABLE_TASK_STATES = new Set(['-', '_', '/', '!', '>', '?'])
 
 function isReadableTaskState(value: string | undefined): value is NonNullable<ListItem['taskState']> {
   return value !== undefined && READABLE_TASK_STATES.has(value)
@@ -2971,7 +2971,7 @@ class Importer {
       const input = this.taskCheckbox(li)
       const liAttrs = this.attrs(li, liPath)
       // The state the renderer wrote (PART 10 §11), which is the only place an
-      // extended state survives: all five unchecked spellings render the same
+      // extended state survives: all seven unchecked spellings render the same
       // box, so without this `[-]` comes back as `[ ]` and nothing can see the
       // difference. It is READ rather than dropped as derived - the same
       // treatment the checkbox `<input>` already gets.

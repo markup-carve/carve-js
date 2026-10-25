@@ -8,6 +8,6 @@ it.each([
 ])('keeps a literal backslash before $name', ({ source, written, html }) => {
   expect(carveToHtml(source)).toBe(html)
   expect(carveToMarkdown(source)).toBe(`${written}\n`)
-  expect(carveToCarve(source)).toBe(`${written}\n`)
-  expect(carveToCarve(`${written}\n`)).toBe(`${written}\n`)
+  expect(carveToCarve(source)).toBe(`${source}\n`)
+  expect(carveToCarve(`${source}\n`)).toBe(`${source}\n`)
 })

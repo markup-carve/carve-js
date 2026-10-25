@@ -197,7 +197,7 @@ export interface List extends BaseNode {
 }
 
 /** The task marker characters an item can record (PART 12, `taskState`). */
-export type TaskState = ' ' | 'x' | '-' | '_' | '>' | '?'
+export type TaskState = ' ' | 'x' | '-' | '_' | '/' | '!' | '>' | '?'
 
 export interface ListItem extends BaseNode {
   type: 'list_item'

@@ -59,7 +59,8 @@ const referenceFields: Record<string, [string, string]> = {
   citation_definition: ['key', 'citation'], link: ['ref', 'link'], image: ['ref', 'link'],
 }
 const taskStatus: Record<string, string> = {
-  ' ': 'todo', x: 'done', '-': 'cancelled', _: 'partial', '>': 'partial', '?': 'other',
+  ' ': 'todo', _: 'todo', x: 'done', X: 'done', '-': 'cancelled',
+  '/': 'in-progress', '!': 'blocked', '>': 'partial', '?': 'other',
 }
 
 function relocate(node: Item, previous: string, current: string): void {
@@ -312,8 +313,8 @@ export function contract2WireToRuntime(input: Item): Item {
       case 'list_item': {
         const task = node.task as Item | undefined
         if (task) {
-          node.checked = task.mark === 'x'
-          if (task.mark !== (node.checked ? 'x' : ' ')) node.taskState = task.mark
+          node.checked = task.mark === 'x' || task.mark === 'X'
+          if (!node.checked && task.mark !== ' ') node.taskState = task.mark
         }
         delete node.task
         break

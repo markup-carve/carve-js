@@ -9,6 +9,24 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-10-25
+
+The parser adds progress and blocked task states. This release also follows recent import, writer and rendering rulings.
+
+### Fixes
+
+- Table header rowspans survive HTML import (#3590).
+- Tabs remain content in empty link destinations and comments; Markdown destination parentheses and unmatched closers keep their intended text (#3583, #3575, #3545).
+- The writer decides literal backslash spelling by reparsing (#3578, #3574).
+- HTML import reads GitHub footnote markers and a lone plain `pre` class (#3542, #3566).
+- Markdown import flattens HTML anchors inside link labels and behind longer raw span fences (#3553, #3573).
+- Djot import recovers attributes with unsupported shorthand parts, and image styles with integral pixel dimensions survive import (#3546, #3560).
+- Markdown conversion and the CLI report dropped titles on fences without a language (#3586).
+
+### Improvements
+
+- Task lists parse progress `[/]` and blocked `[!]` and preserve their authored states through AST and HTML paths. `[_]`, previously read as paused, is now an open alias (#3588).
+
 ## [0.1.14] - 2026-10-24
 
 Carve 0.1.14 follows the spec 0.1.12 table, list, and wrapped attribute rulings. It also improves common parsing, rendering, and import paths.
@@ -640,7 +658,10 @@ references and external fragment links need manual review. See the
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.12...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.15...HEAD
+[0.1.15]: https://github.com/markup-carve/carve-js/compare/0.1.14...0.1.15
+[0.1.14]: https://github.com/markup-carve/carve-js/compare/0.1.13...0.1.14
+[0.1.13]: https://github.com/markup-carve/carve-js/compare/0.1.12...0.1.13
 [0.1.12]: https://github.com/markup-carve/carve-js/compare/0.1.11...0.1.12
 [0.1.11]: https://github.com/markup-carve/carve-js/compare/0.1.10...0.1.11
 [0.1.10]: https://github.com/markup-carve/carve-js/compare/0.1.9...0.1.10

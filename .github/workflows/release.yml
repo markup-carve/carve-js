@@ -236,8 +236,8 @@ jobs:
           release="$(cat "$RUNNER_TEMP/release.json")"
           id="$(printf '%s' "$release" | jq -r 'select(.draft) | .id // empty')"
           if [ -z "$id" ]; then
-            echo "The release is already published."
-            exit 0
+            echo "::error::No draft release for $RELEASE_TAG."
+            exit 1
           fi
           # `tag_name` goes with every PATCH of a release. Omit it on a DRAFT
           # and GitHub replaces the tag with a generated `untagged-*`
@@ -245,10 +245,18 @@ jobs:
           # than a git ref - so the field has nothing to fall back to.
           # `-F` (not `-f`) for draft, so it is sent as a boolean.
           gh api "repos/$GITHUB_REPOSITORY/releases/$id" -X PATCH \
-            -f tag_name="$RELEASE_TAG" -F draft=false --jq '"published \(.tag_name)"'
-          # Read it back: exit status does not tell you whether the tag survived.
-          gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
-            --jq '"draft=\(.draft) tag=\(.tag_name)"'
+            -f tag_name="$RELEASE_TAG" -F draft=false >/dev/null
+          state="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id")"
+          printf '%s' "$state" | jq -e --arg tag "$RELEASE_TAG" \
+            '(.tag_name == $tag) and (.draft == false)' >/dev/null
+          target="$(printf '%s' "$state" | jq -r '.target_commitish // empty')"
+          if [ "$target" != "$GITHUB_SHA" ]; then
+            resolved="$(git ls-remote origin "refs/heads/$target" | cut -f1)"
+            [ "$resolved" = "$GITHUB_SHA" ] || {
+              echo "::error::Published release targets $target, not $GITHUB_SHA."
+              exit 1
+            }
+          fi
 
   # THE TAG IS CREATED HERE, after a human approves, so a release can be started
   # without a tag existing - which is the whole point: creating the tag by hand

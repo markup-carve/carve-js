@@ -4,12 +4,12 @@ import { parse, renderCarve, toAstJson, fromAstJson, carveToHtml } from '../src/
 const fmt = (s: string) => renderCarve(parse(s))
 
 /**
- * PART 11 §6g / carve#1866. The seven task states render as two, so the tree
+ * PART 11 §6g / carve#1866. The task marker spellings render as two, so the tree
  * carried only `checked` and `fmt` rewrote four of them to `[ ]`. The state is
  * the author's spelling, recorded like `bulletChar`.
  */
 describe('a task state survives a format cycle', () => {
-  it.each(['-', '_', '>', '?'])('writes [%s] back', (state) => {
+  it.each(['-', '_', '/', '!', '>', '?'])('writes [%s] back', (state) => {
     expect(fmt(`- [${state}] a\n`)).toBe(`- [${state}] a\n`)
   })
 
@@ -18,6 +18,7 @@ describe('a task state survives a format cycle', () => {
     expect(items('- [ ] a')[0]).not.toHaveProperty('taskState')
     expect(items('- [x] a')[0]).not.toHaveProperty('taskState')
     expect(items('- [-] a')[0]).toMatchObject({ checked: false, taskState: '-' })
+    expect(items('- [_] a')[0]).toMatchObject({ checked: false, taskState: '_' })
   })
 
   it('folds [X] to [x], which is a case and not a state', () => {
@@ -30,7 +31,10 @@ describe('a task state survives a format cycle', () => {
     expect(renderCarve(fromAstJson(toAstJson(parse(source))))).toBe(source)
   })
 
-  it('leaves the rendering alone: every state but x renders unchecked', () => {
+  it('renders the open alias and named states as unchecked', () => {
+    expect(carveToHtml('- [_] a')).toContain('data-task-state="_"')
+    expect(carveToHtml('- [/] a')).toContain('data-task-state="/"')
+    expect(carveToHtml('- [!] a')).toContain('data-task-state="!"')
     expect(carveToHtml('- [>] a')).toContain('<input type="checkbox" disabled aria-label="a"> a')
   })
 
