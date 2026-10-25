@@ -17,7 +17,7 @@ const FOOTNOTE_DEFINITION_BLOCKS = new Set(['li', 'div', 'section', 'aside', 'p'
  * is one level above the paragraph the back-anchor sits in.
  */
 const FOOTNOTE_WRAPPER_BLOCKS = new Set(['div', 'li', 'section', 'aside'])
-const GENERATED_FOOTNOTE_REF_ID = /^fnref\d+(?:-\d+)?$/
+const GENERATED_FOOTNOTE_REF_ID = /^fnref-?\d+(?:-\d+)?$/
 
 export interface FootnoteStageContext {
   report: HtmlImportReportCollector
@@ -171,7 +171,7 @@ export class FootnoteStage {
           : (domAttrs(domTag(reference) === 'sup' ? site : reference) ?? [])
         const referenceAttrs = sourceAttrs.flatMap((attr) => {
           const name = attr.name.toLowerCase()
-          if (['id', 'href', 'role'].includes(name) || RESERVED_CARRIER_ATTRIBUTES.has(name)) return []
+          if (['id', 'href', 'role', 'data-footnote-ref'].includes(name) || RESERVED_CARRIER_ATTRIBUTES.has(name)) return []
           if (name !== 'class') return [attr]
           // HTML footnote producers use this class as a recognition marker.
           const classes = attr.value.split(/\s+/).filter(value => value && value !== 'footnote-ref')
@@ -454,7 +454,7 @@ export class FootnoteStage {
       while (target !== undefined && !this.context.attr(target, 'id')) target = domParent(target)
       if (target === undefined) continue
       let endnotes: P5Node | undefined = target
-      while (endnotes !== undefined && this.context.attr(endnotes, 'role') !== 'doc-endnotes') endnotes = domParent(endnotes)
+      while (endnotes !== undefined && !this.isEndnotesSection(endnotes)) endnotes = domParent(endnotes)
       if (endnotes === undefined) continue
       const fragment = this.context.attr(target, 'id')!
       used.add(fragment)
@@ -468,7 +468,7 @@ export class FootnoteStage {
       candidates.push({ ref: reference, block, fragment, mutual: true })
     }
     for (const { anchor, fragment } of anchors) {
-      if (!heuristic && this.context.attr(anchor, 'role') !== 'doc-noteref') continue
+      if (!heuristic && !this.isExplicitFootnoteReference(anchor)) continue
       const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, targetsIndex)
       if (block === null || this.p5Contains(block, anchor, targetsIndex)) continue
 
@@ -724,7 +724,7 @@ export class FootnoteStage {
       // `#fn1` in a role-marked document keeps the author's shape. (The
       // marked candidates already sit in their groups; this loop exists for
       // the unmarked second reference the heuristic binds.)
-      if (!heuristic && this.context.attr(element, 'role') !== 'doc-noteref') continue
+      if (!heuristic && !this.isExplicitFootnoteReference(element)) continue
       const href = this.context.attr(element, 'href') ?? ''
       if (!href.startsWith('#')) continue
       const definition = byFragment.get(href.slice(1))
@@ -864,14 +864,22 @@ export class FootnoteStage {
    * `footnoteRef` is Pandoc 1.x's spelling of `footnote-ref`, which it used
    * together with a back-link carrying no attributes at all.
    */
+  private isEndnotesSection(node: P5Node): boolean {
+    return domTag(node) === 'section' && (this.context.attr(node, 'role') === 'doc-endnotes' || this.context.attr(node, 'data-footnotes') !== undefined)
+  }
+
+  private isExplicitFootnoteReference(anchor: P5Node): boolean {
+    return this.context.attr(anchor, 'role') === 'doc-noteref' || this.context.attr(anchor, 'data-footnote-ref') !== undefined
+  }
+
   private isFootnoteReferenceMarked(anchor: P5Node): boolean {
-    if (this.context.attr(anchor, 'role') === 'doc-noteref') return true
+    if (this.isExplicitFootnoteReference(anchor)) return true
     const classes = (this.context.attr(anchor, 'class') ?? '').split(/\s+/)
     return classes.includes('footnote-ref') || classes.includes('footnoteRef')
   }
 
   private isFootnoteBacklinkMarked(anchor: P5Node): boolean {
-    if (this.context.attr(anchor, 'role') === 'doc-backlink') return true
+    if (this.context.attr(anchor, 'role') === 'doc-backlink' || this.context.attr(anchor, 'data-footnote-backref') !== undefined) return true
     return (this.context.attr(anchor, 'class') ?? '').split(/\s+/).includes('footnote-back')
   }
 
@@ -986,6 +994,7 @@ export class FootnoteStage {
    * imports as a paragraph that spells the conditional out.
    */
   private isFootnoteChromeNode(node: P5Node): boolean {
+    if (/^h[1-6]$/.test(domTag(node) ?? '') && (this.context.attr(node, 'class') ?? '').split(/\s+/).includes('sr-only') && this.isEndnotesSection(domParent(node)!)) return true
     if (node.nodeName === '#comment') return true
     if (node.nodeName !== '#text') return false
     const text = (domValue(node) ?? '').trim()
