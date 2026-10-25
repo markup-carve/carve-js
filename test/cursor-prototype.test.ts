@@ -1218,6 +1218,12 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- intro\n    - tail\n', '- intro\n%% c\n    - tail\n',
+    '- > intro\n\n    - tail\n'])
+  ('anchors a deep child list span at its root item content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps an at-column unclosed fence behind the prototype guard', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })

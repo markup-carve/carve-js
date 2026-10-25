@@ -1244,12 +1244,17 @@ next: SourceLine | undefined): boolean {
     !next?.text.startsWith(' '.repeat(frame.contentColumn - 1))
 }
 
-function updateListFrameEnds(frames: Array<{ last: SourceLine; indent: number;
+function nestedListSpanColumn(owner: ContainerOwner, hostColumn: number | undefined,
+  markerIndent: number): number {
+  return owner.kind === 'root' ? hostColumn ?? markerIndent + 1 : markerIndent + 1
+}
+
+function updateListFrameEnds(frames: Array<{ last: SourceLine; spanColumn: number;
   item?: ListItem; itemFirst?: SourceLine }>, line: SourceLine,
 listSpan: (from: SourceLine, to: SourceLine, column: number) => Position): void {
   for (const frame of frames) {
     frame.last = line
-    if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.indent + 1)
+    if (frame.item && frame.itemFirst) frame.item.pos = listSpan(frame.itemFirst, line, frame.spanColumn)
   }
 }
 
@@ -1259,12 +1264,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     position(from, to, depth === 0 && from.baseColumn === undefined &&
       column === firstMarker.indent + 1 ? 1 : column, contentEndColumn(to))
   type Frame = { list: List; first: SourceLine; last: SourceLine; indent: number;
+    spanColumn: number;
     ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
     item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
     fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
     blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
     retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
-  const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): Frame => {
+  const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>,
+    hostColumn = marker.indent + 1): Frame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
     if (marker.ordered) {
@@ -1283,7 +1290,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
     return { list, first: line, last: line,
-      indent: marker.indent, ordered: marker.ordered,
+      indent: marker.indent, spanColumn: Math.min(marker.indent + 1, hostColumn),
+      ordered: marker.ordered,
       taskList: isTaskMarkerContent(marker.content, marker.ordered),
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
@@ -1343,7 +1351,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (stack.length > 1 && marker.indent === host.indent && !sameListKind(marker, host)) {
       const done = stack.pop()!
       flush(done)
-      done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+      done.list.pos = listSpan(done.first, done.last, done.spanColumn)
       host = stack.at(-1)!
     }
     return host
@@ -1375,13 +1383,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
   }
   const attachFirstBlock = (frame: Frame, item: ListItem,
-    line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>,
+    line: SourceLine,
     firstBlock: Array<{ line: SourceLine; prefix: number }> | undefined): SourceLine | undefined => {
     if (!firstBlock) return undefined
     frame.body = []
     for (const attached of firstBlock) appendBody(frame, attached.line, attached.prefix)
     frame.last = firstBlock.at(-1)!.line
-    item.pos = listSpan(line, frame.last, marker.indent + 1)
+    item.pos = listSpan(line, frame.last, frame.spanColumn)
     return frame.last
   }
   while (cursor.peek()) {
@@ -1415,14 +1423,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       cursor.take()
       appendBody(top, next, prefix)
       top.last = next
-      if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.indent + 1)
+      if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.spanColumn)
       continue
     }
     if (isFenceMarkerContinuation(marker, top.fenceMarker, top.contentColumn, line.text)) {
       cursor.take()
       appendBody(top, line, top.contentColumn! - 1)
       top.last = line
-      if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.indent + 1)
+      if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.spanColumn)
       continue
     }
     if (marker) {
@@ -1448,19 +1456,20 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         cursor.take()
         appendBody(top, line, top.contentColumn - 1)
         top.last = line
-        if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.indent + 1)
+        if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.spanColumn)
         continue
       }
       while (stack.length > 1 && marker.indent < stack.at(-1)!.indent) {
         const done = stack.pop()!
         flush(done)
-        done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+        done.list.pos = listSpan(done.first, done.last, done.spanColumn)
       }
       const host = mixedNestedHost(marker)
       if (marker.indent > host.indent) {
         if (!host.item) break
         flush(host)
-        const nested = newFrame(line, marker)
+        const nested = newFrame(line, marker,
+          nestedListSpanColumn(cursor.owner, host.contentColumn, marker.indent))
         host.item.children.push(nested.list)
         stack.push(nested)
       } else if (!sameListKind(marker, host)) {
@@ -1470,7 +1479,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       applyInvisibleTail(current)
       flush(current)
       cursor.take()
-      const item: ListItem = { type: 'list_item', children: [], pos: listSpan(line, line, marker.indent + 1) }
+      const item: ListItem = { type: 'list_item', children: [], pos: listSpan(line, line, current.spanColumn) }
       const taskWidth = takeTaskMarker(item, marker.content, marker.ordered)
       if ('attrs' in marker) item.attrs = marker.attrs
       current.list.items.push(item)
@@ -1487,7 +1496,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
       const spanLine = refusedFirstBlock ? { ...line, spanEndColumn: marker.width + 1 } : line
       if (refusedFirstBlock) current.body = []
-      const attachedLast = attachFirstBlock(current, item, line, marker, firstBlock)
+      const attachedLast = attachFirstBlock(current, item, line, firstBlock)
       updateListFrameEnds(stack, attachedLast ?? spanLine, listSpan)
       continue
     }
@@ -1507,7 +1516,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         while (stack.length > 1) {
           const done = stack.pop()!
           flush(done)
-          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+          done.list.pos = listSpan(done.first, done.last, done.spanColumn)
         }
         for (let i = 0; i < blanks; i++) cursor.take()
         continue
@@ -1523,7 +1532,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         while (stack.at(-1) !== continuationFrame) {
           const done = stack.pop()!
           flush(done)
-          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+          done.list.pos = listSpan(done.first, done.last, done.spanColumn)
         }
         for (let i = 0; i < blanks; i++) {
           const blank = cursor.lines[cursor.at - blanks + i]!
@@ -1595,7 +1604,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         while (stack.at(-1) !== ancestor) {
           const done = stack.pop()!
           flush(done)
-          done.list.pos = listSpan(done.first, done.last, done.indent + 1)
+          done.list.pos = listSpan(done.first, done.last, done.spanColumn)
         }
         continue
       }
@@ -1621,7 +1630,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   for (let i = stack.length - 1; i >= 0; i--) {
     const frame = stack[i]!
     flush(frame)
-    frame.list.pos = listSpan(frame.first, frame.last, frame.indent + 1)
+    frame.list.pos = listSpan(frame.first, frame.last, frame.spanColumn)
   }
   return stack[0]!.list
 }
