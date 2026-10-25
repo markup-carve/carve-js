@@ -491,6 +491,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let mayWrapTerm = false
   let mayTermPlus = false
   let mayFirstBlockQuote = false
+  let definitionContentColumn = 0
+  let endedOnStructural = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
     const term = /^:: +[ \t]*[^ \t].*$/.test(text)
@@ -499,6 +501,10 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
       mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
       mayFirstBlockQuote = definition && /^: +\+[ \t]*$/.test(text)
+      if (definition) {
+        const body = /^: +[ \t]*([^ \t].*)$/.exec(text)![1]!
+        definitionContentColumn = text.length - body.length + 1
+      }
       mayWrapTerm = term
       mayTermPlus = term
       end++
@@ -523,6 +529,15 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       break
     }
+    if (mayWrapDefinition && definitionContentColumn > 1 &&
+        text.startsWith(' '.repeat(definitionContentColumn - 1)) &&
+        RE_HEADING.test(text.slice(definitionContentColumn - 1)) &&
+        (!cursor.lines[end + 1] || !cursor.lines[end + 1]!.text.startsWith(' '.repeat(
+          definitionContentColumn - 1)))) {
+      end++
+      endedOnStructural = true
+      break
+    }
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
       end++
@@ -536,6 +551,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   }
   if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '' &&
       !commentOpeners?.has(cursor.lines[end]!.start) &&
+      !(endedOnStructural && !cursor.lines[end]!.text.startsWith(' '.repeat(
+        definitionContentColumn - 1))) &&
       !(cursor.owner.kind === 'root' && (rootLinkDef(cursor.lines[end]!.text) ||
         rootBlockAttributeAt(cursor, end))))) {
     throw new UnsupportedCursorSyntax('definition list body')
@@ -576,6 +593,21 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = termLast
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
+      const following = cursor.at < end ? cursor.peek() : undefined
+      if (following?.text.startsWith(' '.repeat(column - 1)) &&
+          RE_HEADING.test(following.text.slice(column - 1))) {
+        const heading = cursor.take()
+        current.definitions.push(parseBlocks(new Cursor([
+          { text: definition[1]!, start: line.start + column - 1,
+            number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 },
+          { text: heading.text.slice(column - 1), start: heading.start + column - 1,
+            number: heading.number, baseColumn: (heading.baseColumn ?? 1) + column - 1 },
+        ], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
+        current.definitionLines.push(line.number)
+        current.definitionSpans.push(position(line, line))
+        last = heading
+        continue
+      }
       if (definition[1] === '+' && cursor.at < end &&
           RE_BLOCKQUOTE.test(cursor.peek()!.text)) {
         const follower = cursor.take()

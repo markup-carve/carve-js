@@ -543,6 +543,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a heading at the definition body column and closes before the root tail', () => {
+    const source = ':: term\n:  definition\n   # H\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- a\n  - b\n    # N\n  lazy\n',
     '> - a\n>     - child\n>     ```\n>     code\n>     ```\nafter\n',
     '- x\n  - text\n  > q\n\n  ^ cap\n- c\n'])
