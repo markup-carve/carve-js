@@ -688,9 +688,7 @@ function lastPlacedDefinitionLine(blocks: BlockNode[], last: SourceLine,
   return placedEnd && placedEnd < last.number ? physicalLines[placedEnd - 1] ?? last : last
 }
 
-function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
-  commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
-  const first = cursor.peek()!
+function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> | undefined): number {
   let end = cursor.at
   let mayWrapDefinition = false
   let mayWrapTerm = false
@@ -732,6 +730,19 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       mayTermPlus = false
       continue
+    }
+    if (mayWrapTerm && text === '' && /^: +[ \t]*[^ \t]/.test(cursor.lines[end + 1]?.text ?? '') &&
+        (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
+      end++
+      mayWrapTerm = false
+      continue
+    }
+    if (mayWrapDefinition && text === '' && definitionContentColumn > 1 &&
+        cursor.lines[end + 1]?.text.startsWith(' '.repeat(definitionContentColumn - 1)) &&
+        plainQuoteText(cursor.lines[end + 1]!.text.slice(definitionContentColumn - 1)) &&
+        (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
+      end += 2
+      break
     }
     if (mayFirstBlockQuote && RE_BLOCKQUOTE.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
@@ -776,6 +787,13 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   if (follower && (/^[ \t+:]/.test(follower) || follower.startsWith('::'))) {
     throw new UnsupportedCursorSyntax('definition list continuation')
   }
+  return end
+}
+
+function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
+  commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
+  const first = cursor.peek()!
+  const end = definitionListEnd(cursor, commentOpeners)
   const items: DefinitionItem[] = []
   type CompleteSpans = DefinitionItem & {
     termSpans: Position[]; definitionLines: number[]; definitionSpans: Position[] }
@@ -783,6 +801,17 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let last = first
   while (cursor.at < end) {
     const line = cursor.take()
+    if (line.text === '' && current) {
+      if (cursor.at < end && current.definitions.length) {
+        const follower = cursor.take()
+        const column = /^ */.exec(follower.text)![0].length + 1
+        current.definitions.at(-1)!.push({ type: 'paragraph',
+          children: inline.inlines([{ line: follower, column, text: follower.text.slice(column - 1) }]),
+          pos: position(follower, follower, column) })
+        last = follower
+      }
+      continue
+    }
     const term = /^:: +[ \t]*([^ \t].*)$/.exec(line.text)
     const definition = /^: +[ \t]*([^ \t].*)$/.exec(line.text)
     if (term) {
@@ -850,7 +879,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         last = continuation.last
         continue
       }
-      if (cursor.at < end && cursor.peek()!.text !== '+' &&
+      if (cursor.at < end && !isBlankLine(cursor.peek()!.text) && cursor.peek()!.text !== '+' &&
           !/^(?:::|:) +[ \t]*[^ \t]/.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         const followerColumn = /^ */.exec(follower.text)![0].length + 1

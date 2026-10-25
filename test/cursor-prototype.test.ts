@@ -713,6 +713,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: term\n: A definition can now hold\n\n  more than one paragraph.\n',
+    ':: term\n: first\n\n  second\n',
+    ':: term\n\n: the definition\n'])
+  ('keeps a bounded blank inside a root definition list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a definition continuation marker before a plain follower', () => {
     expect(() => parseCursorPrototype(':: term\n: +\nflush\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype(':: term\n: a\nnext\nthird\n')).toThrow(UnsupportedCursorSyntax)
@@ -720,9 +727,10 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(':: term\n: a\nnext\n:: later\n: b\n')).toThrow(UnsupportedCursorSyntax)
   })
 
-  it('declines a definition body with trailing whitespace until its span rule is migrated', () => {
+  it('keeps a blank before a definition but declines its trailing spaces', () => {
     expect(() => parseCursorPrototype(':: term\n: body  \n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype(':: term\n\n: body\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(':: term\n\n: body\n'))
+      .toStrictEqual(parse(':: term\n\n: body\n'))
   })
 
   it.each(['# Before\n\n:: term\n: body\n',
