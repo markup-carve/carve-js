@@ -361,7 +361,7 @@ function quoteListLazyLine(body: SourceLine[], line: SourceLine, prefix: number)
   const text = line.text.trimStart()
   const indent = line.text.length - text.length
   const first = text.charCodeAt(0)
-  const lazyBlock = (indent === 1 || indent >= 4) &&
+  const lazyBlock = (indent === 1 || indent >= 3) &&
     (first === 35 && RE_HEADING.test(text) || first === 62 && RE_BLOCKQUOTE.test(text) ||
       (first === 45 || first === 42 || first === 43 || first >= 48 && first <= 57) &&
         listMarker(text))
@@ -1183,7 +1183,9 @@ function mayFoldNestedListParagraph(cursor: Cursor,
     body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
   if (depth !== 0 || stackLength < 2 || top.fenceMarker ||
       !plainQuoteText(cursor.peek()!.text) || !plainQuoteText(top.body.at(-1)?.text ?? '')) return false
-  const next = listMarker(cursor.peek(1)?.text ?? '')
+  const following = cursor.peek(1)
+  if (!following) return true
+  const next = listMarker(following.text)
   return next !== undefined && next.indent === top.indent && sameListKind(next, top)
 }
 

@@ -1228,9 +1228,17 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['- > intro\n # tail\n', '- > intro\n > tail\n',
-    '- > intro\n    # tail\n', '- > intro\n    - tail\n',
+    '- > intro\n   # tail\n', '- > intro\n    # tail\n',
+    '- > intro\n    - tail\n',
     '- > intro\n    > tail\n'])
   ('keeps a structural-looking lazy line in a list item quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n  - b\ntail\n', '- a\n  - b\n    text\nlazy\n',
+    '- a\n  - b\n    - c\nlazy\n',
+    '- a\n  - b\n    ```\n    ::: note\n    ```\n    text\nlazy\n'])
+  ('keeps a final plain line in the deepest open list paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
