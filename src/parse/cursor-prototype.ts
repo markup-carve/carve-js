@@ -1314,11 +1314,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text)) {
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
-  return { type: 'block_quote',
-    children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
-      cursor.physicalLines),
-      inline, definitionNodes, depth + 1, false),
-    pos: position(first, last, 1, contentEndColumn(last)) }
+  const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
+    cursor.physicalLines), inline, definitionNodes, depth + 1, false)
+  const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
+    rootLinkDef(body[0]!.text) !== null
+  return { type: 'block_quote', children,
+    pos: position(first, last, 1, onlyLinkDefinition ?
+      body[0]!.baseColumn ?? contentEndColumn(last) : contentEndColumn(last)) }
 }
 
 function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
@@ -1611,6 +1613,23 @@ function simpleClosedListColon(cursor: Cursor, run: string): boolean {
     (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))
 }
 
+function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,
+  definitionNodes: BlockNode[], atDocumentLevel: boolean,
+  definition: NonNullable<ReturnType<typeof rootLinkDef>>): void {
+  const first = cursor.peek()!
+  if (!atDocumentLevel && !(cursor.owner.kind === 'quote' &&
+      cursor.owner.parent?.kind === 'root' && cursor.at === 0)) {
+    throw new UnsupportedCursorSyntax('nested link definition')
+  }
+  cursor.take()
+  if (inline.linkDefinitions.get(normalizeRefLabel(definition.label))?.line !== first.number - 1) return
+  const definitionLine = atDocumentLevel ? first : cursor.physicalLines[first.number - 1] ?? first
+  definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
+    ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
+    ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
+    pos: position(definitionLine, definitionLine) })
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -1664,14 +1683,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const definition = rootLinkDef(first.text)
     if (definition) {
-      if (!atDocumentLevel) throw new UnsupportedCursorSyntax('nested link definition')
-      cursor.take()
-      if (inline.linkDefinitions.get(normalizeRefLabel(definition.label))?.line === first.number - 1) {
-        definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
-          ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
-          ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}),
-          pos: position(first, first) })
-      }
+      takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, atDocumentLevel, definition)
       continue
     }
     const abbreviation = ABBR_DEF.exec(first.text)
@@ -1891,7 +1903,10 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       openComment = comment[1]!.length
       continue
     }
-    const match = rootLinkDef(line.text)
+    const quoteDefinition = line.text.startsWith('> ') &&
+      (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
+    const match = rootLinkDef(line.text) ||
+      (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
     if (match) linkDefinitions.set(normalizeRefLabel(match.label),
       { rawLabel: match.label, line: line.number - 1, href: match.href,
         ...(match.title !== undefined ? { title: unescapeAttrValue(match.title) } : {}),

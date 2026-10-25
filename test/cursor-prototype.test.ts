@@ -877,7 +877,6 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
-    '> [a]: /x\n\nSee [t][a].\n',
     '- [a]: /x\n\nSee [t][a].\n',
   ])('declines a nested reference definition until its prepass is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
@@ -1066,6 +1065,17 @@ describe('experimental block cursor', () => {
   it('ends a quoted paragraph before a list marker after a blank line', () => {
     const source = '- a\n\n  > quote\n\n  - nested\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
+    '> [a]: /x\n\nSee [t][a].\n'])
+  ('indexes a simple root quote reference definition: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a definition inside a nested quote until its owner is indexed', () => {
+    expect(() => parseCursorPrototype('> > [r]: /u\ntail\n\n[r][]\n'))
+      .toThrow(UnsupportedCursorSyntax)
   })
 
   it('declines a list-owned quoted definition with unresolved line ownership', () => {
