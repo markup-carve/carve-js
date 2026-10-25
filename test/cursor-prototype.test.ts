@@ -1376,6 +1376,17 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- > ```\n  > x\n  > ```\n   > y\n',
+    '- > ~~~\n  > x\n  > ~~~\n    > y\n',
+    '- > ```\n  > x\n  > ```\n   > y\n   > z\n',
+    '- > ```\n  > x\n  > ```\n   > y\n  > z\n',
+    '- > p\n  > ```\n  > x\n  > ```\n    > y\n',
+    '- > p\n  >\n  > ```\n  > x\n  > ```\n    > y\n',
+    '- > ```\n  > x\n  > ```\n  > ~~~\n  > z\n  > ~~~\n    > y\n'])
+  ('keeps a quote fence and its overindented follower with the authored owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

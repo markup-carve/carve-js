@@ -415,13 +415,15 @@ function quoteListMarkerPrefix(line: SourceLine,
   return undefined
 }
 
-function listContinuationPrefix(line: string, base: number, body?: SourceLine[]): number {
+function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
+  closedQuoteFence = false): number {
   const firstBlockText = body?.[0]?.text
   if (firstBlockText && listMarker(firstBlockText)) return base
   let column = base
   while (line[column] === ' ') column++
   const block = line.slice(column)
-  return column > base && (block.startsWith('>') || RE_HEADING.test(block)) ? column : base
+  return column > base && (!closedQuoteFence && block.startsWith('>') ||
+    RE_HEADING.test(block)) ? column : base
 }
 
 function followsClosedListBlock(body: SourceLine[]): boolean {
@@ -1342,6 +1344,7 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
   item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
   fenceMarker: string | undefined; fencePrefix: number | undefined; fenceMayDedent: boolean;
+  quoteFenceMarker: string | undefined; closedQuoteFence: boolean;
   body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
@@ -1466,7 +1469,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
-      fencePrefix: undefined, fenceMayDedent: false, body: [], blankBeforeInvisible: false,
+      fencePrefix: undefined, fenceMayDedent: false,
+      quoteFenceMarker: undefined, closedQuoteFence: false,
+      body: [], blankBeforeInvisible: false,
       lazyRootParagraph: false, retainedBelowColumnComment: false,
       bareFenceAfterRetainedComment: false, possibleInvisibleTail: false }
   }
@@ -1570,6 +1575,18 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       baseColumn: (line.baseColumn ?? 1) + prefix,
       ...(line.lazyText ? { lazyText: true } : {}),
       ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
+    if (frame.quoteFenceMarker && text[0] === '>') {
+      const inner = text.slice(text[1] === ' ' ? 2 : 1)
+      if (closesFence(inner, frame.quoteFenceMarker)) {
+        frame.quoteFenceMarker = undefined
+        frame.closedQuoteFence = true
+      }
+    } else if (frame.closedQuoteFence &&
+        (text === '' || text[0] === '>' || isBlockStart(text))) {
+      frame.closedQuoteFence = false
+    } else if (frame.body.length === 1 && text[0] === '>') {
+      frame.quoteFenceMarker = fenceOpen(text.slice(text[1] === ' ' ? 2 : 1))?.marker
+    }
     if (frame.fenceMarker) {
       if (closesFence(text, frame.fenceMarker)) {
         frame.fenceMarker = undefined
@@ -1716,6 +1733,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       current.fenceMayDedent = false
+      current.quoteFenceMarker = undefined
+      current.closedQuoteFence = false
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
       const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
@@ -1859,7 +1878,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (consumeWrappedAttribute(top, bodyPrefix)) continue
     cursor.take()
     appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
-      listContinuationPrefix(line.text, bodyPrefix, top.body) : bodyPrefix)
+      listContinuationPrefix(line.text, bodyPrefix, top.body, top.closedQuoteFence) : bodyPrefix)
     top.retainedBelowColumnComment = false
     updateListFrameEnds(stack, line, listSpan)
   }
