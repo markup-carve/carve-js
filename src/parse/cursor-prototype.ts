@@ -1319,6 +1319,25 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
 
+function heldNestedMarkerPrefix(cursor: Cursor, frame: ListCursorFrame,
+  line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): number | undefined {
+  const column = frame.contentColumn
+  if (column === undefined || marker.indent <= frame.indent ||
+      !line.text.startsWith(' '.repeat(column - 1))) return undefined
+  if (listMarker(frame.body[0]?.text ?? '')) return column - 1
+  const opener = COLON_OPEN.exec(frame.body[0]?.text ?? '')
+  if (!opener) return undefined
+  const closer = new RegExp(`^:{${opener[1]!.length}}[ \\t]*$`)
+  for (let offset = 0; cursor.peek(offset); offset++) {
+    const text = cursor.peek(offset)!.text
+    if (!text.startsWith(' '.repeat(column - 1))) return undefined
+    const body = text.slice(column - 1)
+    if (closer.test(body)) return column - 1
+    if (!listMarker(body)) return undefined
+  }
+  return undefined
+}
+
 function deepestReachableFrame<T extends { contentColumn?: number }>(frames: readonly T[],
   text: string, excludeTop = false): T | undefined {
   for (let index = frames.length - 1 - (excludeTop ? 1 : 0); index >= 0; index--) {
@@ -1519,11 +1538,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (markerFallsBetweenListColumns(marker, top)) break
       if (marker.indent < firstMarker.indent) break
-      if (marker.indent > top.indent && top.contentColumn !== undefined &&
-          top.body.length > 0 && listMarker(top.body[0]!.text) &&
-          line.text.startsWith(' '.repeat(top.contentColumn - 1))) {
+      const heldPrefix = heldNestedMarkerPrefix(cursor, top, line, marker)
+      if (heldPrefix !== undefined) {
         cursor.take()
-        appendBody(top, line, top.contentColumn - 1)
+        appendBody(top, line, heldPrefix)
         top.last = line
         if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.spanColumn)
         continue
@@ -2064,9 +2082,17 @@ function simpleClosedListColon(cursor: Cursor, run: string): boolean {
   if (cursor.owner.kind !== 'list') return false
   const body = cursor.peek(1)?.text
   const close = cursor.peek(2)?.text
-  return body !== undefined && plainQuoteText(body) &&
-    close !== undefined && new RegExp(`^:{${run.length}}[ \\t]*$`).test(close) &&
-    (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))
+  const closer = new RegExp(`^:{${run.length}}[ \\t]*$`)
+  if (body !== undefined && plainQuoteText(body) && close !== undefined &&
+      closer.test(close) && (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))) return true
+  if (!listMarker(body ?? '')) return false
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    const text = cursor.peek(offset)!.text
+    if (closer.test(text)) return !cursor.peek(offset + 1) ||
+      isBlankLine(cursor.peek(offset + 1)!.text)
+    if (!listMarker(text)) return false
+  }
+  return false
 }
 
 function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,

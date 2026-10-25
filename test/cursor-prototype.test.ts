@@ -526,6 +526,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- ::: note\n  - para text\n  :::\n',
+    '- ::: note\n  1. para text\n  :::\n',
+    '- ::: note\n  - one\n  - two\n  :::\n',
+    '- ::: note\n\n  - para text\n  :::\n'])
+  ('keeps a nested list inside a closed marker-line colon container: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a list colon container with unresolved lazy text after its closer', () => {
     expect(() => parseCursorPrototype('- a\n  - b\n    ::: note\n    x\n    :::\n    text\nlazy\n'))
       .toThrow(UnsupportedCursorSyntax)
