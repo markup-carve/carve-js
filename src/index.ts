@@ -976,3 +976,5 @@ export function carveToPreservationReport(
 }
 
 export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './extension/smart-typography-mode.js'
+
+export { migrateAstJson, AstJsonMigrationInputError, type AstJsonMigrationLoss } from './ast/migrate-json.js'

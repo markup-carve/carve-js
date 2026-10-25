@@ -43,6 +43,7 @@ import {
   formatChanges,
   mergeAst,
   fromAstJson,
+  migrateAstJson,
   toAstJson,
   applyProfile,
   renderHtmlWithReport,
@@ -110,6 +111,8 @@ Usage:
                                    Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
+  carve migrate-ast [--source FILE] [file]
+                                   Convert a 1.2 AST JSON tree to contract 2.0
   carve migrate --from FORMAT [options] [file]
                                    Convert html, markdown (md), djot or bbcode to
                                    Carve. --mode, --adapter and --list-table
@@ -258,6 +261,23 @@ exits 1 if anything is reported, 0 if clean.
   -h, --help     Show this help
   -V, --version  Print the version
 `
+
+async function runMigrateAst(args: string[], io: CliIO): Promise<number> {
+  try {
+    const { values, positionals } = parseArgs({ args, options: { source: { type: 'string' }, help: { type: 'boolean', short: 'h' } }, allowPositionals: true })
+    if (values.help) { io.write(HELP); return 0 }
+    if (positionals.length > 1) throw new Error('takes at most one input file')
+    const raw = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin()
+    const source = values.source === undefined ? undefined : io.readFile(values.source)
+    const { tree, losses } = migrateAstJson(JSON.parse(raw), source === undefined ? {} : { source })
+    io.write(`${JSON.stringify(tree, null, 2)}\n`)
+    io.writeErr(`${JSON.stringify(losses, null, 2)}\n`)
+    return 0
+  } catch (error) {
+    io.writeErr(`carve migrate-ast: ${(error as Error).message}\n`)
+    return 2
+  }
+}
 
 async function runMigrate(args: string[], io: CliIO): Promise<number> {
   let values: { from?: string; mode?: string; adapter?: string; report?: string; directory?: string; output?: string; 'check-loss'?: boolean; 'list-table'?: boolean; help?: boolean }
@@ -1213,6 +1233,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'diff') return runDiff(rest, io)
   if (sub === 'merge') return runMerge(rest, io)
   if (sub === 'portability') return runPortability(rest, io)
+  if (sub === 'migrate-ast') return runMigrateAst(rest, io)
   if (sub === 'migrate') return runMigrate(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the

@@ -5,7 +5,9 @@ Sidecars sit beside the canonical AST JSON. They are not part of the document tr
 AST JSON uses contract 2.0. `toAstJson` writes `astVersion: "2.0"` on the
 document root. Source offsets and annotation ranges count UTF-8 bytes; source
 columns count codepoints. `fromAstJson` raises `AstJsonMigrationError` for a
-contract 1.2 tree, including an unversioned tree in the old shape. Extension
+contract 1.2 tree, including an unversioned tree in the old shape. Convert it with
+`migrateAstJson(tree12, { source })` or `carve migrate-ast --source document.crv tree.json`.
+Without the original source, migration omits positions and reports their JSON pointers. Extension
 declarations in an envelope contain `name`, `version`, and `required`.
 
 ```ts
