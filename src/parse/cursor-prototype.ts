@@ -739,12 +739,15 @@ function definitionBlockFollowerEnd(cursor: Cursor, end: number, column: number)
   return after
 }
 
-function attachedDefinitionFollowerEnd(cursor: Cursor, end: number): number | undefined {
+function attachedDefinitionFollowerEnd(cursor: Cursor, end: number,
+  contentPlain: boolean): number | undefined {
   if (cursor.lines[end]?.text !== '+') return undefined
   const follower = cursor.lines[end + 1]?.text ?? ''
   const boundary = cursor.lines[end + 2]?.text
   if (boundary !== undefined && boundary !== '') return undefined
-  return plainQuoteText(follower) || listMarker(follower)?.indent === 0 ? end + 2 : undefined
+  const marker = listMarker(follower)
+  return plainQuoteText(follower) || marker?.indent === 0 ||
+    contentPlain && marker !== undefined ? end + 2 : undefined
 }
 
 function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: number):
@@ -893,7 +896,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       const boundary = boundedDefinitionParagraphEnd(cursor.lines, end)
       if (boundary !== undefined) end = boundary
     } else if (mayWrapDefinition) {
-      const attachedEnd = attachedDefinitionFollowerEnd(cursor, end)
+      const attachedEnd = attachedDefinitionFollowerEnd(cursor, end, definitionContentPlain)
       if (attachedEnd !== undefined) {
         end = attachedEnd
         mayWrapDefinition = false
@@ -1012,8 +1015,20 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         last = continuation.last
         continue
       }
-      while (cursor.at < end && !isBlankLine(cursor.peek()!.text) && cursor.peek()!.text !== '+' &&
+      while (cursor.at < end && !isBlankLine(cursor.peek()!.text) &&
           !/^(?:::|:) +[ \t]*[^ \t]/.test(cursor.peek()!.text)) {
+        if (!blockBody && cursor.peek()!.text === '+' &&
+            (listMarker(cursor.peek(1)?.text ?? '')?.indent ?? 0) > 0) {
+          const plus = cursor.take()
+          parts.push({ line: plus, column: 1, text: plus.text })
+          const follower = cursor.take()
+          const followerColumn = /^ */.exec(follower.text)![0].length + 1
+          parts.push({ line: follower, column: followerColumn,
+            text: follower.text.slice(followerColumn - 1) })
+          definitionLast = follower
+          continue
+        }
+        if (cursor.peek()!.text === '+') break
         const follower = cursor.take()
         const followerColumn = /^ */.exec(follower.text)![0].length + 1
         parts.push({ line: follower, column: followerColumn,

@@ -579,6 +579,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    ':: t\n: a\n+\n  - b\n',
+    ':: t\n: a\n+\n    1. b\n',
+  ])('keeps an indented marker after plus in an open description paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an indented marker after a quote-bodied description plus', () => {
+    expect(() => parseCursorPrototype(':: t\n: > q\n+\n  - b\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
