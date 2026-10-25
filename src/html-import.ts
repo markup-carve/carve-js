@@ -1192,8 +1192,8 @@ class Importer {
       for (const declaration of (this.attr(node, 'style') ?? '').split(';')) {
         const split = declaration.indexOf(':')
         if (split < 0) continue
-        const mapped = this.mappedStyleDeclaration(declaration.slice(0, split).trim().toLowerCase(), declaration.slice(split + 1).trim().toLowerCase(), cell)
-        if (mapped && (cell || mapped.key === 'align')) styleSlots.add(mapped.key)
+        const mapped = this.mappedStyleDeclaration(declaration.slice(0, split).trim().toLowerCase(), declaration.slice(split + 1).trim().toLowerCase(), cell, domTag(node) === 'img')
+        if (mapped && (cell || mapped.key === 'align' || mapped.key === 'width' || mapped.key === 'height')) styleSlots.add(mapped.key)
       }
     }
     for (const attr of domAttrs(node) ?? []) {
@@ -2115,7 +2115,12 @@ class Importer {
    * The Carve slot a CSS declaration maps to, or `undefined` where nothing in
    * the language spells it.
    */
-  private mappedStyleDeclaration(property: string, value: string, cell: boolean): { key: 'align' | 'valign'; value: string } | undefined {
+  private mappedStyleDeclaration(property: string, value: string, cell: boolean, image = false): { key: 'align' | 'valign' | 'width' | 'height'; value: string } | undefined {
+    if (image && (property === 'width' || property === 'height')) {
+      const pixels = /^(\+?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))px$/.exec(value)
+      const amount = pixels ? Number(pixels[1]) : value === '0' ? 0 : NaN
+      if (Number.isSafeInteger(amount) && amount >= 0) return { key: property, value: String(amount) }
+    }
     if (this.mode === 'safe' && !(cell && property === 'text-align')) return undefined
     if (property === 'text-align' && ['left', 'right', 'center'].includes(value)) return { key: 'align', value }
     if (property === 'vertical-align' && ['top', 'middle', 'bottom'].includes(value)) return { key: 'valign', value }
@@ -2154,21 +2159,21 @@ class Importer {
       const property = declaration.slice(0, split).trim().toLowerCase()
       const val = declaration.slice(split + 1).trim().toLowerCase()
       if (!property) continue
-      const mapped = this.mappedStyleDeclaration(property, val, cell)
+      const mapped = this.mappedStyleDeclaration(property, val, cell, domTag(node) === 'img')
       // A CELL TAKES THE MARKER RUN, NOT AN ATTRIBUTE. `|>` is written back as
       // `style="text-align: right;"` and `{align=right}` as `align="right"`, so
       // only the marker returns the declaration the import was handed - and
       // only the marker keeps `carve -> html -> carve -> html` stable, which the
       // attribute spelling did not (markup-carve/carve#1745).
-      if (mapped && cell) {
+      if (mapped && cell && (mapped.key === 'align' || mapped.key === 'valign')) {
         const slot = this.cellAlignment.get(node) ?? {}
         slot[mapped.key] = mapped.value
         this.cellAlignment.set(node, slot)
-      } else if (mapped?.key === 'align') {
+      } else if (mapped?.key === 'align' || mapped?.key === 'width' || mapped?.key === 'height') {
         // OFF A CELL there is no marker, and `align` is a legacy presentational
         // attribute HTML defines for exactly these elements, so the key-value
         // is the faithful spelling rather than a second-best one.
-        keyValues.align = mapped.value
+        keyValues[mapped.key] = mapped.value
       } else if (mapped) {
         // `valign` is defined for table cells and nothing else, so writing it
         // onto a paragraph would emit an attribute no reader honours - a
