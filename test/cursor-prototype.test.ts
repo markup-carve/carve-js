@@ -61,6 +61,7 @@ describe('experimental block cursor', () => {
     '[x][r]\n\n[r]: /url {.external}\n',
     '[x][r]\n\n[r]: /first\n\n[r]: /last\n',
     '[x][r]\n\n[r]: \ufeffhttps://example.com/\n',
+    '[^]: /u\n\nsee [text][^].\n',
   ])('matches root reference definition metadata and winner selection: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

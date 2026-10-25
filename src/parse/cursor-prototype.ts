@@ -201,7 +201,7 @@ function fenceOpen(line: string) {
 const COLON_OPEN = /^(:{3,})(?: +([A-Za-z0-9_][A-Za-z0-9_-]*))?(?: +"([^"]+)")?(?: *\[([A-Za-z0-9_/-]+)\])?[ \t]*$/
 const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 function rootLinkDef(line: string) {
-  return line.startsWith('[') && !line.startsWith('[^') ? matchLinkDef(line) : null
+  return line.startsWith('[') && (!line.startsWith('[^') || line[2] === ']') ? matchLinkDef(line) : null
 }
 
 function boundedAdjacentDefinitionTail(lines: SourceLine[], lineNumber: number,
