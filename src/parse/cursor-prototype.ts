@@ -1442,10 +1442,12 @@ function endsListBlankRun(blanks: number, next: SourceLine | undefined, rootInde
   return next === undefined || (blanks >= 3 && marker !== undefined && marker.indent <= rootIndent)
 }
 
-function isFenceBlankContinuation(frame: { fenceMarker: string | undefined; contentColumn?: number },
-  next: SourceLine | undefined): boolean {
-  return frame.fenceMarker !== undefined && next !== undefined &&
-    frame.contentColumn !== undefined &&
+function isFenceBlankContinuation(cursor: Cursor, frame: ListCursorFrame, next: SourceLine | undefined,
+  stackLength: number, depth: number): boolean {
+  if (frame.fenceMarker === undefined) return false
+  if (!next) return stackLength === 1 && depth === 0 && cursor.owner.kind === 'root' &&
+    frame.itemFirst?.number === frame.body[0]?.number
+  return frame.contentColumn !== undefined &&
     next.text.startsWith(' '.repeat(frame.contentColumn - 1))
 }
 
@@ -2036,8 +2038,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
       const next = cursor.peek(blanks)!
-      if (isFenceBlankContinuation(top, next)) {
-        for (let i = 0; i < blanks; i++) appendBody(top, cursor.take(), 0)
+      if (isFenceBlankContinuation(cursor, top, next, stack.length, depth)) {
+        for (let i = 0; i < blanks; i++) {
+          const blank = cursor.take()
+          appendBody(top, blank, 0)
+          updateListFrameEnds(stack, blank, listSpan)
+        }
         continue
       }
       if (endsListBlankRun(blanks, next, firstMarker.indent)) break
@@ -2390,11 +2396,18 @@ function boundedListFence(cursor: Cursor, first: SourceLine, payload: SourceLine
   return indent <= cursor.owner.listRootPrefix
 }
 
+function boundedListEofFence(cursor: Cursor, first: SourceLine, payload: SourceLine[]): boolean {
+  const last = payload.at(-1)
+  return cursor.owner.kind === 'list' && cursor.lines[0]?.number === first.number &&
+    last?.text === '' && last.number === cursor.physicalLines.at(-1)?.number
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
   if (marker && (cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload) ||
-      boundedListFence(cursor, first, payload, marker)) &&
+      boundedListFence(cursor, first, payload, marker) ||
+      boundedListEofFence(cursor, first, payload)) &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
     const last = payload.at(-1)
     return cursor.owner.fenceBoundary && last && isBlankLine(last.text) ?

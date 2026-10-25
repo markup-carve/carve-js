@@ -591,6 +591,19 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '- ```\n  x\n\n',
+    '* ~~~\n  x\n\n',
+    '1. ```\n  x\n\n',
+  ])('keeps the final blank inside a root list fence at EOF: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a root list fence when a later line can own the boundary', () => {
+    expect(() => parseCursorPrototype('- ```\n  x\n\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
