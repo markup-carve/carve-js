@@ -666,12 +666,16 @@ function definitionStructuralLine(text: string, column: number): boolean {
   return definitionStructuralOffset(text, column) !== undefined
 }
 
-function definitionTermWrapText(cursor: Cursor, text: string, contentColumn: number): boolean {
+function definitionTermBelowColumn(text: string, contentColumn: number): boolean {
   let indent = 0
   if (contentColumn !== 4) while (text.charCodeAt(indent) === 32) indent++
   const belowColumn = contentColumn === 4 ? /^ {1,3}[^ ]/.test(text) :
     indent > 0 && indent < contentColumn && text[indent] !== undefined
-  return belowColumn && !listMarker(text) && !LINE_COMMENT.test(text) ||
+  return belowColumn && !listMarker(text) && !LINE_COMMENT.test(text)
+}
+
+function definitionTermWrapText(cursor: Cursor, text: string, contentColumn: number): boolean {
+  return definitionTermBelowColumn(text, contentColumn) ||
     /^:{1,2}[ \t]*$/.test(text) ||
     (cursor.owner.kind === 'root' && plainQuoteText(text)) ||
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
@@ -803,6 +807,18 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       end++
       continue
     }
+    if (mayWrapTerm && definitionTermBelowColumn(text, termContentColumn)) {
+      let after = end + 1
+      while (cursor.lines[after] &&
+          definitionTermBelowColumn(cursor.lines[after]!.text, termContentColumn)) after++
+      const follower = cursor.lines[after]?.text
+      if (follower === undefined || follower === '' ||
+          /^: +[ \t]*[^ \t]/.test(follower)) {
+        end = after
+        mayWrapTerm = false
+        continue
+      }
+    }
     if (mayWrapTerm && definitionTermWrapText(cursor, text, termContentColumn) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '' ||
           /^: +[ \t]*[^ \t]/.test(cursor.lines[end + 1]!.text) ||
@@ -920,8 +936,12 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const parts: ContentLine[] = [{ line, column, text: term[1]! }]
       let termLast = line
       if (cursor.at < end && definitionTermWrapText(cursor, cursor.peek()!.text, column)) {
-        termLast = cursor.take()
-        parts.push({ line: termLast, column: 1, text: termLast.text })
+        const belowColumn = definitionTermBelowColumn(cursor.peek()!.text, column)
+        do {
+          termLast = cursor.take()
+          parts.push({ line: termLast, column: 1, text: termLast.text })
+        } while (belowColumn && cursor.at < end &&
+          definitionTermBelowColumn(cursor.peek()!.text, column))
       }
       if (cursor.at < end && cursor.peek()!.text === '+') {
         termLast = cursor.take()
