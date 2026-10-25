@@ -1073,6 +1073,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- one\n > q\n', '- one\n # H\n',
+    '- a\n > q\ntail\n', '- a\n # H\ntail\n'])
+  ('folds a below-column opener while the item paragraph is open: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> [f]: ~\n/\n', '> [ref]: /url\n\nSee [it][ref].\n',
     '> [a]: /x\n\nSee [t][a].\n'])
   ('indexes a simple root quote reference definition: %s', (source) => {

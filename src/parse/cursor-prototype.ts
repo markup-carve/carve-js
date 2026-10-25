@@ -924,18 +924,31 @@ function mayFoldNestedListParagraph(cursor: Cursor,
 }
 
 function mayFoldRootListParagraph(cursor: Cursor,
-  frame: { indent: number; fenceMarker: string | undefined; body: SourceLine[];
+  frame: { indent: number; contentColumn?: number;
+    fenceMarker: string | undefined; body: SourceLine[];
     lazyRootParagraph: boolean },
   stackLength: number, depth: number): boolean {
+  const next = cursor.peek()!
   const first = frame.body[0]
-  return depth === 0 && stackLength === 1 && frame.indent === 0 && !frame.fenceMarker &&
-    frame.body.at(-1)?.number === cursor.peek()!.number - 1 &&
-    (frame.lazyRootParagraph || frame.body.length === 1 &&
-      first !== undefined && plainQuoteText(first.text)) && plainQuoteText(cursor.peek()!.text)
+  if (depth !== 0 || stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
+      frame.body.at(-1)?.number !== next.number - 1 ||
+      !(frame.lazyRootParagraph || frame.body.length === 1 &&
+        first !== undefined && plainQuoteText(first.text))) return false
+  const follower = next.text
+  let continues = plainQuoteText(follower)
+  if (!continues && frame.contentColumn !== undefined) {
+    const indent = /^ */.exec(follower)![0].length
+    if (indent > frame.indent && indent < frame.contentColumn - 1) {
+      const content = follower.slice(indent)
+      continues = RE_BLOCKQUOTE.test(content) || RE_HEADING.test(content)
+    }
+  }
+  return continues
 }
 
 function mayFoldListParagraph(cursor: Cursor,
-  frame: { indent: number; ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*';
+  frame: { indent: number; contentColumn?: number; ordered: boolean;
+    delim?: '.' | ')'; bullet?: '-' | '*';
     taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
     lazyRootParagraph: boolean }, stackLength: number, depth: number): boolean {
   return mayFoldNestedListParagraph(cursor, frame, stackLength, depth) ||
@@ -1047,7 +1060,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const appendBody = (frame: Frame, line: SourceLine, prefix: number, rootLazy = false) => {
     const text = line.text.slice(prefix)
-    frame.lazyRootParagraph = (rootLazy || frame.lazyRootParagraph) && plainQuoteText(text)
+    frame.lazyRootParagraph = rootLazy || frame.lazyRootParagraph && plainQuoteText(text)
     const previous = frame.body.at(-1)?.text ?? ''
     if (frame.blankBeforeInvisible && text !== '' && !LINE_COMMENT.test(text) &&
         LINE_COMMENT.test(previous) && !RE_COMMENT_BLOCK_ANY.test(previous)) {
