@@ -590,12 +590,18 @@ function rootBlockAttributeAt(cursor: Cursor, index: number): boolean {
   return found
 }
 
-function definitionStructuralLine(text: string, column: number): boolean {
-  if (!text.startsWith(' '.repeat(column - 1))) return false
-  const content = text.slice(column - 1)
+function definitionStructuralOffset(text: string, column: number): number | undefined {
+  if (!text.startsWith(' '.repeat(column - 1))) return undefined
+  let offset = column - 1
+  while (text.charCodeAt(offset) === 32) offset++
+  const content = text.slice(offset)
   return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content) ||
     (LINE_COMMENT.test(content) && !RE_COMMENT_BLOCK_ANY.test(content)) ||
-    (content[0] === '{' && parseBlockAttributeRun(content) !== null)
+    (content[0] === '{' && parseBlockAttributeRun(content) !== null) ? offset : undefined
+}
+
+function definitionStructuralLine(text: string, column: number): boolean {
+  return definitionStructuralOffset(text, column) !== undefined
 }
 
 function definitionTermWrapText(cursor: Cursor, text: string): boolean {
@@ -647,6 +653,10 @@ function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: nu
   if (!definitionStructuralLine(cursor.lines[end]?.text ?? '', column)) return undefined
   let after = end + 1
   while (cursor.lines[after] && definitionStructuralLine(cursor.lines[after]!.text, column)) after++
+  const opener = cursor.lines[end]!.text
+  const offset = definitionStructuralOffset(opener, column)!
+  if (offset > column - 1 && RE_BLOCKQUOTE.test(opener.slice(offset)) &&
+      plainQuoteText(cursor.lines[after]?.text ?? '')) return undefined
   return !cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(column - 1)) ?
     after : undefined
 }
@@ -805,8 +815,9 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         ]
         while (cursor.at < end && definitionStructuralLine(cursor.peek()!.text, column)) {
           const block = cursor.take()
-          body.push({ text: block.text.slice(column - 1), start: block.start + column - 1,
-            number: block.number, baseColumn: (block.baseColumn ?? 1) + column - 1 })
+          const offset = definitionStructuralOffset(block.text, column)!
+          body.push({ text: block.text.slice(offset), start: block.start + offset,
+            number: block.number, baseColumn: (block.baseColumn ?? 1) + offset })
           last = block
         }
         const blocks = parseBlocks(new Cursor(body, undefined,

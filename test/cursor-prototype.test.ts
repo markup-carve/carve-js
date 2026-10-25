@@ -934,6 +934,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n:  body\n    > q\n',
+    ':: term\n:    definition\n      # H\ntail\n'])
+  ('keeps a structural definition child at or past its content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a raised definition quote with a lazy plain-line follower', () => {
+    expect(() => parseCursorPrototype(':: t\n:  d\n    > q\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([':: t\n:  d\n   %% c\ntail\n',
     ':: t\n:  d\n   %% c\n',
     ':: t\n:  d\n   %% c\n   # H\n'])
