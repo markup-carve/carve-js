@@ -1040,8 +1040,9 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
     if (caption) return { type: 'figure', target: image,
       caption: caption.children, pos: position(first, caption.line) }
-    if (!image.ref && image.pos?.startColumn === 1 &&
-        image.pos.endColumn === first.text.length + 1) return image
+    const baseColumn = first.baseColumn ?? 1
+    if (!image.ref && image.pos?.startColumn === baseColumn &&
+        image.pos.endColumn === baseColumn + first.text.length) return image
   }
   if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'math' &&
       paragraph.children[0].display) {
@@ -1271,7 +1272,7 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
 }
 
 function listContinuationFollower(cursor: Cursor, indent: number,
-  fenceMarker: string | undefined, depth: number): { line: SourceLine; prefix: number } {
+  fenceMarker: string | undefined, depth: number): Array<{ line: SourceLine; prefix: number }> {
   const next = cursor.peek(1)
   const after = cursor.peek(2)
   const ownColumnQuote = indent > 0 && next?.text.startsWith(' '.repeat(indent)) &&
@@ -1279,13 +1280,37 @@ function listContinuationFollower(cursor: Cursor, indent: number,
   if (depth !== 0 || fenceMarker || indent !== 0 && !ownColumnQuote) {
     throw new UnsupportedCursorSyntax('nested list continuation')
   }
+  if (indent === 0 && next && fenceOpen(next.text)) {
+    const marker = fenceOpen(next.text)!.marker
+    const lines: Array<{ line: SourceLine; prefix: number }> = [{ line: next, prefix: 0 }]
+    for (let offset = 2; cursor.peek(offset); offset++) {
+      const line = cursor.peek(offset)!
+      lines.push({ line, prefix: 0 })
+      if (closesFence(line.text, marker)) {
+        const caption = cursor.peek(offset + 1)
+        if (caption && RE_CAPTION.test(caption.text)) lines.push({ line: caption, prefix: 0 })
+        return lines
+      }
+    }
+    throw new UnsupportedCursorSyntax('unclosed attached fence')
+  }
+  if (indent === 0 && next && RE_BLOCKQUOTE.test(next.text)) {
+    const lines: Array<{ line: SourceLine; prefix: number }> = [{ line: next, prefix: 0 }]
+    let offset = 2
+    while (cursor.peek(offset) && RE_BLOCKQUOTE.test(cursor.peek(offset)!.text)) {
+      lines.push({ line: cursor.peek(offset)!, prefix: 0 })
+      offset++
+    }
+    if (!cursor.peek(offset) || isBlankLine(cursor.peek(offset)!.text)) return lines
+    throw new UnsupportedCursorSyntax('multiline list continuation')
+  }
   if (!next || next.text === '' || !ownColumnQuote &&
       (next.text[0] === ' ' || next.text[0] === '\t') ||
       isBlockStart(next.text) ||
       (after && after.text !== '' && !listMarker(after.text))) {
     throw new UnsupportedCursorSyntax('multiline list continuation')
   }
-  return { line: next, prefix: ownColumnQuote ? indent : 0 }
+  return [{ line: next, prefix: ownColumnQuote ? indent : 0 }]
 }
 
 function nestedPlusDisposition(cursor: Cursor,
@@ -1789,6 +1814,17 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     item.pos = listSpan(line, frame.last, frame.spanColumn)
     return frame.last
   }
+  const appendAttachedBlock = (frame: ListCursorFrame,
+    attached: Array<{ line: SourceLine; prefix: number }>): void => {
+    for (const { line, prefix } of attached) {
+      cursor.take()
+      appendBody(frame, line, prefix)
+      frame.last = line
+    }
+    if (frame.itemFirst && frame.item) {
+      frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+    }
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
@@ -1813,14 +1849,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if ((line.text === '+' || line.text === `${' '.repeat(top.indent)}+`) && top.item) {
-      const { line: next, prefix } = listContinuationFollower(cursor, top.indent,
+      const attached = listContinuationFollower(cursor, top.indent,
         top.fenceMarker, depth)
       cursor.take()
       flush(top)
-      cursor.take()
-      appendBody(top, next, prefix)
-      top.last = next
-      if (top.itemFirst) top.item.pos = listSpan(top.itemFirst, next, top.spanColumn)
+      appendAttachedBlock(top, attached)
       continue
     }
     if (isFenceMarkerContinuation(marker, top.fenceMarker, top.contentColumn, line.text)) {

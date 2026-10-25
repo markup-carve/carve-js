@@ -464,6 +464,21 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '- a\n+\n```\nc\n```\n- next\n',
+    '- a\n+\n~~~\nc\n~~~\n^ cap\n- next\n',
+    '- a\n+\n> quote\n> more\n',
+  ])('attaches one complete block after a root list continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- ![a](i)\n',
+    '> ![a](i)\n',
+  ])('promotes a sole mapped image at its authored content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
