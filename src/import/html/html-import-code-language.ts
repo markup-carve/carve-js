@@ -2,6 +2,7 @@ import { trimMatchingEdges } from '../../trim-non-nbsp.js'
 import { domAttrs, domChildren, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
 
 const HTML_SPACE = /[\t\n\f\r ]+/
+const STRUCTURAL_PRE_CLASSES = new Set(['mermaid', 'highlight', 'prettyprint', 'sourceCode', 'notranslate'])
 
 export function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: WeakMap<P5Node, P5Node | null>): string | undefined {
   const attr = (node: P5Node, name: string): string => domAttrs(node)?.find((a) => a.name === name)?.value ?? ''
@@ -25,6 +26,9 @@ export function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: We
       }
     }
   }
+  const plain = classes(pre).filter(Boolean)
+  const fallback = plain.length === 1 && plain[0]!.length > 1 && valid(plain[0]!)
+    && !/^(?:language|lang)-/i.test(plain[0]!) && !STRUCTURAL_PRE_CLASSES.has(plain[0]!) ? plain[0] : undefined
   // Lookup does not consume wrapper attributes or change their import policy.
   const wraps = (parent: P5Node | undefined, child: P5Node): parent is P5Node => {
     if (!parent || domTag(parent) !== 'div') return false
@@ -44,12 +48,12 @@ export function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: We
     return wrappers.get(parent) === child
   }
   const parent = domParent(pre)
-  if (!wraps(parent, pre)) return undefined
+  if (!wraps(parent, pre)) return fallback
   const tokens = classes(parent)
   const direct = (tokens.includes('highlight') ? prefixed(tokens, 'highlight-source-') : undefined)
     ?? (tokens.includes('mw-highlight') ? prefixed(tokens, 'mw-highlight-lang-') : undefined)
   if (direct !== undefined) return direct
   const outer = domParent(parent)
-  return tokens.includes('highlight') && wraps(outer, parent) ? prefixed(classes(outer), 'highlight-') : undefined
+  return (tokens.includes('highlight') && wraps(outer, parent) ? prefixed(classes(outer), 'highlight-') : undefined) ?? fallback
 }
 
