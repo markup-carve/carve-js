@@ -2089,10 +2089,11 @@ function footnotePlainColumn(line: SourceLine): number {
   return line.text[0] === '\t' ? 2 : /^[ ]*/.exec(line.text)![0].length + 1
 }
 
-function simpleFootnoteParagraphLine(line: SourceLine | undefined): boolean {
+function simpleFootnoteParagraphLine(line: SourceLine | undefined, allowList = false): boolean {
   if (!line || !(line.text.startsWith('  ') || line.text[0] === '\t')) return false
   const content = line.text.slice(footnotePlainColumn(line) - 1)
   return plainQuoteText(content) ||
+    allowList && !(line.text[0] === '\t' && content[0] === ' ') && listMarker(content) !== undefined ||
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
 }
 
@@ -2107,6 +2108,7 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
   const fence = fenceOpen(firstText)?.marker ?? RE_RAW_FENCE.exec(firstText)?.[1]
   const table = firstText[0] === '|' && isTableRow(firstText)
   const list = listMarker(firstText)
+  if (list && nextIndex === 1) return undefined
   const attrs = firstText[0] === '{' && parseBlockAttributeRun(firstText)
   const comment = LINE_COMMENT.test(firstText)
   if (!heading && !quote && !fence && !table && !list && !attrs && !comment) return undefined
@@ -2232,7 +2234,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const structural = hasBodyLine ? simpleFootnoteStructuralLines(cursor, nextIndex) : undefined
   let bodyLength = 0
   if (hasBodyLine && !structural) {
-    while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength))) bodyLength++
+    while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength), !separated)) bodyLength++
   }
   const initialQuote = footnote[2] !== undefined && RE_BLOCKQUOTE.test(footnote[2])
   if (!footnote[2] || initialQuote && hasBodyLine && !separated ||

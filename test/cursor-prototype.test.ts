@@ -986,6 +986,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['[^a]: note\n  - item\n\nsee[^a]\n',
+    '[^a]: note\n\t- item\n\nsee[^a]\n'])
+  ('folds a list-shaped line into an open footnote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a tabbed list marker whose extra space changes the footnote owner', () => {
+    expect(() => parseCursorPrototype('[^a]: note\n\t - item\n\nsee[^a]\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([':: \tx\n', ':: t\n: \tx\n'])
   ('accepts a tab after the required definition separator space: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
