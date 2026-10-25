@@ -160,19 +160,19 @@ class CursorInline extends InlineParseSession {
     }
   }
   inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
-    const text = dropTrailingWhitespace(parts.map((part) => part.text).join('\n'))
     const first = parts[0]!
-    const lineAnchors = parts.map((part) => {
-      const anchor = { offset: part.line.start + part.column - 1,
-        column: (part.line.baseColumn ?? 1) + part.column - 1, line: part.line.number }
-      return anchor
-    })
+    const multiLine = parts.length > 1
+    const text = dropTrailingWhitespace(multiLine ? parts.map((part) => part.text).join('\n') : first.text)
+    const lineAnchors = multiLine ? parts.map((part) => ({
+      offset: part.line.start + part.column - 1,
+      column: (part.line.baseColumn ?? 1) + part.column - 1, line: part.line.number,
+    })) : undefined
     const nodes = this.parseInline(text, this.abbreviations, this.linkDefinitions, {
       anchored: true,
       baseOffset: first.line.start + first.column - 1,
       startLine: first.line.number,
       startColumn: (first.line.baseColumn ?? 1) + first.column - 1,
-      ...(parts.length > 1 ? { lineAnchors } : {}),
+      ...(lineAnchors ? { lineAnchors } : {}),
     }, captionContext)
     if (nodes[0]?.type === 'image') this.hasLeadingImage = true
     return nodes
