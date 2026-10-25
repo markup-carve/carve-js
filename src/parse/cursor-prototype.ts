@@ -592,7 +592,8 @@ function rootBlockAttributeAt(cursor: Cursor, index: number): boolean {
 function definitionStructuralLine(text: string, column: number): boolean {
   if (!text.startsWith(' '.repeat(column - 1))) return false
   const content = text.slice(column - 1)
-  return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content)
+  return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content) ||
+    (LINE_COMMENT.test(content) && !RE_COMMENT_BLOCK_ANY.test(content))
 }
 
 function definitionTermWrapText(cursor: Cursor, text: string): boolean {

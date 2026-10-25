@@ -923,6 +923,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n:  d\n   %% c\ntail\n',
+    ':: t\n:  d\n   %% c\n',
+    ':: t\n:  d\n   %% c\n   # H\n'])
+  ('keeps a line comment inside a root definition body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([':: t\n: a\n- x\n',
     ':: t\n: a\n::: note\nx\n:::\n'])
   ('declines a definition follower whose owner remains unresolved: %s', (source) => {
