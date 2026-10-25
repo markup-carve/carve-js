@@ -555,6 +555,20 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  [r]: /u\ntail\n\n[r][]\n',
+    '- a\n  [r]: /u\n more\ntail\n',
+    '- a\n  [r]: /u\n\n  more\n'])
+  ('hoists an adjacent simple list definition with a bounded follower: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['1. x\n   [r]: /u\n   [t][r]\n',
+    '- a\n  [r]: /u\n    "T"\ntail\n\n[r][]\n',
+    '- a\n  [r]: /u\n\n    more\ntail\n\n[r][]\n'])
+  ('declines an adjacent list definition with unresolved following content: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> - a\n> \n>   [r]: /target\n',
     '> - a\n> \n>   [r]: /target\n> \n> - b\n',
     '> - a\n> \n>   [r]: /target\n> \n>   tail\n',

@@ -198,6 +198,16 @@ const BREAK = /^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 function rootLinkDef(line: string) {
   return line.startsWith('[') && !line.startsWith('[^') ? matchLinkDef(line) : null
 }
+
+function boundedAdjacentDefinitionTail(lines: SourceLine[], lineNumber: number,
+  prefix: string): boolean {
+  const next = lines[lineNumber]
+  if (!next) return true
+  if (next.text !== '') return !next.text.startsWith(prefix)
+  let at = lineNumber
+  while (lines[at]?.text === '') at++
+  return !lines[at]?.text.startsWith(prefix + ' ')
+}
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.*)$/
 const ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 const LINE_COMMENT = /^[ \t]*%%/
@@ -2437,7 +2447,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
     const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
       line.text.startsWith(simpleRootListPrefix + '[') &&
-      cursor.lines[line.number - 2]?.text === '' ?
+      (cursor.lines[line.number - 2]?.text === '' ||
+       boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
       rootLinkDef(line.text.slice(simpleRootListPrefix.length)) : null
     const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
       line.text.startsWith(simpleQuoteListPrefix + '[') &&
