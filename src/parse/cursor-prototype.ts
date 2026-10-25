@@ -1234,8 +1234,18 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   const last = top.body.at(-1)!.text
   if (top.retainedBelowColumnComment) return true
   if (plainQuoteText(last)) return true
+  if (nestedQuoteParagraphText(last)) return true
   const innerMarker = depth === 0 && top.body.length === 1 ? listMarker(last) : undefined
   return innerMarker !== undefined && plainQuoteText(innerMarker.content)
+}
+
+function belowColumnListBody(line: SourceLine,
+  marker: NonNullable<ReturnType<typeof listMarker>>,
+  frame: { body: SourceLine[]; retainedBelowColumnComment: boolean }):
+  { line: SourceLine; prefix: number } {
+  const quoteFirstBlock = frame.body[0]?.text.startsWith('>')
+  return { line: frame.retainedBelowColumnComment || quoteFirstBlock ?
+    { ...line, lazyText: true } : line, prefix: quoteFirstBlock ? marker.indent : 0 }
 }
 
 function markerFallsBetweenListColumns(marker: ReturnType<typeof listMarker>,
@@ -1466,7 +1476,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (isBelowListMarkerColumn(marker, top, depth, line.number, cursor.owner, stack.length)) {
         cursor.take()
-        appendBody(top, top.retainedBelowColumnComment ? { ...line, lazyText: true } : line, 0, true)
+        const claimed = belowColumnListBody(line, marker, top)
+        appendBody(top, claimed.line, claimed.prefix, true)
         top.retainedBelowColumnComment = false
         updateListFrameEnds(stack, line, listSpan)
         continue
@@ -1700,7 +1711,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     if (((!cursor.owner.inList || line.lazyText) && plainParagraph) || refusedFirstBlock) {
       if ((plainQuoteText(line.text) || listMarker(line.text) || lazyColon ||
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
-          (lazyColon || refusedFirstBlock || mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
+          (lazyColon || refusedFirstBlock || line.lazyText && listMarker(line.text) ||
+            mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
         const lazyLine = cursor.take()
         body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)
         last = line

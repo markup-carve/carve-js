@@ -1195,6 +1195,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a below-column list marker in a quote opened on the item marker', () => {
+    const source = '- > intro\n - tail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> - intro\n>  - tail\n', '> - intro\n> %% c\n>  - tail\n'])
   ('keeps a below-column marker literal in a quote-owned item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
