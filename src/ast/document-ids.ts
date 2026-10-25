@@ -180,6 +180,16 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
               continue
             }
           }
+          if (node.attrs === undefined && (node.type === 'list_item' ||
+              node.type === 'list' || node.type === 'table_row')) {
+            const childField = node.type === 'list' ? 'items' :
+              node.type === 'table_row' ? 'cells' : 'children'
+            const children = (node as Record<string, unknown>)[childField]
+            if (Array.isArray(children)) {
+              stack.push(children)
+              continue
+            }
+          }
           stack.push(child)
         }
       }
