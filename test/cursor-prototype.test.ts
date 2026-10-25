@@ -540,6 +540,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- ::: note\n  :::\n', '- ::: d\n  :::\n',
+    '> - ::: box\n>   :::\n- tail\n', '> - ::: box\n>   :::\n  - tail\n'])
+  ('keeps an empty closed colon container in its list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- ::: note\n  - para text\n  :::\n',
     '- ::: note\n  1. para text\n  :::\n',
     '- ::: note\n  - one\n  - two\n  :::\n',

@@ -2384,6 +2384,8 @@ function simpleClosedListColon(cursor: Cursor, run: string): boolean {
     if (!following || isBlankLine(following.text)) return true
   }
   const closer = new RegExp(`^:{${run.length}}[ \\t]*$`)
+  if (body !== undefined && closer.test(body) &&
+      (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) return true
   if (body !== undefined && plainQuoteText(body) && close !== undefined &&
       closer.test(close) && (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))) return true
   if (!listMarker(body ?? '')) return false
