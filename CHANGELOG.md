@@ -658,7 +658,10 @@ references and external fragment links need manual review. See the
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.12...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.15...HEAD
+[0.1.15]: https://github.com/markup-carve/carve-js/compare/0.1.14...0.1.15
+[0.1.14]: https://github.com/markup-carve/carve-js/compare/0.1.13...0.1.14
+[0.1.13]: https://github.com/markup-carve/carve-js/compare/0.1.12...0.1.13
 [0.1.12]: https://github.com/markup-carve/carve-js/compare/0.1.11...0.1.12
 [0.1.11]: https://github.com/markup-carve/carve-js/compare/0.1.10...0.1.11
 [0.1.10]: https://github.com/markup-carve/carve-js/compare/0.1.9...0.1.10
