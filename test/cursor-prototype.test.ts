@@ -1129,6 +1129,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('opens a nested list after a literal plus in the inner item', () => {
+    const source = '- foo\n  - b\n  +\n    - x\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- foo\n  - [ ] task\n  +\n  - x\n',
     '- foo\n  - [ ] task\n    +\n  - x\n',
     '- foo\n  - [ ] task\n  +\n  1. x\n'])

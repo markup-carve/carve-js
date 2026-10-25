@@ -345,7 +345,7 @@ function quoteListMarkerPrefix(line: SourceLine,
   const previous = frame.body.at(-1)
   const tail = previous?.text ?? ''
   if (previous?.number !== line.number - 1) return undefined
-  if (!quoteEndsInPlus(tail) && !(tail.startsWith('>') && nestedQuoteParagraphText(tail))) {
+  if (!tail.startsWith('>') || (!quoteEndsInPlus(tail) && !nestedQuoteParagraphText(tail))) {
     return undefined
   }
   if (line.lazyText) return 0
