@@ -1567,6 +1567,17 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   return innerMarker !== undefined && plainQuoteText(innerMarker.content)
 }
 
+function isDedentedNestedParagraphMarker(marker: NonNullable<ReturnType<typeof listMarker>>,
+  stack: readonly ListCursorFrame[], line: SourceLine): boolean {
+  const top = stack.at(-1)
+  const parent = stack[0]
+  return stack.length === 2 && top !== undefined && parent !== undefined &&
+    parent.contentColumn !== undefined && top.indent === parent.contentColumn - 1 &&
+    marker.indent > parent.indent && marker.indent < top.indent &&
+    top.body.at(-1)?.number === line.number - 1 &&
+    plainQuoteText(top.body.at(-1)?.text ?? '')
+}
+
 function belowColumnListBody(line: SourceLine,
   marker: NonNullable<ReturnType<typeof listMarker>>,
   frame: { body: SourceLine[]; retainedBelowColumnComment: boolean }):
@@ -1978,6 +1989,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         const claimed = belowColumnListBody(line, marker, top)
         appendBody(top, claimed.line, claimed.prefix, true)
         top.retainedBelowColumnComment = false
+        updateListFrameEnds(stack, line, listSpan)
+        continue
+      }
+      if (isDedentedNestedParagraphMarker(marker, stack, line)) {
+        cursor.take()
+        appendBody(top, { ...line, lazyText: true }, 0, true)
         updateListFrameEnds(stack, line, listSpan)
         continue
       }

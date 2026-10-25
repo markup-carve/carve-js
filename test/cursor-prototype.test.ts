@@ -1130,6 +1130,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['-   x\n    - a\n  - b\n', '-   x\n    * a\n  - b\n'])
+  ('keeps a dedented marker in the open inner paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('starts a separate list when the inner marker passes the parent content column', () => {
+    const source = '- x\n   - a\n  - b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['1. a\n\n 1. b\n', '1. a\n\n 1. b\n\n  1. c\n'])
   ('starts a sibling list for a below-column marker after a blank: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
