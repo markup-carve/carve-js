@@ -871,7 +871,8 @@ function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
 
 function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   depth: number, contentColumn: number): Array<{ line: SourceLine; prefix: number }> | undefined {
-  const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
+  const markerLineNested = depth === 1 &&
+    (cursor.owner.kind === 'list' || cursor.owner.kind === 'quote')
   if (!(depth === 0 || markerLineNested) || marker.indent !== 0 || marker.content !== '+') return undefined
   const follower = cursor.peek()
   if (!follower) return undefined
