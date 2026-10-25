@@ -1206,7 +1206,8 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   top: { indent: number; contentColumn?: number; fenceMarker: string | undefined;
     body: SourceLine[]; retainedBelowColumnComment: boolean },
   depth: number, lineNumber: number, owner: ContainerOwner, stackLength: number): boolean {
-  if (!(depth === 0 || depth === 1 && owner.kind === 'list') || stackLength !== 1 ||
+  if (!(depth === 0 || depth === 1 &&
+      (owner.kind === 'list' || owner.kind === 'quote')) || stackLength !== 1 ||
       top.fenceMarker || top.contentColumn === undefined ||
       marker.indent <= top.indent || marker.indent >= top.contentColumn - 1 ||
       top.body.at(-1)?.number !== lineNumber - 1) return false
