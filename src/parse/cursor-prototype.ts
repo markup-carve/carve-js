@@ -31,7 +31,7 @@ export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
   spanEndColumn?: number; lazyText?: boolean }
-type ContainerKind = 'root' | 'quote' | 'colon' | 'list'
+type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
   readonly inList: boolean
@@ -521,6 +521,68 @@ function definitionTermWrapText(cursor: Cursor, text: string): boolean {
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
 }
 
+function hasExposedDefinitionReference(body: SourceLine[]): boolean {
+  let fence: string | undefined
+  let commentRun: number | undefined
+  for (let i = 1; i < body.length; i++) {
+    const text = body[i]!.text.trimStart()
+    const comment = RE_COMMENT_BLOCK_ANY.exec(text)
+    if (commentRun !== undefined) {
+      if (comment?.[1]?.length === commentRun) commentRun = undefined
+      continue
+    }
+    if (fence) {
+      if (closesFence(text, fence)) fence = undefined
+      continue
+    }
+    if (comment) { commentRun = comment[1]!.length; continue }
+    const opener = fenceOpen(text)
+    if (opener) { fence = opener.marker; continue }
+    if (/^\[(?:\^[^\]]+|[^\]]+)\]:/.test(text)) return true
+  }
+  return false
+}
+
+function definitionBlockFollowerEnd(cursor: Cursor, end: number, column: number): number | undefined {
+  const prefix = ' '.repeat(column - 1)
+  const first = cursor.lines[end]?.text
+  if (!first?.startsWith(prefix) || first.length <= prefix.length) return undefined
+  let after = end + 1
+  while (cursor.lines[after]?.text.startsWith(prefix) &&
+      cursor.lines[after]!.text.length > prefix.length) after++
+  return after
+}
+
+function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: number):
+  number | undefined {
+  if (!definitionStructuralLine(cursor.lines[end]?.text ?? '', column)) return undefined
+  let after = end + 1
+  while (cursor.lines[after] && definitionStructuralLine(cursor.lines[after]!.text, column)) after++
+  return !cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(column - 1)) ?
+    after : undefined
+}
+
+function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: SourceLine,
+  column: number, content: string, inline: CursorInline):
+  { blocks: BlockNode[]; last: SourceLine } | undefined {
+  const prefix = ' '.repeat(column - 1)
+  if (cursor.at >= end || !cursor.peek()!.text.startsWith(prefix)) return undefined
+  const body: SourceLine[] = [{ text: content, start: line.start + column - 1,
+    number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 }]
+  let last = line
+  while (cursor.at < end && cursor.peek()!.text.startsWith(prefix)) {
+    const follower = cursor.take()
+    body.push({ text: follower.text.slice(column - 1), start: follower.start + column - 1,
+      number: follower.number, baseColumn: (follower.baseColumn ?? 1) + column - 1 })
+    last = follower
+  }
+  if (hasExposedDefinitionReference(body)) {
+    throw new UnsupportedCursorSyntax('definition body reference')
+  }
+  return { blocks: parseBlocks(new Cursor(body, undefined,
+    childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false), last }
+}
+
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
   const first = cursor.peek()!
@@ -531,6 +593,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
   let mayFirstBlockQuote = false
   let definitionContentColumn = 0
   let definitionContentPlain = false
+  let definitionContentBlock = false
   let endedOnStructural = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
@@ -545,6 +608,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         definitionContentColumn = text.length - body.length + 1
         definitionContentPlain = !isBlockStart(body)
       }
+      definitionContentBlock = definition && mayWrapDefinition && !definitionContentPlain
       mayWrapTerm = term
       mayTermPlus = term
       end++
@@ -570,17 +634,17 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       end++
       break
     }
-    if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1 &&
-        definitionStructuralLine(text, definitionContentColumn)) {
-      let after = end + 1
-      while (cursor.lines[after] && definitionStructuralLine(
-        cursor.lines[after]!.text, definitionContentColumn)) after++
-      if (!cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(
-        definitionContentColumn - 1))) {
-        end = after
+    if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1) {
+      const structuralEnd = definitionStructuralFollowerEnd(cursor, end, definitionContentColumn)
+      if (structuralEnd !== undefined) {
+        end = structuralEnd
         endedOnStructural = true
         break
       }
+    }
+    if (definitionContentBlock) {
+      const blockEnd = definitionBlockFollowerEnd(cursor, end, definitionContentColumn)
+      if (blockEnd !== undefined) { end = blockEnd; break }
     }
     if (mayWrapDefinition && /^ {0,3}[A-Za-z0-9]/.test(text) && !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
@@ -669,6 +733,15 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const blockBody = isBlockStart(definition[1]!)
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
+      const continuation = blockBody ? takeDefinitionBlockContinuation(cursor, end, line,
+        column, definition[1]!, inline) : undefined
+      if (continuation) {
+        current.definitions.push(continuation.blocks)
+        current.definitionLines.push(line.number)
+        current.definitionSpans.push(position(line, line))
+        last = continuation.last
+        continue
+      }
       if (cursor.at < end && cursor.peek()!.text !== '+' &&
           !/^(?:::|:) +[ \t]*[^ \t]/.test(cursor.peek()!.text)) {
         const follower = cursor.take()
@@ -1060,7 +1133,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
   stackLength: number, depth: number): boolean {
   const next = cursor.peek()!
   const first = frame.body[0]
-  if (!(depth === 0 || depth === 1 && cursor.owner.kind === 'list') ||
+  if (!(depth === 0 || depth === 1 &&
+      (cursor.owner.kind === 'list' || cursor.owner.kind === 'definition')) ||
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       frame.body.at(-1)?.number !== next.number - 1 ||
       !(frame.lazyRootParagraph || frame.body.length === 1 &&
@@ -1072,7 +1146,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
     if (indent > frame.indent && indent < frame.contentColumn - 1) {
       const content = follower.slice(indent)
       continues = content !== '' && content[0] !== '[' && content[0] !== '{' &&
-        content[0] !== '+' && !content.startsWith('*[') && !content.startsWith('%%')
+        content[0] !== '+' && (cursor.owner.kind === 'definition' || !content.startsWith('*[')) &&
+        !content.startsWith('%%')
     }
   }
   return continues

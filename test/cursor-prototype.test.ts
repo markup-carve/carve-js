@@ -1134,6 +1134,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n:  - a\n    more\n', ':: t\n:  - a\n    *[HTML]: HyperText\n\nHTML here.\n',
+    ':: t\n:  - a\n     ```\n     [r]: /url\n     ```\n\nSee [r][].\n',
+    ':: t\n:  - a\n     %%%\n     [r]: /url\n     %%%\n\nSee [r][].\n',
+    ':: t\n:  %%%\n   x\n   %%%\n'])
+  ('keeps a definition body at its authored column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
