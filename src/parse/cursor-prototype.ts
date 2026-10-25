@@ -342,7 +342,12 @@ function quoteListEndsInPlus(text: string): boolean {
 function quoteListMarkerPrefix(line: SourceLine,
   marker: NonNullable<ReturnType<typeof listMarker>>,
   frame: { contentColumn?: number; body: SourceLine[] }): number | undefined {
-  if (!quoteEndsInPlus(frame.body.at(-1)?.text ?? '')) return undefined
+  const previous = frame.body.at(-1)
+  const tail = previous?.text ?? ''
+  if (previous?.number !== line.number - 1) return undefined
+  if (!quoteEndsInPlus(tail) && !(tail.startsWith('>') && nestedQuoteParagraphText(tail))) {
+    return undefined
+  }
   if (line.lazyText) return 0
   if (frame.contentColumn !== undefined && marker.indent === frame.contentColumn - 1) {
     return frame.contentColumn - 1
@@ -1028,7 +1033,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.blankBeforeInvisible = false
     }
     frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
-      baseColumn: (line.baseColumn ?? 1) + prefix })
+      baseColumn: (line.baseColumn ?? 1) + prefix,
+      ...(line.lazyText ? { lazyText: true } : {}) })
     if (frame.fenceMarker) {
       if (closesFence(text, frame.fenceMarker)) {
         frame.fenceMarker = undefined
@@ -1078,7 +1084,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const lazyQuotePrefix = quoteListMarkerPrefix(line, marker, top)
       if (lazyQuotePrefix !== undefined) {
         cursor.take()
-        appendBody(top, line, lazyQuotePrefix)
+        appendBody(top, { ...line, lazyText: true }, lazyQuotePrefix)
         updateListFrameEnds(stack, line, listSpan)
         continue
       }
@@ -1290,7 +1296,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     const refusedFirstBlock = (quoteEndsInPlus(body.at(-1)?.text ?? '') ||
       quoteListEndsInPlus(body.at(-1)?.text ?? '')) &&
       listMarker(line.text) !== undefined
-    if ((!cursor.owner.inList && plainParagraph) || refusedFirstBlock) {
+    if (((!cursor.owner.inList || line.lazyText) && plainParagraph) || refusedFirstBlock) {
       if ((plainQuoteText(line.text) || listMarker(line.text) || lazyColon ||
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
           (lazyColon || refusedFirstBlock || mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {

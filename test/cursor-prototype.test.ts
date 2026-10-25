@@ -1058,6 +1058,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > q\n  - m\n', '- > q\n  1. m\n', '- > q\n  > more\n  - m\n'])
+  ('keeps an adjacent item marker in an open quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a quoted paragraph before a list marker after a blank line', () => {
+    const source = '- a\n\n  > quote\n\n  - nested\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a list-owned quoted definition with unresolved line ownership', () => {
     expect(() => parseCursorPrototype('- > :: t\n> : d\n>   [^f]: n\ntail\n'))
       .toThrow(UnsupportedCursorSyntax)
