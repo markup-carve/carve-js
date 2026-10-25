@@ -710,7 +710,6 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       continue
     }
     if (mayWrapTerm && definitionTermWrapText(cursor, text) &&
-        !/[ \t]$/.test(text) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '' ||
           /^: +[ \t]*[^ \t]/.test(cursor.lines[end + 1]!.text) ||
           (cursor.lines[end + 1]!.text === '+' &&

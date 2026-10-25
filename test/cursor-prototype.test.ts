@@ -919,6 +919,7 @@ describe('experimental block cursor', () => {
   it.each([':: A term that\n   wraps\n: d\n',
     ':: A term that\nwraps onto the next line\n: its definition\n',
     ':: term\nwrapped on\n: definition\n',
+    ':: `a\nb \n:  d\n',
     ':: term\n+\n: d\n',
     ':: A term that\n   wraps\n+\n: d\n'])
   ('keeps one wrapped term and its literal plus in the term: %s', (source) => {
