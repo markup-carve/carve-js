@@ -874,6 +874,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['  ```js\n  c\n  ```', '        ```=html\n        <b>c</b>\n        ```'])
+  ('keeps a fenced block after a separated footnote quote: %s', (fence) => {
+    const source = `x[^1]\n\n[^1]: > q\n\n${fence}\n`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unseparated fence after a footnote quote', () => {
+    expect(() => parseCursorPrototype('x[^1]\n\n[^1]: > q\n   ```js\n   c\n   ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['> +\nflush\n', '> +\nflush\n\nafter\n'])
   ('attaches a first-block marker to one plain quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

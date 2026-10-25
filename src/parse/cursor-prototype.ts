@@ -1919,7 +1919,9 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   if (hasBodyLine && !structural) {
     while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength))) bodyLength++
   }
-  if (!footnote[2] || (footnote[2] !== '{empty}' && isBlockStart(footnote[2])) ||
+  const initialQuote = footnote[2] !== undefined && RE_BLOCKQUOTE.test(footnote[2])
+  if (!footnote[2] || initialQuote && hasBodyLine && !separated ||
+      (footnote[2] !== '{empty}' && isBlockStart(footnote[2]) && !initialQuote) ||
       (hasBodyLine && (footnote[2] === '{empty}' ||
       (bodyLength === 0 && !structural) ||
       (!structural && cursor.peek(nextIndex + bodyLength) &&
@@ -1949,8 +1951,12 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   }
   const bodyLast = structural?.source.at(-1) ?? continuation.at(-1) ?? first
   const last = attached ?? bodyLast
-  const body: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
-    pos: position(first, separated || structural ? first : bodyLast, column) }
+  const initialBody: BlockNode[] = initialQuote ? parseBlocks(new Cursor([{
+    text: footnote[2]!.slice(bodyIndent), start: first.start + column - 1,
+    number: first.number, baseColumn: column }], undefined,
+  childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) : [{
+    type: 'paragraph', children: inline.inlines(parts),
+    pos: position(first, separated || structural ? first : bodyLast, column) }]
   const separateBody: Paragraph | undefined = separated && continuation.length ? { type: 'paragraph',
     children: inline.inlines(continuation.map((line) => {
       const nextColumn = /^[ ]*/.exec(line.text)![0].length + 1
@@ -1964,9 +1970,9 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   const structuralBody = structural ? parseBlocks(new Cursor(structural.body, undefined,
     childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) : []
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
-    attachedBody ? separateBody ? [body, separateBody, ...structuralBody, attachedBody] :
-      [body, ...structuralBody, attachedBody] :
-      separateBody ? [body, separateBody, ...structuralBody] : [body, ...structuralBody],
+    attachedBody ? separateBody ? [...initialBody, separateBody, ...structuralBody, attachedBody] :
+      [...initialBody, ...structuralBody, attachedBody] :
+      separateBody ? [...initialBody, separateBody, ...structuralBody] : [...initialBody, ...structuralBody],
     enumerable: true, configurable: true, writable: true })
   Object.defineProperty(footnoteDefPos, label, { value: position(first, last),
     enumerable: true, configurable: true, writable: true })
