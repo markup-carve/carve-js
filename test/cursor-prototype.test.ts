@@ -1176,7 +1176,8 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['- intro\n%% c\n ```\n x\n ```\n',
-    '- intro\n%% c\n ~~~\n x\n ~~~\n'])
+    '- intro\n%% c\n ~~~\n x\n ~~~\n',
+    '- - intro\n%% c\n ```\n tail\n ```\n'])
   ('closes a retained below-column fence before its body misses the item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

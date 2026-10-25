@@ -343,6 +343,13 @@ function retainedFencePrefix(text: string): number {
   return /^(?:`{3,}|~{3,})$/.test(text.trimStart()) ? 1 : 0
 }
 
+function retainedListFollower(text: string, body: SourceLine[]):
+  { prefix: number; rootLazy: boolean } {
+  if (listMarker(body[0]?.text ?? '')) return { prefix: 0, rootLazy: false }
+  const prefix = retainedFencePrefix(text)
+  return { prefix, rootLazy: prefix === 0 }
+}
+
 function quoteEndsInPlus(text: string): boolean {
   while (text.startsWith('>')) text = text.slice(text[1] === ' ' ? 2 : 1)
   return text === '+'
@@ -1590,9 +1597,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       if (top.retainedBelowColumnComment && retainedCommentFollower(line.text)) {
         cursor.take()
-        const retainedPrefix = retainedFencePrefix(line.text)
-        appendBody(top, line, retainedPrefix, retainedPrefix === 0)
-        top.bareFenceAfterRetainedComment = retainedPrefix !== 0
+        const follower = retainedListFollower(line.text, top.body)
+        appendBody(top, line, follower.prefix, follower.rootLazy)
+        top.bareFenceAfterRetainedComment = follower.prefix !== 0
         top.retainedBelowColumnComment = false
         updateListFrameEnds(stack, line, listSpan)
         continue
