@@ -658,6 +658,7 @@ function definitionStructuralOffset(text: string, column: number): number | unde
   while (text.charCodeAt(offset) === 32) offset++
   const content = text.slice(offset)
   return RE_HEADING.test(content) || RE_BLOCKQUOTE.test(content) ||
+    content === ':::' ||
     (LINE_COMMENT.test(content) && !RE_COMMENT_BLOCK_ANY.test(content)) ||
     (content[0] === '{' && parseBlockAttributeRun(content) !== null) ? offset : undefined
 }
@@ -968,7 +969,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           last = block
         }
         const blocks = parseBlocks(new Cursor(body, undefined,
-          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)
+          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false)
         current.definitions.push(blocks)
         last = lastPlacedDefinitionLine(blocks, last, cursor.physicalLines)
         current.definitionLines.push(line.number)
@@ -2852,8 +2853,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const colon = simpleColon ??
       (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
     if (colon) {
+      const emptyBareDefinition = cursor.owner.kind === 'definition' &&
+        colon[2] === undefined && cursor.peek(1) === undefined
       if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
-          !simpleClosedListColon(cursor, colon[1]!, colon[2])) ||
+          !simpleClosedListColon(cursor, colon[1]!, colon[2]) && !emptyBareDefinition) ||
           colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }

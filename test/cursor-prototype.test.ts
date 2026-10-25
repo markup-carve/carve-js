@@ -555,6 +555,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    ':: t\n: a\n  :::\n',
+    ':: t\n: a\n  :::\ny\n',
+    '> :: t\n> : a\n>   :::\n',
+  ])('hands an empty bare colon block to the definition owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
