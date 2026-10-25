@@ -1378,6 +1378,23 @@ function wrappedListAttributeCount(cursor: Cursor, prefix: number): number {
   return probeBlockAttributes(new Lexer(lines))?.count ?? 0
 }
 
+function attachTrailingListAttrs(body: SourceLine[], list: List): void {
+  let end = body.length
+  while (end > 0 && isBlankLine(body[end - 1]!.text)) end--
+  let attrs: Attrs | null = null
+  let start = end
+  while (start > 0) {
+    const found = parseBlockAttributeRun(body[start - 1]!.text)
+    if (!found) break
+    attrs = attrs ? mergeAttrs(found, attrs) : found
+    start--
+  }
+  if (attrs) {
+    list.attrs = attrs
+    body.splice(start)
+  }
+}
+
 function loosensListGap(cursor: Cursor, body: SourceLine[], text: string,
   prefix: number, nestedContinuation: boolean): boolean {
   if (nestedContinuation || isListGapBlockStart(text, body)) return false
@@ -1408,8 +1425,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.delim === ')') list.delim = ')'
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
+    const spanColumn = Math.min(marker.indent + 1, hostColumn)
+    list.pos = listSpan(line, line, spanColumn)
     return { list, first: line, last: line,
-      indent: marker.indent, spanColumn: Math.min(marker.indent + 1, hostColumn),
+      indent: marker.indent, spanColumn,
       ordered: marker.ordered,
       taskList: isTaskMarkerContent(marker.content, marker.ordered),
       ...(kind ? { kind } : {}),
@@ -1631,9 +1650,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const host = mixedNestedHost(marker)
       if (marker.indent > host.indent) {
         if (!host.item) break
-        flush(host)
         const nested = newFrame(line, marker,
           nestedListSpanColumn(cursor.owner, host.contentColumn, marker.indent))
+        attachTrailingListAttrs(host.body, nested.list)
+        flush(host)
         host.item.children.push(nested.list)
         stack.push(nested)
       } else if (!sameListKind(marker, host)) {

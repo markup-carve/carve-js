@@ -1458,4 +1458,12 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('> - a\n>   {.c\n}\npara\n'))
       .toThrow(UnsupportedCursorSyntax)
   })
+
+  it.each(['- a\n  {.x}\n  - b\n', '- a\n\n  {.x}\n  1. b\n',
+    '- a\n\n  {.x}\n  {#i}\n  - b\n', '- a\n\n   {.c}\n   - b\n'])
+  ('attaches trailing item attributes to a nested list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
