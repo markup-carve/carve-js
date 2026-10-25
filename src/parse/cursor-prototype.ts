@@ -667,7 +667,7 @@ function definitionStructuralLine(text: string, column: number): boolean {
 }
 
 function definitionTermWrapText(cursor: Cursor, text: string): boolean {
-  return /^ {1,3}[A-Za-z0-9]/.test(text) ||
+  return /^ {1,3}[A-Za-z0-9]/.test(text) || /^:{1,2}[ \t]*$/.test(text) ||
     (cursor.owner.kind === 'root' && plainQuoteText(text)) ||
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
 }
@@ -985,7 +985,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = follower
     } else throw new UnsupportedCursorSyntax('definition list body')
   }
-  return { type: 'definition_list', items, pos: position(first, last) }
+  return { type: 'definition_list', items, pos: position(first, last, 1, contentEndColumn(last)) }
 }
 
 function takeCaption(cursor: Cursor, inline: CursorInline):
