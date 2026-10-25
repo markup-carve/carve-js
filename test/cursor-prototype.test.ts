@@ -1437,4 +1437,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- a\n  {.c\n}\npara\n', '- a\n  {.c\n }\npara\n',
+    '- a\n  {.c\n.d}\npara\n', '- a\n\n  {.c\n}\npara\n'])
+  ('keeps a wrapped list attribute in its physical owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

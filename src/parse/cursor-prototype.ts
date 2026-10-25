@@ -30,7 +30,7 @@ import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-tab
 export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
-  spanEndColumn?: number; lazyText?: boolean }
+  spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -288,6 +288,7 @@ function interruptsParagraph(line: string, owner: ContainerOwner): boolean {
 }
 
 function interruptsParagraphAtCursor(cursor: Cursor): boolean {
+  if (cursor.peek()?.wrappedAttr) return true
   const line = cursor.peek()!.text
   if (cursor.owner.kind === 'root' && line[0] === '{' && !parseBlockAttributeRun(line)) {
     const lexer = lexerForCursor(cursor)
@@ -1362,6 +1363,26 @@ function deepestReachableFrame<T extends { contentColumn?: number }>(frames: rea
   return undefined
 }
 
+function wrappedListAttributeCount(cursor: Cursor, prefix: number): number {
+  if (cursor.owner.kind !== 'root') return 0
+  const first = cursor.peek()!.text.slice(prefix)
+  if (first[0] !== '{' || first.includes('}')) return 0
+  const lines = [first]
+  for (let index = 1; cursor.peek(index); index++) {
+    const text = cursor.peek(index)!.text
+    if (isBlankLine(text)) return 0
+    lines.push(text)
+    if (text.includes('}')) break
+  }
+  return probeBlockAttributes(new Lexer(lines))?.count ?? 0
+}
+
+function loosensListGap(cursor: Cursor, body: SourceLine[], text: string,
+  prefix: number, nestedContinuation: boolean): boolean {
+  if (nestedContinuation || isListGapBlockStart(text, body)) return false
+  return text[0] !== '{' || wrappedListAttributeCount(cursor, prefix) <= 1
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
   first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
@@ -1478,7 +1499,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix,
-      ...(line.lazyText ? { lazyText: true } : {}) })
+      ...(line.lazyText ? { lazyText: true } : {}),
+      ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
     if (frame.fenceMarker) {
       if (closesFence(text, frame.fenceMarker)) {
         frame.fenceMarker = undefined
@@ -1491,6 +1513,18 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.fencePrefix = prefix
       }
     }
+  }
+  const consumeWrappedAttribute = (frame: ListCursorFrame, prefix: number): boolean => {
+    if (cursor.peek()?.text[prefix] !== '{') return false
+    const count = wrappedListAttributeCount(cursor, prefix)
+    if (count <= 1) return false
+    for (let index = 0; index < count; index++) {
+      const line = cursor.take()
+      appendBody(frame, index === 0 ? { ...line, wrappedAttr: true } : line,
+        index === 0 ? prefix : 0)
+      updateListFrameEnds(stack, line, listSpan)
+    }
+    return true
   }
   const appendNestedListGap = (frame: ListCursorFrame, nextMarker: ReturnType<typeof listMarker>,
     blanks: number): void => {
@@ -1671,7 +1705,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
         if (LINE_COMMENT.test(blockText)) continuationFrame.blankBeforeInvisible = true
-        if (!nestedContinuation && !isListGapBlockStart(blockText, continuationFrame.body)) {
+        if (loosensListGap(cursor, continuationFrame.body, blockText,
+          prefixLength, nestedContinuation === true)) {
           blankLooseFrame(continuationFrame, top, next).list.tight = false
         }
       } else if (sibling) target.list.tight = false
@@ -1746,6 +1781,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         !listMarker(top.body[0]?.text ?? '')) {
       bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix)
     }
+    if (consumeWrappedAttribute(top, bodyPrefix)) continue
     cursor.take()
     appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
       listContinuationPrefix(line.text, bodyPrefix, top.body) : bodyPrefix)
@@ -2112,7 +2148,7 @@ function takeBlockAttrsAtCursor(cursor: Cursor, atDocumentLevel: boolean): Attrs
   if (first.text[0] !== '{') return null
   const oneLine = parseBlockAttributeRun(first.text)
   if (oneLine) { cursor.take(); return oneLine }
-  if (!atDocumentLevel) return null
+  if (!atDocumentLevel && !first.wrappedAttr) return null
   const lexer = lexerForCursor(cursor)
   lexer.pos = cursor.at
   const wrapped = probeBlockAttributes(lexer)
