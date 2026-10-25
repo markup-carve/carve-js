@@ -666,8 +666,12 @@ function definitionStructuralLine(text: string, column: number): boolean {
   return definitionStructuralOffset(text, column) !== undefined
 }
 
-function definitionTermWrapText(cursor: Cursor, text: string): boolean {
-  return /^ {1,3}\S/.test(text) && !listMarker(text) && !LINE_COMMENT.test(text) ||
+function definitionTermWrapText(cursor: Cursor, text: string, contentColumn: number): boolean {
+  let indent = 0
+  if (contentColumn !== 4) while (text.charCodeAt(indent) === 32) indent++
+  const belowColumn = contentColumn === 4 ? /^ {1,3}[^ ]/.test(text) :
+    indent > 0 && indent < contentColumn && text[indent] !== undefined
+  return belowColumn && !listMarker(text) && !LINE_COMMENT.test(text) ||
     /^:{1,2}[ \t]*$/.test(text) ||
     (cursor.owner.kind === 'root' && plainQuoteText(text)) ||
     (cursor.owner.kind === 'quote' && !cursor.owner.inList && plainQuoteText(text))
@@ -769,6 +773,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let end = cursor.at
   let mayWrapDefinition = false
   let mayWrapTerm = false
+  let termContentColumn = 0
   let mayTermPlus = false
   let mayFirstBlockQuote = false
   let definitionContentColumn = 0
@@ -777,7 +782,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let endedOnStructural = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
-    const term = /^:: +[ \t]*[^ \t].*$/.test(text)
+    const termMatch = /^:: +[ \t]*([^ \t].*)$/.exec(text)
+    const term = termMatch !== null
     const definition = /^: +[ \t]*[^ \t].*$/.test(text)
     if (term || definition) {
       if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
@@ -791,10 +797,13 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       definitionContentBlock = definition && mayWrapDefinition && !definitionContentPlain
       mayWrapTerm = term
       mayTermPlus = term
+      if (term) {
+        termContentColumn = text.length - termMatch[1]!.length + 1
+      }
       end++
       continue
     }
-    if (mayWrapTerm && definitionTermWrapText(cursor, text) &&
+    if (mayWrapTerm && definitionTermWrapText(cursor, text, termContentColumn) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '' ||
           /^: +[ \t]*[^ \t]/.test(cursor.lines[end + 1]!.text) ||
           (cursor.lines[end + 1]!.text === '+' &&
@@ -910,7 +919,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const column = line.text.length - term[1]!.length + 1
       const parts: ContentLine[] = [{ line, column, text: term[1]! }]
       let termLast = line
-      if (cursor.at < end && definitionTermWrapText(cursor, cursor.peek()!.text)) {
+      if (cursor.at < end && definitionTermWrapText(cursor, cursor.peek()!.text, column)) {
         termLast = cursor.take()
         parts.push({ line: termLast, column: 1, text: termLast.text })
       }
