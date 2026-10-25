@@ -2364,7 +2364,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const footnote = FOOTNOTE_DEF.exec(first.text)
     if (footnote) {
-      if (!atDocumentLevel) {
+      if (!footnoteDefs || !footnoteDefPos) {
         throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
       }
       takeSimpleFootnote(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)
@@ -2511,7 +2511,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon'),
         cursor.physicalLines),
         inline, definitionNodes, depth + 1, false,
-        undefined, undefined, undefined, colonDepth + 1)
+        footnoteDefs, footnoteDefPos, undefined, colonDepth + 1)
       const kind = colon[2]
       const pos = position(first, close)
       if (colon[3] && kind === undefined) throw new UnsupportedCursorSyntax('bare div title')

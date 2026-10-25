@@ -475,6 +475,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('hoists a footnote definition from a named container', () => {
+    const source = 'See [^a].\n\n::: note\n[^a]: note body\n:::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a multiline footnote until its body collector is migrated', () => {
     expect(parseCursorPrototype('[^f]: note\n  # heading\n'))
       .toStrictEqual(parse('[^f]: note\n  # heading\n'))
