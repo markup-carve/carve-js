@@ -571,6 +571,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    ':: t\n: a\n+\n- b\n',
+    ':: t\n: a\n+\n1. b\n',
+    '> :: t\n> : a\n> +\n> - b\n',
+  ])('attaches a bounded list block after a description plus: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

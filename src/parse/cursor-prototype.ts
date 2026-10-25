@@ -739,6 +739,14 @@ function definitionBlockFollowerEnd(cursor: Cursor, end: number, column: number)
   return after
 }
 
+function attachedDefinitionFollowerEnd(cursor: Cursor, end: number): number | undefined {
+  if (cursor.lines[end]?.text !== '+') return undefined
+  const follower = cursor.lines[end + 1]?.text ?? ''
+  const boundary = cursor.lines[end + 2]?.text
+  if (boundary !== undefined && boundary !== '') return undefined
+  return plainQuoteText(follower) || listMarker(follower)?.indent === 0 ? end + 2 : undefined
+}
+
 function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: number):
   number | undefined {
   if (!definitionStructuralLine(cursor.lines[end]?.text ?? '', column)) return undefined
@@ -884,11 +892,12 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
         !/[ \t]$/.test(text)) {
       const boundary = boundedDefinitionParagraphEnd(cursor.lines, end)
       if (boundary !== undefined) end = boundary
-    } else if (mayWrapDefinition && text === '+' &&
-        plainQuoteText(cursor.lines[end + 1]?.text ?? '') &&
-        (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
-      end += 2
-      mayWrapDefinition = false
+    } else if (mayWrapDefinition) {
+      const attachedEnd = attachedDefinitionFollowerEnd(cursor, end)
+      if (attachedEnd !== undefined) {
+        end = attachedEnd
+        mayWrapDefinition = false
+      }
     }
     break
   }
@@ -1027,10 +1036,12 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = definitionLast
     } else if (line.text === '+' && current?.definitions.length && cursor.at < end) {
       const follower = cursor.take()
-      const paragraph: Paragraph = { type: 'paragraph',
+      const attached: BlockNode[] = listMarker(follower.text) ?
+        parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'definition'),
+          cursor.physicalLines), inline, [], 1, false) : [{ type: 'paragraph',
         children: inline.inlines([{ line: follower, column: 1, text: follower.text }]),
-        pos: position(follower, follower) }
-      current.definitions.at(-1)!.push(paragraph)
+        pos: position(follower, follower) }]
+      current.definitions.at(-1)!.push(...attached)
       last = follower
     } else throw new UnsupportedCursorSyntax('definition list body')
   }
