@@ -1332,7 +1332,8 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
   fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
-  retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean }
+  retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
+  possibleInvisibleTail: boolean }
 
 function heldNestedMarkerPrefix(cursor: Cursor, frame: ListCursorFrame,
   line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): number | undefined {
@@ -1416,7 +1417,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
       fencePrefix: undefined, body: [], blankBeforeInvisible: false,
       lazyRootParagraph: false, retainedBelowColumnComment: false,
-      bareFenceAfterRetainedComment: false }
+      bareFenceAfterRetainedComment: false, possibleInvisibleTail: false }
   }
   const stack = [newFrame(first, firstMarker)]
   const blankContinuationFrame = (next: SourceLine,
@@ -1434,8 +1435,31 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (frame.blankBeforeInvisible) frame.list.tight = false
     frame.blankBeforeInvisible = false
   }
+  const trimFrameEnd = (frame: ListCursorFrame) => {
+    if (!frame.item || !frame.itemFirst) return
+    if (frame.item.children.length === 0) {
+      const marker = listMarker(frame.itemFirst.text)
+      if (marker) {
+        frame.last = { ...frame.itemFirst,
+          spanEndColumn: 'continuationWidth' in marker ? marker.continuationWidth : marker.width + 1 }
+        frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+      }
+    }
+    const placedEndLine = frame.item.children.at(-1)?.pos?.endLine
+    if (placedEndLine && placedEndLine < frame.last.number) {
+      const placed = cursor.physicalLines[placedEndLine - 1]
+      if (placed) {
+        frame.last = placed
+        frame.item.pos = listSpan(frame.itemFirst, placed, frame.spanColumn)
+      }
+    }
+  }
   const flush = (frame: ListCursorFrame) => {
-    if (!frame.item || !frame.body.length) return
+    if (!frame.item) return
+    if (!frame.body.length) {
+      if (frame.possibleInvisibleTail) trimFrameEnd(frame)
+      return
+    }
     let allowEmptyFence = allowsEmptyRetainedFence(frame, cursor.peek())
     const firstText = frame.body[0]!.text
     if (frame.body.length === 1 && (firstText[0] === '`' || firstText[0] === '~') &&
@@ -1453,23 +1477,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence),
         cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
-    if (frame.item.children.length === 0 && frame.itemFirst) {
-      const marker = listMarker(frame.itemFirst.text)
-      if (marker) {
-        frame.last = { ...frame.itemFirst,
-          spanEndColumn: 'continuationWidth' in marker ? marker.continuationWidth : marker.width + 1 }
-        frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
-      }
-    }
-    const placedEndLine = frame.item.children.at(-1)?.pos?.endLine
-    if (placedEndLine && placedEndLine < frame.last.number && frame.itemFirst) {
-      const placed = cursor.physicalLines[placedEndLine - 1]
-      if (placed) {
-        frame.last = placed
-        frame.item.pos = listSpan(frame.itemFirst, placed, frame.spanColumn)
-      }
-    }
+    trimFrameEnd(frame)
     frame.body = []
+    frame.possibleInvisibleTail = false
     frame.lazyRootParagraph = false
     frame.retainedBelowColumnComment = false
   }
@@ -1490,6 +1500,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     prefix = claimed.prefix
     frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
+    if (line.wrappedAttr || text[0] === '{' && parseBlockAttributeRun(text)) {
+      for (const open of stack) open.possibleInvisibleTail = true
+    }
     frame.lazyRootParagraph = rootLazy || frame.lazyRootParagraph && plainQuoteText(text)
     const previous = frame.body.at(-1)?.text ?? ''
     if (frame.blankBeforeInvisible && text !== '' && !LINE_COMMENT.test(text) &&
@@ -1638,6 +1651,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.itemFirst = line
       current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
+      current.possibleInvisibleTail = false
       current.lazyRootParagraph = false
       current.retainedBelowColumnComment = false
       current.fenceMarker = undefined
