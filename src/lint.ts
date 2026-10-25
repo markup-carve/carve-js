@@ -1382,7 +1382,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 const FENCE_RUN = /^(`{3,}|~{3,})/
 
-const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
+const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX_>\/!?-]\] +)?/
 const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
@@ -1408,7 +1408,7 @@ interface LintItemColumn {
   textStarts: Set<string>
 }
 
-const LINT_MARKER_SHAPED = /^(?:[-+*](?: +\[[ xX\-_>?]\])?|(?:\([0-9A-Za-z]+\)|[0-9A-Za-z]+[.)]|\.))(?=[ \t])/
+const LINT_MARKER_SHAPED = /^(?:[-+*](?: +\[[ xX\-_>/!?]\])?|(?:\([0-9A-Za-z]+\)|[0-9A-Za-z]+[.)]|\.))(?=[ \t])/
 
 /**
  * A block opener indented past a term's marker folds into the term as text,
@@ -1472,7 +1472,7 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
         const markerIndex = unitIndex(termLine, Math.max(0, (span.startColumn ?? 1) - 1))
         const quotes = (termLine.slice(0, markerIndex).match(/>/g) ?? []).length
         // A task checkbox is outside the item's content-column width.
-        const taskPrefix = /[-*] +\[[ xX\-_>?]\] +[ \t]*$/.exec(termLine.slice(0, markerIndex))
+        const taskPrefix = /[-*] +\[[ xX\-_>/!?]\] +[ \t]*$/.exec(termLine.slice(0, markerIndex))
         const markerColumn = taskPrefix
           ? visualColumn(termLine, taskPrefix.index) + 2
           : visualColumn(termLine, markerIndex)

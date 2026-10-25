@@ -34,6 +34,13 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // New corpus categories in spec 32d724d; all six match this engine byte for byte.
+  'a-display-math-span-with-trailing-attributes-takes-a-caption',
+  'a-styled-display-math-span-takes-a-caption-across-one-blank-line',
+  'a-tab-after-a-comment-marker-stays-in-its-text',
+  'a-tab-cannot-pad-an-empty-link-destination',
+  'a-titled-admonition-skips-an-authored-heading-id',
+  'an-empty-link-destination-takes-spaces',
   'a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns',
   'a-caption-after-a-continuation-marker-fence-stays-with-the-fence',
   'a-column-zero-marker-below-an-open-div-attaches-beside-the-div',

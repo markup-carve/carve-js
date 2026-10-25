@@ -98,9 +98,9 @@ export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t\r\n][^\r\n]*)$/
 export const RE_ORDERED =
   /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*([^ \t\r\n][^\r\n]*)$/
 
-// Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
-// `>`, `?` are all accepted and render as an unchecked checkbox.
-export const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t\r\n][^\r\n]*)$/
+// Task states: `x`/`X` are checked; ` `, `_`, `-`, `/`, `!`, `>`, and `?`
+// render as unchecked checkboxes. `_` is an open-state alias.
+export const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>/!?])\] +[ \t]*([^ \t\r\n][^\r\n]*)$/
 
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
@@ -131,7 +131,7 @@ export interface ItemAttributeMarker {
   headWidth?: number
 }
 
-export const RE_TASK_CONTENT_HEAD = /^\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+export const RE_TASK_CONTENT_HEAD = /^\[([ xX\-_>/!?])\] +[ \t]*(?=[^ \t])/
 
 export function extractItemAttr(line: string, terminatorFree = false): ItemAttributeMarker | null {
   const m = (terminatorFree ? RE_ITEM_ATTR_HEAD : RE_ITEM_ATTR).exec(line)
@@ -509,7 +509,7 @@ export const RE_PREPASS_MARKER =
 
 // The same marker with a task box after it, for the `afterMarker` strip below.
 export const RE_PREPASS_MARKER_STRIP =
-  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{([^}]*)\})? +(?:\[[ xX\-_>?]\] +)?/
+  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{([^}]*)\})? +(?:\[[ xX\-_>/!?]\] +)?/
 
 export const RE_PREPASS_MARKER_STRIP_AT = new RegExp(RE_PREPASS_MARKER_STRIP.source.slice(1), 'y')
 

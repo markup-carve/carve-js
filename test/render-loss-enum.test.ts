@@ -12,7 +12,7 @@ import { renderCarveWithConversionReport } from '../src/import/markdown/conversi
  * `list-style-dropped`, `list-delimiter-changed`, `table-span-flattened`,
  * `table-header-row-demoted`, `table-header-row-hoisted` and
  * `table-header-cell-demoted`, `markdown-container-flattened`,
- * `markdown-caption-flattened`, `markdown-attributes-dropped` and
+ * `markdown-caption-flattened`, `fence-title-dropped`, `markdown-attributes-dropped` and
  * `raw-html-escaped`
  * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
@@ -136,6 +136,7 @@ describe('the render-loss code enum', () => {
       'table-header-cell-demoted',
       'markdown-container-flattened',
       'markdown-caption-flattened',
+      'fence-title-dropped',
       'markdown-attributes-dropped',
       'raw-html-escaped',
     ])
@@ -166,6 +167,7 @@ describe('the render-loss code enum', () => {
     for (const loss of carveToMarkdownWithReport('|= First |\n|= Second |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('| A |= B |\n| C | D |\n').losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('``` "T" [Build]\nx\n```\n').losses) seen.add(loss.code)
     for (const source of [':::\ninside\n:::\n', '![img](a.png)\n^ Caption\n', '{#id}\nParagraph\n']) {
       for (const loss of carveToMarkdownWithReport(source).losses) seen.add(loss.code)
     }
@@ -185,6 +187,7 @@ describe('the render-loss code enum', () => {
     records.push(...carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses)
     records.push(...carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses)
     records.push(...carveToMarkdownWithReport('| A |= B |\n| C | D |\n').losses)
+    records.push(...carveToMarkdownWithReport('``` "T" [Build]\nx\n```\n').losses)
     expect(records.map((loss) => loss.code)).toContain('list-delimiter-changed')
     for (const loss of records) {
       expect(schemaViolations(loss as unknown as Record<string, unknown>), loss.code).toEqual([])

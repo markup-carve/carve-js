@@ -152,7 +152,7 @@ const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture']
  * The states an item can be READ into (PART 10 §11). Not ` `: the bare box
  * says that, and `x` is the done state, read only beside a ticked box.
  */
-const READABLE_TASK_STATES = new Set(['-', '_', '>', '?'])
+const READABLE_TASK_STATES = new Set(['-', '_', '/', '!', '>', '?'])
 
 function isReadableTaskState(value: string | undefined): value is NonNullable<ListItem['taskState']> {
   return value !== undefined && READABLE_TASK_STATES.has(value)

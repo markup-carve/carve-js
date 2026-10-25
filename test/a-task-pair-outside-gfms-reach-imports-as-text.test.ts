@@ -16,7 +16,7 @@ import { markdownToCarve } from '../src/markdown-migrate.js'
  *
  * - out of the extension's reach - a second container marker on the line, a
  *   quote's or another item's - where carve-js read a box GFM had none of;
- * - the four Carve-only states `[-]`, `[_]`, `[>]` and `[?]`, which diverge at
+ * - the six Carve-only spellings `[-]`, `[_]`, `[/]`, `[!]`, `[>]` and `[?]`, which diverge at
  *   every position including the top level.
  *
  * Every reading below was measured against cmark-gfm 0.29.0.gfm.13 through
@@ -31,7 +31,7 @@ import { markdownToCarve } from '../src/markdown-migrate.js'
 
 const BOX = '<input type="checkbox"'
 const STATES = [' ', 'x', 'X'] as const
-const CARVE_ONLY = ['-', '_', '>', '?'] as const
+const CARVE_ONLY = ['-', '_', '/', '!', '>', '?'] as const
 
 /** The imported Carve and what it renders. */
 const imported = (markdown: string): { carve: string; html: string } => {
