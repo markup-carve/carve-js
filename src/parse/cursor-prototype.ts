@@ -1347,21 +1347,12 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean }
 
-function listFenceBodyPrefix(cursor: Cursor, frame: ListCursorFrame, line: SourceLine,
-  prefix: number, stackLength: number): number {
-  let bodyPrefix = prefix
-  if (frame.fenceMarker && frame.fencePrefix !== undefined && frame.fencePrefix > prefix) {
-    if (!line.text.startsWith(' '.repeat(frame.fencePrefix))) {
-      if (!frame.fenceMayDedent) throw new UnsupportedCursorSyntax('shifted fence continuation')
-    } else {
-      bodyPrefix = frame.fencePrefix
-    }
-  } else if (!frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
-      !listMarker(frame.body[0]?.text ?? '')) {
-    frame.fenceMayDedent = cursor.owner.kind !== 'quote' && followsClosedListBlock(frame.body)
-    bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, prefix, frame.fenceMayDedent)
+function continuedListFencePrefix(frame: ListCursorFrame, line: SourceLine, prefix: number): number {
+  if (!line.text.startsWith(' '.repeat(frame.fencePrefix!))) {
+    if (!frame.fenceMayDedent) throw new UnsupportedCursorSyntax('shifted fence continuation')
+    return prefix
   }
-  return bodyPrefix
+  return frame.fencePrefix!
 }
 
 function heldNestedMarkerPrefix(cursor: Cursor, frame: ListCursorFrame,
@@ -1854,7 +1845,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
       continue
     }
-    let bodyPrefix = listFenceBodyPrefix(cursor, top, line, prefix.length, stack.length)
+    let bodyPrefix = prefix.length
+    if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
+      bodyPrefix = continuedListFencePrefix(top, line, bodyPrefix)
+    } else if (!top.fenceMarker && line.text[bodyPrefix] === ' ' && stack.length === 1 &&
+        !listMarker(top.body[0]?.text ?? '')) {
+      top.fenceMayDedent = cursor.owner.kind !== 'quote' && followsClosedListBlock(top.body)
+      bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix, top.fenceMayDedent)
+    }
     if (line.text[bodyPrefix] === ' ') {
       bodyPrefix = indentedListAttributePrefix(line.text, bodyPrefix)
     }
