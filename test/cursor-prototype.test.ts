@@ -1446,4 +1446,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it('ends a quoted list at its last placed child after a wrapped attribute', () => {
+    const source = '> - a\n>   {.c\n> }\npara\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('declines a wrapped quoted list attribute whose closer leaves the quote', () => {
+    expect(() => parseCursorPrototype('> - a\n>   {.c\n}\npara\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
 })

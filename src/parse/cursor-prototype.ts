@@ -1365,7 +1365,7 @@ function deepestReachableFrame<T extends { contentColumn?: number }>(frames: rea
 }
 
 function wrappedListAttributeCount(cursor: Cursor, prefix: number): number {
-  if (cursor.owner.kind !== 'root') return 0
+  if (cursor.owner.kind !== 'root' && cursor.owner.kind !== 'quote') return 0
   const first = cursor.peek()!.text.slice(prefix)
   if (first[0] !== '{' || first.includes('}')) return 0
   const lines = [first]
@@ -1866,7 +1866,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   if (body.at(-1)?.text.trim() === '+' && cursor.peek()?.text.startsWith('|')) {
     throw new UnsupportedCursorSyntax('quote continuation into table')
   }
-  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text)) {
+  const lastBodyText = body.at(-1)?.text
+  const wrappedAttributeTail = body.length >= 2 && lastBodyText?.charCodeAt(lastBodyText.length - 1) === 125 &&
+    lastBodyText.trim() === '}' &&
+    body.at(-2)!.text.trimStart().startsWith('{') &&
+    probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), body.at(-1)!.text.trimStart()]))
+  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail) {
     throw new UnsupportedCursorSyntax('lazy quote continuation')
   }
   const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
@@ -1877,7 +1882,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   const terminalListDefinition = lastBodyLine &&
     cursor.simpleRootListDefinitions?.has(lastBodyLine.number)
   const placedEndLine = children.at(-1)?.pos?.endLine
-  const quoteLast = terminalListDefinition && placedEndLine ?
+  const quoteLast = (terminalListDefinition || wrappedAttributeTail) && placedEndLine ?
     cursor.physicalLines[placedEndLine - 1] ?? last : last
   return { type: 'block_quote', children,
     pos: position(first, quoteLast, 1, onlyLinkDefinition ?
