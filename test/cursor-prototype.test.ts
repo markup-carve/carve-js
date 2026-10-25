@@ -1364,6 +1364,18 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- t\n  {.c}\n   ````\n  x\n',
+    '- t\n  {.c}\n  %% c\n   ````\n  x\n'])
+  ('keeps an unclosed fence after invisible list lines at its authored base: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- item\n\n    ```\n    a\n   ```\n\n  tail\n',
+    '> - a\n>     - child\n>     ```\n>\n>       ```\n>   ~~~\nafter\n'])
+  ('declines a shifted fence whose remaining owner is unresolved: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('attaches a list continuation at its authored marker column', () => {
     const source = ' - a\n +\n > q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

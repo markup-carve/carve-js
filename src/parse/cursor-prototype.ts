@@ -36,14 +36,16 @@ interface ContainerOwner {
   readonly kind: ContainerKind
   readonly inList: boolean
   readonly allowEmptyFence?: boolean
+  readonly allowUnclosedFence?: boolean
   readonly parent?: ContainerOwner
 }
 const ROOT_OWNER: ContainerOwner = { kind: 'root', inList: false }
 
 function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>,
-  allowEmptyFence = false): ContainerOwner {
+  allowEmptyFence = false, allowUnclosedFence = false): ContainerOwner {
   return { kind, inList: kind === 'list' || parent.inList, parent,
-    ...(allowEmptyFence ? { allowEmptyFence } : {}) }
+    ...(allowEmptyFence ? { allowEmptyFence } : {}),
+    ...(allowUnclosedFence ? { allowUnclosedFence } : {}) }
 }
 
 class Cursor {
@@ -422,17 +424,26 @@ function listContinuationPrefix(line: string, base: number, body?: SourceLine[])
   return column > base && (block.startsWith('>') || RE_HEADING.test(block)) ? column : base
 }
 
-function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number): number {
+function followsClosedListBlock(body: SourceLine[]): boolean {
+  const last = body.at(-1)?.text
+  return last !== undefined && (last === '' || parseBlockAttributeRun(last) !== null ||
+    LINE_COMMENT.test(last))
+}
+
+function matchedShiftedFencePrefix(cursor: Cursor, line: string, base: number,
+  afterBlock: boolean): number {
   let shifted = base
   while (line[shifted] === ' ') shifted++
   if (shifted === base) return base
   const shiftedText = line.slice(shifted)
-  let opener = fenceOpen(shiftedText)?.marker
+  const codeFence = fenceOpen(shiftedText)
+  let opener = codeFence?.marker
   if (!opener && (shiftedText[0] === '`' || shiftedText[0] === '~') &&
       cursor.lines[cursor.at - 1]?.text === '') {
     opener = RE_RAW_FENCE.exec(shiftedText)?.[1]
   }
   if (!opener) return base
+  if (codeFence && afterBlock) return shifted
   const baseSpaces = ' '.repeat(base)
   const shiftedSpaces = ' '.repeat(shifted)
   for (let i = cursor.at + 1; i < cursor.lines.length; i++) {
@@ -1330,10 +1341,28 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   spanColumn: number;
   ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
   item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
-  fenceMarker: string | undefined; fencePrefix: number | undefined; body: SourceLine[];
+  fenceMarker: string | undefined; fencePrefix: number | undefined; fenceMayDedent: boolean;
+  body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean }
+
+function listFenceBodyPrefix(cursor: Cursor, frame: ListCursorFrame, line: SourceLine,
+  prefix: number, stackLength: number): number {
+  let bodyPrefix = prefix
+  if (frame.fenceMarker && frame.fencePrefix !== undefined && frame.fencePrefix > prefix) {
+    if (!line.text.startsWith(' '.repeat(frame.fencePrefix))) {
+      if (!frame.fenceMayDedent) throw new UnsupportedCursorSyntax('shifted fence continuation')
+    } else {
+      bodyPrefix = frame.fencePrefix
+    }
+  } else if (!frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
+      !listMarker(frame.body[0]?.text ?? '')) {
+    frame.fenceMayDedent = cursor.owner.kind !== 'quote' && followsClosedListBlock(frame.body)
+    bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, prefix, frame.fenceMayDedent)
+  }
+  return bodyPrefix
+}
 
 function heldNestedMarkerPrefix(cursor: Cursor, frame: ListCursorFrame,
   line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>): number | undefined {
@@ -1446,7 +1475,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(kind ? { kind } : {}),
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
-      fencePrefix: undefined, body: [], blankBeforeInvisible: false,
+      fencePrefix: undefined, fenceMayDedent: false, body: [], blankBeforeInvisible: false,
       lazyRootParagraph: false, retainedBelowColumnComment: false,
       bareFenceAfterRetainedComment: false, possibleInvisibleTail: false }
   }
@@ -1505,7 +1534,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           !next.text.startsWith(' '.repeat(frame.contentColumn - 1))))
     }
     frame.item.children.push(...parseBlocks(
-      new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence),
+      new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
+        frame.fenceMayDedent),
         cursor.physicalLines),
       inline, definitionNodes, depth + 1, false))
     trimFrameEnd(frame)
@@ -1553,6 +1583,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (closesFence(text, frame.fenceMarker)) {
         frame.fenceMarker = undefined
         frame.fencePrefix = undefined
+        frame.fenceMayDedent = false
       }
     } else {
       const marker = RE_RAW_FENCE.exec(text)?.[1] ?? fenceOpen(text)?.marker
@@ -1693,6 +1724,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.retainedBelowColumnComment = false
       current.fenceMarker = undefined
       current.fencePrefix = undefined
+      current.fenceMayDedent = false
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
       const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
@@ -1822,16 +1854,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
       continue
     }
-    let bodyPrefix = prefix.length
-    if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
-      if (!line.text.startsWith(' '.repeat(top.fencePrefix))) {
-        throw new UnsupportedCursorSyntax('shifted fence continuation')
-      }
-      bodyPrefix = top.fencePrefix
-    } else if (!top.fenceMarker && line.text[bodyPrefix] === ' ' && stack.length === 1 &&
-        !listMarker(top.body[0]?.text ?? '')) {
-      bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix)
-    }
+    let bodyPrefix = listFenceBodyPrefix(cursor, top, line, prefix.length, stack.length)
     if (line.text[bodyPrefix] === ' ') {
       bodyPrefix = indentedListAttributePrefix(line.text, bodyPrefix)
     }
@@ -1955,6 +1978,11 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
 
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
+  const marker = fenceOpen(first.text)?.marker
+  if (cursor.owner.allowUnclosedFence && marker &&
+      !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
+    return payload.at(-1) ?? first
+  }
   if (cursor.owner.allowEmptyFence && payload.length === 0 &&
       /^(?:`{3,}|~{3,})$/.test(first.text)) return first
   if (cursor.owner.kind === 'root' && /^(?:`{3,}|~{3,})$/.test(first.text) &&
