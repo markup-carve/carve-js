@@ -1397,8 +1397,16 @@ function attachTrailingListAttrs(body: SourceLine[], list: List): void {
 
 function loosensListGap(cursor: Cursor, body: SourceLine[], text: string,
   prefix: number, nestedContinuation: boolean): boolean {
+  if (parseBlockAttributeRun(text.trimStart())) return false
   if (nestedContinuation || isListGapBlockStart(text, body)) return false
   return text[0] !== '{' || wrappedListAttributeCount(cursor, prefix) <= 1
+}
+
+function indentedListAttributePrefix(text: string, prefix: number): number {
+  const remaining = text.slice(prefix)
+  const attribute = remaining.trimStart()
+  return attribute !== remaining && parseBlockAttributeRun(attribute) ?
+    prefix + remaining.length - attribute.length : prefix
 }
 
 function markInvisibleListGap(frame: ListCursorFrame, attrsSeen: boolean, text: string): void {
@@ -1741,7 +1749,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         const prefixLength = continuationFrame.contentColumn! - 1
         let lookahead = 0
         let blockText = next.text.slice(listContinuationPrefix(next.text, prefixLength))
-        while (parseBlockAttributeRun(blockText)) {
+        while (parseBlockAttributeRun(blockText.trimStart())) {
           lookahead++
           const following = cursor.peek(lookahead)
           if (!following?.text.startsWith(' '.repeat(prefixLength))) break
@@ -1823,6 +1831,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     } else if (!top.fenceMarker && line.text[bodyPrefix] === ' ' && stack.length === 1 &&
         !listMarker(top.body[0]?.text ?? '')) {
       bodyPrefix = matchedShiftedFencePrefix(cursor, line.text, bodyPrefix)
+    }
+    if (line.text[bodyPrefix] === ' ') {
+      bodyPrefix = indentedListAttributePrefix(line.text, bodyPrefix)
     }
     if (consumeWrappedAttribute(top, bodyPrefix)) continue
     cursor.take()
