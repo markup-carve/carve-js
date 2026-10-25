@@ -765,6 +765,20 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- foo\n  - [ ] +\n> b\n', '- foo\n  - [ ] +\n > b\n',
+    '- foo\n  - [ ] +\n  > b\n', '- foo\n  - [ ] +\n    > b\n'])
+  ('applies the authored column gate to a task first-block quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- foo\n  - [ ] +\n```\nx\n```\n',
+    '- foo\n  - [ ] +\n ```\n x\n ```\n',
+    '- foo\n  - [ ] +\n  ```\n  x\n  ```\n',
+    '- foo\n  - [ ] +\n    ```\n    x\n    ```\n'])
+  ('applies the authored column gate to a task first-block fence: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('starts a root indented list span at the authored line start', () => {
     const source = '  - a\n  - b\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

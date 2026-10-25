@@ -870,7 +870,7 @@ function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
 }
 
 function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
-  depth: number, contentColumn: number): { line: SourceLine; prefix: number } | undefined {
+  depth: number, contentColumn: number): Array<{ line: SourceLine; prefix: number }> | undefined {
   if (depth !== 0 || marker.indent !== 0 || marker.content !== '+') return undefined
   const follower = cursor.peek()
   if (!follower) return undefined
@@ -881,7 +881,59 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
       (atContentColumn && plainQuoteText(follower.text.slice(prefix.length))))) return undefined
   if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0) return undefined
   cursor.take()
-  return { line: follower, prefix: atContentColumn ? prefix.length : 0 }
+  return [{ line: follower, prefix: atContentColumn ? prefix.length : 0 }]
+}
+
+function takeTaskFirstBlockQuote(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
+  if (depth !== 0 || marker.indent === 0 || marker.content.slice(taskWidth) !== '+') return undefined
+  const follower = cursor.peek()
+  if (!follower) return undefined
+  const indent = /^ */.exec(follower.text)![0].length
+  if (indent !== 0 && indent !== marker.indent && indent !== marker.width) return undefined
+  if (!RE_BLOCKQUOTE.test(follower.text.slice(indent))) return undefined
+  const after = cursor.peek(1)
+  if (after && !isBlankLine(after.text)) return undefined
+  cursor.take()
+  return [{ line: follower, prefix: indent }]
+}
+
+function takeTaskFirstBlockFence(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
+  if (depth !== 0 || marker.indent === 0 || marker.content.slice(taskWidth) !== '+') return undefined
+  const first = cursor.peek()
+  if (!first) return undefined
+  const indent = /^ */.exec(first.text)![0].length
+  if (indent !== 0 && indent !== marker.indent && indent !== marker.width) return undefined
+  const fence = fenceOpen(first.text.slice(indent))?.marker
+  if (!fence) return undefined
+  const lines: Array<{ line: SourceLine; prefix: number }> = []
+  for (let offset = 0; cursor.peek(offset); offset++) {
+    const line = cursor.peek(offset)!
+    if (!line.text.startsWith(' '.repeat(indent))) return undefined
+    lines.push({ line, prefix: indent })
+    if (offset > 0 && closesFence(line.text.slice(indent), fence)) {
+      for (let i = 0; i < lines.length; i++) cursor.take()
+      return lines
+    }
+  }
+  return undefined
+}
+
+function takeListFirstBlock(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, depth: number, contentColumn: number):
+  Array<{ line: SourceLine; prefix: number }> | undefined {
+  return takeSimpleFirstBlockListPlus(cursor, marker, depth, contentColumn) ??
+    takeTaskFirstBlockQuote(cursor, marker, taskWidth, depth) ??
+    takeTaskFirstBlockFence(cursor, marker, taskWidth, depth)
+}
+
+function isRefusedTaskFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, next: SourceLine | undefined, depth: number): boolean {
+  if (depth !== 0 || marker.indent === 0 || marker.content.slice(taskWidth) !== '+' || !next) return false
+  const indent = /^ */.exec(next.text)![0].length
+  return indent > 0 && indent < marker.indent &&
+    (RE_BLOCKQUOTE.test(next.text.slice(indent)) || fenceOpen(next.text.slice(indent)) !== null)
 }
 
 function isUnattachedRootFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
@@ -889,6 +941,12 @@ function isUnattachedRootFirstBlock(marker: NonNullable<ReturnType<typeof listMa
   if (depth !== 0 || marker.indent !== 0 || marker.content.slice(taskWidth) !== '+') return false
   return next === undefined || isBlankLine(next.text) ||
     (listMarker(next.text)?.indent ?? Number.POSITIVE_INFINITY) <= marker.indent
+}
+
+function isRefusedListFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
+  taskWidth: number, next: SourceLine | undefined, depth: number): boolean {
+  return isUnattachedRootFirstBlock(marker, taskWidth, next, depth) ||
+    isRefusedTaskFirstBlock(marker, taskWidth, next, depth)
 }
 
 function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceMarker: string | undefined,
@@ -1168,6 +1226,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     }
   }
+  const attachFirstBlock = (frame: Frame, item: ListItem,
+    line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>,
+    firstBlock: Array<{ line: SourceLine; prefix: number }> | undefined): SourceLine | undefined => {
+    if (!firstBlock) return undefined
+    frame.body = []
+    for (const attached of firstBlock) appendBody(frame, attached.line, attached.prefix)
+    frame.last = firstBlock.at(-1)!.line
+    item.pos = listSpan(line, frame.last, marker.indent + 1)
+    return frame.last
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
@@ -1272,17 +1340,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       appendBody(current, line, marker.width + taskWidth)
-      const firstBlock = takeSimpleFirstBlockListPlus(cursor, marker, depth, current.contentColumn)
-      const refusedFirstBlock = !firstBlock && isUnattachedRootFirstBlock(marker, taskWidth, cursor.peek(), depth)
+      const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
+      const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
       const spanLine = refusedFirstBlock ? { ...line, spanEndColumn: marker.width + 1 } : line
       if (refusedFirstBlock) current.body = []
-      if (firstBlock) {
-        current.body = []
-        appendBody(current, firstBlock.line, firstBlock.prefix)
-        current.last = firstBlock.line
-        item.pos = listSpan(line, firstBlock.line, marker.indent + 1)
-      }
-      updateListFrameEnds(stack, firstBlock?.line ?? spanLine, listSpan)
+      const attachedLast = attachFirstBlock(current, item, line, marker, firstBlock)
+      updateListFrameEnds(stack, attachedLast ?? spanLine, listSpan)
       continue
     }
     if (line.text === '') {
