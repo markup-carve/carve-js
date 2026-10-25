@@ -2209,14 +2209,17 @@ function boundedColonFence(body: SourceLine[], cursor: Cursor, run: number): Sou
 function boundedQuoteFence(cursor: Cursor, first: SourceLine, payload: SourceLine[]): boolean {
   if (cursor.owner.kind !== 'quote' || cursor.lines[0]?.number !== first.number) return false
   const firstPayload = payload[0]
+  const next = cursor.physicalLines[(payload.at(-1) ?? first).number]
+  if (firstPayload && cursor.owner.parent?.kind === 'list' &&
+      cursor.owner.parent.parent?.kind === 'root' &&
+      cursor.owner.listRootPrefix !== undefined && next &&
+      new RegExp(`^ {${cursor.owner.listRootPrefix + 2},}>`).test(next.text)) return true
   if (!firstPayload) {
-    const next = cursor.physicalLines[first.number]
     return !next || next.text !== '' && next.text[0] !== ' ' && next.text[0] !== '>'
   }
   const column = firstPayload.baseColumn ?? 1
   if (column >= (first.baseColumn ?? 1) ||
       payload.some((line) => (line.baseColumn ?? 1) < column)) return false
-  const next = cursor.physicalLines[(payload.at(-1) ?? first).number]
   return !next || !plainQuoteText(next.text)
 }
 
