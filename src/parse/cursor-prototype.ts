@@ -930,7 +930,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
   stackLength: number, depth: number): boolean {
   const next = cursor.peek()!
   const first = frame.body[0]
-  if (depth !== 0 || stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
+  if (!(depth === 0 || depth === 1 && cursor.owner.kind === 'list') ||
+      stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       frame.body.at(-1)?.number !== next.number - 1 ||
       !(frame.lazyRootParagraph || frame.body.length === 1 &&
         first !== undefined && plainQuoteText(first.text))) return false
@@ -947,13 +948,24 @@ function mayFoldRootListParagraph(cursor: Cursor,
   return continues
 }
 
+function mayFoldMarkerLineNestedParagraph(cursor: Cursor,
+  frame: { body: SourceLine[]; fenceMarker: string | undefined },
+  stackLength: number, depth: number): boolean {
+  if (depth !== 0 || stackLength !== 1 || frame.fenceMarker || frame.body.length !== 1) return false
+  const first = frame.body[0]!
+  const marker = listMarker(first.text)
+  return marker !== undefined && first.number === cursor.peek()!.number - 1 &&
+    plainQuoteText(marker.content) && plainQuoteText(cursor.peek()!.text)
+}
+
 function mayFoldListParagraph(cursor: Cursor,
   frame: { indent: number; contentColumn?: number; ordered: boolean;
     delim?: '.' | ')'; bullet?: '-' | '*';
     taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
     lazyRootParagraph: boolean }, stackLength: number, depth: number): boolean {
   return mayFoldNestedListParagraph(cursor, frame, stackLength, depth) ||
-    mayFoldRootListParagraph(cursor, frame, stackLength, depth)
+    mayFoldRootListParagraph(cursor, frame, stackLength, depth) ||
+    mayFoldMarkerLineNestedParagraph(cursor, frame, stackLength, depth)
 }
 
 function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength: number):
