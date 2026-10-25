@@ -1840,7 +1840,7 @@ const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
  * guarded character out is what keeps the two engines offering the SAME sites
  * in the same order.
  */
-const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
+const NOT_OFFERED_PER_OCCURRENCE = '`"\'^'
 
 /**
  * The candidates whose construct opens on ONE character, so a repeat of one
@@ -5744,6 +5744,7 @@ class CarveRenderSession {
         return escaped ? '\\]' : ']'
       }
       if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
+      if (mode === 'minimal' && char === '\\') return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
       // so the one occurrence that needed the escape no longer drags the rest
@@ -5761,10 +5762,6 @@ class CarveRenderSession {
       // omitting it would change the re-parse. Mid-line the colon is left to
       // the symbol pass below, which is the one channel it still opens there.
       if (char === ':' && !opensLine(subject, offset)) return ':'
-      if (char === '\\' && offset + 1 < subject.length) {
-        const next = subject.charCodeAt(offset + 1)
-        if (!((next >= 33 && next <= 47) || (next >= 58 && next <= 64) || (next >= 91 && next <= 96) || (next >= 123 && next <= 126))) return '\\'
-      }
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
       // A TAB after the marker is not a caption opener: PART 10 §231 leaves
