@@ -807,6 +807,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps an indented image and caption marker in a literal paragraph', () => {
+    const source = ' ![Apollo](a.jpg)\n ^ Figure 1: moon\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps a caption-looking line in a paragraph led by an image and other text', () => {
     const source = '![a](p.png) text\n^ Caption\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

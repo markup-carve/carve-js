@@ -10,6 +10,7 @@ import { mergeAttrs } from '../extension/attribute-merge.js'
 import { parseAttrs, unescapeAttrValue } from '../extension/attribute-parser.js'
 import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
+import { markAboveContentColumn } from './block/paragraph-indent.js'
 import { RE_CAPTION, RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
@@ -916,6 +917,9 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   }
   const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
     pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
+  if (parts[0]!.column > 1 && paragraph.children[0]?.type === 'image') {
+    markAboveContentColumn(paragraph)
+  }
   if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
     const image = paragraph.children[0]
     const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
