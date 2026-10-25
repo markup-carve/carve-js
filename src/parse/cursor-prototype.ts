@@ -864,11 +864,12 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       if (blockEnd !== undefined) { end = blockEnd; break }
     }
     if (mayWrapDefinition && definitionContentPlain && /^:{1,2}[ \t]*$/.test(text)) {
-      const afterEmptyMarker = cursor.lines[end + 1]?.text
-      const nextDefinitionItem = afterEmptyMarker !== undefined &&
-        /^::? +[ \t]*[^ \t]/.test(afterEmptyMarker)
-      if (afterEmptyMarker === undefined || afterEmptyMarker === '' || nextDefinitionItem) {
-        end++
+      let after = end + 1
+      while (cursor.lines[after] && plainQuoteText(cursor.lines[after]!.text)) after++
+      const follower = cursor.lines[after]?.text
+      const nextDefinitionItem = follower !== undefined && /^::? +[ \t]*[^ \t]/.test(follower)
+      if (follower === undefined || follower === '' || nextDefinitionItem) {
+        end = after
         if (nextDefinitionItem) continue
         break
       }

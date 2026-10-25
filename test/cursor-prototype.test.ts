@@ -546,6 +546,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    ':: t\n: a\n:: \nc\n',
+    ':: t\n: a\n:  \nc\nd\n',
+    ':: t\n: a\n:: \nc\n: b\n',
+    '> :: t\n> : a\n> :: \n> c\n',
+  ])('keeps a bounded plain run after an empty description marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
   ('keeps a lazy line in its nested quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
