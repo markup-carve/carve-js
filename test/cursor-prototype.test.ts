@@ -906,6 +906,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> :  d\n   :  b\n', '> :  d\n      :  b\n'])
+  ('keeps a colon-shaped lazy line in a quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> Stay hungry.\n^ Attribution\n', '> quote\n\nnext\n', '> # Heading\ntail\n',
     '> > # H\ntail\n', '> > ```\n> > c\n> > ```\ntail\n',
     '> - item\n>   # Heading\ntail\n'])

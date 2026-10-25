@@ -1245,14 +1245,16 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const text = line.text.slice(prefix)
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      plainParagraph &&= nestedQuoteParagraphText(text)
+      plainParagraph &&= nestedQuoteParagraphText(text) || /^: +/.test(text)
       last = line
       continue
     }
+    const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')
     if (!cursor.owner.inList && plainParagraph &&
         (plainQuoteText(line.text) || listMarker(line.text) ||
+          lazyColon ||
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
-        mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
+        (lazyColon || mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
       body.push(cursor.take())
       last = line
       continue
