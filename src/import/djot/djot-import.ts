@@ -1,3 +1,4 @@
+import { recoverDjotAttributes } from './djot-attribute-recovery.js'
 import { tightDjotDefinitionDescriptions } from './djot-tight-definition-descriptions.js'
 import { djotImageEmptyDestinations } from './djot-image-empty-destinations.js'
 import { importedDjotHeadingTargets } from './djot-heading-targets.js'
@@ -1242,7 +1243,7 @@ function collapseLiteralNestedImages(source: string): string {
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
-  try { return convertDjotInput(replaceLoneSurrogates(djot)) } finally { resetParagraphContext() }
+  try { return convertDjotInput(recoverDjotAttributes(replaceLoneSurrogates(djot)).source) } finally { resetParagraphContext() }
 }
 
 function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false, skipHeadingTargets = false): string {
@@ -1481,7 +1482,8 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
     if (label.length <= 256) imageLossCache.set(key, text)
     return text
   }
-  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted, undefined, codeSource, imageText) }
+  const recovered = recoverDjotAttributes(djot)
+  return { value: djotToCarve(recovered.source), losses: [...djotImportLosses(source, rows, djotContentStart, rawCode, accepted, undefined, codeSource, imageText), ...recovered.losses] }
 }
 
 function dropLeadingDjotSeparators(source: string): string {
