@@ -556,6 +556,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('places a quoted ancestor fence after a closed child list', () => {
+    const source = '> - a\n>     - child\n>       ```\n>       x\n>       ```\n>   ~~~\nafter\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines the unresolved root-list version of that fence boundary', () => {
+    const source = '- a\n    - # h\n  ~~~\nafter\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- - ```\n\ntail\n', '- a\n  - ```\n  +\n  > q\n'])
   ('declines marker-line fences whose physical follower still needs an owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)

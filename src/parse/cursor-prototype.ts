@@ -918,11 +918,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (!frame.item || !frame.body.length) return
     let allowEmptyFence = false
     const firstText = frame.body[0]!.text
-    if (frame.body.length === 1 && frame.itemFirst?.number === frame.body[0]!.number &&
-        (firstText[0] === '`' || firstText[0] === '~') &&
-        /^(?:`{3,}|~{3,})$/.test(firstText)) {
+    if (frame.body.length === 1 && (firstText[0] === '`' || firstText[0] === '~') &&
+        /^(?:`{3,}|~{3,})$/.test(firstText) &&
+        (frame.itemFirst?.number === frame.body[0]!.number ||
+          (cursor.owner.kind === 'quote' && frame.item.children.at(-1)?.type === 'list'))) {
       const next = cursor.peek()
-      const immediate = cursor.physicalLines[frame.itemFirst.number]
+      const immediate = frame.itemFirst ? cursor.physicalLines[frame.itemFirst.number] : undefined
       allowEmptyFence = (!immediate || !isBlankLine(immediate.text)) &&
         (!next || (next.text !== '' && next.text.trim() !== '+' &&
           frame.contentColumn !== undefined &&
