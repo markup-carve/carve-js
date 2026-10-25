@@ -37,7 +37,7 @@ import { carveToHtml, fromAstJson, type Document } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
 import * as prettier from '@markup-carve/carve/prettier'
 
-const payload: unknown = { type: 'document', srcByteLength: 0, children: [] }
+const payload: unknown = { type: 'document', astVersion: '2.0', children: [] }
 const doc: Document = fromAstJson(payload)
 if (doc.children.length !== 0) throw new Error('Unexpected decoded children')
 if (carveToHtml('hello').trim() !== '<p>hello</p>') throw new Error('Render failed')
