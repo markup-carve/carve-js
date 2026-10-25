@@ -897,19 +897,19 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
     text.startsWith(' '.repeat(contentColumn - 1))
 }
 
-function nestedPlusFollower(cursor: Cursor,
+function nestedPlusDisposition(cursor: Cursor,
   frame: { indent: number; item?: ListItem; fenceMarker: string | undefined },
-  stackLength: number): SourceLine | undefined {
-  if (stackLength < 2 || !frame.item || frame.fenceMarker) return undefined
-  const line = cursor.peek()!
-  if (line.text.length !== frame.indent + 1 || line.text.at(-1) !== '+' ||
-      line.text !== `${' '.repeat(frame.indent)}+`) return undefined
+  stackLength: number): SourceLine | 'literal' | undefined {
+  const text = cursor.peek()!.text
+  if (text.charCodeAt(text.length - 1) !== 43 || stackLength < 2 || !frame.item ||
+      frame.fenceMarker || text.length !== frame.indent + 1 ||
+      text !== `${' '.repeat(frame.indent)}+`) return undefined
   const follower = cursor.peek(1)
-  if (!follower || !follower.text.startsWith(' '.repeat(frame.indent))) return undefined
+  if (!follower || !follower.text.startsWith(' '.repeat(frame.indent))) return 'literal'
   const content = follower.text.slice(frame.indent)
-  if (!RE_BLOCKQUOTE.test(content) && !plainQuoteText(content)) return undefined
+  if (!RE_BLOCKQUOTE.test(content) && !plainQuoteText(content)) return 'literal'
   const after = cursor.peek(2)
-  return !after || isBlankLine(after.text) ? follower : undefined
+  return !after || isBlankLine(after.text) ? follower : 'literal'
 }
 
 function isTaskMarkerContent(content: string, ordered: boolean): boolean {
@@ -1141,13 +1141,19 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
     rejectBelowColumnMarkerAfterComment(marker, top)
-    const nestedPlus = nestedPlusFollower(cursor, top, stack.length)
+    const nestedPlus = line.text.charCodeAt(line.text.length - 1) === 43 ?
+      nestedPlusDisposition(cursor, top, stack.length) : undefined
     if (nestedPlus) {
       cursor.take()
-      flush(top)
-      cursor.take()
-      appendBody(top, nestedPlus, top.indent)
-      updateListFrameEnds(stack, nestedPlus, listSpan)
+      if (nestedPlus === 'literal') {
+        appendBody(top, { ...line, lazyText: true }, top.indent, true)
+        updateListFrameEnds(stack, line, listSpan)
+      } else {
+        flush(top)
+        cursor.take()
+        appendBody(top, nestedPlus, top.indent)
+        updateListFrameEnds(stack, nestedPlus, listSpan)
+      }
       continue
     }
     if (line.text === '+' && top.item) {
