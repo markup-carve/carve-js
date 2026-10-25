@@ -456,15 +456,12 @@ describe('task status (contract 2.0)', () => {
     expect(renderCarve(fromAstJson(wire))).toBe(source)
   })
 
-  it('reads an uppercase done mark as checked', () => {
-    const item = (fromAstJson({
-      type: 'document', astVersion: '2.0', children: [{
-        type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
-        children: [{ type: 'list_item', task: { mark: 'X', status: 'done' }, children: [] }],
-      }],
-    } as never).children[0] as unknown as { items: Record<string, unknown>[] }).items[0]
-    expect(item.checked).toBe(true)
-    expect(item.taskState).toBeUndefined()
+  it('writes an authored [X] as x and refuses mark X', () => {
+    const wire = toAstJson(parse('- [X] a\n'))
+    const item = (wire.children[0] as unknown as { children: Record<string, unknown>[] }).children[0]
+    expect(item.task).toEqual({ mark: 'x', status: 'done' })
+    ;(item.task as { mark: string }).mark = 'X'
+    expect(() => fromAstJson(wire)).toThrow(AstJsonSchemaError)
   })
 })
 
