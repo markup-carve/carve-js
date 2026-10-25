@@ -17,7 +17,7 @@ it.each([
 it.each([
   ['<https://example.com?a=1&copy;>', '[https://example.com?a=1\\&copy;](https://example.com?a=1&amp;copy;)'],
   ['<https://example.com>{title="Example"}', '[https://example.com](https://example.com "Example")'],
-  ['<https://example.com/a(b)>', '[https://example.com/a(b)](https://example.com/a%28b%29)'],
+  ['<https://example.com/a(b)>', '[https://example.com/a(b)](https://example.com/a\\(b\\))'],
   ['<javascript:alert1>', '[javascript:alert1]()'],
   ['<user@-x.com>', '[user@-x.com](mailto:user@-x.com)'],
   ['<user@x-.com>', '[user@x-.com](mailto:user@x-.com)'],
