@@ -776,8 +776,10 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
     }
     if (mayWrapDefinition && definitionBodyWrapText(text, definitionContentColumn) &&
         !/[ \t]$/.test(text) &&
-        (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
-      end++
+        (cursor.lines[end + 1]?.text === undefined || cursor.lines[end + 1]!.text === '' ||
+          plainQuoteText(cursor.lines[end + 1]!.text) &&
+          (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === ''))) {
+      end += plainQuoteText(cursor.lines[end + 1]?.text ?? '') ? 2 : 1
     } else if (mayWrapDefinition && text === '+' &&
         plainQuoteText(cursor.lines[end + 1]?.text ?? '') &&
         (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
@@ -893,7 +895,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         last = continuation.last
         continue
       }
-      if (cursor.at < end && !isBlankLine(cursor.peek()!.text) && cursor.peek()!.text !== '+' &&
+      while (cursor.at < end && !isBlankLine(cursor.peek()!.text) && cursor.peek()!.text !== '+' &&
           !/^(?:::|:) +[ \t]*[^ \t]/.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         const followerColumn = /^ */.exec(follower.text)![0].length + 1

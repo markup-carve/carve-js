@@ -735,9 +735,10 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a definition continuation marker before a plain follower', () => {
+  it('keeps a bounded plain wrap and declines ambiguous definition followers', () => {
     expect(() => parseCursorPrototype(':: term\n: +\nflush\n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype(':: term\n: a\nnext\nthird\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(':: term\n: a\nnext\nthird\n'))
+      .toStrictEqual(parse(':: term\n: a\nnext\nthird\n'))
     expect(() => parseCursorPrototype(':: term\n: a\n    indented\n')).toThrow(UnsupportedCursorSyntax)
     expect(() => parseCursorPrototype(':: term\n: a\nnext\n:: later\n: b\n')).toThrow(UnsupportedCursorSyntax)
   })
@@ -1161,6 +1162,12 @@ describe('experimental block cursor', () => {
     ':: term\n:  definition\n  {.k}\n',
     ':: term\n:  definition\n  ```\n'])
   ('keeps a below-column token in its definition paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([':: term\n:  definition\n  {.k}\ntail\n',
+    ':: term\n:  definition\n  # H\ntail\n'])
+  ('keeps the next plain line in an open definition paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
