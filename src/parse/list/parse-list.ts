@@ -358,7 +358,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
           sourceColumn(firstBlockSource, 0) === 0) &&
       !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
-    if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
+    if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)

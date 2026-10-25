@@ -964,7 +964,9 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(':: term\n:  body\n%%%\nhidden\n')).toThrow(UnsupportedCursorSyntax)
   })
 
-  it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [+] plain\n'])
+  it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [_] open\n',
+    '- [/] active\n', '- [!] blocked\n', '- [>] deferred\n', '- [?] maybe\n',
+    '- [+] plain\n'])
   ('preserves authored task list state: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

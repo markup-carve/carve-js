@@ -527,7 +527,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       s.commentLineEnd = nl === -1 ? text.length : nl
     }
     const end = Math.min(s.commentLineEnd, commentRun?.close ?? text.length)
-    const content = trimEndSpaceTab(text.slice(i + 2, end).replace(/^[ \t]/, ''))
+    const content = trimEndSpaceTab(text.slice(i + 2, end).replace(/^ /, ''))
     emit(s, { type: 'comment', block: false, content } as Comment, i, end)
     s.i = end
     return true

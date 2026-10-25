@@ -115,7 +115,7 @@ export function isPhysicalContinuationMarker(line: string): boolean {
 }
 
 export function isStackedFirstBlockQuoteMarker(line: string): boolean {
-  return /^[ \t]*(?:(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
+  return /^[ \t]*(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
 }
 
 export function firstBlockOpenerContent(line: string): boolean {
@@ -786,7 +786,7 @@ export function stackedOpenerColumns(line: string, levels: number): number[] {
   while (line[offset] === ' ' || line[offset] === '\t') offset++
   const columns = [sourceColumnAt(line, offset)]
   let quoteColumn = -1
-  const opener = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
+  const opener = /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
   for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
     if (match[0] === '> ') quoteColumn = sourceColumnAt(line, offset)
     offset += match[0].length

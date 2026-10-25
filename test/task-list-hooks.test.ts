@@ -41,7 +41,7 @@ describe('task-list HTML hooks', () => {
     expect(html).toContain('data-task-state="x"')
   })
   it('retains every extended state through HTML rendering and import', () => {
-    for (const state of ['-', '_', '>', '?']) {
+    for (const state of ['-', '_', '/', '!', '>', '?']) {
       const source = `- [${state}] task\n`
       const html = carveToHtml(source)
       const escaped = state === '>' ? '&gt;' : state

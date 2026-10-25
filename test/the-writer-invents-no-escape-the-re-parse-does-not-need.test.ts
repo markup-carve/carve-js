@@ -32,8 +32,8 @@
  * per-OPENER-OCCURRENCE test retires the 47 that were one unit written
  * conservatively in full, and leaves 12 across 5 (markup-carve/carve#1533).
  * Asking §2's question of the OPENER rather than of the byte then took it to 3
- * across 2, which is where it stands; carve-php measures the same 2 with the same
- * counts (markup-carve/carve-php#2645).
+ * across 2. The canonical backslash ruling (carve-js#3559) cleared both; the
+ * measured count is now zero.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -107,18 +107,10 @@ const IDLE_ESCAPE_CAUSES = ['minimal class: ']
  * for it read the artifact as debt; carve-php reached the same wall and corrected
  * the measure instead (markup-carve/carve-php#2645).
  *
- * MINIMAL CLASS, the two that are left: both passes agree, so nothing escalated,
- * and the escape is still idle - once because a literal backslash is written
- * doubled where the bare one re-parses the same, once because the writer's own
- * cell padding retired an authored escape it then kept. Grouping cost
- * `72-escape-coverage-2` two of its four as well, because a doubled backslash is
- * ONE escape and was being judged as two. Both are §2 defects in the escape
- * logic and are fixed on their own merits.
+ * The remaining minimal-class debt was a doubled literal backslash and an
+ * escape retained after cell padding. Both were cleared under CARVE-P11-006.
  */
-const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>([
-  ['390-a-table-cell-s-marker-run-ends-at-a-space-5', [1, 'minimal class: an authored `\\=` is kept after the writer\'s own cell padding retired it - padded, the `=` no longer starts the cell']],
-  ['72-escape-coverage-2', [2, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
-])
+const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>()
 
 /**
  * Key-order-insensitive, position-free view of an AST-JSON tree.
@@ -343,8 +335,8 @@ describe('the idle-escape ratchet', () => {
     // line that moves when the debt does.
     let total = 0
     for (const [, [count]] of IDLE_ESCAPE_RATCHET) total += count
-    expect(total).toBeLessThanOrEqual(3)
-    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(2)
+    expect(total).toBe(0)
+    expect(IDLE_ESCAPE_RATCHET.size).toBe(0)
   })
 })
 

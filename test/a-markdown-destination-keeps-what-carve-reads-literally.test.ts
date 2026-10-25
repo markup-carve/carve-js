@@ -15,7 +15,7 @@ const rows: Array<[string, string, string, string[]?]> = [
 | [a](/x\|y) z |`, String.raw`|= h |
 | [a](/x%7Cy) z |`],
   ['A1', String.raw`<https://example.com/\[\>`, String.raw`[https://example.com/\\\[\\](https://example.com/\[\\)`, ['markdown-paragraph', 'markdown-autolink']],
-  ['A2', String.raw`<https://e.com/a\b>`, String.raw`[https://e.com/a\\b](https://e.com/a\b)`, ['markdown-paragraph', 'markdown-autolink']],
+  ['A2', String.raw`<https://e.com/a\b>`, String.raw`[https://e.com/a\b](https://e.com/a\b)`, ['markdown-paragraph', 'markdown-autolink']],
   ['A3', '<https://e.com/a`b>', '[https://e.com/a\\`b](https://e.com/a`b)', ['markdown-paragraph', 'markdown-autolink']],
   ['A4', '<http://u/[^a|b]>\n\n[^a|b]: Note.', String.raw`[http://u/\[^a|b\]](http://u/[^a|b])` + '\n\n[^carve-import-footnote-1]: Note.'],
   ['A5', 'http://\u2028a.b', '[http://\u2028a.b](http://%E2%80%A8a.b)'],

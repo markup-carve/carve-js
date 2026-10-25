@@ -1840,7 +1840,7 @@ const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
  * guarded character out is what keeps the two engines offering the SAME sites
  * in the same order.
  */
-const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
+const NOT_OFFERED_PER_OCCURRENCE = '`"\'^'
 
 /**
  * The candidates whose construct opens on ONE character, so a repeat of one
@@ -4317,7 +4317,8 @@ class CarveRenderSession {
       const writtenValign = empty && valign === '^' ? '' : valign
       const writtenInherited = !writtenAlign && writtenValign ? '?' : ''
       const prefix = `${cell.header && markHeader ? '=' : ''}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
-      return padCell(prefix, escapeSpanMarkerPayload(content, prefix))
+      const paddedContent = !cell.header && content.startsWith('\\= ') ? content.slice(1) : content
+      return padCell(prefix, escapeSpanMarkerPayload(paddedContent, prefix))
     } finally {
       ctx.tableCellDepth--
     }
@@ -5743,6 +5744,7 @@ class CarveRenderSession {
         return escaped ? '\\]' : ']'
       }
       if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
+      if (mode === 'minimal' && char === '\\') return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
       // so the one occurrence that needed the escape no longer drags the rest

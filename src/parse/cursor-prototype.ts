@@ -1419,12 +1419,12 @@ function nestedPlusDisposition(cursor: Cursor,
 }
 
 function isTaskMarkerContent(content: string, ordered: boolean): boolean {
-  return !ordered && /^\[([ xX_>?-])\] /.test(content)
+  return !ordered && /^\[([ xX\-_>/!?])\] /.test(content)
 }
 
 function takeTaskMarker(item: ListItem, content: string, ordered: boolean): number {
   if (ordered) return 0
-  const task = /^\[([ xX_>?-])\] /.exec(content)
+  const task = /^\[([ xX\-_>/!?])\] /.exec(content)
   if (!task) return 0
   item.checked = task[1]!.toLowerCase() === 'x'
   if (task[1] !== ' ' && task[1]!.toLowerCase() !== 'x') item.taskState = task[1] as TaskState
@@ -1520,7 +1520,7 @@ function mayFoldMarkerLineNestedFollower(cursor: Cursor,
   if (first.text === '> +' && RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1)) return true
   return marker !== undefined &&
     (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
-      (marker.content === '+' || /^\[[ xX_>?-]\] \+$/.test(marker.content)) &&
+      (marker.content === '+' || /^\[[ xX\-_>/!?]\] \+$/.test(marker.content)) &&
       RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1))
 }
 

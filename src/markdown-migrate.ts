@@ -1438,6 +1438,36 @@ function restoreInlineCarriers(source: string): string {
   return renderCarve(tree)
 }
 
+function flattenHtmlAnchorsInLinkLabels(
+  line: string,
+  spans: readonly string[],
+  sources: readonly string[],
+  isReference: (label: string) => boolean,
+): string {
+  if (!line.includes('[') || !line.includes('\x00P')) return line
+  const removed = new Set<number>()
+  const ranges = markdownActiveLinkLabelRanges(line, spans, isReference)
+  for (const range of ranges) {
+    const openings: number[] = []
+    for (const token of line.slice(range.start, range.end).matchAll(/\x00P(\d+)\x00/g)) {
+      const at = range.start + token.index
+      const source = sources[Number(token[1])] ?? ''
+      const fence = /^`+/.exec(source)?.[0]
+      if (!fence || !source.endsWith(`${fence}{=html}`)) continue
+      const html = source.slice(fence.length, -fence.length - 7)
+      const tag = scanHtmlTag(html, 0)
+      if (tag?.name !== 'a' || tag.end !== html.length) continue
+      if (!tag.closing && !tag.selfClosing) openings.push(at)
+      else if (tag.closing && openings.length) {
+        removed.add(openings.pop()!)
+        removed.add(at)
+        importLosses.push({ code: 'structure-unspellable', message: 'Flattened an HTML link inside a Markdown link label; its text was kept' })
+      }
+    }
+  }
+  return line.replace(/\x00P\d+\x00/g, (token, at: number) => removed.has(at) ? '' : token)
+}
+
 function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
@@ -2420,6 +2450,8 @@ function convertInline(
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
+  line = flattenHtmlAnchorsInLinkLabels(line, protectedSpans, protectedSources,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
@@ -2758,7 +2790,7 @@ function escapeUnreadTaskMarker(line: string): string {
     if (!marker.exec(line)) break
     at = marker.lastIndex
   }
-  const m = /^\[([ xX\-_>?])\](?= +[ \t]*\S)/.exec(line.slice(at))
+  const m = /^\[([ xX\-_>/!?])\](?= +[ \t]*\S)/.exec(line.slice(at))
   if (m === null) return line
   const prefix = line.slice(0, at)
   const markers = containerMarkersOnLine(prefix)
@@ -3941,7 +3973,7 @@ function opensInterruptingItem(line: string, paragraphOpen: boolean, paragraphCo
 /**
  * The item markers and task checkbox a line opens with, as CARVE reads them:
  * any nesting of item markers, the innermost a `-` or `*` bullet, then a box.
- * Mirrors `RE_TASK` in the parser, which takes `[ xX-_>?]` and neither `+` nor
+ * Mirrors `RE_TASK` in the parser, which takes `[ xX-_>/!?]` and neither `+` nor
  * an ordered marker.
  *
  * Markdown's own reading stops at the bullet: the box is the first paragraph's
@@ -3949,7 +3981,7 @@ function opensInterruptingItem(line: string, paragraphOpen: boolean, paragraphCo
  * what follows the box stands at a content position, and a marker there opens
  * exactly what the source said was text.
  */
-const RE_CARVE_TASK_LEAD = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*?[-*][ \t]+)\[[ xX\-_>?]\][ \t]+/
+const RE_CARVE_TASK_LEAD = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*?[-*][ \t]+)\[[ xX\-_>/!?]\][ \t]+/
 
 /**
  * `content` is the item's content column in the source and `shift` how far the

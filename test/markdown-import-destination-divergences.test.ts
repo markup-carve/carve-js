@@ -3,7 +3,7 @@ import { migrateMarkdown } from '../src/index.js'
 
 const cases: Array<[string, string, string, Array<[string, string, number]>]> = [
   ['A1', String.raw`<https://example.com/\[\>`, String.raw`[https://example.com/\\\[\\](https://example.com/\[\\)`, [['markdown-paragraph', 'preserved', 1], ['markdown-autolink', 'normalized', 1]]],
-  ['A2', String.raw`<https://e.com/a\b>`, String.raw`[https://e.com/a\\b](https://e.com/a\b)`, [['markdown-paragraph', 'preserved', 1], ['markdown-autolink', 'normalized', 1]]],
+  ['A2', String.raw`<https://e.com/a\b>`, String.raw`[https://e.com/a\b](https://e.com/a\b)`, [['markdown-paragraph', 'preserved', 1], ['markdown-autolink', 'normalized', 1]]],
   ['A3', '<https://e.com/a`b>', '[https://e.com/a\\`b](https://e.com/a`b)', [['markdown-paragraph', 'preserved', 1], ['markdown-autolink', 'normalized', 1]]],
   ['A4', '<https://e.com/a[b]>', '<https://e.com/a[b]>', [['markdown-paragraph', 'preserved', 1], ['markdown-autolink', 'normalized', 1]]],
   ['B1', '[a](<😀>) and ![b](</x y.png>)', '[a](😀) and ![b](/x%20y.png)', [['markdown-paragraph', 'preserved', 1], ['markdown-link', 'preserved', 1], ['markdown-image', 'preserved', 1]]],
