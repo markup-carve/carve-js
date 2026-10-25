@@ -940,7 +940,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
     const indent = /^ */.exec(follower)![0].length
     if (indent > frame.indent && indent < frame.contentColumn - 1) {
       const content = follower.slice(indent)
-      continues = RE_BLOCKQUOTE.test(content) || RE_HEADING.test(content)
+      continues = content !== '' && content[0] !== '[' && content[0] !== '{' &&
+        content[0] !== '+' && !content.startsWith('*[') && !content.startsWith('%%')
     }
   }
   return continues
