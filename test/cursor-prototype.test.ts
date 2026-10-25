@@ -1105,6 +1105,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['::: note\n```\nx\n:::\nafter\n',
+    '::: note\n```\nx\n\n:::\n'])
+  ('ends a bounded unclosed fence at its owned source line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['::: figure\nBody\n:::\n', '::: list-table\n- item\n:::\n',
     '> ::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',

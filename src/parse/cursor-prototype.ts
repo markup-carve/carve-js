@@ -38,15 +38,17 @@ interface ContainerOwner {
   readonly inList: boolean
   readonly allowEmptyFence?: boolean
   readonly allowUnclosedFence?: boolean
+  readonly fenceBoundary?: SourceLine
   readonly parent?: ContainerOwner
 }
 const ROOT_OWNER: ContainerOwner = { kind: 'root', inList: false }
 
 function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>,
-  allowEmptyFence = false, allowUnclosedFence = false): ContainerOwner {
+  allowEmptyFence = false, allowUnclosedFence = false, fenceBoundary?: SourceLine): ContainerOwner {
   return { kind, inList: kind === 'list' || parent.inList, parent,
     ...(allowEmptyFence ? { allowEmptyFence } : {}),
-    ...(allowUnclosedFence ? { allowUnclosedFence } : {}) }
+    ...(allowUnclosedFence ? { allowUnclosedFence } : {}),
+    ...(fenceBoundary ? { fenceBoundary } : {}) }
 }
 
 class Cursor {
@@ -2054,12 +2056,25 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
   return body
 }
 
+function boundedColonFence(body: SourceLine[], cursor: Cursor, run: number): SourceLine | undefined {
+  const first = body[0]
+  const opener = first && fenceOpen(first.text)
+  const boundary = cursor.peek()
+  if (!opener || !boundary || !new RegExp(`^:{${run}}[ \t]*$`).test(boundary.text)) return undefined
+  for (let i = 1; i < body.length; i++) {
+    if (closesFence(body[i]!.text, opener.marker)) return undefined
+  }
+  return boundary
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
   if (cursor.owner.allowUnclosedFence && marker &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
-    return payload.at(-1) ?? first
+    const last = payload.at(-1)
+    return cursor.owner.fenceBoundary && last && isBlankLine(last.text) ?
+      { ...cursor.owner.fenceBoundary, text: '' } : last ?? first
   }
   if (cursor.owner.allowEmptyFence && payload.length === 0 &&
       /^(?:`{3,}|~{3,})$/.test(first.text)) return first
@@ -2543,11 +2558,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       }
       cursor.take()
       const body = takeColonBody(cursor, colon[1]!.length)
+      const boundary = boundedColonFence(body, cursor, colon[1]!.length)
       if (colon[2] === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
         throw new UnsupportedCursorSyntax('abbreviation inside bare container')
       }
       const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-      const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon'),
+      const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon',
+        false, boundary !== undefined, boundary),
         cursor.physicalLines),
         inline, definitionNodes, depth + 1, false,
         footnoteDefs, footnoteDefPos, undefined, colonDepth + 1)
