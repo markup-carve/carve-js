@@ -20,7 +20,7 @@ export function recoverDjotAttributes(source: string): { source: string; losses:
     const inner = match[1]!
     if (!/^[\s.#A-Za-z]/.test(inner) || !/[#.]/.test(inner)) continue
     const tokens = inner.match(/#[^\s.#{}]+|\.[^\s.#{}]+|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"])*"|[^\s{}]+)|[^\s{}]+/g) ?? []
-    if (!tokens.length) continue
+    if (!tokens.length || tokens.some(token => !/^[#.]/.test(token) && !readAttributes(`{${token}}`, 0))) continue
     const kept: string[] = []
     const rejected: string[] = []
     for (const token of tokens) {
