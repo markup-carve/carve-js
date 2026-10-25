@@ -815,6 +815,18 @@ function parseNestedCommentAtCursor(cursor: Cursor, run: number): BlockNode | un
   return comment
 }
 
+function ambiguousDegradedComment(cursor: Cursor, first: SourceLine,
+  atDocumentLevel: boolean, afterList: boolean): boolean {
+  if ((atDocumentLevel && !afterList) || !first.text.trimStart().startsWith('%%%')) return false
+  const physical = cursor.physicalLines
+  if (!/^[ \t]+%%%/.test(physical[first.number - 1]?.text ?? '')) return true
+  const previousMarker = listMarker(physical[first.number - 2]?.text ?? '')
+  if (previousMarker && listMarker(previousMarker.content)) return true
+  const next = physical[first.number]?.text ?? ''
+  const after = physical[first.number + 1]?.text ?? ''
+  return /^[ \t]+\S/.test(next) && /^[^ \t]/.test(after)
+}
+
 function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
   if (ABBR_DEF.test(text)) return false
   if (!RE_CAPTION.test(text)) return isBlockStart(text)
@@ -1770,8 +1782,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       }
     }
     if (LINE_COMMENT.test(first.text)) {
-      if ((!atDocumentLevel || children.at(-1)?.type === 'list') &&
-          first.text.trimStart().startsWith('%%%')) {
+      if (ambiguousDegradedComment(cursor, first, atDocumentLevel,
+        children.at(-1)?.type === 'list')) {
         throw new UnsupportedCursorSyntax('nested degraded block comment')
       }
       cursor.take()

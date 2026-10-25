@@ -412,6 +412,17 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- x\n  %%%\ny\n', '1. x\n   %%%\ny\n',
+    '- x\n  %%%\n y\n'])
+  ('keeps an indented degraded comment in a simple item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- - x\n  %%%\n  y\n', '- x\n  %%%\n  body\ny\n'])
+  ('declines degraded comments with unresolved nested ownership: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- - a\n\n  %% just a note\n- b\n',
     '- a\n\n  %% note\n- b\n',
