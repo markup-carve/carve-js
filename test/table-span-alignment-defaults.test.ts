@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, lintCarve, parse } from '../src/index.js'
+import { carveToCarve, carveToHtml, lintCarve, parse, toAstJson } from '../src/index.js'
 
 describe('table span alignment defaults', () => {
+  it('groups a header row with a span placeholder into table_head', () => {
+    const source = '|= a |<|= b |\n| 1 | 2 | 3 |\n'
+    const table = toAstJson(parse(source)).children?.[0]
+    expect(table).toMatchObject({ type: 'table', children: [
+      { type: 'table_head', children: [{ type: 'table_row' }] },
+      { type: 'table_body', children: [{ type: 'table_row' }] },
+    ] })
+    expect(carveToHtml(source)).toContain('<thead>')
+  })
+
   it('reads a leading-space lone marker as a colspan', () => {
     const source = '|a| <|\n'
     expect(parse(source).children[0]).toMatchObject({ rows: [{ cells: [{}, { span: 'colspan' }] }] })

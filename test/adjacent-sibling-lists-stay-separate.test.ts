@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, parse, toAstJson } from '../src/index.js'
+import { carveToCarve, carveToHtml, carveToMarkdown, markdownToCarve, parse, toAstJson } from '../src/index.js'
 
 const topTypes = (source: string): string[] =>
   ((toAstJson(parse(source)).children ?? []) as Array<{ type: string }>).map((c) => c.type)
@@ -20,6 +20,13 @@ const topTypes = (source: string): string[] =>
  * indented by a space it never wrote.
  */
 describe('adjacent sibling lists stay separate through fmt', () => {
+  it('keeps two ordered lists separate through Markdown', () => {
+    const source = '1. a\n\n  1. b\n'
+    const markdown = carveToMarkdown(source, { roundtrip: true })
+    expect(markdown).toBe('1. a\n\n1) b\n')
+    expect(markdownToCarve(markdown)).toBe('1. a\n\n1) b\n')
+  })
+
   it('separates two ordered lists with the hard boundary', () => {
     const source = '1. a\n\n  1. b\n'
     expect(topTypes(source)).toEqual(['list', 'list'])

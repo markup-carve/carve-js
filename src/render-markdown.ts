@@ -286,7 +286,7 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
     mark = block.ordered ? (mark === '.' ? ')' : '.') : mark === '-' ? '*' : '-'
   }
   if (block.ordered) listDelimiterChanged(ctx.options, block, block.delim === ')' ? ')' : '.', mark as '.' | ')')
-  const delimiterCarrier = ctx.roundtrip && block.ordered && mark !== (block.delim === ')' ? ')' : '.') &&
+  const delimiterCarrier = ctx.roundtrip && block.ordered && block.olType !== undefined && mark !== (block.delim === ')' ? ')' : '.') &&
     (ctx.footnoteBlockDepth === undefined ||
       ctx.blockDepth === ctx.footnoteBlockDepth && ctx.listDepth === 0 && block !== ctx.footnoteOpeningList)
   const rendered = renderList(block, ctx, mark, delimiterCarrier)
