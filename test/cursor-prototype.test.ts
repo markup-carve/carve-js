@@ -548,6 +548,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['1. a\n\n   [r]: /target\n',
+    '10. a\n\n    [r]: /target\n',
+    '* a\n\n  [r]: /target\n'])
+  ('hoists a reference definition at a root list content column: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> - a\n> \n>   [r]: /target\n',
     '> - a\n> \n>   [r]: /target\n> \n> - b\n',
     '> - a\n> \n>   [r]: /target\n> \n>   tail\n',

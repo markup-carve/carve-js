@@ -2389,18 +2389,22 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const abbreviations = new Map<string, string>()
   let openFence: string | undefined
   let openComment: number | undefined
-  let simpleRootListOpen = false
+  let simpleRootListPrefix: string | undefined
   let simpleQuoteListOpen = false
   const mayHaveNestedListDefinition = source.includes('  [') || source.includes('>   [')
   const simpleRootListDefinitions = mayHaveNestedListDefinition ?
     new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
   for (const line of cursor.lines) {
     if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
-      if (line.text.startsWith('- ')) simpleRootListOpen = true
-      else if (line.text !== '' && !line.text.startsWith('  ')) simpleRootListOpen = false
-      else if (line.text.startsWith('    ') || line.text.startsWith('  ') &&
-          isBlockStart(line.text.slice(2)) && !rootLinkDef(line.text.slice(2))) {
-        simpleRootListOpen = false
+      const marker = listMarker(line.text)
+      if (marker?.indent === 0) simpleRootListPrefix = ' '.repeat(marker.width)
+      else if (line.text !== '' && simpleRootListPrefix &&
+          !line.text.startsWith(simpleRootListPrefix)) simpleRootListPrefix = undefined
+      else if (simpleRootListPrefix && line.text.startsWith(simpleRootListPrefix) &&
+          (line.text.startsWith(simpleRootListPrefix + '  ') ||
+           isBlockStart(line.text.slice(simpleRootListPrefix.length)) &&
+           !rootLinkDef(line.text.slice(simpleRootListPrefix.length)))) {
+        simpleRootListPrefix = undefined
       }
       if (line.text.startsWith('> - ')) simpleQuoteListOpen = true
       else if (line.text !== '> ' && !line.text.startsWith('>   ')) simpleQuoteListOpen = false
@@ -2423,9 +2427,10 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     }
     const quoteDefinition = line.text.startsWith('> ') &&
       (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
-    const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListOpen &&
-      line.text.startsWith('  [') &&
-      cursor.lines[line.number - 2]?.text === '' ? rootLinkDef(line.text.slice(2)) : null
+    const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
+      line.text.startsWith(simpleRootListPrefix + '[') &&
+      cursor.lines[line.number - 2]?.text === '' ?
+      rootLinkDef(line.text.slice(simpleRootListPrefix.length)) : null
     const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListOpen &&
       line.text.startsWith('>   [') &&
       cursor.lines[line.number - 2]?.text === '> ' ? rootLinkDef(line.text.slice(4)) : null
