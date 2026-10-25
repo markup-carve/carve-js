@@ -50,6 +50,7 @@ class Cursor {
   at = 0
   sharedLexer?: Lexer
   fenceCloserSuffix?: { backtick: Uint32Array; tilde: Uint32Array }
+  simpleRootListDefinitions?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
     readonly owner: ContainerOwner = ROOT_OWNER,
     readonly physicalLines: SourceLine[] = lines) {}
@@ -1699,6 +1700,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       rejectListQuoteBoundary(top.body, line)
       break
     }
+    const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
+    if (nestedDefinition) {
+      takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
+      continue
+    }
     let bodyPrefix = prefix.length
     if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
       if (!line.text.startsWith(' '.repeat(top.fencePrefix))) {
@@ -2373,7 +2379,19 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const abbreviations = new Map<string, string>()
   let openFence: string | undefined
   let openComment: number | undefined
+  let simpleRootListOpen = false
+  const mayHaveNestedListDefinition = source.includes('  [')
+  const simpleRootListDefinitions = mayHaveNestedListDefinition ?
+    new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
   for (const line of cursor.lines) {
+    if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
+      if (line.text.startsWith('- ')) simpleRootListOpen = true
+      else if (line.text !== '' && !line.text.startsWith('  ')) simpleRootListOpen = false
+      else if (line.text.startsWith('    ') || line.text.startsWith('  ') &&
+          isBlockStart(line.text.slice(2)) && !rootLinkDef(line.text.slice(2))) {
+        simpleRootListOpen = false
+      }
+    }
     if (openComment !== undefined) {
       const closer = RE_COMMENT_BLOCK_ANY.exec(line.text)
       if (closer?.[1]?.length === openComment) openComment = undefined
@@ -2392,7 +2410,11 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     }
     const quoteDefinition = line.text.startsWith('> ') &&
       (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
-    const match = rootLinkDef(line.text) ||
+    const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListOpen &&
+      line.text.startsWith('  [') &&
+      cursor.lines[line.number - 2]?.text === '' ? rootLinkDef(line.text.slice(2)) : null
+    if (simpleListDefinition) simpleRootListDefinitions!.set(line.number, simpleListDefinition)
+    const match = rootLinkDef(line.text) || simpleListDefinition ||
       (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
     if (match) linkDefinitions.set(normalizeRefLabel(match.label),
       { rawLabel: match.label, line: line.number - 1, href: match.href,
@@ -2401,6 +2423,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     const abbr = ABBR_DEF.exec(line.text)
     if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
   }
+  if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations)
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
