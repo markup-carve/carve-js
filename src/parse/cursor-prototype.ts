@@ -2082,6 +2082,10 @@ function simpleClosedListColon(cursor: Cursor, run: string): boolean {
   if (cursor.owner.kind !== 'list') return false
   const body = cursor.peek(1)?.text
   const close = cursor.peek(2)?.text
+  if (body !== undefined && plainQuoteText(body) && close === undefined) {
+    const following = cursor.physicalLines[cursor.peek(1)!.number]
+    if (!following || isBlankLine(following.text)) return true
+  }
   const closer = new RegExp(`^:{${run.length}}[ \\t]*$`)
   if (body !== undefined && plainQuoteText(body) && close !== undefined &&
       closer.test(close) && (!cursor.peek(3) || isBlankLine(cursor.peek(3)!.text))) return true

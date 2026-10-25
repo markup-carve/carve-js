@@ -534,6 +534,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- ::: d\n  b\n\n- s\n',
+    '- ::: d\n  b\n\ntail\n'])
+  ('ends an unclosed marker-line colon container at its physical blank: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a list colon container with unresolved lazy text after its closer', () => {
     expect(() => parseCursorPrototype('- a\n  - b\n    ::: note\n    x\n    :::\n    text\nlazy\n'))
       .toThrow(UnsupportedCursorSyntax)
