@@ -21,7 +21,7 @@ import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
 import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
-import { commentBlockHasCloser, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
+import { commentBlockHasCloser, isFigureGroupOpener, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 
 /**
@@ -36,6 +36,7 @@ type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
   readonly inList: boolean
+  readonly inFigureGroup?: boolean
   readonly allowEmptyFence?: boolean
   readonly allowUnclosedFence?: boolean
   readonly fenceBoundary?: SourceLine
@@ -48,10 +49,15 @@ function childOwner(parent: ContainerOwner, kind: Exclude<ContainerKind, 'root'>
   allowEmptyFence = false, allowUnclosedFence = false, fenceBoundary?: SourceLine,
   listRootPrefix = parent.listRootPrefix): ContainerOwner {
   return { kind, inList: kind === 'list' || parent.inList, parent,
+    ...(parent.inFigureGroup ? { inFigureGroup: true } : {}),
     ...(allowEmptyFence ? { allowEmptyFence } : {}),
     ...(allowUnclosedFence ? { allowUnclosedFence } : {}),
     ...(fenceBoundary ? { fenceBoundary } : {}),
     ...(listRootPrefix === undefined ? {} : { listRootPrefix }) }
+}
+
+function figureGroupOwner(owner: ContainerOwner, figureGroup: boolean): ContainerOwner {
+  return figureGroup ? { ...owner, inFigureGroup: true } : owner
 }
 
 class Cursor {
@@ -1135,6 +1141,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const first = cursor.peek()!
   const parts: ContentLine[] = []
   let last = first
+  let captionLead: InlineNode[] | undefined
   const literalColonOpener = /^:{3,}(?: *\t| +\{|>)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || ((!interruptsParagraphAtCursor(cursor) || cursor.peek()!.lazyText) &&
@@ -1147,19 +1154,25 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
       if (lead.length === 1 && lead[0]?.type === 'image' &&
           imageReferenceResolved(lead[0], inline) &&
           lead[0].pos?.startOffset === parts[0]!.line.start &&
-          lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) break
+          lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) {
+        captionLead = lead
+        break
+      }
     }
     if (parts.length === 1 && parts[0]!.text.startsWith('$$') &&
         RE_CAPTION.test(cursor.peek()!.text)) {
       const lead = inline.inlines(parts)
-      if (lead.length === 1 && lead[0]?.type === 'math' && lead[0].display) break
+      if (lead.length === 1 && lead[0]?.type === 'math' && lead[0].display) {
+        captionLead = lead
+        break
+      }
     }
     const line = cursor.take()
     const column = /^[ \t]*/.exec(line.text)![0].length + 1
     parts.push({ line, column, text: line.text.slice(column - 1) })
     last = line
   }
-  const paragraph: Paragraph = { type: 'paragraph', children: inline.inlines(parts),
+  const paragraph: Paragraph = { type: 'paragraph', children: captionLead ?? inline.inlines(parts),
     pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
   if (parts[0]!.column > 1 && paragraph.children[0]?.type === 'image') {
     markAboveContentColumn(paragraph)
@@ -3092,11 +3105,12 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const colon = simpleColon ??
       (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
     if (colon) {
+      const figureGroup = isFigureGroupOpener(first.text, !!cursor.owner.inFigureGroup)
       const emptyBareDefinition = cursor.owner.kind === 'definition' &&
         colon[2] === undefined && cursor.peek(1) === undefined
       if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
           !simpleClosedListColon(cursor, colon[1]!, colon[2]) && !emptyBareDefinition) ||
-          colon[2] === 'figure' || colon[2] === 'list-table' || colon[2] === 'references') {
+          colon[2] === 'list-table' || colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }
       cursor.take()
@@ -3106,11 +3120,19 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         throw new UnsupportedCursorSyntax('abbreviation inside bare container')
       }
       const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-      const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'colon',
-        false, boundary !== undefined, boundary),
+      const owner = childOwner(cursor.owner, 'colon', false, boundary !== undefined, boundary)
+      const children = parseBlocks(new Cursor(body, undefined,
+        figureGroupOwner(owner, figureGroup),
         cursor.physicalLines),
         inline, definitionNodes, depth + 1, false,
         footnoteDefs, footnoteDefPos, undefined, colonDepth + 1)
+      if (figureGroup) {
+        const caption = takeCaption(cursor, inline)
+        emit({ type: 'figure_group', children,
+          ...(caption ? { caption: caption.children } : {}),
+          pos: position(first, caption?.line ?? close) })
+        continue
+      }
       const kind = colon[2]
       const pos = position(first, close)
       if (colon[3] && kind === undefined) throw new UnsupportedCursorSyntax('bare div title')
