@@ -1479,7 +1479,6 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['::: figure\n::: figure\nNested\n:::\n:::\n',
-    '::: list-table\n- item\n:::\n',
     '> ::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
     '::: "Careful"\nBody\n:::\n',
@@ -1487,6 +1486,14 @@ describe('experimental block cursor', () => {
     '::: note\n```\n:::\n```\n:::\n'])
   ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('matches a list-table container and its rendered HTML', () => {
+    const source = '::: list-table\n- item\n:::\n'
+    const expected = parse(source)
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(resolve(actual))).toBe(renderHtml(resolve(expected)))
   })
 
   it.each([

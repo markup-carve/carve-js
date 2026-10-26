@@ -3110,7 +3110,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         colon[2] === undefined && cursor.peek(1) === undefined
       if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
           !simpleClosedListColon(cursor, colon[1]!, colon[2]) && !emptyBareDefinition) ||
-          colon[2] === 'list-table' || colon[2] === 'references') {
+          colon[2] === 'references') {
         throw new UnsupportedCursorSyntax('nested or specialized colon container')
       }
       cursor.take()
