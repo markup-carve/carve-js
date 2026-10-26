@@ -1085,6 +1085,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps an empty caption marker in the image paragraph', () => {
+    const source = '> q\n\n^   \n\n![a](i.png)\n^ \n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('continues the outer list item after a blank below a nested list', () => {
     const source = '- a\n  - b\n\n  c\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

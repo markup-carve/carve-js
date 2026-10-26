@@ -1143,7 +1143,8 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
         !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
           listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
-    if (parts.length === 1 && parts[0]!.text.startsWith('![') && cursor.peek()!.text.startsWith('^ ')) {
+    if (parts.length === 1 && parts[0]!.text.startsWith('![') &&
+        RE_CAPTION.test(cursor.peek()!.text)) {
       const lead = inline.inlines(parts)
       if (lead.length === 1 && lead[0]?.type === 'image' &&
           imageReferenceResolved(lead[0], inline) &&
