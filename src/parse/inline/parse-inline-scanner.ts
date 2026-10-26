@@ -752,7 +752,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanReferenceLink(s: InlineScan, rest: string, close: number, innerText: string, tail: string): boolean {
     const { text, i, session, source } = s
     const mref = execReferenceTail(s, tail, i + close + 1)
-    if (!mref || (innerText === '' && mref[1]!.startsWith('@'))) return false
+    if (!mref) return false
     flush(s)
     const extra = tailAttrs(mref[2])
     const len = close + 1 + mref[0].length - extra.unconsumed
