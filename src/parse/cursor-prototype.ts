@@ -185,6 +185,12 @@ class CursorInline extends InlineParseSession {
     const first = parts[0]!
     const multiLine = parts.length > 1
     const text = dropTrailingWhitespace(multiLine ? parts.map((part) => part.text).join('\n') : first.text)
+    if (!multiLine && !captionContext && this.abbreviations.size === 0 && text.length > 0 &&
+        /^[A-Za-z0-9 .,;!?()]+$/.test(text) && !text.includes('..') &&
+        !/\((?:c|r|tm)\)/i.test(text)) {
+      return [{ type: 'text', value: text,
+        pos: position(first.line, first.line, first.column, first.column + text.length) }]
+    }
     const lineAnchors = multiLine ? parts.map((part) => ({
       offset: part.line.start + part.column - 1,
       column: (part.line.baseColumn ?? 1) + part.column - 1, line: part.line.number,
