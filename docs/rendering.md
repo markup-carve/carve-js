@@ -457,3 +457,126 @@ two drop together; any other invalid marker drops alone. A dropped marker stays
 in the output as the ordinary HTML comment it is, the rest of the set restores,
 and each dropped marker or pair is reported as `carrier-marker-dropped` at the
 marker's line.
+
+## Rendering an existing document
+
+`carveToHtml` and its siblings take source. A host that produced a *tree*
+instead; `expandIncludes` for a preview with the children merged in, an AST
+patch, an editor session, a decoded PART 12 payload; reaches the same
+composition with `renderDocument`:
+
+```ts
+import { renderDocument, renderDocumentWithReport } from '@markup-carve/carve'
+
+const html = renderDocument(doc, { extensions, target: 'html' })
+const report = renderDocumentWithReport(doc, { extensions, strictLosses: true })
+```
+
+It runs resolution, the extension transforms (`afterParse`, `beforeRender`),
+the profile pass and then the renderer for `target` (`'html'` by default, plus
+`'markdown'`, `'plain'`, `'ansi'`); the same order, entered one step later, so
+a host never has to know that order. Composing it by hand is what this
+replaces: `applyTransforms` is not public, and a pipeline missing it still
+renders, so an extension that contributes a transform (citations numbering its
+groups and appending the references list, a heading-level shift, default
+attributes) degrades silently instead of failing.
+
+Two obligations, because the seam begins after the parse:
+
+- **Parse with the same `extensions` you pass here.** `matchInline` and
+  `matchBlock` run at parse time; passing an extension here reaches only its
+  transform and renderer hooks.
+- **Parse with `positions: true`**, which the string entry points force.
+  Resolution reads a block image's own column for the strict column-0 figure
+  rule, so a positionless tree resolves to a different document.
+
+The document is transformed **in place**, as the string entry points transform
+the tree they just parsed. That is invisible when the entry point owns a fresh
+parse and visible here, so hand over a freshly produced tree; re-parse or
+re-expand a tree you already rendered.
+
+A profile's `maxLength` is not enforced here; it is a pre-parse guard on
+source bytes, and there is no source at this seam. `'carve'` is deliberately
+not a target: `carveToCarve` runs a different composition on purpose, because a
+formatter must write back what the author wrote.
+Pass `{ alignTables: true }` to `carveToCarve` to pad table cells by Unicode 18
+display width. The default keeps the canonical one-space padding.
+
+## Mention and tag resolvers
+
+`mentionUrl` and `tagUrl` remain available for route templates. For application
+lookups, configure `resolveMention` or `resolveTag` instead:
+
+```ts
+carveToHtml(source, {
+  socialContext: currentTenant,
+  resolveMention: ({ name, context }) => (context as AppContext).users.get(name)?.url ?? null,
+  resolveTag: ({ name, context }) => (context as AppContext).tags.get(name)?.url ?? null,
+})
+```
+
+A resolver is authoritative for its kind. Returning `null`, throwing, or
+returning a denied URL produces the ordinary inert span and never falls back to
+the corresponding template. The callback receives the exact parsed name,
+read-only attributes, the node kind, and the opaque `socialContext`. Its result
+is a complete destination and is not encoded again.
+
+## Task markers and AST state
+
+`[ ]` and `[_]` are open; `[/]` is progress; `[!]` is blocked; `[x]` and
+`[X]` are done; `[-]` is dropped; `[>]` is deferred; `[?]` is uncertain.
+Only done checks the box. `TaskState` and AST JSON keep a nondefault authored
+marker in `list_item.taskState`; `_` keeps its spelling but remains open.
+
+## Check table preservation
+
+Render-loss reports cover the events defined by the Carve render-loss schema.
+Markdown, plain, and ANSI output report flattened merged cells as
+`table-span-flattened`. Markdown also reports later header rows written as body
+rows as `table-header-row-demoted`, a header row moved above earlier body rows
+as `table-header-row-hoisted`, and each header cell in a row that is not a
+header row as `table-header-cell-demoted`. A table caption written as a paragraph
+reports `markdown-caption-flattened`. Render-loss reports do not assess every semantic
+change. A nested tight item whose blocks cannot be written tight without an
+indented `+` is written loose and reports `list-tightness-lost`.
+
+Use the separate preservation assessment when caption placement or other table
+structure matters:
+
+```ts
+import { carveToPreservationReport } from '@markup-carve/carve'
+
+const result = carveToPreservationReport(source, 'markdown')
+console.log(result.value)
+console.log(result.losses)
+console.log(result.preservation.diagnostics)
+
+// Refuse any diagnosed table degradation, independently of strictLosses.
+carveToPreservationReport(source, 'markdown', { strictPreservation: true })
+```
+
+Targets are `html`, `markdown`, `plain`, and `ansi`. The `table-structure-v1`
+assessment checks spans, caption association, header roles, row groups,
+attributes, column metadata, block cells, and alignment. Diagnostics carry
+AST JSON node paths and field names. `maxDiagnostics` bounds retained detail
+while `totalDiagnostics` counts all findings; strict refusal uses that count.
+`result.losses` is the normative render-loss report; the assessment adds the
+fields it does not cover.
+
+The report sets `complete: false` and lists its unchecked boundaries. A clean
+assessment does not establish preservation of non-table semantics, source
+spelling, assets, host behavior, or a final PDF. `assessTablePreservation` also
+accepts a validated AST JSON tree for callers that already have one.
+
+Table alignment checks treat an unset alignment as left alignment. Host CSS and default header styling are outside the assessment.
+
+## Straight quotes with smart typography
+
+
+
+Pass `{ smartTypography: { quotes: false } }` to `carveToHtml`,
+`carveToMarkdown`, `carveToPlainText`, or `carveToAnsi` to keep quote source
+runs, including apostrophes. Other smart substitutions still render as glyphs.
+An empty family object or `{ quotes: true }` keeps the default output.
+`false` and `'source'` still emit every source run. Parsing and heading IDs
+are unchanged; typed curly quotes and escapes keep their existing behavior.
