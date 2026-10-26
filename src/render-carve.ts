@@ -3202,7 +3202,7 @@ class CarveRenderSession {
     return rendered
   }
 
-  private renderBlocks(blocks: BlockNode[], ctx: CarveContext, item?: ListItem): string {
+  private renderBlocks(blocks: BlockNode[], ctx: CarveContext, item?: ListItem, descriptionBody = false): string {
     if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     ctx.blockDepth++
     const previousHost = ctx.afterCaptionHost
@@ -3212,6 +3212,7 @@ class CarveRenderSession {
       const parts: string[] = []
       let previousList: List | null = null
       let listSeparated = false
+      let descriptionListOffset = 0
       let previousBlock: BlockNode | null = null
       let previousMoved = false
       for (const block of blocks) {
@@ -3226,10 +3227,12 @@ class CarveRenderSession {
         ctx.afterCaptionHost = hostsCaption(block)
         if (block.type === 'list') {
           listSeparated = previousList !== null && listsWouldMerge(previousList, block)
+          if (!listSeparated) descriptionListOffset = 0
           previousList = block
         } else if (spellsSomething(rendered)) {
           previousList = null
           listSeparated = false
+          descriptionListOffset = 0
         }
         // A block that spells nothing contributes nothing - not even the blank
         // line a part of its own would open. As far as the page is concerned it
@@ -3249,7 +3252,14 @@ class CarveRenderSession {
             (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text))
           ) {
             parts[parts.length - 1] += `\n${text}`
+          } else if (listSeparated && parts.length > 0 && descriptionBody) {
+            // Each sibling list takes the next body column. Shift all of its
+            // lines so item continuations and nested children move with it.
+            descriptionListOffset++
+            const indent = ' '.repeat(descriptionListOffset)
+            parts[parts.length - 1] += `\n\n${text.split('\n').map(line => line ? indent + line : line).join('\n')}`
           } else if (listSeparated && parts.length > 0) {
+            descriptionListOffset = 0
             // §11 N1a's boundary, written as a SENTINEL rather than as four
             // literal newlines. `normalize` squeezes every run of three or more
             // newlines to two - correct for a decorative run, which the rule says
@@ -4088,7 +4098,7 @@ class CarveRenderSession {
         try {
           this.indentedHostDepth++
           try {
-            written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)))
+            written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true)))
           } finally {
             this.indentedHostDepth--
           }
@@ -4134,11 +4144,11 @@ class CarveRenderSession {
    * Render blocks that a prefix/indent host owns (blockquote, list item,
    * definition body). Their fences start over at `:::` - see colonFenceFor.
    */
-  private renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
+  private renderHostedBlocks(children: BlockNode[], ctx: CarveContext, descriptionBody = false): string {
     const outer = ctx.colonFenceDepth
     ctx.colonFenceDepth = 0
     try {
-      return this.renderBlocks(children, ctx)
+      return this.renderBlocks(children, ctx, undefined, descriptionBody)
     } finally {
       ctx.colonFenceDepth = outer
     }
