@@ -45,7 +45,14 @@ export function renderCarveWithConversionReport(
   const stack: Array<{ value: unknown; inlineOnly: boolean; directCellChildren: boolean; listDepth: number; hosted: boolean }> = [{ value: ast, inlineOnly: false, directCellChildren: false, listDepth: 0, hosted: false }]
   while (stack.length) {
     const { value, inlineOnly, directCellChildren, listDepth, hosted } = stack.pop()!
-    if (Array.isArray(value)) { for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], inlineOnly: inlineOnly && !(directCellChildren && i === value.length - 1 && value[i]?.type === 'hard_break'), directCellChildren: false, listDepth, hosted }); continue }
+    if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i--) {
+        const child: unknown = value[i]
+        const terminal = directCellChildren && i === value.length - 1 && child !== null && typeof child === 'object' && (child as { type?: unknown }).type === 'hard_break'
+        stack.push({ value: child, inlineOnly: inlineOnly && !terminal, directCellChildren: false, listDepth, hosted })
+      }
+      continue
+    }
     if (!value || typeof value !== 'object') continue
     const node = value as Record<string, unknown>
     const type = node.type
