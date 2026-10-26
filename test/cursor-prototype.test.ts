@@ -1049,6 +1049,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    'A plain first sentence.\nA second plain sentence.\nA final plain sentence.\n',
+    '- A plain first sentence.\n  A second plain sentence.\n  A final plain sentence.\n',
+    '> A plain first sentence.\n> A second plain sentence.\n> A final plain sentence.\n',
+  ])('keeps source positions across a plain wrapped paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([2, 3, 4, 5])('promotes an owned list image indented by %i spaces', (indent) => {
     const source = `- t\n\n${' '.repeat(indent)}![Apollo](a.jpg)\n`
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

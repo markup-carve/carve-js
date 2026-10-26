@@ -163,6 +163,11 @@ function contentEndColumn(line: SourceLine): number {
 }
 
 type ContentLine = { line: SourceLine; column: number; text: string }
+const RE_PLAIN_CURSOR_TEXT = /^[A-Za-z0-9 .,;!?()]+$/
+function plainCursorText(text: string): boolean {
+  return RE_PLAIN_CURSOR_TEXT.test(text) && !text.includes('..') &&
+    !/\((?:c|r|tm)\)/i.test(text)
+}
 
 class CursorInline extends InlineParseSession {
   // Image promotion only changes paragraphs whose first inline node is an image.
@@ -184,10 +189,24 @@ class CursorInline extends InlineParseSession {
   inlines(parts: ContentLine[], captionContext = false): InlineNode[] {
     const first = parts[0]!
     const multiLine = parts.length > 1
+    if (parts.length >= 3 && !captionContext && this.abbreviations.size === 0 &&
+        parts.every((part) => part.text.trim() === part.text && plainCursorText(part.text))) {
+      const nodes: InlineNode[] = []
+      for (let index = 0; index < parts.length; index++) {
+        const part = parts[index]!
+        if (index > 0) {
+          const before = parts[index - 1]!
+          nodes.push({ type: 'soft_break', pos: position(before.line, part.line,
+            before.column + before.text.length, part.column) })
+        }
+        nodes.push({ type: 'text', value: part.text,
+          pos: position(part.line, part.line, part.column, part.column + part.text.length) })
+      }
+      return nodes
+    }
     const text = dropTrailingWhitespace(multiLine ? parts.map((part) => part.text).join('\n') : first.text)
     if (!multiLine && !captionContext && this.abbreviations.size === 0 && text.length > 0 &&
-        /^[A-Za-z0-9 .,;!?()]+$/.test(text) && !text.includes('..') &&
-        !/\((?:c|r|tm)\)/i.test(text)) {
+        plainCursorText(text)) {
       return [{ type: 'text', value: text,
         pos: position(first.line, first.line, first.column, first.column + text.length) }]
     }
