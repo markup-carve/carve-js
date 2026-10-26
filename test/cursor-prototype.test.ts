@@ -1044,6 +1044,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps an image with nested alt text in its paragraph', () => {
+    const source = '![a [b]](u)\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('retains reference-image promotion inside a quote', () => {
     const source = '> ![a][p]\n> ^ Cap\n\n[p]: /a\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

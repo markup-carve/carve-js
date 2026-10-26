@@ -11,7 +11,7 @@ import { parseAttrs, unescapeAttrValue } from '../extension/attribute-parser.js'
 import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { markAboveContentColumn } from './block/paragraph-indent.js'
-import { RE_CAPTION, RE_COMMENT_BLOCK_ANY } from './block/parse-quote-core.js'
+import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, isBlockImageLine } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
@@ -1146,7 +1146,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     if (caption) return { type: 'figure', target: image,
       caption: caption.children, pos: position(first, caption.line) }
     const baseColumn = first.baseColumn ?? 1
-    if (!image.ref && image.pos?.startColumn === baseColumn &&
+    if (!image.ref && isBlockImageLine(first.text) && image.pos?.startColumn === baseColumn &&
         image.pos.endColumn === baseColumn + first.text.length) return image
   }
   if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'math' &&
