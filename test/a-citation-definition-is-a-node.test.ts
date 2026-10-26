@@ -156,12 +156,8 @@ describe('the definitions a document can hold', () => {
     expect(paragraph.pos).toMatchObject({ startLine: 1, endLine: 3 })
   })
 
-  it('admits an empty entry, and the field with it', () => {
-    // Which source lines carry no entry is a question §18 does not settle; the
-    // FIELD is required and may be an empty array, so an engine cannot answer
-    // it by dropping the field.
-    const [definition] = definitions('[@a]: \n')
-    expect(definition!.children).toEqual([])
+  it('leaves a bare marker as prose after trailing spaces are trimmed', () => {
+    expect(definitions('[@a]: \n')).toEqual([])
   })
 })
 

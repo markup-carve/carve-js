@@ -643,7 +643,7 @@ function definitionNode(kids: InlineNode[]): CitationDefinition | null {
   const it = cg.items[0]!
   if (it.prefix || it.locator || it.suppressAuthor) return null
   const second = kids[1]
-  if (!second || second.type !== 'text' || !(second as Text).value.startsWith(':')) return null
+  if (!second || second.type !== 'text' || !/^: +/.test((second as Text).value)) return null
 
   // The span of the whole line, taken BEFORE the entry is trimmed: the node
   // stands for the line the author wrote, `[@key]` and separator included.
@@ -652,7 +652,7 @@ function definitionNode(kids: InlineNode[]): CitationDefinition | null {
   // Entry = inline content after the leading `: `, with the second text node's
   // leading colon stripped.
   const entry: InlineNode[] = [...kids.slice(1)]
-  const separator = /^:\s*/.exec((second as Text).value)![0]
+  const separator = /^: +/.exec((second as Text).value)![0]
   const head: Text = { type: 'text', value: (second as Text).value.slice(separator.length) }
   if (second.pos) head.pos = { ...second.pos }
   advanceStart(head, separator)
