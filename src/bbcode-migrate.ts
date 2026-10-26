@@ -705,13 +705,17 @@ function convertMarks(text: string, written: string): string {
 }
 
 function convertBasicFormatting(text: string, written: string): string {
+  const dropStyle = (kind: string) => (_whole: string, value: string, body: string): string => {
+    stylingDrops.push({ kind, value })
+    return body
+  }
   return (
     convertMarks(text, written)
       // Size, colour and font have no Carve equivalent: the tags go, the text
       // stays. Dropping the content would lose the post.
-      .replace(/\[size=[^\]]*\]([\s\S]*?)\[\/size\]/gi, '$1')
-      .replace(/\[color=[^\]]*\]([\s\S]*?)\[\/color\]/gi, '$1')
-      .replace(/\[font=[^\]]*\]([\s\S]*?)\[\/font\]/gi, '$1')
+      .replace(/\[size=([^\]]*)\]([\s\S]*?)\[\/size\]/gi, dropStyle('size'))
+      .replace(/\[color=([^\]]*)\]([\s\S]*?)\[\/color\]/gi, dropStyle('color'))
+      .replace(/\[font=([^\]]*)\]([\s\S]*?)\[\/font\]/gi, dropStyle('font'))
   )
 }
 
@@ -1237,7 +1241,9 @@ function cleanup(text: string): string {
 /** Spans dropped by the current conversion because their content starts with an extender. */
 let extenderLeadingSpans = 0
 
-type BbcodeLoss = { code: 'structure-unspellable' | 'bbcode-quote-field-dropped'; message: string; line?: number }
+type BbcodeLoss = { code: 'structure-unspellable' | 'bbcode-quote-field-dropped' | 'bbcode-styling-dropped'; message: string; line?: number }
+
+let stylingDrops: Array<{ kind: string; value: string }> = []
 
 type DroppedQuoteField = { field: string; unnamed: boolean }
 
@@ -1290,12 +1296,17 @@ export function bbcodeToCarveWithLosses(bbcode: string): { value: string; losses
   const value = bbcodeToCarve(bbcode)
   const losses: BbcodeLoss[] = Array.from({ length: extenderLeadingSpans }, () => ({ code: 'structure-unspellable', message: EXTENDER_LEADING_SPAN_UNSPELLABLE }))
   losses.push(...droppedQuoteFields(bbcode))
+  losses.push(...stylingDrops.map(({ kind, value }) => ({
+    code: 'bbcode-styling-dropped' as const,
+    message: `Dropped the BBCode ${kind} styling wrapper with value ${JSON.stringify(value)}.`,
+  })))
   return { value, losses }
 }
 
 export function bbcodeToCarve(bbcode: string): string {
   extenderLeadingSpans = 0
   quoteFieldDrops = []
+  stylingDrops = []
   const inputBytes = UTF8_ENCODER.encode(bbcode).byteLength
   if (inputBytes > BBCODE_MAX_INPUT_LENGTH) {
     throw new BbcodeInputTooLargeError(inputBytes)
