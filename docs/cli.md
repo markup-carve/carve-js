@@ -191,3 +191,16 @@ See </#Getting-Started> and [Getting Started][].
 ---
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
+
+## Aligned table formatting
+
+Use `carve fmt --align-tables -w README.crv` to align table pipes by Unicode display width.
+
+## Directory migration
+
+```sh
+npx carve migrate --from markdown --directory docs --output docs-carve --check-loss
+```
+
+The command copies assets and writes `docs-carve/migration-report.json` with
+files that need review.
