@@ -318,6 +318,16 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     return match
   }
 
+  function scanReservedReferenceTail(s: InlineScan, close: number, tail: string): boolean {
+    const match = execReferenceTail(s, tail, s.i + close + 1)
+    if (!match?.[1]?.startsWith('@')) return false
+    const end = s.i + close + 1 + match[0].length
+    flush(s)
+    emit(s, { type: 'text', value: s.text.slice(s.i, end) }, s.i, end)
+    s.i = end
+    return true
+  }
+
   function createInlineScan(
     session: InlineScannerSession, text: string, source: InlineSource,
     inFootnote: boolean, captionContext: boolean, atHostRunStart: boolean,
@@ -660,7 +670,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     const rest = text.slice(i)
     const alt = rest.slice(2, close)
     const tail = rest.slice(close + 1)
-    return scanInlineImage(s, close, alt, tail) || scanReferenceImage(s, rest, close, alt, tail)
+    return scanInlineImage(s, close, alt, tail) || scanReservedReferenceTail(s, close, tail) || scanReferenceImage(s, rest, close, alt, tail)
   }
 
   function scanInlineImage(s: InlineScan, close: number, alt: string, tail: string): boolean {
@@ -757,7 +767,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanReferenceLink(s: InlineScan, rest: string, close: number, innerText: string, tail: string): boolean {
     const { text, i, session, source } = s
     const mref = execReferenceTail(s, tail, i + close + 1)
-    if (!mref || (innerText === '' && mref[1]!.startsWith('@'))) return false
+    if (!mref) return false
     flush(s)
     const extra = tailAttrs(mref[2])
     const len = close + 1 + mref[0].length - extra.unconsumed
@@ -816,6 +826,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       // (no notes inside notes, design §3.1).
       if (scanFootnoteRef(s, rest)) return true
       if (scanInlineLink(s, close, innerText, tail)) return true
+      if (scanReservedReferenceTail(s, close, tail)) return true
       if (scanReferenceLink(s, rest, close, innerText, tail)) return true
     }
     // Footnote reference [^label] -- before span, so `[^x]{.c}` stays a
