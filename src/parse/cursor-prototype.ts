@@ -1873,6 +1873,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.item.children.push({ type: 'paragraph',
         children: inline.inlines([{ line, column: 1, text: line.text }]),
         pos: position(line, line, 1, line.text.replace(/[ \t]+$/, '').length + 1) })
+    } else if (frame.body.length > 1 && frame.body.every((line) =>
+      !line.lazyText && plainQuoteText(line.text))) {
+      const first = frame.body[0]!
+      const last = frame.body.at(-1)!
+      frame.item.children.push({ type: 'paragraph',
+        children: inline.inlines(frame.body.map((line) => ({ line, column: 1, text: line.text }))),
+        pos: position(first, last, 1, last.text.replace(/[ \t]+$/, '').length + 1) })
     } else {
       frame.item.children.push(...parseBlocks(
         new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
