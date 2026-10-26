@@ -77,6 +77,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a tab-indented quote inside its list item', () => {
+    const source = '1. a\n\t> quote\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',

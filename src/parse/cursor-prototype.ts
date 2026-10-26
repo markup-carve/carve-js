@@ -488,6 +488,23 @@ function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
     RE_HEADING.test(block)) ? column : base
 }
 
+function tabbedListPrefix(line: string, contentColumn: number): number | undefined {
+  if (!line.includes('\t')) return undefined
+  let column = 0
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index]
+    if (char !== ' ' && char !== '\t') break
+    column += char === '\t' ? 4 - column % 4 : 1
+    if (column >= contentColumn - 1) return index + 1
+  }
+  return undefined
+}
+
+function reachableListPrefix(line: string, contentColumn: number): number | undefined {
+  const spaces = ' '.repeat(contentColumn - 1)
+  return line.startsWith(spaces) ? spaces.length : tabbedListPrefix(line, contentColumn)
+}
+
 function openColonRun(body: SourceLine[], quoted: boolean): number | undefined {
   let first = body[0]?.text
   if (!first) return undefined
@@ -2224,7 +2241,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const contentColumn = top.contentColumn
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
-    if (!line.text.startsWith(prefix) && top.body.at(-1)?.number === line.number - 1) {
+    const reachedPrefix = reachableListPrefix(line.text, contentColumn)
+    if (reachedPrefix === undefined && top.body.at(-1)?.number === line.number - 1) {
       const previousText = top.body.at(-1)!.text
       if (LINE_COMMENT.test(line.text) && !RE_COMMENT_BLOCK_ANY.test(line.text) &&
           (top.retainedBelowColumnComment || plainQuoteText(previousText) ||
@@ -2251,7 +2269,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       updateListFrameEnds(stack, line, listSpan)
       continue
     }
-    if (!line.text.startsWith(prefix)) {
+    if (reachedPrefix === undefined) {
       const ancestor = deepestReachableFrame(stack, line.text, true)
       if (ancestor) {
         const lazy = finalNestedListLazyLine(cursor, top.body, stack.length)
@@ -2291,7 +2309,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
       continue
     }
-    let bodyPrefix = prefix.length
+    let bodyPrefix = reachedPrefix
     if (top.fenceMarker && top.fencePrefix !== undefined && top.fencePrefix > bodyPrefix) {
       bodyPrefix = continuedListFencePrefix(top, line, bodyPrefix)
     } else if (shouldMatchShiftedListFence(top, line, bodyPrefix, stack.length)) {
@@ -2303,7 +2321,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     if (consumeWrappedAttribute(top, bodyPrefix)) continue
     cursor.take()
-    appendBody(top, line, bodyPrefix === prefix.length && !top.fenceMarker ?
+    appendBody(top, line, bodyPrefix === reachedPrefix && !top.fenceMarker ?
       listContinuationPrefix(line.text, bodyPrefix, top.body, top.closedQuoteFence) : bodyPrefix)
     top.retainedBelowColumnComment = false
     updateListFrameEnds(stack, line, listSpan)
