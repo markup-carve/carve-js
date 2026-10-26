@@ -95,6 +95,18 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- ```\n  x\n y\n  ```\n',
+    '- a\n    - child\n      ```\n      x\n      ```\n  ~~~\nafter\n',
+  ])('releases an unclosed fence at its list owner boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unclosed fence while a nested list paragraph owns its line', () => {
+    expect(() => parseCursorPrototype('- a\n    - child\n      text\n  ~~~\nafter\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
     '- item with trailing spaces  \n',
@@ -921,9 +933,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines the unresolved root-list version of that fence boundary', () => {
+  it('releases the root-list fence after a nested heading leaves no paragraph open', () => {
     const source = '- a\n    - # h\n  ~~~\nafter\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- - ```\n\ntail\n', '- a\n  - ```\n  +\n  > q\n'])

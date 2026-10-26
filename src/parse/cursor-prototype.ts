@@ -1738,6 +1738,16 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean }
 
+function releaseRootListFenceAtBoundary(frame: ListCursorFrame,
+  owner: ContainerOwner, stackLength: number): void {
+  if (stackLength !== 1 || owner.kind !== 'root' || !frame.fenceMarker ||
+      !fenceOpen(frame.body[0]?.text ?? '')) return
+  const lastChild = frame.item?.children.at(-1)
+  const lastNestedBlock = lastChild?.type === 'list' ?
+    lastChild.items.at(-1)?.children.at(-1) : undefined
+  if (lastNestedBlock?.type !== 'paragraph') frame.fenceMayDedent = true
+}
+
 function shouldMatchShiftedListFence(frame: ListCursorFrame, line: SourceLine,
   prefix: number, stackLength: number): boolean {
   return !frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
@@ -2292,6 +2302,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         continue
       }
       rejectListQuoteBoundary(top.body, line)
+      releaseRootListFenceAtBoundary(top, cursor.owner, stack.length)
       break
     }
     const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
