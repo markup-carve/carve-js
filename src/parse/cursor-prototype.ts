@@ -89,6 +89,17 @@ function lexerForCursor(cursor: Cursor): Lexer {
 function scanLines(source: string): SourceLine[] {
   const lines: SourceLine[] = []
   let start = 0
+  if (!source.includes('\r')) {
+    let end: number
+    while ((end = source.indexOf('\n', start)) !== -1) {
+      lines.push({ text: source.slice(start, end), start, number: lines.length + 1 })
+      start = end + 1
+    }
+    if (start < source.length || lines.length === 0) {
+      lines.push({ text: source.slice(start), start, number: lines.length + 1 })
+    }
+    return lines
+  }
   for (let i = 0; i < source.length; i++) {
     const code = source.charCodeAt(i)
     if (code !== 10 && code !== 13) continue
