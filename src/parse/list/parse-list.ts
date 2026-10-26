@@ -250,6 +250,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (attr?.contentOffset !== undefined && attr.headWidth !== undefined) {
       content = line.slice(attr.contentOffset + markerLine.length - markerContentLength - attr.headWidth)
     }
+    const markerTail = markerLine.slice(leadingWhitespace(markerLine), markerLine.length - markerContentLength)
+    if (markerTail.includes('\t') && lineOpensBlock(content)) content = LAZY_FRAME + content
     const leadOrigin = terminatorFree ? { text: content, parentIndex: startLineIndex, prefix: line.length - content.length } : undefined
     return { startLineIndex, line, terminatorFree, attr, markerLine, content, markerContentLength, checked, taskState, leadOrigin }
   }
@@ -2394,6 +2396,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         {
           terminatorFree: false,
           ...itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
+          // A tab split at the item column leaves generated spaces with no
+          // matching source origin. Measure that residual run in its new text.
+          ...(l.slice(0, leadingWhitespace(l)).includes('\t') && /^ +[^ \t]/.test(trackedContent)
+            ? { whitespace: leadingWhitespace(trackedContent) }
+            : {}),
           quoteFenceCloser: (marker, depth = 0, column = 0) => {
             const key = `${depth}:${column}`
             let memo = itemQuoteFenceMemos.get(key)

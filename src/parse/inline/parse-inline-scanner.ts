@@ -615,7 +615,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     const innerEnd = end - openLen
     const hasContent = closed
       ? innerEnd > tick + openLen && text[innerEnd - 1] !== '`'
-      : text.length > tick + openLen
+      : true
     if (!hasContent || (closed && text[end] === '`')) return false
     flush(s)
     const padded = closed ? text.slice(tick + openLen, innerEnd) : ''
