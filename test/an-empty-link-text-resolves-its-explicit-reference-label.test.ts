@@ -34,16 +34,9 @@ import { citations } from '../src/extension/citations.js'
  * document whose HTML agreed - and `[][]{.c}` came out an inline span here and
  * literal text in both oracles. The rows below pin all three.
  *
- * ONE THING THE OLD TEXT GUARD WAS SHIELDING BY ACCIDENT: a label cannot open
- * with `@`, because `@` opens a citation key -
- *
- *   reference_label = (character - ']' - '@'), {character - ']'} ;
- *
- * - so `[][@a]` is a literal `[]` followed by the citation `[@a]`. Widening
- * the branch without testing for it swallowed the citation whole. That guard
- * is scoped to the empty-text spelling this change opens: `[t][@a]` breaks the
- * same production and is taken as a reference in all three engines, which is a
- * cross-engine ruling rather than this fix's to make, and has its own row.
+ * CARVE-P3-003 reserves labels beginning with `@` for citations. A declined
+ * reference tail stays literal as one source run under CARVE-P3-004.
+
  */
 
 /** The href a document's first link resolves to, or null when none resolved. */
@@ -122,35 +115,12 @@ describe('an empty link text resolves its explicit reference label', () => {
     expect(inlines('[][]{.c}\n').map((n) => n.type)).toEqual(['link'])
   })
 
-  it('does not claim a citation: a label cannot open with `@`', () => {
-    // Raised by codex review at high effort, and real. The grammar subtracts
-    // `@` from a label's FIRST character:
-    //
-    //   reference_label = (character - ']' - '@'), {character - ']'} ;
-    //
-    // so `[][@a]` is a literal `[]` followed by the citation `[@a]`. Widening
-    // the branch without testing for it swallowed the citation whole - with
-    // the extension enabled it lost its number and its bibliography entry, and
-    // the reader got `[][@a]` as text.
-    expect(carveToHtml('[][@a]\n\n[@a]: Entry A.\n', { extensions: [citations()] })).toContain(
-      'data-cite-key="a"',
-    )
-    expect(inlines('[][@a]\n\n[@a]: Entry A.\n', { extensions: [citations()] }).map((n) => n.type)).toEqual([
-      'text',
-      'citation_group',
-    ])
-    // The subtraction is the FIRST character only, so an `@` inside a label is
-    // an ordinary label character and still resolves.
+  it('keeps a reserved citation label literal', () => {
+    for (const source of ['[][@a]', '[t][@a]']) {
+      expect(carveToHtml(`${source}\n`, { extensions: [citations()] })).toBe(`<p>${source}</p>`)
+      expect(inlines(`${source}\n`, { extensions: [citations()] }).map((n) => n.type)).toEqual(['text'])
+    }
     expect(href('[a@b]: u\n\n[][a@b]\n')).toBe('u')
-  })
-
-  it('CONTROL the non-empty-text `@` spelling keeps the behavior all three engines share', () => {
-    // `[t][@a]` violates the same production and is taken as a reference here,
-    // in carve-rs and in carve-php alike. Correcting that is a cross-engine
-    // ruling rather than this fix's to make, so the guard is scoped to the
-    // empty-text spelling and this row pins that it did not move.
-    expect(carveToHtml('[t][@a]\n')).toBe('<p>[t][@a]</p>')
-    expect(inlines('[t][@a]\n').map((n) => n.type)).toEqual(['link'])
   })
 
   it('CONTROL a non-empty text still resolves, in both spellings', () => {
