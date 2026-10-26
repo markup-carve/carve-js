@@ -1035,7 +1035,10 @@ export function createDefinitionListParser(
     // folded in reaches no column here, so it attaches to the open term from
     // wherever it landed - which is why this collector unframes before every
     // entry test while the block dispatch never does.
-    const peekEntry = (n = 0) => stripLazyFrame(lexer.peek(n) ?? '')
+    const peekEntry = (n = 0) => {
+      const line = stripLazyFrame(lexer.peek(n) ?? '')
+      return lexer.hostBody === 'list' ? line.trimStart() : line
+    }
     const entryColumn = (n = 0): number => {
       const index = lexer.pos + n
       const ownerColumn = lexer.returnedDescriptionOwnerColumns.get(lexer.lineNumber(index))
@@ -1111,7 +1114,7 @@ export function createDefinitionListParser(
           }
           // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
           // because a framed heading is the term's text rather than a block.
-          const nextEntry = stripLazyFrame(next)
+          const nextEntry = peekEntry()
           const belowList = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
             !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
@@ -1287,8 +1290,7 @@ export function createDefinitionListParser(
       if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
         let look = 1
         while (isBlankLine(lexer.peek(look))) look++
-        const next = lexer.peek(look)
-        if (next && RE_DEFLIST_TERM.test(next)) for (let k = 0; k < look; k++) lexer.consume()
+        if (RE_DEFLIST_TERM.test(peekEntry(look))) for (let k = 0; k < look; k++) lexer.consume()
         else break
       }
     }

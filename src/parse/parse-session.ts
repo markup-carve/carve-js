@@ -861,7 +861,10 @@ export class ParseSession extends InlineParseSession {
     }
     if (RE_HEADING.test(line)) return this.parseHeading(lexer)
     // Definition list starts on a `:: term` line (two colons, not three).
-    if (RE_DEFLIST_TERM.test(line)) return this.parseDefinitionList(lexer)
+    if (RE_DEFLIST_TERM.test(line) ||
+      (lexer.hostBody === 'list' && RE_DEFLIST_TERM.test(line.trimStart()) &&
+        sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? line) >= lexer.hostContentColumn))
+      return this.parseDefinitionList(lexer)
     if (quotedLineText(line, lexer.lineTerminatorFree(lexer.pos)) !== null) return this.parseBlockQuote(lexer)
     if (
       taskMatch(line, lexer.lineTerminatorFree(lexer.pos)) !== null ||
