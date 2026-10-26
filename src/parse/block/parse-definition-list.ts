@@ -722,6 +722,7 @@ export function createDefinitionListParser(
             bodySourceLines.push(lexer.peek())
             bodyLineNumbers.push(lexer.lineNumber(lineIndex))
             track('')
+            nestedItemParagraphOpen = false
             lexer.consume()
           }
           return 'continue'
