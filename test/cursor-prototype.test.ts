@@ -88,6 +88,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '1. x\n[t](u)\n_u_\n[r]: /u\n[t][r]\n\\#\n',
+    '1. ordered\n  > > quote\n+  \n- item\n',
+  ])('keeps the open list paragraph at a later owner boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
     '- item with trailing spaces  \n',

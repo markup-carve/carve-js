@@ -1605,7 +1605,8 @@ function mayFoldRootListParagraph(cursor: Cursor,
         first !== undefined &&
         (plainQuoteText(first.text) || listFirstBlockParagraphText(first.text)))) return false
   const follower = next.text
-  let continues = plainQuoteText(follower)
+  let continues = plainQuoteText(follower) || frame.lazyRootParagraph &&
+    frame.body[0]?.text[0] !== '>' && !isBlankLine(follower) && !isBlockStart(follower)
   if (!continues && frame.contentColumn !== undefined) {
     const indent = /^ */.exec(follower)![0].length
     if (indent > frame.indent && indent < frame.contentColumn - 1) {
