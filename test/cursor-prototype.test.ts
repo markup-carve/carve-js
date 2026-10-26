@@ -1414,6 +1414,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '> - a\n>\n>   ```\n>   x\nflush\n',
+    '> - a\n>\n>   ```\n>   x\n> after\nflush\n',
+    '> - outer\n>   - head\n>\n>     ```\n>     a\n>   ```\n>\n>   tail\n',
+  ])('keeps a list-owned fence within its quoted frame: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- > intro\n ```\n tail\n ```\n',
     '* > intro\n ````\n tail\n ````\n'])
   ('keeps a bounded multiline inline code span in its quoted list paragraph: %s', (source) => {

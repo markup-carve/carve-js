@@ -1909,7 +1909,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     } else {
       frame.item.children.push(...parseBlocks(
         new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
-          frame.fenceMayDedent, undefined, cursor.owner.kind === 'root' ? firstMarker.width : undefined),
+          frame.fenceMayDedent || cursor.owner.allowUnclosedFence,
+          cursor.owner.fenceBoundary, cursor.owner.kind === 'root' ? firstMarker.width : undefined),
           cursor.physicalLines),
         inline, definitionNodes, depth + 1, false))
     }
@@ -2331,15 +2332,74 @@ function takeDegradedQuoteLazyLine(cursor: Cursor, first: SourceLine,
 
 function quoteChildrenAtCursor(cursor: Cursor, inline: CursorInline,
   definitionNodes: BlockNode[], depth: number, body: SourceLine[],
-  directParagraph: boolean): BlockNode[] {
+  directParagraph: boolean, boundaryFence = false): BlockNode[] {
   if (body.length > 0 && directParagraph) {
     const last = body.at(-1)!
     return [{ type: 'paragraph',
       children: inline.inlines(body.map((line) => ({ line, column: 1, text: line.text }))),
       pos: position(body[0]!, last, 1, last.text.replace(/[ \t]+$/, '').length + 1) }]
   }
-  return parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
+  return parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote', false,
+    boundaryFence, boundaryFence ? cursor.peek() : undefined),
     cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
+}
+
+interface QuoteListOwnerFrame { column: number; fence: string | undefined }
+
+class QuoteListOwner {
+  readonly frames: QuoteListOwnerFrame[] = []
+  releasedFence = false
+  shiftedFence = false
+
+  observe(text: string): boolean {
+    if (text === '') return false
+    let indent = 0
+    while (text.charCodeAt(indent) === 32) indent++
+    let released = false
+    while (this.frames.length && indent < this.frames.at(-1)!.column) {
+      const old = this.frames.pop()!
+      released ||= old.fence !== undefined
+      this.releasedFence ||= old.fence !== undefined
+    }
+    const top = this.frames.at(-1)
+    const owned = top && indent >= top.column ? text.slice(top.column) : text
+    if (top?.fence) {
+      if (indent === top.column && closesFence(owned, top.fence)) top.fence = undefined
+      return false
+    }
+    const marker = listMarker(text)
+    if (marker && (!top || marker.indent >= top.column)) {
+      const frame: QuoteListOwnerFrame = { column: marker.width,
+        fence: fenceOpen(marker.content)?.marker }
+      this.frames.push(frame)
+      return false
+    }
+    if (top && indent > top.column && fenceOpen(text.slice(indent))) this.shiftedFence = true
+    if (top && indent === top.column) top.fence = fenceOpen(owned)?.marker
+    return released && !top && plainQuoteText(text)
+  }
+
+  get openFence(): boolean { return this.frames.some((frame) => frame.fence !== undefined) }
+  get boundaryFence(): boolean { return !this.shiftedFence && (this.releasedFence || this.openFence) }
+}
+
+function observeQuoteListOwner(owner: QuoteListOwner | undefined, container: ContainerOwner,
+  text: string, firstLine: boolean): { owner: QuoteListOwner | undefined; resumed: boolean } {
+  if (!owner && firstLine && container.kind === 'root' &&
+      (text[0] === '-' || text[0] === '*') && listMarker(text)?.indent === 0) {
+    owner = new QuoteListOwner()
+  }
+  return { owner, resumed: !!owner?.observe(text) && !owner.shiftedFence }
+}
+
+function quotedParagraphText(text: string, plain: boolean): boolean {
+  return plain || nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) ||
+    /^: +/.test(text) || /^:: +[^ ]/.test(text)
+}
+
+function quoteNeedsLazyBoundary(follower: string | undefined, last: string | undefined,
+  wrappedAttributeTail: boolean, inlineCode: SourceLine[] | undefined): boolean {
+  return mayContinueQuoteLazily(follower, last) && !wrappedAttributeTail || !!inlineCode
 }
 
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
@@ -2364,6 +2424,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let last = first
   let plainParagraph = true
   let directParagraph = true
+  let listOwner: QuoteListOwner | undefined
   while (cursor.peek()) {
     const line = cursor.peek()!
     const degraded = takeDegradedQuoteLazyLine(cursor, first, body)
@@ -2380,9 +2441,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
       const plain = plainQuoteText(text)
+      const observed = observeQuoteListOwner(listOwner, cursor.owner, text, body.length === 1)
+      listOwner = observed.owner
       directParagraph &&= plain
-      plainParagraph &&= plain || nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) || /^: +/.test(text) ||
-        /^:: +[^ ]/.test(text)
+      plainParagraph = observed.resumed || plainParagraph && quotedParagraphText(text, plain)
       last = line
       continue
     }
@@ -2441,13 +2503,19 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), body.at(-1)!.text.trimStart()]))
   const inlineCode = !wrappedAttributeTail && cursor.peek()?.text[0] === ' ' &&
     cursor.peek()!.text.includes('`') ? takeQuotedInlineCodeContinuation(cursor, body) : undefined
-  if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail || inlineCode) {
-    if (!inlineCode) throw new UnsupportedCursorSyntax('lazy quote continuation')
-    body.push(...inlineCode)
-    directParagraph = false
-    last = inlineCode.at(-1)!
+  if (quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,
+    !!wrappedAttributeTail, inlineCode)) {
+    if (!inlineCode && !(listOwner?.openFence && !listOwner.shiftedFence)) {
+      throw new UnsupportedCursorSyntax('lazy quote continuation')
+    }
+    if (inlineCode) {
+      body.push(...inlineCode)
+      directParagraph = false
+      last = inlineCode.at(-1)!
+    }
   }
-  const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body, directParagraph)
+  const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body,
+    directParagraph, listOwner?.boundaryFence)
   const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
     rootLinkDef(body[0]!.text) !== null
   const placedEndLine = children.at(-1)?.pos?.endLine
