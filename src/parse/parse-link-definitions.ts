@@ -60,7 +60,7 @@ type LinkDefScan = {
   prevBlank: boolean
   afterPreviousTerm: boolean
   inFootnoteBody: boolean
-  noteColumns: Array<{ column: number; quotes: number; termText: boolean }>
+  noteColumns: Array<{ column: number; quotes: number; termText: boolean; openedAt: number; quotedLeadParagraph: boolean }>
   inlineBodyList: boolean
   plusColumn: number | null
   paraState: 'no' | 'yes' | 'ask'
@@ -843,8 +843,11 @@ export function createLinkDefinitionCollector(
           leadingWhitespace(raw.slice(composed.column)) === 0)) &&
         !s.lexer.declinedLinkDefLines.has(s.lexer.lineNumber(v.idx))) {
       // A term on the marker line has no content column (CARVE-P2-028).
+      const lead = RE_FOOTNOTE_DEF.exec(line)![2]!
+      const quotedLead = /^>[ \t]+(.+)$/.exec(lead)?.[1]
       s.noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: v.rawQuoteDepth,
-        termText: RE_DEFLIST_TERM.test(RE_FOOTNOTE_DEF.exec(line)![2]!) })
+        termText: RE_DEFLIST_TERM.test(lead), openedAt: v.idx,
+        quotedLeadParagraph: quotedLead !== undefined && !prepassOpensBlock(quotedLead, false) })
       s.inFootnoteBody = true
     }
   }
@@ -954,6 +957,7 @@ export function createLinkDefinitionCollector(
     // not the definition's indent; the composed column check above owns that.
     // A definition-shaped line folded into an open quote paragraph stays text.
     return (note.termText && composed.column > openColumn) ||
+      (note.quotedLeadParagraph && v.idx === note.openedAt + 1 && v.rawQuoteDepth > note.quotes) ||
       (collectsNothing && v.rawQuoteDepth > note.quotes) ||
       (v.rawQuoteDepth > note.quotes && /^[ \t]/.test(v.kept) && !composed.peeled.some((one) => !one.quote))
   }

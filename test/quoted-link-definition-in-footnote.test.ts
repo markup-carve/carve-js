@@ -17,4 +17,12 @@ describe('quoted link definitions in footnote bodies', () => {
     expect(html).toContain('[x][r]')
     expect(html).toContain('[r]: /x')
   })
+
+  it('keeps a marker-line quote paragraph open across its first continuation', () => {
+    for (const spacer of ['\n', '\n\n']) {
+      const html = carveToHtml(`[r][] [^c]${spacer}[^c]: > para\n      > [r]: /u\n`)
+      expect(html).toContain('[r][]')
+      expect(html).toContain('&gt; [r]: /u')
+    }
+  })
 })
