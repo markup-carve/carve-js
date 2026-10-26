@@ -100,12 +100,15 @@ function scanLines(source: string): SourceLine[] {
     }
     return lines
   }
-  for (let i = 0; i < source.length; i++) {
-    const code = source.charCodeAt(i)
-    if (code !== 10 && code !== 13) continue
-    lines.push({ text: source.slice(start, i), start, number: lines.length + 1 })
-    if (code === 13 && source.charCodeAt(i + 1) === 10) i++
-    start = i + 1
+  let nextLF = source.indexOf('\n', start)
+  let nextCR = source.indexOf('\r', start)
+  while (nextLF !== -1 || nextCR !== -1) {
+    const end = nextCR !== -1 && (nextLF === -1 || nextCR < nextLF) ? nextCR : nextLF
+    lines.push({ text: source.slice(start, end), start, number: lines.length + 1 })
+    start = end + 1
+    if (end === nextCR && source.charCodeAt(start) === 10) start++
+    if (nextLF !== -1 && nextLF < start) nextLF = source.indexOf('\n', start)
+    if (nextCR !== -1 && nextCR < start) nextCR = source.indexOf('\r', start)
   }
   if (start < source.length || lines.length === 0) {
     lines.push({ text: source.slice(start), start, number: lines.length + 1 })
