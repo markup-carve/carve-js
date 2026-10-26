@@ -46,6 +46,20 @@ describe('shared migration result', () => {
     ])
   })
 
+  it('reports every removed BBCode styling wrapper', () => {
+    const result = migrateBbcode('[color=red]a[/color] [size=20]b[/size] [font=serif]c[/font]')
+    expect(result.value).toBe('a b c\n')
+    expect(result.report.diagnostics.map(row => row.code)).toEqual([
+      'fidelity-unverified', 'bbcode-styling-dropped', 'bbcode-styling-dropped', 'bbcode-styling-dropped',
+    ])
+    expect(result.report.diagnostics.slice(1).map(row => row.message)).toEqual([
+      'Dropped the BBCode size styling wrapper with value "20".',
+      'Dropped the BBCode color styling wrapper with value "red".',
+      'Dropped the BBCode font styling wrapper with value "serif".',
+    ])
+    expect(migrateBbcode('[code][color=red]x[/color][/code]').report.diagnostics.some(row => row.code === 'bbcode-styling-dropped')).toBe(false)
+  })
+
   it('replays the spec bbcode-quote-field-dropped fixture, the row after fidelity-unverified', () => {
     const manifest = JSON.parse(readFileSync(new URL('../spec/tests/importer-fidelity/manifest.json', import.meta.url), 'utf8')) as {
       cases: Array<{ id: string; input: string; expected: { output: string; diagnostics: Array<Record<string, string>> } }>
