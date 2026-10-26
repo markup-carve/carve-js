@@ -788,7 +788,30 @@ function constOf(kind: string): unknown {
  * a validator - and without a hand-written table, which would be the schema
  * expressed a second time.
  */
+const KIND_MATCHERS = new Map<string, (value: unknown) => boolean>()
+
 function matchesKind(value: unknown, kind: string): boolean {
+  let matcher = KIND_MATCHERS.get(kind)
+  if (matcher === undefined) {
+    matcher = kindMatcher(kind)
+    KIND_MATCHERS.set(kind, matcher)
+  }
+  return matcher(value)
+}
+
+function kindMatcher(kind: string): (value: unknown) => boolean {
+  if (kind.startsWith('const:')) {
+    const expected = constOf(kind)
+    return (value) => value === expected
+  }
+  if (kind.startsWith('enum:')) {
+    const members = new Set(kind.slice(5).split('\u0000'))
+    return (value) => typeof value === 'string' && members.has(value)
+  }
+  return (value) => matchesKindUncached(value, kind)
+}
+
+function matchesKindUncached(value: unknown, kind: string): boolean {
   if (kind.startsWith('string>=')) {
     if (typeof value !== 'string') return false
     const minimum = Number(kind.slice(8))
@@ -836,13 +859,8 @@ function matchesKind(value: unknown, kind: string): boolean {
 /**
  * PART 12 §12(d), over the whole payload (markup-carve/carve#881).
  */
-function refuseSchemaViolations(node: unknown, path: string): void {
-  if (Array.isArray(node)) {
-    node.forEach((item, index) => refuseSchemaViolations(item, `${path}[${index}]`))
-    return
-  }
-  if (node === null || typeof node !== 'object') return
-  const record = node as Record<string, unknown>
+/** §12(d) checks that read one node and the records hanging off it. */
+function refuseSchemaViolationsAt(record: Record<string, unknown>, path: string): void {
   const type = record.type
   const required = typeof type === 'string' ? ownValue(WIRE_REQUIRED, type) : undefined
   if (required !== undefined) {
@@ -853,8 +871,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     if (type === 'inline_extension' && typeof record.name === 'string' && record.name.includes('.') && !Object.hasOwn(record, 'fallback')) {
       throw new AstJsonSchemaError('qualified inline extension requires fallback', path)
     }
-    const kinds = ownValue(WIRE_VALUE_KINDS, type as string) ?? {}
-    for (const [field, kind] of Object.entries(kinds)) {
+    for (const [field, kind] of WIRE_VALUE_KIND_ENTRIES.get(type as string) ?? []) {
       if (type === 'document' && field === 'astVersion') continue
       if (!(field in record)) continue
       if (record[field] === undefined) continue
@@ -909,29 +926,27 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     refuseTaskState(record, path)
     refuseAdditionalSpecConstraints(record, path)
   }
-  for (const [key, value] of Object.entries(record)) {
-    // A NODE POSITION holds nodes, so an element that is not an object is not a
-    // node - `children: [null]` and `children: ["x"]` both reached the renderer
-    // and failed there with an untyped TypeError.
-    //
-    // AND WHICH nodes, not merely that they are objects. Checking only the
-    // container leaves the schema half-consulted: a `paragraph` sitting in
-    // another paragraph's `children` is a block where the schema names
-    // `inlineNode`, and it decoded cleanly and then threw
-    // `renderHtml: unknown inline paragraph` - the same untyped renderer crash
-    // this clause exists to stop. A `records` position has no entry in
-    // `NODE_POSITION_TYPES` - the schema gives those no `type`, so no member set
-    // exists - and the plain records they hold are therefore untouched.
-    if (NODE_FIELDS.includes(key)) {
-      const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
-      const positionKind =
-        typeof type === 'string' ? NODE_POSITION_KIND[`${type}.${key}`] : undefined
-      const at = path === '' ? key : `${path}.${key}`
-      refuseNodePosition(value, positionKind, admitted, at)
-    }
-    if (key !== 'data' && key !== 'metadata' && key !== 'props') {
-      refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
-    }
+}
+
+/** §12(d) for the value a node holds under `key`. */
+function refuseSchemaPositionAt(type: unknown, key: string, value: unknown, at: string): void {
+  // A NODE POSITION holds nodes, so an element that is not an object is not a
+  // node - `children: [null]` and `children: ["x"]` both reached the renderer
+  // and failed there with an untyped TypeError.
+  //
+  // AND WHICH nodes, not merely that they are objects. Checking only the
+  // container leaves the schema half-consulted: a `paragraph` sitting in
+  // another paragraph's `children` is a block where the schema names
+  // `inlineNode`, and it decoded cleanly and then threw
+  // `renderHtml: unknown inline paragraph` - the same untyped renderer crash
+  // this clause exists to stop. A `records` position has no entry in
+  // `NODE_POSITION_TYPES` - the schema gives those no `type`, so no member set
+  // exists - and the plain records they hold are therefore untouched.
+  if (NODE_FIELD_SET.has(key)) {
+    const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
+    const positionKind =
+      typeof type === 'string' ? NODE_POSITION_KIND[`${type}.${key}`] : undefined
+    refuseNodePosition(value, positionKind, admitted, at)
   }
 }
 
@@ -1020,10 +1035,9 @@ function refuseNestedRecordShapes(
   record: Record<string, unknown>,
   path: string,
 ): void {
-  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
-  if (nested === undefined) return
-  for (const [field, { record: name, array }] of Object.entries(nested)) {
+  for (const [field, { record: name, array }] of WIRE_NESTED_RECORD_ENTRIES.get(owner) ?? []) {
     const value = record[field]
+    if (value === undefined) continue
     const at = `${path}.${field}`
     if (array) {
       if (!Array.isArray(value)) continue
@@ -1075,6 +1089,7 @@ function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: 
 function refuseArrayMinimums(record: Record<string, unknown>, owner: string, path: string): void {
   const fields = ownValue(WIRE_ARRAY_MIN_ITEMS, owner) ?? {}
   for (const [field, bounds] of Object.entries(fields)) {
+    if (!Array.isArray(record[field])) continue
     const check = (value: unknown, depth: number, minimum: number, at: string): void => {
       if (!Array.isArray(value)) return
       if (depth > 0) {
@@ -1103,16 +1118,16 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
       throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
     }
   }
-  const kinds = WIRE_VALUE_KINDS[name] ?? {}
-  for (const [field, kind] of Object.entries(kinds)) {
+  for (const [field, kind] of WIRE_VALUE_KIND_ENTRIES.get(name) ?? []) {
     if (!(field in item) || item[field] === undefined) continue
     if (!matchesKind(item[field], kind)) {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
     }
   }
   refuseArrayMinimums(item, name, path)
-  for (const [field, value] of Object.entries(item)) {
-    if (!NODE_FIELDS.includes(field)) continue
+  for (const field of Object.keys(item)) {
+    if (!NODE_FIELD_SET.has(field)) continue
+    const value = item[field]
     const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
     const kind = NODE_POSITION_KIND[`${name}.${field}`]
     const at = `${path}.${field}`
@@ -1188,42 +1203,45 @@ function refuseUnknownRecordFields(
   record: Record<string, unknown>,
   path: string,
 ): void {
-  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
-  if (nested === undefined) return
-  for (const [field, { record: name, array }] of Object.entries(nested)) {
+  for (const [field, { record: name, array }] of WIRE_NESTED_RECORD_ENTRIES.get(owner) ?? []) {
     const value = record[field]
+    if (value === undefined) continue
     const at = `${path}.${field}`
-    const items: Array<[unknown, string]> = array
-      ? Array.isArray(value)
-        ? value.map((item, index) => [item, `${at}[${index}]`])
-        : []
-      : [[value, at]]
-    for (const [item, itemPath] of items) {
-      // A value that is not a record at all is §12(d)'s to refuse, with the
-      // shape it names. Saying it here as well would be two producers of one
-      // rule, and this one has no shape to report.
-      if (item === null || typeof item !== 'object' || Array.isArray(item)) continue
-      const allowed = new Set(WIRE_RECORD_FIELDS[name])
-      for (const key of Object.keys(item as Record<string, unknown>)) {
-        if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, itemPath, name)
-      }
-      refuseUnknownRecordFields(name, item as Record<string, unknown>, itemPath)
-    }
+    if (!array) refuseUnknownRecordFieldsIn(value, name, at)
+    else if (Array.isArray(value)) value.forEach((item, index) => refuseUnknownRecordFieldsIn(item, name, `${at}[${index}]`))
   }
 }
 
-function refuseUnknownFields(node: unknown, path: string): void {
-  if (Array.isArray(node)) {
-    node.forEach((item, index) => refuseUnknownFields(item, `${path}[${index}]`))
-    return
+function refuseUnknownRecordFieldsIn(item: unknown, name: string, path: string): void {
+  // A value that is not a record at all is §12(d)'s to refuse, with the
+  // shape it names. Saying it here as well would be two producers of one
+  // rule, and this one has no shape to report.
+  if (item === null || typeof item !== 'object' || Array.isArray(item)) return
+  const allowed = WIRE_RECORD_FIELD_SETS[name] ?? new Set<string>()
+  for (const key of Object.keys(item as Record<string, unknown>)) {
+    if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, path, name)
   }
-  if (node === null || typeof node !== 'object') return
-  const record = node as Record<string, unknown>
+  refuseUnknownRecordFields(name, item as Record<string, unknown>, path)
+}
+
+const NODE_FIELD_SET: ReadonlySet<string> = new Set(NODE_FIELDS)
+// The schema tables as entry lists, so the per-node checks do not rebuild them.
+const WIRE_VALUE_KIND_ENTRIES: ReadonlyMap<string, ReadonlyArray<[string, string]>> = new Map(
+  Object.entries(WIRE_VALUE_KINDS).map(([owner, kinds]) => [owner, Object.entries(kinds)]))
+const WIRE_NESTED_RECORD_ENTRIES: ReadonlyMap<string, ReadonlyArray<[string, { record: string; array: boolean }]>> = new Map(
+  Object.entries(WIRE_NESTED_RECORDS).map(([owner, fields]) => [owner, Object.entries(fields)]))
+const WIRE_FIELD_SETS: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(
+  Object.entries(WIRE_FIELDS).map(([type, fields]) => [type, new Set(fields)]))
+const WIRE_RECORD_FIELD_SETS: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(
+  Object.entries(WIRE_RECORD_FIELDS).map(([name, fields]) => [name, new Set(fields)]))
+
+/** §11 for one record: its own fields and the typeless records hanging off it. */
+function refuseUnknownFieldsAt(record: Record<string, unknown>, path: string): void {
   const type = record.type
   // A node kind the schema does not name at all is NOT this error's business:
   // the decoder turns an unusable kind away on its own terms, and reporting a
   // field on a type nobody names would send the caller after the wrong thing.
-  const known = typeof type === 'string' ? ownValue(WIRE_FIELDS, type) : undefined
+  const known = typeof type === 'string' ? ownValue(WIRE_FIELD_SETS, type) : undefined
   if (known === undefined && isLegacyDefinitionEntry(record)) {
     for (const key of Object.keys(record)) {
       if (!LEGACY_DEFINITION_ENTRY_FIELDS.has(key)) {
@@ -1233,18 +1251,52 @@ function refuseUnknownFields(node: unknown, path: string): void {
   }
   if (known !== undefined) {
     for (const key of Object.keys(record)) {
-      if (!known.includes(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
+      if (!known.has(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
     }
     // The objects that hang off a node without a `type` of their own. They are
     // closed in the schema too, and a type-keyed check cannot reach them - which
     // is how `rowGroups: {junk: -5}` decoded and was published again.
     refuseUnknownRecordFields(type as string, record, path)
   }
-  for (const [key, value] of Object.entries(record)) {
-    if (key !== 'data' && key !== 'metadata' && key !== 'props') {
-      refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+}
+
+/**
+ * §11 and §12(d) in one walk. Both cover the same fields in the same order, and
+ * an unknown field anywhere outranks a schema violation anywhere, so the first
+ * violation waits until the walk has found no unknown field.
+ */
+function refuseUnknownFieldsAndSchemaViolations(root: unknown): void {
+  let violation: { error: unknown } | undefined
+  const walk = (node: unknown, path: string): void => {
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${path}[${index}]`))
+      return
+    }
+    if (node === null || typeof node !== 'object') return
+    const record = node as Record<string, unknown>
+    refuseUnknownFieldsAt(record, path)
+    if (violation === undefined) {
+      try {
+        refuseSchemaViolationsAt(record, path)
+      } catch (error) {
+        violation = { error }
+      }
+    }
+    for (const key of Object.keys(record)) {
+      const value = record[key]
+      const at = path === '' ? key : `${path}.${key}`
+      if (violation === undefined) {
+        try {
+          refuseSchemaPositionAt(record.type, key, value, at)
+        } catch (error) {
+          violation = { error }
+        }
+      }
+      if (key !== 'data' && key !== 'metadata' && key !== 'props') walk(value, at)
     }
   }
+  walk(root, '')
+  if (violation !== undefined) throw violation.error
 }
 
 /**
@@ -1548,11 +1600,10 @@ export function fromAstJson(input: unknown, payloadByteLength?: number, knownExt
   // AFTER the depth bound, so a payload built to blow the stack is turned away
   // by the cheap check rather than by a full walk of itself (PART 12 §9).
   refuseUnknownNodeTypes(json, '', true)
-  refuseUnknownFields(json, '')
-  // PART 12 §12(d), AFTER the two narrower refusals so a payload with an
+  // PART 12 §12(d) comes AFTER the two narrower refusals so a payload with an
   // unknown type or an unnamed property is still reported as that, which is
   // the more specific answer and the one those clauses name.
-  refuseSchemaViolations(json, '')
+  refuseUnknownFieldsAndSchemaViolations(json)
   refuseMathNumberConstraints(json)
 
   // PART 12 §21, and BEFORE every read of a VALUE below - before a label
