@@ -2303,6 +2303,19 @@ function takeDegradedQuoteLazyLine(cursor: Cursor, first: SourceLine,
   return cursor.take()
 }
 
+function quoteChildrenAtCursor(cursor: Cursor, inline: CursorInline,
+  definitionNodes: BlockNode[], depth: number, body: SourceLine[],
+  directParagraph: boolean): BlockNode[] {
+  if (body.length > 0 && directParagraph) {
+    const last = body.at(-1)!
+    return [{ type: 'paragraph',
+      children: inline.inlines(body.map((line) => ({ line, column: 1, text: line.text }))),
+      pos: position(body[0]!, last, 1, last.text.replace(/[ \t]+$/, '').length + 1) }]
+  }
+  return parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
+    cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
@@ -2324,11 +2337,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   const body: SourceLine[] = []
   let last = first
   let plainParagraph = true
+  let directParagraph = true
   while (cursor.peek()) {
     const line = cursor.peek()!
     const degraded = takeDegradedQuoteLazyLine(cursor, first, body)
     if (degraded) {
       body.push(degraded)
+      directParagraph = false
       last = degraded
       continue
     }
@@ -2338,7 +2353,9 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const text = line.text.slice(prefix)
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      plainParagraph &&= nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) || /^: +/.test(text) ||
+      const plain = plainQuoteText(text)
+      directParagraph &&= plain
+      plainParagraph &&= plain || nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) || /^: +/.test(text) ||
         /^:: +[^ ]/.test(text)
       last = line
       continue
@@ -2352,6 +2369,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const prefix = /^ +/.exec(owned.text)![0].length
       body.push({ text: owned.text.slice(prefix), start: owned.start + prefix,
         number: owned.number, baseColumn: (owned.baseColumn ?? 1) + prefix, lazyText: true })
+      directParagraph = false
       last = owned
       continue
     }
@@ -2364,6 +2382,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       body.push(attached)
       last = attached
       plainParagraph = false
+      directParagraph = false
       continue
     }
     const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')
@@ -2379,6 +2398,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
             mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
         const lazyLine = cursor.take()
         body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)
+        directParagraph = false
         last = line
         continue
       }
@@ -2398,10 +2418,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   if (mayContinueQuoteLazily(cursor.peek()?.text, body.at(-1)?.text) && !wrappedAttributeTail || inlineCode) {
     if (!inlineCode) throw new UnsupportedCursorSyntax('lazy quote continuation')
     body.push(...inlineCode)
+    directParagraph = false
     last = inlineCode.at(-1)!
   }
-  const children = parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
-    cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
+  const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body, directParagraph)
   const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
     rootLinkDef(body[0]!.text) !== null
   const placedEndLine = children.at(-1)?.pos?.endLine
