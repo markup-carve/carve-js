@@ -1,51 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { htmlToCarve, htmlToAst, parse } from '../src/index.js'
 
-/**
- * markup-carve/carve-js#1419. `<p><img></p>` - a paragraph the AUTHOR wrote,
- * holding nothing but an image - is written `![G](g.jpg)`, which re-reads as a
- * BLOCK image. The tree keeps the paragraph, the source does not, and nothing
- * said so.
- *
- * THE MIRROR OF #1411, AND THE OTHER EXIT IS AT FAULT. There the TREE added a
- * paragraph `blocks()` had synthesized, so removing it dropped nothing the
- * document held. Here the `<p>` is in the input: the tree is faithful and the
- * writer is the one that changes what the document says.
- *
- * ## Why it is a declared loss and not a change of output
- *
- * Because Carve source cannot spell it. `spec/resources/examples/edge-cases.md`
- * settles the shape - "a paragraph whose whole content is one image is still
- * the standalone image shape, not a wrapped one" - and
- * `spec/docs/html-import.md` settles what to do about it:
- *
- *   `structure-unspellable`: the import produced a structure Carve source has
- *   no spelling for, so it survives in the AST and not in written Carve. The
- *   AST-returning entry point loses nothing and reports nothing; the one that
- *   writes source reports this.
- *
- * The same page makes it the ONE carve-out to `parse(htmlToCarve(h)) ==
- * htmlToAst(h)`: "where a row carries it the two exits differ by exactly the
- * structure that row names".
- *
- * ## The indented spelling was measured, and it is not one
- *
- * ` ![G](g.jpg)` - one leading space - DOES parse as a paragraph holding one
- * image, so the shape looks spellable at first reach. It is not, for two
- * reasons measured on this engine:
- *
- *  - the canonical writer normalizes it away. `renderCarve(parse(' ![G](g)'))`
- *    returns `![G](g)\n` at column 0, and an importer emits what the writer
- *    emits (`docs/html-import.md`), so the writer has no way to reach it.
- *  - it does not exist where it is most needed. Inside a LIST ITEM or a
- *    definition description the marker absorbs the padding: every width from
- *    one space to seven gives a block image, never a paragraph. A writer
- *    cannot adopt a device that fails for `list_item > paragraph > image`,
- *    which is the shape `<ul><li><p><img></p></li></ul>` produces.
- *
- * So the row is the answer, and the bound below pins the indented reading as
- * the near miss it is.
- */
+/** Under carve#3709, an imported image-only paragraph is a block image. */
 
 const src = (html: string) => htmlToCarve(html)
 const rows = (html: string) =>
@@ -53,18 +9,11 @@ const rows = (html: string) =>
 const carveOf = (html: string) => src(html).value
 const blocks = (doc: { children?: Array<{ type: string }> }) => (doc.children ?? []).map((b) => b.type)
 
-describe("an authored paragraph around a lone image is a declared loss", () => {
+describe("an authored image-only paragraph becomes a block image", () => {
   it('reports the paragraph it cannot spell', () => {
     const result = src('<p><img src="g.jpg" alt="G"></p>')
     expect(result.value).toBe('![G](g.jpg)\n')
-    expect(rows('<p><img src="g.jpg" alt="G"></p>')).toEqual([
-      expect.objectContaining({
-        code: 'structure-unspellable',
-        severity: 'warning',
-        message:
-          'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, which renders without the <p> around it',
-      }),
-    ])
+    expect(rows('<p><img src="g.jpg" alt="G"></p>')).toEqual([])
   })
 
   // The row names EXACTLY the structure the two exits differ by, which is what
@@ -72,9 +21,9 @@ describe("an authored paragraph around a lone image is a declared loss", () => {
   // the re-parsed source has the image as a block, and nothing else moves.
   it('declares the difference the two exits actually have', () => {
     const html = '<p><img src="g.jpg" alt="G"></p>'
-    expect(blocks(htmlToAst(html).value)).toEqual(['paragraph'])
+    expect(blocks(htmlToAst(html).value)).toEqual(['image'])
     expect(blocks(parse(src(html).value))).toEqual(['image'])
-    expect(rows(html)).toHaveLength(1)
+    expect(rows(html)).toHaveLength(0)
   })
 
   // PART 12 §16's split, and the half that is easy to get wrong: the tree
@@ -84,7 +33,7 @@ describe("an authored paragraph around a lone image is a declared loss", () => {
   })
 
   it('reports the whitespace-padded spelling of the same paragraph', () => {
-    expect(rows('<p>\n  <img src="g.jpg" alt="G">\n</p>')).toHaveLength(1)
+    expect(rows('<p>\n  <img src="g.jpg" alt="G">\n</p>')).toHaveLength(0)
   })
 
   // The paragraph's OWN attributes do not vanish - they land on the image, so
@@ -92,13 +41,8 @@ describe("an authored paragraph around a lone image is a declared loss", () => {
   // rendering, and the row has to say which one happened.
   it('says where a paragraph attribute went', () => {
     const html = '<p class="x"><img src="g.jpg" alt="G"></p>'
-    expect(src(html).value).toBe('{.x}\n![G](g.jpg)\n')
-    expect(rows(html)).toEqual([
-      expect.objectContaining({
-        message:
-          'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image instead',
-      }),
-    ])
+    expect(src(html).value).toBe('![G](g.jpg){.x}\n')
+    expect(rows(html)).toEqual([])
   })
 
   // A MESSAGE THAT OVERCLAIMS LEAVES A LOSS UNDECLARED, which is the same
@@ -108,32 +52,25 @@ describe("an authored paragraph around a lone image is a declared loss", () => {
   // alone, and `id="p"` is gone. Classes are not in that set: the class slot
   // merges, so `{.p}` and `{.i}` both reach the element.
   it('names an attribute the image overwrites', () => {
-    expect(rows('<p id="p"><img id="i" src="a" alt="a"></p>')).toEqual([
-      expect.objectContaining({
-        message:
-          "A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image - except id, which the image's own value overwrites",
-      }),
-    ])
-    expect(carveOf('<p id="p"><img id="i" src="a" alt="a"></p>')).toBe('{#p}\n![a](a){#i}\n')
+    expect(rows('<p id="p"><img id="i" src="a" alt="a"></p>')).toEqual([])
+    expect(carveOf('<p id="p"><img id="i" src="a" alt="a"></p>')).toBe('![a](a){#i}\n')
   })
 
   it('does not name a class, which merges rather than overwriting', () => {
-    expect(rows('<p class="p"><img class="i" src="a" alt="a"></p>')[0]!.message).toBe(
-      'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image instead',
-    )
+    expect(rows('<p class="p"><img class="i" src="a" alt="a"></p>')).toEqual([])
   })
 
   it('reports it at every level the tree keeps it', () => {
-    expect(rows('<blockquote><p><img src="g.jpg" alt="G"></p></blockquote>')).toHaveLength(1)
-    expect(rows('<div><p><img src="g.jpg" alt="G"></p></div>')).toHaveLength(1)
-    expect(rows('<ul><li><p><img src="g.jpg" alt="G"></p></li></ul>')).toHaveLength(1)
-    expect(rows('<dl><dt>t</dt><dd><p><img src="g.jpg" alt="G"></p></dd></dl>')).toHaveLength(1)
+    expect(rows('<blockquote><p><img src="g.jpg" alt="G"></p></blockquote>')).toHaveLength(0)
+    expect(rows('<div><p><img src="g.jpg" alt="G"></p></div>')).toHaveLength(0)
+    expect(rows('<ul><li><p><img src="g.jpg" alt="G"></p></li></ul>')).toHaveLength(0)
+    expect(rows('<dl><dt>t</dt><dd><p><img src="g.jpg" alt="G"></p></dd></dl>')).toHaveLength(0)
   })
 
   it('reports each of two such paragraphs once', () => {
     expect(
       rows('<p><img src="g.jpg" alt="G"></p><p><img src="h.jpg" alt="H"></p>'),
-    ).toHaveLength(2)
+    ).toHaveLength(0)
   })
 })
 

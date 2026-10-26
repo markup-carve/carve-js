@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { expect, test } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { migrateDjot, carveToHtml } from '../src/index.js'
@@ -19,7 +20,7 @@ function shape(html: string): unknown[] {
 test('multiline image chains preserve Native output and loss guards', () => {
   for (const row of controls) {
     const result = migrateDjot(row.source)
-    expect(shape(carveToHtml(result.value)), row.source).toEqual(shape(row.html))
+    expect(shape(carveToHtml(result.value)), row.source).toEqual(shape(imageParagraphsAsImages(row.html)))
     expect(result.report.diagnostics.filter(d => d.code === 'structure-unspellable').map(d => d.message), row.source).toEqual(row.losses)
   }
 }, 30000)

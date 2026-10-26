@@ -1179,14 +1179,21 @@ function captionFirstLineHasContent(children: InlineNode[]): boolean {
  * losing the figure). Emitting the promoted figure yields a portable
  * unescaped `^ …` line, matching carve-php.
  */
+/** The only rendered child of an image-only paragraph. */
+function loneParagraphImage(b: BlockNode): Image | undefined {
+  if (b.type !== 'paragraph') return undefined
+  let image: Image | undefined
+  for (const child of b.children) {
+    if (child.type === 'comment') continue
+    if (image || child.type !== 'image') return undefined
+    image = child
+  }
+  return image && !isUnresolvedReference(image) ? image : undefined
+}
+
 /** Whether a paragraph contains one resolved image. */
 function isLoneImageParagraph(b: BlockNode): b is Paragraph {
-  return (
-    b.type === 'paragraph' &&
-    b.children.length === 1 &&
-    b.children[0]!.type === 'image' &&
-    !isUnresolvedReference(b.children[0] as Image)
-  )
+  return loneParagraphImage(b) !== undefined
 }
 
 /**
@@ -1252,7 +1259,7 @@ function collapsedBlocks(blocks: BlockNode[]): BlockNode[] {
       const node = frame.blocks[i]!
       let replacement = node
       if (isLoneImageParagraph(node)) {
-        const image = node.children[0] as Image
+        const image = loneParagraphImage(node)!
         replacement = (node.attrs ? { ...image, attrs: mergeAttrs(node.attrs, image.attrs ?? {}) } : image) as unknown as BlockNode
       } else {
         let hasChanges = false
@@ -1292,6 +1299,7 @@ function forEachCollapsibleBlockList(b: BlockNode, visit: (children: BlockNode[]
 export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
+    const loneImage = loneParagraphImage(b)
     // The sole-image -> block-image promotion is skipped in `figuresOnly` mode
     // (the formatter): a paragraph and a bare block image serialize identically,
     // so the only effect there would be dropping a leading block-attribute line
@@ -1299,11 +1307,13 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     // formatter keeps it a paragraph so those attrs survive.
     if (
       !figuresOnly &&
-      isLoneImageParagraph(b) &&
-      ((b.children[0] as Image).pos === undefined ||
-        (b.children[0] as Image).pos!.startColumn === 1)
+      b.type === 'paragraph' &&
+      loneImage !== undefined &&
+      (loneImage.pos === undefined ||
+        loneImage.pos.startColumn === 1 ||
+        b.children.some(child => child.type === 'comment'))
     ) {
-      const img = b.children[0] as Image
+      const img = loneImage
       // A leading block-attribute line (`{#id}`) landed on the paragraph; carry
       // it onto the promoted block image (its own inline attrs win on conflict,
       // §15), matching a direct block image `{#id}\n![…](…)`. Otherwise the id
