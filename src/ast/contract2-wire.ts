@@ -59,7 +59,7 @@ const referenceFields: Record<string, [string, string]> = {
   citation_definition: ['key', 'citation'], link: ['ref', 'link'], image: ['ref', 'link'],
 }
 const taskStatus: Record<string, string> = {
-  ' ': 'todo', _: 'todo', x: 'done', X: 'done', '-': 'cancelled',
+  ' ': 'todo', _: 'todo', x: 'done', '-': 'cancelled',
   '/': 'in-progress', '!': 'blocked', '>': 'partial', '?': 'other',
 }
 
@@ -313,7 +313,7 @@ export function contract2WireToRuntime(input: Item): Item {
       case 'list_item': {
         const task = node.task as Item | undefined
         if (task) {
-          node.checked = task.mark === 'x' || task.mark === 'X'
+          node.checked = task.mark === 'x'
           if (!node.checked && task.mark !== ' ') node.taskState = task.mark
         }
         delete node.task
