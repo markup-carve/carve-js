@@ -303,6 +303,7 @@ export function lastEmittedGlyph(previous: InlineNode): string {
   // brace exactly as an unescaped `{` would (corpus 163).
   if (previous && previous.type === 'non_breaking_space') return '\u00a0'
   if (previous && previous.type === 'escaped_text') return previous.value
+  if (previous.type === 'symbol') return ':'
   if (previous.type === 'text') return previous.value.slice(-1)
   // A line break is whitespace to quote flanking, so a quote starting a line opens (carve#2822).
   if (previous && (previous.type === 'soft_break' || previous.type === 'hard_break' || previous.type === 'cell_wrap')) return '\n'
