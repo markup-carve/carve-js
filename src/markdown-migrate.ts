@@ -6309,6 +6309,9 @@ function writeListInlineRun(
     }
   }
   const written = restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect, terminal)
+  if (!terminal && / {2,}$/.test(run.at(-1)?.text ?? '') && written.length > 0) {
+    written[written.length - 1] += '\\'
+  }
   return { lines: canonicalItemHeldTildeFence(written), end }
 }
 
