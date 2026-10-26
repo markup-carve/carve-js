@@ -348,6 +348,10 @@ function plainQuoteText(line: string): boolean {
   return /^(?:[\p{L}\p{N}]|\\#)/u.test(line) && !line.includes('\t') && !isBlockStart(line)
 }
 
+function plainPlusText(line: string): boolean {
+  return line.startsWith('+ ') && line.length > 2 && !isBlockStart(line)
+}
+
 function nestedQuoteParagraphText(text: string): boolean {
   let inner = text
   while (inner.startsWith('>')) inner = inner.slice(inner[1] === ' ' ? 2 : 1)
@@ -1490,7 +1494,8 @@ function mayFoldBelowColumnParagraph(cursor: Cursor,
   if (!frame.contentColumn || frame.fenceMarker || !last ||
       next.text.startsWith(' '.repeat(frame.contentColumn - 1)) ||
       last.number !== next.number - 1 || isBlankLine(next.text) ||
-      !plainQuoteText(last.text) || isBlockStart(next.text)) return false
+      !(plainQuoteText(last.text) || plainPlusText(last.text) &&
+        frame.body[0]?.text[0] !== '|') || isBlockStart(next.text)) return false
   const raised = next.text.trimStart()
   if (raised.startsWith('>') || raised.startsWith('`') || raised.startsWith('~') ||
       raised.startsWith('{') || raised.startsWith('::')) return false

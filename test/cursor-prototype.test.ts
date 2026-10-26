@@ -1925,4 +1925,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- + a |\ntail\n', '- a\n  + b |\ntail\n',
+    '- | a |\n  + b |\ntail\n', '- |= a |\n  + b |\ntail\n',
+    '- | a |\n  + |\ntail\n'])
+  ('keeps plus text or a table continuation with its physical owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
