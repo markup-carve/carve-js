@@ -252,7 +252,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     const markerTail = markerLine.slice(leadingWhitespace(markerLine), markerLine.length - markerContentLength)
     if (markerTail.includes('\t') && lineOpensBlock(content)) content = LAZY_FRAME + content
-    const leadOrigin = terminatorFree && line.endsWith(content)
+    const leadOrigin = terminatorFree && !content.startsWith(LAZY_FRAME)
       ? { text: content, parentIndex: startLineIndex, prefix: line.length - content.length } : undefined
     return { startLineIndex, line, terminatorFree, attr, markerLine, content, markerContentLength, checked, taskState, leadOrigin }
   }
