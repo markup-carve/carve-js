@@ -382,6 +382,39 @@ function hasLaterFenceCloser(cursor: Cursor, marker: string): boolean {
   return runs[cursor.at + 1]! >= marker.length
 }
 
+function hasLaterQuotedFenceCloser(cursor: Cursor, marker: string): boolean {
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    const text = cursor.peek(offset)!.text
+    if (!RE_BLOCKQUOTE.test(text)) break
+    const inner = text.slice(text.startsWith('> ') ? 2 : 1)
+    if (closesFence(inner, marker)) return true
+  }
+  return false
+}
+
+function quotedFenceStaysInParagraph(cursor: Cursor, body: SourceLine[],
+  directParagraph: boolean, plainParagraph: boolean, text: string): boolean {
+  if (body.length !== 1 || !directParagraph || !plainParagraph ||
+      cursor.owner.kind !== 'root') return false
+  const marker = fenceOpen(text)?.marker
+  return marker !== undefined && !hasLaterQuotedFenceCloser(cursor, marker)
+}
+
+function takeUnmarkedQuoteParagraphLine(cursor: Cursor, body: SourceLine[],
+  unclosedFenceParagraph: boolean): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!unclosedFenceParagraph || !line || !plainQuoteText(line.text)) return undefined
+  body.push(cursor.take())
+  return line
+}
+
+function wrappedQuoteAttributeTail(body: SourceLine[]): boolean {
+  const lastBodyText = body.at(-1)?.text
+  return body.length >= 2 && lastBodyText?.charCodeAt(lastBodyText.length - 1) === 125 &&
+    lastBodyText.trim() === '}' && body.at(-2)!.text.trimStart().startsWith('{') &&
+    !!probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), lastBodyText.trimStart()]))
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -2471,6 +2504,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let last = first
   let plainParagraph = true
   let directParagraph = true
+  let unclosedFenceParagraph = false
   let listOwner: QuoteListOwner | undefined
   while (cursor.peek()) {
     const line = cursor.peek()!
@@ -2482,17 +2516,25 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       continue
     }
     if (!line.lazyText && line.text[0] === '>' && RE_BLOCKQUOTE.test(line.text)) {
-      cursor.take()
       const prefix = line.text.startsWith('> ') ? 2 : 1
       const text = line.text.slice(prefix)
+      const literalFence = quotedFenceStaysInParagraph(cursor, body,
+        directParagraph, plainParagraph, text)
+      if (literalFence) unclosedFenceParagraph = true
+      cursor.take()
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      const plain = plainQuoteText(text)
+      const plain: boolean = literalFence || plainQuoteText(text)
       const observed = observeQuoteListOwner(listOwner, cursor.owner, text, body.length === 1)
       listOwner = observed.owner
       directParagraph &&= plain
       plainParagraph = observed.resumed || plainParagraph && quotedParagraphText(text, plain)
       last = line
+      continue
+    }
+    const unmarked = takeUnmarkedQuoteParagraphLine(cursor, body, unclosedFenceParagraph)
+    if (unmarked) {
+      last = unmarked
       continue
     }
     if (openColonRun(body, false) !== undefined && /^ +>/.test(line.text)) {
@@ -2543,11 +2585,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   if (body.at(-1)?.text.trim() === '+' && cursor.peek()?.text.startsWith('|')) {
     throw new UnsupportedCursorSyntax('quote continuation into table')
   }
-  const lastBodyText = body.at(-1)?.text
-  const wrappedAttributeTail = body.length >= 2 && lastBodyText?.charCodeAt(lastBodyText.length - 1) === 125 &&
-    lastBodyText.trim() === '}' &&
-    body.at(-2)!.text.trimStart().startsWith('{') &&
-    probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), body.at(-1)!.text.trimStart()]))
+  const wrappedAttributeTail = wrappedQuoteAttributeTail(body)
   const inlineCode = !wrappedAttributeTail && cursor.peek()?.text[0] === ' ' &&
     cursor.peek()!.text.includes('`') ? takeQuotedInlineCodeContinuation(cursor, body) : undefined
   if (quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,

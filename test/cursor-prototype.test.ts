@@ -107,6 +107,14 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> q\n> ```\ntail\n',
+    '> text\n> ```\nlazy\n',
+    '> q\n> ```\n> code\n> ```\n',
+  ])('resolves quote fence ownership before parsing its follower: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
     '- item with trailing spaces  \n',
