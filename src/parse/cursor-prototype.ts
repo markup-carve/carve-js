@@ -1776,9 +1776,15 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const stack = [newFrame(first, firstMarker)]
   const blankContinuationFrame = (next: SourceLine,
-    marker: ReturnType<typeof listMarker>, top: ListCursorFrame): ListCursorFrame | undefined => {
+    marker: ReturnType<typeof listMarker>, top: ListCursorFrame,
+    blankCount: number): ListCursorFrame | undefined => {
     if (marker) return undefined
     if (stack.length > 1 && top.item && next.text === `${' '.repeat(top.indent)}+`) return top
+    const follower = cursor.peek(blankCount + 1)
+    const afterFollower = cursor.peek(blankCount + 2)
+    if (depth === 0 && stack.length === 1 && top.indent === 0 && top.item && next.text === '+' &&
+        plainQuoteText(follower?.text ?? '') &&
+        (!afterFollower || isBlankLine(afterFollower.text))) return top
     return deepestReachableFrame(stack, next.text)
   }
   const blankLooseFrame = (continued: ListCursorFrame, top: ListCursorFrame,
@@ -2094,7 +2100,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const target = nextMarker && stack.find((frame) => frame.indent === nextMarker.indent)
       const sibling = nextMarker && target && sameListKind(nextMarker, target)
       const nested = nextMarker && nextMarker.indent > top.indent
-      const continuationFrame = blankContinuationFrame(next, nextMarker, top)
+      const continuationFrame = blankContinuationFrame(next, nextMarker, top, blanks)
       rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
       for (let i = 0; i < blanks; i++) cursor.take()
