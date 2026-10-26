@@ -1479,7 +1479,7 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['::: figure\n::: figure\nNested\n:::\n:::\n',
-    '> ::: references\n> :::\n',
+    '> :::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
     '::: "Careful"\nBody\n:::\n',
     '::: note\n```text\n::: tip\n```\nbody\n:::\nafter\n',
@@ -1490,6 +1490,14 @@ describe('experimental block cursor', () => {
 
   it('matches a list-table container and its rendered HTML', () => {
     const source = '::: list-table\n- item\n:::\n'
+    const expected = parse(source)
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(resolve(actual))).toBe(renderHtml(resolve(expected)))
+  })
+
+  it('matches a three-colon references directive inside a quote', () => {
+    const source = 'See [@x].\n\n> ::: references\n> :::\n\n[@x]: Source\n'
     const expected = parse(source)
     const actual = parseCursorPrototype(source)
     expect(actual).toStrictEqual(expected)
