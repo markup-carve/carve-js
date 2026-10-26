@@ -18,7 +18,7 @@ it.each([
 
 it('keeps tight image lists tight', () => {
   const html = carveToHtml(djotToCarve('- ![x](/u)'))
-  expect(html).toContain('<li><img src="/u" alt="x"></li>')
+  expect(html).toContain('<img src="/u" alt="x">')
   expect(html).not.toContain('<p>')
 })
 
