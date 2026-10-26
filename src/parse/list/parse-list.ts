@@ -3094,7 +3094,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               firstBlockIdx,
             ),
             0,
-            carry,
+            { attrs: carry.attrs, last: true },
           ),
         )
       }
