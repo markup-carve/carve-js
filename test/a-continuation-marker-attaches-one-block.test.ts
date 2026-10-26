@@ -141,3 +141,52 @@ describe('a continuation marker attaches one block', () => {
     )
   })
 })
+
+describe('an attribute line between the marker and a fence', () => {
+  // The attribute run belongs to the fence, so the fence body stays opaque:
+  // a body line shaped like the host's marker is code, as it is with no
+  // attribute line (carve#1238).
+  it('keeps a list-marker body line inside the fence', () => {
+    expect(carveToHtml('- a\n+\n{.x}\n```\n- x\ncode\n```\n')).toBe(
+      '<ul>\n  <li>a\n    <pre class="x"><code>- x\ncode\n</code></pre>\n  </li>\n</ul>',
+    )
+  })
+
+  it('a wrapped attribute run does the same', () => {
+    expect(carveToHtml('- a\n+\n{.x\n .z}\n```\n- x\n```\n')).toBe(
+      '<ul>\n  <li>a\n    <pre class="x z"><code>- x\n</code></pre>\n  </li>\n</ul>',
+    )
+  })
+
+  it('a definition body keeps `: x` and `:: x` inside the fence', () => {
+    expect(carveToHtml(':: t\n: d\n+\n{.x}\n```\n: x\n:: y\n```\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre class="x"><code>: x\n:: y\n</code></pre>\n  </dd>\n</dl>',
+    )
+  })
+
+  const hosts: Record<string, string[]> = {
+    bullet: ['- a'], ordered: ['1. a'], auto: ['. a'], task: ['- [ ] a'], nested: ['- a', '  - b'],
+  }
+  const attrs: Record<string, string[]> = { class: ['{.x}'], wrapped: ['{.x', ' .x}'] }
+  const cases: [string, string[], string, string[], string][] = []
+  for (const [host, opener] of Object.entries(hosts)) {
+    for (const body of ['- x', '* x', '1. x', '. x']) {
+      for (const [form, attr] of Object.entries(attrs)) {
+        for (const prefix of ['', '> ']) cases.push([host, opener, body, attr, prefix === '' ? form : `${form}, quoted`])
+      }
+    }
+  }
+  cases.push(['definition', [':: t', ': d'], ': x', ['{.x}'], 'class'])
+  cases.push(['definition', [':: t', ': d'], ':: x', ['{.x}'], 'class'])
+  cases.push(['unclosed bullet', ['- a'], '- x', ['{.x}'], 'class'])
+
+  it.each(cases)('%s host, %s body line: %s reads like the bare fence', (host, opener, body, attr, form) => {
+    const prefix = form.endsWith('quoted') ? '> ' : ''
+    const closer = host.startsWith('unclosed') ? [] : ['```']
+    const doc = (marker: string[]) => [...opener, ...marker, '```', body, 'code', ...closer]
+      .map(line => (prefix + line).trimEnd()).join('\n') + '\n'
+    const bare = carveToHtml(doc(['+']))
+    expect(bare).toContain(body.replace(/^>/, '&gt;'))
+    expect(carveToHtml(doc(['+', ...attr]))).toBe(bare.replace('<pre>', '<pre class="x">'))
+  })
+})
