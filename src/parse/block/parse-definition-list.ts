@@ -832,6 +832,19 @@ export function createDefinitionListParser(
               !lazyState.lazyFoldable)) return 'stop'
         return undefined
       }
+      const belowBandInterrupts = (ln: string, below: string, atDocumentColumn: boolean, retained: boolean): boolean => {
+        const sourceColumn = indentColumns(ln)
+        if (sourceColumn > 0 && sourceColumn < contentCol && opensCodeFence(below)) {
+          const marker = RE_FENCE.exec(below)?.[2] ?? RE_RAW_FENCE.exec(below)?.[1]
+          if (marker !== undefined) {
+            const memos = defFenceMemos ??= new Map()
+            let memo = memos.get(sourceColumn)
+            if (memo === undefined) memos.set(sourceColumn, memo = new Map())
+            return itemFenceHasCloser(lexer, marker, lexer.pos, sourceColumn, memo, bodyEndsAt)
+          }
+        }
+        return startsInterruptingBlock(lexer, below, !retained, false, atDocumentColumn)
+      }
       const foldsLazyLine = (
         ln: string,
         below: string,
@@ -851,7 +864,7 @@ export function createDefinitionListParser(
           (indentColumns(ln, contentCol) < contentCol &&
             (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
             (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
-            !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn)))
+            !belowBandInterrupts(ln, below, atDocumentColumn, retainedBelowComment)))
         && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
       )
       const foldLazyLine = (ln: string, below: string, atDocumentColumn: boolean): 'continue' => {
