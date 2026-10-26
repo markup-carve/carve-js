@@ -339,7 +339,8 @@ function mayContinueQuoteLazily(follower: string | undefined, innerLast: string 
   while (finalBlock.startsWith('>')) {
     finalBlock = finalBlock.slice(finalBlock[1] === ' ' ? 2 : 1).trimStart()
   }
-  if (finalBlock === '' || (isBlockStart(finalBlock) && !finalBlock.startsWith(':: '))) return false
+  if (finalBlock === '' || (isBlockStart(finalBlock) && !finalBlock.startsWith(':: ') &&
+      !/^ (?:\[|\{)/.test(innerLast))) return false
   return !interruptsParagraph(follower, ROOT_OWNER)
 }
 
@@ -1496,6 +1497,17 @@ function mayFoldBelowColumnParagraph(cursor: Cursor,
   return deepestReachableFrame(stack, next.text, true) === undefined
 }
 
+function ownsBelowColumnQuotedLiteral(body: SourceLine[], follower: string): boolean {
+  const first = body[0]?.text
+  const last = body.at(-1)?.text
+  return first?.startsWith('>') === true && nestedQuoteParagraphText(first) &&
+    last !== undefined && /^>  (?:\[|\{)/.test(last) && plainQuoteText(follower)
+}
+
+function markBelowColumnQuotedLiteral(body: SourceLine[], line: SourceLine): SourceLine {
+  return ownsBelowColumnQuotedLiteral(body, line.text) ? { ...line, lazyText: true } : line
+}
+
 function mayFoldRootListParagraph(cursor: Cursor,
   frame: { indent: number; contentColumn?: number;
     fenceMarker: string | undefined; body: SourceLine[];
@@ -1503,12 +1515,14 @@ function mayFoldRootListParagraph(cursor: Cursor,
   stackLength: number, depth: number): boolean {
   const next = cursor.peek()!
   const first = frame.body[0]
+  const last = frame.body.at(-1)
   if (!(depth === 0 || depth === 1 &&
       (cursor.owner.kind === 'list' || cursor.owner.kind === 'definition' ||
         cursor.owner.kind === 'quote')) ||
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
-      frame.body.at(-1)?.number !== next.number - 1 ||
-      !(frame.lazyRootParagraph || frame.body.length === 1 &&
+      last?.number !== next.number - 1 ||
+      !(frame.lazyRootParagraph || ownsBelowColumnQuotedLiteral(frame.body, next.text) ||
+        frame.body.length === 1 &&
         first !== undefined &&
         (plainQuoteText(first.text) || listFirstBlockParagraphText(first.text)))) return false
   const follower = next.text
@@ -2162,7 +2176,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     if (mayFoldListParagraph(cursor, top, stack, depth)) {
       cursor.take()
-      appendBody(top, line, 0, true)
+      appendBody(top, markBelowColumnQuotedLiteral(top.body, line), 0, true)
       updateListFrameEnds(stack, line, listSpan)
       continue
     }
@@ -2297,7 +2311,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       const text = line.text.slice(prefix)
       body.push({ text, start: line.start + prefix,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
-      plainParagraph &&= nestedQuoteParagraphText(text) || /^: +/.test(text) ||
+      plainParagraph &&= nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) || /^: +/.test(text) ||
         /^:: +[^ ]/.test(text)
       last = line
       continue

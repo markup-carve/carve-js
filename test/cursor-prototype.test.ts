@@ -1907,4 +1907,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- > para\n  >  [r]: /u\ntail\n\n[r][]\n',
+    '- > para\n  >  [^f]: n\ntail\n',
+    '- > para\n  >  {#x}\ntail\n',
+    '- > - para\n  >   {#x}\ntail\n',
+    '> :: t\n> : d\n>   {#x}\ntail\n'])
+  ('keeps a below-column quoted literal with its open paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
