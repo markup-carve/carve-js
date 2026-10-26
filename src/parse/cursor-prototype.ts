@@ -1547,7 +1547,8 @@ function mayFoldMarkerLineNestedFollower(cursor: Cursor,
   const marker = listMarker(first.text)
   const follower = cursor.peek()!
   if (first.number !== follower.number - 1) return false
-  if (first.text === '> +' && RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1)) return true
+  if (first.text === '> +' && (RE_BLOCKQUOTE.test(follower.text) ||
+      RE_HEADING.test(follower.text)) && !cursor.peek(1)) return true
   return marker !== undefined &&
     (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
       (marker.content === '+' || /^\[[ xX\-_>/!?]\] \+$/.test(marker.content)) &&
@@ -2282,7 +2283,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   if (first.text === '> +' && (depth === 0 || markerLineNested)) {
     const follower = cursor.peek(1)
     const after = cursor.peek(2)
-    if (follower && (plainQuoteText(follower.text) ||
+    if (follower && (plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
         markerLineNested && RE_BLOCKQUOTE.test(follower.text)) &&
         (!after || isBlankLine(after.text))) {
       cursor.take()
