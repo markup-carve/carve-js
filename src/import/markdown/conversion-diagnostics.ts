@@ -42,10 +42,17 @@ export function renderCarveWithConversionReport(
     if (diagnostics.length < maxDiagnostics) diagnostics.push(entry)
   }
   const preservedHeaderCells = new WeakSet<object>()
-  const stack: Array<{ value: unknown; inlineOnly: boolean; listDepth: number; hosted: boolean }> = [{ value: ast, inlineOnly: false, listDepth: 0, hosted: false }]
+  const stack: Array<{ value: unknown; inlineOnly: boolean; directCellChildren: boolean; listDepth: number; hosted: boolean }> = [{ value: ast, inlineOnly: false, directCellChildren: false, listDepth: 0, hosted: false }]
   while (stack.length) {
-    const { value, inlineOnly, listDepth, hosted } = stack.pop()!
-    if (Array.isArray(value)) { for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], inlineOnly, listDepth, hosted }); continue }
+    const { value, inlineOnly, directCellChildren, listDepth, hosted } = stack.pop()!
+    if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i--) {
+        const child: unknown = value[i]
+        const terminal = directCellChildren && i === value.length - 1 && child !== null && typeof child === 'object' && (child as { type?: unknown }).type === 'hard_break'
+        stack.push({ value: child, inlineOnly: inlineOnly && !terminal, directCellChildren: false, listDepth, hosted })
+      }
+      continue
+    }
     if (!value || typeof value !== 'object') continue
     const node = value as Record<string, unknown>
     const type = node.type
@@ -108,7 +115,7 @@ export function renderCarveWithConversionReport(
     if (type === 'math' && node.number !== undefined) report('field-unspellable', 'Carve source cannot spell an equation number', 'number')
     for (const [key, child] of Object.entries(node)) {
       if (key === 'pos' || key === 'attrs' || key === 'payload' || key === 'shortCaption') continue
-      stack.push({ value: child, inlineOnly: type === 'table_cell' && node.span !== undefined ? false : inlineOnly || (type === 'table_cell' && (key === 'children' || key === 'blocks')), listDepth: listDepth + (type === 'list' ? 1 : 0), hosted: hosted || (type === 'definition_list' && key === 'items') || (type === 'document' && key === 'footnoteDefs') })
+      stack.push({ value: child, inlineOnly: type === 'table_cell' && node.span !== undefined ? false : inlineOnly || (type === 'table_cell' && (key === 'children' || key === 'blocks')), directCellChildren: type === 'table_cell' && key === 'children' && node.span === undefined, listDepth: listDepth + (type === 'list' ? 1 : 0), hosted: hosted || (type === 'definition_list' && key === 'items') || (type === 'document' && key === 'footnoteDefs') })
     }
   }
   let output: string | undefined

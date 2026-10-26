@@ -2432,7 +2432,10 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     const node = stack.pop()
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
-      flattenHardBreaks((node as TableCell).children ?? [])
+      const children = (node as TableCell).children ?? []
+      const terminal = (node as TableCell).span === undefined && children.at(-1)?.type === 'hard_break' ? children.pop() : undefined
+      flattenHardBreaks(children)
+      if (terminal) children.push(terminal)
       continue
     }
     if (Array.isArray(node)) {
@@ -5001,7 +5004,7 @@ class CarveRenderSession {
       case 'cell_wrap':
         return ctx.tableCellDepth > 0 ? `\u0002${node.row ?? 0},${node.line},${node.col ?? 0}\u0003` : ' '
       case 'hard_break':
-        return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
+        return ctx.tableCellDepth > 0 ? '\\' : ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
       case 'insert':
         return withAttrs(`{+${spelledContent(node.children)}+}`)
       case 'delete':
