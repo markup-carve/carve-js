@@ -143,6 +143,7 @@ export const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'
 // opener), so `carve fmt` could not round-trip it. Shared by the code-span,
 // math and inline-literal scanners so the three cannot drift apart.
 export function stripVerbatimPadding(content: string): string {
+  if (content.charCodeAt(0) !== 32 || content.charCodeAt(content.length - 1) !== 32) return content
   // ALL-SPACE IS MEASURED IN CARVE'S WHITESPACE, not the host language's
   // (carve#977, PART 7). A native `.trim()` called ` <VT> ` all-space, so the
   // padding stayed on and `` ` <VT> ` `` rendered `<code> <VT> </code>` where
