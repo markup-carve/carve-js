@@ -1090,6 +1090,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '![a](/u)\n^ cap one\ncontinued\n',
+    '![a][r]\n^ cap one\ncontinued\n\n[r]: /u\n',
+    '![a][r]\n^ cap one\ncontinued\n',
+  ])('keeps a caption continuation with its image: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('continues the outer list item after a blank below a nested list', () => {
     const source = '- a\n  - b\n\n  c\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

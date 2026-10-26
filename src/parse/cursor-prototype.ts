@@ -1118,12 +1118,10 @@ function takeCaption(cursor: Cursor, inline: CursorInline):
   const column = line.text.length - match[1]!.length + 1
   const parts: ContentLine[] = [{ line, column, text: match[1]! }]
   let last = line
-  if (cursor.owner.kind === 'list') {
-    while (cursor.peek() && plainQuoteText(cursor.peek()!.text) &&
-        !RE_CAPTION.test(cursor.peek()!.text) && !isBlockStart(cursor.peek()!.text)) {
-      last = cursor.take()
-      parts.push({ line: last, column: 1, text: last.text })
-    }
+  while (cursor.peek() && plainQuoteText(cursor.peek()!.text) &&
+      !RE_CAPTION.test(cursor.peek()!.text) && !isBlockStart(cursor.peek()!.text)) {
+    last = cursor.take()
+    parts.push({ line: last, column: 1, text: last.text })
   }
   return { children: inline.inlines(parts, true), line: last }
 }
