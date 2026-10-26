@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { expect, test } from 'vitest'
 import { parseFragment } from 'parse5'
 import { carveToHtml, djotToCarve } from '../src/index.js'
@@ -19,7 +20,7 @@ test('Djot DIV openers normalize compact and tab-separated classes', () => {
   for (const { source, html } of controls) {
     const converted = djotToCarve(source)
     const actual = content(parseFragment(carveToHtml(converted)))
-    const expected = content(parseFragment(html))
+    const expected = content(parseFragment(imageParagraphsAsImages(html)))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
   expect(failures).toEqual([])

@@ -382,15 +382,10 @@ describe('a caption target is the captioned block, not a paragraph around it', (
     expect(host('<figure><img src="i.png" alt="a"><img src="j.png" alt="b"><figcaption>cap</figcaption></figure>').type).toBe('paragraph')
   })
 
-  it('keeps a <p> that carries its own attributes, because the tree is the exit that still holds them', () => {
-    // The one shape where the WRAPPER is the faithful half: this tree renders
-    // back to the input exactly, and the source keeps the class on a block-
-    // attribute line above the image. Unwrapping here would delete `x` from
-    // the only exit that still records it.
-    expect(host('<figure><p class="x"><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toEqual({
-      type: 'paragraph',
-      children: [{ type: 'image', src: 'i.png', alt: 'a' }],
-      attrs: { classes: ['x'] },
+  it('moves paragraph attributes onto the figure image', () => {
+    expect(host('<figure><p class="x"><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toMatchObject({
+      type: 'figure',
+      target: { type: 'image', src: 'i.png', alt: 'a', attrs: { classes: ['x'] } },
     })
   })
 })

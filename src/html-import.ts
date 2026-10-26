@@ -38,7 +38,7 @@ import {
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading/heading-ids.js'
-import { hasOwnKey, ownValue, setOwn } from './own-property.js'
+import { hasOwnKey, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
@@ -2674,13 +2674,9 @@ class Importer {
      * device does not exist for `list_item > paragraph > image` at all.
      */
     if (children.length === 1 && children[0]!.type === 'image') {
-      this.loneImageParagraphs.push({
-        node,
-        path,
-        block: paragraph,
-        attributed: attrs !== undefined,
-        overwritten: overwrittenAttrNames(attrs, (children[0] as { attrs?: Attrs }).attrs),
-      })
+      const image = children[0]!
+      if (attrs) image.attrs = mergeAttrs(attrs, image.attrs ?? {})
+      return [image as BlockNode]
     }
     return [paragraph]
   }
@@ -5073,29 +5069,6 @@ class Importer {
   }
 
 
-}
-
-/**
- * The paragraph attribute names an image's OWN attribute block overwrites.
- *
- * The writer emits the paragraph's attributes as a block above the image and
- * the image's inline `{…}` after it, and the two are then read onto one node:
- * a name the image also sets is the one that survives. CLASSES ARE NOT IN THIS
- * SET - the class slot merges rather than replacing, so both groups reach the
- * rendered element and nothing is lost.
- *
- * A `title` on the image is not here either, and for a different reason: it
- * goes into the destination's title slot rather than the attribute block, so it
- * never collides with a `title=` the paragraph carried.
- */
-function overwrittenAttrNames(paragraph: Attrs | undefined, image: Attrs | undefined): string[] {
-  if (paragraph === undefined || image === undefined) return []
-  const lost: string[] = []
-  if (paragraph.id !== undefined && image.id !== undefined) lost.push('id')
-  for (const key of Object.keys(paragraph.keyValues ?? {})) {
-    if (ownValue(image.keyValues, key) !== undefined) lost.push(key)
-  }
-  return lost.sort()
 }
 
 /**

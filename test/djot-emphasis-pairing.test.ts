@@ -42,7 +42,7 @@ test.each(['```', '~~~'])('a definition marker can open a fenced description: %s
 test.each([
   ['``` =html\n<b>_x</b>\n```', '<b>_x</b>'],
   ['[r]: /u_v\n\n[x][r]', '<p><a href="/u_v">x</a></p>'],
-  ['![alt_x](u.png)', '<p><img src="u.png" alt="alt_x"></p>'],
+  ['![alt_x](u.png)', '<img src="u.png" alt="alt_x">'],
   ['_a\n```\nx\n```\nb_', '<p><em>a\n<code>\nx\n</code>\nb</em></p>'],
 ])('opaque block and image label ownership: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source)).trim()).toBe(expected)

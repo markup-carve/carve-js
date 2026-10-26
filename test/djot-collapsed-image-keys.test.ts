@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { test, expect } from 'vitest'
 import { parseFragment } from 'parse5'
 import { carveToHtml } from '../src/index.js'
@@ -39,7 +40,7 @@ test('collapsed image keys preserve native child text and report unresolved dest
     }
     if (loss || blankAlt) continue
     const actual = shape(parseFragment(carveToHtml(converted)))
-    const expected = shape(parseFragment(html))
+    const expected = shape(parseFragment(imageParagraphsAsImages(html)))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
   expect(failures).toEqual([])

@@ -64,12 +64,12 @@ it('preserves user text matching the NUL shield', () => {
 
 it('restores NUL characters in data carried by the importer', () => {
   for (const source of ['# a\0b', '[a](x\0y)', '![a](x\0y)', '[a]{key="x\0y"}', '<x:a\0b>']) {
-    expect(djotToCarve(source)).toBe((source.startsWith('![') ? '{%%}' : '') + source)
+    expect(djotToCarve(source)).toBe(source)
   }
 })
 
 it('restores original NUL bytes before flattening a formatted image label', () => {
-  expect(djotToCarve('![*a*\0](x)')).toBe('{%%}![a\uFFFD](x)')
+  expect(djotToCarve('![*a*\0](x)')).toBe('![a\uFFFD](x)')
 })
 
 it('keeps an escaped NUL inside its attributed word', () => {

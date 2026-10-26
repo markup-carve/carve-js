@@ -1397,14 +1397,11 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     referenceCursor = end
   }
   const rawFolded = referenceParts.join('') + flatFolded.slice(referenceCursor)
-  const imageParagraph = djotPlaceholderPrefix(body, '\x00DJOTIMAGEPARAGRAPH\x00')
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const imageLines = djotImageLineOwners(rawFolded, imageMask)
-  const imageStarts = new Set(imageLines.map(line => line.start))
   let imageLine = 0
   const folded = replaceDjotImageLabels(rawFolded, imageMask, (image, label, at) => {
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
-    const paragraph = imageStarts.has(at) ? imageParagraph : ''
     if (label.startsWith('^')) return image
     const pairedQuotes = ['"', "'"].some(quote => {
       const first = label.indexOf(quote)
@@ -1412,7 +1409,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     })
     if (!label.includes('\n') && !/[_*`{^~\[\]<:]/.test(label) && !pairedQuotes && !/["']\}/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
-      return `${paragraph}![${prefix}${spans.length - 1}\x00]`
+      return `![${prefix}${spans.length - 1}\x00]`
     }
     while (imageLines[imageLine]!.end <= at) imageLine++
     const altLayout = djotImageAltLayout(label, imageLines[imageLine]!.quotes, imageLines[imageLine]!.itemColumn, imageLines[imageLine]!.itemQuote, imageLines[imageLine]!.div)
@@ -1422,7 +1419,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     const plain = imageChildText(normalizedLabel).replace(/\n(?:[ \t]*\n)+/g, '\n')
     spans.push(escapeImageAlt(plain, imageLines[imageLine]!.table)
       .replace(/\n/g, () => `\n${continuations[continuation++] ?? ''}`))
-    return `${paragraph}![${prefix}${spans.length - 1}\x00]`
+    return `![${prefix}${spans.length - 1}\x00]`
   })
   const wordMask = maskDjotCodeAndDestinations(folded).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(folded, at) ? value : ' '.repeat(value.length))
   const words = attributedDjotWords(folded, wordMask, convert, span => {
@@ -1431,7 +1428,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   }, invalidAttributes.inherited)
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
-    .replaceAll(emptyNote, '%%%%').replaceAll(imageParagraph, '{%%}')
+    .replaceAll(emptyNote, '%%%%')
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   const containers = tightDjotDefinitionDescriptions(genericDjotDivClasses(converted, djotContentStart))
