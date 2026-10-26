@@ -131,7 +131,7 @@ describe('the canonical writer emits the markers first', () => {
 
 describe('the lint rule for the retired order', () => {
   const rules = (src: string) =>
-    lintCarve(src).filter((w) => w.rule === 'table-cell-attribute-before-marker')
+    lintCarve(src).filter((w) => w.rule === 'table-marker-run-padding')
 
   it('reports a block written before an alignment marker', () => {
     const [warning] = rules('|{#x}< content |')

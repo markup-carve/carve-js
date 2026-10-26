@@ -1271,7 +1271,7 @@ export function lintCarve(
   // The source-line rules skip a COMMENT body as well as a verbatim one. A
   // comment is discarded text - it reaches no output at all - so a report that
   // some construct inside it silently degraded is describing something that was
-  // never going to render. `table-cell-attribute-before-marker` and
+  // never going to render. `table-marker-run-padding` and
   // `fence-delimiter-indentation` both had this false positive.
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
@@ -2356,9 +2356,19 @@ function collectTableCellMarkerWarnings(
             i + 1,
             prefixWidth + indent + start + at + 1,
             unpadded[1]!.length,
-            'table-alignment-run-padding',
+            'table-marker-run-padding',
             `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${block ? ' and its attribute block' : ''} to make it alignment.`,
           )
+        }
+      }
+      // A kind marker is also part of the run, even without alignment.
+      if (text.startsWith('=') && !unpadded && text[1] !== ' ') {
+        const kindBlock = readCellAttributeBlock(text, 1)
+        const runEnd = 1 + (kindBlock?.length ?? 0)
+        if (text[runEnd] !== ' ') {
+          push(i + 1, prefixWidth + indent + start + 1, runEnd,
+            'table-marker-run-padding',
+            `The table kind marker has no terminating space, so it is literal cell content. Add a space after the marker run${kindBlock ? ' and its attribute block' : ''} to make it a header.`)
         }
       }
       const block = readCellAttributeBlock(text)
@@ -2370,7 +2380,7 @@ function collectTableCellMarkerWarnings(
         i + 1,
         prefixWidth + indent + start + 1,
         block.length + 1,
-        'table-cell-attribute-before-marker',
+        'table-marker-run-padding',
         `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
           `which Carve no longer reads as one. The block is part of the cell's marker run ` +
           `and the run ends at a space, so with the "${marker}" glued to it there is no run: ` +
