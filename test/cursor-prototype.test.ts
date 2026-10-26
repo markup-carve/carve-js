@@ -1466,6 +1466,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- ^ cap\n  > q\n\n  ^ cap\n  more\n- c\n',
+    '- > q\n  ^ cap\n  more\n- c\n',
+    '- ![image](x.png)\n  ^ cap\n  more\n',
+  ])('keeps a list caption continuation with its target: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- a\n\n  *[A]: a\n', '- a\n\n  *[A]: a\n  - b\n',
     '- a\n\n  *[A]: a\n  - b\n- c\n'])
   ('treats an abbreviation-shaped list line as paragraph text: %s', (source) => {
