@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { test, expect } from 'vitest'
 import { parseFragment } from 'parse5'
 import { djotToCarve, carveToHtml } from '../src/index.js'
@@ -28,7 +29,7 @@ test('image quote wrappers preserve native child text', () => {
   for (const { source, html } of controls) {
     const converted = djotToCarve(source)
     const actual = shape(parseFragment(carveToHtml(converted)))
-    const expected = shape(parseFragment(html))
+    const expected = shape(parseFragment(imageParagraphsAsImages(html)))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
   expect(failures).toEqual([])

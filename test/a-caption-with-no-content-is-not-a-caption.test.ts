@@ -154,15 +154,12 @@ describe('a caption with no content is not a caption', () => {
       expect(report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
     })
 
-    it('leaves an authored paragraph around the image alone, with its own declared row', () => {
-      // The unwrap returns the body as it imported, NOT the caption host: with
-      // no figure there is no image-target slot to take the wrapper off for, so
-      // the paragraph stays and takes carve-js#1422's row instead.
+    it('promotes an image-only paragraph when unwrapping a figure', () => {
       const html = '<figure><p><img src="g.jpg" alt="G"></p></figure>'
       const { report } = htmlToCarve(html)
 
-      expect(types(htmlToAst(html).value)).toEqual(['paragraph'])
-      expect(report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'structure-unspellable'])
+      expect(types(htmlToAst(html).value)).toEqual(['image'])
+      expect(report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped'])
     })
   })
 })

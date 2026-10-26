@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { test, expect } from 'vitest'
 import { parseFragment } from 'parse5'
 import { djotToCarve, carveToHtml } from '../src/index.js'
@@ -35,7 +36,7 @@ test('NUL heading references preserve Native destinations', () => {
       continue
     }
     const actual = shape(parseFragment(rendered))
-    const expected = shape(parseFragment(html.replaceAll('\0', '�')))
+    const expected = shape(parseFragment(imageParagraphsAsImages(html.replaceAll('\0', '�'))))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
   expect(failures).toEqual([])

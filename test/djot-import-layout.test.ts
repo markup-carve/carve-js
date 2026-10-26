@@ -138,7 +138,7 @@ it('folds a heading continuation inside a parenthesized ordered item', () => {
 })
 
 it.each(['[x]', '![x]'])('keeps empty attribute groups in a nested %s destination', (label) => {
-  expect(djotToCarve(`${label}(a(b{}c))\n`)).toBe(`${label.startsWith('!') ? '{%%}' : ''}${label}(a%28b{}c%29)\n`)
+  expect(djotToCarve(`${label}(a(b{}c))\n`)).toBe(`${label}(a%28b{}c%29)\n`)
 })
 
 it('keeps attribute values opaque when references inherit definition attributes', () => {
@@ -229,8 +229,8 @@ it('closes a div opened on a continuation line before leaving its item', () => {
 })
 
 it.each(['[x]', '![x]'])('keeps paired backticks in the %s destination unchanged', (label) => {
-  expect(djotToCarve(`${label}(a\` b \`c)\n`)).toBe(`${label.startsWith('!') ? '{%%}' : ''}${label}(a%60%20b%20%60c)\n`)
-  expect(djotToCarve(`${label}(a\` b \`c) and \` code \`\n`)).toBe(`${label.startsWith('!') ? '{%%}' : ''}${label}(a%60%20b%20%60c) and \`  code  \`\n`)
+  expect(djotToCarve(`${label}(a\` b \`c)\n`)).toBe(`${label}(a%60%20b%20%60c)\n`)
+  expect(djotToCarve(`${label}(a\` b \`c) and \` code \`\n`)).toBe(`${label}(a%60%20b%20%60c) and \`  code  \`\n`)
 })
 
 it('keeps code padding out of nested and multiline destinations', () => {

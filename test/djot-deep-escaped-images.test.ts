@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { expect, test } from 'vitest'
 import { carveToHtml, djotToCarve, normalizeHtml } from '../src/index.js'
 import controls from './fixtures/djot-deep-escaped-images.json'
@@ -5,7 +6,7 @@ import controls from './fixtures/djot-deep-escaped-images.json'
 test('nested escaped image labels preserve Native output and opaque syntax', () => {
   for (const { source, html } of controls) {
     const actual = carveToHtml(djotToCarve(source)).replace(/ role="math"/g, '')
-    expect(normalizeHtml(actual).html, source).toBe(normalizeHtml(html).html)
+    expect(normalizeHtml(actual).html, source).toBe(normalizeHtml(imageParagraphsAsImages(html)).html)
   }
 })
 

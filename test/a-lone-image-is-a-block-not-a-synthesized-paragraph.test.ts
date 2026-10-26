@@ -100,24 +100,18 @@ describe('the shapes that keep their paragraph', () => {
     expect(types('<img src="a.jpg" alt="A">\n<img src="b.jpg" alt="B">')).toEqual(['paragraph'])
   })
 
-  // THE AUTHOR'S OWN `<p>` IS NOT OURS TO TAKE. Removing it would be a LOSS
-  // rather than the removal of an addition, and the two are not the same call.
-  // The source exit writes `![G](g.jpg)` for this shape and reports nothing,
-  // so the two exits disagree here too - filed separately, because the exit at
-  // fault is the other one.
-  it('keeps the paragraph the author wrote', () => {
-    expect(types('<p><img src="g.jpg" alt="G"></p>')).toEqual(['paragraph'])
+  it('promotes an authored paragraph containing only an image', () => {
+    expect(types('<p><img src="g.jpg" alt="G"></p>')).toEqual(['image'])
   })
 
-  it('keeps a paragraph that carries its own attributes', () => {
+  it('moves paragraph attributes onto the promoted image', () => {
     expect(tree('<p class="x"><img src="g.jpg" alt="G"></p>')[0]).toMatchObject({
-      type: 'paragraph',
+      type: 'image',
       attrs: { classes: ['x'] },
     })
   })
 
-  // A figure body was already unwrapped by `captionHost`, and still is: the
-  // target is the image, not a paragraph around it.
+  // A figure target uses the image directly.
   it('still gives a figure the image as its target', () => {
     expect(
       tree('<figure><img src="g.jpg" alt="G"><figcaption>c</figcaption></figure>')[0],

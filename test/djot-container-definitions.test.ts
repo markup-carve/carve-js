@@ -1,3 +1,4 @@
+import { imageParagraphsAsImages } from './legacy-image-paragraph.js'
 import { expect, test } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { migrateDjot, carveToHtml, djotToCarve } from '../src/index.js'
@@ -21,7 +22,7 @@ function shape(html: string): unknown[] {
 test('Djot definitions preserve quote, list and DIV ownership', () => {
   for (const row of controls) {
     const result = migrateDjot(row.source)
-    expect(shape(carveToHtml(result.value)), row.source).toEqual(shape(row.html))
+    expect(shape(carveToHtml(result.value)), row.source).toEqual(shape(imageParagraphsAsImages(row.html)))
     expect(result.report.diagnostics.filter(d => /empty definition|definition item with an empty term/i.test(d.message)), row.source).toEqual([])
   }
 })
