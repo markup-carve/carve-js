@@ -2398,7 +2398,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ...itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
           // A tab split at the item column leaves generated spaces with no
           // matching source origin. Measure that residual run in its new text.
-          ...(/^ +[^ \t]/.test(trackedContent) && l.slice(0, leadingWhitespace(l)).includes('\t')
+          ...(l.slice(0, leadingWhitespace(l)).includes('\t') && /^ +[^ \t]/.test(trackedContent)
             ? { whitespace: leadingWhitespace(trackedContent) }
             : {}),
           quoteFenceCloser: (marker, depth = 0, column = 0) => {
