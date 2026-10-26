@@ -17,7 +17,7 @@ import { replaceLoneSurrogates } from '../well-formed.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
-import { olKindOf, olStartOf, type OlKind } from './list/parse-item-core.js'
+import { olKindOf, olStartOf, sourceColumnAt, type OlKind } from './list/parse-item-core.js'
 import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
@@ -240,7 +240,7 @@ function imageReferenceResolved(image: Extract<InlineNode, { type: 'image' }>, i
   return !image.ref || inline.linkDefinitions.has(normalizeRefLabel(image.ref))
 }
 
-const BULLET = /^( *)([-*]) +(.*)$/
+const BULLET = /^([ \t]*)([-*]) +(.*)$/
 function fenceOpen(line: string) {
   if (line[0] !== '`' && line[0] !== '~') return null
   const match = RE_FENCE.exec(line)
@@ -308,7 +308,7 @@ function listMarker(line: string) {
   if (ordered && !ordered[1]!.includes('\t')) {
     const markerWidth = ordered[0].length - ordered[4]!.length
     const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
-    return { indent: ordered[1]!.length, ordered: true, raw: ordered[2]!,
+    return { indent: sourceColumnAt(ordered[1]!, ordered[1]!.length), ordered: true, raw: ordered[2]!,
       delim: ordered[3] as '.' | ')', bullet: undefined,
       width: markerWidth + attrWidth,
       ...(itemAttr ? { continuationWidth: markerWidth,
@@ -319,7 +319,7 @@ function listMarker(line: string) {
   if (!bullet) return undefined
   const markerWidth = bullet[0].length - bullet[3]!.length
   const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
-  return { indent: bullet[1]!.length, ordered: false, raw: undefined,
+  return { indent: sourceColumnAt(bullet[1]!, bullet[1]!.length), ordered: false, raw: undefined,
     delim: undefined, bullet: bullet[2] as '-' | '*',
     width: markerWidth + attrWidth,
     ...(itemAttr ? { continuationWidth: markerWidth,

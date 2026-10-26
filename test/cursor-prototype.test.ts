@@ -72,6 +72,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('joins sibling list markers that reach the same column through a tab', () => {
+    const source = '- a\n    - b\n \t- c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
