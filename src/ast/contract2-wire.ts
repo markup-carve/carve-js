@@ -121,6 +121,22 @@ function tableToContract2(node: Item): void {
   }
 }
 
+function setOwn(node: Item, key: string, value: unknown): void {
+  // Plain assignment to `__proto__` would set the prototype instead of a field.
+  if (key === '__proto__') Object.defineProperty(node, key, { value, enumerable: true, writable: true, configurable: true })
+  else node[key] = value
+}
+
+/** A copy of `value` with `transform` applied to each own field but `raw`. */
+function copyWith(value: Item, transform: (child: unknown) => unknown, raw?: string): Item {
+  const node: Item = {}
+  for (const key of Object.keys(value)) {
+    const child = value[key]
+    setOwn(node, key, key === raw || child === null || typeof child !== 'object' ? child : transform(child))
+  }
+  return node
+}
+
 export function runtimeWireToContract2(input: Item, doc: Document): Item {
   const names = new Map<string, string | undefined>()
   const transform = (value: unknown): unknown => {
@@ -128,8 +144,12 @@ export function runtimeWireToContract2(input: Item, doc: Document): Item {
     if (value === null || typeof value !== 'object') return value
     const saved = savedExtension(value)
     if (saved !== undefined) return saved
-    const node: Item = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, transform(child)]))
-    if (typeof node.type !== 'string') return node
+    // `pos` is copied as is and converted once below, keeping its key order.
+    const node = copyWith(value as Item, transform, 'pos')
+    if (typeof node.type !== 'string') {
+      if (node.pos !== undefined) node.pos = transform(node.pos)
+      return node
+    }
     if (node.pos !== undefined) node.pos = positionToBytes(doc, node.pos as Position)
     switch (node.type) {
       case 'document':
@@ -281,7 +301,7 @@ export function contract2WireToRuntime(input: Item): Item {
   const transform = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(transform)
     if (!value || typeof value !== 'object') return value
-    const node: Item = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, transform(child)]))
+    const node = copyWith(value as Item, transform)
     if (typeof node.type !== 'string') return node
     // Common 2.0 node facts also live on runtime nodes.
     switch (node.type) {
