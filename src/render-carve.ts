@@ -2433,7 +2433,7 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
       const children = (node as TableCell).children ?? []
-      const terminal = children.at(-1)?.type === 'hard_break' ? children.pop() : undefined
+      const terminal = (node as TableCell).span === undefined && children.at(-1)?.type === 'hard_break' ? children.pop() : undefined
       flattenHardBreaks(children)
       if (terminal) children.push(terminal)
       continue
