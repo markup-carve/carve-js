@@ -81,7 +81,9 @@ describe('table column metadata', () => {
   })
 
   it('reports all four new lint contracts', () => {
-    expect(rules('|>text |\n')).toContain('table-alignment-run-padding')
+    expect(rules('|>text |\n')).toContain('table-marker-run-padding')
+    expect(rules('|=text |\n')).toContain('table-marker-run-padding')
+    expect(rules('|=|\n')).toContain('table-marker-run-padding')
     expect(rules('{aligns="left"}\n| a | b |\n')).toContain('table-column-arity')
     expect(rules('{widths="60,50"}\n| a | b |\n')).toContain('table-width-total')
     expect(rules('{aligns="left"}\n|=> H |\n')).toContain('table-column-overlap')
