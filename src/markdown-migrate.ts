@@ -1248,19 +1248,20 @@ function escapeCarveConstructsSpelledLikeText(
  * renders as an en or em dash and Markdown keeps as typed. The form is the one
  * the Carve writer uses for literal hyphens. A line that is only a thematic
  * break or a setext underline, alone or under its containers' markers, is
- * structure rather than text and keeps its hyphens.
+ * structure rather than text and keeps its hyphens. A table cell has no
+ * block-structure role, so it does not take those exemptions.
  */
-function escapeTypographicDashes(input: string): string {
+function escapeTypographicDashes(input: string, table = false): string {
   if (!input.includes('--')) return input
   return input
     .split('\n')
     .map((line, idx) => {
       let rest = line.replace(/^[ \t]*(?:>[ \t]?)*/, '')
       // An underline needs a paragraph line above it, so never on the first line.
-      if (RE_MD_THEMATIC.test(rest) || (idx > 0 && /^ {0,3}-+[ \t]*$/.test(rest))) return line
+      if (!table && (RE_MD_THEMATIC.test(rest) || (idx > 0 && /^ {0,3}-+[ \t]*$/.test(rest)))) return line
       for (let m = RE_LIST_MARKER.exec(rest); m; m = RE_LIST_MARKER.exec(rest)) {
         rest = rest.slice(m[0].length)
-        if (RE_MD_THEMATIC.test(rest)) return line
+        if (!table && RE_MD_THEMATIC.test(rest)) return line
       }
       return line.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))
     })
@@ -1492,7 +1493,7 @@ function convertInline(
   })
   if (!input.includes('www.') && /^[A-Za-z0-9 *_.,;?!'"-]+$/.test(input)) {
     let line = escapeCarveOnlyMarker(input)
-    if (!holdsFenceBody) line = escapeTypographicDashes(line)
+    if (!holdsFenceBody) line = escapeTypographicDashes(line, table)
     line = markdownEmphasis(line, reportFlattenedEmphasis)
     return holdsFenceBody ? line : line.replace(/["']/g, '\\$&')
   }
@@ -2448,7 +2449,7 @@ function convertInline(
   // pass even though the standalone escaper freezes it.
   line = line.replace(/&\\#(?=(?:[0-9]+|[xX][0-9A-Fa-f]+);)/g, '&#')
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
-  if (!holdsFenceBody) line = escapeTypographicDashes(line)
+  if (!holdsFenceBody) line = escapeTypographicDashes(line, table)
 
   line = flattenHtmlAnchorsInLinkLabels(line, protectedSpans, protectedSources,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
