@@ -3042,70 +3042,74 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   let openComment: number | undefined
   let simpleRootListPrefix: string | undefined
   let simpleQuoteListPrefix: string | undefined
-  const mayHaveNestedListDefinition = source.includes('  [') || source.includes('>   [')
+  const hasDefinitionMarker = source.includes(']:')
+  const mayHaveNestedListDefinition = hasDefinitionMarker &&
+    (source.includes('  [') || source.includes('>   ['))
   const simpleRootListDefinitions = mayHaveNestedListDefinition ?
     new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
-  for (const line of cursor.lines) {
-    if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
-      const marker = listMarker(line.text)
-      if (marker?.indent === 0) simpleRootListPrefix = ' '.repeat(marker.width)
-      else if (line.text !== '' && simpleRootListPrefix &&
-          !line.text.startsWith(simpleRootListPrefix)) simpleRootListPrefix = undefined
-      else if (simpleRootListPrefix && line.text.startsWith(simpleRootListPrefix) &&
-          (line.text.startsWith(simpleRootListPrefix + '  ') ||
-           isBlockStart(line.text.slice(simpleRootListPrefix.length)) &&
-           !rootLinkDef(line.text.slice(simpleRootListPrefix.length)))) {
-        simpleRootListPrefix = undefined
+  if (hasDefinitionMarker) {
+    for (const line of cursor.lines) {
+      if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
+        const marker = listMarker(line.text)
+        if (marker?.indent === 0) simpleRootListPrefix = ' '.repeat(marker.width)
+        else if (line.text !== '' && simpleRootListPrefix &&
+            !line.text.startsWith(simpleRootListPrefix)) simpleRootListPrefix = undefined
+        else if (simpleRootListPrefix && line.text.startsWith(simpleRootListPrefix) &&
+            (line.text.startsWith(simpleRootListPrefix + '  ') ||
+             isBlockStart(line.text.slice(simpleRootListPrefix.length)) &&
+             !rootLinkDef(line.text.slice(simpleRootListPrefix.length)))) {
+          simpleRootListPrefix = undefined
+        }
+        const quoteMarker = line.text.startsWith('> ') ? listMarker(line.text.slice(2)) : undefined
+        if (quoteMarker?.indent === 0) simpleQuoteListPrefix = '> ' + ' '.repeat(quoteMarker.width)
+        else if (line.text !== '> ' && simpleQuoteListPrefix &&
+            !line.text.startsWith(simpleQuoteListPrefix)) simpleQuoteListPrefix = undefined
+        else if (simpleQuoteListPrefix && line.text.startsWith(simpleQuoteListPrefix) &&
+            (line.text.startsWith(simpleQuoteListPrefix + '  ') ||
+             isBlockStart(line.text.slice(simpleQuoteListPrefix.length)) &&
+             !rootLinkDef(line.text.slice(simpleQuoteListPrefix.length)))) {
+          simpleQuoteListPrefix = undefined
+        }
       }
-      const quoteMarker = line.text.startsWith('> ') ? listMarker(line.text.slice(2)) : undefined
-      if (quoteMarker?.indent === 0) simpleQuoteListPrefix = '> ' + ' '.repeat(quoteMarker.width)
-      else if (line.text !== '> ' && simpleQuoteListPrefix &&
-          !line.text.startsWith(simpleQuoteListPrefix)) simpleQuoteListPrefix = undefined
-      else if (simpleQuoteListPrefix && line.text.startsWith(simpleQuoteListPrefix) &&
-          (line.text.startsWith(simpleQuoteListPrefix + '  ') ||
-           isBlockStart(line.text.slice(simpleQuoteListPrefix.length)) &&
-           !rootLinkDef(line.text.slice(simpleQuoteListPrefix.length)))) {
-        simpleQuoteListPrefix = undefined
+      if (openComment !== undefined) {
+        const closer = RE_COMMENT_BLOCK_ANY.exec(line.text)
+        if (closer?.[1]?.length === openComment) openComment = undefined
+        continue
       }
+      if (openFence) {
+        if (closesFence(line.text, openFence)) openFence = undefined
+        continue
+      }
+      const fence = fenceOpen(line.text)
+      if (fence) { openFence = fence.marker; continue }
+      const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
+      if (comment && commentOpeners.has(line.start)) {
+        openComment = comment[1]!.length
+        continue
+      }
+      const quoteDefinition = line.text.startsWith('> ') &&
+        (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
+      const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
+        line.text.startsWith(simpleRootListPrefix + '[') &&
+        (cursor.lines[line.number - 2]?.text === '' ||
+         boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
+        rootLinkDef(line.text.slice(simpleRootListPrefix.length)) : null
+      const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
+        line.text.startsWith(simpleQuoteListPrefix + '[') &&
+        cursor.lines[line.number - 2]?.text === '> ' ?
+        rootLinkDef(line.text.slice(simpleQuoteListPrefix.length)) : null
+      if (simpleListDefinition || quoteListDefinition) {
+        simpleRootListDefinitions!.set(line.number, (simpleListDefinition ?? quoteListDefinition)!)
+      }
+      const match = rootLinkDef(line.text) || simpleListDefinition || quoteListDefinition ||
+        (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
+      if (match) linkDefinitions.set(normalizeRefLabel(match.label),
+        { rawLabel: match.label, line: line.number - 1, href: match.href,
+          ...(match.title !== undefined ? { title: unescapeAttrValue(match.title) } : {}),
+          ...(match.attrText !== null ? { attrs: parseAttrs(match.attrText) } : {}) })
+      const abbr = ABBR_DEF.exec(line.text)
+      if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
     }
-    if (openComment !== undefined) {
-      const closer = RE_COMMENT_BLOCK_ANY.exec(line.text)
-      if (closer?.[1]?.length === openComment) openComment = undefined
-      continue
-    }
-    if (openFence) {
-      if (closesFence(line.text, openFence)) openFence = undefined
-      continue
-    }
-    const fence = fenceOpen(line.text)
-    if (fence) { openFence = fence.marker; continue }
-    const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
-    if (comment && commentOpeners.has(line.start)) {
-      openComment = comment[1]!.length
-      continue
-    }
-    const quoteDefinition = line.text.startsWith('> ') &&
-      (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
-    const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
-      line.text.startsWith(simpleRootListPrefix + '[') &&
-      (cursor.lines[line.number - 2]?.text === '' ||
-       boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
-      rootLinkDef(line.text.slice(simpleRootListPrefix.length)) : null
-    const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
-      line.text.startsWith(simpleQuoteListPrefix + '[') &&
-      cursor.lines[line.number - 2]?.text === '> ' ?
-      rootLinkDef(line.text.slice(simpleQuoteListPrefix.length)) : null
-    if (simpleListDefinition || quoteListDefinition) {
-      simpleRootListDefinitions!.set(line.number, (simpleListDefinition ?? quoteListDefinition)!)
-    }
-    const match = rootLinkDef(line.text) || simpleListDefinition || quoteListDefinition ||
-      (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
-    if (match) linkDefinitions.set(normalizeRefLabel(match.label),
-      { rawLabel: match.label, line: line.number - 1, href: match.href,
-        ...(match.title !== undefined ? { title: unescapeAttrValue(match.title) } : {}),
-        ...(match.attrText !== null ? { attrs: parseAttrs(match.attrText) } : {}) })
-    const abbr = ABBR_DEF.exec(line.text)
-    if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
   }
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations)
