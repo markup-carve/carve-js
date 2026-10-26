@@ -833,14 +833,16 @@ export function createDefinitionListParser(
         return undefined
       }
       const belowBandInterrupts = (ln: string, below: string, atDocumentColumn: boolean, retained: boolean): boolean => {
-        const sourceColumn = indentColumns(ln)
-        if (sourceColumn > 0 && sourceColumn < contentCol && opensCodeFence(below)) {
+        const lineIndent = indentColumns(ln)
+        const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        const markedQuoteLine = quoteDepth > 0 && quotePrefixDepth(source) >= quoteDepth
+        if (!markedQuoteLine && lineIndent > 0 && lineIndent < contentCol && opensCodeFence(below)) {
           const marker = RE_FENCE.exec(below)?.[2] ?? RE_RAW_FENCE.exec(below)?.[1]
           if (marker !== undefined) {
             const memos = defFenceMemos ??= new Map()
-            let memo = memos.get(sourceColumn)
-            if (memo === undefined) memos.set(sourceColumn, memo = new Map())
-            return itemFenceHasCloser(lexer, marker, lexer.pos, sourceColumn, memo, bodyEndsAt)
+            let memo = memos.get(lineIndent)
+            if (memo === undefined) memos.set(lineIndent, memo = new Map())
+            return itemFenceHasCloser(lexer, marker, lexer.pos, lineIndent, memo, bodyEndsAt)
           }
         }
         return startsInterruptingBlock(lexer, below, !retained, false, atDocumentColumn)
