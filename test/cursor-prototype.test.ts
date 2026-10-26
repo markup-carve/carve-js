@@ -82,6 +82,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a visually indented tabbed line inside its footnote', () => {
+    const source = '[^a]: note\n\n \tmore\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
@@ -1286,9 +1291,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a tabbed list marker whose extra space changes the footnote owner', () => {
-    expect(() => parseCursorPrototype('[^a]: note\n\t - item\n\nsee[^a]\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps a tabbed list marker as text when its extra space changes the footnote owner', () => {
+    const source = '[^a]: note\n\t - item\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([':: \tx\n', ':: t\n: \tx\n'])

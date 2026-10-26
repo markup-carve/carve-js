@@ -2653,12 +2653,14 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
 }
 
 function footnotePlainColumn(line: SourceLine): number {
-  return line.text[0] === '\t' ? 2 : /^[ ]*/.exec(line.text)![0].length + 1
+  return /^[ \t]*/.exec(line.text)![0].length + 1
 }
 
 function simpleFootnoteParagraphLine(line: SourceLine | undefined, allowList = false): boolean {
-  if (!line || !(line.text.startsWith('  ') || line.text[0] === '\t')) return false
-  const content = line.text.slice(footnotePlainColumn(line) - 1)
+  if (!line) return false
+  const prefix = footnotePlainColumn(line) - 1
+  if (sourceColumnAt(line.text, prefix) < 2) return false
+  const content = line.text.slice(prefix)
   return plainQuoteText(content) ||
     allowList && !(line.text[0] === '\t' && content[0] === ' ') && listMarker(content) !== undefined ||
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
@@ -2796,7 +2798,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
-  const hasBodyLine = next?.startsWith('  ') || next?.startsWith('\t')
+  const hasBodyLine = next !== undefined &&
+    sourceColumnAt(next, /^[ \t]*/.exec(next)![0].length) >= 2
   const separated = hasBodyLine && nextIndex > 1
   const structural = hasBodyLine ? simpleFootnoteStructuralLines(cursor, nextIndex) : undefined
   let bodyLength = 0
