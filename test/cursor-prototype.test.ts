@@ -1470,6 +1470,7 @@ describe('experimental block cursor', () => {
     '- ^ cap\n  > q\n\n  ^ cap\n  more\n- c\n',
     '- > q\n  ^ cap\n  more\n- c\n',
     '- ![image](x.png)\n  ^ cap\n  more\n',
+    '- a\n  - > q\n\n\n    ^ cap\n- c\n',
   ])('keeps a list caption continuation with its target: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

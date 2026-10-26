@@ -2122,7 +2122,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
         markInvisibleListGap(continuationFrame, lookahead > 0, blockText)
-        if (loosensListGap(cursor, continuationFrame.body, blockText,
+        if (blanks > 1 && RE_CAPTION.test(blockText) ||
+            loosensListGap(cursor, continuationFrame.body, blockText,
           prefixLength, nestedContinuation === true)) {
           blankLooseFrame(continuationFrame, top, next).list.tight = false
         }
