@@ -37,7 +37,7 @@ describe('table span diagnostics', () => {
   })
 
   it('still reports malformed alignment and real caret pairs', () => {
-    expect(lintCarve('|<text|\n').map(w => w.rule)).toContain('table-alignment-run-padding')
+    expect(lintCarve('|<text|\n').map(w => w.rule)).toContain('table-marker-run-padding')
     expect(djotMigrationWarnings('|^a|b^|\n').map(w => w.rule)).toContain('djot-superscript-caret')
   })
 })
