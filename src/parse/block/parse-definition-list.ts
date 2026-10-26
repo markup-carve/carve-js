@@ -1037,7 +1037,7 @@ export function createDefinitionListParser(
     // entry test while the block dispatch never does.
     const peekEntry = (n = 0) => {
       const line = stripLazyFrame(lexer.peek(n) ?? '')
-      return lexer.hostBody === 'list' ? line.trimStart() : line
+      return lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker ? line.trimStart() : line
     }
     const entryColumn = (n = 0): number => {
       const index = lexer.pos + n
