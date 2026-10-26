@@ -1049,6 +1049,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([2, 3, 4, 5])('promotes an owned list image indented by %i spaces', (indent) => {
+    const source = `- t\n\n${' '.repeat(indent)}![Apollo](a.jpg)\n`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('retains reference-image promotion inside a quote', () => {
     const source = '> ![a][p]\n> ^ Cap\n\n[p]: /a\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

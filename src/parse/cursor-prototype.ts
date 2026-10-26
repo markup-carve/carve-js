@@ -1146,7 +1146,9 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     if (caption) return { type: 'figure', target: image,
       caption: caption.children, pos: position(first, caption.line) }
     const baseColumn = first.baseColumn ?? 1
-    if (!image.ref && isBlockImageLine(first.text) && image.pos?.startColumn === baseColumn &&
+    const imageText = cursor.owner.inList ? first.text.trimStart() : first.text
+    if (!image.ref && isBlockImageLine(imageText) &&
+        image.pos?.startColumn === baseColumn + first.text.length - imageText.length &&
         image.pos.endColumn === baseColumn + first.text.length) return image
   }
   if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'math' &&
