@@ -1781,6 +1781,29 @@ function releaseRootListFenceAtBoundary(frame: ListCursorFrame,
   if (lastNestedBlock?.type !== 'paragraph') frame.fenceMayDedent = true
 }
 
+function listFenceStaysInParagraph(cursor: Cursor, frame: ListCursorFrame,
+  line: SourceLine, text: string, strippedPrefix: number): boolean {
+  if (cursor.owner.kind !== 'root' || frame.indent !== 0 || frame.fenceMarker ||
+      frame.contentColumn === undefined ||
+      frame.body.at(-1)?.number !== line.number - 1 ||
+      !plainQuoteText(frame.body.at(-1)?.text ?? '') || text[0] === ' ' ||
+      strippedPrefix !== frame.contentColumn - 1) return false
+  const marker = fenceOpen(text)?.marker
+  if (!marker) return false
+  const prefix = ' '.repeat(frame.contentColumn - 1)
+  let afterBlank = false
+  for (let offset = 0; cursor.peek(offset); offset++) {
+    const future = cursor.peek(offset)!.text
+    if (future === '') { afterBlank = true; continue }
+    if (afterBlank && !future.startsWith(prefix)) break
+    if (future.startsWith(prefix)) {
+      const inner = future.slice(prefix.length)
+      if (closesFence(inner, marker) || afterBlank && fenceOpen(inner.trimStart())) return false
+    }
+  }
+  return true
+}
+
 function shouldMatchShiftedListFence(frame: ListCursorFrame, line: SourceLine,
   prefix: number, stackLength: number): boolean {
   return !frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
@@ -2015,6 +2038,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     prefix = claimed.prefix
     frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
+    const literalFence = listFenceStaysInParagraph(cursor, frame, line, text, prefix)
+    if (literalFence) {
+      line = { ...line, lazyText: true }
+      rootLazy = true
+    }
     if (line.wrappedAttr || text[0] === '{' && parseBlockAttributeRun(text)) {
       for (const open of stack) open.possibleInvisibleTail = true
     }
@@ -2053,7 +2081,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     } else {
       const marker = RE_RAW_FENCE.exec(text)?.[1] ?? fenceOpen(text)?.marker
-      if (marker) {
+      if (marker && !literalFence) {
         frame.fenceMarker = marker
         frame.fencePrefix = prefix
       }

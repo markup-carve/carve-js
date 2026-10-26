@@ -115,6 +115,24 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- q\n  ```\ntail\n',
+    '- q\n  ```\n\ntail\n',
+    '- a\n  ```\n  b\n y\n ```\n',
+    '- a\n  ```\n  b\n y\n   ```\n',
+    '- a\n  ```\n  b\n\ny\n  ```\n',
+    '- o\n  ```\nx\n\n  t\n',
+  ])('keeps an unclosed list fence-looking line with its open paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- a\n  ```\ntail\n  ```\n',
+    '- a\n  ```\n\n   ```\n',
+  ])('declines an ambiguous list fence with a later candidate closer: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
     '- item with trailing spaces  \n',
@@ -1860,8 +1878,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('keeps an at-column unclosed fence behind the prototype guard', () => {
-    expect(() => parseCursorPrototype('- q\n  ```\ntail\n')).toThrow(UnsupportedCursorSyntax)
+  it('keeps an at-column unclosed fence in the open list paragraph', () => {
+    const source = '- q\n  ```\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- t\n  {.c}\n   ````\n  x\n',
