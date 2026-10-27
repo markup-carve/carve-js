@@ -2453,20 +2453,24 @@ function releaseRootListFenceAtBoundary(frame: ListCursorFrame,
 }
 
 function listFenceStaysInParagraph(cursor: Cursor, frame: ListCursorFrame,
-  line: SourceLine, text: string, strippedPrefix: number): boolean {
-  if (cursor.owner.kind !== 'root' || frame.indent !== 0 || frame.fenceMarker ||
+  line: SourceLine, text: string, strippedPrefix: number,
+  marker: string | undefined): boolean {
+  if (cursor.owner.kind !== 'root' || frame.fenceMarker ||
       frame.contentColumn === undefined ||
       frame.body.at(-1)?.number !== line.number - 1 ||
-      !plainQuoteText(frame.body.at(-1)?.text ?? '') || text[0] === ' ' ||
+      !plainQuoteText(frame.body.at(-1)?.text ?? '') ||
+      isBlockStart(frame.body.at(-1)?.text ?? '') || text[0] === ' ' ||
       strippedPrefix !== frame.contentColumn - 1) return false
-  const marker = fenceOpen(text)?.marker
   if (!marker) return false
   const prefix = ' '.repeat(frame.contentColumn - 1)
   let afterBlank = false
   for (let offset = 0; cursor.peek(offset); offset++) {
     const future = cursor.peek(offset)!.text
     if (future === '') { afterBlank = true; continue }
-    if (afterBlank && !future.startsWith(prefix)) break
+    if (afterBlank && !future.startsWith(prefix)) {
+      if (frame.indent > 0 && RE_HEADING.test(future.trimStart())) return false
+      break
+    }
     if (future.startsWith(prefix)) {
       const inner = future.slice(prefix.length)
       if (closesFence(inner, marker) || afterBlank && fenceOpen(inner.trimStart())) return false
@@ -2857,7 +2861,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     prefix = claimed.prefix
     frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
-    const literalFence = listFenceStaysInParagraph(cursor, frame, line, text, prefix)
+    const codeFenceMarker = (text[0] === '`' || text[0] === '~') ? fenceOpen(text)?.marker : undefined
+    const literalFence = (frame.indent === 0 || text[0] === '`' || text[0] === '~') &&
+      listFenceStaysInParagraph(cursor, frame, line, text, prefix, codeFenceMarker)
     if (literalFence) {
       line = { ...line, lazyText: true }
       rootLazy = true
@@ -2905,7 +2911,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.fenceMayDedent = false
       }
     } else {
-      const marker = RE_RAW_FENCE.exec(text)?.[1] ?? fenceOpen(text)?.marker
+      const marker = RE_RAW_FENCE.exec(text)?.[1] ?? codeFenceMarker
       if (marker && !literalFence && !line.lazyText) {
         frame.fenceMarker = marker
         frame.fencePrefix = prefix

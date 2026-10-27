@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2641)
+    expect(exact).toBeGreaterThanOrEqual(2646)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
@@ -457,6 +457,18 @@ describe('experimental block cursor', () => {
     '- a\n  - b\n    - c\n      ```\n      p\nx\n      ```\n',
   ])('ends a nested fence at its owner column after a root dedent: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- outer\n  - head\n    ```\n    a\n   ```\n\n  tail\n',
+    '- outer\n  - head\n    more\n    ```\n    a\n   ```\n\n  tail\n',
+  ])('keeps a child fence run in its open paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a child fence paragraph before an ancestor heading', () => {
+    const source = '- outer\n  - para\n    ```\n    code\n\n  # h\n    ```\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
   it('uses a later quoted tilde closer before folding an open code span', () => {
