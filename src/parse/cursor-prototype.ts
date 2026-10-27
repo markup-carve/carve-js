@@ -207,7 +207,8 @@ class CursorInline extends InlineParseSession {
   footnoteDefs?: Record<string, BlockNode[]>
   footnoteDefPos?: Record<string, Position>
   constructor(readonly linkDefinitions: Map<string, LinkDef>,
-    readonly abbreviations: Map<string, string>) { super() }
+    readonly abbreviations: Map<string, string>,
+    readonly positionless = false) { super() }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
   }
@@ -1627,6 +1628,13 @@ function takeQuoteCaption(cursor: Cursor, inline: CursorInline, quote: BlockQuot
   return quote.children.length ? takeCaption(cursor, inline) : undefined
 }
 
+function positionlessImageCaptionIsText(inline: CursorInline, image: InlineNode,
+  first: SourceLine): boolean {
+  return inline.positionless && image.type === 'image' &&
+    (image.ref !== undefined || image.pos?.startLine !== image.pos?.endLine ||
+      /`{2,}/.test(first.text))
+}
+
 function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
   const first = cursor.peek()!
   const codeInclude = first.text.includes('{{') &&
@@ -1651,7 +1659,8 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
       if (lead.length === 1 && lead[0]?.type === 'image' &&
           imageReferenceResolved(lead[0], inline) &&
           lead[0].pos?.startOffset === parts[0]!.line.start &&
-          lead[0].pos?.endOffset === last.start + last.text.length) {
+          lead[0].pos?.endOffset === last.start + last.text.length &&
+          !positionlessImageCaptionIsText(inline, lead[0], first)) {
         captionLead = lead
         break
       }
@@ -1681,7 +1690,8 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   }
   if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
     const image = paragraph.children[0]
-    const caption = imageReferenceResolved(image, inline) || cursor.peek()?.text === '' ?
+    const caption = !positionlessImageCaptionIsText(inline, image, first) &&
+      (imageReferenceResolved(image, inline) || cursor.peek()?.text === '') ?
       takeCaption(cursor, inline) : undefined
     if (caption) return { type: 'figure', target: image,
       caption: caption.children, pos: position(first, caption.line) }
@@ -5014,10 +5024,6 @@ function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string
 }
 
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
-  if (opts.positions === false && source.includes('![') &&
-      /(?:^|[\r\n])[ \t]*\^/.test(source)) {
-    throw new UnsupportedCursorSyntax('position-free image caption ownership')
-  }
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
       opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata ||
@@ -5132,7 +5138,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     }
   }
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
-  const inline = new CursorInline(linkDefinitions, abbreviations)
+  const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false)
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
