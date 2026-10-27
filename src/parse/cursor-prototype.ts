@@ -1954,6 +1954,24 @@ function nestedPlusDisposition(cursor: Cursor,
   const follower = cursor.peek(1)
   if (!follower || !follower.text.startsWith(' '.repeat(frame.indent))) return 'literal'
   const content = follower.text.slice(frame.indent)
+  const attribute = parseBlockAttributeRun(content)
+  if (attribute) {
+    const opener = cursor.peek(2)
+    const fenced = opener?.text.startsWith(' '.repeat(frame.indent)) ?
+      fenceOpen(opener.text.slice(frame.indent))?.marker : undefined
+    if (fenced) {
+      const lines = [follower, opener!]
+      for (let offset = 3; cursor.peek(offset); offset++) {
+        const next = cursor.peek(offset)!
+        if (!next.text.startsWith(' '.repeat(frame.indent))) {
+          throw new UnsupportedCursorSyntax('nested attached fence owner')
+        }
+        lines.push(next)
+        if (closesFence(next.text.slice(frame.indent), fenced)) return lines
+      }
+      throw new UnsupportedCursorSyntax('unclosed nested attached fence')
+    }
+  }
   const fence = fenceOpen(content)?.marker
   if (fence) {
     const lines = [follower]

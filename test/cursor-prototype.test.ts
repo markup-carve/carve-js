@@ -1412,6 +1412,11 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('attaches an attributed fence after a nested continuation marker', () => {
+    const source = '- a\n  - b\n  +\n  {.x}\n  ```\n  code\n  ```\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('closes a nested item paragraph when its reference definition is hoisted', () => {
     const source = '- a\n  - para\n    [r]: /u\nx\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
