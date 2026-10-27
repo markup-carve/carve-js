@@ -3074,13 +3074,14 @@ function takeFootnoteFirstFence(cursor: Cursor, inline: CursorInline, first: Sou
   return true
 }
 
-function takeFootnoteAttachedFence(cursor: Cursor, inline: CursorInline, first: SourceLine,
+function takeFootnoteAttachedBlock(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): boolean {
   const content = footnote[2]
   if (!content || !plainQuoteText(content) || cursor.owner.kind !== 'root' ||
       !footnoteDefs || !footnoteDefPos || cursor.peek(1)?.text !== '+') return false
-  const end = closedFenceEnd(cursor, 2)
+  const end = closedFenceEnd(cursor, 2) ??
+    (listMarker(cursor.peek(2)?.text ?? '') ? 2 : undefined)
   if (end === undefined || cursor.peek(end + 1) && !isBlankLine(cursor.peek(end + 1)!.text)) {
     return false
   }
@@ -3107,7 +3108,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
   if (takeFootnoteFirstFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
-  if (takeFootnoteAttachedFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
+  if (takeFootnoteAttachedBlock(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
