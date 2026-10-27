@@ -3684,20 +3684,32 @@ function takeBoundedFootnoteBlocks(cursor: Cursor, inline: CursorInline, first: 
       !footnoteDefs || !footnoteDefPos) return false
   const source: SourceLine[] = []
   let structural = false
-  for (let offset = 1; cursor.peek(offset)?.text.startsWith('  '); offset++) {
+  let offset = 1
+  let nonblank = 0
+  while (cursor.peek(offset)) {
     const line = cursor.peek(offset)!
+    if (isBlankLine(line.text)) {
+      let next = offset
+      while (cursor.peek(next) && isBlankLine(cursor.peek(next)!.text)) next++
+      if (!cursor.peek(next)?.text.startsWith('  ')) break
+      while (offset < next) source.push(cursor.peek(offset++)!)
+      continue
+    }
+    if (!line.text.startsWith('  ')) break
     const text = line.text.slice(2)
     if (text.startsWith(' ') || text.startsWith('[') ||
         text.startsWith('::') || text.startsWith(':')) return false
     structural ||= RE_BLOCKQUOTE.test(text) || RE_HEADING.test(text) ||
       listMarker(text) !== undefined || fenceOpen(text) !== null
     source.push(line)
+    nonblank++
+    offset++
   }
-  if (source.length < 2 || !structural) return false
+  if (nonblank < 2 || !structural) return false
   if (source.slice(0, -1).some((line) => listMarker(line.text.slice(2)))) return false
-  const next = cursor.peek(source.length + 1)
+  const next = cursor.peek(offset)
   if (next && !isBlankLine(next.text)) return false
-  let after = source.length + 1
+  let after = offset
   while (cursor.peek(after) && isBlankLine(cursor.peek(after)!.text)) after++
   if (cursor.peek(after)?.text.startsWith('  ')) return false
   cursor.take()
@@ -3707,7 +3719,7 @@ function takeBoundedFootnoteBlocks(cursor: Cursor, inline: CursorInline, first: 
   const column = first.text.length - content.length + 1
   const body: SourceLine[] = [{ text: content, start: first.start + column - 1,
     number: first.number, baseColumn: (first.baseColumn ?? 1) + column - 1 },
-  ...source.map((line) => ({ text: line.text.slice(2), start: line.start + 2,
+  ...source.map((line) => isBlankLine(line.text) ? { ...line, text: '' } : ({ text: line.text.slice(2), start: line.start + 2,
     number: line.number, baseColumn: (line.baseColumn ?? 1) + 2 }))]
   const blocks = parseBlocks(new Cursor(body, undefined,
     childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)

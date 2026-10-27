@@ -672,6 +672,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps blank-separated child blocks in a bounded footnote', () => {
+    const source = '[^a]: note\n\n  # H\n\n  after\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines an unresolved nested list after a footnote quote', () => {
     expect(() => parseCursorPrototype('[^n]: intro\n  > quote\n  - next\n  - child\n'))
       .toThrow(UnsupportedCursorSyntax)
@@ -1392,8 +1397,9 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
-  it('declines a structural note with another indented block after a blank', () => {
-    expect(() => parseCursorPrototype('[^a]: note\n\n  # H\n\n  after\n')).toThrow(UnsupportedCursorSyntax)
+  it('keeps a structural note with another indented block after a blank', () => {
+    const source = '[^a]: note\n\n  # H\n\n  after\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('keeps a plain footnote continuation and its source positions', () => {
