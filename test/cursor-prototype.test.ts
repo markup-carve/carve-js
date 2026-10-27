@@ -69,6 +69,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '[^f]: n\n+\n```\na\n\nb\n```\n\nsee[^f]\n',
+    '[^long]: text *word*\n+\n~~~\nx\n~~~\n',
+  ])('keeps a closed attached fence with its footnote paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     ':: t\n:  d\n+\n```\na\n\nb\n```\n',
     ':: term\n:  a *word*\n+\n~~~\nx\n~~~\n\nend\n',
   ])('keeps a closed attached fence with its definition owner: %s', (source) => {

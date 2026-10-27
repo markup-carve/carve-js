@@ -3074,10 +3074,40 @@ function takeFootnoteFirstFence(cursor: Cursor, inline: CursorInline, first: Sou
   return true
 }
 
+function takeFootnoteAttachedFence(cursor: Cursor, inline: CursorInline, first: SourceLine,
+  footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
+  footnoteDefPos: Record<string, Position> | undefined): boolean {
+  const content = footnote[2]
+  if (!content || !plainQuoteText(content) || cursor.owner.kind !== 'root' ||
+      !footnoteDefs || !footnoteDefPos || cursor.peek(1)?.text !== '+') return false
+  const end = closedFenceEnd(cursor, 2)
+  if (end === undefined || cursor.peek(end + 1) && !isBlankLine(cursor.peek(end + 1)!.text)) {
+    return false
+  }
+  cursor.take()
+  cursor.take()
+  const body: SourceLine[] = []
+  for (let offset = 2; offset <= end; offset++) body.push(cursor.take())
+  const label = footnote[1]!
+  if (Object.hasOwn(footnoteDefs, label)) return true
+  const column = first.text.length - content.length + 1
+  const paragraph: Paragraph = { type: 'paragraph',
+    children: inline.inlines([{ line: first, column, text: content }]),
+    pos: position(first, first, column) }
+  const blocks = parseBlocks(new Cursor(body, undefined,
+    childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)
+  Object.defineProperty(footnoteDefs, label, { value: [paragraph, ...blocks],
+    enumerable: true, configurable: true, writable: true })
+  Object.defineProperty(footnoteDefPos, label, { value: position(first, body.at(-1)!),
+    enumerable: true, configurable: true, writable: true })
+  return true
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
   if (takeFootnoteFirstFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
+  if (takeFootnoteAttachedFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
