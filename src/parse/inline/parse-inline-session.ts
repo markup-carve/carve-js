@@ -74,6 +74,13 @@ const emphasisPairs: ReadonlyArray<readonly [string, Emphasis['type']]> = [
   ['~', 'strike'], ['=', 'highlight'],
 ]
 
+function canCloseBarePair(text: string, at: number, marker: string, openerMarks: Set<number>): boolean {
+  const before = text[at - 1]
+  const next = text[at + 1]
+  return text[at] === marker && !(next === '}' && openerMarks.has(at)) && before !== undefined
+    && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, at + 1)
+}
+
 export class InlineParseSession {
   protected linkLabelDepth = 0
 
@@ -270,7 +277,6 @@ export class InlineParseSession {
         for (const m of bareMarkers) {
           const table = bareTables[m]!
           const marker = PAIR_MARKERS[m]!
-          const before = text[j - 1]
           let stop: number
           if (ch === '\\') stop = table[j + 2]!
           else if (bracketEnds.has(j)) stop = -1
@@ -280,7 +286,7 @@ export class InlineParseSession {
           else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
           else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
           else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
-          else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, j + 1)) stop = j
+          else if (canCloseBarePair(text, j, marker, openerMarks)) stop = j
           else stop = table[j + 1]!
           table[j] = stop
         }
@@ -309,7 +315,7 @@ export class InlineParseSession {
           table[j] = table[j + 2]!
           continue
         }
-        const isCloser = next === '}' && ch === PAIR_MARKERS[m] && !openerMarks.has(j)
+        const isCloser = next === '}' && ch === PAIR_MARKERS[m] && (!openerMarks.has(j) || ch === '+' || ch === '-')
         raw[j] = next === '}' && ch === PAIR_MARKERS[m] ? j : raw[j + 1]!
         let stop: number
         const commentEnd = lineComments.get(j)
@@ -1163,6 +1169,11 @@ export class InlineParseSession {
         }
       }
       if (ch === delim) {
+        if (text[j - 1] === '{' && text[j + 1] === '}' && !splitBracedOpener(text, j - 1)) {
+          let slash = j - 2
+          while (text[slash] === '\\') slash--
+          if ((j - 2 - slash) % 2 === 0) continue
+        }
         // Closer must not be preceded by whitespace (CARVE-P3-013).
         const prev = text[j - 1]
         if (prev === undefined || isCarveWhitespace(prev)) continue
