@@ -38,6 +38,20 @@ export function isBlankLine(line: string | undefined): boolean {
   return line !== undefined && !RE_NOT_BLANK.test(line)
 }
 
+/** A nonempty sequence of quote markers with only ASCII whitespace around them. */
+export function isQuoteBlankLine(line: string): boolean {
+  let index = 0
+  let markers = 0
+  while (index < line.length) {
+    while (line[index] === ' ' || line[index] === '\t') index++
+    if (index === line.length) break
+    if (line[index] !== '>') return false
+    markers++
+    index++
+  }
+  return markers > 0
+}
+
 /**
  * COUNTED instrumentation for the container-layout work (markup-carve/carve#752).
  *

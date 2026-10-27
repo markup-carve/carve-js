@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { createRebasePass } from '../parse-rebase.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
-import { Lexer, indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
+import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
@@ -1542,10 +1542,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           inlineFenceColumn = lastNonBlankColumn
       }
       const trailingRun = RE_FENCE.exec(lastNonBlankSource?.trimStart() ?? '')?.[2]
-      const mismatchedRun = trailingRun !== undefined && inlineFenceRun !== null &&
-        (trailingRun[0] !== inlineFenceRun[0] || trailingRun.length < inlineFenceRun.length)
       if (lazyState.inlineFenceParagraph && pendingBlankRun.count === 0 && inlineFenceRun !== null &&
-          inlineFencePriorText && !mismatchedRun)
+          inlineFencePriorText && trailingRun === undefined)
         childInlinePayloadBlanks.add(lexer.lineNumber(lexer.pos))
       if (!markerNoteItem && inlineFenceColumn >= 0) {
         const nextLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
@@ -1741,11 +1739,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           itemQuoteDepth, physicalItemMarkerColumn, contentCol, baseIndent,
           previousNestedLine: nestedSourceLines.at(-1) })
       if (plusAfterBlank) blankBeforeNestedContinuation = true
-      if (listPlusReason === 'blank' && acceptedPlusLine === lexer.lineNumber(lexer.pos) - 1 &&
-          lazyState.opaque?.kind === 'code') {
-        // The first + ended the fence but attached no block. Keep this
-        // refused second + as authored text in the item.
-        lexer.reportRefusedContinuationMarker(lexer.pos, baseIndent + 1, 'list item', 'blank')
+      if (listPlusReason !== null && acceptedPlusLine === lexer.lineNumber(lexer.pos) - 1) {
+        // A directly successive refused marker stays with the item reached by
+        // the first marker, regardless of what refused its own follower.
+        lexer.reportRefusedContinuationMarker(lexer.pos, baseIndent + 1, 'list item', listPlusReason)
         nested.push(l)
         nestedSourceLines.push(markerSource)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -2744,7 +2741,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const termlessLazyDescription = lazyState.inDefList === false && !lazyState.deepest?.inDefList &&
         indentColumns(l, contentCol) < contentCol && RE_DEFLIST_DEF.test(lazyLine)
       trackItemLazyState(lazyLine, lazyState, () => true, false,
-        lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
+        (width) => commentBlockHasCloser(lexer, width))
       if (descriptionFenceAtRetainedColumn) lazyState.lazyFoldable = false
       if (termlessLazyDescription) lazyState.inDefList = false
       if (commentState) {
@@ -3165,7 +3162,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
             const source = nestedSourceLines[index] ?? ''
             if (nestedLineNumbers[index]! >= span.start || isBlankLine(nested[index] ?? '') ||
-                isBlankLine(source) || /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(source)) continue
+                isBlankLine(source) || isQuoteBlankLine(source)) continue
             noteEndLine = nestedLineNumbers[index]!
             break
           }
@@ -3180,7 +3177,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           const rootLines = lexer.rootLines ?? lexer.lines
           while (previousVisibleEnd > previousVisibleSpan.start &&
               (isBlankLine(rootLines[previousVisibleEnd - 1] ?? '') ||
-                /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(rootLines[previousVisibleEnd - 1] ?? ''))) {
+                isQuoteBlankLine(rootLines[previousVisibleEnd - 1] ?? ''))) {
             previousVisibleEnd--
           }
         }
