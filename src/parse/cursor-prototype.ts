@@ -1534,6 +1534,16 @@ function nestedTaskFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
   return closedFenceEnd(cursor)
 }
 
+function nestedSimpleFirstPlain(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number, depth: number): boolean {
+  if (depth !== 0 || stackLength !== 1 || frame.body.length !== 1 || frame.fenceMarker) return false
+  const inner = listMarker(frame.body[0]!.text)
+  const follower = cursor.peek()
+  if (inner?.content !== '+' || !follower || !plainQuoteText(follower.text)) return false
+  const after = cursor.peek(1)
+  return !after || isBlankLine(after.text)
+}
+
 function takeListFirstBlock(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number, contentColumn: number):
   Array<{ line: SourceLine; prefix: number }> | undefined {
@@ -2248,6 +2258,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     return true
   }
+  const takeNestedFirstBlock = (frame: ListCursorFrame, line: SourceLine): boolean => {
+    if (takeNestedTaskFence(frame)) return true
+    if (!nestedSimpleFirstPlain(cursor, frame, stack.length, depth)) return false
+    cursor.take()
+    appendBody(frame, line, 0)
+    updateListFrameEnds(stack, line, listSpan)
+    return true
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
@@ -2462,7 +2480,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (reachedPrefix === undefined) {
-      if (takeNestedTaskFence(top)) continue
+      if (takeNestedFirstBlock(top, line)) continue
       const ancestor = deepestReachableFrame(stack, line.text, true)
       if (ancestor) {
         const lazy = finalNestedListLazyLine(cursor, top.body, stack.length)

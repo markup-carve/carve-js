@@ -37,6 +37,17 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '* * +\nx\n',
+    '- - +\na *word*\n\nend\n',
+    '. . +\nx\n\n- sibling\n',
+  ])('passes a flush-left first paragraph to a nested list item: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '> - > +\n# h\n',
     '> - a\n> - > +\n# h\n',
     '> +\n|= 2-col header | < |= header |\n',
