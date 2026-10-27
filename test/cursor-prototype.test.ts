@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2635)
+    expect(exact).toBeGreaterThanOrEqual(2638)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
@@ -436,6 +436,14 @@ describe('experimental block cursor', () => {
 
   it('keeps repeated below-column list markers in the ordered item paragraph', () => {
     const source = '1. outer\n  - first\n  - head\n\n    ```\n    body\n  ```\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> a\n+\n> q\n',
+    '> > q\n> +\n> > r\n',
+    ':: t\n: > > q\n  > +\n  > > r\n',
+  ])('attaches a nested quote to its first-line quote owner: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

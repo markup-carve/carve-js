@@ -3558,6 +3558,11 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
   const plain = plainQuoteText(follower?.text ?? '')
+  const firstBody = body[0]
+  const nestedQuote = body.length === 1 && firstBody !== undefined &&
+    firstBody.number === cursor.lines[0]?.number && plainQuoteText(firstBody.text) &&
+    follower?.text[0] === '>' && RE_BLOCKQUOTE.test(follower.text) &&
+    (!after || isBlankLine(after.text))
   const quotedAfter = after?.text[0] === '>' && RE_BLOCKQUOTE.test(after.text) ?
     after.text.slice(after.text[1] === ' ' ? 2 : 1) : undefined
   const attachedMarker = listMarker(follower?.text ?? '')
@@ -3570,7 +3575,7 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   const afterResumedList = cursor.peek(3)?.text
   const boundedResumedList = sameAttachedList &&
     (!afterResumedList || isBlankLine(afterResumedList))
-  return (quotedContinuationFollower(cursor, body) || plain) &&
+  return (quotedContinuationFollower(cursor, body) || plain || nestedQuote) &&
     (!after || isBlankLine(after.text) ||
       attachedMarker?.indent === 0 && quotedAfter !== undefined &&
         (!resumedMarker || boundedResumedList) ||
