@@ -291,7 +291,7 @@ function attributedListMarker(line: string) {
     const attrs = parseBlockAttributeRun(line.slice(start, i + 1))
     const rest = /^ +(.*)$/.exec(line.slice(i + 1))
     if (!attrs || !rest) return undefined
-    return { indent, ordered: marker === '.',
+    return { indent, authoredIndent: indent, ordered: marker === '.',
       raw: marker === '.' ? '' : undefined, delim: marker === '.' ? '.' as const : undefined,
       bullet: marker === '.' ? undefined : marker as '-' | '*',
       width: i + 1 + rest[0].length - rest[1]!.length, continuationWidth: indent + 2,
@@ -308,7 +308,8 @@ function listMarker(line: string) {
   if (ordered && !ordered[1]!.includes('\t')) {
     const markerWidth = ordered[0].length - ordered[4]!.length
     const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
-    return { indent: sourceColumnAt(ordered[1]!, ordered[1]!.length), ordered: true, raw: ordered[2]!,
+    return { indent: sourceColumnAt(ordered[1]!, ordered[1]!.length),
+      authoredIndent: ordered[1]!.length, ordered: true, raw: ordered[2]!,
       delim: ordered[3] as '.' | ')', bullet: undefined,
       width: markerWidth + attrWidth,
       ...(itemAttr ? { continuationWidth: markerWidth,
@@ -319,7 +320,8 @@ function listMarker(line: string) {
   if (!bullet) return undefined
   const markerWidth = bullet[0].length - bullet[3]!.length
   const attrWidth = itemAttr ? line.length - itemAttr.stripped.length : 0
-  return { indent: sourceColumnAt(bullet[1]!, bullet[1]!.length), ordered: false, raw: undefined,
+  return { indent: sourceColumnAt(bullet[1]!, bullet[1]!.length),
+    authoredIndent: bullet[1]!.length, ordered: false, raw: undefined,
     delim: undefined, bullet: bullet[2] as '-' | '*',
     width: markerWidth + attrWidth,
     ...(itemAttr ? { continuationWidth: markerWidth,
@@ -1975,7 +1977,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.delim === ')') list.delim = ')'
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
-    const spanColumn = Math.min(marker.indent + 1, hostColumn)
+    const spanColumn = Math.min(marker.indent + 1, hostColumn, marker.authoredIndent + 1)
     list.pos = listSpan(line, line, spanColumn)
     return { list, first: line, last: line,
       indent: marker.indent, spanColumn,

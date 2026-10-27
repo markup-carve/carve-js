@@ -26,6 +26,13 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
+  it.each([
+    '- a\n\t- b\n\tc\n',
+    '1. a\n \t* b\n\tc\n',
+  ])('places a tab-indented nested list at its authored marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('matches the physical-line ownership fixtures', () => {
     for (const name of ['container-ownership.json', 'container-ownership-boundaries.json']) {
       const path = new URL(`../spec/tests/fixtures/${name}`, import.meta.url)
