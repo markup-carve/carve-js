@@ -425,7 +425,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2584)
+    expect(exact).toBeGreaterThanOrEqual(2609)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
