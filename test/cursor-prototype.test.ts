@@ -1412,6 +1412,16 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('closes a nested item paragraph when its reference definition is hoisted', () => {
+    const source = '- a\n  - para\n    [r]: /u\nx\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a nested reference followed by a same-column paragraph', () => {
+    const source = '- a\n  - para\n\n  [r]: /url\n  more\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- - x\n   [r]: /url\n\nSee [r][].\n',
     '- - x\n    [r]: /url\n\nSee [r][].\n',
@@ -1419,11 +1429,6 @@ describe('experimental block cursor', () => {
     '- > - x\n    [r]: /url\n\nSee [r][].\n',
   ])('hoists a bounded reference from its nested list owner: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-  })
-
-  it('declines an adjacent nested reference with a following paragraph', () => {
-    expect(() => parseCursorPrototype('- a\n  - para\n    [r]: /u\nx\n'))
-      .toThrow(UnsupportedCursorSyntax)
   })
 
   it.each([

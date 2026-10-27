@@ -3001,6 +3001,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
     if (nestedDefinition) {
+      flush(top)
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
       continue
     }
@@ -4286,9 +4287,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
         line.text.startsWith(simpleRootListPrefix) &&
         /^ *\[/.test(line.text.slice(simpleRootListPrefix.length)) &&
-        (!simpleRootListNested && line.text[simpleRootListPrefix.length] === '[' ||
-          !cursor.lines[line.number] || cursor.lines[line.number]?.text === '') &&
-        (cursor.lines[line.number - 2]?.text === '' ||
+        (!simpleRootListNested && cursor.lines[line.number - 2]?.text === '' ||
          boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
         rootLinkDef(line.text.slice(simpleRootListPrefix.length).trimStart()) : null
       const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
