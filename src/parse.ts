@@ -40,6 +40,7 @@ export {
   rawImageBracketRunCloses,
   readCellAttributeBlock,
   rebaseHelpers,
+  scanCellMarkerRun,
   rowAttrsFromLine,
   splitTableRowSpans,
   stripContainerPrefixes,
