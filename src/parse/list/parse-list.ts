@@ -356,7 +356,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
     const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
     const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
-      (firstBlockColumn === itemMarkerColumn || firstBlockColumn === placement.contentCol ||
+      (firstBlockColumn === itemMarkerColumn || firstBlockMarker &&
+        firstBlockColumn === placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent ||
         firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
         isStackedFirstBlockQuoteMarker(itemSource) &&
           stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
@@ -455,6 +456,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
     } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
+    // The selected block starts at its own column inside the item. Keep later
+    // blocks pulled by a separate + at their own source columns.
+    for (let index = 0; index < attached.length; index++) {
+      attached[index] = sliceColumns(attached[index]!, firstBlockColumn, true)
+    }
     // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
     // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
     // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
