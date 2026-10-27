@@ -1702,6 +1702,14 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it('keeps an out-of-column tilde run in the nested list paragraph', () => {
+    const source = '- outer\n  - head\n     ~~~\n     a\n ~~~\n\n    tail\n'
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
   it.each([':: term\n:  definition\n > quote\n',
     ':: term\n:  definition\n  # H\n'])
   ('keeps a below-column marker as definition paragraph text: %s', (source) => {

@@ -1789,6 +1789,16 @@ function closesOpenListCodeSpan(body: SourceLine[], follower: string,
   return false
 }
 
+function foldsListTildeRun(body: SourceLine[], follower: string,
+  contentColumn: number | undefined): boolean {
+  const run = /^( +)(~{3,})[ \t]*$/.exec(follower)
+  return run !== null && contentColumn !== undefined &&
+    run[1]!.length < contentColumn - 1 && body.length >= 2 &&
+    plainQuoteText(body[0]!.text) &&
+    body.every((line) => line.text !== '') &&
+    body.some((line) => line.text.trimStart() === run[2])
+}
+
 function mayFoldNestedListParagraph(cursor: Cursor,
   top: { indent: number; contentColumn?: number; ordered: boolean;
     delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
@@ -1799,7 +1809,9 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   if (plainQuoteText(follower) && (plainQuoteText(last) ||
       last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
   return follower[0] === ' ' && follower.includes('`') &&
-    closesOpenListCodeSpan(top.body, follower, top.contentColumn)
+    closesOpenListCodeSpan(top.body, follower, top.contentColumn) ||
+    follower[0] === ' ' && follower.includes('~') &&
+    foldsListTildeRun(top.body, follower, top.contentColumn)
 }
 
 function mayFoldBelowColumnParagraph(cursor: Cursor,
