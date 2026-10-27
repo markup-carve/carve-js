@@ -3499,7 +3499,7 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   return (quotedContinuationFollower(cursor, body) || plain) &&
     (!after || isBlankLine(after.text) ||
       listMarker(follower?.text ?? '')?.indent === 0 && quotedAfter !== undefined &&
-        plainQuoteText(quotedAfter) ||
+        !listMarker(quotedAfter) ||
       plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
 }
 
@@ -3568,7 +3568,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
         listMarker(text) !== undefined
       cursor.take()
       const owned = quotedOwnedBodyLine(line, body, prefix, text)
-      body.push(attachedListReturn && plainQuoteText(text) ?
+      body.push(attachedListReturn && !listMarker(text) ?
         { ...owned, quoteResume: true } : owned)
       attachedListReturn = false
       if (body.length === 1) firstFence = fenceOpen(text) !== null
