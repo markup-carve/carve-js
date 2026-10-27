@@ -1717,6 +1717,9 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
   const follower = cursor.peek()
   if (!follower) return undefined
   const after = cursor.peek(1)
+  if (markerLineNested && cursor.owner.kind === 'list' &&
+      (follower.baseColumn ?? 1) > 1 &&
+      !RE_BLOCKQUOTE.test(follower.text)) return undefined
   const prefix = ' '.repeat(contentColumn - 1)
   const atContentColumn = prefix.length > 0 && follower.text.startsWith(prefix)
   if (!(plainQuoteText(follower.text) ||
@@ -1824,9 +1827,11 @@ function isUnattachedRootFirstBlock(marker: NonNullable<ReturnType<typeof listMa
 }
 
 function isRefusedListFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
-  taskWidth: number, next: SourceLine | undefined, depth: number): boolean {
+  taskWidth: number, next: SourceLine | undefined, depth: number, owner: ContainerOwner): boolean {
   return isUnattachedRootFirstBlock(marker, taskWidth, next, depth) ||
-    isRefusedTaskFirstBlock(marker, taskWidth, next, depth)
+    isRefusedTaskFirstBlock(marker, taskWidth, next, depth) ||
+    depth === 1 && owner.kind === 'list' && marker.indent === 0 &&
+    marker.content.slice(taskWidth) === '+' && (!next || (next.baseColumn ?? 1) > 1)
 }
 
 function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceMarker: string | undefined,
@@ -2424,6 +2429,14 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         frame.item.pos = listSpan(frame.itemFirst, placed, frame.spanColumn)
       }
     }
+    const lastChild = frame.item.children.at(-1)
+    if (lastChild?.type === 'list' && placedEndLine === frame.last.number &&
+        frame.itemFirst.number === frame.last.number && frame.last.text.endsWith('+') &&
+        lastChild.pos?.endColumn !== undefined &&
+        lastChild.pos.endColumn < contentEndColumn(frame.last)) {
+      frame.last = { ...frame.last, spanEndColumn: lastChild.pos.endColumn }
+      frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+    }
   }
   const flush = (frame: ListCursorFrame) => {
     if (!frame.item) return
@@ -2780,7 +2793,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.closedQuoteFence = false
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
-      const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth, cursor.peek(), depth)
+      const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth,
+        cursor.peek(), depth, cursor.owner)
       const emptyAttributedItem = 'attrs' in marker && current.body.length === 0
       const spanLine = refusedFirstBlock || emptyAttributedItem ?
         { ...line, spanEndColumn: 'continuationWidth' in marker ? marker.continuationWidth : marker.width + 1 } : line
