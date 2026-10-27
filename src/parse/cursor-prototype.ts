@@ -3805,13 +3805,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   }
   const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body,
     directParagraph, listOwner?.boundaryFence)
-  const onlyLinkDefinition = children.length === 0 && body.length === 1 &&
-    rootLinkDef(body[0]!.text) !== null
+  const onlyDefinition = children.length === 0 && body.length === 1 &&
+    (rootLinkDef(body[0]!.text) !== null || FOOTNOTE_DEF.test(body[0]!.text))
   const placedEndLine = children.at(-1)?.pos?.endLine
   const quoteLast = placedEndLine && placedEndLine < last.number ?
     cursor.physicalLines[placedEndLine - 1] ?? last : last
   return { type: 'block_quote', children,
-    pos: position(first, quoteLast, 1, onlyLinkDefinition ?
+    pos: position(first, quoteLast, 1, onlyDefinition ?
       body[0]!.baseColumn ?? contentEndColumn(quoteLast) : contentEndColumn(quoteLast)) }
 }
 
@@ -4526,7 +4526,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
   colonDepth = 0): BlockNode[] {
   if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
-  if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list') {
+  const singleRootQuoteFootnote = cursor.owner.kind === 'quote' &&
+    cursor.owner.parent?.kind === 'root' && cursor.lines.length === 1 &&
+    FOOTNOTE_DEF.test(cursor.lines[0]!.text)
+  if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list' ||
+      singleRootQuoteFootnote) {
     footnoteDefs ??= inline.footnoteDefs
     footnoteDefPos ??= inline.footnoteDefPos
   }

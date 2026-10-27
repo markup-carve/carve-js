@@ -556,8 +556,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('keeps a root quote footnote declined until its empty-span owner is migrated', () => {
-    expect(() => parseCursorPrototype('See [^a].\n\n> [^a]: note body\n'))
+  it('places an empty root quote at its marker after collecting its footnote', () => {
+    const source = 'See [^a].\n\n> [^a]: note body\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root quote with multiple collected definitions declined', () => {
+    expect(() => parseCursorPrototype('> [r]: /url\n> [^f]: note\n\nSee [r][] [^f].\n'))
       .toThrow(UnsupportedCursorSyntax)
   })
 
