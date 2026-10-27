@@ -18,7 +18,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, sourceColumnAt, type OlKind } from './list/parse-item-core.js'
-import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
+import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_DIV_OPEN, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, RE_VALID_ADMONITION_OPEN, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, isFigureGroupOpener, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
@@ -180,6 +180,15 @@ function plainCursorText(text: string): boolean {
       /\((?:c|r|tm)\)/i.test(text)) return false
   const colon = text.indexOf(':')
   return colon === -1 || text.indexOf(':', colon + 1) === -1
+}
+
+function cursorContainerLabel(text: string): string {
+  if (!text.includes('%%')) return text
+  const nodes = new InlineParseSession().parseRefLabelInlines(text)
+  const last = nodes.at(-1)
+  if (last?.type !== 'comment' || last.block) return text
+  const start = last.pos?.startOffset
+  return start === undefined ? text : text.slice(0, start).replace(/ +$/, '')
 }
 
 class CursorInline extends InlineParseSession {
@@ -3671,6 +3680,66 @@ function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,
     pos: position(definitionLine, definitionLine) })
 }
 
+function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
+  definitionNodes: BlockNode[], depth: number, atDocumentLevel: boolean,
+  footnoteDefs: Record<string, BlockNode[]> | undefined,
+  footnoteDefPos: Record<string, Position> | undefined,
+  colonDepth: number): BlockNode | undefined {
+  const first = cursor.peek()!
+  if (first.text[0] !== ':') return undefined
+  const simple = COLON_OPEN.exec(first.text)
+  const div = simple ? null : RE_DIV_OPEN.exec(first.text)
+  const valid = simple || div ? null : RE_VALID_ADMONITION_OPEN.exec(first.text)
+  const opener = simple ?? div ?? valid ??
+    (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
+  if (!opener) return undefined
+  const kind = div ? undefined : opener[2]
+  const titleRaw = div ? undefined : opener[3]
+  const labelRaw = div ? div[2] : opener[4]
+  const figureGroup = isFigureGroupOpener(first.text, !!cursor.owner.inFigureGroup)
+  const emptyBareDefinition = cursor.owner.kind === 'definition' &&
+    kind === undefined && cursor.peek(1) === undefined
+  if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
+      !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition) ||
+      unsupportedReferencesColon(opener)) {
+    throw new UnsupportedCursorSyntax('nested or specialized colon container')
+  }
+  cursor.take()
+  const body = takeColonBody(cursor, opener[1]!.length)
+  const boundary = boundedColonFence(body, cursor, opener[1]!.length)
+  if (kind === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
+    throw new UnsupportedCursorSyntax('abbreviation inside bare container')
+  }
+  const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
+  const owner = childOwner(cursor.owner, 'colon', false, boundary !== undefined, boundary)
+  const children = parseBlocks(new Cursor(body, undefined,
+    figureGroupOwner(owner, figureGroup), cursor.physicalLines),
+  inline, definitionNodes, depth + 1, false,
+  footnoteDefs, footnoteDefPos, undefined, colonDepth + 1)
+  if (figureGroup) {
+    const caption = takeCaption(cursor, inline)
+    return { type: 'figure_group', children,
+      ...(caption ? { caption: caption.children } : {}),
+      pos: position(first, caption?.line ?? close) }
+  }
+  const pos = position(first, close)
+  if (titleRaw && kind === undefined) throw new UnsupportedCursorSyntax('bare div title')
+  if (labelRaw && kind && GENERATED_CONTENT_KINDS.has(kind)) {
+    throw new UnsupportedCursorSyntax('directive label')
+  }
+  const titleText = simple ? titleRaw : titleRaw?.slice(1, -1)
+  const title = titleText ? inline.inlines([{ line: first,
+    column: first.text.indexOf('"') + 2, text: titleText }]) : undefined
+  const labelText = simple ? labelRaw : labelRaw?.slice(1, -1)
+  const label = labelText === undefined ? undefined : cursorContainerLabel(labelText)
+  return kind === undefined ? { type: 'div', children,
+    ...(label === undefined ? {} : { label }), pos } :
+    GENERATED_CONTENT_KINDS.has(kind) ?
+      { type: 'directive', kind, children, ...(title ? { title } : {}), pos } :
+      { type: 'admonition', kind, children, ...(title ? { title } : {}),
+        ...(label === undefined ? {} : { label }), pos }
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -3845,57 +3914,9 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseSigilFence(cursor, inline, definitionNodes, depth, sigilFence))
       continue
     }
-    const simpleColon = COLON_OPEN.exec(first.text)
-    const colon = simpleColon ??
-      (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
-    if (colon) {
-      const figureGroup = isFigureGroupOpener(first.text, !!cursor.owner.inFigureGroup)
-      const emptyBareDefinition = cursor.owner.kind === 'definition' &&
-        colon[2] === undefined && cursor.peek(1) === undefined
-      if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
-          !simpleClosedListColon(cursor, colon[1]!, colon[2]) && !emptyBareDefinition) ||
-          unsupportedReferencesColon(colon)) {
-        throw new UnsupportedCursorSyntax('nested or specialized colon container')
-      }
-      cursor.take()
-      const body = takeColonBody(cursor, colon[1]!.length)
-      const boundary = boundedColonFence(body, cursor, colon[1]!.length)
-      if (colon[2] === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
-        throw new UnsupportedCursorSyntax('abbreviation inside bare container')
-      }
-      const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-      const owner = childOwner(cursor.owner, 'colon', false, boundary !== undefined, boundary)
-      const children = parseBlocks(new Cursor(body, undefined,
-        figureGroupOwner(owner, figureGroup),
-        cursor.physicalLines),
-        inline, definitionNodes, depth + 1, false,
-        footnoteDefs, footnoteDefPos, undefined, colonDepth + 1)
-      if (figureGroup) {
-        const caption = takeCaption(cursor, inline)
-        emit({ type: 'figure_group', children,
-          ...(caption ? { caption: caption.children } : {}),
-          pos: position(first, caption?.line ?? close) })
-        continue
-      }
-      const kind = colon[2]
-      const pos = position(first, close)
-      if (colon[3] && kind === undefined) throw new UnsupportedCursorSyntax('bare div title')
-      if (colon[4] && kind && GENERATED_CONTENT_KINDS.has(kind)) {
-        throw new UnsupportedCursorSyntax('directive label')
-      }
-      const titleText = simpleColon ? colon[3] : colon[3]?.slice(1, -1)
-      const title = titleText ? inline.inlines([{ line: first,
-        column: first.text.indexOf('"') + 2, text: titleText }]) : undefined
-      const label = simpleColon ? colon[4] : colon[4]?.slice(1, -1)
-      const node: BlockNode = kind === undefined ? { type: 'div', children,
-        ...(label ? { label } : {}), pos } :
-        GENERATED_CONTENT_KINDS.has(kind) ?
-          { type: 'directive', kind, children, ...(title ? { title } : {}), pos } :
-          { type: 'admonition', kind, children, ...(title ? { title } : {}),
-            ...(label ? { label } : {}), pos }
-      emit(node)
-      continue
-    }
+    const colonNode = parseColonAtCursor(cursor, inline, definitionNodes, depth,
+      atDocumentLevel, footnoteDefs, footnoteDefPos, colonDepth)
+    if (colonNode) { emit(colonNode); continue }
     if (/^:: +[ \t]*[^ \t]/.test(first.text) &&
         (atDocumentLevel || cursor.owner.kind === 'definition' ||
           (cursor.owner.kind === 'quote' && !cursor.owner.inList))) {

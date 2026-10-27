@@ -2503,4 +2503,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each([':::[*b*]\nbody\n:::\n',
+    ':::[`x`]\nbody\n:::\n',
+    '::: note [`x`]\nbody\n:::\n',
+    '::: note [%% hidden]\nbody\n:::\n',
+    ':::[{+a %% hidden+}]\nbody\n:::\n'])
+  ('uses the full container label matcher and inline comment boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
