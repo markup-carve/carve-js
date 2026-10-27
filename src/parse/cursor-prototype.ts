@@ -842,9 +842,11 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
       parseSimpleTable(cursor, inline)
   }
   const headed = first.text.startsWith('|=')
+  const tabbedListRow = cursor.owner.kind === 'list' &&
+    cursor.physicalLines[first.number - 1]?.text.startsWith('\t')
   if (!first.text.startsWith('|') ||
       (!headed && cursor.at > 0 && cursor.lines[cursor.at - 1]?.text !== '' &&
-        (cursor.owner.kind !== 'root' ||
+        (cursor.owner.kind !== 'root' && !tabbedListRow ||
           listMarker(cursor.lines[cursor.at - 1]!.text) !== undefined ||
           cursor.lines[cursor.at - 1]!.text.startsWith('>')))) {
     throw new UnsupportedCursorSyntax('canonical table header')
@@ -1840,6 +1842,10 @@ function mayFoldBelowColumnParagraph(cursor: Cursor,
       next.text.startsWith(' '.repeat(frame.contentColumn - 1)) ||
       last.number !== next.number - 1 || isBlankLine(next.text) ||
       isBlockStart(next.text)) return false
+  if (next.text.includes('\t')) {
+    const reached = reachableListPrefix(next.text, frame.contentColumn)
+    if (reached !== undefined && isTableRow(next.text.slice(reached))) return false
+  }
   if (!plainQuoteText(last.text) &&
       !(plainPlusText(last.text) && frame.body[0]?.text[0] !== '|')) {
     const nestedMarker = frame.body.length === 1 ? listMarker(last.text) : undefined
