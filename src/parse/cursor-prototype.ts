@@ -174,10 +174,12 @@ function contentEndColumn(line: SourceLine): number {
 }
 
 type ContentLine = { line: SourceLine; column: number; text: string }
-const RE_PLAIN_CURSOR_TEXT = /^[A-Za-z0-9 .,;!?()\-]+$/
+const RE_PLAIN_CURSOR_TEXT = /^[A-Za-z0-9 .,;!?():\-]+$/
 function plainCursorText(text: string): boolean {
-  return RE_PLAIN_CURSOR_TEXT.test(text) && !text.includes('..') && !text.includes('--') &&
-    !/\((?:c|r|tm)\)/i.test(text)
+  if (!RE_PLAIN_CURSOR_TEXT.test(text) || text.includes('..') || text.includes('--') ||
+      /\((?:c|r|tm)\)/i.test(text)) return false
+  const colon = text.indexOf(':')
+  return colon === -1 || text.indexOf(':', colon + 1) === -1
 }
 
 class CursorInline extends InlineParseSession {
@@ -232,7 +234,8 @@ class CursorInline extends InlineParseSession {
       startColumn: (first.line.baseColumn ?? 1) + first.column - 1,
       ...(lineAnchors ? { lineAnchors } : {}),
     }, captionContext)
-    if (nodes[0]?.type === 'image') this.hasLeadingImage = true
+    if (nodes[0]?.type === 'image' || nodes[0]?.type === 'comment' &&
+        nodes.find((node) => node.type !== 'comment')?.type === 'image') this.hasLeadingImage = true
     return nodes
   }
 }
@@ -1346,12 +1349,16 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   const parts: ContentLine[] = []
   let last = first
   let captionLead: InlineNode[] | undefined
+  let imageCaptionSlot = false
   const literalColonOpener = /^:{3,}(?: *\t| +\{|>)/.test(first.text)
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || ((!interruptsParagraphAtCursor(cursor) || cursor.peek()!.lazyText) &&
         !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
           listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
+    if (imageCaptionSlot && RE_CAPTION.test(cursor.peek()!.text)) break
+    if (parts.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(parts[0]!.line.text) &&
+        RE_CAPTION.test(cursor.peek()!.text)) imageCaptionSlot = true
     if (parts.length === 1 && parts[0]!.text.startsWith('![') &&
         RE_CAPTION.test(cursor.peek()!.text)) {
       const lead = inline.inlines(parts)

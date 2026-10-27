@@ -5,12 +5,35 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    '![a][r]\n^ cap\n^ cap\n',
+    '{%%}![alt](x.png)\n',
+  ])('keeps caption slots and image promotion exact: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     'A well-formed sentence.\n',
     'A well-formed sentence.\n\nA second hyphen-separated line.\n',
     '- A well-formed item.\n',
     'A well-formed\nline-by-line\nparagraph.\n',
     'A word--pair stays on the inline scanner.\n',
   ])('keeps plain hyphenated text exact: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
+    'Note: the line remains plain.\n',
+    'Note: one line\nwith a second line\nand a third line.\n',
+    '- Note: a list item.\n',
+    'A symbol :check: stays on the inline scanner.\n',
+    'Two: colons: stay on the inline scanner.\n',
+  ])('keeps plain single-colon text exact: %s', (source) => {
     const actual = parseCursorPrototype(source)
     const expected = parse(source)
     expect(actual).toStrictEqual(expected)
