@@ -506,6 +506,11 @@ function indentedLiteralAbbreviation(text: string): boolean {
   return text.startsWith(' ') && ABBR_DEF.test(text.trimStart())
 }
 
+function indentedLiteralColon(text: string): boolean {
+  const content = text.trimStart()
+  return text.startsWith(' ') && content.startsWith(':::') && !COLON_OPEN.test(content)
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -3292,6 +3297,15 @@ function takeIndentedAbbreviationQuoteTail(cursor: Cursor, body: SourceLine[],
   return line
 }
 
+function takeIndentedColonQuoteTail(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!line || !indentedLiteralColon(body.at(-1)?.text ?? '') ||
+      !/^ +:::$/.test(line.text) ||
+      cursor.peek(1) && !isBlankLine(cursor.peek(1)!.text)) return undefined
+  body.push(cursor.take())
+  return line
+}
+
 function quotedContinuationFollower(cursor: Cursor, body: SourceLine[]): boolean {
   const next = cursor.peek(1)?.text ?? ''
   return listMarker(next)?.indent === 0 ||
@@ -3413,6 +3427,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     if (abbreviationTail) {
       directParagraph = false
       last = abbreviationTail
+      continue
+    }
+    const colonLiteralTail = takeIndentedColonQuoteTail(cursor, body)
+    if (colonLiteralTail) {
+      directParagraph = false
+      last = colonLiteralTail
       continue
     }
     const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')
