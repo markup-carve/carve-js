@@ -5014,6 +5014,10 @@ function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string
 }
 
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
+  if (opts.positions === false && source.includes('![') &&
+      /(?:^|[\r\n])[ \t]*\^/.test(source)) {
+    throw new UnsupportedCursorSyntax('position-free image caption ownership')
+  }
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
       opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata ||

@@ -6,6 +6,14 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('declines position-free image captions until their owner is migrated', () => {
+    expect(() => parseCursorPrototype('![a][ok]\n^ cap\n\n[ok]: /p.png\n',
+      { positions: false })).toThrow(UnsupportedCursorSyntax)
+    const plain = '# Heading\n\nparagraph\n'
+    expect(parseCursorPrototype(plain, { positions: false }))
+      .toStrictEqual(parse(plain, { positions: false }))
+  })
+
   it('keeps one-column list siblings as text after a nonempty root item', () => {
     const source = '- Rechnung\n - Entwurf\n - Final\n- Mahnung\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
