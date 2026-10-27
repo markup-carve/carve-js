@@ -1504,6 +1504,7 @@ function convertInline(
   // The caller writes every returned line as it stands, so a code value may add one.
   breakableCode = false,
   preserveSingleQuoteTitle = false,
+  codeBreakMarker?: string,
 ): string {
   if (input.includes('][') && !input.includes('<')) input = respellReferenceChainDestinations(input, table)
   const reportFlattenedEmphasis = (reason?: 'extender') => importLosses.push({
@@ -1712,7 +1713,7 @@ function convertInline(
         const paragraph = probe.children[0]
         const code = paragraph?.type === 'paragraph' ? paragraph.children[1] : undefined
         if (probe.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 3 && code?.type === 'code' && code.value === value) {
-          return protect(written, referenceSourceText(match, protectedSources))
+          return protect(codeBreakMarker === undefined ? written : written.replace(/\n/g, codeBreakMarker), referenceSourceText(match, protectedSources))
         }
       } catch (error) {
         if (!(error instanceof SourceUnspellableError)) throw error
@@ -4560,6 +4561,14 @@ function restorePrefixedInlineRun(
   terminal = true,
   inheritedItemCol = 0,
 ): string[] {
+  const codeBreakMarker = '\x00CARVE_CODE_BREAK\x00'
+  const expandCodeBreaks = (line: string, prefix: string): string[] => {
+    if (!line.includes(codeBreakMarker)) return [line]
+    const beforeCode = line.slice(0, line.indexOf(codeBreakMarker))
+    const containers = /^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+))*/.exec(beforeCode)![0]
+    const continuation = (containers || prefix).replace(/(?:[-*+]|\d+[.)])[ \t]+/g, marker => ' '.repeat(marker.length))
+    return line.split(codeBreakMarker).map((part, index) => index === 0 ? part : continuation + part)
+  }
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const joinedLines = new Set<number>()
   const tableRows = containerTableRows(run, inheritedItemCol)
@@ -4589,6 +4598,7 @@ function restorePrefixedInlineRun(
       return sourceSegments[low - 1]?.line
     },
     true, false, line => continuationIndents[line] ?? false,
+    true, false, codeBreakMarker,
   ).split('\n')
   let physicalLine = 0
   run = run.flatMap(part => part.continuationIndents === undefined ? [part] : part.text.split('\n').map(text => ({ ...part, text })))
@@ -4609,23 +4619,23 @@ function restorePrefixedInlineRun(
   const modellable = held.every(
     (part) => !RE_LIST_MARKER.test(part.body) && !/^[ \t]/.test(part.body),
   )
-  if (!modellable) return run.map((part, idx) => {
+  if (!modellable) return run.flatMap((part, idx) => {
     const line = converted[idx] ?? ''
     if (part.lazyQuote && nestedItemsOnLine(run[0]!.prefix + run[0]!.text, run[0]!.prefix.length).length > 0) {
-      return part.prefix + /^[ \t]*/.exec(part.text)![0] + line.trimStart()
+      return expandCodeBreaks(part.prefix + /^[ \t]*/.exec(part.text)![0] + line.trimStart(), part.prefix)
     }
     const quoted = peelQuoteMarkers(line)
     const source = peelQuoteMarkers(part.text)
     if (RE_LIST_MARKER.test(part.prefix) && quoted.marker !== '' && source.marker !== '' &&
       isAsciiAlphanumeric(source.body.trimStart()[0])) {
       const prefix = part.prefix + quoted.marker
-      return prefix + emitContainerLine(quoted.body, 'paragraph', {
+      return expandCodeBreaks(prefix + emitContainerLine(quoted.body, 'paragraph', {
         listDepth: 1, quoteDepth: quoteDepth(prefix), prefix, hosts: emissionHosts(prefix),
-      }).line
+      }).line, prefix)
     }
-    return part.prefix + emitContainerLine(line, 'verbatim', {
+    return expandCodeBreaks(part.prefix + emitContainerLine(line, 'verbatim', {
       listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(part.prefix), prefix: part.prefix,
-    }).line
+    }).line, part.prefix)
   })
 
   const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`)
@@ -4750,11 +4760,12 @@ function restorePrefixedInlineRun(
         }).line
       }
     }
-    out.push(openingPrefix(part.prefix + kept) + emitContainerLine(kind === 'paragraph' ? dropTrailingWs(writtenBody) : writtenBody, kind, {
+    const prefix = openingPrefix(part.prefix + kept)
+    out.push(...expandCodeBreaks(prefix + emitContainerLine(kind === 'paragraph' ? dropTrailingWs(writtenBody) : writtenBody, kind, {
       listDepth: RE_LIST_MARKER.test(kept) ? 1 : 0,
       quoteDepth: quoteDepth(part.prefix) + quoteDepth(kept), prefix: part.prefix + kept,
       hosts: emissionHosts(part.prefix + kept),
-    }).line)
+    }).line, prefix))
   }
   return out
 }
