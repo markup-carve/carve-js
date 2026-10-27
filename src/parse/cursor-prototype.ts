@@ -1789,6 +1789,15 @@ function closesOpenListCodeSpan(body: SourceLine[], follower: string,
   return false
 }
 
+function attachedListFenceCaption(frame: ListCursorFrame, line: SourceLine,
+  owner: ContainerOwner, stackLength: number, reachedPrefix: number | undefined): boolean {
+  if (reachedPrefix !== undefined || stackLength !== 1 || owner.kind !== 'root' ||
+      frame.indent !== 0 || frame.fenceMarker || frame.body.length < 2 ||
+      line.text[0] !== '^' || !RE_CAPTION.test(line.text)) return false
+  const marker = fenceOpen(frame.body[0]!.text)?.marker
+  return marker !== undefined && closesFence(frame.body.at(-1)!.text, marker)
+}
+
 function foldsListTildeRun(body: SourceLine[], follower: string,
   contentColumn: number | undefined): boolean {
   const run = /^( +)(~{3,})[ \t]*$/.exec(follower)
@@ -2565,6 +2574,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     if (contentColumn === undefined) break
     const prefix = ' '.repeat(contentColumn - 1)
     const reachedPrefix = reachableListPrefix(line.text, contentColumn)
+    if (attachedListFenceCaption(top, line, cursor.owner, stack.length, reachedPrefix)) {
+      cursor.take()
+      appendBody(top, line, 0)
+      updateListFrameEnds(stack, line, listSpan)
+      continue
+    }
     if (reachedPrefix === undefined && top.body.at(-1)?.number === line.number - 1) {
       const previousText = top.body.at(-1)!.text
       if (LINE_COMMENT.test(line.text) && !RE_COMMENT_BLOCK_ANY.test(line.text) &&

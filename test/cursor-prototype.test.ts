@@ -119,6 +119,14 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
+  it('keeps a caption with a root list continuation fence', () => {
+    const source = '- +\n```\nx\n```\n^ cap\n- c\n'
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
   it.each([3, 4, 8])('keeps a shifted inline code run in a list-owned quote at column %i',
     (column) => {
       const indent = ' '.repeat(column)
