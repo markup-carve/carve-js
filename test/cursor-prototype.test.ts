@@ -6,6 +6,11 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('declines one-column list siblings after a root list item', () => {
+    const source = '- Rechnung\n - Entwurf\n - Final\n- Mahnung\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines shallow child markers after nested quote ownership changes', () => {
     for (const source of [
       '- a\n  > a\n- s\n> next\n - child\nplain\n',
