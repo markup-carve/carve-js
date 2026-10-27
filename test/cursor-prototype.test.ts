@@ -1656,6 +1656,7 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['- +\n', '- +\n- b\n', '- +\n\npara\n',
+    '- +\n flush\n', '1. +\n x\n', '- [ ] +\n x\n',
     '1. +\n', '- [ ] +\n', '1. [ ] +\n'])
   ('keeps a refused first-block marker and its authored span: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

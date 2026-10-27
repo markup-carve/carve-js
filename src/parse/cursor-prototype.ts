@@ -1846,7 +1846,9 @@ function isRefusedTaskFirstBlock(marker: NonNullable<ReturnType<typeof listMarke
 function isUnattachedRootFirstBlock(marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, next: SourceLine | undefined, depth: number): boolean {
   if (depth !== 0 || marker.indent !== 0 || marker.content.slice(taskWidth) !== '+') return false
+  const nextIndent = next ? /^ */.exec(next.text)![0].length : 0
   return next === undefined || isBlankLine(next.text) ||
+    nextIndent > 0 && nextIndent < marker.width + taskWidth ||
     (listMarker(next.text)?.indent ?? Number.POSITIVE_INFINITY) <= marker.indent
 }
 
