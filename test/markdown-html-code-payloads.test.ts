@@ -47,6 +47,17 @@ it('keeps a spellable paragraph code payload native', () => {
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><code>a\nb</code></p>')
 })
 
+it.each([
+  ['- q\n  <code><!---->&#10;<!---->tail</code>', '<ul>\n  <li>q\n<code>\ntail</code></li>\n</ul>'],
+  ['- - <code><!---->&#10;<!---->tail</code>', '<ul>\n  <li>\n    <ul>\n      <li><code>\ntail</code></li>\n    </ul>\n  </li>\n</ul>'],
+  ['> <code>a<!---->&#10;<!---->b<!---->&#10;<!---->c</code>', '<blockquote><p><code>a\nb\nc</code></p></blockquote>'],
+])('keeps multiline inline code native in a container: %s', (markdown, expectedHtml) => {
+  const result = migrateMarkdown(markdown)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(result.value).not.toContain('{=html}')
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(expectedHtml)
+})
+
 it('does not report losses from the discarded native-code probe', () => {
   const result = migrateMarkdown('<code>&#32;a_b</code>')
   expect(result.report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])

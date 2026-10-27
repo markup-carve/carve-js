@@ -3,7 +3,7 @@ import { protectNativeMarkdownDestinationGlyphs } from './import/markdown/markdo
 import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './import/markdown/markdown-destination-encoding.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
-import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
+import { isCarveWhitespace, trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './import/markdown/markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source/source-unspellable-error.js'
@@ -100,6 +100,7 @@ function extenderFollows(full: string, end: number): boolean {
 function wrapped(open: string, close: string, braced = open): (match: string, body: string, offset: number, full: string) => string {
   return (match, body, offset, full) => {
     if (extenderLeadingBody(body)) return body
+    if (braced !== open && (isCarveWhitespace(body[0]!) || isCarveWhitespace(body.at(-1)!))) return `${braced}${body}${close}}`
     return extenderFollows(full, offset + match.length) ? `${braced}${body}${close}${braced === open ? '' : '}'}` : `${open}${body}${close}`
   }
 }
@@ -107,6 +108,10 @@ function wrapped(open: string, close: string, braced = open): (match: string, bo
 function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
   return (match, body, offset, full, spans = []) => {
     if (extenderLeadingBody(body)) return body
+    if (marker === '*') {
+      const nested = nestedHtmlStrongBody(body)
+      if (nested !== undefined) return nested
+    }
     // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
     let before = full[offset - 1] ?? ''
@@ -126,8 +131,22 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
       }
     }
     const after = full[offset + match.length] ?? ''
-    return emphasisNeedsBraces(marker, body, marker === '*' && before === '*' ? '' : before, after, extenderFollows(full, offset + match.length))
+    return emphasisNeedsBraces(marker, body, before, after, extenderFollows(full, offset + match.length))
       ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+  }
+}
+
+/** Render an HTML strong wrapper with its already-converted Markdown children. */
+function nestedHtmlStrongBody(body: string): string | undefined {
+  if (!body.includes('*') || body.includes('\x00')) return undefined
+  try {
+    const blocks = parse(body).children
+    if (blocks.length !== 1 || blocks[0]?.type !== 'paragraph') return undefined
+    const children = blocks[0].children
+    if (!children.some(child => child.type === 'strong')) return undefined
+    return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'strong', children }] }] }).replace(/\n$/, '')
+  } catch {
+    return undefined
   }
 }
 
@@ -1485,6 +1504,7 @@ function convertInline(
   // The caller writes every returned line as it stands, so a code value may add one.
   breakableCode = false,
   preserveSingleQuoteTitle = false,
+  codeBreakMarker?: string,
 ): string {
   if (input.includes('][') && !input.includes('<')) input = respellReferenceChainDestinations(input, table)
   const reportFlattenedEmphasis = (reason?: 'extender') => importLosses.push({
@@ -1693,7 +1713,7 @@ function convertInline(
         const paragraph = probe.children[0]
         const code = paragraph?.type === 'paragraph' ? paragraph.children[1] : undefined
         if (probe.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 3 && code?.type === 'code' && code.value === value) {
-          return protect(written, referenceSourceText(match, protectedSources))
+          return protect(codeBreakMarker === undefined ? written : written.replace(/\n/g, codeBreakMarker), referenceSourceText(match, protectedSources))
         }
       } catch (error) {
         if (!(error instanceof SourceUnspellableError)) throw error
@@ -1747,6 +1767,7 @@ function convertInline(
     return referenceLiteralText(part, decodeHtmlEntitiesRaw, protectedSpans).replace(/\r\n?|\n/g, ' ').replace(/[!-\/:-@\[-`{-~]/g, '\\$&')
   }).join('')
   line = protectMarkdownSourceEscapes(line, protect, terminal)
+  line = decodeLiteralFootnoteClosingEscapes(line, protectedSpans)
 
 
 
@@ -2617,6 +2638,51 @@ function protectMarkdownSourceEscapes(line: string, protect: (s: string, source?
     }
   }
   return escaped
+}
+
+/** Move an inactive footnote-shaped run's bracket escape to its opener. */
+function decodeLiteralFootnoteClosingEscapes(line: string, protectedSpans: readonly string[]): string {
+  if (!line.includes('[^') || !line.includes('\x00')) return line
+  const replacements: Array<{ start: number; end: number; value: string }> = []
+  const tokenAt = /\x00P(\d+)\x00/y
+  let opener = -1
+  let closing: { start: number; end: number } | undefined
+  const keepLiteral = (): void => {
+    if (opener < 0 || closing === undefined) return
+    replacements.push({ start: opener, end: opener + 1, value: '\\[' })
+    replacements.push({ start: closing.start, end: closing.end, value: ']' })
+  }
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\n') { keepLiteral(); opener = -1; closing = undefined; continue }
+    if (line[i] === '\x00') {
+      tokenAt.lastIndex = i
+      const token = tokenAt.exec(line)
+      if (token) {
+        if (opener >= 0 && closing === undefined && protectedSpans[Number(token[1])] === '\\]') {
+          closing = { start: i, end: tokenAt.lastIndex }
+        }
+        i = tokenAt.lastIndex - 1
+        continue
+      }
+    }
+    if (line[i] === '\\') { i++; continue }
+    if (line[i] === '[' && line[i + 1] === '^') {
+      keepLiteral()
+      opener = i
+      closing = undefined
+    } else if (line[i] === ']') {
+      opener = -1
+      closing = undefined
+    }
+  }
+  keepLiteral()
+  if (replacements.length === 0) return line
+  let result = '', at = 0
+  for (const replacement of replacements) {
+    result += line.slice(at, replacement.start) + replacement.value
+    at = replacement.end
+  }
+  return result + line.slice(at)
 }
 
 /**
@@ -4472,8 +4538,8 @@ function runPartSourceLine(part: PrefixedInlineLine): number | undefined {
   return part.source === undefined ? undefined : importSourceLine?.(part.source)
 }
 
-function containerTableRows(run: readonly PrefixedInlineLine[]): boolean[] {
-  const held = heldByItem(run)
+function containerTableRows(run: readonly PrefixedInlineLine[], inheritedItemCol = 0): boolean[] {
+  const held = heldByItem(run, inheritedItemCol)
   const container = run.map(
     (part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`,
   )
@@ -4493,10 +4559,19 @@ function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
   terminal = true,
+  inheritedItemCol = 0,
 ): string[] {
+  const codeBreakMarker = '\x00CARVE_CODE_BREAK\x00'
+  const expandCodeBreaks = (line: string, prefix: string): string[] => {
+    if (!line.includes(codeBreakMarker)) return [line]
+    const beforeCode = line.slice(0, line.indexOf(codeBreakMarker))
+    const containers = /^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+))*/.exec(beforeCode)![0]
+    const continuation = (containers || prefix).replace(/(?:[-*+]|\d+[.)])[ \t]+/g, marker => ' '.repeat(marker.length))
+    return line.split(codeBreakMarker).map((part, index) => index === 0 ? part : continuation + part)
+  }
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const joinedLines = new Set<number>()
-  const tableRows = containerTableRows(run)
+  const tableRows = containerTableRows(run, inheritedItemCol)
   let offset = 0
   const sourceSegments = run.flatMap((part, index) => {
     const entries = (part.sourceSegments ?? [{offset:0, line:runPartSourceLine(part)}]).map(entry => ({offset:offset + entry.offset, line:tableRows[index] ? null : entry.line}))
@@ -4523,6 +4598,7 @@ function restorePrefixedInlineRun(
       return sourceSegments[low - 1]?.line
     },
     true, false, line => continuationIndents[line] ?? false,
+    true, false, codeBreakMarker,
   ).split('\n')
   let physicalLine = 0
   run = run.flatMap(part => part.continuationIndents === undefined ? [part] : part.text.split('\n').map(text => ({ ...part, text })))
@@ -4531,7 +4607,7 @@ function restorePrefixedInlineRun(
       physicalLine += countNewlines(part.text) + 1
       return keep
     })
-  const held = heldByItem(run)
+  const held = heldByItem(run, inheritedItemCol)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
   // still carry a container it does not model: the OUTER item of `- - | a |` is
@@ -4543,27 +4619,27 @@ function restorePrefixedInlineRun(
   const modellable = held.every(
     (part) => !RE_LIST_MARKER.test(part.body) && !/^[ \t]/.test(part.body),
   )
-  if (!modellable) return run.map((part, idx) => {
+  if (!modellable) return run.flatMap((part, idx) => {
     const line = converted[idx] ?? ''
     if (part.lazyQuote && nestedItemsOnLine(run[0]!.prefix + run[0]!.text, run[0]!.prefix.length).length > 0) {
-      return part.prefix + /^[ \t]*/.exec(part.text)![0] + line.trimStart()
+      return expandCodeBreaks(part.prefix + /^[ \t]*/.exec(part.text)![0] + line.trimStart(), part.prefix)
     }
     const quoted = peelQuoteMarkers(line)
     const source = peelQuoteMarkers(part.text)
     if (RE_LIST_MARKER.test(part.prefix) && quoted.marker !== '' && source.marker !== '' &&
       isAsciiAlphanumeric(source.body.trimStart()[0])) {
       const prefix = part.prefix + quoted.marker
-      return prefix + emitContainerLine(quoted.body, 'paragraph', {
+      return expandCodeBreaks(prefix + emitContainerLine(quoted.body, 'paragraph', {
         listDepth: 1, quoteDepth: quoteDepth(prefix), prefix, hosts: emissionHosts(prefix),
-      }).line
+      }).line, prefix)
     }
-    return part.prefix + emitContainerLine(line, 'verbatim', {
+    return expandCodeBreaks(part.prefix + emitContainerLine(line, 'verbatim', {
       listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(part.prefix), prefix: part.prefix,
-    }).line
+    }).line, part.prefix)
   })
 
   const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`)
-  const inTable = containerTableRows(run)
+  const inTable = containerTableRows(run, inheritedItemCol)
 
   const out: string[] = []
   let tableWidth = 0
@@ -4684,11 +4760,12 @@ function restorePrefixedInlineRun(
         }).line
       }
     }
-    out.push(openingPrefix(part.prefix + kept) + emitContainerLine(kind === 'paragraph' ? dropTrailingWs(writtenBody) : writtenBody, kind, {
+    const prefix = openingPrefix(part.prefix + kept)
+    out.push(...expandCodeBreaks(prefix + emitContainerLine(kind === 'paragraph' ? dropTrailingWs(writtenBody) : writtenBody, kind, {
       listDepth: RE_LIST_MARKER.test(kept) ? 1 : 0,
       quoteDepth: quoteDepth(part.prefix) + quoteDepth(kept), prefix: part.prefix + kept,
       hosts: emissionHosts(part.prefix + kept),
-    }).line)
+    }).line, prefix))
   }
   return out
 }
@@ -4698,9 +4775,9 @@ function restorePrefixedInlineRun(
  * quote holds peeled too: the item's marker, and the same columns under it, go
  * to `marker`, so a table inside a quoted item is found at the item's column.
  */
-function heldByItem(run: readonly PrefixedInlineLine[]): Array<{ marker: string; body: string }> {
-  let itemCol = 0
-  let itemKey = ''
+function heldByItem(run: readonly PrefixedInlineLine[], inheritedItemCol = 0): Array<{ marker: string; body: string }> {
+  let itemCol = inheritedItemCol
+  let itemKey = inheritedItemCol > 0 && run[0] ? `${run[0].prefix.length}:${peelQuoteMarkers(run[0].text).marker}` : ''
   return run.map((part) => {
     const held = peelQuoteMarkers(part.text)
     const key = `${part.prefix.length}:${held.marker}`
@@ -5266,7 +5343,8 @@ function writeQuotedInlineRun(
   const paddingFreeAtBlank = lastMarkerItem !== null && last !== undefined && resumed?.prefix === last.prefix &&
     (resumedIndent >= columnWidth(lastMarkerItem.lead) ||
       !resumed.hadLeadingTab && resumedIndent < 4 && isAsciiAlphanumeric(resumed.text.trimStart()[0]))
-  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect)
+  const inheritedItemCol = markers.get(run[0]?.prefix ?? '')?.itemAt(indentColumns(run[0]?.text ?? ''))?.content ?? 0
+  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l))

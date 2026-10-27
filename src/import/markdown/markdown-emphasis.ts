@@ -235,7 +235,8 @@ function closingSpanNeedsBraces(ctx: BraceContext, frame: Frame, pair: Pair, fir
   const beforeToken = beforeCandidate && beforeAt + beforeCandidate[0].length === pair.open ? beforeCandidate : null
   const beforeValue = beforeToken ? protectedSpans[Number(beforeToken[1])] ?? '' : ''
   const beforeSpelled = frame.parent && claimed.has(pair.open - 1) ? frame.parent
-    : beforeValue.startsWith('\\') || source[pair.open - 2] === '\\' ? '\\' : neighbor(pair.open - 1, true)
+    : beforeValue.startsWith('\\') ? beforeValue[1] ?? ''
+      : source[pair.open - 2] === '\\' ? source[pair.open - 1] ?? '' : neighbor(pair.open - 1, true)
   const afterSpelled = frame.parent && claimed.has(afterSource) ? frame.parent : nextSpelled
   const bodyToken = tokenAt(bodyStart)
   const bodyValue = bodyToken && bodyStart + bodyToken[0].length === pair.close ? protectedSpans[Number(bodyToken[1])] ?? '' : ''
