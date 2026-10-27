@@ -3211,7 +3211,9 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
 function quotedContinuationFollower(cursor: Cursor, body: SourceLine[]): boolean {
   const next = cursor.peek(1)?.text ?? ''
   return listMarker(next)?.indent === 0 ||
-    body.at(-1)?.text === '' && plainQuoteText(next)
+    body.at(-1)?.text === '' && plainQuoteText(next) ||
+    cursor.owner.kind === 'quote' && listMarker(body.at(-1)?.text ?? '') !== undefined &&
+      plainQuoteText(next)
 }
 
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {

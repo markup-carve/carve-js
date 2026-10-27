@@ -1412,6 +1412,11 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('attaches a paragraph after a nested quote list continuation', () => {
+    const source = '> > - a\n> +\n> para\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps an overindented empty fence after a list-owned break', () => {
     const source = '- outer\n  - para\n\n  ---\n    ```\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
