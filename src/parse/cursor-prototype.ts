@@ -1624,13 +1624,13 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     if (imageCaptionSlot && RE_CAPTION.test(cursor.peek()!.text)) break
     if (parts.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(parts[0]!.line.text) &&
         RE_CAPTION.test(cursor.peek()!.text)) imageCaptionSlot = true
-    if (parts.length === 1 && parts[0]!.text.startsWith('![') &&
+    if (parts.length > 0 && parts[0]!.text.startsWith('![') &&
         RE_CAPTION.test(cursor.peek()!.text)) {
       const lead = inline.inlines(parts)
       if (lead.length === 1 && lead[0]?.type === 'image' &&
           imageReferenceResolved(lead[0], inline) &&
           lead[0].pos?.startOffset === parts[0]!.line.start &&
-          lead[0].pos?.endOffset === parts[0]!.line.start + parts[0]!.line.text.length) {
+          lead[0].pos?.endOffset === last.start + last.text.length) {
         captionLead = lead
         break
       }
@@ -1653,9 +1653,10 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   if (parts[0]!.column > 1 && paragraph.children[0]?.type === 'image') {
     markAboveContentColumn(paragraph)
   }
-  if (parts.length === 1 && paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
+  if (paragraph.children.length === 1 && paragraph.children[0]?.type === 'image') {
     const image = paragraph.children[0]
-    const caption = imageReferenceResolved(image, inline) ? takeCaption(cursor, inline) : undefined
+    const caption = imageReferenceResolved(image, inline) || cursor.peek()?.text === '' ?
+      takeCaption(cursor, inline) : undefined
     if (caption) return { type: 'figure', target: image,
       caption: caption.children, pos: position(first, caption.line) }
     const baseColumn = first.baseColumn ?? 1

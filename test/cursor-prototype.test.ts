@@ -2417,8 +2417,8 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
-    '![a][ref]\n^ cap\n\n[ref]: /u\n'])
-  ('attaches an image caption only when its reference resolves: %s', (source) => {
+    '![a][ref]\n^ cap\n\n[ref]: /u\n', '![a\nb](/i)\n^ A caption.\n'])
+  ('keeps image caption ownership exact: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
