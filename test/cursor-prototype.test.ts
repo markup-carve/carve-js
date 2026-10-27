@@ -2147,9 +2147,19 @@ describe('experimental block cursor', () => {
 
   it.each(['- [a]: /x\n\nSee [t][a].\n',
     '* [a]: /x\n\nSee [t][a].\n',
+    '1. [a]: /x\n\nSee [t][a].\n',
+    '10. [a]: /x\n\nSee [t][a].\n',
+    '- lead\n- [a]: /x\n\nSee [t][a].\n',
     'intro\n\n- [a]: /x\n\nSee [t][a].\n'])
   ('hoists a bounded marker-line reference definition: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('does not hoist a lazy marker-line definition from a colon paragraph', () => {
+    const source = '::: n\nr\n- [d]: u\n:::\n\n[go][d]\n'
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(actual.children.some((node) => node.type === 'link_reference_definition')).toBe(false)
   })
 
   it('parses nested blocks through the same cursor inside a quote', () => {

@@ -4871,11 +4871,14 @@ function hasDedentedNestedFenceBoundary(lines: readonly SourceLine[]): boolean {
 function recordMarkerLineLinkDefinition(cursor: Cursor, line: SourceLine,
   links: Map<string, LinkDef>, known?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>):
   Map<number, NonNullable<ReturnType<typeof rootLinkDef>>> | undefined {
-  if (line.text[0] !== '-' && line.text[0] !== '*') return known
+  if (line.text[0] !== '-' && line.text[0] !== '*' &&
+      !/^[0-9A-Za-z]/.test(line.text)) return known
   const marker = listMarker(line.text)
-  if (!marker || marker.indent !== 0 || marker.ordered ||
-      line.number > 1 && !isBlankLine(cursor.lines[line.number - 2]!.text) ||
-      cursor.lines[line.number] && !isBlankLine(cursor.lines[line.number]!.text)) return known
+  const previous = cursor.lines[line.number - 2]
+  const previousMarker = line.number === 2 && previous ? listMarker(previous.text) : undefined
+  const precedingRootItem = previousMarker?.indent === 0 && plainQuoteText(previousMarker.content)
+  if (!marker || marker.indent !== 0 ||
+      line.number > 1 && !isBlankLine(previous!.text) && !precedingRootItem) return known
   const definition = rootLinkDef(marker.content)
   if (!definition) return known
   const definitions = known ?? new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>()
