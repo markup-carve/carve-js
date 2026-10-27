@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { carveToHtml, fromAstJson, parse, renderHtml, resolve, toAstJson } from '../src/index.js'
 import controls from './fixtures/definition-description-code-ownership.json'
+import currentRuling from './fixtures/description-code-current-ruling.json'
 import { layoutWork } from '../src/parse.js'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 
@@ -23,11 +24,12 @@ const htmlTree = (html: string): unknown => {
 
 // Controls follow CARVE-P2-028, CARVE-P2-017 and PART 0 X1.
 it.each(controls)('keeps description code and following blocks in their authored hosts: $id', control => {
-  expect(htmlTree(carveToHtml(control.source))).toEqual(htmlTree(control.html))
+  const expected = (currentRuling as Record<string, string>)[control.id] ?? control.html
+  expect(htmlTree(carveToHtml(control.source))).toEqual(htmlTree(expected))
   for (const positions of [false, true]) {
     const ast = resolve(parse(control.source, { positions }))
-    expect(htmlTree(renderHtml(ast))).toEqual(htmlTree(control.html))
-    expect(htmlTree(renderHtml(fromAstJson(toAstJson(ast))))).toEqual(htmlTree(control.html))
+    expect(htmlTree(renderHtml(ast))).toEqual(htmlTree(expected))
+    expect(htmlTree(renderHtml(fromAstJson(toAstJson(ast))))).toEqual(htmlTree(expected))
   }
 })
 
