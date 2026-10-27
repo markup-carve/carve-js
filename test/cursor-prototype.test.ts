@@ -1412,6 +1412,11 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('keeps an overindented empty fence after a list-owned break', () => {
+    const source = '- outer\n  - para\n\n  ---\n    ```\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('attaches an attributed fence after a nested continuation marker', () => {
     const source = '- a\n  - b\n  +\n  {.x}\n  ```\n  code\n  ```\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

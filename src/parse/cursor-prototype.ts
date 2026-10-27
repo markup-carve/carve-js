@@ -639,7 +639,8 @@ function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
   if (block.startsWith('>') && previous === '' && body?.at(-2)?.ownedDefinitionBody &&
       (next === undefined || isBlankLine(next))) return base
   return column > base && (!closedQuoteFence && block.startsWith('>') ||
-    RE_HEADING.test(block) || body && previous === '' && /^:: +/.test(block) ||
+    RE_HEADING.test(block) || BREAK.test(previous) && fenceOpen(block) !== null ||
+    body && previous === '' && /^:: +/.test(block) ||
     previousLine?.ownedDefinition && column === (previousLine.baseColumn ?? 1) - 1 &&
       /^: +/.test(block)) ? column : base
 }
@@ -3477,6 +3478,13 @@ function boundedListSiblingFence(cursor: Cursor, payload: SourceLine[]): SourceL
   return next && listMarker(next.text)?.indent === 0 ? { ...next, text: '' } : undefined
 }
 
+function boundedPostBreakEmptyFence(cursor: Cursor, first: SourceLine, payload: SourceLine[]): boolean {
+  const index = cursor.lines.indexOf(first)
+  return cursor.owner.kind === 'list' && payload.length === 0 && index > 0 &&
+    BREAK.test(cursor.lines[index - 1]!.text) &&
+    first.number === cursor.physicalLines.at(-1)?.number
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
@@ -3485,7 +3493,8 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
   if (marker && (cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload) ||
       boundedListFence(cursor, first, payload, marker) ||
       boundedListDedentFence(cursor, payload, marker) ||
-      boundedListEofFence(cursor, first, payload)) &&
+      boundedListEofFence(cursor, first, payload) ||
+      boundedPostBreakEmptyFence(cursor, first, payload)) &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {
     const last = payload.at(-1)
     return cursor.owner.fenceBoundary && last && isBlankLine(last.text) ?
