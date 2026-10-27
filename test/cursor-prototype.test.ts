@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
@@ -391,6 +393,37 @@ describe('experimental block cursor', () => {
         expect(parseCursorPrototype(fixture.source), fixture.id).toStrictEqual(parse(fixture.source))
       }
     }
+  })
+
+  it('matches the public AST on every accepted repository Carve file', () => {
+    const root = fileURLToPath(new URL('../', import.meta.url))
+    const files: string[] = []
+    const collect = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name)
+        if (entry.isDirectory()) collect(path)
+        else if (entry.name.endsWith('.crv')) files.push(path)
+      }
+    }
+    collect(join(root, 'spec/tests'))
+    collect(join(root, 'test/fixtures'))
+    let exact = 0
+    for (const path of files) {
+      const source = readFileSync(path, 'utf8')
+      let actual: ReturnType<typeof parseCursorPrototype>
+      try {
+        actual = parseCursorPrototype(source)
+      } catch (error) {
+        if (error instanceof UnsupportedCursorSyntax) continue
+        throw error
+      }
+      const expected = parse(source)
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        expect(actual, path).toStrictEqual(expected)
+      }
+      exact++
+    }
+    expect(exact).toBeGreaterThanOrEqual(2584)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
