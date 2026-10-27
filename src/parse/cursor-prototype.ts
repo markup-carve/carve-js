@@ -1211,6 +1211,14 @@ function uncertainDefinitionListEnd(cursor: Cursor, end: number,
     !safeDefinitionListEnd(cursor, end, body))
 }
 
+function terminalDefinitionFollower(text: string, following: SourceLine | undefined,
+  mayFirstBlock: boolean, mayWrapDefinition: boolean, definitionContentPlain: boolean): boolean {
+  if (following && following.text !== '') return false
+  if (mayFirstBlock && (RE_BLOCKQUOTE.test(text) || plainQuoteText(text))) return true
+  return mayWrapDefinition && definitionContentPlain &&
+    /^ (?:-{3,}|\*{3,}|_{3,}|~{3,}|(?:- ){2,}-)[ \t]*$/.test(text)
+}
+
 function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> | undefined): number {
   let end = cursor.at
   let mayWrapDefinition = false
@@ -1288,8 +1296,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       end += 2
       break
     }
-    if (mayFirstBlock && (RE_BLOCKQUOTE.test(text) || plainQuoteText(text)) &&
-        (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
+    if (terminalDefinitionFollower(text, cursor.lines[end + 1],
+      mayFirstBlock, mayWrapDefinition, definitionContentPlain)) {
       end++
       break
     }
