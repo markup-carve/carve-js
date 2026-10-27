@@ -2143,7 +2143,7 @@ function startsNestedListAfterLongBlankRun(blanks: number,
 
 function entersOpenListCodeSpan(body: SourceLine[], follower: string,
   contentColumn: number | undefined): boolean {
-  const closer = /^ +(`{3,})[ \t]*$/.exec(follower)
+  const closer = /^ *(`{3,})[ \t]*$/.exec(follower)
   if (!closer || contentColumn === undefined ||
       closer[0].length - closer[0].trimStart().length >= contentColumn - 1 ||
       body.length < 2 || !plainQuoteText(body[0]!.text) ||
@@ -2224,7 +2224,7 @@ function mayFoldNestedListParagraph(cursor: Cursor,
       top.body.at(-1)?.text.trimStart().startsWith('|')) &&
       (plainQuoteText(last) || nonRowPipe || top.body.at(-1)?.lazyText ||
         last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
-  return follower[0] === ' ' && follower.includes('`') &&
+  return (follower[0] === ' ' || follower[0] === '`') && follower.includes('`') &&
     entersOpenListCodeSpan(top.body, follower, top.contentColumn) ||
     follower[0] === ' ' && follower.includes('~') &&
     foldsListTildeRun(top.body, follower, top.contentColumn)
@@ -2861,6 +2861,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     prefix = claimed.prefix
     frame.bareFenceAfterRetainedComment = false
     const text = line.text.slice(prefix)
+    if (frame.indent > 0 && !frame.fenceMarker && text[0] === '`' &&
+        frame.body.some((prior) => prior.lazyText && /^`{3,}/.test(prior.text)) &&
+        entersOpenListCodeSpan(frame.body, text, frame.contentColumn)) {
+      line = { ...line, lazyText: true }
+      rootLazy = true
+    }
     const codeFenceMarker = (text[0] === '`' || text[0] === '~') ? fenceOpen(text)?.marker : undefined
     const literalFence = (frame.indent === 0 || text[0] === '`' || text[0] === '~') &&
       listFenceStaysInParagraph(cursor, frame, line, text, prefix, codeFenceMarker)

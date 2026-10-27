@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2646)
+    expect(exact).toBeGreaterThanOrEqual(2648)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
@@ -468,6 +468,18 @@ describe('experimental block cursor', () => {
 
   it('declines a child fence paragraph before an ancestor heading', () => {
     const source = '- outer\n  - para\n    ```\n    code\n\n  # h\n    ```\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    '- a\n  - b\n    ```\n    p\n```\n',
+    '- o\n  - h\n    ```\n```\n',
+  ])('keeps a column-zero closer in a child paragraph code span: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a shifted nested block-fence closer', () => {
+    const source = '- outer\n  - head\n     ```\n     a\n    ```\n\n  tail\n'
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
