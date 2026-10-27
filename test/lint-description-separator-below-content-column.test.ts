@@ -18,7 +18,12 @@ describe(rule, () => {
       for (const phrase of finding.includes) expect(actual[index]!.message).toContain(phrase)
     })
     // These vectors already trigger list-item-block-overindented on origin/main.
-    if (name !== 'within-description' && name !== 'correct-document') expect(warnings).toEqual(actual)
+    if (name === 'open-description') {
+      expect(warnings.map(warning => warning.rule)).toEqual([
+        rule,
+        'markdown-definition-paragraph',
+      ])
+    } else if (name !== 'within-description' && name !== 'correct-document') expect(warnings).toEqual(actual)
   })
 
   it.each([
