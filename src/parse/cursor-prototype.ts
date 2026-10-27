@@ -23,6 +23,7 @@ import { Lexer, isBlankLine } from './parse-lexer.js'
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, isFigureGroupOpener, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
+import { verbatimSpanEnd } from './inline/parse-brackets.js'
 
 /**
  * An isolated block-cursor experiment. It deliberately fails on syntax that has
@@ -1771,13 +1772,34 @@ function startsNestedListAfterLongBlankRun(blanks: number,
   return blanks >= 3 && marker !== undefined && marker.indent > rootIndent
 }
 
+function closesOpenListCodeSpan(body: SourceLine[], follower: string,
+  contentColumn: number | undefined): boolean {
+  const closer = /^ +(`{3,})[ \t]*$/.exec(follower)
+  if (!closer || contentColumn === undefined ||
+      closer[0].length - closer[0].trimStart().length >= contentColumn - 1 ||
+      body.length < 2 || !plainQuoteText(body[0]!.text) ||
+      body.some((line) => line.text === '')) return false
+  const text = body.map((line) => line.text).join('\n')
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] !== '`') continue
+    const span = verbatimSpanEnd(text, at)
+    if (!span.closed) return span.openLen === closer[1]!.length
+    at = span.end - 1
+  }
+  return false
+}
+
 function mayFoldNestedListParagraph(cursor: Cursor,
-  top: { indent: number; ordered: boolean; delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
+  top: { indent: number; contentColumn?: number; ordered: boolean;
+    delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
     body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
-  if (depth !== 0 || stackLength < 2 || top.fenceMarker ||
-      !plainQuoteText(cursor.peek()!.text)) return false
+  if (depth !== 0 || stackLength < 2 || top.fenceMarker) return false
+  const follower = cursor.peek()!.text
   const last = top.body.at(-1)?.text ?? ''
-  return plainQuoteText(last) || last === '+' && plainQuoteText(top.body.at(-2)?.text ?? '')
+  if (plainQuoteText(follower) && (plainQuoteText(last) ||
+      last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
+  return follower[0] === ' ' && follower.includes('`') &&
+    closesOpenListCodeSpan(top.body, follower, top.contentColumn)
 }
 
 function mayFoldBelowColumnParagraph(cursor: Cursor,

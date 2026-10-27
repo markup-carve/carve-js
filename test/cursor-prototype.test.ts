@@ -1685,6 +1685,23 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- outer\n  - head\n     ```\n     a\n   ```\n\n    tail\n',
+    '- outer\n  - head\n     ```\n     a\n ```\n\n  tail\n',
+    '1. outer\n   - head\n      ```\n      a\n   ```\n\n     tail\n',
+  ])('keeps a nested list paragraph open only when the inline code closer misses the child column: %s',
+    (source) => {
+      const actual = parseCursorPrototype(source)
+      const expected = parse(source)
+      expect(actual).toStrictEqual(expected)
+      expect(renderHtml(actual)).toBe(renderHtml(expected))
+    })
+
+  it('declines a closer that reaches the child column by one space', () => {
+    const source = '- outer\n  - head\n     ```\n     a\n    ```\n\n  tail\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([':: term\n:  definition\n > quote\n',
     ':: term\n:  definition\n  # H\n'])
   ('keeps a below-column marker as definition paragraph text: %s', (source) => {
