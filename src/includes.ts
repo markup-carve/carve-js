@@ -811,6 +811,7 @@ function shiftBlocks(blocks: BlockNode[], shift: number, state: State): void {
       case 'div':
       case 'admonition':
       case 'directive':
+      case 'figure_group':
         node.children.forEach(visit)
         break
       case 'list':
@@ -1636,6 +1637,7 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
       case 'admonition':
       case 'directive':
       case 'section':
+      case 'figure_group':
         expandBlocks(block.children, state)
         break
       case 'list':
@@ -1684,6 +1686,7 @@ function walkBlocks(blocks: BlockNode[], fn: (block: BlockNode) => void): void {
       case 'admonition':
       case 'directive':
       case 'section':
+      case 'figure_group':
         walkBlocks(block.children, fn)
         break
       case 'list':
@@ -1937,6 +1940,7 @@ function collectBlocks(blocks: BlockNode[], sites: DirectiveSite[]): void {
       case 'admonition':
       case 'directive':
       case 'section':
+      case 'figure_group':
         collectBlocks(block.children, sites)
         break
       case 'list':
