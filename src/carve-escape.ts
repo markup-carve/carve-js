@@ -259,7 +259,7 @@ export const HANDLED_MARKDOWN: HandledDelimiters = { braced: '*_', bare: '*_~' }
  * and destinations. Constructs owned by Djot remain available to its delimiter
  * conversion pass; Carve-only constructs are frozen as literal text.
  */
-export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~%', bare: '~*_' }
+export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~', bare: '~*_' }
 
 /**
  * Escape the Carve inline constructs that are literal text in the source.
