@@ -81,6 +81,12 @@ function canCloseBarePair(text: string, at: number, marker: string, openerMarks:
     && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, at + 1)
 }
 
+function editorialCloserInsideAttribute(text: string, start: number, marker: string, closer: number, attributeEnd: number): boolean {
+  return text[start] === '{' && text[start + 1] !== '%'
+    && !/}[ \t]*[#%]}$/.test(text.slice(start, attributeEnd))
+    && (marker === '+' || marker === '-') && closer >= 0 && closer < attributeEnd
+}
+
 export class InlineParseSession {
   protected linkLabelDepth = 0
 
@@ -325,7 +331,8 @@ export class InlineParseSession {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
           stop = codeEnd !== -1 ? table[afterAttributes(codeEnd)]! : raw[j]!
-        } else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
+        } else if (attributeEnd !== undefined) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
+          ? raw[j]! : table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
         else if (bracketEnd !== undefined) stop = table[afterAttributes(bracketEnd + 1)]!
         else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
         else if (isCloser) stop = j
