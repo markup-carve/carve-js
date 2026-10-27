@@ -2645,4 +2645,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- - + a |\ntail\n', '* * + a |\ntail\n'])
+  ('keeps a plain follower in the marker-line pipe paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

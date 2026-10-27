@@ -2106,6 +2106,8 @@ function mayFoldMarkerLineNestedFollower(cursor: Cursor,
       RE_HEADING.test(follower.text) || isTableRow(follower.text)) && !cursor.peek(1)) return true
   return marker !== undefined &&
     (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
+      marker.content.startsWith('+ ') && marker.content.includes('|') &&
+      plainQuoteText(follower.text) ||
       (marker.content === '+' || /^\[[ xX\-_>/!?]\] \+$/.test(marker.content)) &&
       RE_BLOCKQUOTE.test(follower.text) && !cursor.peek(1))
 }
