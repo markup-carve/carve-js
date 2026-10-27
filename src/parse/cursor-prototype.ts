@@ -3637,6 +3637,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       directParagraph = false
       continue
     }
+    const attachedList = line.text === '+' && listMarker(cursor.peek(1)?.text ?? '')?.indent === 0
+    const quotedAfterList = cursor.peek(2)?.text
+    if (attachedList && quotedAfterList?.startsWith('>') &&
+        RE_BLOCKQUOTE.test(quotedAfterList) &&
+        !plainQuoteText(quotedAfterList.slice(quotedAfterList[1] === ' ' ? 2 : 1))) {
+      throw new UnsupportedCursorSyntax('quote owner after attached list')
+    }
     const abbreviationTail = takeQuotedListLiteralTail(cursor, body, listOwner)
     if (abbreviationTail) {
       directParagraph = false

@@ -958,6 +958,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> # H\n+\n- item\n> # H\n',
+    '> quoted\n+\n- item\n> - next\n'])
+  ('declines a structural quote return after an attached list: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('keeps an indented multiline code span in its list-owned quote paragraph', () => {
     const source = '- > intro\n    ```\n    tail\n    ```\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
