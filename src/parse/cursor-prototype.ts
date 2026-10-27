@@ -1823,7 +1823,10 @@ function listContinuationFollower(cursor: Cursor, indent: number,
   const after = cursor.peek(2)
   const ownColumnQuote = indent > 0 && next?.text.startsWith(' '.repeat(indent)) &&
     RE_BLOCKQUOTE.test(next.text.slice(indent)) && !after
-  if (depth !== 0 || fenceMarker || indent !== 0 && !ownColumnQuote) {
+  const quoteContinuation = depth === 1 && cursor.owner.kind === 'quote' &&
+    listMarker(cursor.lines[0]?.text ?? '')?.content.trim() !== '+'
+  if (!(depth === 0 || quoteContinuation) ||
+      fenceMarker || indent !== 0 && !ownColumnQuote) {
     throw new UnsupportedCursorSyntax('nested list continuation')
   }
   if (indent === 0 && next && fenceOpen(next.text)) {

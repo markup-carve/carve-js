@@ -2557,4 +2557,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['> - a\n>   - b\n> +\n> para\n',
+    '> - a\n> +\n> > r\n'])
+  ('attaches a quote-owned list continuation to its outer item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('declines an ambiguous continuation after a quote-owned plus item', () => {
+    expect(() => parseCursorPrototype('> - +\n>   - b\n> +\n> para\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
 })
