@@ -2187,7 +2187,7 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        const attachedLiteralPlus = take === 0 && isContinuationMarker(candidate)
+        const attachedLiteralPlus = take === 0 && !acceptFirstNonList && isContinuationMarker(candidate)
         if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
         take++
       }
