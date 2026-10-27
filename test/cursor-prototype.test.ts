@@ -6,6 +6,15 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('declines shallow child markers after nested quote ownership changes', () => {
+    for (const source of [
+      '- a\n  > a\n- s\n> next\n - child\nplain\n',
+      '- a\n  > - child\n- s\nplain\n  more\n - child\n',
+    ]) {
+      expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    }
+  })
+
   it('keeps generated list and quote ownership exact through later followers', () => {
     const quoted = ['a', '[x][r]', '[r][]', '[^f]: n', '- child', '* child',
       '1. child', ':: term', '```', '%%%', '> nested']

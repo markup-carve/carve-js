@@ -5003,6 +5003,16 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
   source = replaceLoneSurrogates(source)
   const lines = scanLines(source)
+  // A nested quote can keep ownership of a later, shallow list marker after
+  // another block has started. The cursor list frame cannot yet make that
+  // decision from physical columns alone.
+  if (lines.length >= 6 && source.includes('>') && source.includes(' - ') &&
+      lines.some((line, index) => index >= 4 &&
+      listMarker(line.text)?.indent === 1 &&
+      lines.slice(Math.max(0, index - 4), index).some((prior) =>
+        /^\s{2,}>/.test(prior.text)))) {
+    throw new UnsupportedCursorSyntax('nested quote and shallow list owner')
+  }
   if ((source.includes('```') || source.includes('~~~')) &&
       hasDedentedNestedFenceBoundary(lines)) {
     throw new UnsupportedCursorSyntax('dedented nested fence owner')
