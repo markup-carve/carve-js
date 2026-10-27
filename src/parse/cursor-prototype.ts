@@ -460,7 +460,8 @@ function quotedListPlainFollower(cursor: Cursor, body: SourceLine[], line: Sourc
 }
 
 function takeNestedQuoteListLazyLine(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
-  if (cursor.owner.kind !== 'quote' || cursor.owner.parent?.kind !== 'root') return undefined
+  if (cursor.owner.kind !== 'root' &&
+      (cursor.owner.kind !== 'quote' || cursor.owner.parent?.kind !== 'root')) return undefined
   const first = listMarker(body[0]?.text ?? '')
   const line = cursor.peek()
   if (!first || first.indent !== 0 || !plainQuoteText(first.content) || !line ||

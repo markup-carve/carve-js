@@ -79,6 +79,17 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> - x\n  [r]: /url\n\nSee [r][].\n',
+    '> - a\n  +\n',
+    '> * x\n  plain\n',
+  ])('keeps an unmarked line with the root quote list paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '> +\n```\nx\n```\n',
     '> > +\n```\nx\n```\n',
     '> > +\n~~~\nx\n~~~\n',
