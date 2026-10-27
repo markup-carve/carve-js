@@ -498,6 +498,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> q\n+\n', '- x\n  > q\n  +\n', '> > q\n> +\n'])
+  ('keeps a terminal plus in its quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('uses a later quoted tilde closer before folding an open code span', () => {
     for (const count of [1, 2, 3, 10]) {
       const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)

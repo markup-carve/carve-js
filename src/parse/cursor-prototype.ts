@@ -3608,6 +3608,10 @@ function takeQuoteLazyBoundaryTail(cursor: Cursor, body: SourceLine[],
   listOwner: QuoteListOwner | undefined, directParagraph: boolean): SourceLine[] | undefined {
   if (!quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,
     wrappedAttributeTail, inlineCode)) return undefined
+  if (body.length === 1 && plainQuoteText(body[0]!.text) &&
+      cursor.peek()?.text === '+' && !cursor.peek(1)) {
+    return [{ ...cursor.take(), lazyText: true }]
+  }
   const tableLine = (text: string): string => text.replace(/^(?:> ?)+/, '')
   const joinedTableEnd = body.length === 2 &&
     /^\|.*\|[ \t]*$/.test(tableLine(body[0]!.text)) &&
