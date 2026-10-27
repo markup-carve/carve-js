@@ -25,6 +25,24 @@ describe('experimental block cursor', () => {
     expect(cursor).toStrictEqual(established)
   })
 
+  it.each([
+    '- ```\n x\n ```\n',
+    '```\ncode\n',
+    '```=html\n<b>raw</b>\n',
+    '::: note\n```\ncode\n:::\n{.x}\n',
+  ])('reports unclosed fences and dangling attributes in source order: %s', (source) => {
+    const established: object[] = []
+    const cursor: object[] = []
+    const options = (events: object[]) => ({
+      onUnclosedCodeFence: (event: object) => events.push({ kind: 'fence', event }),
+      onDanglingBlockAttributes: (event: object) => events.push({ kind: 'dangling', event }),
+    })
+    const expected = parse(source, options(established))
+    const actual = parseCursorPrototype(source, options(cursor))
+    expect(actual).toStrictEqual(expected)
+    expect(cursor).toStrictEqual(established)
+  })
+
   it.each(['> +\n flush\n', '> +\n  flush\n', '> +\n flush\n\nafter\n'])
   ('keeps a leading quote plus in its paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

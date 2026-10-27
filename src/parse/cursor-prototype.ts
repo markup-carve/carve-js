@@ -21,7 +21,7 @@ import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, sourceColumnAt, type OlKind } from './list/parse-item-core.js'
 import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_DIV_OPEN, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, RE_VALID_ADMONITION_OPEN, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
-import type { DanglingBlockAttributes, ParseOptions } from './block/parse-block-scan-core.js'
+import type { DanglingBlockAttributes, ParseOptions, UnclosedCodeFence } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, isFigureGroupOpener, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 import { verbatimSpanEnd } from './inline/parse-brackets.js'
@@ -201,18 +201,23 @@ function cursorContainerLabel(text: string): string {
   return start === undefined ? text : text.slice(0, start).replace(/ +$/, '')
 }
 
+type CursorDiagnostic =
+  | { kind: 'dangling'; event: DanglingBlockAttributes }
+  | { kind: 'fence'; event: UnclosedCodeFence }
+
 class CursorInline extends InlineParseSession {
   // Image promotion only changes paragraphs whose first inline node is an image.
   hasLeadingImage = false
   footnoteDefs?: Record<string, BlockNode[]>
   footnoteDefPos?: Record<string, Position>
-  danglingAttributes?: DanglingBlockAttributes[]
+  diagnostics?: CursorDiagnostic[]
   constructor(readonly linkDefinitions: Map<string, LinkDef>,
     readonly abbreviations: Map<string, string>,
     readonly positionless = false,
-    readonly recordDanglingAttributes = false) {
+    readonly recordDanglingAttributes = false,
+    readonly recordUnclosedCodeFences = false) {
     super()
-    if (recordDanglingAttributes) this.danglingAttributes = []
+    if (recordDanglingAttributes || recordUnclosedCodeFences) this.diagnostics = []
   }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
@@ -1715,7 +1720,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   return paragraph
 }
 
-function parseRawAtCursor(cursor: Cursor): BlockNode {
+function parseRawAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
   if (cursor.owner.inList && cursor.at === 0) {
     throw new UnsupportedCursorSyntax('marker-line raw block')
   }
@@ -1729,6 +1734,15 @@ function parseRawAtCursor(cursor: Cursor): BlockNode {
   }
   cursor.at = lexer.pos
   raw.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  if (inline.recordUnclosedCodeFences) {
+    const marker = RE_RAW_FENCE.exec(first.text)?.[1]
+    const last = cursor.lines[cursor.at - 1] ?? first
+    if (marker && !closesFence(last.text, marker)) {
+      inline.diagnostics!.push({ kind: 'fence', event: { line: first.number, column: first.baseColumn ?? 1,
+        marker, endLine: last.number + 1,
+        reason: last.number >= cursor.physicalLines.length ? 'document' : 'container' } })
+    }
+  }
   return raw
 }
 
@@ -4694,9 +4708,9 @@ function reportDanglingAtCursor(cursor: Cursor, inline: CursorInline,
       wholeBodyOf = 'footnote'
     }
   }
-  inline.danglingAttributes!.push({ line: pendingAt.number, column: pendingAt.baseColumn ?? 1,
+  inline.diagnostics!.push({ kind: 'dangling', event: { line: pendingAt.number, column: pendingAt.baseColumn ?? 1,
     startOffset: pendingAt.start, endOffset: pendingAt.start + pendingAt.text.length,
-    ...(wholeBodyOf ? { wholeBodyOf } : {}) })
+    ...(wholeBodyOf ? { wholeBodyOf } : {}) } })
 }
 
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
@@ -4826,7 +4840,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (RE_RAW_FENCE.test(first.text)) {
-      emit(parseRawAtCursor(cursor))
+      emit(parseRawAtCursor(cursor, inline))
       continue
     }
     if (RE_LINE_BLOCK_OPEN.test(first.text)) {
@@ -4843,7 +4857,14 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
         payload.push(line.text)
         payloadLines.push(line)
       }
+      const unclosed = inline.recordUnclosedCodeFences && !cursor.peek()
       const close = takeFenceCloseAtCursor(cursor, first, payloadLines)
+      if (unclosed) {
+        const endLine = payloadLines.at(-1)?.number ?? first.number
+        inline.diagnostics!.push({ kind: 'fence', event: { line: first.number, column: first.baseColumn ?? 1,
+          marker: fence.marker, endLine: endLine + 1,
+          reason: endLine >= cursor.physicalLines.length ? 'document' : 'container' } })
+      }
       const block: CodeBlock = { type: 'code_block', content: payload.length ? payload.join('\n') + '\n' : '',
         ...(fence.lang ? { lang: fence.lang } : {}),
         ...(fence.header !== undefined ? { header: fence.header } : {}),
@@ -5066,9 +5087,29 @@ function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string
   }
 }
 
+function emitCursorDiagnostics(inline: CursorInline, opts: ParseOptions): void {
+  if (!inline.diagnostics) return
+  const seen = new Set<string>()
+  for (const diagnostic of inline.diagnostics) {
+    if (diagnostic.kind === 'dangling') {
+      const event = diagnostic.event
+      const key = `attr:${event.startOffset}:${event.endOffset}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      opts.onDanglingBlockAttributes?.(event)
+    } else {
+      const event = diagnostic.event
+      const key = `fence:${event.line}:${event.column}:${event.marker}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      opts.onUnclosedCodeFence?.(event)
+    }
+  }
+}
+
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
-      extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
+      extension.quoteCharacters) || opts.onUnclosedContainer ||
       opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata) {
     throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
   }
@@ -5181,7 +5222,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   }
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
-    opts.onDanglingBlockAttributes !== undefined)
+    opts.onDanglingBlockAttributes !== undefined, opts.onUnclosedCodeFence !== undefined)
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
@@ -5214,14 +5255,6 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (opts.positions !== false) toCodepointPositions(document, rawSource)
   if (inline.hasLeadingImage) promoteBlockImages(children, true)
   document.children = promoteCitationDefinitions(children)
-  if (opts.onDanglingBlockAttributes) {
-    const seen = new Set<string>()
-    for (const event of inline.danglingAttributes!) {
-      const key = `${event.startOffset}:${event.endOffset}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      opts.onDanglingBlockAttributes(event)
-    }
-  }
+  emitCursorDiagnostics(inline, opts)
   return opts.positions === false ? dropPositions(document) : document
 }
