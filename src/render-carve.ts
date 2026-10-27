@@ -36,7 +36,7 @@ import {
 } from './parse.js'
 import { isAttrValueEscapable } from './extension/attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { findDirectives, RunOffsets } from './include-directive.js'
+import { findDirectives, parseDirective, RunOffsets } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -1267,6 +1267,15 @@ function directiveRunText(node: InlineNode): string | null {
   if (node.type === 'smart_punctuation') return node.value
   if (node.type === 'escaped_text') return `\\${node.value}`
   return null
+}
+
+function codeIncludeCaptionGap(previous: BlockNode, next: BlockNode): number | null {
+  if (previous.type !== 'paragraph' || next.type !== 'paragraph') return null
+  const gap = (next.pos?.startLine ?? 0) - (previous.pos?.endLine ?? 0)
+  if (gap < 1) return null
+  const directive = previous.children.map(directiveRunText)
+  if (directive.some(part => part === null) || parseDirective(directive.join(''))?.code === undefined) return null
+  return next.children[0]?.type === 'text' && /^\^[ \t]+\S/.test(next.children[0].value) ? gap : null
 }
 
 /**
@@ -3221,6 +3230,8 @@ class CarveRenderSession {
       for (const block of blocks) {
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
         let rendered = this.renderBlock(block, ctx)
+        const codeCaptionGap = previousBlock ? codeIncludeCaptionGap(previousBlock, block) : null
+        if (codeCaptionGap !== null && codeCaptionGap > 2) rendered = rendered.replace(/^\^/, '\\^')
         if (block.type === 'paragraph') rendered = guardLeadingPlusBelowList(rendered, previousBlock, item !== undefined)
         const moved: boolean =
           item !== undefined &&
@@ -3252,7 +3263,7 @@ class CarveRenderSession {
           if (
             previousBlock !== null &&
             parts.length > 0 &&
-            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text))
+            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeCaptionGap !== null && codeCaptionGap <= 2)
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0 && descriptionBody) {

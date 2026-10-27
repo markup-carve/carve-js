@@ -166,6 +166,7 @@ import {
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
+import { parseDirective } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
@@ -2355,9 +2356,14 @@ export class ParseSession extends InlineParseSession {
     let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     let secondLineLazy = false
+    // A code include at block start owns exactly its source line. This is
+    // decided before resolution, including when the resolver later refuses it.
+    const firstLine = lexer.peek()!
+    const codeInclude = !flattened && firstLine.includes('{{') && parseDirective(firstLine.trim())?.code !== undefined
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
+      if (codeInclude && lines.length > 0) break
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
@@ -2449,13 +2455,23 @@ export class ParseSession extends InlineParseSession {
         : undefined
     const paragraphNode: Paragraph = {
       type: 'paragraph',
-      children: this.skipParagraphInlines && !this.inMatcherRequest ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      children: (codeInclude && !/^\{\{ +["“]/.test(text) || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),
         startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
+    }
+    if (codeInclude && !/^\{\{ +["“]/.test(text)) {
+      const startOffset = lexer.lineOffset(startLineIndex) + firstLead
+      const startColumn = lexer.lineStartColumn(startLineIndex) + firstLead
+      paragraphNode.children = [{ type: 'text', value: text,
+        ...(lexer.hasDocumentOffsets ? { pos: {
+          startLine: lexer.lineNumber(startLineIndex), endLine: lexer.lineNumber(startLineIndex),
+          startColumn, endColumn: startColumn + [...text].length,
+          startOffset, endOffset: startOffset + [...text].length,
+        } } : {}) }]
     }
     // The container prefix is already stripped by the lexer, so a first line with
     // leading whitespace LEFT sat above the container's content column. Recorded
