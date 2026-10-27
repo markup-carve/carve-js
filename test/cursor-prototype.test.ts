@@ -2620,4 +2620,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['> > q\n> > {.k\n> > #x}\n> > after\n',
+    '> q\n> {.k\n> .b}\n> # h\n'])
+  ('parses a wrapped attribute within a quote body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

@@ -2987,6 +2987,13 @@ function takeDegradedQuoteLazyLine(cursor: Cursor, first: SourceLine,
 function quoteChildrenAtCursor(cursor: Cursor, inline: CursorInline,
   definitionNodes: BlockNode[], depth: number, body: SourceLine[],
   directParagraph: boolean, boundaryFence = false): BlockNode[] {
+  for (let index = 0; index < body.length - 1; index++) {
+    const line = body[index]!
+    if (line.text[0] !== '{' || parseBlockAttributeRun(line.text)) continue
+    if (!probeBlockAttributes(lexerForCursor(new Cursor(body.slice(index))))) continue
+    body[index] = { ...line, wrappedAttr: true }
+    directParagraph = false
+  }
   if (body.length > 0 && directParagraph) {
     const last = body.at(-1)!
     return [{ type: 'paragraph',
