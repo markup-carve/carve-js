@@ -734,7 +734,16 @@ describe('include rules', () => {
   it('I1 syntax: an inverted line range warns and stays literal', () => {
     const source = '{{ child @lines:3-1 }}'
     const result = expand(source, { child: 'a\nb\nc' })
-    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unknown-option'])
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-lines-invalid'])
+    expect(result.dependencies).toEqual([{ id: 'child', resolved: true }])
+    expect(result.html).toBe(renderHtml(resolve(parse(source))))
+  })
+
+  it.each(['0-2', '2-1', '01-2', '1-02', '2-2-2'])('reports an invalid line range %s after resolving its target', (range) => {
+    const source = `{{ data.txt @lines:${range} }}`
+    const result = expand(source, { 'data.txt': 'one\ntwo\n' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-lines-invalid'])
+    expect(result.dependencies).toEqual([{ id: 'data.txt', resolved: true }])
     expect(result.html).toBe(renderHtml(resolve(parse(source))))
   })
 

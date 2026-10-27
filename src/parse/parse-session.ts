@@ -110,6 +110,7 @@ import {
   linkDestinationValue,
   literalCommentHasCloser,
   markAboveContentColumn,
+  markCaptionAtContentColumn,
   markSecondLineLazy,
   markerContentColumn,
   markerDecision,
@@ -912,7 +913,16 @@ export class ParseSession extends InlineParseSession {
       const eq = this.parseEquationBlock(lexer)
       if (eq) return eq
     }
-    return this.parseParagraph(lexer)
+    const paragraph = this.parseParagraph(lexer)
+    if (paragraph.children.length === 1 && paragraph.children[0]!.type === 'image' &&
+        isBlankLine(lexer.peek()) && RE_CAPTION.test(lexer.peek(1) ?? '')) {
+      const cap = RE_CAPTION.exec(lexer.peek(1)!)!
+      this.recordAttachedCaption(lexer, lexer.pos + 1)
+      lexer.consume()
+      lexer.consume()
+      return { type: 'figure', target: paragraph.children[0], caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
+    }
+    return paragraph
   }
 
   // Parse a standalone display-math line, optionally wrapping it in a figure when
@@ -1725,6 +1735,9 @@ export class ParseSession extends InlineParseSession {
         (leadingWhitespace(ln) === 0 && (RE_FOOTNOTE_DEF.test(ln) || isLinkDefLine(ln) || isBlockAttributeLine(ln))) ||
         RE_COMMENT_LINE.test(ln)
       )) ||
+      (quoteTermContinuation && (RE_FENCE.test(ln) || RE_RAW_FENCE.test(ln)) &&
+        sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln) < quoteMarkerColumn + 2 &&
+        startsInterruptingBlock(lexer, undefined, false)) ||
       (lexer.hostBody !== null && RE_FOOTNOTE_DEF.test(ln.trimStart()) &&
         !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
         indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) >= quoteMarkerColumn) ||
@@ -2174,7 +2187,8 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
+        const attachedLiteralPlus = take === 0 && !acceptFirstNonList && isContinuationMarker(candidate)
+        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
@@ -2337,6 +2351,7 @@ export class ParseSession extends InlineParseSession {
   private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     const lines: string[] = []
     let imageCaptionSlot = false
+    let captionAtContentColumn = false
     let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     let secondLineLazy = false
@@ -2346,6 +2361,7 @@ export class ParseSession extends InlineParseSession {
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
+      if (RE_CAPTION.test(ln)) captionAtContentColumn = true
       if (lines.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(lines[0]!) && RE_CAPTION.test(ln))
         imageCaptionSlot = true
       if (lines.length === 1 && startLineIndex === lexer.interruptRefusedSiblingPlusLine &&
@@ -2447,6 +2463,7 @@ export class ParseSession extends InlineParseSession {
     // thrown away two lines up, and the block-image promotion phase has no way to
     // recover it from the tree (carve-js#1553).
     if (firstLead > 0) markAboveContentColumn(paragraphNode)
+    if (captionAtContentColumn) markCaptionAtContentColumn(paragraphNode)
     // A caption line below the container's column reaches no host (§10 I7).
     if (secondLineLazy) markSecondLineLazy(paragraphNode)
     return paragraphNode

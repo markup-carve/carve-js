@@ -125,7 +125,7 @@ describe('a container hosting a lone image past its content column', () => {
   })
 
   it('publishes a block image for the flush spelling in a quote', () => {
-    expect(quoteChildren('> ![a](u)\n')).toEqual(['image'])
+    expect(quoteChildren('> ![a](u)\n')).toEqual(['paragraph'])
   })
 })
 

@@ -83,7 +83,7 @@ import { mapInlineChildren, visitInlineChildren } from './inline/inline-children
 import { applyAbbreviations, applyLinkDefs } from './inline/inline-resolution.js'
 import { normalizeRefLabel } from '../label-key.js'
 import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue } from '../link-destination.js'
-import { markAboveContentColumn, markSecondLineLazy } from './block/paragraph-indent.js'
+import { markAboveContentColumn, markCaptionAtContentColumn, markSecondLineLazy } from './block/paragraph-indent.js'
 import { Lexer, indentColumns, isBlankLine, layoutWork, normalizeNewlines, sliceColumns } from './parse-lexer.js'
 import { createListParser } from './list/parse-list.js'
 import { referenceImage, referenceLink } from './inline/reference-resolution.js'
@@ -421,6 +421,7 @@ export {
   isCarveWhitespace,
   linkDestinationValue,
   markAboveContentColumn,
+  markCaptionAtContentColumn,
   markSecondLineLazy,
   normalizeNewlines,
   replaceLoneSurrogates,

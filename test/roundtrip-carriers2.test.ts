@@ -144,9 +144,9 @@ describe('new roundtrip carriers', () => {
   it('does not carry a generated heading id', () => {
     expect(carveToMarkdown('# Heading\n', { roundtrip: true })).not.toContain('<!-- carve:')
   })
-  it('places the HTML label before authored attributes and reports collisions', () => {
+  it('places the HTML label after authored attributes and reports collisions', () => {
     const result = carveToHtmlWithReport('{.code data-carve-label=lost}\n```js [A & "B"]\nx\n```\n', { roundtrip: true })
-    expect(result.value).toContain('<pre data-carve-label="A &amp; &quot;B&quot;" class="code">')
+    expect(result.value).toContain('<pre class="code" data-carve-label="A &amp; &quot;B&quot;">')
     expect(result.losses).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-carve-label' })]))
   })
   it('prefers the canonical label and consumes labels on other hosts', () => {

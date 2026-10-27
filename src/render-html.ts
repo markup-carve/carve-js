@@ -788,7 +788,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
         // <section> (it already suppressed the auto-slug in resolveHeadingIds).
         const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
-        out.push(`${indent(depth)}<section${sectionId}${explicitId}${wrapperCarriers}>`)
+        out.push(`${indent(depth)}<section${explicitId}${wrapperCarriers}${sectionId}>`)
         sectionStack.push(node.level)
       }
       // Where the <h*> sits: one level in when a wrapper opened above it,
@@ -808,7 +808,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       const inner = renderInlines(node.children, opts)
       const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${explicit}${renderAttrs(headingAttrs, `h${node.level}`)}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -1568,7 +1568,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'heading': {
       const inner = renderInlines(node.children, opts)
       const explicit = headingIdCarrierAttr(node.attrs, node.attrs, opts)
-      return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
+      return `${pad}<h${node.level}${explicit}${renderAttrs(node.attrs, `h${node.level}`)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
@@ -1731,7 +1731,7 @@ function renderCodeBlockCore(
   const escaped = escapeHtml(node.content)
   const labelAttr = roundtripExport(opts) && node.label !== undefined
     ? ` ${carrier('label')}="${escapeAttr(node.label)}"` : ''
-  return `${pad}<pre${labelAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+  return `${pad}<pre${renderAttrs(node.attrs)}${labelAttr}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**

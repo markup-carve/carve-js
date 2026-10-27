@@ -1273,8 +1273,9 @@ export function createDefinitionListParser(
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
-        if (currentTermReturned && defMarkerOffset >= 0 &&
-            entryColumnAt(defSource, defMarkerOffset) < currentTermSourceColumn) break
+        if (defMarkerOffset >= 0 &&
+            entryColumnAt(defSource, defMarkerOffset) <
+              (lexer.definitionLeadFromItemMarker ? lexer.hostContentColumn : currentTermReturned ? currentTermSourceColumn : -1)) break
         const d = !entryReachesList() ? null : RE_DEFLIST_DEF.exec(peekEntry())
         if (!d) break
         lexer.consume()

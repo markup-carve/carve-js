@@ -397,6 +397,43 @@ function orderCollectedDefinitions(children: AstJsonBlock[]): void {
   for (let k = 0; k < slots.length; k++) children[slots[k]!] = ordered[k]!
 }
 
+/** Keep block image promotion on the paragraph in the exchange tree. */
+function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
+  return blocks.map((block): BlockNode => {
+    if (block.type === 'image') return {
+      type: 'paragraph', children: [block], blockImage: true,
+      ...(block.pos === undefined ? {} : { pos: block.pos }),
+    }
+    switch (block.type) {
+      case 'block_quote':
+      case 'admonition':
+      case 'directive':
+      case 'div':
+      case 'section':
+      case 'figure_group':
+        return { ...block, children: imageParagraphsToWire(block.children) }
+      case 'list':
+        return { ...block, items: block.items.map(item => ({ ...item, children: imageParagraphsToWire(item.children) })) }
+      case 'definition_list':
+        return { ...block, items: block.items.map(item => ({
+          ...item, definitions: item.definitions.map(imageParagraphsToWire),
+        })) }
+      case 'table':
+        return { ...block, rows: block.rows.map(row => ({
+          ...row, cells: row.cells.map(cell => cell.blocks === undefined ? cell : {
+            ...cell, blocks: imageParagraphsToWire(cell.blocks),
+          }),
+        })) }
+      case 'figure':
+        return block.target.type === 'image' ? block : {
+          ...block, target: imageParagraphsToWire([block.target])[0]! as typeof block.target,
+        }
+      default:
+        return block
+    }
+  })
+}
+
 /**
  * Map a document onto the exchange shape.
  *
@@ -422,13 +459,13 @@ export function toAstJson(doc: Document): AstJsonDocument {
     children.push(node)
   }
 
-  for (const child of definitionListsToWire(doc.children)) children.push(child)
+  for (const child of definitionListsToWire(imageParagraphsToWire(doc.children))) children.push(child)
 
   for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
     const node: FootnoteDefNode = {
       type: 'footnote',
       label,
-      children: definitionListsToWire(body),
+      children: definitionListsToWire(imageParagraphsToWire(body)),
     }
     const pos = ownValue(doc.footnoteDefPos, label)
     if (pos !== undefined) node.pos = pos
