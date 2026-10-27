@@ -120,6 +120,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    ':: t\n:  > a\n   > + b |\ntail\n',
+    ':: term\n:  > text *word*\n   > + x\n\nend\n',
+  ])('keeps a lazy tail in a definition-owned quote paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- a\n\t- b\n\tc\n',
     '1. a\n \t* b\n\tc\n',
   ])('places a tab-indented nested list at its authored marker: %s', (source) => {
@@ -1063,11 +1073,6 @@ describe('experimental block cursor', () => {
   it('reads adjacent quote and heading blocks in a definition body', () => {
     const source = ':: term\n:  intro\n   > quote\n   # heading\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-  })
-
-  it('declines a quote follower after a definition already starts with a quote', () => {
-    expect(() => parseCursorPrototype(':: t\n:  > a\n   > + b |\ntail\n'))
-      .toThrow(UnsupportedCursorSyntax)
   })
 
   it.each(['- a\n  - b\n    # N\n  lazy\n',

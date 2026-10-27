@@ -420,6 +420,16 @@ function takeUnmarkedQuoteParagraphLine(cursor: Cursor, body: SourceLine[],
   return line
 }
 
+function takeDefinitionQuoteTail(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  if (cursor.owner.kind !== 'definition' || body.length < 2 ||
+      !/^\+ [^+]/.test(body.at(-1)!.text)) return undefined
+  const line = cursor.peek()
+  if (!line || !plainQuoteText(line.text) ||
+      cursor.peek(1) && !isBlankLine(cursor.peek(1)!.text)) return undefined
+  body.push(cursor.take())
+  return line
+}
+
 function wrappedQuoteAttributeTail(body: SourceLine[]): boolean {
   const lastBodyText = body.at(-1)?.text
   return body.length >= 2 && lastBodyText?.charCodeAt(lastBodyText.length - 1) === 125 &&
@@ -912,6 +922,13 @@ function definitionBlockFollowerEnd(cursor: Cursor, end: number, column: number)
   let after = end + 1
   while (cursor.lines[after]?.text.startsWith(prefix) &&
       cursor.lines[after]!.text.length > prefix.length) after++
+  const opener = cursor.lines[end - 1]?.text.slice(column - 1)
+  const last = cursor.lines[after - 1]?.text.slice(column - 1)
+  if (RE_BLOCKQUOTE.test(opener ?? '') && RE_BLOCKQUOTE.test(last ?? '') &&
+      plainQuoteText(cursor.lines[after]?.text ?? '')) {
+    const paragraphEnd = boundedDefinitionParagraphEnd(cursor.lines, after)
+    if (paragraphEnd !== undefined) return paragraphEnd
+  }
   return after
 }
 
@@ -951,6 +968,12 @@ function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: Sour
     const follower = cursor.take()
     body.push({ text: follower.text.slice(column - 1), start: follower.start + column - 1,
       number: follower.number, baseColumn: (follower.baseColumn ?? 1) + column - 1 })
+    last = follower
+  }
+  if (RE_BLOCKQUOTE.test(content)) while (cursor.at < end &&
+      plainQuoteText(cursor.peek()!.text)) {
+    const follower = cursor.take()
+    body.push(follower)
     last = follower
   }
   if (hasExposedDefinitionReference(body)) {
@@ -2736,6 +2759,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       directParagraph &&= plain
       plainParagraph = observed.resumed || plainParagraph && quotedParagraphText(text, plain)
       last = line
+      continue
+    }
+    const definitionTail = takeDefinitionQuoteTail(cursor, body)
+    if (definitionTail) {
+      directParagraph = false
+      last = definitionTail
       continue
     }
     const unmarked = takeUnmarkedQuoteParagraphLine(cursor, body, unclosedFenceParagraph)
