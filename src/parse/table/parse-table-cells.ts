@@ -329,7 +329,8 @@ export function joinFragment(target: RawCell, frag: string, at: FragmentPlace | 
 }
 
 export const isGfmDelimiterCell = (c: RawCell): boolean =>
-  !c.span && !c.attrs && /^:?-+:?$/.test(trimCellPadding(c.raw))
+  !c.header && !c.span && !c.align && !c.valign && !c.attrs &&
+  /^:?-+:?$/.test(trimCellPadding(c.raw))
 
 export const isGfmDelimiterRow = (row: RawCell[]): boolean =>
   row.length > 0 && row.every(isGfmDelimiterCell)

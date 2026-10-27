@@ -889,13 +889,19 @@ export class OpenMarkerClassifier {
     this.stack = this.stack.filter(entry => entry.kind !== 'quote')
     // A blank quoted line closes deeper containers only; the items inside the quote stay open.
     const blankQuoted = depth > 0 && isBlankLine(body)
+    const lazyDescriptionLine = !isBlankLine(this.lines[index - 1]) &&
+      !lineOpensBlock(body) && !isListMarkerLine(body) &&
+      !RE_DEFLIST_DEF.test(body) && !RE_DEFLIST_TERM.test(body)
     while (this.stack.length && (this.stack.at(-1)!.quoteDepth > depth ||
-      !blankQuoted && this.stack.at(-1)!.quoteDepth === depth && this.stack.at(-1)!.column >= column)) this.stack.pop()
+      !blankQuoted && this.stack.at(-1)!.quoteDepth === depth && this.stack.at(-1)!.column >= column &&
+      !(lazyDescriptionLine && this.stack.at(-1)!.kind === 'description' && this.stack.at(-1)!.column === column))) this.stack.pop()
+    const quotes: OpenMarker[] = []
     for (let level = 1; level <= depth; level++) {
       const quoteColumn = quoteBodyColumn(line, level)
-      this.stack.push({ kind: 'quote', column: quoteColumn, localColumn: 0, quoteDepth: level,
+      quotes.push({ kind: 'quote', column: quoteColumn, localColumn: 0, quoteDepth: level,
         contentColumn: quoteColumn, firstBlock: false })
     }
+    this.stack.unshift(...quotes)
     let inner = body
     let innerColumn = column
     let innerLocalColumn = localColumn
@@ -1162,6 +1168,7 @@ export const listHelpers = {
   isPhysicalContinuationMarker,
   isRetainableLineComment,
   isStackedFirstBlockQuoteMarker,
+  isTableRow,
   itemFenceHasCloser,
   lazyContinuationEndsList,
   leadingWhitespace,

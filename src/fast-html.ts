@@ -5,6 +5,7 @@ import { MAX_NESTING_DEPTH, type ParseOptions } from './parse.js'
 import type { RenderLossSinkOptions } from './render/render-loss.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue } from './link-destination.js'
+import { isTableRow } from './parse/parse-prepass-core.js'
 
 type Options = ParseOptions & RenderOptions & { profile?: unknown }
 type LinkDef = { href: string; title?: string }
@@ -481,6 +482,7 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
 }
 
 function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
+  if (!isTableRow(lines[start]!)) return undefined
   const heads = cells(lines[start]!), delimiter = cells(lines[start + 1] ?? '')
   if (!heads || !delimiter || !heads.length || heads.length !== delimiter.length) return undefined
   if (heads.some((cell) => cell === '^' || cell === '<')) return undefined
@@ -498,6 +500,7 @@ function renderTable(lines: string[], start: number, depth: number, defs: Map<st
   let i = start + 2
   const rows: string[][] = []
   while (lines[i]?.startsWith('|')) {
+    if (!isTableRow(lines[i]!)) return undefined
     const row = cells(lines[i]!)
     if (!row || row.length !== heads.length) return undefined
     if (row.some((cell) => cell === '^' || cell === '<')) return undefined
