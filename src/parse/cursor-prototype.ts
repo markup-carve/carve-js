@@ -313,7 +313,7 @@ function attributedListMarker(line: string) {
 function listMarker(line: string) {
   const attributed = attributedListMarker(line)
   if (attributed) return attributed
-  const itemAttr = extractItemAttr(line)
+  const itemAttr = line.includes('{') ? extractItemAttr(line) : null
   const ordered = RE_ORDERED.exec(itemAttr?.stripped ?? line)
   if (ordered && !ordered[1]!.includes('\t')) {
     const markerWidth = ordered[0].length - ordered[4]!.length
