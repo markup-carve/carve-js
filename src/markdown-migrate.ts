@@ -3,7 +3,7 @@ import { protectNativeMarkdownDestinationGlyphs } from './import/markdown/markdo
 import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './import/markdown/markdown-destination-encoding.js'
 import type { BlockNode, Document, InlineNode, List } from './ast.js'
 import { orderedMarker } from './render-carve.js'
-import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
+import { isCarveWhitespace, trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './import/markdown/markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source/source-unspellable-error.js'
@@ -100,6 +100,7 @@ function extenderFollows(full: string, end: number): boolean {
 function wrapped(open: string, close: string, braced = open): (match: string, body: string, offset: number, full: string) => string {
   return (match, body, offset, full) => {
     if (extenderLeadingBody(body)) return body
+    if (braced !== open && (isCarveWhitespace(body[0]!) || isCarveWhitespace(body.at(-1)!))) return `${braced}${body}${close}}`
     return extenderFollows(full, offset + match.length) ? `${braced}${body}${close}${braced === open ? '' : '}'}` : `${open}${body}${close}`
   }
 }

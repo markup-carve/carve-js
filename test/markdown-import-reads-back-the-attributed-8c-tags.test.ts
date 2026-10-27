@@ -88,6 +88,15 @@ describe('a bare del', () => {
     expect(markdownToCarve('a <del>x</del> b\n')).toBe('a ~x~ b\n')
     expect(carveToHtml(markdownToCarve('a <del>x</del> b\n'))).toContain('<s>x</s>')
   })
+
+  it.each([
+    ['<del> </del>', '{~ ~}', '<p><s> </s></p>'],
+    ['<s> x </s>', '{~ x ~}', '<p><s> x </s></p>'],
+    ['<del>x </del>', '{~x ~}', '<p><s>x </s></p>'],
+  ])('keeps padding inside %s', (source, written, rendered) => {
+    expect(markdownToCarve(source)).toBe(written)
+    expect(carveToHtml(written)).toBe(rendered)
+  })
 })
 
 describe('the §8c constructs that already round-tripped', () => {
