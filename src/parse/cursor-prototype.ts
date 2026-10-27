@@ -3237,7 +3237,11 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     cursor.peek()!.text.includes('`') ? takeQuotedInlineCodeContinuation(cursor, body) : undefined
   if (quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,
     !!wrappedAttributeTail, inlineCode)) {
-    if (!inlineCode && !(listOwner?.openFence && !listOwner.shiftedFence)) {
+    const tableLine = (text: string): string => text.replace(/^(?:> ?)+/, '')
+    const joinedTableEnd = body.length === 2 &&
+      /^\|.*\|[ \t]*$/.test(tableLine(body[0]!.text)) &&
+      /^\+.*\|/.test(tableLine(body[1]!.text))
+    if (!inlineCode && !(listOwner?.openFence && !listOwner.shiftedFence) && !joinedTableEnd) {
       throw new UnsupportedCursorSyntax('lazy quote continuation')
     }
     if (inlineCode) {

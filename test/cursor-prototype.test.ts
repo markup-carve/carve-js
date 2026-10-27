@@ -2596,4 +2596,18 @@ describe('experimental block cursor', () => {
   ('declines an unresolved indented first-block owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
+
+  it.each(['> | a |\n> + b |\ntail\n',
+    '> |= a |\n> + b |\ntail\n',
+    '> > | a |\n> > + b |\ntail\n'])
+  ('releases a follower after a quote-owned table continuation row: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('declines a follower after an incomplete quote-owned table row', () => {
+    expect(() => parseCursorPrototype('> | a\n> + b |\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
 })
