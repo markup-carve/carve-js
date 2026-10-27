@@ -728,10 +728,11 @@ describe('experimental block cursor', () => {
       '| a |\n', '| --- | --- |\n| 1 | 2 |\n', '| a | b |\n\n',
       '# Before\n\n| a | b |\n', '\n| a | b |\n',
       '| a | b |\n\n| c | d |\n', 'para\n| a |\n', '# Heading\n| a |\n',
+      '| a |\npara\n',
       '{aligns="right,,center" valigns="top,middle,bottom" widths="25,50,25"}\n| A | B | C |\n| D | E | F |\n']) {
       expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     }
-    for (const source of ['- +\n| a | b |\n', '> - > +\n| c |\n', '| a |\npara\n',
+    for (const source of ['- +\n| a | b |\n', '> - > +\n| c |\n',
       '| a |\n\n>\n\n^ cap\n', '| a |\n\n- +\n']) {
       expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
     }
@@ -2531,5 +2532,21 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
+  })
+
+  it.each(['| a | b |\n| c | d\n',
+    '| a | b |\n| - | - |\n+ cont |\n',
+    '- | a |\n  b\ntail\n',
+    '| a |\npara\n- s1\n'])
+  ('releases a non-row follower after a data table: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each([':: t\n:  > | a |\n   > + b |\ntail\n',
+    '- text\n\n  | a |\n  |b\n\n  ^ cap\n- c\n'])
+  ('declines a data-table follower with unresolved container ownership: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 })

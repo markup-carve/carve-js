@@ -61,6 +61,13 @@ function figureGroupOwner(owner: ContainerOwner, figureGroup: boolean): Containe
   return figureGroup ? { ...owner, inFigureGroup: true } : owner
 }
 
+function hasContainerOwner(owner: ContainerOwner, kind: ContainerKind): boolean {
+  for (let current: ContainerOwner | undefined = owner; current; current = current.parent) {
+    if (current.kind === kind) return true
+  }
+  return false
+}
+
 function unsupportedReferencesColon(colon: RegExpExecArray): boolean {
   return colon[2] === 'references' && colon[1] !== ':::'
 }
@@ -866,7 +873,10 @@ function parseTableAtCursor(cursor: Cursor, inline: CursorInline): Table {
       RE_CAPTION.test(cursor.peek(2)?.text ?? '')) {
     throw new UnsupportedCursorSyntax('list table caption gap')
   }
-  if (!headed && cursor.peek()?.text && !isBlockStart(cursor.peek()!.text)) {
+  if (!headed && cursor.peek()?.text && !isBlockStart(cursor.peek()!.text) &&
+      (hasContainerOwner(cursor.owner, 'definition') ||
+        cursor.owner.inList && cursor.peek(1)?.text === '' &&
+        RE_CAPTION.test(cursor.peek(2)?.text ?? ''))) {
     throw new UnsupportedCursorSyntax('data table paragraph follower')
   }
   if (!headed && cursor.peek()?.text === '' &&
