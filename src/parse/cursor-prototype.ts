@@ -1962,8 +1962,13 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   if (depth !== 0 || stackLength < 2 || top.fenceMarker) return false
   const follower = cursor.peek()!.text
   const last = top.body.at(-1)?.text ?? ''
-  if (plainQuoteText(follower) && (plainQuoteText(last) ||
-      last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
+  const nonRowPipe = follower.trimStart().startsWith('|') &&
+    !isTableRow(follower.trimStart()) && follower.startsWith(' ')
+  if ((plainQuoteText(follower) || nonRowPipe ||
+      follower.startsWith('+ ') && top.body.at(-1)?.lazyText &&
+      top.body.at(-1)?.text.trimStart().startsWith('|')) &&
+      (plainQuoteText(last) || nonRowPipe || top.body.at(-1)?.lazyText ||
+        last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
   return follower[0] === ' ' && follower.includes('`') &&
     closesOpenListCodeSpan(top.body, follower, top.contentColumn) ||
     follower[0] === ' ' && follower.includes('~') &&
@@ -2003,6 +2008,12 @@ function ownsBelowColumnQuotedLiteral(body: SourceLine[], follower: string): boo
 
 function markBelowColumnQuotedLiteral(body: SourceLine[], line: SourceLine): SourceLine {
   return ownsBelowColumnQuotedLiteral(body, line.text) ? { ...line, lazyText: true } : line
+}
+
+function foldedNestedParagraphLine(body: SourceLine[], line: SourceLine): SourceLine {
+  const folded = markBelowColumnQuotedLiteral(body, line)
+  return folded.text.trimStart().startsWith('|') &&
+    !isTableRow(folded.text.trimStart()) ? { ...folded, lazyText: true } : folded
 }
 
 function mayFoldRootListParagraph(cursor: Cursor,
@@ -2807,7 +2818,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     if (mayFoldListParagraph(cursor, top, stack, depth)) {
       cursor.take()
-      appendBody(top, markBelowColumnQuotedLiteral(top.body, line), 0, true)
+      appendBody(top, foldedNestedParagraphLine(top.body, line), 0, true)
       updateListFrameEnds(stack, line, listSpan)
       continue
     }

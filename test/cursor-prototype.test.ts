@@ -2493,4 +2493,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- a\n  - b\n  | x | y | Ω\n+ c\n',
+    '- a\n  - b\n  | x | y | Ω\nplain\n',
+    '* a\n  * b\n  | x\n+ c\n',
+    '1. a\n  - b\n  | x | y | Ω\n+ c\n'])
+  ('keeps a non-row pipe and its lazy follower in the nested item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
