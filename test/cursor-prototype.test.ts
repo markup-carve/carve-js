@@ -145,6 +145,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('carries a longer plain run through the same quoted list owner', () => {
+    const source = '- a\n  > - x\n  p0\n  p1\n  p2\n  p3\n  p4\n  - m\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
