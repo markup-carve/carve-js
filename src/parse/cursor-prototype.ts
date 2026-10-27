@@ -4409,6 +4409,57 @@ function hoistBareListFootnote(lines: SourceLine[], inline: CursorInline,
   return lines.filter((line) => !consumed.has(line.number))
 }
 
+function hoistMarkerLineFootnote(lines: SourceLine[], inline: CursorInline,
+  footnoteDefs: Record<string, BlockNode[]>, footnoteDefPos: Record<string, Position>):
+  SourceLine[] | undefined {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
+    const marker = listMarker(line.text)
+    if (!marker || marker.indent !== 0 || marker.ordered || marker.width !== 2 ||
+        'attrs' in marker || 'continuationWidth' in marker) continue
+    const noteText = line.text.slice(marker.width)
+    const note = FOOTNOTE_DEF.exec(noteText)
+    if (!note || !plainQuoteText(note[2] ?? '')) continue
+    const body: SourceLine[] = []
+    let end = index + 1
+    while (end < lines.length) {
+      const next = lines[end]!
+      if (isBlankLine(next.text)) {
+        let after = end + 1
+        while (after < lines.length && isBlankLine(lines[after]!.text)) after++
+        if (!lines[after]?.text.startsWith(' '.repeat(marker.width + 2))) break
+        while (end < after) body.push({ ...lines[end++]!, text: '' })
+        continue
+      }
+      if (!next.text.startsWith(' '.repeat(marker.width + 2))) break
+      body.push({ ...next, text: next.text.slice(marker.width + 2),
+        start: next.start + marker.width + 2,
+        baseColumn: (next.baseColumn ?? 1) + marker.width + 2 })
+      end++
+    }
+    if (body.filter((part) => !isBlankLine(part.text)).length === 1 &&
+          body.some((part) => LINE_COMMENT.test(part.text)) ||
+        body.some((part) => listMarker(part.text) !== undefined) &&
+          plainQuoteText(lines[end]?.text ?? '')) {
+      throw new UnsupportedCursorSyntax('marker-line footnote owner')
+    }
+    const contentColumn = marker.width + noteText.length - note[2]!.length + 1
+    const firstBody = { ...line, text: note[2]!, start: line.start + contentColumn - 1,
+      baseColumn: (line.baseColumn ?? 1) + contentColumn - 1 }
+    const blocks = parseBlocks(new Cursor([firstBody, ...body], undefined,
+      childOwner(ROOT_OWNER, 'colon'), lines), inline, [], 1, false)
+    Object.defineProperty(footnoteDefs, note[1]!, { value: blocks,
+      enumerable: true, configurable: true, writable: true })
+    Object.defineProperty(footnoteDefPos, note[1]!, { value: position({ ...line,
+      text: noteText, start: line.start + marker.width,
+      baseColumn: (line.baseColumn ?? 1) + marker.width }, lines[end - 1] ?? line),
+    enumerable: true, configurable: true, writable: true })
+    return [...lines.slice(0, index), { ...line, text: line.text.slice(0, marker.width) },
+      ...lines.slice(end)]
+  }
+  return undefined
+}
+
 function hasDedentedNestedFenceBoundary(lines: readonly SourceLine[]): boolean {
   for (let index = 0; index + 6 < lines.length; index++) {
     if (lines[index + 1]!.text !== '' || lines[index + 5]!.text !== '') continue
@@ -4545,7 +4596,9 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
-  const ownedFootnoteLines = hoistBareListFootnote(lines, inline, footnoteDefs, footnoteDefPos)
+  const ownedFootnoteLines = hoistBareListFootnote(lines, inline, footnoteDefs, footnoteDefPos) ??
+    (source.includes(' [^') ?
+      hoistMarkerLineFootnote(lines, inline, footnoteDefs, footnoteDefPos) : undefined)
   const blockCursor = ownedFootnoteLines ? new Cursor(ownedFootnoteLines, source, ROOT_OWNER, lines) : cursor
   if (ownedFootnoteLines && simpleRootListDefinitions) {
     blockCursor.simpleRootListDefinitions = simpleRootListDefinitions

@@ -2384,6 +2384,20 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['See [^a].\n\n- [^a]: note body\n',
+    '- [^n]: text\n    %% c\n    ```\n    code\n    ```\nafter [^n]\n',
+    '- [^n]: text\n\n    %% c\n    ```\n    code\n    ```\nafter [^n]\n'])
+  ('hoists a marker-line footnote with its owned body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- [^n]: text\n    %% c\n',
+    '- [^n]: text\n\n    %% c\n',
+    '- [^n]: text\n\n    - item\nafter [^n]\n'])
+  ('declines an ambiguous marker-line footnote owner: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])
