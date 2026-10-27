@@ -2363,6 +2363,7 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   const last = top.body.at(-1)!.text
   if (top.retainedBelowColumnComment) return true
   if (plainQuoteText(last)) return true
+  if (owner.kind === 'root' && top.ordered && hasUnclosedListCodeSpan(top.body)) return true
   if (nestedQuoteParagraphText(last)) return true
   const priorMarker = listMarker(last)
   if (depth === 0 && owner.kind === 'root' && top.ordered &&
