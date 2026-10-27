@@ -2455,7 +2455,7 @@ export class ParseSession extends InlineParseSession {
         : undefined
     const paragraphNode: Paragraph = {
       type: 'paragraph',
-      children: (codeInclude || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      children: (codeInclude && !/^\{\{ +["“]/.test(text) || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),
@@ -2463,7 +2463,7 @@ export class ParseSession extends InlineParseSession {
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
-    if (codeInclude) {
+    if (codeInclude && !/^\{\{ +["“]/.test(text)) {
       const startOffset = lexer.lineOffset(startLineIndex) + firstLead
       const startColumn = lexer.lineStartColumn(startLineIndex) + firstLead
       paragraphNode.children = [{ type: 'text', value: text,

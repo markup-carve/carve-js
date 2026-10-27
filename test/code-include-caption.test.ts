@@ -43,6 +43,9 @@ describe('block code include caption', () => {
     expect(renderHtml(resolve(parse('{{ missing.csv @code:csv }}\n^ Plans')))).toBe(
       '<p>{{ missing.csv @code:csv }}</p>\n<p>^ Plans</p>',
     )
+    expect(renderHtml(resolve(parse('{{ "a}}b" @code }}\n^ Plans')))).toBe(
+      '<p>{{ “a}}b” <span class="mention"><strong>@code</strong></span> }}</p>\n<p>^ Plans</p>',
+    )
   })
 
   it('leaves a caption detached after two blanks', () => {
