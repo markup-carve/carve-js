@@ -1309,6 +1309,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       !figuresOnly &&
       b.type === 'paragraph' &&
       loneImage !== undefined &&
+      !b.children.some(child => child.type === 'comment') &&
       (loneImage.pos === undefined ||
         loneImage.pos.startColumn === 1 ||
         b.children.some(child => child.type === 'comment'))

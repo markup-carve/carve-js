@@ -63,6 +63,9 @@ const targets: Record<string, { extension: string; render: Render }> = {
  * configures is a divergence nothing would report.
  */
 const featureRunners: Record<string, (source: string, render: Render) => string> = {
+  'profile-comment': (source, render) => render(source, { profile: lib.Profile.comment() }),
+  'profile-minimal': (source, render) => render(source, { profile: lib.Profile.minimal() }),
+  'toc-placement': (source, render) => render(source, { extensions: [lib.tocPlacement()] }),
   'fenced-render-mermaid': (source, render) => render(source, { extensions: [lib.mermaid()] }),
   'fenced-render-d2': (source, render) => render(source, { extensions: [lib.d2()] }),
   'fenced-render-graphviz': (source, render) => render(source, { extensions: [lib.graphviz()] }),
