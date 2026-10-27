@@ -4223,6 +4223,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   let openFence: string | undefined
   let openComment: number | undefined
   let simpleRootListPrefix: string | undefined
+  let simpleRootListNested = false
   let simpleQuoteListPrefix: string | undefined
   const hasDefinitionMarker = source.includes(']:')
   const mayHaveNestedListDefinition = hasDefinitionMarker &&
@@ -4233,14 +4234,25 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     for (const line of cursor.lines) {
       if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
         const marker = listMarker(line.text)
-        if (marker?.indent === 0) simpleRootListPrefix = ' '.repeat(marker.width)
+        if (marker?.indent === 0) {
+          simpleRootListPrefix = ' '.repeat(marker.width)
+          simpleRootListNested = false
+        }
         else if (line.text !== '' && simpleRootListPrefix &&
-            !line.text.startsWith(simpleRootListPrefix)) simpleRootListPrefix = undefined
+            !line.text.startsWith(simpleRootListPrefix)) {
+          simpleRootListPrefix = undefined
+          simpleRootListNested = false
+        }
         else if (simpleRootListPrefix && line.text.startsWith(simpleRootListPrefix) &&
             (line.text.startsWith(simpleRootListPrefix + '  ') ||
              isBlockStart(line.text.slice(simpleRootListPrefix.length)) &&
              !rootLinkDef(line.text.slice(simpleRootListPrefix.length)))) {
-          simpleRootListPrefix = undefined
+          if (listMarker(line.text.slice(simpleRootListPrefix.length))) {
+            simpleRootListNested = true
+          } else if (!rootLinkDef(line.text.slice(simpleRootListPrefix.length).trimStart())) {
+            simpleRootListPrefix = undefined
+            simpleRootListNested = false
+          }
         }
         const quoteMarker = line.text.startsWith('> ') ? listMarker(line.text.slice(2)) : undefined
         if (quoteMarker?.indent === 0) simpleQuoteListPrefix = '> ' + ' '.repeat(quoteMarker.width)
@@ -4272,10 +4284,13 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       const quoteDefinition = line.text.startsWith('> ') &&
         (line.number === 1 || cursor.lines[line.number - 2]?.text === '')
       const simpleListDefinition = mayHaveNestedListDefinition && simpleRootListPrefix &&
-        line.text.startsWith(simpleRootListPrefix + '[') &&
+        line.text.startsWith(simpleRootListPrefix) &&
+        /^ *\[/.test(line.text.slice(simpleRootListPrefix.length)) &&
+        (!simpleRootListNested && line.text[simpleRootListPrefix.length] === '[' ||
+          !cursor.lines[line.number] || cursor.lines[line.number]?.text === '') &&
         (cursor.lines[line.number - 2]?.text === '' ||
          boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
-        rootLinkDef(line.text.slice(simpleRootListPrefix.length)) : null
+        rootLinkDef(line.text.slice(simpleRootListPrefix.length).trimStart()) : null
       const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
         line.text.startsWith(simpleQuoteListPrefix + '[') &&
         cursor.lines[line.number - 2]?.text === '> ' ?

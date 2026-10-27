@@ -1413,6 +1413,20 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- - x\n   [r]: /url\n\nSee [r][].\n',
+    '- - x\n    [r]: /url\n\nSee [r][].\n',
+    '- - x\n     [r]: /url\n\nSee [r][].\n',
+    '- > - x\n    [r]: /url\n\nSee [r][].\n',
+  ])('hoists a bounded reference from its nested list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an adjacent nested reference with a following paragraph', () => {
+    expect(() => parseCursorPrototype('- a\n  - para\n    [r]: /u\nx\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '- intro\n\n   :: term\n   :  definition\n\n      > quote\n',
     '- intro\n\n   :: term\n   :  definition\n',
   ])('keeps a nested definition with its list owner: %s', (source) => {
