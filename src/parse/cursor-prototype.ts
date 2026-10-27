@@ -1592,6 +1592,14 @@ function nestedSimpleFirstBlock(cursor: Cursor, frame: ListCursorFrame,
   return !after || isBlankLine(after.text)
 }
 
+function nestedQuoteFirstHeading(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number, depth: number): boolean {
+  if (depth !== 0 || stackLength !== 2 || frame.body.length !== 1 ||
+      frame.body[0]!.text !== '> +' || !RE_HEADING.test(cursor.peek()?.text ?? '')) return false
+  const after = cursor.peek(1)
+  return !after || isBlankLine(after.text)
+}
+
 function takeListFirstBlock(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number, contentColumn: number):
   Array<{ line: SourceLine; prefix: number }> | undefined {
@@ -2308,6 +2316,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const takeNestedFirstBlock = (frame: ListCursorFrame, line: SourceLine): boolean => {
     if (takeNestedFirstFence(frame)) return true
+    if (nestedQuoteFirstHeading(cursor, frame, stack.length, depth)) {
+      cursor.take()
+      appendBody(frame, line, 0)
+      updateListFrameEnds(stack, line, listSpan)
+      return true
+    }
     if (!nestedSimpleFirstBlock(cursor, frame, stack.length, depth)) return false
     cursor.take()
     const prefix = stack.length === 2 && line.text.startsWith(' '.repeat(frame.indent)) ?
