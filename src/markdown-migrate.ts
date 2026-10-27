@@ -2506,7 +2506,18 @@ function convertInline(
 
   if (table) line = escapeTablePipes(line)
 
-  return restoreProtectedSpans(line, protectedSpans, table).replaceAll('\x00FNEMPTY\x00', '{empty}')
+  return escapeCaptionAfterImportedImage(restoreProtectedSpans(line, protectedSpans, table).replaceAll('\x00FNEMPTY\x00', '{empty}'))
+}
+
+/** Keep a later Markdown text line from attaching to a standalone imported image. */
+function escapeCaptionAfterImportedImage(written: string): string {
+  if (!written.includes('\n^ ') || !written.includes('![')) return written
+  const lines = written.split('\n')
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i]!.startsWith('^ ') || !lines[i - 1]!.includes('![')) continue
+    if (parse(lines[i - 1]!).children[0]?.type === 'image') lines[i] = `\\${lines[i]}`
+  }
+  return lines.join('\n')
 }
 
 /**

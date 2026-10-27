@@ -45,6 +45,11 @@ describe('markdownToCarve — Carve syntax no Markdown flavour spells', () => {
     )
   })
 
+  it('keeps a later caption-shaped line literal after an image', () => {
+    expect(conv('![a](b)\n^ c')).toBe('![a](b)\n\\^ c')
+    expect(html('![a](b)\n^ c')).toBe('<p><img src="b" alt="a">\n^ c</p>')
+  })
+
   it('escapes every dollar of a run, not just the first', () => {
     // `\$$`x`` is a literal dollar followed by an INLINE math span - the second
     // dollar opens it - so a run needs one backslash per character.
