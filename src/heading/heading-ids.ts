@@ -32,6 +32,7 @@ import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js
 import { TRANSLIT_MAP } from '../translit-map.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { hasCaptionAtContentColumn, hasLazySecondLine } from '../parse/block/paragraph-indent.js'
+import { markPromotedBlockImage } from '../ast/block-image-promotion.js'
 
 /**
  * The key an implicit heading reference and a heading's text are compared on:
@@ -1320,6 +1321,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // §15), matching a direct block image `{#id}\n![…](…)`. Otherwise the id
       // would be lost when the paragraph wrapper is dropped.
       if (b.attrs) img.attrs = mergeAttrs(b.attrs, img.attrs ?? {})
+      markPromotedBlockImage(img)
       blocks[i] = img as unknown as BlockNode
       continue
     }

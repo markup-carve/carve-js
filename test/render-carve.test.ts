@@ -299,30 +299,9 @@ describe('renderCarve corpus', () => {
     }
   }
 
-  /*
-   * THE PART 11 §1c EXEMPTION IS REACHED, so it cannot rot unnoticed.
-   *
-   * The per-document branch above is taken SILENTLY: if the corpus or this
-   * engine changed so that no document's pinned canonical form re-parsed
-   * differently from its source, every document would fall through to the plain
-   * invariant, the whole branch would stop being generated, and nothing would
-   * say so. The carve-out would then sit in this file describing a ceiling that
-   * no longer exists - which is how a guard stops guarding.
-   *
-   * Asked once, over the corpus, because it is a question about the corpus. It
-   * fails in the direction the deleted per-document `not.toBe` could not: the
-   * day a lone indented image round-trips cleanly, this goes red and the branch
-   * and this test are deleted together.
-   *
-   * The message names the documents rather than only counting them, so a corpus
-   * renumbering reads as the rename it is.
-   */
-  it('the PART 11 §1c ceiling is reached', () => {
-    expect(
-      sidecarCeilings(),
-      'no pinned canonical form re-parses differently from its source: the PART 11 §1c ' +
-        'exemption above is dead and should be deleted',
-    ).not.toEqual([])
+  // Image promotion on the AST wire cleared the last wrapper-only difference.
+  it('has no pinned canonical form that re-parses differently from its source', () => {
+    expect(sidecarCeilings()).toEqual([])
   })
 
   /*

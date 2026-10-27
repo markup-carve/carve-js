@@ -166,6 +166,7 @@ import {
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
+import { markPromotedBlockImage } from '../ast/block-image-promotion.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
@@ -1893,6 +1894,7 @@ export class ParseSession extends InlineParseSession {
     // `isBlockImageLine` has already read the run as a destination, so the
     // escapes are resolved here as they are on the inline tail.
     const img: Image = { type: 'image', src: m[2] === '' ? '' : linkDestinationValue(m[2]!)!, alt: unescapeAttrValue(m[1]!) }
+    markPromotedBlockImage(img)
     const title = m[3] ?? m[4]
     if (title !== undefined) img.title = unescapeAttrValue(title)
     if (m[5]) img.attrs = parseAttrs(m[5])

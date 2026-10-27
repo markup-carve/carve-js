@@ -28,6 +28,7 @@ import { OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fie
 import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from '../ast.js'
 import { resolveTableSpans } from '../table/table-spans.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
+import { isPromotedBlockImage } from './block-image-promotion.js'
 import { isResolvedEmptyReference, markResolvedEmptyReference } from '../parse/inline/reference-state.js'
 import { checkAstVersion } from './envelope.js'
 import { MAX_NESTING_DEPTH } from '../parse.js'
@@ -400,7 +401,7 @@ function orderCollectedDefinitions(children: AstJsonBlock[]): void {
 /** Keep block image promotion on the paragraph in the exchange tree. */
 function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
   return blocks.map((block): BlockNode => {
-    if (block.type === 'image') return {
+    if (block.type === 'image' && isPromotedBlockImage(block)) return {
       type: 'paragraph', children: [block], blockImage: true,
       ...(block.pos === undefined ? {} : { pos: block.pos }),
     }
