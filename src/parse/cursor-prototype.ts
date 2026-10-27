@@ -2200,6 +2200,8 @@ function shouldMatchShiftedListFence(frame: ListCursorFrame, line: SourceLine,
 function continuedListFencePrefix(frame: ListCursorFrame, line: SourceLine, prefix: number): number {
   if (!line.text.startsWith(' '.repeat(frame.fencePrefix!))) {
     if (!frame.fenceMayDedent) throw new UnsupportedCursorSyntax('shifted fence continuation')
+    const indent = /^ */.exec(line.text)![0].length
+    if (indent > prefix && fenceOpen(line.text.slice(indent))) return indent
     return prefix
   }
   return frame.fencePrefix!

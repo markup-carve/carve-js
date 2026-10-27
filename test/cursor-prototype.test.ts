@@ -5,6 +5,17 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    '- item\n\n    ````\n    a\n   ```\n\n  tail\n',
+    '- item\n\n    ```\n    a\n   ```\n\n  tail\n',
+    '- item\n\n    ~~~~\n    a\n   ~~~\n',
+  ])('measures a dedented fence run at its payload column: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- - text\n  $$\n  x\n  $$\n\n  ^ cap\n- c\n',
     '- - text\n  ![i](x.png)\n\n  ^ cap\n- c\n',
     '- - text\n  > q\n\n  ^ cap\n- c\n',
@@ -2289,8 +2300,7 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- item\n\n    ```\n    a\n   ```\n\n  tail\n',
-    '> - a\n>     - child\n>     ```\n>\n>       ```\n>   ~~~\nafter\n'])
+  it.each(['> - a\n>     - child\n>     ```\n>\n>       ```\n>   ~~~\nafter\n'])
   ('declines a shifted fence whose remaining owner is unresolved: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
