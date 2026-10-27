@@ -933,6 +933,41 @@ function nestedDefinitionBodyEnd(cursor: Cursor, from: number, column: number): 
   return !cursor.lines[after] || cursor.lines[after]!.text === '' ? after : undefined
 }
 
+function definitionFenceBodyEnd(cursor: Cursor, from: number, column: number): number | undefined {
+  const prefix = ' '.repeat(column - 1)
+  const first = cursor.lines[from]?.text
+  if (!first?.startsWith(prefix)) return undefined
+  const marker = fenceOpen(first.slice(prefix.length))?.marker
+  if (!marker) return undefined
+  for (let at = from + 1; at < cursor.lines.length; at++) {
+    const text = cursor.lines[at]!.text
+    if (text === '') return undefined
+    if (!text.startsWith(prefix)) {
+      for (let later = at + 1; later < cursor.lines.length; later++) {
+        const follower = cursor.lines[later]!.text
+        if (follower === '') break
+        if (follower.startsWith(prefix) && closesFence(follower.slice(prefix.length), marker)) {
+          return at
+        }
+      }
+      return undefined
+    }
+    if (!text.startsWith(prefix) || !closesFence(text.slice(prefix.length), marker)) continue
+    return !cursor.lines[at + 1] || cursor.lines[at + 1]!.text === '' ? at + 1 : undefined
+  }
+  return undefined
+}
+
+function definitionFenceBoundary(cursor: Cursor, from: number, column: number,
+  mayWrap: boolean, plain: boolean): { end: number; structural: boolean } | undefined {
+  if (!mayWrap || !plain) return undefined
+  const end = definitionFenceBodyEnd(cursor, from, column)
+  if (end === undefined) return undefined
+  const boundary = cursor.lines[end]?.text
+  return { end, structural: boundary !== undefined && boundary !== '' &&
+    !boundary.startsWith(' '.repeat(column - 1)) }
+}
+
 function boundedDefinitionParagraphEnd(lines: SourceLine[], from: number): number | undefined {
   const codeRun = /^ +(`{3,})[ \t]*$/.exec(lines[from]?.text ?? '')?.[1]
   if (codeRun) {
@@ -1070,6 +1105,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let definitionContentPlain = false
   let definitionContentBlock = false
   let endedOnStructural = false
+  let endedOnFenceBoundary = false
   while (end < cursor.lines.length) {
     const text = cursor.lines[end]!.text
     const termMatch = /^:: +[ \t]*([^ \t].*)$/.exec(text)
@@ -1142,6 +1178,14 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
     const nestedEnd = mayWrapDefinition && definitionContentPlain ?
       nestedDefinitionBodyEnd(cursor, end, definitionContentColumn) : undefined
     if (nestedEnd !== undefined) { end = nestedEnd; break }
+    const fenced = definitionFenceBoundary(cursor, end, definitionContentColumn,
+      mayWrapDefinition, definitionContentPlain)
+    if (fenced) {
+      endedOnStructural = fenced.structural
+      endedOnFenceBoundary = fenced.structural
+      end = fenced.end
+      break
+    }
     if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1) {
       const structuralEnd = definitionStructuralFollowerEnd(cursor, end, definitionContentColumn)
       if (structuralEnd !== undefined) {
@@ -1190,7 +1234,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let next = end
   while (cursor.lines[next]?.text === '') next++
   const follower = cursor.lines[next]?.text
-  if (follower && (/^[ \t+:]/.test(follower) || follower.startsWith('::'))) {
+  if (follower && !endedOnFenceBoundary &&
+      (/^[ \t+:]/.test(follower) || follower.startsWith('::'))) {
     throw new UnsupportedCursorSyntax('definition list continuation')
   }
   return end
@@ -1260,6 +1305,30 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         }
         const blocks = parseBlocks(new Cursor(body, undefined,
           childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false)
+        current.definitions.push(blocks)
+        current.definitionLines.push(line.number)
+        current.definitionSpans.push(position(line, line))
+        continue
+      }
+      const fencedEnd = !isBlockStart(definition[1]!) ?
+        definitionFenceBodyEnd(cursor, cursor.at, column) : undefined
+      if (fencedEnd !== undefined && fencedEnd <= end) {
+        const prefix = ' '.repeat(column - 1)
+        const boundary = cursor.lines[fencedEnd]
+        const unclosed = boundary !== undefined && boundary.text !== '' &&
+          !boundary.text.startsWith(prefix)
+        const body: SourceLine[] = [{ text: definition[1]!, start: line.start + column - 1,
+          number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 }]
+        while (cursor.at < fencedEnd) {
+          const follower = cursor.take()
+          const offset = follower.text.startsWith(prefix) ? prefix.length : 0
+          body.push({ text: follower.text.slice(offset), start: follower.start + offset,
+            number: follower.number, baseColumn: (follower.baseColumn ?? 1) + offset })
+          last = follower
+        }
+        const blocks = parseBlocks(new Cursor(body, undefined,
+          childOwner(cursor.owner, 'definition', false, unclosed,
+            unclosed ? boundary : undefined), cursor.physicalLines), inline, [], depth + 1, false)
         current.definitions.push(blocks)
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
