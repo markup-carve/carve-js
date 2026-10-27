@@ -434,6 +434,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps blank payload in an ordered-list fence through its owner boundary', () => {
+    for (const fence of ['```', '````', '~~~']) {
+      for (const tail of ['', '  tail\n', '  tail\n\n  more\n']) {
+        const source = `1. outer\n  - head\n\n    ${fence}\n    body\n  \n\n${tail}`
+        expect(parseCursorPrototype(source), source).toStrictEqual(parse(source))
+      }
+    }
+  })
+
   it('keeps nested list code spans and outer unclosed fences with their owners', () => {
     for (const source of [
       '- outer\n  - head\n\n    ```\n    body\n  ```\n\n  tail\n',

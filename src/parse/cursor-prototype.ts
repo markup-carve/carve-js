@@ -1973,6 +1973,19 @@ function isFenceMarkerContinuation(marker: ReturnType<typeof listMarker>, fenceM
     text.startsWith(' '.repeat(contentColumn - 1))
 }
 
+function listFenceContinuationClaim(marker: ReturnType<typeof listMarker>, frame: ListCursorFrame,
+  line: SourceLine, owner: ContainerOwner, stackLength: number,
+  orderedRoot: boolean): { line: SourceLine; prefix: number } | undefined {
+  const column = frame.contentColumn
+  if (owner.kind === 'root' && stackLength === 1 && orderedRoot &&
+      frame.fenceMarker && column !== undefined && line.text.trim() === '' &&
+      reachableListPrefix(line.text, column) === undefined) {
+    return { line: { ...line, text: '' }, prefix: 0 }
+  }
+  return isFenceMarkerContinuation(marker, frame.fenceMarker, column, line.text) ?
+    { line, prefix: column! - 1 } : undefined
+}
+
 function listContinuationFollower(cursor: Cursor, indent: number,
   fenceMarker: string | undefined, depth: number): Array<{ line: SourceLine; prefix: number }> {
   const next = cursor.peek(1)
@@ -2385,6 +2398,12 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean }
+
+function recordOrderedFenceBoundary(owner: ContainerOwner, stackLength: number,
+  orderedRoot: boolean, frame: ListCursorFrame, line: SourceLine): void {
+  if (owner.kind === 'root' && stackLength === 1 && orderedRoot &&
+      frame.fenceMarker && frame.body.at(-1)?.text === '') frame.fenceBoundary = line
+}
 
 function releaseRootListFenceAtBoundary(frame: ListCursorFrame,
   owner: ContainerOwner, stackLength: number): void {
@@ -3026,9 +3045,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       appendAttachedBlock(top, attached)
       continue
     }
-    if (isFenceMarkerContinuation(marker, top.fenceMarker, top.contentColumn, line.text)) {
+    const fenceContinuation = listFenceContinuationClaim(marker, top, line,
+      cursor.owner, stack.length, firstMarker.ordered)
+    if (fenceContinuation) {
       cursor.take()
-      appendBody(top, line, top.contentColumn! - 1)
+      appendBody(top, fenceContinuation.line, fenceContinuation.prefix)
       top.last = line
       if (top.item && top.itemFirst) top.item.pos = listSpan(top.itemFirst, line, top.spanColumn)
       continue
@@ -3237,6 +3258,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         continue
       }
       rejectListQuoteBoundary(top.body, line)
+      recordOrderedFenceBoundary(cursor.owner, stack.length, firstMarker.ordered, top, line)
       releaseRootListFenceAtBoundary(top, cursor.owner, stack.length)
       break
     }
