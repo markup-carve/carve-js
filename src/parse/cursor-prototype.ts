@@ -33,7 +33,8 @@ export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
   spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
-  ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean }
+  ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean;
+  quoteResume?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -2982,6 +2983,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   while (cursor.peek()) {
     const line = cursor.peek()!
+    if (line.quoteResume) break
     const marker = listMarker(line.text)
     const inlineFence = unclosedNestedInlineFence(cursor, stack.at(-1)!, stack.length)
     if (inlineFence) {
@@ -3492,8 +3494,12 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
   const plain = plainQuoteText(follower?.text ?? '')
+  const quotedAfter = after?.text[0] === '>' && RE_BLOCKQUOTE.test(after.text) ?
+    after.text.slice(after.text[1] === ' ' ? 2 : 1) : undefined
   return (quotedContinuationFollower(cursor, body) || plain) &&
     (!after || isBlankLine(after.text) ||
+      listMarker(follower?.text ?? '')?.indent === 0 && quotedAfter !== undefined &&
+        plainQuoteText(quotedAfter) ||
       plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
 }
 
@@ -3529,6 +3535,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let quotedListRun = false
   let firstFence = false
   let listOwner: QuoteListOwner | undefined
+  let attachedListReturn = false
   while (cursor.peek()) {
     const line = cursor.peek()!
     if (depth === 0 && body.length === 1 && body[0]!.text === '> +') {
@@ -3560,7 +3567,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       quotedListRun = body.length === 0 && cursor.owner.kind === 'list' &&
         listMarker(text) !== undefined
       cursor.take()
-      body.push(quotedOwnedBodyLine(line, body, prefix, text))
+      const owned = quotedOwnedBodyLine(line, body, prefix, text)
+      body.push(attachedListReturn && plainQuoteText(text) ?
+        { ...owned, quoteResume: true } : owned)
+      attachedListReturn = false
       if (body.length === 1) firstFence = fenceOpen(text) !== null
       const plain: boolean = literalFence || plainQuoteText(text)
       const observed = observeQuoteListOwner(listOwner, cursor.owner, text, body.length === 1)
@@ -3621,6 +3631,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       body.push({ ...marker, text: '' })
       const attached = cursor.take()
       body.push(attached)
+      attachedListReturn = listMarker(attached.text)?.indent === 0
       last = attached
       plainParagraph = false
       directParagraph = false

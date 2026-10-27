@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2619)
+    expect(exact).toBeGreaterThanOrEqual(2620)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
@@ -951,9 +951,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a quote that resumes after an attached list until both owners are tracked', () => {
-    expect(() => parseCursorPrototype('> quoted\n+\n- item\n> more\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it.each(['> quoted\n+\n- item\n> more\n',
+    '> quoted\n+\n* item\n> more\n> still\n',
+    '> é😀\r\n+\r\n1. item\r\n> more\r\n'])
+  ('resumes the quote owner after an attached list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('keeps an indented multiline code span in its list-owned quote paragraph', () => {
