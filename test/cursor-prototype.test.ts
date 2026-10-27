@@ -16,6 +16,16 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
+  it.each([
+    '- [ ] +\n```\ncode\n```\n',
+    '- [x] +\n> quote\n',
+  ])('attaches a first block after a root task checkbox: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
   it('matches the physical-line ownership fixtures', () => {
     for (const name of ['container-ownership.json', 'container-ownership-boundaries.json']) {
       const path = new URL(`../spec/tests/fixtures/${name}`, import.meta.url)

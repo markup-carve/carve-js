@@ -1448,7 +1448,7 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
 function takeTaskFirstBlockQuote(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
   const markerLineNested = depth === 1 && cursor.owner.kind === 'list' && marker.indent === 0
-  if (!(depth === 0 && marker.indent > 0 || markerLineNested) ||
+  if (!(depth === 0 || markerLineNested) ||
       marker.content.slice(taskWidth) !== '+') return undefined
   const follower = cursor.peek()
   if (!follower) return undefined
@@ -1465,7 +1465,7 @@ function takeTaskFirstBlockQuote(cursor: Cursor, marker: NonNullable<ReturnType<
 
 function takeTaskFirstBlockFence(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
-  if (depth !== 0 || marker.indent === 0 || marker.content.slice(taskWidth) !== '+') return undefined
+  if (depth !== 0 || marker.content.slice(taskWidth) !== '+') return undefined
   const first = cursor.peek()
   if (!first) return undefined
   const indent = /^ */.exec(first.text)![0].length
