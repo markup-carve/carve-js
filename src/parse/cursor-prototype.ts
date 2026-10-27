@@ -2407,9 +2407,10 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   if (owner.kind === 'root' && top.ordered && hasUnclosedListCodeSpan(top.body)) return true
   if (nestedQuoteParagraphText(last)) return true
   const priorMarker = listMarker(last)
-  if (depth === 0 && owner.kind === 'root' && top.ordered &&
+  if (depth === 0 && owner.kind === 'root' &&
       priorMarker?.indent === marker.indent && plainQuoteText(priorMarker.content) &&
-      top.body.length > 1 && plainQuoteText(top.body[0]!.text)) return true
+      top.body.length > 1 && top.body[0]!.text !== '' &&
+      plainQuoteText(top.body[0]!.text)) return true
   const innerMarker = depth === 0 && top.body.length === 1 ? listMarker(last) : undefined
   return innerMarker !== undefined && plainQuoteText(innerMarker.content)
 }
@@ -5000,7 +5001,8 @@ function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string
     const marker = listMarker(text)
     if (index >= 2 && marker?.indent === 1 &&
         listMarker(lines[index - 1]!.text)?.indent === 1 &&
-        listMarker(lines[index - 2]!.text)?.indent === 0) {
+        listMarker(lines[index - 2]!.text)?.indent === 0 &&
+        listMarker(lines[index - 2]!.text)?.content === '') {
       throw new UnsupportedCursorSyntax('one-column list sibling owner')
     }
     if (lines.length >= 6 && index >= 4 && source.includes('>') &&

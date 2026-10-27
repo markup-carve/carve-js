@@ -6,9 +6,14 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
-  it('declines one-column list siblings after a root list item', () => {
+  it('keeps one-column list siblings as text after a nonempty root item', () => {
     const source = '- Rechnung\n - Entwurf\n - Final\n- Mahnung\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines one-column list siblings after an empty root item', () => {
+    expect(() => parseCursorPrototype('- \n - child\n - child\n'))
+      .toThrow(UnsupportedCursorSyntax)
   })
 
   it('declines shallow child markers after nested quote ownership changes', () => {
