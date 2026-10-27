@@ -2558,6 +2558,59 @@ function takeListFrameFootnote(cursor: Cursor, inline: CursorInline, frame: List
   return nested.at
 }
 
+function takeListFrameDefinition(cursor: Cursor, inline: CursorInline,
+  frame: ListCursorFrame, depth: number, stackLength: number, ordered: boolean,
+  reachedPrefix: number): { node: DefinitionList; count: number } | undefined {
+  const line = cursor.peek()!
+  if (!line.text.startsWith(':: ', reachedPrefix) || depth !== 0 || stackLength !== 1 ||
+      ordered || frame.fenceMarker || frame.item?.children.length !== 0 ||
+      !frame.body.every((part) => isBlankLine(part.text) || plainQuoteText(part.text))) {
+    return undefined
+  }
+  const contentColumn = frame.contentColumn!
+  if (!cursor.peek(1)?.text.startsWith(' '.repeat(contentColumn - 1) + ': ')) return undefined
+  const owned: SourceLine[] = []
+  for (let offset = 0; cursor.peek(offset); offset++) {
+    const part = cursor.peek(offset)!
+    if (isBlankLine(part.text)) { owned.push({ ...part, text: '' }); continue }
+    const claim = reachableListPrefix(part.text, contentColumn)
+    if (claim === undefined) { owned.push(part); break }
+    owned.push({ ...part, text: part.text.slice(claim), start: part.start + claim,
+      baseColumn: (part.baseColumn ?? 1) + claim })
+  }
+  if (owned.slice(2).some((part) => part.text.startsWith(' >') ||
+      /^ {1,2}#/.test(part.text) ||
+      rootLinkDef(part.text.trimStart()) || /^: +/.test(part.text))) {
+    throw new UnsupportedCursorSyntax('list-owned definition boundary')
+  }
+  const nested = new Cursor(owned, undefined, childOwner(cursor.owner, 'definition'),
+    cursor.physicalLines)
+  const node = parseSimpleDefinitionList(nested, inline, undefined, depth + 1)
+  return { node, count: nested.at }
+}
+
+function listFrameDefinitionAction(cursor: Cursor, inline: CursorInline,
+  frame: ListCursorFrame, stack: ListCursorFrame[], depth: number, ordered: boolean,
+  reachedPrefix: number, definitionNodes: BlockNode[],
+  listSpan: (from: SourceLine, to: SourceLine, column: number) => Position):
+  (() => void) | undefined {
+  const line = cursor.peek()!
+  const link = cursor.simpleRootListDefinitions?.get(line.number)
+  if (link) return () => takeLinkDefinitionAtCursor(cursor, inline,
+    definitionNodes, true, link)
+  if (line.text[reachedPrefix] !== ':') return undefined
+  const definition = takeListFrameDefinition(cursor, inline,
+    frame, depth, stack.length, ordered, reachedPrefix)
+  if (!definition) return undefined
+  return () => {
+    frame.item!.children.push(definition.node)
+    let last = line
+    for (let offset = 0; offset < definition.count; offset++) last = cursor.take()
+    updateListFrameEnds(stack, last, listSpan)
+    frame.lazyRootParagraph = false
+  }
+}
+
 function shiftedColonAtListFrame(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, prefixLength: number): ReturnType<typeof shiftedClosedListColon> {
   if (stackLength !== 1 || frame.fenceMarker || beginsOpenQuotedParagraph(frame.body)) {
@@ -3173,10 +3226,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       top.lazyRootParagraph = false
       continue
     }
-    const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
-    if (nestedDefinition) {
+    const definitionAction = listFrameDefinitionAction(cursor, inline, top, stack, depth,
+      firstMarker.ordered, reachedPrefix, definitionNodes, listSpan)
+    if (definitionAction) {
       flush(top)
-      takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
+      definitionAction()
       continue
     }
     const shiftedColon = shiftedColonAtListFrame(cursor, top, stack.length, prefix.length)
