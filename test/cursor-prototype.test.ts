@@ -3302,4 +3302,18 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- a\n  > [^f]: n\n- s\n',
+    '- a\n  > [^f]: n\n  - s\n',
+    '- a\n  > [^f]: n\nplain\n'])
+  ('parses a terminal quoted footnote follower: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('declines a quoted footnote follower with a later nested paragraph', () => {
+    expect(() => parseCursorPrototype('- a\n  > [^f]: n\n  - s\n  continuation\nplain\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
 })

@@ -2482,11 +2482,12 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
   possibleInvisibleTail: boolean; ownerState?: ItemLazyState }
 
-function sharedQuoteClaimsLine(frame: ListCursorFrame, line: SourceLine,
+function sharedQuoteClaimsLine(cursor: Cursor, frame: ListCursorFrame, line: SourceLine,
   marker: ReturnType<typeof listMarker>): boolean {
   if (!frame.ownerState) return false
   const previous = frame.body.at(-1)
-  if (!frame.body[0]?.text.startsWith('>') && previous?.number === line.number - 1 &&
+  if (cursor.peek(1) && !frame.body[0]?.text.startsWith('>') &&
+      previous?.number === line.number - 1 &&
       previous.text.startsWith('>') &&
       FOOTNOTE_DEF.test(previous.text.slice(previous.text[1] === ' ' ? 2 : 1))) {
     throw new UnsupportedCursorSyntax('quoted footnote follower owner')
@@ -2869,6 +2870,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     }
     const lastChild = frame.item.children.at(-1)
+    if (lastChild?.type === 'block_quote' && lastChild.children.length === 0 &&
+        lastChild.pos?.endLine === frame.last.number &&
+        lastChild.pos.endColumn !== undefined &&
+        lastChild.pos.endColumn < contentEndColumn(frame.last)) {
+      frame.last = { ...frame.last, spanEndColumn: lastChild.pos.endColumn }
+      frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+    }
     if (lastChild?.type === 'list' && placedEndLine === frame.last.number &&
         frame.itemFirst.number === frame.last.number && frame.last.text.endsWith('+') &&
         lastChild.pos?.endColumn !== undefined &&
@@ -3172,7 +3180,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     rejectAmbiguousNestedPlus(cursor, marker)
     const top = continuationOwner(line)
-    if (sharedQuoteClaimsLine(top, line, marker)) {
+    if (sharedQuoteClaimsLine(cursor, top, line, marker)) {
       cursor.take()
       appendBody(top, { ...line, lazyText: true, claimedQuoteLazy: true }, 0, true)
       updateListFrameEnds(stack, line, listSpan)
@@ -3926,9 +3934,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   const placedEndLine = children.at(-1)?.pos?.endLine
   const quoteLast = onlyRootDefinitions ? first : placedEndLine && placedEndLine < last.number ?
     cursor.physicalLines[placedEndLine - 1] ?? last : last
+  const markerEnd = first.text[1] === ' ' ? 3 : 2
   return { type: 'block_quote', children,
     pos: position(first, quoteLast, 1, onlyDefinition || onlyRootDefinitions ?
-      body[0]!.baseColumn ?? contentEndColumn(quoteLast) : contentEndColumn(quoteLast)) }
+      markerEnd : contentEndColumn(quoteLast)) }
 }
 
 function closesColonOwner(text: string, width: number): boolean {
