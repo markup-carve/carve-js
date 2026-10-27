@@ -27,6 +27,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- - [ ] +\n```\ncode\n```\n',
+    '* * [x] +\n~~~\ncode\n~~~\n',
+  ])('keeps a flush-left fence with the nested task item: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- a\n\t- b\n\tc\n',
     '1. a\n \t* b\n\tc\n',
   ])('places a tab-indented nested list at its authored marker: %s', (source) => {

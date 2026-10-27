@@ -1467,7 +1467,8 @@ function takeTaskFirstBlockQuote(cursor: Cursor, marker: NonNullable<ReturnType<
 
 function takeTaskFirstBlockFence(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
   taskWidth: number, depth: number): Array<{ line: SourceLine; prefix: number }> | undefined {
-  if (depth !== 0 || marker.content.slice(taskWidth) !== '+') return undefined
+  const markerLineNested = depth === 1 && cursor.owner.kind === 'list' && marker.indent === 0
+  if (!(depth === 0 || markerLineNested) || marker.content.slice(taskWidth) !== '+') return undefined
   const first = cursor.peek()
   if (!first) return undefined
   const indent = /^ */.exec(first.text)![0].length
@@ -1483,6 +1484,20 @@ function takeTaskFirstBlockFence(cursor: Cursor, marker: NonNullable<ReturnType<
       for (let i = 0; i < lines.length; i++) cursor.take()
       return lines
     }
+  }
+  return undefined
+}
+
+function nestedTaskFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number, depth: number): number | undefined {
+  if (depth !== 0 || stackLength !== 1 || frame.body.length !== 1 || frame.fenceMarker) return undefined
+  const inner = listMarker(frame.body[0]!.text)
+  if (!inner || !/^\[[ xX\-_>/!?]\] \+$/.test(inner.content)) return undefined
+  const opener = cursor.peek()
+  const fence = opener ? fenceOpen(opener.text)?.marker : undefined
+  if (!fence) return undefined
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    if (closesFence(cursor.peek(offset)!.text, fence)) return offset
   }
   return undefined
 }
@@ -1590,6 +1605,12 @@ function nestedPlusDisposition(cursor: Cursor,
   if (!RE_BLOCKQUOTE.test(content) && !plainQuoteText(content)) return 'literal'
   const after = cursor.peek(2)
   return !after || isBlankLine(after.text) ? [follower] : 'literal'
+}
+
+function nestedPlusAtLine(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number, line: SourceLine): ReturnType<typeof nestedPlusDisposition> {
+  return line.text.charCodeAt(line.text.length - 1) === 43 ?
+    nestedPlusDisposition(cursor, frame, stackLength) : undefined
 }
 
 function isTaskMarkerContent(content: string, ordered: boolean): boolean {
@@ -2184,14 +2205,23 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
     }
   }
+  const takeNestedTaskFence = (frame: ListCursorFrame): boolean => {
+    const end = nestedTaskFirstFenceEnd(cursor, frame, stack.length, depth)
+    if (end === undefined) return false
+    for (let offset = 0; offset <= end; offset++) {
+      const owned = cursor.take()
+      appendBody(frame, owned, 0)
+      updateListFrameEnds(stack, owned, listSpan)
+    }
+    return true
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
     rejectAmbiguousNestedPlus(marker)
     const top = stack.at(-1)!
     rejectAmbiguousListBoundary(marker, top, line)
-    const nestedPlus = line.text.charCodeAt(line.text.length - 1) === 43 ?
-      nestedPlusDisposition(cursor, top, stack.length) : undefined
+    const nestedPlus = nestedPlusAtLine(cursor, top, stack.length, line)
     if (nestedPlus) {
       cursor.take()
       if (nestedPlus === 'literal') {
@@ -2399,6 +2429,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (reachedPrefix === undefined) {
+      if (takeNestedTaskFence(top)) continue
       const ancestor = deepestReachableFrame(stack, line.text, true)
       if (ancestor) {
         const lazy = finalNestedListLazyLine(cursor, top.body, stack.length)
