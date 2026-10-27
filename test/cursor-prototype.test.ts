@@ -2239,6 +2239,13 @@ describe('experimental block cursor', () => {
       parse(source, { positions: false }))
   })
 
+  it.each(['- +\npara\n> q\n', '- +\npara\n+\n> q\n'])
+  ('keeps a list first block within its attached extent: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
   it.each(['- + a |\ntail\n', '- a\n  + b |\ntail\n',
     '- | a |\n  + b |\ntail\n', '- |= a |\n  + b |\ntail\n',
     '- | a |\n  + |\ntail\n'])

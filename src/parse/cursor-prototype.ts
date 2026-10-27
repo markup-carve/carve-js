@@ -1523,7 +1523,8 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
   if (!(plainQuoteText(follower.text) ||
       (markerLineNested && RE_BLOCKQUOTE.test(follower.text)) ||
       (atContentColumn && plainQuoteText(follower.text.slice(prefix.length))))) return undefined
-  if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0) return undefined
+  if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0 &&
+      after.text !== '+' && !RE_BLOCKQUOTE.test(after.text)) return undefined
   cursor.take()
   return [{ line: follower, prefix: atContentColumn ? prefix.length : 0 }]
 }
