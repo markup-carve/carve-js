@@ -2292,6 +2292,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('attaches a tabbed quote after the nested item continuation marker', () => {
+    const source = '- x\n  - y\n    - a\n\t+\n\t> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a below-column quote after a tabbed plus on its existing path', () => {
+    const source = '- x\n  - y\n    - a\n\t+\n  > q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

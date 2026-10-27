@@ -1910,8 +1910,9 @@ function listContinuationFollower(cursor: Cursor, indent: number,
   fenceMarker: string | undefined, depth: number): Array<{ line: SourceLine; prefix: number }> {
   const next = cursor.peek(1)
   const after = cursor.peek(2)
-  const ownColumnQuote = indent > 0 && next?.text.startsWith(' '.repeat(indent)) &&
-    RE_BLOCKQUOTE.test(next.text.slice(indent)) && !after
+  const ownPrefix = indent > 0 && next ? reachableListPrefix(next.text, indent + 1) : undefined
+  const ownColumnQuote = ownPrefix !== undefined && next !== undefined &&
+    RE_BLOCKQUOTE.test(next.text.slice(ownPrefix)) && !after
   const quoteContinuation = depth === 1 && cursor.owner.kind === 'quote' &&
     listMarker(cursor.lines[0]?.text ?? '')?.content.trim() !== '+'
   if (!(depth === 0 || quoteContinuation) ||
@@ -1948,7 +1949,7 @@ function listContinuationFollower(cursor: Cursor, indent: number,
       (after && after.text !== '' && !listMarker(after.text))) {
     throw new UnsupportedCursorSyntax('multiline list continuation')
   }
-  return [{ line: next, prefix: ownColumnQuote ? indent : 0 }]
+  return [{ line: next, prefix: ownColumnQuote ? ownPrefix! : 0 }]
 }
 
 function nestedPlusDisposition(cursor: Cursor,
@@ -2039,6 +2040,18 @@ function isFenceBlankContinuation(cursor: Cursor, frame: ListCursorFrame, next: 
 function isListContinuationMarker(cursor: Cursor, line: SourceLine, frame: ListCursorFrame): boolean {
   if (!frame.item) return false
   if (line.text === '+' || line.text === `${' '.repeat(frame.indent)}+`) return true
+  if (line.text.includes('\t') && line.text.endsWith('+')) {
+    let column = 0
+    for (const char of line.text.slice(0, -1)) {
+      if (char === ' ') column++
+      else if (char === '\t') column += 4 - column % 4
+      else return false
+    }
+    const next = cursor.peek(1)
+    const nextPrefix = next ? reachableListPrefix(next.text, frame.indent + 1) : undefined
+    if (column === frame.indent && nextPrefix !== undefined && !cursor.peek(2) &&
+        RE_BLOCKQUOTE.test(next!.text.slice(nextPrefix))) return true
+  }
   return line.text === '+ ' && plainQuoteText(cursor.peek(1)?.text ?? '') &&
     (!cursor.peek(2) || cursor.peek(2)!.text === '')
 }
@@ -2694,10 +2707,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     for (const { line, prefix } of attached) {
       cursor.take()
       appendBody(frame, line, prefix)
-      frame.last = line
-    }
-    if (frame.itemFirst && frame.item) {
-      frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+      updateListFrameEnds(stack, line, listSpan)
     }
   }
   const takeNestedFirstFence = (frame: ListCursorFrame): boolean => {
