@@ -1045,7 +1045,7 @@ class Importer {
     children.push(...this.reconstructedDefinitions())
     // `*[abbr]: expansion` leads the document, where Carve's own writer puts a
     // definition the prose below it uses.
-    children.unshift(...[...this.footnotes.abbreviationDefs].map(([abbr, expansion]): BlockNode => ({ type: 'abbreviation_def', abbr, expansion })))
+    children.unshift(...this.footnotes.abbreviationLines.map(([abbr, expansion]): BlockNode => ({ type: 'abbreviation_def', abbr, expansion })))
     const doc: Document = { type: 'document', children }
     if (footnoteDefs) this.footnotes.pruneInlinedFootnotes(footnoteDefs, children)
     if (footnoteDefs && Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
@@ -2453,7 +2453,7 @@ class Importer {
       // without this its subtree is the one input that reaches a reconstructed
       // node without passing the caller's `maxNodes` and `maxDepth`.
       this.budget(node, depth)
-      for (let count = this.footnotes.abbreviationDefs.size; count > 0; count -= 1) this.enter(depth)
+      for (let count = this.footnotes.abbreviationLines.length; count > 0; count -= 1) this.enter(depth)
       return []
     }
     if (ACTIVE.has(tag)) {

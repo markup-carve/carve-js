@@ -85,10 +85,12 @@ export class FootnoteStage {
   private readonly inlineFootnoteBodiesState = new Map<string, InlineNode[]>()
   /** Definitions supplied by the document-end `data-carve-abbreviations` template. */
   private readonly abbreviationDefsState = new Map<string, string>()
+  private readonly abbreviationLinesState: Array<readonly [string, string]> = []
   private readonly detachedFootnoteBlocksState: Set<P5Node> = new Set()
   private footnotePlacementMarked = false
   get inlineFootnoteBodies(): ReadonlyMap<string, InlineNode[]> { return this.inlineFootnoteBodiesState }
   get abbreviationDefs(): ReadonlyMap<string, string> { return this.abbreviationDefsState }
+  get abbreviationLines(): ReadonlyArray<readonly [string, string]> { return this.abbreviationLinesState }
   get detachedFootnoteBlocks(): ReadonlySet<P5Node> { return this.detachedFootnoteBlocksState }
   constructor(private readonly context: FootnoteStageContext) {}
   /**
@@ -262,7 +264,7 @@ export class FootnoteStage {
    * the expansion a second time.
    *
    * A line that is not a definition is skipped rather than guessed at, and the
-   * FIRST definition of an abbreviation wins, as a Carve source's would.
+   * Every authored definition is retained; the last value is effective.
    */
   readAbbreviationCarrier(root: P5Node): void {
     // DOCUMENT LEVEL ONLY, which is where §13a places it: "the document's
@@ -286,8 +288,9 @@ export class FootnoteStage {
           const match = RE_ABBR_DEF.exec(line)
           if (!match) continue
           const abbr = match[1]!
-          if (this.abbreviationDefsState.has(abbr)) continue
-          this.abbreviationDefsState.set(abbr, match[2]!.replace(/[ \t]+$/, ''))
+          const expansion = match[2]!.replace(/[ \t]+$/, '')
+          this.abbreviationLinesState.push([abbr, expansion])
+          this.abbreviationDefsState.set(abbr, expansion)
         }
         continue
       }
