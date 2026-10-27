@@ -28,3 +28,14 @@ export function markSecondLineLazy(para: Paragraph): void {
 export function hasLazySecondLine(para: Paragraph): boolean {
   return secondLineLazy.has(para)
 }
+
+/** Paragraphs whose second source line begins a caption at the host column. */
+const captionAtContentColumn = new WeakSet<Paragraph>()
+
+export function markCaptionAtContentColumn(para: Paragraph): void {
+  captionAtContentColumn.add(para)
+}
+
+export function hasCaptionAtContentColumn(para: Paragraph): boolean {
+  return captionAtContentColumn.has(para)
+}
