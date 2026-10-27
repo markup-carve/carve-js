@@ -82,8 +82,8 @@ function canCloseBarePair(text: string, at: number, marker: string, openerMarks:
 }
 
 function editorialCloserInsideAttribute(text: string, start: number, marker: string, closer: number, attributeEnd: number): boolean {
-  return text[start] === '{' && text.slice(attributeEnd - 3, attributeEnd) !== '}#}'
-    && text.slice(attributeEnd - 3, attributeEnd) !== '}%}'
+  return text[start] === '{' && text[start + 1] !== '%'
+    && !/}[ \t]*[#%]}$/.test(text.slice(start, attributeEnd))
     && (marker === '+' || marker === '-') && closer >= 0 && closer < attributeEnd
 }
 
