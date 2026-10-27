@@ -2412,6 +2412,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> > # H\n> > a\ntail\n',
+    '> > :: term\ntail\n',
+    '> > ::: note\n> > a\ntail\n',
+    '> > | a |\n> > + b |\ntail\n',
+    '- > ```\n  > x\n    > y\n  > ```\n'])
+  ('keeps a nested quote lazy line with its open child: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('declines a plain quote continuation followed by another quote marker', () => {
     expect(() => parseCursorPrototype('> quoted\n+\npara\n> q\n'))
       .toThrow(UnsupportedCursorSyntax)

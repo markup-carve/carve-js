@@ -3428,6 +3428,26 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
       plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
 }
 
+function takeQuoteLazyBoundaryTail(cursor: Cursor, body: SourceLine[],
+  wrappedAttributeTail: boolean, inlineCode: SourceLine[] | undefined,
+  listOwner: QuoteListOwner | undefined, directParagraph: boolean): SourceLine[] | undefined {
+  if (!quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,
+    wrappedAttributeTail, inlineCode)) return undefined
+  const tableLine = (text: string): string => text.replace(/^(?:> ?)+/, '')
+  const joinedTableEnd = body.length === 2 &&
+    /^\|.*\|[ \t]*$/.test(tableLine(body[0]!.text)) &&
+    /^\+.*\|/.test(tableLine(body[1]!.text))
+  const nestedLazy = !inlineCode && !tableLine(body[0]?.text ?? '').startsWith('|') &&
+    body.at(-1)?.text.startsWith('>') &&
+    !directParagraph && plainQuoteText(cursor.peek()?.text ?? '') &&
+    (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
+  if (nestedLazy) return [{ ...cursor.take(), lazyText: true }]
+  if (!inlineCode && !(listOwner?.openFence && !listOwner.shiftedFence) && !joinedTableEnd) {
+    throw new UnsupportedCursorSyntax('lazy quote continuation')
+  }
+  return inlineCode
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
@@ -3438,6 +3458,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let directParagraph = true
   let unclosedFenceParagraph = false
   let quotedListRun = false
+  let firstFence = false
   let listOwner: QuoteListOwner | undefined
   while (cursor.peek()) {
     const line = cursor.peek()!
@@ -3471,11 +3492,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
         listMarker(text) !== undefined
       cursor.take()
       body.push(quotedOwnedBodyLine(line, body, prefix, text))
+      if (body.length === 1) firstFence = fenceOpen(text) !== null
       const plain: boolean = literalFence || plainQuoteText(text)
       const observed = observeQuoteListOwner(listOwner, cursor.owner, text, body.length === 1)
       listOwner = observed.owner
       directParagraph &&= plain
-      plainParagraph = observed.resumed || plainParagraph && quotedParagraphText(text, plain)
+      plainParagraph = plain && !firstFence || observed.resumed ||
+        plainParagraph && quotedParagraphText(text, plain)
       last = line
       continue
     }
@@ -3572,20 +3595,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   const wrappedAttributeTail = wrappedQuoteAttributeTail(body)
   const inlineCode = !wrappedAttributeTail && cursor.peek()?.text[0] === ' ' &&
     cursor.peek()!.text.includes('`') ? takeQuotedInlineCodeContinuation(cursor, body) : undefined
-  if (quoteNeedsLazyBoundary(cursor.peek()?.text, body.at(-1)?.text,
-    !!wrappedAttributeTail, inlineCode)) {
-    const tableLine = (text: string): string => text.replace(/^(?:> ?)+/, '')
-    const joinedTableEnd = body.length === 2 &&
-      /^\|.*\|[ \t]*$/.test(tableLine(body[0]!.text)) &&
-      /^\+.*\|/.test(tableLine(body[1]!.text))
-    if (!inlineCode && !(listOwner?.openFence && !listOwner.shiftedFence) && !joinedTableEnd) {
-      throw new UnsupportedCursorSyntax('lazy quote continuation')
-    }
-    if (inlineCode) {
-      body.push(...inlineCode)
-      directParagraph = false
-      last = inlineCode.at(-1)!
-    }
+  const lazyTail = takeQuoteLazyBoundaryTail(cursor, body,
+    !!wrappedAttributeTail, inlineCode, listOwner, directParagraph)
+  if (lazyTail) {
+    body.push(...lazyTail)
+    directParagraph = false
+    last = lazyTail.at(-1)!
   }
   const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body,
     directParagraph, listOwner?.boundaryFence)
