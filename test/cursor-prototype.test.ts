@@ -2351,6 +2351,16 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it('keeps an unclosed inline fence in the nested paragraph through a plain root tail', () => {
+    const source = '- a\n    - child\n    ```\n    code\nafter\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unclosed nested inline fence with a structural tail', () => {
+    expect(() => parseCursorPrototype('- a\n    - child\n    ```\n- next\n~~~\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

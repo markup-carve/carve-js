@@ -1876,6 +1876,26 @@ function nestedFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
   return closedFenceEnd(cursor)
 }
 
+function unclosedNestedInlineFence(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number): number[] | undefined {
+  const line = cursor.peek()
+  if (!line || cursor.owner.kind !== 'root' || stackLength < 2 || frame.body.length !== 1 ||
+      !plainQuoteText(frame.body[0]!.text) || frame.contentColumn === undefined ||
+      !line.text.startsWith(' '.repeat(frame.indent))) return undefined
+  const text = line.text.slice(frame.indent)
+  const marker = fenceOpen(text)?.marker
+  if (!marker || line.text.startsWith(' '.repeat(frame.contentColumn - 1))) return undefined
+  const prefixes = [frame.indent]
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    const following = cursor.peek(offset)!
+    if (!plainQuoteText(following.text.trimStart())) return undefined
+    const prefix = following.text.startsWith(' '.repeat(frame.indent)) ? frame.indent : 0
+    if (closesFence(following.text.slice(prefix), marker)) return undefined
+    prefixes.push(prefix)
+  }
+  return prefixes
+}
+
 function nestedSimpleFirstBlock(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, depth: number): boolean {
   if (depth === 1 && stackLength === 1 && frame.body[0]?.text === '> +' &&
@@ -2711,7 +2731,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     } else {
       const marker = RE_RAW_FENCE.exec(text)?.[1] ?? fenceOpen(text)?.marker
-      if (marker && !literalFence) {
+      if (marker && !literalFence && !line.lazyText) {
         frame.fenceMarker = marker
         frame.fencePrefix = prefix
       }
@@ -2845,6 +2865,16 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
+    const inlineFence = unclosedNestedInlineFence(cursor, stack.at(-1)!, stack.length)
+    if (inlineFence) {
+      const frame = stack.at(-1)!
+      for (const prefix of inlineFence) {
+        const owned = cursor.take()
+        appendBody(frame, { ...owned, lazyText: true }, prefix, true)
+        updateListFrameEnds(stack, owned, listSpan)
+      }
+      continue
+    }
     rejectAmbiguousNestedPlus(cursor, marker)
     const top = continuationOwner(line)
     rejectAmbiguousListBoundary(marker, top, line)
