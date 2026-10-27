@@ -23,7 +23,7 @@ import { isCarveWhitespace } from './trim-non-nbsp.js'
  * mentions and smart typography, which apply to any Carve source rather than
  * being introduced here.
  */
-const BRACED_DELIMITER_CHARS = '^,=+-~/#*_'
+const BRACED_DELIMITER_CHARS = '^,=+-~/#*_%'
 
 /** The delimiters as a regex character class. Derived, so the list lives once. */
 function bracedClass(handled: string): string {
