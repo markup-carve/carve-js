@@ -3634,7 +3634,8 @@ function takeFootnoteAttachedBlock(cursor: Cursor, inline: CursorInline, first: 
   if (!content || !plainQuoteText(content) || cursor.owner.kind !== 'root' ||
       !footnoteDefs || !footnoteDefPos || cursor.peek(1)?.text !== '+') return false
   const end = closedFenceEnd(cursor, 2) ??
-    (listMarker(cursor.peek(2)?.text ?? '') ? 2 : undefined)
+    (listMarker(cursor.peek(2)?.text ?? '') ||
+      RE_BLOCKQUOTE.test(cursor.peek(2)?.text ?? '') ? 2 : undefined)
   if (end === undefined || cursor.peek(end + 1) && !isBlankLine(cursor.peek(end + 1)!.text)) {
     return false
   }

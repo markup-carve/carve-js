@@ -661,6 +661,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['x[^a]\n\n[^a]: note\n+\n> q\n',
+    '[^a]: note\n+\n> # H\n'])
+  ('attaches a quote after a footnote continuation marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['[^a]: intro\n%% c\n more\n\nsee[^a]\n',
     '[^a]: intro\n%% c\n  more\n\nsee[^a]\n'])
   ('keeps a comment and its indented follower in a footnote: %s', (source) => {
