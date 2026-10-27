@@ -271,6 +271,8 @@ export type IncludeResolver = (
 
 
 interface State {
+  sourceLines: string[]
+  sourceLineOffsets: number[]
   included?: IncludedContent[]
   opts: IncludeOptions
   warnings: IncludeWarning[]
@@ -333,6 +335,16 @@ interface State {
 }
 
 const MIN_BUDGET = 1024 * 1024
+
+function sourceLineOffsets(source: string): number[] {
+  const characters = [...source]
+  const starts = [0]
+  for (let i = 0; i < characters.length; i++) {
+    if (characters[i] === '\r' && characters[i + 1] === '\n') i++
+    if (characters[i] === '\r' || characters[i] === '\n') starts.push(i + 1)
+  }
+  return starts
+}
 
 function locate(node: { pos?: { startLine: number; startColumn?: number; startOffset?: number; endOffset?: number } }): Pick<
   IncludeWarning,
@@ -1028,6 +1040,10 @@ function expandChild(
   state.contextLevel = outerContext - stated
   const outerUnwrapped = state.unwrapped
   state.unwrapped = inline ? child.children : null
+  const outerSourceLines = state.sourceLines
+  const outerSourceLineOffsets = state.sourceLineOffsets
+  state.sourceLines = resolved.full.split(/\r\n?|\n/)
+  state.sourceLineOffsets = sourceLineOffsets(resolved.full)
   expandBlocks(child.children, state)
   state.unwrapped = outerUnwrapped
   if (child.footnoteDefs) {
@@ -1037,6 +1053,8 @@ function expandChild(
       expandBlocks(body, state)
     }
   }
+  state.sourceLines = outerSourceLines
+  state.sourceLineOffsets = outerSourceLineOffsets
   state.contextLevel = outerContext
   state.docs.pop()
   state.depth--
@@ -1624,6 +1642,40 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
   return [block]
 }
 
+function codeIncludeCaption(next: Paragraph, directive: Paragraph, sourceLines: string[], lineOffsets: number[], file: string | undefined): InlineNode[] | null {
+  const start = next.pos?.startLine
+  const previous = directive.pos?.endLine
+  if (start === undefined || previous === undefined || start - previous < 1 || start - previous > 2) return null
+  const line = sourceLines[start - 1]
+  if (line === undefined) return null
+  const column = next.pos?.startColumn ?? 1
+  const end = next.pos?.endLine ?? start
+  const content = sourceLines.slice(start - 1, end)
+    .map(part => [...part].slice(column - 1).join('')).join('\n')
+  if (!/^\^[ \t]+\S/.test(content)) return null
+  const parsed = parse(`\`\`\`\n\`\`\`\n${content}`, { positions: true }).children[0]
+  if (parsed?.type !== 'figure' || parsed.target.type !== 'code_block') return null
+  const lineShift = start - 3
+  const columnShift = column - 1
+  const move = (nodes: InlineNode[]): void => {
+    for (const node of nodes) {
+      if (node.pos) {
+        const p = node.pos
+        if (file !== undefined) p.file = file
+        p.startLine += lineShift
+        p.endLine += lineShift
+        if (p.startColumn !== undefined) p.startColumn += columnShift
+        if (p.endColumn !== undefined) p.endColumn += columnShift
+        if (p.startOffset !== undefined) p.startOffset = (lineOffsets[p.startLine - 1] ?? 0) + (p.startColumn ?? 1) - 1
+        if (p.endOffset !== undefined) p.endOffset = (lineOffsets[p.endLine - 1] ?? 0) + (p.endColumn ?? 1) - 1
+      }
+      if ('children' in node && Array.isArray(node.children)) move(node.children as InlineNode[])
+    }
+  }
+  move(parsed.caption)
+  return parsed.caption
+}
+
 function expandBlocks(blocks: BlockNode[], state: State): void {
   // Spec I8: this block list is one container. Headings in it set the context
   // for later blocks and for containers nested inside it, but the entry value
@@ -1669,6 +1721,21 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
     }
     if (replacement) {
       blocks.splice(i, 1, ...replacement)
+      if (block.type === 'paragraph' && replacement.length === 1 && (replacement[0]?.type === 'code_block' || replacement[0]?.type === 'table')) {
+        const next = blocks[i + 1]
+        const caption = next?.type === 'paragraph' ? codeIncludeCaption(next, block, state.sourceLines, state.sourceLineOffsets, state.file) : null
+        if (caption) {
+          const host = replacement[0]
+          if (host.type === 'table') host.caption = caption
+          else {
+            const attrs = host.attrs
+            delete host.attrs
+            blocks[i] = { type: 'figure', target: host, caption,
+              ...(attrs ? { attrs } : {}), ...(block.pos ? { pos: block.pos } : {}) }
+          }
+          blocks.splice(i + 1, 1)
+        }
+      }
       i += replacement.length - 1
       // The merged blocks are now part of this container, so a heading they
       // contribute at this level sets the context for what follows - "the
@@ -1743,6 +1810,8 @@ export function expandsForTarget(target: string): boolean {
 
 export function expandIncludes(doc: Document, source: string, options: IncludeOptions = {}): IncludeResult {
   const state: State = {
+    sourceLines: source.split(/\r\n?|\n/),
+    sourceLineOffsets: sourceLineOffsets(source),
     opts: options,
     ...(options.collectIncluded ? { included: [] } : {}),
     warnings: [],
