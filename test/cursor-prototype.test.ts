@@ -2366,6 +2366,13 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([':: c\n%% note\nmore\n',
+    ':: term\n%% c\n:: next\n',
+    ':: c\n%% c\n\nend\n'])
+  ('ends a term-only definition before a root line comment: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

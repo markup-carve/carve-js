@@ -1202,7 +1202,8 @@ function uncertainDefinitionListEnd(cursor: Cursor, end: number,
     !commentOpeners?.has(line.start) &&
     !(endedOnStructural && !line.text.startsWith(' '.repeat(contentColumn - 1))) &&
     !(cursor.owner.kind === 'root' && (rootLinkDef(line.text) ||
-      rootBlockAttributeAt(cursor, end) || startsRootBlockAfterDefinition(line.text))) &&
+      rootBlockAttributeAt(cursor, end) || startsRootBlockAfterDefinition(line.text) ||
+      body === '' && LINE_COMMENT.test(line.text))) &&
     !safeDefinitionListEnd(cursor, end, body))
 }
 
