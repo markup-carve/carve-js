@@ -3753,10 +3753,10 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       body.push(cursor.take())
       continue
     }
-    const nested = COLON_OPEN.exec(text) ?? RE_DIV_OPEN.exec(text) ??
+    const nested = text[0] === ':' ? COLON_OPEN.exec(text) ?? RE_DIV_OPEN.exec(text) ??
       RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_ADMONITION_OPEN.exec(text) ??
       RE_LINE_BLOCK_OPEN.exec(text) ?? RE_QUOTE_BLOCK_OPEN.exec(text) ??
-      RE_HARDBREAKS_OPEN.exec(text)
+      RE_HARDBREAKS_OPEN.exec(text) : null
     if (nested) {
       nestedClosers.push(nested[1]!.length)
     } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
