@@ -667,6 +667,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps bounded structural lines in a multiline footnote', () => {
+    const source = '[^n]: intro\n  > quote\n  # heading\n  - item\n\nsee[^n]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unresolved nested list after a footnote quote', () => {
+    expect(() => parseCursorPrototype('[^n]: intro\n  > quote\n  - next\n  - child\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['[^a]: intro\n%% c\n more\n\nsee[^a]\n',
     '[^a]: intro\n%% c\n  more\n\nsee[^a]\n'])
   ('keeps a comment and its indented follower in a footnote: %s', (source) => {
