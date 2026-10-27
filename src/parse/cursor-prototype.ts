@@ -1172,9 +1172,12 @@ function lastPlacedDefinitionLine(blocks: BlockNode[], last: SourceLine,
 
 function attachedDefinitionFenceEnd(cursor: Cursor, plus: number): number | undefined {
   if (cursor.lines[plus]?.text !== '+') return undefined
-  const marker = fenceOpen(cursor.lines[plus + 1]?.text ?? '')?.marker
+  const attribute = rootBlockAttributeAt(cursor, plus + 1) &&
+    fenceOpen(cursor.lines[plus + 2]?.text ?? '')
+  const fence = plus + (attribute ? 2 : 1)
+  const marker = fenceOpen(cursor.lines[fence]?.text ?? '')?.marker
   if (!marker) return undefined
-  let close = plus + 2
+  let close = fence + 1
   while (cursor.lines[close] && !closesFence(cursor.lines[close]!.text, marker)) close++
   return cursor.lines[close] && (!cursor.lines[close + 1] || cursor.lines[close + 1]!.text === '') ?
     close + 1 : undefined
@@ -1550,7 +1553,8 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = definitionLast
     } else if (line.text === '+' && current?.definitions.length && cursor.at < end) {
       const follower = cursor.take()
-      if (fenceOpen(follower.text)) {
+      if (fenceOpen(follower.text) || rootBlockAttributeAt(cursor, cursor.at - 1) &&
+          fenceOpen(cursor.peek()?.text ?? '')) {
         const body = [follower]
         while (cursor.at < end) body.push(cursor.take())
         current.definitions.at(-1)!.push(...parseBlocks(new Cursor(body, undefined,
