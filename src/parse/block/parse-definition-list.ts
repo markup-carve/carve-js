@@ -703,8 +703,6 @@ export function createDefinitionListParser(
       // outer block stream see it unchanged.
       const admitBlankLine = (): 'continue' | 'stop' => {
         const { offset: look, line: after } = nextContainerContent(lexer)
-        // The description ends at two blanks, including any unfinished fence.
-        if (look > 1) return 'stop'
         // The SECOND spelling of the same rule, and it has its own job: this one
         // decides whether the body survives the blank at all, the Form A branch
         // above decides whether a line folds. Both read columns, or a lone tab
