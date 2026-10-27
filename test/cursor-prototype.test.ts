@@ -2636,4 +2636,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- - ```\n    x\n',
+    ':: t\n: - - ```\n      x\n',
+    '- a\n  - ```\n    +\n'])
+  ('ends a marker-line list fence at its single final payload line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

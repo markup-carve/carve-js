@@ -3405,6 +3405,9 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
       (first.number === 1 || isBlankLine(cursor.lines[first.number - 2]?.text))) {
     return payload.at(-1) ?? first
   }
+  if (cursor.owner.kind === 'list' && cursor.lines[0]?.number === first.number &&
+      payload.length === 1 && payload[0]!.text !== '' &&
+      payload[0]!.number === cursor.physicalLines.at(-1)?.number) return payload[0]!
   throw new UnsupportedCursorSyntax('unclosed fence')
 }
 
