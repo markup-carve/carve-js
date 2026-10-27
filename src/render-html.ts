@@ -2714,12 +2714,9 @@ function renderAutolinkNode(node: InlineOf<'autolink'>, opts: RenderOptions): st
   // fall back to stripping an auto-added `mailto:` for nodes without `text`.
   const display =
     node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
-  // Inside a link it is plain text, for the reason `renderLinkNode`
-  // gives. The `mailto:` scheme comes off here whatever `text` said, which
-  // is what the resolver's unwrap did and what the corpus pins: an author
-  // writing `<mailto:a@b.c>` in a label sees the address, not the scheme.
+  // Inside a link it is plain text, for the reason `renderLinkNode` gives.
   if (insideLink) {
-    return escapeHtml(node.href.startsWith('mailto:') ? node.href.slice(7) : display)
+    return escapeHtml(display)
   }
   // The structural href always wins; never re-emit an author-supplied
   // `href` from an attribute block (it would duplicate the attribute).

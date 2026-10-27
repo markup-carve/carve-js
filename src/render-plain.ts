@@ -483,7 +483,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // Raw autolink content: a URI autolink keeps its scheme, an email shows
       // the address; fall back to stripping an auto-added `mailto:`.
       if (insideLink) {
-        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : (node.text ?? node.href)
+        const display = node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
         return stripControls(display)
       }
       return stripControls(

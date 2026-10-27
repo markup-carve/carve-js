@@ -646,7 +646,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // auto-added `mailto:` so the displayed label stays unchanged
       // (markup-carve/carve#817).
       if (insideLink) {
-        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : (node.text ?? node.href)
+        const display = node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
         return stripControls(display)
       }
       return style(
