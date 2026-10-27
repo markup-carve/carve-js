@@ -2167,8 +2167,8 @@ function foldsListTildeRun(body: SourceLine[], follower: string,
 function mayFoldNestedListParagraph(cursor: Cursor,
   top: { indent: number; contentColumn?: number; ordered: boolean;
     delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
-    body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number, depth: number): boolean {
-  if (depth !== 0 || stackLength < 2 || top.fenceMarker) return false
+    body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number): boolean {
+  if (stackLength < 2 || top.fenceMarker) return false
   const follower = cursor.peek()!.text
   const last = top.body.at(-1)?.text ?? ''
   const nonRowPipe = follower.trimStart().startsWith('|') &&
@@ -2287,7 +2287,7 @@ function mayFoldListParagraph(cursor: Cursor,
     delim?: '.' | ')'; bullet?: '-' | '*';
     taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
     lazyRootParagraph: boolean }, stack: readonly ListCursorFrame[], depth: number): boolean {
-  return mayFoldNestedListParagraph(cursor, frame, stack.length, depth) ||
+  return mayFoldNestedListParagraph(cursor, frame, stack.length) ||
     mayFoldRootListParagraph(cursor, frame, stack.length, depth) ||
     mayFoldMarkerLineNestedFollower(cursor, frame, stack.length, depth) ||
     mayFoldBelowColumnParagraph(cursor, frame, stack)
