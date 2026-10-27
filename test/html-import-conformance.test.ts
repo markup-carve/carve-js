@@ -23,6 +23,24 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *    has to be deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  ['detached-caption-caret', {
+    reason: 'PART 12 §23 places a block image in a paragraph',
+    ast: { type: 'document', children: [
+      { type: 'paragraph', blockImage: true, children: [{ type: 'image', src: 'g.jpg', alt: 'G' }] },
+      { type: 'paragraph', children: [{ type: 'text', value: '^ c' }] },
+    ] },
+  }],
+  ['destination-less-link', {
+    reason: 'PART 12 §23 places a block image in a paragraph',
+    ast: { type: 'document', children: [
+      { type: 'paragraph', children: [
+        { type: 'link', href: '', children: [{ type: 'text', value: 'click here' }] },
+        { type: 'text', value: ' and ' },
+        { type: 'span', children: [{ type: 'text', value: 'a named one' }], attrs: { id: 'k' } },
+      ] },
+      { type: 'paragraph', blockImage: true, children: [{ type: 'image', src: '', alt: 'logo' }] },
+    ] },
+  }],
 ])
 
 /**
