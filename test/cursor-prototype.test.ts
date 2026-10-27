@@ -140,6 +140,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps a lazy line and later marker in the quoted list paragraph', () => {
+    const source = '- a\n  > - x\n  p\n  - m\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',

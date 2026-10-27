@@ -416,11 +416,19 @@ function wrappedQuoteAttributeTail(body: SourceLine[]): boolean {
 }
 
 function quotedListSibling(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
-  if (cursor.owner.kind !== 'list' || body.length !== 1) return false
+  if (cursor.owner.kind !== 'list' || body.length < 1 || body.length > 2) return false
   const first = listMarker(body[0]!.text)
   const next = listMarker(line.text)
+  if (body.length === 2 && (!plainQuoteText(body[1]!.text) ||
+      body[1]!.number !== line.number - 1)) return false
   return first !== undefined && next !== undefined && first.bullet !== undefined &&
     first.bullet === next.bullet && first.indent === next.indent
+}
+
+function quotedListPlainFollower(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
+  return cursor.owner.kind === 'list' && body.length === 1 &&
+    listMarker(body[0]!.text) !== undefined && plainQuoteText(line.text) &&
+    body[0]!.number === line.number - 1
 }
 
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
@@ -522,9 +530,11 @@ function quotedListSiblingPrefix(line: SourceLine,
   frame: { contentColumn?: number; body: SourceLine[] }): number | undefined {
   if (frame.contentColumn === undefined ||
       marker.indent !== frame.contentColumn - 1) return undefined
-  const first = frame.body.at(-1)
+  const last = frame.body.at(-1)
+  const first = last && plainQuoteText(last.text) && frame.body.at(-2)?.number === last.number - 1 ?
+    frame.body.at(-2) : last
   if (!first) return undefined
-  if (first.number !== line.number - 1 || !RE_BLOCKQUOTE.test(first.text)) return undefined
+  if (last?.number !== line.number - 1 || !RE_BLOCKQUOTE.test(first.text)) return undefined
   const prefix = first.text.startsWith('> ') ? 2 : 1
   const nested = listMarker(first.text.slice(prefix))
   return nested?.bullet !== undefined && nested.bullet === marker.bullet ? marker.indent : undefined
@@ -2597,6 +2607,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     const unmarked = takeUnmarkedQuoteParagraphLine(cursor, body, unclosedFenceParagraph)
     if (unmarked) {
       last = unmarked
+      continue
+    }
+    if (quotedListPlainFollower(cursor, body, line)) {
+      body.push(cursor.take())
+      directParagraph = false
+      plainParagraph = false
+      last = line
       continue
     }
     if (quotedListSibling(cursor, body, line)) {
