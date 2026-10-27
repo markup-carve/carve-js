@@ -2187,7 +2187,8 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
+        const attachedLiteralPlus = take === 0 && isContinuationMarker(candidate)
+        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
