@@ -6,6 +6,59 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('keeps generated list and quote ownership exact through later followers', () => {
+    const quoted = ['a', '[x][r]', '[r][]', '[^f]: n', '- child', '* child',
+      '1. child', ':: term', '```', '%%%', '> nested']
+    const third = ['- s', ' - s', '  - s', '   - s', '# h', ' # h',
+      '  # h', 'plain', ' plain', '  plain', '']
+    const fourth = ['plain', '  continuation', '- sibling', '> next', '# title', '']
+    const fifth = ['plain', ' - child', '  more', '> quote', '```', '']
+    let exact = 0
+    for (const first of quoted) for (const tail of third) {
+      const sources = [`- a\n  > ${first}\n${tail}\n`]
+      for (const after of fourth) for (const final of fifth) {
+        sources.push(`- a\n  > ${first}\n${tail}\n${after}\n${final}\n`)
+      }
+      for (const source of sources) {
+        let candidate: ReturnType<typeof parseCursorPrototype>
+        try {
+          candidate = parseCursorPrototype(source)
+        } catch (error) {
+          if (error instanceof UnsupportedCursorSyntax) continue
+          throw error
+        }
+        expect(candidate, source).toStrictEqual(parse(source))
+        exact++
+      }
+    }
+    expect(exact).toBeGreaterThanOrEqual(2038)
+  }, 30000)
+
+  it('keeps quote ownership exact under all root list marker widths', () => {
+    const quoted = ['a', '[x][r]', '[^f]: n', '- child', '* child',
+      '1. child', '```', '> nested']
+    const third = ['- s', ' - s', '  - s', '   - s', '    - s',
+      '# h', ' # h', '  # h', '   # h', 'plain', ' plain', '  plain', '']
+    const fourth = ['plain', '  continuation', '- sibling', '> next', '# title', '']
+    let exact = 0
+    for (const marker of ['-', '*', '1.']) for (const first of quoted) {
+      for (const tail of third) for (const after of fourth) {
+        const source = `${marker} a\n${' '.repeat(marker.length + 1)}> ${first}\n${tail}\n${after}\n`
+        let candidate: ReturnType<typeof parseCursorPrototype>
+        try {
+          candidate = parseCursorPrototype(source)
+        } catch (error) {
+          if (error instanceof UnsupportedCursorSyntax) continue
+          throw error
+        }
+        expect(candidate, source).toStrictEqual(parse(source))
+        exact++
+      }
+    }
+    expect(exact).toBeGreaterThanOrEqual(1232)
+  }, 30000)
+
+
   it('keeps a code include with an invalid line range as one literal text node', () => {
     const source = '{{ data/p2.csv @code:csv @lines:2-1 }}\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

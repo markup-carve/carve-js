@@ -8,10 +8,10 @@ import { promoteBlockImages } from '../heading/heading-ids.js'
 import { promoteCitationDefinitions } from '../extension/citations.js'
 import { mergeAttrs } from '../extension/attribute-merge.js'
 import { parseAttrs, unescapeAttrValue } from '../extension/attribute-parser.js'
-import { dropTrailingWhitespace, readCaptionText } from './block/parse-block-boundaries.js'
+import { dropTrailingWhitespace, readCaptionText, trackItemLazyState, verbatimOnlyLazyState, type ItemLazyState } from './block/parse-block-boundaries.js'
 import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-core.js'
 import { markAboveContentColumn } from './block/paragraph-indent.js'
-import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, isBlockImageLine } from './block/parse-quote-core.js'
+import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, blockQuoteParagraphClaimOpen, isBlockImageLine, trackBlockQuoteLazyState } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
 import { parseDirective } from '../include-directive.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
@@ -35,7 +35,7 @@ export class UnsupportedCursorSyntax extends Error {}
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
   spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
   ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean;
-  quoteResume?: boolean; quotedAttachedSibling?: boolean }
+  quoteResume?: boolean; quotedAttachedSibling?: boolean; claimedQuoteLazy?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -629,8 +629,9 @@ function quotedListSiblingPrefix(line: SourceLine,
 
 function quoteOwnedListMarker(cursor: Cursor, line: SourceLine,
   marker: NonNullable<ReturnType<typeof listMarker>>,
-  frame: { contentColumn?: number; body: SourceLine[] }):
+  frame: ListCursorFrame):
   { line: SourceLine; prefix: number; rootLazy: boolean } | undefined {
+  if (line.quotedAttachedSibling) frame.list.tight = false
   if (line.lazyText && cursor.owner.kind === 'quote') {
     return { line, prefix: 0, rootLazy: true }
   }
@@ -2287,7 +2288,7 @@ function mayFoldBelowColumnParagraph(cursor: Cursor,
     const reached = reachableListPrefix(next.text, frame.contentColumn)
     if (reached !== undefined && isTableRow(next.text.slice(reached))) return false
   }
-  if (!plainQuoteText(last.text) &&
+  if (!plainQuoteText(last.text) && !last.claimedQuoteLazy &&
       !(plainPlusText(last.text) && frame.body[0]?.text[0] !== '|')) {
     const nestedMarker = frame.body.length === 1 ? listMarker(last.text) : undefined
     if (!nestedMarker || !plainQuoteText(nestedMarker.content)) return false
@@ -2479,7 +2480,35 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
-  possibleInvisibleTail: boolean }
+  possibleInvisibleTail: boolean; ownerState?: ItemLazyState }
+
+function sharedQuoteClaimsLine(frame: ListCursorFrame, line: SourceLine,
+  marker: ReturnType<typeof listMarker>): boolean {
+  if (!frame.ownerState) return false
+  const previous = frame.body.at(-1)
+  if (!frame.body[0]?.text.startsWith('>') && previous?.number === line.number - 1 &&
+      previous.text.startsWith('>') &&
+      FOOTNOTE_DEF.test(previous.text.slice(previous.text[1] === ' ' ? 2 : 1))) {
+    throw new UnsupportedCursorSyntax('quoted footnote follower owner')
+  }
+  if (previous?.number !== line.number - 1) return false
+  const quote = frame.ownerState?.quoteInner
+  if (!quote) return false
+  if (!marker && line.text !== '' && previous.claimedQuoteLazy &&
+      blockQuoteParagraphClaimOpen(quote) && plainQuoteText(line.text.trimStart())) return true
+  if (!marker && frame.contentColumn !== undefined &&
+      line.text.startsWith(' '.repeat(frame.contentColumn)) &&
+      RE_HEADING.test(line.text.trimStart()) && blockQuoteParagraphClaimOpen(quote)) return true
+  const mode = quote.mode
+  const indent = line.text.length - line.text.trimStart().length
+  if (mode.kind === 'paragraph' && mode.itemParagraph &&
+      (plainQuoteText(line.text.trimStart()) &&
+        frame.contentColumn !== undefined && indent < frame.contentColumn - 1 ||
+        frame.contentColumn !== undefined && RE_HEADING.test(line.text.trimStart()) &&
+          (indent > 0 && indent < frame.contentColumn - 1 ||
+            indent >= frame.contentColumn))) return true
+  return marker !== undefined && marker.indent > 0 && blockQuoteParagraphClaimOpen(quote)
+}
 
 function recordOrderedFenceBoundary(owner: ContainerOwner, stackLength: number,
   orderedRoot: boolean, frame: ListCursorFrame, line: SourceLine): void {
@@ -2952,10 +2981,23 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix,
       ...(line.lazyText ? { lazyText: true } : {}),
+      ...(line.claimedQuoteLazy ? { claimedQuoteLazy: true } : {}),
       ...(line.ownedDefinition ? { ownedDefinition: true } : {}),
       ...(line.ownedDefinitionBody ? { ownedDefinitionBody: true } : {}),
       ...(line.ownedFirstBlock ? { ownedFirstBlock: true } : {}),
       ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
+    if (frame.ownerState || text.startsWith('>')) {
+      const state = frame.ownerState ??= verbatimOnlyLazyState()
+      if (line.claimedQuoteLazy && state.quoteInner) {
+        const inner = state.quoteInner.mode
+        if (inner.kind !== 'paragraph' || !inner.itemParagraph ||
+            !RE_HEADING.test(text.trimStart())) {
+          trackBlockQuoteLazyState(text, state.quoteInner, () => false, () => false)
+        }
+      } else {
+        trackItemLazyState(text, state, () => false)
+      }
+    }
     if (frame.quoteFenceMarker && text[0] === '>') {
       const inner = quotedFencePayload(text, frame.quoteFenceDepth)
       if (inner !== undefined && closesFence(inner, frame.quoteFenceMarker)) {
@@ -3130,6 +3172,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     rejectAmbiguousNestedPlus(cursor, marker)
     const top = continuationOwner(line)
+    if (sharedQuoteClaimsLine(top, line, marker)) {
+      cursor.take()
+      appendBody(top, { ...line, lazyText: true, claimedQuoteLazy: true }, 0, true)
+      updateListFrameEnds(stack, line, listSpan)
+      continue
+    }
     rejectAmbiguousListBoundary(marker, top, line)
     const nestedPlus = nestedPlusAtLine(cursor, top, stack.length, line)
     if (nestedPlus) {
@@ -3165,7 +3213,6 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (marker) {
-      if (line.quotedAttachedSibling) top.list.tight = false
       const quoteOwned = quoteOwnedListMarker(cursor, line, marker, top)
       if (quoteOwned) {
         cursor.take()
@@ -3227,6 +3274,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.itemFirst = line
       current.contentColumn = ('continuationWidth' in marker ? marker.continuationWidth : marker.width) + 1
       current.body = []
+      delete current.ownerState
       current.possibleInvisibleTail = false
       current.lazyRootParagraph = false
       current.retainedBelowColumnComment = false
@@ -3714,6 +3762,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let attachedListReturn = false
   while (cursor.peek()) {
     const line = cursor.peek()!
+    if (line.claimedQuoteLazy) {
+      last = cursor.take()
+      body.push(last)
+      directParagraph = false
+      continue
+    }
     if (depth === 0 && body.length === 1 && body[0]!.text === '> +') {
       const fenceEnd = closedFenceEnd(cursor)
       if (fenceEnd !== undefined &&
