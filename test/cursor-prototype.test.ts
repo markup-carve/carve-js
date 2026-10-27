@@ -2610,4 +2610,14 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('> | a\n> + b |\ntail\n'))
       .toThrow(UnsupportedCursorSyntax)
   })
+
+  it.each(['- {.a\n  .b}\ntail\n',
+    '- {.a\n  .b}\n  text\n',
+    '- {#x\n  .b}\n  # h\n',
+    '1. {#x\n   .b}\n   # h\n'])
+  ('parses a wrapped attribute at the start of a list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

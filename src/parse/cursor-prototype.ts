@@ -2433,6 +2433,12 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     let allowEmptyFence = allowsEmptyRetainedFence(frame, cursor.peek())
     const firstText = frame.body[0]!.text
+    if (frame.body.length > 1 && firstText[0] === '{' &&
+        !frame.body[0]!.wrappedAttr && !parseBlockAttributeRun(firstText) &&
+        probeBlockAttributes(lexerForCursor(new Cursor(frame.body)))) {
+      frame.body[0] = { ...frame.body[0]!, wrappedAttr: true }
+      frame.possibleInvisibleTail = true
+    }
     if (frame.body.length === 1 && (firstText[0] === '`' || firstText[0] === '~') &&
         /^(?:`{3,}|~{3,})$/.test(firstText) &&
         (frame.itemFirst?.number === frame.body[0]!.number ||
@@ -2444,12 +2450,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           frame.contentColumn !== undefined &&
           !next.text.startsWith(' '.repeat(frame.contentColumn - 1))))
     }
-    if (frame.body.length === 1 && plainQuoteText(firstText) && !frame.body[0]!.lazyText) {
+    if (frame.body.length === 1 && plainQuoteText(firstText) && !frame.body[0]!.lazyText &&
+        !frame.body[0]!.wrappedAttr) {
       const line = frame.body[0]!
       frame.item.children.push({ type: 'paragraph',
         children: inline.inlines([{ line, column: 1, text: line.text }]),
         pos: position(line, line, 1, line.text.replace(/[ \t]+$/, '').length + 1) })
-    } else if (frame.body.length > 1 && frame.body.every((line) =>
+    } else if (frame.body.length > 1 && !frame.body[0]!.wrappedAttr && frame.body.every((line) =>
       !line.lazyText && plainQuoteText(line.text))) {
       const first = frame.body[0]!
       const last = frame.body.at(-1)!
