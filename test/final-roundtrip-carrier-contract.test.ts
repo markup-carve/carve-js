@@ -28,10 +28,10 @@ const nested = ':: Outer\n: body\n\n  :: Inner\n  : inner body\n'
 
 describe('rule 1: generated heading ids have a carrier on their own host', () => {
   it('marks wrappers and unwrapped headings, while authored ids remain explicit', () => {
-    expect(rt('# C\n')).toBe('<section id="C" data-carve-generated-id="1">\n  <h1>C</h1>\n</section>')
-    expect(rt('> # Q\n')).toBe('<blockquote>\n  <h1 id="Q" data-carve-generated-id="1">Q</h1>\n</blockquote>')
-    expect(rt('> {.c #Z}\n> # Q\n')).toBe('<blockquote>\n  <h1 class="c" id="Z" data-carve-explicit-id="1">Q</h1>\n</blockquote>')
-    expect(carveToHtml('# C\n', { roundtrip: true, sections: false })).toBe('<h1 id="C" data-carve-generated-id="1">C</h1>')
+    expect(rt('# C\n')).toBe('<section data-carve-generated-id="1" id="C">\n  <h1>C</h1>\n</section>')
+    expect(rt('> # Q\n')).toBe('<blockquote>\n  <h1 data-carve-generated-id="1" id="Q">Q</h1>\n</blockquote>')
+    expect(rt('> {.c #Z}\n> # Q\n')).toBe('<blockquote>\n  <h1 data-carve-explicit-id="1" class="c" id="Z">Q</h1>\n</blockquote>')
+    expect(carveToHtml('# C\n', { roundtrip: true, sections: false })).toBe('<h1 data-carve-generated-id="1" id="C">C</h1>')
     expect(rt('{#mine}\n# C\n')).not.toMatch(/generated-id|id-slot|data-carve-ext/)
     expect(renderHtml({ type: 'document', children: [{ type: 'heading', level: 1, children: [{ type: 'text', value: 'C' }] }] } as Document, { roundtrip: true, sections: false })).not.toContain('generated-id')
   })

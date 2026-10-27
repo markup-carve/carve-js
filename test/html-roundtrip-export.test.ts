@@ -90,25 +90,25 @@ describe('the HTML carriers', () => {
   })
 
   it('data-carve-explicit-id: presence says the id was authored', () => {
-    expect(rt('{#ex}\n# C\n')).toBe('<section id="ex" data-carve-explicit-id="1">\n  <h1>C</h1>\n</section>')
+    expect(rt('{#ex}\n# C\n')).toBe('<section data-carve-explicit-id="1" id="ex">\n  <h1>C</h1>\n</section>')
     expect(rt('# C\n')).not.toContain('data-carve-explicit-id')
   })
 
   it('data-carve-generated-id: presence on the wrapper or heading holding a generated id', () => {
-    expect(rt('# C\n')).toBe('<section id="C" data-carve-generated-id="1">\n  <h1>C</h1>\n</section>')
+    expect(rt('# C\n')).toBe('<section data-carve-generated-id="1" id="C">\n  <h1>C</h1>\n</section>')
     expect(rt('{#ex}\n# C\n')).not.toContain('data-carve-generated-id')
-    expect(renderHtml(resolve(parse('# C\n')), { roundtrip: true, sections: false })).toBe('<h1 id="C" data-carve-generated-id="1">C</h1>')
+    expect(renderHtml(resolve(parse('# C\n')), { roundtrip: true, sections: false })).toBe('<h1 data-carve-generated-id="1" id="C">C</h1>')
   })
 
   it('data-carve-id-slot: the authored id\u2019s slot, omitted where the id leads', () => {
     expect(rt('{.c #mine}\n# H\n')).toBe(
-      '<section id="mine" data-carve-explicit-id="1" data-carve-id-slot="1">\n  <h1 class="c">H</h1>\n</section>',
+      '<section data-carve-explicit-id="1" data-carve-id-slot="1" id="mine">\n  <h1 class="c">H</h1>\n</section>',
     )
     expect(rt('{data-x=1 .c #mine}\n# H\n')).toContain('data-carve-id-slot="2"')
     expect(rt('{#mine .c}\n# H\n')).not.toContain('data-carve-id-slot')
     // The slot rides the wrapper. A heading that keeps its own id keeps its
     // attributes in authored order, so there is nothing to carry.
-    expect(rt('> {.c #mine}\n> # H\n')).toContain('<h1 class="c" id="mine" data-carve-explicit-id="1">H</h1>')
+    expect(rt('> {.c #mine}\n> # H\n')).toContain('<h1 data-carve-explicit-id="1" class="c" id="mine">H</h1>')
   })
 
   it('data-carve-tight: only a tight list whose item paragraph keeps its <p>', () => {
@@ -124,9 +124,9 @@ describe('the HTML carriers', () => {
   it('data-carve-explicit-id rides the element that carries the id', () => {
     // §13a: the `<section>` where PART 9 §13 wraps one, the heading where it
     // does not.
-    expect(rt('::: note\n{#ex}\n# C\n:::\n')).toContain('<h1 id="ex" data-carve-explicit-id="1">C</h1>')
+    expect(rt('::: note\n{#ex}\n# C\n:::\n')).toContain('<h1 data-carve-explicit-id="1" id="ex">C</h1>')
     expect(renderHtml(resolve(parse('{#ex}\n# C\n')), { roundtrip: true, sections: false }))
-      .toBe('<h1 id="ex" data-carve-explicit-id="1">C</h1>')
+      .toBe('<h1 data-carve-explicit-id="1" id="ex">C</h1>')
   })
 
   it('data-carve-ref: the label a link or an image resolved by', () => {
@@ -301,9 +301,9 @@ describe('an authored attribute colliding with a carrier', () => {
   })
 
   it.each([
-    ['{#x data-carve-explicit-id=0}\n# H\n', '<section id="x" data-carve-explicit-id="1">\n  <h1>H</h1>\n</section>'],
+    ['{#x data-carve-explicit-id=0}\n# H\n', '<section data-carve-explicit-id="1" id="x">\n  <h1>H</h1>\n</section>'],
     ['::: note\n{#x data-carve-explicit-id=0}\n# H\n:::\n',
-      '<aside class="admonition note" aria-label="Note">\n  <h1 id="x" data-carve-explicit-id="1">H</h1>\n</aside>'],
+      '<aside class="admonition note" aria-label="Note">\n  <h1 data-carve-explicit-id="1" id="x">H</h1>\n</aside>'],
   ])('drops an authored explicit-id carrier, wrapped or not', (src, expected) => {
     // The carrier rides the `<section>` while the authored attribute stays on
     // the `<h*>`, so the drop has to happen on the heading's attributes under
@@ -406,7 +406,7 @@ describe('the section 13a rows added for markup-carve/carve#2894', () => {
     expect(slot.value.match(/data-carve-id-slot/g)).toHaveLength(1)
     expect(slot.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-id-slot'])
     const ext = carveToHtmlWithReport('{data-carve-ext=zz}\n# H\n', { roundtrip: true })
-    expect(ext.value).toBe('<section id="H" data-carve-generated-id="1">\n  <h1 data-carve-ext="zz">H</h1>\n</section>')
+    expect(ext.value).toBe('<section data-carve-generated-id="1" id="H">\n  <h1 data-carve-ext="zz">H</h1>\n</section>')
     expect(ext.losses).toEqual([])
     const tight = carveToHtmlWithReport('{data-carve-tight=false}\n- {.x}\n  a\n', { roundtrip: true })
     expect(tight.value).toContain('<ul data-carve-tight="1">')
@@ -450,7 +450,7 @@ it.each([
 ])('counts only rendered heading attributes for {%s}', (attrs, slot) => {
   const html = rt(`{${attrs}}\n# H\n`)
   const carrier = slot === undefined ? '' : ` data-carve-id-slot="${slot}"`
-  expect(html).toContain(`<section id="mine" data-carve-explicit-id="1"${carrier}>`)
+  expect(html).toContain(`<section data-carve-explicit-id="1"${carrier} id="mine">`)
   expect(html).toContain('<h1 class="c">H</h1>')
   if (attrs === 'onclick=x .c #mine') {
     expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('{.c #mine}\n# H\n')
