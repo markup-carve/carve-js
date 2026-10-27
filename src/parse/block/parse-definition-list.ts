@@ -1030,6 +1030,17 @@ export function createDefinitionListParser(
       }
     }
 
+    /** `lineRange` from the entry marker, past the indent a list-hosted `peekEntry` trims. */
+    function markerRange(lx: Lexer, first: number, last: number): Position | undefined {
+      const span = lineRange(lx, first, last)
+      const lead = leadingWhitespace(stripLazyFrame(lx.lineAt(first) ?? ''))
+      if (span && lead > 0) {
+        span.startColumn = (span.startColumn ?? 1) + lead
+        span.startOffset = (span.startOffset ?? 0) + lead
+      }
+      return span
+    }
+
     // THE ENTRY MATCHER IS THE ONE PREDICATE THAT SEES THROUGH THE FRAME
     // (PART 9 SS24 C3's LENIENT def-list entry). A `::` or `:` line a quote
     // folded in reaches no column here, so it attaches to the open term from
@@ -1246,7 +1257,7 @@ export function createDefinitionListParser(
         terms.push(termInlines)
         termSpans.push(
           lexer.hasDocumentOffsets
-            ? lineRange(lexer, termLineIndex, lexer.pos - 1)
+            ? markerRange(lexer, termLineIndex, lexer.pos - 1)
             : undefined,
         )
       }
@@ -1282,7 +1293,7 @@ export function createDefinitionListParser(
         // (carve#1963). It always takes at least the marker line, so the range is
         // never empty and never runs backwards.
         definitionSpans.push(
-          lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, defLineIndex) : undefined,
+          lexer.hasDocumentOffsets ? markerRange(lexer, defLineIndex, defLineIndex) : undefined,
         )
       }
       items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
