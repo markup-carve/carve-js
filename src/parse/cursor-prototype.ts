@@ -174,9 +174,9 @@ function contentEndColumn(line: SourceLine): number {
 }
 
 type ContentLine = { line: SourceLine; column: number; text: string }
-const RE_PLAIN_CURSOR_TEXT = /^[A-Za-z0-9 .,;!?()]+$/
+const RE_PLAIN_CURSOR_TEXT = /^[A-Za-z0-9 .,;!?()\-]+$/
 function plainCursorText(text: string): boolean {
-  return RE_PLAIN_CURSOR_TEXT.test(text) && !text.includes('..') &&
+  return RE_PLAIN_CURSOR_TEXT.test(text) && !text.includes('..') && !text.includes('--') &&
     !/\((?:c|r|tm)\)/i.test(text)
 }
 

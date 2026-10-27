@@ -5,6 +5,19 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    'A well-formed sentence.\n',
+    'A well-formed sentence.\n\nA second hyphen-separated line.\n',
+    '- A well-formed item.\n',
+    'A well-formed\nline-by-line\nparagraph.\n',
+    'A word--pair stays on the inline scanner.\n',
+  ])('keeps plain hyphenated text exact: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- - a\n [^f]: x\n',
     '* * u\n%\n :\n',
     '* * u\n%\n  :\n',
