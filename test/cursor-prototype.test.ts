@@ -529,6 +529,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- item\n  ::: note\n  body\ntail\n', '- ::: d\n  b\ntail\n'])
+  ('keeps a bounded plain colon body in its list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a multiline colon body before a continuation marker', () => {
+    expect(() => parseCursorPrototype('- a\n  ::: note\n  a\n  b\n+\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('uses a later quoted tilde closer before folding an open code span', () => {
     for (const count of [1, 2, 3, 10]) {
       const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)

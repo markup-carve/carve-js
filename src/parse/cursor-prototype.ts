@@ -4435,6 +4435,20 @@ function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,
     pos: position(definitionLine, definitionLine) })
 }
 
+function boundedListColonBody(cursor: Cursor): boolean {
+  if (cursor.owner.kind !== 'list' || !cursor.peek(1)) return false
+  let last = cursor.peek()!
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    const line = cursor.peek(offset)!
+    if (line.number !== last.number + 1 || !plainQuoteText(line.text)) return false
+    last = line
+  }
+  const follower = cursor.physicalLines[last.number]?.text
+  if (last.number > cursor.peek()!.number + 1 && follower?.startsWith('+')) return false
+  return follower === undefined || follower !== '' &&
+    follower[0] !== ' ' && follower[0] !== '\t'
+}
+
 function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   definitionNodes: BlockNode[], depth: number, atDocumentLevel: boolean,
   footnoteDefs: Record<string, BlockNode[]> | undefined,
@@ -4457,12 +4471,7 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   const emptyListContainer = cursor.owner.kind === 'list' && cursor.peek(1) === undefined &&
     (physicalFollower === undefined || physicalFollower === '' ||
       physicalFollower[0] !== ' ' && physicalFollower[0] !== '\t')
-  const singleBody = cursor.peek(1)
-  const physicalAfterBody = singleBody && cursor.physicalLines[singleBody.number]?.text
-  const boundedListContainer = cursor.owner.kind === 'list' && singleBody !== undefined &&
-    cursor.peek(2) === undefined && plainQuoteText(singleBody.text) &&
-    (physicalAfterBody === undefined || physicalAfterBody !== '' &&
-      physicalAfterBody[0] !== ' ' && physicalAfterBody[0] !== '\t')
+  const boundedListContainer = boundedListColonBody(cursor)
   if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
       !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition &&
       !emptyListContainer && !boundedListContainer) ||
