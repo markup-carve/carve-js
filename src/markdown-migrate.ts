@@ -127,7 +127,7 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
       }
     }
     const after = full[offset + match.length] ?? ''
-    return emphasisNeedsBraces(marker, body, marker === '*' && before === '*' ? '' : before, after, extenderFollows(full, offset + match.length))
+    return emphasisNeedsBraces(marker, body, before, after, extenderFollows(full, offset + match.length))
       ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
   }
 }
