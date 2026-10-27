@@ -2467,6 +2467,10 @@ function listFenceStaysInParagraph(cursor: Cursor, frame: ListCursorFrame,
   for (let offset = 0; cursor.peek(offset); offset++) {
     const future = cursor.peek(offset)!.text
     if (future === '') { afterBlank = true; continue }
+    if (frame.indent > 0 && !future.startsWith(prefix)) {
+      const sibling = listMarker(future)
+      if (sibling && sibling.indent <= frame.indent) break
+    }
     if (afterBlank && !future.startsWith(prefix)) {
       if (frame.indent > 0 && RE_HEADING.test(future.trimStart())) return false
       break
