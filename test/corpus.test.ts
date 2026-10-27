@@ -34,6 +34,13 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-nested-first-block-item-releases-the-next-root-block',
+  'compact-single-paragraph-quote',
+  'consecutive-continuation-markers-in-a-div-hosted-quote',
+  'invalid-line-range-includes-within-paragraphs-stay-literal',
+  'loose-list-starts-directly-on-its-first-paragraph',
+  'multiple-footnote-backlinks-follow-inline-content',
+  'paired-german-quotes-leave-no-quote-in-a-heading-id',
   'a-bang-before-a-link-is-escaped',
   'a-bare-dot-starts-a-list-after-a-blank-line',
   'a-below-column-fence-stays-in-a-definition-paragraph',

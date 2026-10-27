@@ -97,7 +97,7 @@ const HELP = `carve - Carve markup tooling
 Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
-  carve fmt [-w|--check] [--stamp] [--migrate] [--align-tables] [files...]
+  carve fmt [-w|--check|--diff] [--stamp] [--migrate] [--align-tables] [files...]
                                    Format Carve source canonically
   carve flatten [--include-root DIR] [file]
                                    Write the document as ONE self-contained
@@ -184,7 +184,8 @@ fmt - format Carve source canonically.
 
   fmt options:
     -w, --write    Rewrite the given files in place
-        --check    Exit 1 if any file is not formatted (no writes)
+        --check    Exit 1 on a change; print the first changed line (no writes)
+        --diff     Print a unified source diff and exit 1 on a change
         --stdout   Print formatted output to stdout (single file or stdin)
         --align-tables  Pad table cells to shared display widths
         --stamp    Append a provenance marker (a comment recording the spec
@@ -243,6 +244,7 @@ exits 1 if anything is reported, 0 if clean.
 
   lint options:
         --json       Emit semantic lint findings as structured JSON
+        --caption-hints  Check caption-looking paragraphs next to tables and images
         --include-root <dir>  Expand and lint includes within this root
         --from-djot  Also flag valid Carve whose meaning differs from Djot
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
@@ -558,10 +560,44 @@ async function runFlatten(args: string[], io: CliIO): Promise<number> {
   return 0
 }
 
+function firstFormatChange(path: string, before: string, after: string): string {
+  const oldLines = before.split('\n')
+  const newLines = after.split('\n')
+  let line = 0
+  while (line < oldLines.length && line < newLines.length && oldLines[line] === newLines[line]) line++
+  return `${path}:${line + 1}\n- ${oldLines[line] ?? ''}\n+ ${newLines[line] ?? ''}\n`
+}
+
+function formatUnifiedDiff(path: string, before: string, after: string): string {
+  const oldLines = before.endsWith('\n') ? before.slice(0, -1).split('\n') : before.split('\n')
+  const newLines = after.endsWith('\n') ? after.slice(0, -1).split('\n') : after.split('\n')
+  const oldCount = before === '' ? 0 : oldLines.length
+  const newCount = after === '' ? 0 : newLines.length
+  let prefix = 0
+  while (prefix < oldCount && prefix < newCount && oldLines[prefix] === newLines[prefix]) prefix++
+  let suffix = 0
+  while (suffix < oldCount - prefix && suffix < newCount - prefix &&
+      oldLines[oldCount - suffix - 1] === newLines[newCount - suffix - 1]) suffix++
+  const contextBefore = Math.min(prefix, 3)
+  const contextAfter = Math.min(suffix, 3)
+  const oldStart = prefix - contextBefore
+  const newStart = prefix - contextBefore
+  const oldEnd = oldCount - suffix + contextAfter
+  const newEnd = newCount - suffix + contextAfter
+  const oldLength = oldEnd - oldStart
+  const newLength = newEnd - newStart
+  return `--- a/${path}\n+++ b/${path}\n@@ -${oldLength ? oldStart + 1 : oldStart},${oldLength} +${newLength ? newStart + 1 : newStart},${newLength} @@\n` +
+    oldLines.slice(oldStart, prefix).map(line => ` ${line}\n`).join('') +
+    oldLines.slice(prefix, oldCount - suffix).map(line => `-${line}\n`).join('') +
+    newLines.slice(prefix, newCount - suffix).map(line => `+${line}\n`).join('') +
+    oldLines.slice(oldCount - suffix, oldEnd).map(line => ` ${line}\n`).join('')
+}
+
 async function runFmt(args: string[], io: CliIO): Promise<number> {
   let values: {
     write?: boolean
     check?: boolean
+    diff?: boolean
     stdout?: boolean
     stamp?: boolean
     'stamp-block'?: boolean
@@ -576,6 +612,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
       options: {
         write: { type: 'boolean', short: 'w' },
         check: { type: 'boolean' },
+        diff: { type: 'boolean' },
         stdout: { type: 'boolean' },
         stamp: { type: 'boolean' },
         'stamp-block': { type: 'boolean' },
@@ -597,9 +634,9 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     return 0
   }
 
-  const modes = [values.write, values.check, values.stdout].filter(Boolean).length
+  const modes = [values.write, values.check, values.diff, values.stdout].filter(Boolean).length
   if (modes > 1) {
-    io.writeErr('carve fmt: choose at most one of --write, --check, --stdout\n')
+    io.writeErr('carve fmt: choose at most one of --write, --check, --diff, --stdout\n')
     return 2
   }
 
@@ -622,7 +659,12 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     }
     const src = await io.readStdin()
     const out = format(src)
-    if (values.check) return out === src ? 0 : 1
+    if (values.check || values.diff) {
+      if (out === src) return 0
+      if (values.check) io.writeErr(firstFormatChange('<stdin>', src, out))
+      else io.write(formatUnifiedDiff('<stdin>', src, out))
+      return 1
+    }
     io.write(out)
     return 0
   }
@@ -632,10 +674,12 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     return 2
   }
 
-  const mode: 'write' | 'stdout' | 'check' = values.write
+  const mode: 'write' | 'stdout' | 'check' | 'diff' = values.write
     ? 'write'
     : values.check
       ? 'check'
+      : values.diff
+        ? 'diff'
       : 'stdout'
 
   let changed = 0
@@ -659,13 +703,15 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     changed++
     if (mode === 'write') {
       io.writeFile(file, out)
+    } else if (mode === 'check') {
+      io.writeErr(firstFormatChange(file, src, out))
     } else {
-      io.writeErr(`${file}\n`)
+      io.write(formatUnifiedDiff(file, src, out))
     }
   }
 
   if (hadError) return 2
-  return mode === 'check' && changed > 0 ? 1 : 0
+  return (mode === 'check' || mode === 'diff') && changed > 0 ? 1 : 0
 }
 
 /**
@@ -1485,6 +1531,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let platforms: LintPlatform[]
   let citationsEnabled: boolean
   let json: boolean
+  let captionHints: boolean
   let includeRoot: string | undefined
   try {
     const parsed = parseArgs({
@@ -1495,6 +1542,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
         'from-djot': { type: 'boolean' },
         portable: { type: 'boolean' },
         json: { type: 'boolean' },
+        'caption-hints': { type: 'boolean' },
         // Repeatable, so a document can be checked against two hosts at once
         // and a second host's table can be added without a new flag.
         platform: { type: 'string', multiple: true },
@@ -1510,6 +1558,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     fromDjot = parsed.values['from-djot'] ?? false
     portable = parsed.values.portable ?? false
     json = parsed.values.json ?? false
+    captionHints = parsed.values['caption-hints'] ?? false
     includeRoot = parsed.values['include-root']
     // An unknown name is REFUSED here rather than silently ignored: on the API
     // an unknown host is a typed mistake the compiler catches, but a CLI flag
@@ -1548,13 +1597,13 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     const extensions = citationsEnabled ? [citations()] : []
     const lintOne = (text: string): LintWarning[] => [
       ...djotMigrationWarnings(text).filter(w => fromDjot || w.category === 'carve-breakage').map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '', start: w.start, end: w.end })),
-      ...lintCarve(text, { portable, platforms, extensions }),
+      ...lintCarve(text, { portable, platforms, extensions, captionLookingParagraph: captionHints }),
     ]
     return lintIncludes(src, { portable, platforms, extensions, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne, rootFindings)
   }
   const lintSource = (src: string, file?: string) => {
     const migration = djotMigrationWarnings(src).filter(w => fromDjot || w.category === 'carve-breakage')
-    const semantic = lintCarve(src, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] })
+    const semantic = lintCarve(src, { portable, platforms, extensions: citationsEnabled ? [citations()] : [], captionLookingParagraph: captionHints })
     const children = childFindings(src, semantic, file)
     return { migration, semantic, children }
   }

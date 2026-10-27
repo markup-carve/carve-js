@@ -13,7 +13,7 @@ import { blankDeniedDestination } from './import/markdown/deny-listed-destinatio
 import { codeLines, rawSource } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './extension/bidi-controls.js'
-import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
+import { isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
 import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './parse/inline/reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, tableSpanFlattened, type RenderLoss, type RenderLossSinkOptions } from './render/render-loss.js'
 import { resolveTableSpans } from './table/table-spans.js'
@@ -277,7 +277,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return ''
     case 'link_reference_definition': {
       if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
-      const authored = stripControls(node.href)
+      const authored = stripBidiControls(stripControls(node.href))
       const href = blankDeniedDestination(authored)
       destinationDenied(ctx.options, 'link', 'ansi', authored, href, node.pos)
       return `${style(stripControls(renderLinkReferenceDefinition({ ...node, href })), DIM)}\n\n`
@@ -579,7 +579,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(referenceSourceText(node.rawRef))
+      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination gets ANSI link styling.
@@ -590,7 +590,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // held back and replayed after the link's own.
       const label = withHeldLosses(ctx, () => withinLink(() => renderInlines(node.children, ctx)))
       const text = label.text
-      const authored = stripControls(node.href)
+      const authored = stripBidiControls(stripControls(node.href))
       const shows = authored && !authored.startsWith('#') && authored !== stripAnsi(text)
       let out = style(text, UNDERLINE + FG_BLUE)
       if (shows) {
@@ -771,7 +771,7 @@ function renderImage(node: Image): string {
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceSourceText(node.rawRef))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef))
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

@@ -31,12 +31,14 @@ tooling:
 carve fmt  file.crv        # print canonically formatted Carve to stdout
 carve fmt -w   file.crv    # format in place
 carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
+carve fmt --diff file.crv  # print a unified source diff
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fmt --migrate -w file.crv # also respell case-only reference misses
 carve fmt --align-tables -w file.crv # align table pipes by display width
 carve fmt --align-tables --check file.crv # check the aligned form
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
+carve lint --caption-hints file.crv # also check likely missed captions
 carve diff a.crv b.crv     # semantic changes, ignoring source reflow
 carve merge base.crv ours.crv theirs.crv # merge independent edits
 carve portability file.crv # report where the document reads differently in Djot
@@ -50,6 +52,10 @@ lengths, and attribute spacing. It is conservative (no reflow, no reference/inli
 link conversion, no list renumbering) and semantic-preserving - the rendered HTML
 is byte-identical before and after - so it is safe to run on a whole tree. The
 same canonical serializer is available programmatically as `carveToCarve(src)`.
+
+On a mismatch, `carve fmt --check` prints the file and first changed line with
+the old and new text. `carve fmt --diff` writes a unified source diff. Both
+return status 1 when formatting would change the input and leave files alone.
 
 `carve fmt --stamp` additionally appends a *provenance marker* - a comment at the
 end of the document recording the Carve spec version it was processed under and
@@ -116,6 +122,13 @@ ids, unresolved reference links, missing/duplicate/unused footnotes, a trailing
 this engine does not implement. It exits non-zero when it reports anything, so it
 works as a CI gate. The same checks surface live in editors
 through [carve-lsp](https://github.com/markup-carve/carve-lsp).
+
+The authoring rules also flag malformed table rows and separators, lists folded
+into paragraphs, unclosed emphasis, gaps before link destinations, Markdown
+underscores used for italic, heading-level skips, bare HTML tags, Markdown
+definitions, and GitHub alert markers. `--caption-hints` adds a hint for a
+caption-looking paragraph next to a table or image. That hint is off by
+default because ordinary prose can use the same words.
 
 `carve lint --include-root DIR` also lints what a document pulls in through
 `{{ ... }}`, under the same containment and limits as `carve render`. Every rule
