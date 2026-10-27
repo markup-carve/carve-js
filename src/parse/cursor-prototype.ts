@@ -3636,6 +3636,24 @@ function takeFootnoteAttachedBlock(cursor: Cursor, inline: CursorInline, first: 
   return true
 }
 
+function takeFootnoteCommentTail(cursor: Cursor, inline: CursorInline):
+  { blocks: BlockNode[]; last: SourceLine } | undefined {
+  const comment = cursor.peek()
+  const follower = cursor.peek(1)
+  if (!comment || !LINE_COMMENT.test(comment.text) || !follower ||
+      footnotePlainColumn(follower) <= 1 || !plainQuoteText(follower.text.trimStart()) ||
+      cursor.peek(2) && !isBlankLine(cursor.peek(2)!.text)) return undefined
+  cursor.take()
+  cursor.take()
+  const commentBlock = parseBlocks(new Cursor([comment], undefined,
+    childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)
+  const column = footnotePlainColumn(follower)
+  const paragraph: Paragraph = { type: 'paragraph',
+    children: inline.inlines([{ line: follower, column, text: follower.text.slice(column - 1) }]),
+    pos: position(follower, follower, column) }
+  return { blocks: [...commentBlock, paragraph], last: follower }
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
@@ -3674,6 +3692,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text) ||
       isBlockStart(cursor.peek(2)!.text)) ? plusFollower : undefined
   if (attached) { cursor.take(); cursor.take() }
+  const commentTail = !attached && !structural && bodyLength === 0 &&
+    footnote[2] && plainQuoteText(footnote[2]) ? takeFootnoteCommentTail(cursor, inline) : undefined
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
   const bodyIndent = /^[ \t]*/.exec(footnote[2]!)![0].length
@@ -3684,7 +3704,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     parts.push({ line, column: nextColumn, text: line.text.slice(nextColumn - 1) })
   }
   const bodyLast = structural?.source.at(-1) ?? continuation.at(-1) ?? first
-  const last = attached ?? bodyLast
+  const last = commentTail?.last ?? attached ?? bodyLast
   const initialBody: BlockNode[] = initialQuote ? parseBlocks(new Cursor([{
     text: footnote[2]!.slice(bodyIndent), start: first.start + column - 1,
     number: first.number, baseColumn: column }], undefined,
@@ -3706,7 +3726,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
     attachedBody ? separateBody ? [...initialBody, separateBody, ...structuralBody, attachedBody] :
       [...initialBody, ...structuralBody, attachedBody] :
-      separateBody ? [...initialBody, separateBody, ...structuralBody] : [...initialBody, ...structuralBody],
+      separateBody ? [...initialBody, separateBody, ...structuralBody, ...(commentTail?.blocks ?? [])] :
+        [...initialBody, ...structuralBody, ...(commentTail?.blocks ?? [])],
     enumerable: true, configurable: true, writable: true })
   Object.defineProperty(footnoteDefPos, label, { value: position(first, last),
     enumerable: true, configurable: true, writable: true })
