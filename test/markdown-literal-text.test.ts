@@ -12,6 +12,8 @@ describe('Markdown literal text imports', () => {
     ['{%x%}', '<p>{%x%}</p>'],
     ['a {%x%} b', '<p>a {%x%} b</p>'],
     ['a {%x%} {%y%} b', '<p>a {%x%} {%y%} b</p>'],
+    [':+-:', '<p>:+-:</p>'],
+    [':foo+-bar:', '<p>:foo+-bar:</p>'],
   ])('preserves %s', (source, expected) => {
     expect(renderHtml(parse(markdownToCarve(source))).trim()).toBe(expected)
   })
