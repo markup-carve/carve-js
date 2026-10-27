@@ -2145,10 +2145,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each([
-    '- [a]: /x\n\nSee [t][a].\n',
-  ])('declines a nested reference definition until its prepass is migrated: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  it.each(['- [a]: /x\n\nSee [t][a].\n',
+    '* [a]: /x\n\nSee [t][a].\n',
+    'intro\n\n- [a]: /x\n\nSee [t][a].\n'])
+  ('hoists a bounded marker-line reference definition: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('parses nested blocks through the same cursor inside a quote', () => {

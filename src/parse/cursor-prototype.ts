@@ -2719,6 +2719,18 @@ function listFrameDefinitionAction(cursor: Cursor, inline: CursorInline,
   }
 }
 
+function collectMarkerLineLinkDefinition(cursor: Cursor, inline: CursorInline,
+  definitionNodes: BlockNode[], frame: ListCursorFrame, line: SourceLine,
+  marker: NonNullable<ReturnType<typeof listMarker>>, depth: number): void {
+  if (cursor.owner.kind !== 'root' || depth !== 0) return
+  const definition = cursor.simpleRootListDefinitions?.get(line.number)
+  if (!definition || !rootLinkDef(marker.content)) return
+  frame.body = []
+  frame.possibleInvisibleTail = true
+  takeLinkDefinitionAtCursor(new Cursor([line], undefined, cursor.owner,
+    cursor.physicalLines), inline, definitionNodes, true, definition)
+}
+
 function shiftedColonAtListFrame(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, prefixLength: number): ReturnType<typeof shiftedClosedListColon> {
   if (stackLength !== 1 || frame.fenceMarker || beginsOpenQuotedParagraph(frame.body)) {
@@ -3213,6 +3225,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.quoteFenceDepth = 0
       current.closedQuoteFence = false
       appendBody(current, line, marker.width + taskWidth)
+      collectMarkerLineLinkDefinition(cursor, inline, definitionNodes, current, line, marker, depth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
       const refusedFirstBlock = !firstBlock && isRefusedListFirstBlock(marker, taskWidth,
         cursor.peek(), depth, cursor.owner)
@@ -4855,6 +4868,25 @@ function hasDedentedNestedFenceBoundary(lines: readonly SourceLine[]): boolean {
   return false
 }
 
+function recordMarkerLineLinkDefinition(cursor: Cursor, line: SourceLine,
+  links: Map<string, LinkDef>, known?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>):
+  Map<number, NonNullable<ReturnType<typeof rootLinkDef>>> | undefined {
+  if (line.text[0] !== '-' && line.text[0] !== '*') return known
+  const marker = listMarker(line.text)
+  if (!marker || marker.indent !== 0 || marker.ordered ||
+      line.number > 1 && !isBlankLine(cursor.lines[line.number - 2]!.text) ||
+      cursor.lines[line.number] && !isBlankLine(cursor.lines[line.number]!.text)) return known
+  const definition = rootLinkDef(marker.content)
+  if (!definition) return known
+  const definitions = known ?? new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>()
+  definitions.set(line.number, definition)
+  links.set(normalizeRefLabel(definition.label), { rawLabel: definition.label,
+    line: line.number - 1, href: definition.href,
+    ...(definition.title !== undefined ? { title: unescapeAttrValue(definition.title) } : {}),
+    ...(definition.attrText !== null ? { attrs: parseAttrs(definition.attrText) } : {}) })
+  return definitions
+}
+
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
@@ -4889,7 +4921,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const hasDefinitionMarker = source.includes(']:')
   const mayHaveNestedListDefinition = hasDefinitionMarker &&
     (source.includes('  [') || source.includes('>   ['))
-  const simpleRootListDefinitions = mayHaveNestedListDefinition ?
+  let simpleRootListDefinitions = mayHaveNestedListDefinition ?
     new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
   if (hasDefinitionMarker) {
     for (const line of cursor.lines) {
@@ -4957,6 +4989,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       if (simpleListDefinition || quoteListDefinition) {
         simpleRootListDefinitions!.set(line.number, (simpleListDefinition ?? quoteListDefinition)!)
       }
+      simpleRootListDefinitions = recordMarkerLineLinkDefinition(cursor, line,
+        linkDefinitions, simpleRootListDefinitions)
       const match = rootLinkDef(line.text) || simpleListDefinition || quoteListDefinition ||
         (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
       if (match) linkDefinitions.set(normalizeRefLabel(match.label),
