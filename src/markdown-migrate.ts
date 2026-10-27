@@ -5344,14 +5344,40 @@ function writeQuotedInlineRun(
     (resumedIndent >= columnWidth(lastMarkerItem.lead) ||
       !resumed.hadLeadingTab && resumedIndent < 4 && isAsciiAlphanumeric(resumed.text.trimStart()[0]))
   const inheritedItemCol = markers.get(run[0]?.prefix ?? '')?.itemAt(indentColumns(run[0]?.text ?? ''))?.content ?? 0
-  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
+  let emptyToken = '\uE0FD'
+  while (run.some(part => part.text.includes(emptyToken))) emptyToken += '\uE0FD'
+  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(quoteEmptyItems(run, emptyToken), afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l))
   return {
-    lines: canonicalItemHeldTildeFence(written),
+    lines: canonicalItemHeldTildeFence(written).map(line => line.replaceAll(emptyToken, '+')),
     end,
   }
+}
+
+/** Give quoted empty Markdown items a temporary body before block conversion. */
+function quoteEmptyItems(run: readonly PrefixedInlineLine[], emptyToken: string): PrefixedInlineLine[] {
+  let fence: { prefix: string; char: string; width: number } | null = null
+  return run.map((part, index) => {
+    if (fence !== null && part.prefix !== fence.prefix) fence = null
+    const lead = quotedItemLead(part.text)?.lead ?? ''
+    const match = RE_MD_FENCE_LINE.exec(part.text.slice(lead.length))
+    if (fence !== null) {
+      if (match && match[2]![0] === fence.char && match[2]!.length >= fence.width && match[3]!.trim() === '') fence = null
+      return part
+    }
+    if (match && fenceRunIsAFence(match[2]!, match[3]!)) {
+      fence = { prefix: part.prefix, char: match[2]![0]!, width: match[2]!.length }
+      return part
+    }
+    const empty = /^([ \t]*(?:[-*+]|\d{1,9}[.)]))[ \t]*$/.exec(part.text)
+    if (!empty || part.continued) return part
+    const previous = run[index - 1]
+    const previousItem = previous !== undefined && /^(?:[ \t]*)(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/.test(previous.text)
+    if (previous?.prefix === part.prefix && quoteParagraphIsOpen(previous.text) && !previousItem) return part
+    return { ...part, text: `${empty[1]} ${emptyToken}` }
+  })
 }
 
 /** Canonicalize a closed tilde fence opened by a quote on a list marker line. */
