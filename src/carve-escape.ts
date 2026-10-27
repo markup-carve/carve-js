@@ -23,7 +23,7 @@ import { isCarveWhitespace } from './trim-non-nbsp.js'
  * mentions and smart typography, which apply to any Carve source rather than
  * being introduced here.
  */
-const BRACED_DELIMITER_CHARS = '^,=+-~/#*_'
+const BRACED_DELIMITER_CHARS = '^,=+-~/#*_%'
 
 /** The delimiters as a regex character class. Derived, so the list lives once. */
 function bracedClass(handled: string): string {
@@ -259,7 +259,7 @@ export const HANDLED_MARKDOWN: HandledDelimiters = { braced: '*_', bare: '*_~' }
  * and destinations. Constructs owned by Djot remain available to its delimiter
  * conversion pass; Carve-only constructs are frozen as literal text.
  */
-export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~', bare: '~*_' }
+export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~%', bare: '~*_' }
 
 /**
  * Escape the Carve inline constructs that are literal text in the source.
