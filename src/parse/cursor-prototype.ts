@@ -415,6 +415,14 @@ function wrappedQuoteAttributeTail(body: SourceLine[]): boolean {
     !!probeBlockAttributes(new Lexer([body.at(-2)!.text.trimStart(), lastBodyText.trimStart()]))
 }
 
+function quotedListSibling(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
+  if (cursor.owner.kind !== 'list' || body.length !== 1) return false
+  const first = listMarker(body[0]!.text)
+  const next = listMarker(line.text)
+  return first !== undefined && next !== undefined && first.bullet !== undefined &&
+    first.bullet === next.bullet && first.indent === next.indent
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -507,6 +515,32 @@ function quoteListMarkerPrefix(line: SourceLine,
   if (frame.contentColumn !== undefined && frame.body[0]?.text.startsWith('>') &&
       marker.indent >= frame.contentColumn + 1) return marker.indent
   return undefined
+}
+
+function quotedListSiblingPrefix(line: SourceLine,
+  marker: NonNullable<ReturnType<typeof listMarker>>,
+  frame: { contentColumn?: number; body: SourceLine[] }): number | undefined {
+  if (frame.contentColumn === undefined ||
+      marker.indent !== frame.contentColumn - 1) return undefined
+  const first = frame.body.at(-1)
+  if (!first) return undefined
+  if (first.number !== line.number - 1 || !RE_BLOCKQUOTE.test(first.text)) return undefined
+  const prefix = first.text.startsWith('> ') ? 2 : 1
+  const nested = listMarker(first.text.slice(prefix))
+  return nested?.bullet !== undefined && nested.bullet === marker.bullet ? marker.indent : undefined
+}
+
+function quoteOwnedListMarker(cursor: Cursor, line: SourceLine,
+  marker: NonNullable<ReturnType<typeof listMarker>>,
+  frame: { contentColumn?: number; body: SourceLine[] }):
+  { line: SourceLine; prefix: number; rootLazy: boolean } | undefined {
+  if (line.lazyText && cursor.owner.kind === 'quote') {
+    return { line, prefix: 0, rootLazy: true }
+  }
+  const prefix = quotedListSiblingPrefix(line, marker, frame) ??
+    quoteListMarkerPrefix(line, marker, frame)
+  return prefix === undefined ? undefined :
+    { line: { ...line, lazyText: true }, prefix, rootLazy: false }
 }
 
 function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
@@ -2166,10 +2200,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (marker) {
-      const lazyQuotePrefix = quoteListMarkerPrefix(line, marker, top)
-      if (lazyQuotePrefix !== undefined) {
+      const quoteOwned = quoteOwnedListMarker(cursor, line, marker, top)
+      if (quoteOwned) {
         cursor.take()
-        appendBody(top, { ...line, lazyText: true }, lazyQuotePrefix)
+        appendBody(top, quoteOwned.line, quoteOwned.prefix, quoteOwned.rootLazy)
         updateListFrameEnds(stack, line, listSpan)
         continue
       }
@@ -2563,6 +2597,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     const unmarked = takeUnmarkedQuoteParagraphLine(cursor, body, unclosedFenceParagraph)
     if (unmarked) {
       last = unmarked
+      continue
+    }
+    if (quotedListSibling(cursor, body, line)) {
+      body.push(cursor.take())
+      directParagraph = false
+      plainParagraph = false
+      last = line
       continue
     }
     if (openColonRun(body, false) !== undefined && /^ +>/.test(line.text)) {

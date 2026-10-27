@@ -133,6 +133,14 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- a\n  > - x\n  - m\n',
+    '- > - x\n  - m\n',
+    '- a\n  > * x\n  * m\n',
+  ])('hands a below-column marker to its open quoted list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '- item **bold** text\n',
     '1. item [link](/u)\n',
     '- item with trailing spaces  \n',
