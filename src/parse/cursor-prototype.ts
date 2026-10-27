@@ -3220,7 +3220,8 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       body.push(cursor.take())
       continue
     }
-    const nested = COLON_OPEN.exec(text) ?? RE_LINE_BLOCK_OPEN.exec(text)
+    const nested = COLON_OPEN.exec(text) ?? RE_DIV_OPEN.exec(text) ??
+      RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_LINE_BLOCK_OPEN.exec(text)
     if (nested) {
       if (nested[2] === 'figure' || nested[2] === 'list-table') {
         throw new UnsupportedCursorSyntax('nested specialized colon container')

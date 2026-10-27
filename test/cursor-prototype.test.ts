@@ -2514,4 +2514,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['::: note\n:::[*b*]\nbody\n:::\n:::\n',
+    ':::: note\n::: widget [a %% hidden]\n- item\n:::\n::::\n',
+    '::: note\n::: note [`x`]\n> quote\n:::\n:::\n'])
+  ('keeps a labeled nested container within its outer closer: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
