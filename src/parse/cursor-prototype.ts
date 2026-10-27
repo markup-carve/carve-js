@@ -2257,11 +2257,13 @@ function heldNestedMarkerPrefix(cursor: Cursor, frame: ListCursorFrame,
 }
 
 function deepestReachableFrame<T extends { contentColumn?: number }>(frames: readonly T[],
-  text: string, excludeTop = false): T | undefined {
+  text: string, excludeTop = false, knownIndent?: number): T | undefined {
+  let indent = knownIndent ?? 0
+  if (knownIndent === undefined) while (text.charCodeAt(indent) === 32) indent++
   for (let index = frames.length - 1 - (excludeTop ? 1 : 0); index >= 0; index--) {
     const frame = frames[index]!
     if (frame.contentColumn !== undefined &&
-        text.startsWith(' '.repeat(frame.contentColumn - 1))) return frame
+        indent >= frame.contentColumn - 1) return frame
   }
   return undefined
 }
@@ -2953,7 +2955,7 @@ function quoteChildrenAtCursor(cursor: Cursor, inline: CursorInline,
     cursor.physicalLines, cursor.simpleRootListDefinitions), inline, definitionNodes, depth + 1, false)
 }
 
-interface QuoteListOwnerFrame { column: number; fence: string | undefined }
+interface QuoteListOwnerFrame { contentColumn: number; fence: string | undefined }
 
 class QuoteListOwner {
   readonly frames: QuoteListOwnerFrame[] = []
@@ -2965,26 +2967,28 @@ class QuoteListOwner {
     let indent = 0
     while (text.charCodeAt(indent) === 32) indent++
     let released = false
-    while (this.frames.length && indent < this.frames.at(-1)!.column) {
+    const reached = deepestReachableFrame(this.frames, text, false, indent)
+    while (this.frames.length && this.frames.at(-1) !== reached) {
       const old = this.frames.pop()!
       released ||= old.fence !== undefined
       this.releasedFence ||= old.fence !== undefined
     }
     const top = this.frames.at(-1)
-    const owned = top && indent >= top.column ? text.slice(top.column) : text
+    const owned = top && indent >= top.contentColumn - 1 ?
+      text.slice(top.contentColumn - 1) : text
     if (top?.fence) {
-      if (indent === top.column && closesFence(owned, top.fence)) top.fence = undefined
+      if (indent === top.contentColumn - 1 && closesFence(owned, top.fence)) top.fence = undefined
       return false
     }
     const marker = listMarker(text)
-    if (marker && (!top || marker.indent >= top.column)) {
-      const frame: QuoteListOwnerFrame = { column: marker.width,
+    if (marker && (!top || marker.indent >= top.contentColumn - 1)) {
+      const frame: QuoteListOwnerFrame = { contentColumn: marker.width + 1,
         fence: fenceOpen(marker.content)?.marker }
       this.frames.push(frame)
       return false
     }
-    if (top && indent > top.column && fenceOpen(text.slice(indent))) this.shiftedFence = true
-    if (top && indent === top.column) top.fence = fenceOpen(owned)?.marker
+    if (top && indent > top.contentColumn - 1 && fenceOpen(text.slice(indent))) this.shiftedFence = true
+    if (top && indent === top.contentColumn - 1) top.fence = fenceOpen(owned)?.marker
     return released && !top && plainQuoteText(text)
   }
 
