@@ -3221,7 +3221,8 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       continue
     }
     const nested = COLON_OPEN.exec(text) ?? RE_DIV_OPEN.exec(text) ??
-      RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_LINE_BLOCK_OPEN.exec(text)
+      RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_ADMONITION_OPEN.exec(text) ??
+      RE_LINE_BLOCK_OPEN.exec(text)
     if (nested) {
       if (nested[2] === 'figure' || nested[2] === 'list-table') {
         throw new UnsupportedCursorSyntax('nested specialized colon container')
@@ -3691,8 +3692,7 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   const simple = COLON_OPEN.exec(first.text)
   const div = simple ? null : RE_DIV_OPEN.exec(first.text)
   const valid = simple || div ? null : RE_VALID_ADMONITION_OPEN.exec(first.text)
-  const opener = simple ?? div ?? valid ??
-    (first.text.includes('\t') ? RE_ADMONITION_OPEN.exec(first.text) : null)
+  const opener = simple ?? div ?? valid ?? RE_ADMONITION_OPEN.exec(first.text)
   if (!opener) return undefined
   const kind = div ? undefined : opener[2]
   const titleRaw = div ? undefined : opener[3]

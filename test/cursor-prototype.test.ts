@@ -2523,4 +2523,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['::: note "Unclosed\nbody\n:::\n',
+    '::: widget [Unclosed\nbody\n:::\n',
+    ':::: tabs\n::: tab [First\nbody\n:::\n::::\n'])
+  ('retains a container when its title or label metadata is invalid: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })
