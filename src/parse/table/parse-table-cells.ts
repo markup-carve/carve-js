@@ -69,18 +69,24 @@ export function readCellAttributeBlock(
   return { attrs, length: m[0].length }
 }
 
-export function parseCellMarkers(src: string): {
+/**
+ * A cell's marker run as the parser reads it - kind marker, alignment run,
+ * attribute block - WITHOUT the §5 T11 terminator check.
+ *
+ * `end` is where T11 wants the terminating space (0 when there is no run);
+ * `alignStart`..`alignEnd` is the accepted alignment run, empty when there is
+ * none or it was rejected. Exported so the linter reports a missing terminator
+ * against the parser's own run instead of a second spelling of it.
+ */
+export function scanCellMarkerRun(src: string): {
   header: boolean
-  span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
   valign?: 'top' | 'middle' | 'bottom'
   attrs?: Attrs
-  content: string
+  alignStart: number
+  alignEnd: number
+  end: number
 } {
-  // A lone span glyph takes precedence over an empty alignment run.
-  const trimmedSource = trimCellPadding(src)
-  if (trimmedSource === '<' || trimmedSource === '^') return { header: false, span: trimmedSource === '<' ? 'colspan' : 'rowspan', content: '' }
-
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
   let header = false
@@ -122,11 +128,11 @@ export function parseCellMarkers(src: string): {
     }
     i++
   }
+  // What follows the run is not checked here: the T11 terminator check in
+  // `parseCellMarkers` rejects the whole run when it is not a space.
   const validRun = i > markerStart &&
     !invalidAxis &&
-    (align !== undefined || inheritedHorizontal) &&
-    (src[i] === ' ' || src[i] === '{' ||
-      (!inheritedHorizontal && src[i] !== undefined && '<>~^v?'.includes(src[i]!)))
+    (align !== undefined || inheritedHorizontal)
   if (!validRun) {
     i = markerStart
     align = undefined
@@ -151,9 +157,32 @@ export function parseCellMarkers(src: string): {
   // `<td id="x">=R</td>` and the round-trip invariant failed on it. Once `=`
   // has committed the cell to header, everything after it is unambiguous
   // (spec §5 T10, corpus 319).
+  const alignEnd = i
   const block = readCellAttributeBlock(src, i)
-  let attrs = block?.attrs
   if (block) i += block.length
+
+  return {
+    header,
+    ...(align ? { align } : {}),
+    ...(valign ? { valign } : {}),
+    ...(block ? { attrs: block.attrs } : {}),
+    alignStart: markerStart,
+    alignEnd,
+    end: i,
+  }
+}
+
+export function parseCellMarkers(src: string): {
+  header: boolean
+  span?: 'rowspan' | 'colspan'
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  attrs?: Attrs
+  content: string
+} {
+  // A lone span glyph takes precedence over an empty alignment run.
+  const trimmedSource = trimCellPadding(src)
+  if (trimmedSource === '<' || trimmedSource === '^') return { header: false, span: trimmedSource === '<' ? 'colspan' : 'rowspan', content: '' }
 
   // Spec §5 T11: THE MARKER RUN ENDS AT A SPACE. The kind marker, the alignment
   // run and the attribute block are ONE run, and a cell carrying any of them
@@ -162,20 +191,13 @@ export function parseCellMarkers(src: string): {
   // author wrote rather than a header cell holding `hot=`. The closing pipe is
   // not a terminator (`|= |` is the empty header cell) and neither is a tab,
   // which PART 7 gives no padding role inline. The run is ATOMIC: a rejected
-  // alignment run takes the `=` with it, which is why the reset below clears
-  // `header` as well.
-  if (i > 0 && src[i] !== ' ') {
-    i = 0
-    header = false
-    align = undefined
-    valign = undefined
-    inheritedHorizontal = false
-    attrs = undefined
-  }
-
-  if (i > 0) {
+  // alignment run takes the `=` with it, so without the space the cell is not
+  // a header either.
+  const run = scanCellMarkerRun(src)
+  if (run.end > 0 && src[run.end] === ' ') {
+    const { header, align, valign, attrs } = run
     // A tight prefix was consumed; the rest is content.
-    const content = trimCellPadding(src.slice(i))
+    const content = trimCellPadding(src.slice(run.end))
     if ((align !== undefined || valign !== undefined) && attrs !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), attrs, content }
     if (align !== undefined || valign !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), content }
     if (attrs !== undefined) return { header, attrs, content }

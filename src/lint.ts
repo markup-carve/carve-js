@@ -34,6 +34,7 @@ import {
   isTableRow,
   isBlockAttributeLine,
   readCellAttributeBlock,
+  scanCellMarkerRun,
   rowAttrsFromLine,
   splitTableRowSpans,
   stripContainerPrefixesKeepIndent,
@@ -2314,6 +2315,45 @@ function collectFenceOpenerFallbacks(
   return fallbackLines
 }
 
+/**
+ * Report a cell whose marker run lacks its terminating space (§5 T11).
+ *
+ * The run is the parser's own (`scanCellMarkerRun`), so a cell is reported
+ * exactly when the missing space is what turns it into literal content. A `=`
+ * followed by an alignment glyph that the parser rejects (`|=^ x|`,
+ * `|=<< x|`) is literal for another reason, and adding a space after the `=`
+ * is not the repair, so it is not reported here.
+ */
+function reportUnterminatedMarkerRun(
+  text: string,
+  report: (column: number, length: number, message: string) => void,
+): void {
+  const run = scanCellMarkerRun(text)
+  if (run.end === 0 || text[run.end] === ' ') return
+  const blockSuffix = run.attrs ? ' and its attribute block' : ''
+  if (run.alignEnd > run.alignStart) {
+    const spelling = text.slice(run.alignStart, run.alignEnd)
+    report(run.alignStart + 1, spelling.length,
+      `The table alignment run "${spelling}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${blockSuffix} to make it alignment.`)
+    return
+  }
+  if (!run.header) {
+    // A glued `<`, `>` or `~` after the block has its own, more specific
+    // warning (block written before the alignment marker).
+    if (!run.attrs || TABLE_ALIGNMENT_MARKERS.has(text[run.end] ?? '')) return
+    const spelling = text.slice(0, run.end)
+    report(1, run.end,
+      `The table cell attribute block "${spelling}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the block to apply it to the cell.`)
+    return
+  }
+  if (TABLE_MARKER_GLYPHS.has(text[1] ?? '')) return
+  report(1, run.end,
+    `The table kind marker has no terminating space, so it is literal cell content. Add a space after the marker run${blockSuffix} to make it a header.`)
+}
+
+/** Every glyph an alignment run is spelled with, valid or not. */
+const TABLE_MARKER_GLYPHS: ReadonlySet<string> = new Set('<>~^v?')
+
 /** Table cell marker runs whose spelling makes them literal content. */
 function collectTableCellMarkerWarnings(
   lines: readonly string[],
@@ -2342,35 +2382,8 @@ function collectTableCellMarkerWarnings(
     for (const { text, start } of splitTableRowSpans(body)) {
       // A whole-cell ^ or < is a span marker (T4), not a marker run (T11).
       if (/^[ \t]*[<^][ \t]*$/.test(text)) continue
-      // The run's terminator is a space, and the attribute block is INSIDE the
-      // run rather than after it (§5 T11) - so `|>{#x}value |` is as unpadded as
-      // `|>value |` is, and reporting only the second left the first silent.
-      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?\s])/.exec(text)
-      if (unpadded) {
-        const at = text.startsWith('=') ? 1 : 0
-        const marksEnd = at + unpadded[1]!.length
-        const block = text[marksEnd] === '{' ? readCellAttributeBlock(text, marksEnd) : undefined
-        const runEnd = marksEnd + (block?.length ?? 0)
-        if (text[runEnd] !== ' ') {
-          push(
-            i + 1,
-            prefixWidth + indent + start + at + 1,
-            unpadded[1]!.length,
-            'table-marker-run-padding',
-            `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${block ? ' and its attribute block' : ''} to make it alignment.`,
-          )
-        }
-      }
-      // A kind marker is also part of the run, even without alignment.
-      if (text.startsWith('=') && !unpadded && text[1] !== ' ') {
-        const kindBlock = readCellAttributeBlock(text, 1)
-        const runEnd = 1 + (kindBlock?.length ?? 0)
-        if (text[runEnd] !== ' ') {
-          push(i + 1, prefixWidth + indent + start + 1, runEnd,
-            'table-marker-run-padding',
-            `The table kind marker has no terminating space, so it is literal cell content. Add a space after the marker run${kindBlock ? ' and its attribute block' : ''} to make it a header.`)
-        }
-      }
+      reportUnterminatedMarkerRun(text, (column, length, message) =>
+        push(i + 1, prefixWidth + indent + start + column, length, 'table-marker-run-padding', message))
       const block = readCellAttributeBlock(text)
       if (!block) continue
       const marker = text[block.length]

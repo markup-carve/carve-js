@@ -1358,12 +1358,12 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       // Visible text is the raw autolink content (an email autolink shows the
       // address, not the `mailto:` href); fall back to href for older nodes.
       const label = stripControls(node.text ?? node.href)
-      // Same render-seam rule as nested links above. Strip an auto-added
-      // `mailto:` so the label matches what the author saw
-      // (markup-carve/carve#817).
+      // Same render-seam rule as nested links above: show the autolink's text.
       if (insideLink) {
-        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : label
-        return escapeText(stripControls(display))
+        const display = node.text === undefined && node.href.startsWith('mailto:')
+          ? node.href.slice(7)
+          : label
+        return escapeText(display)
       }
       const renderedLabel = withinLink(() => escapeText(label))
       const destination = markdownDestination(node.href)

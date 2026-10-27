@@ -417,6 +417,8 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
   // and hands it to this sub-parse, which read the marker a second time and
   // started a sibling item inside the quote (markup-carve/carve#1904).
   if (lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) return false
+  if (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+      lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) return false
   // A VERBATIM fence ends the fold only WITH a closer ahead (§10 I4): an
   // unterminated ``` is not a code block, it is an inline verbatim run that
   // belongs to the item's paragraph. Without this the item was closed and the
