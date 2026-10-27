@@ -2373,6 +2373,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> quoted\n+\npara\n# H\n',
+    '> > q\n> +\n> para\n'])
+  ('attaches one plain quote continuation before a safe boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a plain quote continuation followed by another quote marker', () => {
+    expect(() => parseCursorPrototype('> quoted\n+\npara\n> q\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

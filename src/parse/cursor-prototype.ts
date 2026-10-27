@@ -3363,6 +3363,16 @@ function quotedOwnedBodyLine(line: SourceLine, body: SourceLine[], prefix: numbe
     ...(line.ownedFirstBlock ? { ownedFirstBlock: true } : {}) }
 }
 
+function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
+  if (cursor.owner.inList || line.text !== '+' || body.length === 0) return false
+  const follower = cursor.peek(1)
+  const after = cursor.peek(2)
+  const plain = plainQuoteText(follower?.text ?? '')
+  return (quotedContinuationFollower(cursor, body) || plain) &&
+    (!after || isBlankLine(after.text) ||
+      plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
@@ -3459,9 +3469,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       last = colonTail
       continue
     }
-    if (!cursor.owner.inList && line.text === '+' && body.length > 0 &&
-        quotedContinuationFollower(cursor, body) &&
-        (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) {
+    if (canAttachQuoteContinuation(cursor, body, line)) {
       const marker = cursor.take()
       body.push({ ...marker, text: '' })
       const attached = cursor.take()
