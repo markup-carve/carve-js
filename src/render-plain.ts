@@ -11,7 +11,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './ast/legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './extension/bidi-controls.js'
-import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
+import { isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
 import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './parse/inline/reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, tableSpanFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
 import { resolveTableSpans } from './table/table-spans.js'
@@ -357,7 +357,7 @@ function renderImageText(node: Image): string {
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceSourceText(node.rawRef))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef))
 
   return stripControls(node.alt)
 }
@@ -456,7 +456,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(referenceSourceText(node.rawRef))
+      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost link context applies while its label renders.

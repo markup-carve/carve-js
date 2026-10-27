@@ -672,6 +672,8 @@ export function lintCarve(
      * Pass what you pass to `carveToHtml`. Omitted means a core render.
      */
     extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
+    /** Opt-in hint for a paragraph resembling a caption next to a figure or table. */
+    captionLookingParagraph?: boolean
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
@@ -1298,7 +1300,7 @@ export function lintCarve(
   }
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectDescriptionSeparatorBelowContentColumn(source, doc, unrendered, out)
-  collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
+  collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines, opts.captionLookingParagraph === true)
   collectRegionMarkerWarnings(source, doc, unrendered, verbatimLines, out)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out, toUtf16)
   if (opts.platforms?.length) {
@@ -2528,6 +2530,146 @@ function collectTableAttributeWarnings(
   }
 }
 
+/** Source spellings that reached paragraph or table nodes with a different meaning. */
+function collectAuthoringWarnings(
+  lines: readonly string[],
+  headings: readonly Positioned[],
+  paragraphs: readonly Positioned[],
+  tables: readonly Table[],
+  verbatimLines: ReadonlySet<number>,
+  listItemLines: ReadonlySet<number>,
+  listIndentLines: ReadonlySet<number>,
+  push: SilentFailurePush,
+  captionLookingParagraph: boolean,
+): void {
+  const paragraphAt = new Set<number>()
+  const paragraphEndAt = new Map<number, number>()
+  for (const p of paragraphs) {
+    const start = p.pos?.startLine
+    if (!start) continue
+    const end = p.pos?.endLine ?? start
+    for (let line = start; line <= end; line++) {
+      paragraphAt.add(line)
+      paragraphEndAt.set(line, end)
+    }
+  }
+  const visible = (line: string): string => {
+    let result = line.replace(/\\[\\`*_/<>()\[\]]/g, match => ' '.repeat(match.length))
+    result = result.replace(/(`+)(?:(?!\1).)*\1/g, match => ' '.repeat(match.length))
+    return result
+  }
+  const rowAt = new Map<number, Table>()
+  for (const table of tables) {
+    if (table.sourceFormat) continue
+    const width = table.rows[0]?.cells.length ?? 0
+    for (let index = 0; index < table.rows.length; index++) {
+      const row = table.rows[index]!
+      const at = row.pos?.startLine
+      if (!at) continue
+      rowAt.set(at, table)
+      if (index > 0 && row.cells.length !== width) {
+        const col = lines[at - 1]!.indexOf('|') + 1
+        push(at, Math.max(col, 1), 1, 'table-row-cell-count',
+          `This table row has ${row.cells.length} cells; the header has ${width}. Add or remove a cell to match the table.`)
+      }
+    }
+  }
+  let previousHeadingLevel = 0
+  const headingLines = new Set<number>()
+  for (const heading of headings) {
+    const at = heading.pos?.startLine
+    if (!at) continue
+    headingLines.add(at)
+    const level = (heading as { level?: number }).level ?? 1
+    if (previousHeadingLevel && level > previousHeadingLevel + 1) {
+      const col = lines[at - 1]!.indexOf('#') + 1
+      push(at, Math.max(col, 1), level, 'heading-level-skip',
+        `This heading skips from level ${previousHeadingLevel} to ${level}; use the next heading level for a continuous outline.`)
+    }
+    previousHeadingLevel = level
+  }
+  const tableLines = new Set(rowAt.keys())
+  for (let index = 0; index < lines.length; index++) {
+    const at = index + 1
+    if (verbatimLines.has(at)) continue
+    const raw = lines[index]!
+    const stripped = stripContainerPrefixesKeepIndent(raw)
+    const prefix = raw.length - stripped.length
+    const column = prefix + stripped.search(/\S/) + 1
+    const text = visible(stripped)
+    const row = rowAt.has(at)
+    if (paragraphAt.has(at)) {
+      const shape = /^\s*\|(?:=|\s|[^\s|])/.exec(stripped)
+      if (shape && !isTableRow(stripped.trimStart()) && /\|/.test(stripped.slice(1)) &&
+          (at === 1 || !/^\s*\|/.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? '')) ||
+           isTableRow(stripContainerPrefixesKeepIndent(lines[index - 1] ?? '').trimStart()))) {
+        push(at, Math.max(column, 1), 1, 'table-shaped-paragraph',
+          'This table-shaped line lacks a closing pipe and renders as paragraph text; close the table row.')
+      }
+      if (index > 0 && !listItemLines.has(at) && !listIndentLines.has(at) &&
+          /^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(raw) &&
+          !/^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(lines[index - 1]!) &&
+          !/^\s*$/.test(lines[index - 1]!) && paragraphAt.has(at - 1)) {
+        const markerColumn = /^(?:\s*> ?)*\s*/.exec(raw)?.[0].length ?? 0
+        push(at, markerColumn + 1, 1, 'list-marker-without-blank-line',
+          'This list marker is part of the preceding paragraph; add a blank line before the list.')
+      }
+      if (/^\s*:\s+\S/.test(stripped) && index > 0 && paragraphAt.has(at - 1) &&
+          !/^\s*::\s/.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? ''))) {
+        push(at, Math.max(column, 1), 1, 'markdown-definition-paragraph',
+          'This markdown definition remains paragraph text; use a :: term line before the definition.')
+      }
+      if (captionLookingParagraph && /^(?:\*?\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\s+\d+)?\s*:|:\s+\S)/i.test(stripped.trimStart()) &&
+          (tableLines.has(at - 2) || tableLines.has(at - 1) || tableLines.has(at + 2) || tableLines.has(at + 1) ||
+           /!\[/.test(lines[index - 2] ?? '') || /!\[/.test(lines[index - 1] ?? ''))) {
+        push(at, Math.max(column, 1), 1, 'caption-looking-paragraph',
+          'This caption-looking paragraph sits next to a table or image; use a ^ caption line.')
+      }
+    }
+    if (!paragraphAt.has(at) && !row && !headingLines.has(at)) continue
+    const gap = /\[[^\]]+\]\s+\(\s*[^)\s][^)]*\)/g
+    for (const match of text.matchAll(gap)) {
+      push(at, prefix + match.index! + 1, match[0].length, 'link-gap-before-destination',
+        'The gap after this link label keeps the link as text; write ]( with no space.')
+    }
+    const underline = /(^|[^\p{L}\p{N}])_([\p{L}][\p{L}\p{N}_ -]*?)_(?![\p{L}\p{N}])/gu
+    for (const match of text.matchAll(underline)) {
+      push(at, prefix + match.index! + match[1]!.length + 1, match[0].length - match[1]!.length,
+        'markdown-italic-underline', 'This markdown italic spelling renders as underline; use /word/ for italic.')
+    }
+    const tag = /<\/?[A-Za-z][\w:-]*(?:\s+[^<>]*)?\/?>/g
+    const firstTag = tag.exec(text)
+    if (firstTag) push(at, prefix + firstTag.index + 1, firstTag[0].length, 'bare-html-tag',
+      'This bare HTML tag is escaped as text; use a raw HTML block if markup is intended.')
+    const alert = /\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(text)
+    if (alert && /^\s*>/.test(raw)) push(at, prefix + alert.index + 1, alert[0].length,
+      'github-alert-marker', 'This github alert marker stays literal in a Carve quote; use an admonition fence.')
+    if (paragraphAt.has(at)) {
+      const strong = /(^|[\s([{])([*/])(?=\w)/g
+      for (const match of text.matchAll(strong)) {
+        const start = match.index! + match[1]!.length
+        const delimiter = match[2]!
+        let remainder = text.slice(start + 1)
+        const endLine = paragraphEndAt.get(at) ?? at
+        for (let next = at + 1; next <= endLine; next++) remainder += `\n${visible(stripContainerPrefixesKeepIndent(lines[next - 1] ?? ''))}`
+        if (!remainder.includes(delimiter)) {
+          push(at, prefix + start + 1, 1, 'unclosed-inline-emphasis',
+            `This ${delimiter === '*' ? 'strong' : 'emphasis'} opener is unclosed in its paragraph; add a closer.`)
+        }
+      }
+    }
+    if (row || paragraphAt.has(at)) {
+      const cells = stripped.trimStart().split('|').slice(1, -1).map(cell => cell.trim())
+      const dashed = /^\s*\|[\s:|\-x]+\|?\s*$/.test(stripped) && /--/.test(stripped)
+      if ((dashed && !/^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(stripped)) ||
+          (row && cells.some(cell => /^-{3,}$/.test(cell)))) {
+        push(at, Math.max(column, 1), 1, 'table-separator-near-miss',
+          'This table separator spelling renders as table content; correct the dash cells.')
+      }
+    }
+  }
+}
+
 /**
  * Source-line checks for constructs that parsed into the wrong node. Each is
  * anchored to a parsed node so verbatim regions (code/raw blocks) are skipped
@@ -2541,6 +2683,7 @@ function collectSilentFailures(
   out: LintWarning[],
   toUtf16: (offset: number) => number,
   listIndentLines: ReadonlySet<number>,
+  captionLookingParagraph: boolean,
 ): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -2586,6 +2729,15 @@ function collectSilentFailures(
     }
   }
   walkTables(Object.values(doc.footnoteDefs ?? {}))
+
+  const listItemLines = new Set<number>()
+  walkDocument(doc, node => {
+    if (node.type === 'list_item') {
+      const line = (node as Positioned).pos?.startLine
+      if (line) listItemLines.add(line)
+    }
+  })
+  collectAuthoringWarnings(lines, headings, paragraphs, tables, verbatimLines, listItemLines, listIndentLines, push, captionLookingParagraph)
 
   // 1. Trailing attribute block on a heading: literal text, not attributes.
   for (const h of headings) {

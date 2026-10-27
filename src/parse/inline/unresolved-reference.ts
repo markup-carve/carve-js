@@ -61,3 +61,8 @@ export function referenceSourceText(rawRef: string | undefined): string {
     .map((line) => (RE_COMMENT_ONLY_LINE.test(line) ? '' : line))
     .join('\n')
 }
+
+/** Plain and terminal targets spell a literal label's soft break as a space. */
+export function referenceDisplayText(rawRef: string | undefined): string {
+  return referenceSourceText(rawRef).replace(/\r?\n/g, ' ')
+}

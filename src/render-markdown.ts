@@ -1825,14 +1825,14 @@ function writtenTypography(nodes: InlineNode[], typography: SmartTypographyOptio
  * target on the same input.
  */
 function deniedProbeInput(url: string): string {
-  return stripDestinationControls(url)
+  return stripBidiControls(stripDestinationControls(url))
 }
 
 function markdownDestination(url: string): string {
   if (url === '') return '<>'
-  const probed = sanitizeMdUrl(stripDestinationControls(url))
+  const probed = sanitizeMdUrl(deniedProbeInput(url))
   const pipeDestination = url.includes('|')
-  const safe = probed === '' ? probed : stripControls(url)
+  const safe = probed === '' ? probed : stripBidiControls(stripControls(url))
   const encoded = safe.replace(/[ ()<>\\|]/g, (ch) => {
     switch (ch) {
       case '\\':

@@ -54,7 +54,7 @@ describe('footnote definitions inside containers reach the lint rules', () => {
     // no warning - the two cannot disagree about what a definition is.
     const src = 'prose\n- not a definition, just a wrapped line\n'
     expect(Object.keys(parse(src).footnoteDefs ?? {})).toEqual([])
-    expect(lintCarve(src)).toEqual([])
+    expect(rules(src)).toEqual(['list-marker-without-blank-line'])
   })
 
   it('does not read an over-indented literal line as a definition', () => {

@@ -334,7 +334,7 @@ describe('lintCarve — trailing heading attribute', () => {
 describe('lintCarve — legacy raw fence', () => {
   it('flags ```raw FORMAT and suggests ```=FORMAT', () => {
     const w = lintCarve('```raw html\n<b>x</b>\n```')
-    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax'])
+    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax', 'bare-html-tag'])
     expect(w[0]!.message).toContain('```=html')
     expect(w[0]!.line).toBe(1)
   })
