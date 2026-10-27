@@ -6478,9 +6478,11 @@ function opensAtTheContentColumn(text: string): boolean {
  */
 function quotedFenceCloser(text: string): RegExp | null {
   const quoted = blockquotePrefix(text.trimStart())
-  const open = quoted === null ? null : RE_MD_FENCE_LINE.exec(quoted.text)
+  const item = quoted === null ? null : quotedItemLead(quoted.text)
+  const column = item === null ? 0 : columnWidth(item.lead)
+  const open = quoted === null ? null : RE_MD_FENCE_LINE.exec(quoted.text.slice(item?.lead.length ?? 0))
   if (open === null || columnWidth(open[1]!) > 3 || !fenceRunIsAFence(open[2]!, open[3]!)) return null
-  return new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
+  return new RegExp(`^ {${column},${column + 3}}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
 }
 
 /**
