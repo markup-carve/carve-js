@@ -5,6 +5,21 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    '- ```\n  b\n\n- s\n',
+    '- outer\n  - head\n\n    ```\n    a\n  ```\n\n- next\n',
+  ])('keeps an open list fence blank through the sibling boundary: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it('declines an open list fence before a non-list boundary', () => {
+    expect(() => parseCursorPrototype('- ```\n  b\n\n> q\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     '- a\n  ```\n  b\n y\n  ```\n',
     '- ```\n  b\n y\n  ```\n',
     '1. a\n   ~~~\n   b\n y\n   ~~~\n',

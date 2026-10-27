@@ -2351,6 +2351,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       }
     }
     const placedEndLine = frame.item.children.at(-1)?.pos?.endLine
+    if (placedEndLine && placedEndLine > frame.last.number) {
+      const placed = cursor.physicalLines[placedEndLine - 1]
+      if (placed) {
+        frame.last = { ...placed, text: '' }
+        frame.item.pos = listSpan(frame.itemFirst, frame.last, frame.spanColumn)
+      }
+    }
     if (placedEndLine && placedEndLine < frame.last.number) {
       const placed = cursor.physicalLines[placedEndLine - 1]
       if (placed) {
@@ -2536,6 +2543,17 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     updateListFrameEnds(stack, line, listSpan)
     return true
   }
+  const retainFenceSiblingBlanks = (frame: ListCursorFrame,
+    target: ListCursorFrame | undefined, sibling: boolean | undefined, count: number): boolean => {
+    if (!frame.fenceMarker || !sibling || target !== frame) return false
+    for (let index = 0; index < count; index++) {
+      const blank = cursor.take()
+      appendBody(frame, blank, 0)
+      updateListFrameEnds(stack, blank, listSpan)
+    }
+    frame.list.tight = false
+    return true
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
@@ -2685,6 +2703,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const continuationFrame = blankContinuationFrame(next, nextMarker, top, blanks)
       rejectRaisedColonContinuation(next.text, continuationFrame)
       if (!sibling && !nested && !continuationFrame) break
+      if (retainFenceSiblingBlanks(top, target, sibling, blanks)) continue
       for (let i = 0; i < blanks; i++) cursor.take()
       appendNestedListGap(top, nextMarker, blanks)
       if (continuationFrame) {
@@ -3217,9 +3236,19 @@ function boundedListEofFence(cursor: Cursor, first: SourceLine, payload: SourceL
     last?.text === '' && last.number === cursor.physicalLines.at(-1)?.number
 }
 
+function boundedListSiblingFence(cursor: Cursor, payload: SourceLine[]): SourceLine | undefined {
+  const last = payload.at(-1)
+  if (cursor.owner.kind !== 'list' || cursor.owner.listRootPrefix === undefined ||
+      !last || last.text !== '') return undefined
+  const next = cursor.physicalLines[last.number]
+  return next && listMarker(next.text)?.indent === 0 ? { ...next, text: '' } : undefined
+}
+
 function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: SourceLine[]): SourceLine {
   if (cursor.peek()) return cursor.take()
   const marker = fenceOpen(first.text)?.marker
+  const siblingBoundary = marker ? boundedListSiblingFence(cursor, payload) : undefined
+  if (siblingBoundary) return siblingBoundary
   if (marker && (cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload) ||
       boundedListFence(cursor, first, payload, marker) ||
       boundedListDedentFence(cursor, payload, marker) ||
