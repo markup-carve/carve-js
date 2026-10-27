@@ -2349,7 +2349,7 @@ function finalNestedListLazyLine(cursor: Cursor, body: SourceLine[], stackLength
 
 function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarker>>,
   top: { indent: number; contentColumn?: number; fenceMarker: string | undefined;
-    body: SourceLine[]; retainedBelowColumnComment: boolean },
+    body: SourceLine[]; retainedBelowColumnComment: boolean; ordered: boolean },
   depth: number, lineNumber: number, owner: ContainerOwner, stackLength: number): boolean {
   if (!(depth === 0 || depth === 1 &&
       (owner.kind === 'list' || owner.kind === 'quote')) || stackLength !== 1 ||
@@ -2360,6 +2360,10 @@ function isBelowListMarkerColumn(marker: NonNullable<ReturnType<typeof listMarke
   if (top.retainedBelowColumnComment) return true
   if (plainQuoteText(last)) return true
   if (nestedQuoteParagraphText(last)) return true
+  const priorMarker = listMarker(last)
+  if (depth === 0 && owner.kind === 'root' && top.ordered &&
+      priorMarker?.indent === marker.indent && plainQuoteText(priorMarker.content) &&
+      top.body.length > 1 && plainQuoteText(top.body[0]!.text)) return true
   const innerMarker = depth === 0 && top.body.length === 1 ? listMarker(last) : undefined
   return innerMarker !== undefined && plainQuoteText(innerMarker.content)
 }

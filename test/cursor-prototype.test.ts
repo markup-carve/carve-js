@@ -434,6 +434,11 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps repeated below-column list markers in the ordered item paragraph', () => {
+    const source = '1. outer\n  - first\n  - head\n\n    ```\n    body\n  ```\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('uses a later quoted tilde closer before folding an open code span', () => {
     for (const count of [1, 2, 3, 10]) {
       const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)
