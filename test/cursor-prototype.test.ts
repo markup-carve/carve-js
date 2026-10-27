@@ -4,6 +4,19 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('keeps a nested list fence blank before the released root paragraph', () => {
+    const source = '- - ```\n\ntail\n'
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it('declines an open nested list fence before a root heading', () => {
+    expect(() => parseCursorPrototype('- - ```\n\n# H\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- ```\n  b\n\n- s\n',
     '- outer\n  - head\n\n    ```\n    a\n  ```\n\n- next\n',
@@ -1314,7 +1327,7 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- - ```\n\ntail\n', '- a\n  - ```\n  +\n  > q\n'])
+  it.each(['- a\n  - ```\n  +\n  > q\n'])
   ('declines marker-line fences whose physical follower still needs an owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })

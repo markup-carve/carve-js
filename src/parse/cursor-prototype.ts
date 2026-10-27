@@ -2148,6 +2148,7 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   ordered: boolean; taskList: boolean; kind?: OlKind; delim?: '.' | ')'; bullet?: '-' | '*';
   item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
   fenceMarker: string | undefined; fencePrefix: number | undefined; fenceMayDedent: boolean;
+  fenceBoundary?: SourceLine;
   quoteFenceMarker: string | undefined; closedQuoteFence: boolean;
   body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
@@ -2401,7 +2402,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       frame.item.children.push(...parseBlocks(
         new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
           frame.fenceMayDedent || cursor.owner.allowUnclosedFence,
-          cursor.owner.fenceBoundary, cursor.owner.kind === 'root' ? firstMarker.width : undefined),
+          frame.fenceBoundary ?? cursor.owner.fenceBoundary,
+          cursor.owner.kind === 'root' ? firstMarker.width : undefined),
           cursor.physicalLines),
         inline, definitionNodes, depth + 1, false))
     }
@@ -2554,6 +2556,40 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     frame.list.tight = false
     return true
   }
+  const retainFenceBoundaryBlanks = (frame: ListCursorFrame, count: number,
+    next: SourceLine | undefined): boolean => {
+    const finalFence = frame.fenceMarker && !next && cursor.owner.allowUnclosedFence &&
+      cursor.owner.fenceBoundary
+    let nestedRootFence = false
+    if (!finalFence && stack.length === 1 && count === 1 && frame.body.length === 1 &&
+        next && plainQuoteText(next.text) &&
+        (!cursor.peek(count + 1) || cursor.peek(count + 1)!.text === '')) {
+      const nestedFirst = listMarker(frame.body[0]!.text)
+      nestedRootFence = nestedFirst !== undefined && fenceOpen(nestedFirst.content) !== null
+    }
+    if (!finalFence && !nestedRootFence) return false
+    for (let index = 0; index < count; index++) {
+      const blank = cursor.take()
+      appendBody(frame, blank, 0)
+      updateListFrameEnds(stack, blank, listSpan)
+    }
+    if (nestedRootFence) {
+      frame.fenceMayDedent = true
+      if (next) frame.fenceBoundary = next
+    }
+    return true
+  }
+  const takeFenceBlank = (frame: ListCursorFrame, count: number,
+    next: SourceLine | undefined): 'break' | 'continue' | undefined => {
+    if (retainFenceBoundaryBlanks(frame, count, next)) return 'break'
+    if (!isFenceBlankContinuation(cursor, frame, next, stack.length, depth)) return undefined
+    for (let index = 0; index < count; index++) {
+      const blank = cursor.take()
+      appendBody(frame, blank, 0)
+      updateListFrameEnds(stack, blank, listSpan)
+    }
+    return 'continue'
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
@@ -2659,6 +2695,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fenceMarker = undefined
       current.fencePrefix = undefined
       current.fenceMayDedent = false
+      delete current.fenceBoundary
       current.quoteFenceMarker = undefined
       current.closedQuoteFence = false
       appendBody(current, line, marker.width + taskWidth)
@@ -2677,14 +2714,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       let blanks = 0
       while (cursor.peek(blanks)?.text === '') blanks++
       const next = cursor.peek(blanks)!
-      if (isFenceBlankContinuation(cursor, top, next, stack.length, depth)) {
-        for (let i = 0; i < blanks; i++) {
-          const blank = cursor.take()
-          appendBody(top, blank, 0)
-          updateListFrameEnds(stack, blank, listSpan)
-        }
-        continue
-      }
+      const fenceBlank = takeFenceBlank(top, blanks, next)
+      if (fenceBlank === 'break') break
+      if (fenceBlank === 'continue') continue
       if (endsListBlankRun(blanks, next, firstMarker.indent)) break
       const nextMarker = listMarker(next.text)
       if (markerFallsBetweenListColumns(nextMarker, top)) break
