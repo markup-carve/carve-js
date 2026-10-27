@@ -651,6 +651,12 @@ function beginsOpenQuotedParagraph(body: SourceLine[]): boolean {
   return plainQuoteText(first.slice(first[1] === ' ' ? 2 : 1))
 }
 
+function endsOpenQuotedParagraph(body: SourceLine[]): boolean {
+  const last = body.at(-1)?.text
+  return last !== undefined && RE_BLOCKQUOTE.test(last) &&
+    plainQuoteText(last.slice(last[1] === ' ' ? 2 : 1))
+}
+
 function followsClosedListBlock(body: SourceLine[]): boolean {
   const last = body.at(-1)?.text
   return last !== undefined && (last === '' || parseBlockAttributeRun(last) !== null ||
@@ -1952,7 +1958,7 @@ function listFenceStaysInParagraph(cursor: Cursor, frame: ListCursorFrame,
 function shouldMatchShiftedListFence(frame: ListCursorFrame, line: SourceLine,
   prefix: number, stackLength: number): boolean {
   return !frame.fenceMarker && line.text[prefix] === ' ' && stackLength === 1 &&
-    !listMarker(frame.body[0]?.text ?? '') && !beginsOpenQuotedParagraph(frame.body)
+    !listMarker(frame.body[0]?.text ?? '') && !endsOpenQuotedParagraph(frame.body)
 }
 
 function continuedListFencePrefix(frame: ListCursorFrame, line: SourceLine, prefix: number): number {
@@ -2572,7 +2578,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
 
 function takeQuotedInlineCodeContinuation(cursor: Cursor, body: SourceLine[]): SourceLine[] | undefined {
   if (!cursor.owner.inList || body.length !== 1 || !plainQuoteText(body[0]!.text)) return undefined
-  const opener = /^( +)(`{3,})[ \t]*$/.exec(cursor.peek()?.text ?? '')
+  const opener = /^( +)(`{3,})(?:[A-Za-z][\w-]*)?[ \t]*$/.exec(cursor.peek()?.text ?? '')
   if (!opener) return undefined
   const prefix = opener[1]!
   let count = 1

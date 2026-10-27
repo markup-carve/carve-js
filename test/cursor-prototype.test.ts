@@ -89,6 +89,16 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
+  it.each([3, 4, 8])('keeps a shifted inline code run in a list-owned quote at column %i',
+    (column) => {
+      const indent = ' '.repeat(column)
+      const source = `- a\n  > q\n${indent}\`\`\`js\n${indent}c\n${indent}\`\`\`\n`
+      const actual = parseCursorPrototype(source)
+      const expected = parse(source)
+      expect(actual).toStrictEqual(expected)
+      expect(renderHtml(actual)).toBe(renderHtml(expected))
+    })
+
   it.each([
     '[^a]: x\n+\n- b\n\nsee[^a]\n',
     '[^long]: text\n+\n1. item\n',
