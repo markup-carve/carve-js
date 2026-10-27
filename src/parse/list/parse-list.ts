@@ -410,6 +410,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const followerLexer = nestedSubLexer(lexer, follower, attached.startLineIndex, attached.lineNumbers)
       children.push(...session.parseBlocks(followerLexer, 0))
     }
+    if (emptyQuotedFollower && children[0]?.type === 'block_quote' && children[0].children[0]?.type === 'block_quote') {
+      const outer = children[0]
+      attachBlockPos(lexer, outer.children[0]!, attached.startLineIndex, attached.startLineIndex + 1)
+      attachBlockPos(lexer, outer, itemStartLineIndex, lexer.pos)
+      if (outer.pos) {
+        const markerOffset = (lexer.lineAt(itemStartLineIndex) ?? '').indexOf('>')
+        const marker = lexer.sourceBoundary(itemStartLineIndex, markerOffset)
+        outer.pos.startColumn = marker.column
+        outer.pos.startOffset = marker.offset
+      }
+    }
     const stackedItem: ListItem = { type: 'list_item', children }
     attachBlockPos(lexer, stackedItem, itemStartLineIndex, lexer.pos)
     markItem(stackedItem, head)
