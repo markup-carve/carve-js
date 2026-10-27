@@ -862,12 +862,11 @@ function headingIdCarrierAttr(
  */
 function renderAbbreviationTemplate(ast: Document, opts: RenderOptions): string {
   if (!roundtripExport(opts)) return ''
-  const defs = new Map<string, string>()
+  const lines: string[] = []
   for (const node of ast.children) {
-    if (node.type === 'abbreviation_def') defs.set(node.abbr, node.expansion)
+    if (node.type === 'abbreviation_def') lines.push(`*[${node.abbr}]: ${node.expansion}`)
   }
-  if (defs.size === 0) return ''
-  const lines = [...defs].map(([abbr, expansion]) => `*[${abbr}]: ${expansion}`)
+  if (lines.length === 0) return ''
   return `<template ${carrier('abbreviations')}>${escapeHtml(lines.join('\n'))}</template>`
 }
 
