@@ -4,6 +4,18 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it.each([
+    '- - a\n [^f]: x\n',
+    '* * u\n%\n :\n',
+    '* * u\n%\n  :\n',
+    '* * u\n%\n    :\n',
+  ])('keeps a below-column follower with the innermost marker paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
   it('matches the physical-line ownership fixtures', () => {
     for (const name of ['container-ownership.json', 'container-ownership-boundaries.json']) {
       const path = new URL(`../spec/tests/fixtures/${name}`, import.meta.url)

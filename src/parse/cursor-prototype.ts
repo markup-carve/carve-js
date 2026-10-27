@@ -1652,8 +1652,12 @@ function mayFoldBelowColumnParagraph(cursor: Cursor,
   if (!frame.contentColumn || frame.fenceMarker || !last ||
       next.text.startsWith(' '.repeat(frame.contentColumn - 1)) ||
       last.number !== next.number - 1 || isBlankLine(next.text) ||
-      !(plainQuoteText(last.text) || plainPlusText(last.text) &&
-        frame.body[0]?.text[0] !== '|') || isBlockStart(next.text)) return false
+      isBlockStart(next.text)) return false
+  if (!plainQuoteText(last.text) &&
+      !(plainPlusText(last.text) && frame.body[0]?.text[0] !== '|')) {
+    const nestedMarker = frame.body.length === 1 ? listMarker(last.text) : undefined
+    if (!nestedMarker || !plainQuoteText(nestedMarker.content)) return false
+  }
   const raised = next.text.trimStart()
   if (raised.startsWith('>') || raised.startsWith('`') || raised.startsWith('~') ||
       raised.startsWith('{') || raised.startsWith('::')) return false
