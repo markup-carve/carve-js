@@ -1578,12 +1578,16 @@ function nestedFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
   return closedFenceEnd(cursor)
 }
 
-function nestedSimpleFirstPlain(cursor: Cursor, frame: ListCursorFrame,
+function nestedSimpleFirstBlock(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, depth: number): boolean {
-  if (depth !== 0 || stackLength !== 1 || frame.body.length !== 1 || frame.fenceMarker) return false
+  if (depth !== 0 || stackLength > 2 || frame.body.length !== 1 || frame.fenceMarker) return false
   const inner = listMarker(frame.body[0]!.text)
   const follower = cursor.peek()
-  if (inner?.content !== '+' || !follower || !plainQuoteText(follower.text)) return false
+  if (inner?.content !== '+' || !follower) return false
+  const prefix = stackLength === 2 && follower.text.startsWith(' '.repeat(frame.indent)) ?
+    frame.indent : 0
+  if (!(stackLength === 1 && plainQuoteText(follower.text) ||
+      stackLength === 2 && RE_BLOCKQUOTE.test(follower.text.slice(prefix)))) return false
   const after = cursor.peek(1)
   return !after || isBlankLine(after.text)
 }
@@ -2304,9 +2308,11 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const takeNestedFirstBlock = (frame: ListCursorFrame, line: SourceLine): boolean => {
     if (takeNestedFirstFence(frame)) return true
-    if (!nestedSimpleFirstPlain(cursor, frame, stack.length, depth)) return false
+    if (!nestedSimpleFirstBlock(cursor, frame, stack.length, depth)) return false
     cursor.take()
-    appendBody(frame, line, 0)
+    const prefix = stack.length === 2 && line.text.startsWith(' '.repeat(frame.indent)) ?
+      frame.indent : 0
+    appendBody(frame, line, prefix)
     updateListFrameEnds(stack, line, listSpan)
     return true
   }

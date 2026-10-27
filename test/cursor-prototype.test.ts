@@ -48,6 +48,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- a\n  - - +\n  > b\n',
+    '- a\n  - - +\n> b\n',
+  ])('passes a quote first block to a nested list item: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '> - > +\n# h\n',
     '> - a\n> - > +\n# h\n',
     '> +\n|= 2-col header | < |= header |\n',
