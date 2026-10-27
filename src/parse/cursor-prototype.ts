@@ -4348,6 +4348,28 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   return children
 }
 
+function hoistBareListFootnote(lines: SourceLine[], inline: CursorInline,
+  footnoteDefs: Record<string, BlockNode[]>, footnoteDefPos: Record<string, Position>):
+  SourceLine[] | undefined {
+  const marker = listMarker(lines[0]?.text ?? '')
+  const note = lines[1]
+  const follower = lines[2]
+  if (!marker?.ordered || marker.raw !== '' || marker.indent !== 0 ||
+      !note || !/^ {3}\[\^[^\]]+\]: +\S/.test(note.text) ||
+      lines.length !== 3 || !follower ||
+      !/^ {4,5}- +\S/.test(follower.text)) return undefined
+  const strip = (line: SourceLine): SourceLine => ({ ...line, text: line.text.slice(3),
+    start: line.start + 3, baseColumn: (line.baseColumn ?? 1) + 3 })
+  const owned = [strip(note)]
+  if (follower.text.startsWith('     ')) owned.push(strip(follower))
+  const nested = new Cursor(owned, undefined, ROOT_OWNER, lines)
+  const match = FOOTNOTE_DEF.exec(owned[0]!.text)
+  if (!match) return undefined
+  takeSimpleFootnote(nested, inline, owned[0]!, match, footnoteDefs, footnoteDefPos)
+  const consumed = new Set(owned.slice(0, nested.at).map((line) => line.number))
+  return lines.filter((line) => !consumed.has(line.number))
+}
+
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
@@ -4461,6 +4483,11 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
+  const ownedFootnoteLines = hoistBareListFootnote(lines, inline, footnoteDefs, footnoteDefPos)
+  const blockCursor = ownedFootnoteLines ? new Cursor(ownedFootnoteLines, source, ROOT_OWNER, lines) : cursor
+  if (ownedFootnoteLines && simpleRootListDefinitions) {
+    blockCursor.simpleRootListDefinitions = simpleRootListDefinitions
+  }
   let frontmatter: Document['frontmatter']
   if (source.startsWith('---')) {
     const lexer = lexerForCursor(cursor)
@@ -4469,7 +4496,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     cursor.at = lexer.pos
     frontmatter = lexer.frontmatter
   }
-  const children = parseBlocks(cursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos,
+  const children = parseBlocks(blockCursor, inline, definitionNodes, 0, true, footnoteDefs, footnoteDefPos,
     commentOpeners)
   const document: Document = { type: 'document', children, srcByteLength: rawByteLength }
   if (Object.keys(footnoteDefs).length) {

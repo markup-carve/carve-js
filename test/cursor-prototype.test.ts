@@ -2340,6 +2340,17 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['. d\n   [^n]: e\n     - a\n',
+    '. d\n   [^n]: e\n    - a\n'])
+  ('hoists a bounded footnote after a bare ordered item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a bounded bare-item footnote whose initial block is unsupported', () => {
+    expect(() => parseCursorPrototype('. d\n   [^n]: > q\n     - a\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])
