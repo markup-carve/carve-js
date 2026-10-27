@@ -3287,10 +3287,12 @@ function takeQuotedColonDefinitionTail(cursor: Cursor, body: SourceLine[]): Sour
   return owned
 }
 
-function takeIndentedAbbreviationQuoteTail(cursor: Cursor, body: SourceLine[],
+function takeQuotedListLiteralTail(cursor: Cursor, body: SourceLine[],
   listOwner: QuoteListOwner | undefined): SourceLine | undefined {
   const line = cursor.peek()
-  if (!listOwner || !indentedLiteralAbbreviation(body.at(-1)?.text ?? '') ||
+  const last = body.at(-1)?.text ?? ''
+  const literalDefinition = /^ +> {2,}\[[^\]]+\]: +\S/.test(last)
+  if (!listOwner || !(indentedLiteralAbbreviation(last) || literalDefinition) ||
       !line || !plainQuoteText(line.text) ||
       cursor.peek(1) && !isBlankLine(cursor.peek(1)!.text)) return undefined
   body.push(cursor.take())
@@ -3423,7 +3425,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       directParagraph = false
       continue
     }
-    const abbreviationTail = takeIndentedAbbreviationQuoteTail(cursor, body, listOwner)
+    const abbreviationTail = takeQuotedListLiteralTail(cursor, body, listOwner)
     if (abbreviationTail) {
       directParagraph = false
       last = abbreviationTail

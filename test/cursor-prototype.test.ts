@@ -2324,6 +2324,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> - > para\n>   >  [r]: /u\ntail\n\n[r][]\n',
+    '> * > para\n>   >  [x]: /v\nother\n'])
+  ('keeps an extra-indented definition literal in a quoted list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])
