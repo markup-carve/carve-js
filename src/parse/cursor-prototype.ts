@@ -3882,17 +3882,19 @@ function boundedListFence(cursor: Cursor, first: SourceLine, payload: SourceLine
   return indent <= cursor.owner.listRootPrefix
 }
 
-function boundedListDedentFence(cursor: Cursor, payload: SourceLine[], marker: string): boolean {
+function boundedListDedentFence(cursor: Cursor, first: SourceLine,
+  payload: SourceLine[], marker: string): boolean {
   if (cursor.owner.kind !== 'list' || cursor.owner.listRootPrefix === undefined ||
       payload.length === 0) return false
   const next = cursor.physicalLines[payload.at(-1)!.number]
   const closer = cursor.physicalLines[payload.at(-1)!.number + 1]
   if (!next || !closer || !plainQuoteText(next.text.trimStart())) return false
   const prefix = cursor.owner.listRootPrefix
+  const ownerPrefix = Math.max(prefix, (first.baseColumn ?? 1) - 1)
   const indent = /^ */.exec(next.text)![0].length
   const closerIndent = /^ */.exec(closer.text)![0].length
-  return indent < prefix && closerIndent === prefix &&
-    closesFence(closer.text.slice(prefix), marker) &&
+  return indent < prefix && (closerIndent === prefix || closerIndent === ownerPrefix) &&
+    closesFence(closer.text.slice(closerIndent), marker) &&
     (!cursor.physicalLines[closer.number] || cursor.physicalLines[closer.number]!.text === '')
 }
 
@@ -3924,7 +3926,7 @@ function takeFenceCloseAtCursor(cursor: Cursor, first: SourceLine, payload: Sour
   if (siblingBoundary) return siblingBoundary
   if (marker && (cursor.owner.allowUnclosedFence || boundedQuoteFence(cursor, first, payload) ||
       boundedListFence(cursor, first, payload, marker) ||
-      boundedListDedentFence(cursor, payload, marker) ||
+      boundedListDedentFence(cursor, first, payload, marker) ||
       boundedListEofFence(cursor, first, payload) ||
       boundedPostBreakEmptyFence(cursor, first, payload)) &&
       !payload.some((line) => closesFence(line.text.trimStart(), marker))) {

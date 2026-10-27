@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2639)
+    expect(exact).toBeGreaterThanOrEqual(2641)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
@@ -449,6 +449,13 @@ describe('experimental block cursor', () => {
 
   it('keeps a root definition marker with a tab separator as paragraph text', () => {
     const source = '::\tterm\n:  d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- a\n  - b\n    ```\n    p\nx\n    ```\n',
+    '- a\n  - b\n    - c\n      ```\n      p\nx\n      ```\n',
+  ])('ends a nested fence at its owner column after a root dedent: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
