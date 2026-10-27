@@ -655,6 +655,12 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype('[^a]: {empty}\n+\nmore\n')).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['[^a]: +\nflush\n\nsee[^a]\n',
+    '[^a]: +\nplain text\n'])
+  ('attaches a plain first block after a footnote marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['[^a]: intro\n%% c\n more\n\nsee[^a]\n',
     '[^a]: intro\n%% c\n  more\n\nsee[^a]\n'])
   ('keeps a comment and its indented follower in a footnote: %s', (source) => {

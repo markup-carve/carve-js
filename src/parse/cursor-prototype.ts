@@ -3606,6 +3606,27 @@ function takeFootnoteFirstFence(cursor: Cursor, inline: CursorInline, first: Sou
   return true
 }
 
+function takeFootnoteFirstPlain(cursor: Cursor, inline: CursorInline, first: SourceLine,
+  footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
+  footnoteDefPos: Record<string, Position> | undefined): boolean {
+  const follower = cursor.peek(1)
+  if (footnote[2] !== '+' || cursor.owner.kind !== 'root' || !footnoteDefs || !footnoteDefPos ||
+      !follower || !plainQuoteText(follower.text) ||
+      cursor.peek(2) && !isBlankLine(cursor.peek(2)!.text)) return false
+  cursor.take()
+  cursor.take()
+  const label = footnote[1]!
+  if (Object.hasOwn(footnoteDefs, label)) return true
+  const paragraph: Paragraph = { type: 'paragraph',
+    children: inline.inlines([{ line: follower, column: 1, text: follower.text }]),
+    pos: position(follower, follower) }
+  Object.defineProperty(footnoteDefs, label, { value: [paragraph],
+    enumerable: true, configurable: true, writable: true })
+  Object.defineProperty(footnoteDefPos, label, { value: position(first, follower),
+    enumerable: true, configurable: true, writable: true })
+  return true
+}
+
 function takeFootnoteAttachedBlock(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): boolean {
@@ -3658,6 +3679,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
   if (takeFootnoteFirstFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
+  if (takeFootnoteFirstPlain(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
   if (takeFootnoteAttachedBlock(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
