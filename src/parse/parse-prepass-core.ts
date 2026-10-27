@@ -1200,7 +1200,9 @@ export function attachBlockPos(
   // nothing - a `comment` at a description body's column started on the fourth
   // space rather than on its `%`. Containers keep the latitude and are excluded;
   // `paragraph` is in neither camp and is overwritten by its first inline below.
-  if (type !== undefined && !INDENT_LATITUDE.has(type)) {
+  // A definition list keeps the latitude in the spec checker, but its lead can
+  // only be an indent a list-hosted entry match trimmed, so it opens on `::`.
+  if (type !== undefined && (!INDENT_LATITUDE.has(type) || type === 'definition_list')) {
     const startLine = lexer.lineAt(startLineIndex) ?? ''
     const lead = leadingWhitespace(startLine)
     if (lead > 0) {
