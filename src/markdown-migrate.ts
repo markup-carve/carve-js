@@ -108,6 +108,10 @@ function wrapped(open: string, close: string, braced = open): (match: string, bo
 function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
   return (match, body, offset, full, spans = []) => {
     if (extenderLeadingBody(body)) return body
+    if (marker === '*') {
+      const nested = nestedHtmlStrongBody(body)
+      if (nested !== undefined) return nested
+    }
     // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
     let before = full[offset - 1] ?? ''
@@ -129,6 +133,20 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
     const after = full[offset + match.length] ?? ''
     return emphasisNeedsBraces(marker, body, before, after, extenderFollows(full, offset + match.length))
       ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+  }
+}
+
+/** Render an HTML strong wrapper with its already-converted Markdown children. */
+function nestedHtmlStrongBody(body: string): string | undefined {
+  if (!body.includes('*') || body.includes('\x00')) return undefined
+  try {
+    const blocks = parse(body).children
+    if (blocks.length !== 1 || blocks[0]?.type !== 'paragraph') return undefined
+    const children = blocks[0].children
+    if (!children.some(child => child.type === 'strong')) return undefined
+    return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'strong', children }] }] }).replace(/\n$/, '')
+  } catch {
+    return undefined
   }
 }
 

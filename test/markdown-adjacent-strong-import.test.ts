@@ -8,3 +8,12 @@ it.each([
   expect(markdownToCarve(source)).toBe(written)
   expect(carveToHtml(written)).toBe(rendered)
 })
+
+it.each([
+  ['<strong>**x**</strong>', '{*{*x*}*}', '<p><strong><strong>x</strong></strong></p>'],
+  ['<strong>**x** b</strong>', '{*{*x*} b*}', '<p><strong><strong>x</strong> b</strong></p>'],
+  ['<strong>a **x** b</strong>', '{*a {*x*} b*}', '<p><strong>a <strong>x</strong> b</strong></p>'],
+])('keeps nested strong spans inside imported HTML: %s', (source, written, rendered) => {
+  expect(markdownToCarve(source)).toBe(written)
+  expect(carveToHtml(written)).toBe(rendered)
+})
