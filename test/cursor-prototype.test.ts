@@ -426,7 +426,20 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2620)
+    expect(exact).toBeGreaterThanOrEqual(2624)
+  })
+
+  it('keeps a colon-owned unclosed fence after invisible lines', () => {
+    for (const prefix of ['', '%% note\n', '{.x}\n', '%% note\n{.x}\n', '{.x}\n%% note\n', '\n%% note\n']) {
+      for (const fence of ['```', '~~~', '``` js', '~~~~']) {
+        for (const payload of ['text\n', 'text\n\n', 'text\n::::\n', 'a\nb\n']) {
+          for (const ending of [':::\nafter\n', ':::\n', '::::\n:::\nafter\n']) {
+            const source = `::: note\n${prefix}${fence}\n${payload}${ending}`
+            expect(parseCursorPrototype(source), source).toStrictEqual(parse(source))
+          }
+        }
+      }
+    }
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {

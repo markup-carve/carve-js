@@ -3770,11 +3770,18 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
 }
 
 function boundedColonFence(body: SourceLine[], cursor: Cursor, run: number): SourceLine | undefined {
-  const first = body[0]
-  const opener = first && fenceOpen(first.text)
+  let openerIndex = 0
+  while (openerIndex < body.length) {
+    const text = body[openerIndex]!.text
+    if (text === '' || LINE_COMMENT.test(text) && !RE_COMMENT_BLOCK_ANY.test(text) ||
+        (text[0] === '{' || text[0] === ' ' || text[0] === '\t') &&
+        parseBlockAttributeRun(text)) openerIndex++
+    else break
+  }
+  const opener = body[openerIndex] && fenceOpen(body[openerIndex]!.text)
   const boundary = cursor.peek()
   if (!opener || !boundary || !new RegExp(`^:{${run}}[ \t]*$`).test(boundary.text)) return undefined
-  for (let i = 1; i < body.length; i++) {
+  for (let i = openerIndex + 1; i < body.length; i++) {
     if (closesFence(body[i]!.text, opener.marker)) return undefined
   }
   return boundary
