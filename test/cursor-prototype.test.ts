@@ -2330,6 +2330,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('hands a root list follower through stacked quote first blocks', () => {
+    const source = '- > > +\n> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unresolved block after the stacked quote first block', () => {
+    expect(() => parseCursorPrototype('- > > +\n> q\n\n  ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

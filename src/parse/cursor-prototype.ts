@@ -1880,6 +1880,11 @@ function nestedSimpleFirstBlock(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, depth: number): boolean {
   if (depth === 1 && stackLength === 1 && frame.body[0]?.text === '> +' &&
       cursor.peek()?.ownedFirstBlock) return true
+  if (depth === 0 && stackLength === 1 && frame.body.length === 1 &&
+      frame.body[0]?.text === '> > +' && RE_BLOCKQUOTE.test(cursor.peek()?.text ?? '')) {
+    const after = cursor.peek(1)
+    return !after || isBlankLine(after.text)
+  }
   if (depth !== 0 || stackLength > 2 || frame.body.length !== 1 || frame.fenceMarker) return false
   const inner = listMarker(frame.body[0]!.text)
   const follower = cursor.peek()
@@ -2771,7 +2776,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     cursor.take()
     const prefix = stack.length === 2 && line.text.startsWith(' '.repeat(frame.indent)) ?
       frame.indent : 0
-    const ownedFirstBlock = listMarker(frame.body[0]?.text ?? '')?.content === '> +'
+    const ownedFirstBlock = listMarker(frame.body[0]?.text ?? '')?.content === '> +' ||
+      frame.body[0]?.text === '> > +'
     appendBody(frame, ownedFirstBlock ? { ...line, ownedFirstBlock: true } : line, prefix)
     updateListFrameEnds(stack, line, listSpan)
     return true
@@ -3242,7 +3248,8 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
     (depth === 1 || depth === 2 && cursor.owner.parent?.kind === 'quote' ||
       cursor.peek(1)?.ownedFirstBlock === true)
   const nestedQuote = depth === 1 && cursor.owner.kind === 'quote'
-  if (depth === 0 || markerLineNested || nestedQuote) {
+  const ownedNested = cursor.owner.kind === 'quote' && cursor.peek(1)?.ownedFirstBlock === true
+  if (depth === 0 || markerLineNested || nestedQuote || ownedNested) {
     const fenceEnd = closedFenceEnd(cursor, 1)
     if (fenceEnd !== undefined &&
         (!cursor.peek(fenceEnd + 1) || isBlankLine(cursor.peek(fenceEnd + 1)!.text))) {
@@ -3256,11 +3263,12 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
         pos: position(first, last, 1, contentEndColumn(last)) }
     }
   }
-  if (!(depth === 0 || markerLineNested)) return undefined
+  if (!(depth === 0 || markerLineNested || ownedNested)) return undefined
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
   if (!follower || !(plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
-      isTableRow(follower.text) || markerLineNested && RE_BLOCKQUOTE.test(follower.text)) ||
+      isTableRow(follower.text) || (markerLineNested || ownedNested) &&
+      RE_BLOCKQUOTE.test(follower.text)) ||
       after && !isBlankLine(after.text)) return undefined
   cursor.take()
   cursor.take()
@@ -3316,6 +3324,14 @@ function quotedContinuationFollower(cursor: Cursor, body: SourceLine[]): boolean
       plainQuoteText(next)
 }
 
+function quotedOwnedBodyLine(line: SourceLine, body: SourceLine[], prefix: number,
+  text: string): SourceLine {
+  if (line.ownedFirstBlock && body.at(-1)?.text === '> +') return line
+  return { text, start: line.start + prefix, number: line.number,
+    baseColumn: (line.baseColumn ?? 1) + prefix,
+    ...(line.ownedFirstBlock ? { ownedFirstBlock: true } : {}) }
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
@@ -3358,8 +3374,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       quotedListRun = body.length === 0 && cursor.owner.kind === 'list' &&
         listMarker(text) !== undefined
       cursor.take()
-      body.push({ text, start: line.start + prefix,
-        number: line.number, baseColumn: (line.baseColumn ?? 1) + prefix })
+      body.push(quotedOwnedBodyLine(line, body, prefix, text))
       const plain: boolean = literalFence || plainQuoteText(text)
       const observed = observeQuoteListOwner(listOwner, cursor.owner, text, body.length === 1)
       listOwner = observed.owner
