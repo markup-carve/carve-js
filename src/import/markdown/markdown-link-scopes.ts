@@ -133,6 +133,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   let generation = 0
   let escapedTailThrough = -1
   let escapedPosition = -1
+  let lastAngle = -1
   for (let i = 0; i < source.length; i++) {
     if (source[i] === '\x00') {
       tokenAt.lastIndex = i
@@ -142,6 +143,7 @@ export function escapeInactiveMarkdownLinkBrackets(
     const opaqueThrough = opaque.get(i)
     if (opaqueThrough !== undefined) { i = opaqueThrough - 1; continue }
     if (source[i] === '\\') { escapedPosition = i + 1; i++; continue }
+    if (source[i] === '<') lastAngle = i
     if (source[i] === '[') {
       opens.push({ at: i, image: source[i - 1] === '!' && escapedPosition !== i - 1, generation })
       continue
@@ -180,6 +182,13 @@ export function escapeInactiveMarkdownLinkBrackets(
       onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = referenceEnd
+    } else if (lastAngle > opener.at) {
+      // A Carve angle run may include this bracket, but Markdown closes its
+      // label here. Keep a later `](...)` from activating the Carve opener.
+      const laterClose = source.indexOf(']', i + 1)
+      if (laterClose >= 0 && markdownInlineDestinationEnd(source, laterClose + 1) !== undefined) {
+        escaped.add(opener.at)
+      }
     }
   }
   const output: string[] = []
