@@ -2180,10 +2180,19 @@ function foldsListTildeRun(body: SourceLine[], follower: string,
 function mayFoldNestedListParagraph(cursor: Cursor,
   top: { indent: number; contentColumn?: number; ordered: boolean;
     delim?: '.' | ')'; bullet?: '-' | '*'; taskList: boolean;
-    body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number): boolean {
+    body: SourceLine[]; fenceMarker: string | undefined }, stackLength: number,
+  rootContentColumn: number | undefined): boolean {
   if (stackLength < 2 || top.fenceMarker) return false
   const follower = cursor.peek()!.text
   const last = top.body.at(-1)?.text ?? ''
+  if (cursor.owner.kind === 'quote' && top.body.length === 1 &&
+      rootContentColumn !== undefined && top.indent === rootContentColumn - 1 &&
+      top.body.at(-1)?.number === cursor.peek()!.number - 1 &&
+      !top.body.at(-1)?.lazyText && plainQuoteText(last) &&
+      top.contentColumn !== undefined &&
+      follower.startsWith(' '.repeat(top.contentColumn - 1)) &&
+      follower[top.contentColumn - 1] !== ' ' &&
+      fenceOpen(follower.trimStart()) !== null) return true
   const nonRowPipe = follower.trimStart().startsWith('|') &&
     !isTableRow(follower.trimStart()) && follower.startsWith(' ')
   if ((plainQuoteText(follower) || nonRowPipe ||
@@ -2300,7 +2309,7 @@ function mayFoldListParagraph(cursor: Cursor,
     delim?: '.' | ')'; bullet?: '-' | '*';
     taskList: boolean; fenceMarker: string | undefined; body: SourceLine[];
     lazyRootParagraph: boolean }, stack: readonly ListCursorFrame[], depth: number): boolean {
-  return mayFoldNestedListParagraph(cursor, frame, stack.length) ||
+  return mayFoldNestedListParagraph(cursor, frame, stack.length, stack[0]?.contentColumn) ||
     mayFoldRootListParagraph(cursor, frame, stack.length, depth) ||
     mayFoldMarkerLineNestedFollower(cursor, frame, stack.length, depth) ||
     mayFoldBelowColumnParagraph(cursor, frame, stack)

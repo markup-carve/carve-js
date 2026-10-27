@@ -426,7 +426,12 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2634)
+    expect(exact).toBeGreaterThanOrEqual(2635)
+  })
+
+  it('keeps a direct quoted child paragraph open at its content column', () => {
+    const source = '> - outer\n>   - head\n>     ```\n>     a\n>    ```\n>\n>   tail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('folds a fence-shaped line into a nested quoted paragraph', () => {
