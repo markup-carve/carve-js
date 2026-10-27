@@ -965,6 +965,16 @@ function lastPlacedDefinitionLine(blocks: BlockNode[], last: SourceLine,
   return placedEnd && placedEnd < last.number ? physicalLines[placedEnd - 1] ?? last : last
 }
 
+function attachedDefinitionFenceEnd(cursor: Cursor, plus: number): number | undefined {
+  if (cursor.lines[plus]?.text !== '+') return undefined
+  const marker = fenceOpen(cursor.lines[plus + 1]?.text ?? '')?.marker
+  if (!marker) return undefined
+  let close = plus + 2
+  while (cursor.lines[close] && !closesFence(cursor.lines[close]!.text, marker)) close++
+  return cursor.lines[close] && (!cursor.lines[close + 1] || cursor.lines[close + 1]!.text === '') ?
+    close + 1 : undefined
+}
+
 function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> | undefined): number {
   let end = cursor.at
   let mayWrapDefinition = false
@@ -1043,6 +1053,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       end++
       break
     }
+    const attachedFenceEnd = mayWrapDefinition ? attachedDefinitionFenceEnd(cursor, end) : undefined
+    if (attachedFenceEnd !== undefined) { end = attachedFenceEnd; break }
     if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1) {
       const structuralEnd = definitionStructuralFollowerEnd(cursor, end, definitionContentColumn)
       if (structuralEnd !== undefined) {
@@ -1226,6 +1238,14 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       last = definitionLast
     } else if (line.text === '+' && current?.definitions.length && cursor.at < end) {
       const follower = cursor.take()
+      if (fenceOpen(follower.text)) {
+        const body = [follower]
+        while (cursor.at < end) body.push(cursor.take())
+        current.definitions.at(-1)!.push(...parseBlocks(new Cursor(body, undefined,
+          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false))
+        last = body.at(-1)!
+        continue
+      }
       const attached: BlockNode[] = listMarker(follower.text) ?
         parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'definition'),
           cursor.physicalLines), inline, [], 1, false) : [{ type: 'paragraph',
