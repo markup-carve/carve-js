@@ -488,8 +488,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('keeps a backtick run at a sibling marker column in that sibling', () => {
-    const source = '- a\n  - b\n    ```\n    p\n  - c\n  ```\n\n  tail\n'
+  it.each(['```', '~~~'])('keeps a %s run at a sibling marker column in that sibling', (run) => {
+    const source = `- a\n  - b\n    ${run}\n    p\n  - c\n  ${run}\n\n  tail\n`
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

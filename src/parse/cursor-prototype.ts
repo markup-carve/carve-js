@@ -2219,7 +2219,7 @@ function mayFoldNestedListParagraph(cursor: Cursor,
       fenceOpen(follower.trimStart()) !== null) return true
   if (rootContentColumn !== undefined && top.indent === rootContentColumn - 1 &&
       top.body.length === 1 && top.body[0]!.number === cursor.peek()!.number - 1 &&
-      plainQuoteText(last) && /^ *`{3,}[ \t]*$/.test(follower) &&
+      plainQuoteText(last) && /^ *(?:`{3,}|~{3,})[ \t]*$/.test(follower) &&
       follower.length - follower.trimStart().length === top.indent) return true
   const nonRowPipe = follower.trimStart().startsWith('|') &&
     !isTableRow(follower.trimStart()) && follower.startsWith(' ')
