@@ -434,6 +434,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('uses a later quoted tilde closer before folding an open code span', () => {
+    for (const count of [1, 2, 3, 10]) {
+      const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)
+      expect(parseCursorPrototype(source), source).toStrictEqual(parse(source))
+    }
+    const separated = '> - outer\n>   - head\n> \n>      ```\n>      body\n>   ~~~\n> \n'
+    expect(() => parseCursorPrototype(separated)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('folds a fence-shaped line into a nested quoted paragraph', () => {
     const source = '> - outer\n>   - head\n>      ```\n>      a\n>   ```\n>\n>   tail\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

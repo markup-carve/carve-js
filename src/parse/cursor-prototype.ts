@@ -2158,6 +2158,27 @@ function entersOpenListCodeSpan(body: SourceLine[], follower: string,
   return false
 }
 
+function hasUnclosedListCodeSpan(body: SourceLine[]): boolean {
+  if (body.length < 2 || body.some((line) => line.text === '')) return false
+  const text = body.map((line) => line.text).join('\n')
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] !== '`') continue
+    const span = verbatimSpanEnd(text, at)
+    if (!span.closed) return true
+    at = span.end - 1
+  }
+  return false
+}
+
+function hasLaterIndentedTildeCloser(cursor: Cursor, indent: number, marker: string): boolean {
+  const prefix = ' '.repeat(indent)
+  for (let offset = 1; cursor.peek(offset); offset++) {
+    const text = cursor.peek(offset)!.text
+    if (text.startsWith(prefix) && closesFence(text.slice(indent), marker)) return true
+  }
+  return false
+}
+
 function attachedListFenceCaption(frame: ListCursorFrame, line: SourceLine,
   owner: ContainerOwner, stackLength: number, reachedPrefix: number | undefined): boolean {
   if (reachedPrefix !== undefined || stackLength !== 1 || owner.kind !== 'root' ||
@@ -2185,6 +2206,9 @@ function mayFoldNestedListParagraph(cursor: Cursor,
   if (stackLength < 2 || top.fenceMarker) return false
   const follower = cursor.peek()!.text
   const last = top.body.at(-1)?.text ?? ''
+  const tilde = cursor.owner.kind === 'quote' ? /^( +)(~{3,})[ \t]*$/.exec(follower) : null
+  if (tilde && hasUnclosedListCodeSpan(top.body) &&
+      !hasLaterIndentedTildeCloser(cursor, tilde[1]!.length, tilde[2]!)) return true
   if (cursor.owner.kind === 'quote' && top.body.length === 1 &&
       rootContentColumn !== undefined && top.indent === rootContentColumn - 1 &&
       top.body.at(-1)?.number === cursor.peek()!.number - 1 &&
