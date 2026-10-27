@@ -362,12 +362,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
           sourceColumn(firstBlockSource, 0) === 0) &&
       !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
-    const nestedContentOffset = itemSource.lastIndexOf(content)
-    const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) && isListMarkerLine(content) &&
-      /\+[ \t]*$/.test(content) && firstBlockSource !== undefined &&
+    let markerEnd = content.length - 1
+    while (content[markerEnd] === ' ' || content[markerEnd] === '\t') markerEnd--
+    const stackedMarker = content[markerEnd] === '+' &&
+      /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
+    const nestedContentOffset = stackedMarker ? itemSource.lastIndexOf(content) : -1
+    const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
+      firstBlockSource !== undefined &&
       indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset) &&
       (lexer.peek(1) === undefined || !isBlankLine(lexer.peek(1)!))
-    if ((firstBlockEligible || stackedOwnedFollower) && (/^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
+    if ((firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
