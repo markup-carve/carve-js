@@ -1388,6 +1388,21 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: t\n: - ```\ncode\n```\n',
+    ':: t\n: - - ```\n      ```\nx\n',
+    ':: t\n: - a\n    # H\ntail\n',
+    ':: t\n: - a\n      # H\ntail\n',
+    ':: t\n: - | a |\n    | - |\nx\n'])
+  ('keeps a structural list body inside a definition: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([':: t\n: - +\n    # H\ntail\n',
+    ':: t\n: - +\n  # H\n- next\n'])
+  ('declines an unresolved list continuation in a definition: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([':: term\n: A definition wrapped\nonto the next line.\n',
     ':: term\n: a\n  continuation\n'])
   ('keeps one plain wrapped definition paragraph: %s', (source) => {

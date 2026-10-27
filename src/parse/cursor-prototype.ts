@@ -1130,6 +1130,32 @@ function attachedDefinitionFenceEnd(cursor: Cursor, plus: number): number | unde
     close + 1 : undefined
 }
 
+function safeDefinitionListEnd(cursor: Cursor, end: number, body: string): boolean {
+  const listBody = listMarker(body)
+  if (!listBody) return false
+  const nestedBody = listMarker(listBody.content)
+  const previousText = cursor.lines[end - 1]?.text.trimStart() ?? ''
+  const safeStructure = fenceOpen(listBody.content) ||
+    nestedBody && fenceOpen(nestedBody.content) ||
+    !listBody.ordered && !listBody.content.trimStart().startsWith('+') &&
+    (RE_HEADING.test(previousText) ||
+      isTableRow(listBody.content) && isTableRow(previousText))
+  return Boolean(safeStructure) &&
+    !cursor.lines.slice(cursor.at, end + 1).some((line) => line.text.includes('{'))
+}
+
+function uncertainDefinitionListEnd(cursor: Cursor, end: number,
+  commentOpeners: ReadonlySet<number> | undefined, contentColumn: number,
+  endedOnStructural: boolean, body: string): boolean {
+  const line = cursor.lines[end]
+  return Boolean(line && line.text !== '' &&
+    !commentOpeners?.has(line.start) &&
+    !(endedOnStructural && !line.text.startsWith(' '.repeat(contentColumn - 1))) &&
+    !(cursor.owner.kind === 'root' && (rootLinkDef(line.text) ||
+      rootBlockAttributeAt(cursor, end) || startsRootBlockAfterDefinition(line.text))) &&
+    !safeDefinitionListEnd(cursor, end, body))
+}
+
 function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> | undefined): number {
   let end = cursor.at
   let mayWrapDefinition = false
@@ -1140,6 +1166,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let definitionContentColumn = 0
   let definitionContentPlain = false
   let definitionContentBlock = false
+  let definitionListText = ''
   let endedOnStructural = false
   let endedOnFenceBoundary = false
   while (end < cursor.lines.length) {
@@ -1155,12 +1182,14 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
         const body = /^: +[ \t]*([^ \t].*)$/.exec(text)![1]!
         definitionContentColumn = text.length - body.length + 1
         definitionContentPlain = !isBlockStart(body)
+        definitionListText = body
       }
       definitionContentBlock = definition && mayWrapDefinition && !definitionContentPlain
       mayWrapTerm = term
       mayTermPlus = term
       if (term) {
         termContentColumn = text.length - termMatch[1]!.length + 1
+        definitionListText = ''
       }
       end++
       continue
@@ -1258,13 +1287,8 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
     }
     break
   }
-  if (end === cursor.at || (cursor.lines[end] && cursor.lines[end]!.text !== '' &&
-      !commentOpeners?.has(cursor.lines[end]!.start) &&
-      !(endedOnStructural && !cursor.lines[end]!.text.startsWith(' '.repeat(
-        definitionContentColumn - 1))) &&
-      !(cursor.owner.kind === 'root' && (rootLinkDef(cursor.lines[end]!.text) ||
-        rootBlockAttributeAt(cursor, end) ||
-        startsRootBlockAfterDefinition(cursor.lines[end]!.text))))) {
+  if (end === cursor.at || uncertainDefinitionListEnd(cursor, end, commentOpeners,
+    definitionContentColumn, endedOnStructural, definitionListText)) {
     throw new UnsupportedCursorSyntax('definition list body')
   }
   let next = end
