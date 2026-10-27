@@ -922,6 +922,14 @@ function definitionBodyWrapText(text: string, column: number): boolean {
 }
 
 function boundedDefinitionParagraphEnd(lines: SourceLine[], from: number): number | undefined {
+  const codeRun = /^ +(`{3,})[ \t]*$/.exec(lines[from]?.text ?? '')?.[1]
+  if (codeRun) {
+    for (let at = from + 1; at < lines.length; at++) {
+      if (lines[at]!.text !== codeRun) continue
+      if (!lines[at + 1] || lines[at + 1]!.text === '') return at + 1
+      break
+    }
+  }
   let after = from + 1
   while (lines[after] && plainQuoteText(lines[after]!.text)) after++
   return !lines[after] || lines[after]!.text === '' ? after : undefined

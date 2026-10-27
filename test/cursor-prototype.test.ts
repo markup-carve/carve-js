@@ -5,6 +5,16 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    ':: t\n: d\n ```\nx\n```\n',
+    ':: t\n:  d\n ````\nx\n````\n\ntail\n',
+  ])('keeps a below-column code run inside the definition paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- a\n\t|x|\n+ c\n',
     '- a\n\t| x | y | Ω\n+ c\n',
   ])('distinguishes a tabbed table row from lazy pipe text: %s', (source) => {
