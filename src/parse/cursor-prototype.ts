@@ -3687,8 +3687,27 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
   const body: SourceLine[] = []
   const closer = new RegExp(`^:{${openerLength}}[ \t]*$`)
   const nestedClosers: RegExp[] = []
+  let opaqueFence: string | undefined
   while (cursor.peek()) {
     const text = cursor.peek()!.text
+    if (opaqueFence) {
+      const structuralCloser = (nestedClosers.at(-1) ?? closer).test(text) &&
+        !hasLaterFenceCloser(cursor, opaqueFence)
+      if (!structuralCloser) {
+        body.push(cursor.take())
+        if (closesFence(text, opaqueFence)) opaqueFence = undefined
+        continue
+      }
+      opaqueFence = undefined
+    }
+    const firstChar = text[0]
+    const openingFence = firstChar === '`' || firstChar === '~' ?
+      fenceOpen(text)?.marker ?? RE_RAW_FENCE.exec(text)?.[1] : undefined
+    if (openingFence) {
+      opaqueFence = openingFence
+      body.push(cursor.take())
+      continue
+    }
     if ((nestedClosers.at(-1) ?? closer).test(text)) {
       if (nestedClosers.length === 0) break
       nestedClosers.pop()
@@ -3697,12 +3716,14 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
     }
     const nested = COLON_OPEN.exec(text) ?? RE_DIV_OPEN.exec(text) ??
       RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_ADMONITION_OPEN.exec(text) ??
-      RE_LINE_BLOCK_OPEN.exec(text)
+      RE_LINE_BLOCK_OPEN.exec(text) ?? RE_QUOTE_BLOCK_OPEN.exec(text) ??
+      RE_HARDBREAKS_OPEN.exec(text)
     if (nested) {
       nestedClosers.push(new RegExp(`^:{${nested[1]!.length}}[ \t]*$`))
     } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
     body.push(cursor.take())
   }
+  if (opaqueFence) throw new UnsupportedCursorSyntax('unclosed colon literal ownership')
   if (!cursor.peek() && body.some((line) => RE_FENCE.test(line.text))) {
     throw new UnsupportedCursorSyntax('unclosed colon literal ownership')
   }

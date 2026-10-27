@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2611)
+    expect(exact).toBeGreaterThanOrEqual(2619)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
@@ -2098,11 +2098,24 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
-  it.each(['> :::: references\n> :::\n',
-    ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
-    '::: "Careful"\nBody\n:::\n',
+  it.each(['::: >\nCarol\n::: >\nBob\n:::\n:::\n',
+    '::: note\n:::: \\\nA\nB\n::::\n:::\n'])
+  ('keeps nested sigil fences with their colon owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['::: note\n```\n::: >\n```\n:::\n',
+    '::: note\n```\nx\n:::\n',
+    '::: note\n```=html\n```\n:::\n',
     '::: note\n```text\n::: tip\n```\nbody\n:::\nafter\n',
     '::: note\n```\n:::\n```\n:::\n'])
+  ('keeps code-fence text opaque to nested colon owners: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> :::: references\n> :::\n',
+    ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
+    '::: "Careful"\nBody\n:::\n'])
   ('declines specialized or nested containers until their ownership is migrated: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
