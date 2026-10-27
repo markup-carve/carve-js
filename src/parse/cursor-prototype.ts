@@ -203,6 +203,8 @@ function cursorContainerLabel(text: string): string {
 class CursorInline extends InlineParseSession {
   // Image promotion only changes paragraphs whose first inline node is an image.
   hasLeadingImage = false
+  footnoteDefs?: Record<string, BlockNode[]>
+  footnoteDefPos?: Record<string, Position>
   constructor(readonly linkDefinitions: Map<string, LinkDef>,
     readonly abbreviations: Map<string, string>) { super() }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
@@ -4524,6 +4526,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
   colonDepth = 0): BlockNode[] {
   if (depth >= MAX_NESTING_DEPTH) throw new UnsupportedCursorSyntax('container nesting limit')
+  if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list') {
+    footnoteDefs ??= inline.footnoteDefs
+    footnoteDefPos ??= inline.footnoteDefPos
+  }
   const children: BlockNode[] = []
   let pendingAttrs: Attrs | null = null
   const emit = (input: BlockNode) => {
@@ -4932,6 +4938,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
+  inline.footnoteDefs = footnoteDefs
+  inline.footnoteDefPos = footnoteDefPos
   const ownedFootnoteLines = hoistBareListFootnote(lines, inline, footnoteDefs, footnoteDefPos) ??
     (source.includes(' [^') ?
       hoistMarkerLineFootnote(lines, inline, footnoteDefs, footnoteDefPos) : undefined)

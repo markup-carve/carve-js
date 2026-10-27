@@ -549,6 +549,18 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '- > para\n  > [^f]: n\ntail\n',
+    '- > para\n  > [^f]: n\n  >   - sub\ntail[^f]\n',
+  ])('collects a footnote in a list-owned quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root quote footnote declined until its empty-span owner is migrated', () => {
+    expect(() => parseCursorPrototype('See [^a].\n\n> [^a]: note body\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('uses a later quoted tilde closer before folding an open code span', () => {
     for (const count of [1, 2, 3, 10]) {
       const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)
