@@ -9,7 +9,10 @@ describe('experimental block cursor', () => {
   it('declines shallow child markers after nested quote ownership changes', () => {
     for (const source of [
       '- a\n  > a\n- s\n> next\n - child\nplain\n',
+      '- a\n  > a\n- s\n> next\n * child\nplain\n',
+      '- a\n  > a\n- s\n> next\n 1. child\nplain\n',
       '- a\n  > - child\n- s\nplain\n  more\n - child\n',
+      '- a\n  > a\n- s\nplain\nplain\n  more\n - child\n',
     ]) {
       expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
     }
