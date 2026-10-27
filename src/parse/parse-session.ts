@@ -2357,7 +2357,7 @@ export class ParseSession extends InlineParseSession {
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
-      if (lines.length === 1 && RE_CAPTION.test(ln)) captionAtContentColumn = true
+      if (RE_CAPTION.test(ln)) captionAtContentColumn = true
       if (lines.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(lines[0]!) && RE_CAPTION.test(ln))
         imageCaptionSlot = true
       if (lines.length === 1 && startLineIndex === lexer.interruptRefusedSiblingPlusLine &&
