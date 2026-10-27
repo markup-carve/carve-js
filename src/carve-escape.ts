@@ -352,6 +352,8 @@ export function escapePlainCarveInlineSyntax(
 
   if (!bareHandled.includes(':')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_]):(?=[A-Za-z0-9+-][\w+-]*:)/g, out)
+    out = out.replace(/\\:([A-Za-z0-9+-][\w+-]*):/g, (match, name: string) =>
+      name.includes('+-') ? `\\:${name.replaceAll('+-', '+\\-')}:` : match)
   }
 
   return out
