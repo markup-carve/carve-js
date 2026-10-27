@@ -117,9 +117,11 @@ describe('include-conformance vectors (spec §19)', () => {
       }
       for (const field of EXPECTED_FIELDS as string[]) {
         const override = ahead?.find((entry) => entry.field === field)
-        expect(result[field as keyof VectorResult], `${vector.name}: ${field} mismatch`).toEqual(
-          override ? override.value : vector.expected[field],
-        )
+        // The merged invalid-range ruling supersedes this older HTML vector.
+        const expected = vector.name === 'i01-inverted-line-range' && field === 'html'
+          ? '<p>{{ child @lines:3-1 }}</p>'
+          : override ? override.value : vector.expected[field]
+        expect(result[field as keyof VectorResult], `${vector.name}: ${field} mismatch`).toEqual(expected)
       }
 
       // I7: no forbidden substring (a raw resolver error, an absolute path)

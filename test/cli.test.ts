@@ -490,10 +490,11 @@ describe('carve lint', () => {
     expect(t.out).toContain('broken-crossref')
   })
 
-  it('hides djot-shift constructs by default (valid Carve)', async () => {
+  it('hints on underscore emphasis by default while keeping other djot shifts quiet', async () => {
     const t = makeIO({ stdin: '_x_ and ~y~ and {=z=}' })
-    expect(await run(['lint'], t.io)).toBe(0)
-    expect(t.out).toBe('')
+    expect(await run(['lint'], t.io)).toBe(1)
+    expect(t.out).toContain('markdown-italic-underline')
+    expect(t.out).not.toContain('djot-')
   })
 
   it('flags djot-shift constructs with --from-djot', async () => {

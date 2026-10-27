@@ -1628,6 +1628,7 @@ export class ParseSession extends InlineParseSession {
     const quotePlusDepth = quotePrefixDepth(physicalPlus)
     const quotePlusColumn = sourceColumn(physicalPlus)
     const quoteFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
+    const afterFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) + 1]
     // Strip source prefixes, not `^>`: a hosted quote line sits behind the item's indentation.
     const quotePlusBody = sourceQuoteRest(physicalPlus, quotePlusDepth) ?? ''
     const quoteFollowerBody = sourceQuoteRest(quoteFollower ?? '', quotePlusDepth) ?? quoteFollower ?? ''
@@ -1648,6 +1649,9 @@ export class ParseSession extends InlineParseSession {
           quotePlusDecision.owner.column === quotePlusColumn && quotePlusDecision.reason === undefined) &&
         quoteFollower !== undefined &&
         !isBlankLine(quoteFollowerBody) &&
+        !(isContinuationMarker(quoteFollowerBody.trimStart()) && afterFollower !== undefined &&
+          !isBlankLine(afterFollower) && !/^\s*:{3,}\s*$/.test(afterFollower) &&
+          sourceColumn(afterFollower, quotePlusDepth) === quotePlusColumn) &&
         (quotePlusDepth === 0 || quotePrefixDepth(quoteFollower) >= quotePlusDepth ||
           quotePlusColumn > quoteBodyColumn(physicalPlus, quotePlusDepth)) &&
         sourceColumn(quoteFollower, quotePlusDepth) === quotePlusColumn)) return false

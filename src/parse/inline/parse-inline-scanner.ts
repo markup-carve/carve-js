@@ -37,6 +37,7 @@ import type {
   Tag,
   Text,
 } from '../../ast.js'
+import { DIRECTIVE_SCAN_RE, parseDirective } from '../../include-directive.js'
 
 const ordinaryAscii = new Uint8Array(128)
 for (let code = 48; code <= 57; code++) ordinaryAscii[code] = 1
@@ -1113,9 +1114,21 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   }
 
   // Core constructs that open on `c`, tried in their precedence order.
+  function scanInvalidLineRangeDirective(s: InlineScan): boolean {
+    const { text, i } = s
+    if (text.slice(i, i + 2) !== '{{') return false
+    DIRECTIVE_SCAN_RE.lastIndex = i
+    const found = DIRECTIVE_SCAN_RE.exec(text)
+    if (!found || found.index !== i || !parseDirective(found[0])?.invalidLines) return false
+    flush(s)
+    emit(s, { type: 'text', value: found[0] }, i, i + found[0].length)
+    s.i += found[0].length
+    return true
+  }
+
   function scanConstruct(s: InlineScan, c: string): boolean {
     switch (c) {
-      case '{': return scanDelimitedComment(s) || scanBraceFamily(s)
+      case '{': return scanInvalidLineRangeDirective(s) || scanDelimitedComment(s) || scanBraceFamily(s)
       case '`': return scanCodeSpan(s)
       case '$': return scanMath(s)
       case '!': return scanLiteralInline(s) || scanImage(s)
