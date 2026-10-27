@@ -3513,7 +3513,7 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
         pos: position(first, last, 1, contentEndColumn(last)) }
     }
   }
-  if (!(depth === 0 || markerLineNested || ownedNested)) return undefined
+  if (!(depth === 0 || markerLineNested || nestedQuote || ownedNested)) return undefined
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
   if (!follower || !(plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
