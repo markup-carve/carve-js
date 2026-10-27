@@ -57,19 +57,19 @@ describe('a lone image promotes only at its container content column', () => {
   // The near miss. A fix that suppressed on "the source line starts with a
   // space" would take these too, and they must keep promoting.
   it('still promotes a flush direct image', () => {
-    expect(published('![a](u)\n')).toEqual(['image'])
+    expect(published('![a](u)\n')).toEqual(['paragraph'])
   })
 
   it('still promotes a flush resolved reference image', () => {
     expect(published('![a][r]\n\n[r]: u\n')).toEqual([
-      'image',
+      'paragraph',
       'link_reference_definition',
     ])
   })
 
   it('still promotes a flush collapsed reference image', () => {
     expect(published('![a][]\n\n[a]: u\n')).toEqual([
-      'image',
+      'paragraph',
       'link_reference_definition',
     ])
   })
@@ -84,7 +84,7 @@ describe('a lone image promotes only at its container content column', () => {
     // carve-rs 5e58310a and carve-php 0d4c73b3 both promote the first and
     // decline the second; this is the shape the ruling produces, not carve-js's
     // own reading of it.
-    expect(inQuote('> ![a](u)\n')).toEqual(['image'])
+    expect(inQuote('> ![a](u)\n')).toEqual(['paragraph'])
     expect(inQuote('>  ![a](u)\n')).toEqual(['paragraph'])
   })
 
@@ -129,19 +129,16 @@ describe('a lone image promotes only at its container content column', () => {
     expect(carveToHtml('{#hero}\n ![a](u)\n')).toBe('<img src="u" alt="a" id="hero">')
   })
 
-  /**
-   * The stage guard. If this ever fails, `parse()` has started resolving and
-   * every assertion above stops being about the published exit specifically -
-   * at which point this file needs rewriting rather than re-baselining.
-   */
+  /** A resolved image is marked as a block image only on the published tree. */
   it('reads a stage that parse() does not settle', () => {
     expect(parse('![a][r]\n\n[r]: u\n').children.map((n) => n.type)).toEqual([
       'paragraph',
       'link_reference_definition',
     ])
     expect(published('![a][r]\n\n[r]: u\n')).toEqual([
-      'image',
+      'paragraph',
       'link_reference_definition',
     ])
+    expect(carveToAstJson('![a][r]\n\n[r]: u\n').children[0]).toMatchObject({ blockImage: true })
   })
 })
