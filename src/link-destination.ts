@@ -11,7 +11,7 @@ const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 function isDestinationWhitespace(char: string): boolean {
   const code = char.charCodeAt(0)
   return code <= 32
-    ? code === 32 || (code >= 9 && code <= 13)
+    ? code === 0 || code === 32 || (code >= 9 && code <= 13)
     : code > 127 && RE_DESTINATION_WHITESPACE.test(char)
 }
 
@@ -103,7 +103,7 @@ export function destinationSlotEnds(text: string, first = 0): Map<number, number
       const close = stops[i + 1]!
       stops[i] = text.charCodeAt(close) === 41 ? stops[close + 1]! : -1
       continue
-    } else if (code === 41 || code === 32 || (code >= 9 && code <= 13) ||
+    } else if (code === 41 || code === 0 || code === 32 || (code >= 9 && code <= 13) ||
       (code > 127 && RE_DESTINATION_WHITESPACE.test(text[i]!))) {
       stops[i] = i
       continue
