@@ -2569,18 +2569,25 @@ function takeListFrameDefinition(cursor: Cursor, inline: CursorInline,
   }
   const contentColumn = frame.contentColumn!
   if (!cursor.peek(1)?.text.startsWith(' '.repeat(contentColumn - 1) + ': ')) return undefined
+  const definitionLine = cursor.peek(1)!.text.slice(contentColumn - 1)
+  const definitionBody = /^: +[ \t]*([^ \t].*)$/.exec(definitionLine)
+  if (!definitionBody) return undefined
+  const definitionBodyPrefix = definitionLine.length - definitionBody[1]!.length
   const owned: SourceLine[] = []
   for (let offset = 0; cursor.peek(offset); offset++) {
     const part = cursor.peek(offset)!
     if (isBlankLine(part.text)) { owned.push({ ...part, text: '' }); continue }
     const claim = reachableListPrefix(part.text, contentColumn)
     if (claim === undefined) { owned.push(part); break }
-    if (offset > 1 && part.text.slice(claim).startsWith(' >')) break
-    owned.push({ ...part, text: part.text.slice(claim), start: part.start + claim,
+    const text = part.text.slice(claim)
+    const indent = /^ */.exec(text)![0].length
+    if (offset > 1 && indent < definitionBodyPrefix &&
+        (RE_BLOCKQUOTE.test(text.slice(indent)) || RE_HEADING.test(text.slice(indent)))) break
+    owned.push({ ...part, text, start: part.start + claim,
       baseColumn: (part.baseColumn ?? 1) + claim })
   }
-  if (owned.slice(2).some((part) => /^ {1,2}#/.test(part.text) ||
-      rootLinkDef(part.text.trimStart()) || /^: +/.test(part.text))) {
+  if (owned.slice(2).some((part) => rootLinkDef(part.text.trimStart()) ||
+      /^: +/.test(part.text))) {
     throw new UnsupportedCursorSyntax('list-owned definition boundary')
   }
   const nested = new Cursor(owned, undefined, childOwner(cursor.owner, 'definition'),

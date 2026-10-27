@@ -2459,16 +2459,23 @@ describe('experimental block cursor', () => {
     '- one\n\n  :: t\n  :  d\n',
     '- intro\n\n  :: term\n  :  definition\n      # H\n  tail\n',
     '- intro\n\n  :: term\n  :  definition\n   > quote\n',
+    '- intro\n  :: term\n  : d\n    # H\n',
+    '- intro\n  :: term\n  :  d\n    # H\n',
     '- intro\n  :: term\n  : body\n\n  text\n'])
   ('places a bounded definition list in its open item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- x\n  :: t\n  : d\n   [r]: /url\n\nSee [r][].\n',
-    '- item\n\n  :: Term\n  :  Def\n:  under\n',
-    '- intro\n  :: term\n  :  d\n    # H\n'])
+    '- item\n\n  :: Term\n  :  Def\n:  under\n'])
   ('declines an unresolved item definition boundary: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['\n', '\r\n', '\r'])
+  ('keeps definition-owner columns exact with %s line endings', (ending) => {
+    const source = ['- é😀', '  :: term', '  :  d', '    # H', ''].join(ending)
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- intro\n  %% c\n - next\n',
