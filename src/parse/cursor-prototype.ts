@@ -502,13 +502,18 @@ function quotedListFirstBlockFollower(cursor: Cursor, body: SourceLine[],
     (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
 }
 
+function indentedLiteralAbbreviation(text: string): boolean {
+  return text.startsWith(' ') && ABBR_DEF.test(text.trimStart())
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
   while (finalBlock.startsWith('>')) {
     finalBlock = finalBlock.slice(finalBlock[1] === ' ' ? 2 : 1).trimStart()
   }
-  if (finalBlock === '' || (isBlockStart(finalBlock) && !finalBlock.startsWith(':: ') &&
+  if (finalBlock === '' || (isBlockStart(finalBlock) && !indentedLiteralAbbreviation(innerLast) &&
+      !finalBlock.startsWith(':: ') &&
       !/^ (?:\[|\{)/.test(innerLast))) return false
   return !interruptsParagraph(follower, ROOT_OWNER)
 }
@@ -3214,7 +3219,8 @@ function observeQuoteListOwner(owner: QuoteListOwner | undefined, container: Con
 }
 
 function quotedParagraphText(text: string, plain: boolean): boolean {
-  return plain || nestedQuoteParagraphText(text) || /^ (?:\[|\{)/.test(text) ||
+  return plain || indentedLiteralAbbreviation(text) || nestedQuoteParagraphText(text) ||
+    /^ (?:\[|\{)/.test(text) ||
     /^: +/.test(text) || /^:: +[^ ]/.test(text)
 }
 
@@ -3258,6 +3264,32 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
       cursor.physicalLines),
       inline, definitionNodes, depth + 1, false),
     pos: position(first, follower, 1, contentEndColumn(follower)) }
+}
+
+function takeQuotedColonDefinitionTail(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!line || openColonRun(body, false) === undefined || !/^ +>/.test(line.text)) {
+    return undefined
+  }
+  const afterMarker = line.text.trimStart().replace(/^> ?/, '')
+  if (rootLinkDef(afterMarker) || FOOTNOTE_DEF.test(afterMarker) || ABBR_DEF.test(afterMarker)) {
+    throw new UnsupportedCursorSyntax('quoted colon definition owner')
+  }
+  const owned = cursor.take()
+  const prefix = /^ +/.exec(owned.text)![0].length
+  body.push({ text: owned.text.slice(prefix), start: owned.start + prefix,
+    number: owned.number, baseColumn: (owned.baseColumn ?? 1) + prefix, lazyText: true })
+  return owned
+}
+
+function takeIndentedAbbreviationQuoteTail(cursor: Cursor, body: SourceLine[],
+  listOwner: QuoteListOwner | undefined): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!listOwner || !indentedLiteralAbbreviation(body.at(-1)?.text ?? '') ||
+      !line || !plainQuoteText(line.text) ||
+      cursor.peek(1) && !isBlankLine(cursor.peek(1)!.text)) return undefined
+  body.push(cursor.take())
+  return line
 }
 
 function quotedContinuationFollower(cursor: Cursor, body: SourceLine[]): boolean {
@@ -3359,17 +3391,10 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       last = line
       continue
     }
-    if (openColonRun(body, false) !== undefined && /^ +>/.test(line.text)) {
-      const afterMarker = line.text.trimStart().replace(/^> ?/, '')
-      if (rootLinkDef(afterMarker) || FOOTNOTE_DEF.test(afterMarker) || ABBR_DEF.test(afterMarker)) {
-        throw new UnsupportedCursorSyntax('quoted colon definition owner')
-      }
-      const owned = cursor.take()
-      const prefix = /^ +/.exec(owned.text)![0].length
-      body.push({ text: owned.text.slice(prefix), start: owned.start + prefix,
-        number: owned.number, baseColumn: (owned.baseColumn ?? 1) + prefix, lazyText: true })
+    const colonTail = takeQuotedColonDefinitionTail(cursor, body)
+    if (colonTail) {
       directParagraph = false
-      last = owned
+      last = colonTail
       continue
     }
     if (!cursor.owner.inList && line.text === '+' && body.length > 0 &&
@@ -3382,6 +3407,12 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       last = attached
       plainParagraph = false
       directParagraph = false
+      continue
+    }
+    const abbreviationTail = takeIndentedAbbreviationQuoteTail(cursor, body, listOwner)
+    if (abbreviationTail) {
+      directParagraph = false
+      last = abbreviationTail
       continue
     }
     const lazyColon = /^ +: +/.test(line.text) && body.at(-1)?.text.startsWith(': ')

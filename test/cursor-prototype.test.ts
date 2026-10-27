@@ -2313,6 +2313,12 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['> - para\n>   *[A]: b\ntail\n',
+    '> - para\n>  *[X]: c\nother\n\nend\n'])
+  ('keeps an indented abbreviation literal in an open quoted list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])
