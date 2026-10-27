@@ -48,6 +48,17 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> +\n```\nx\n```\n',
+    '> > +\n```\nx\n```\n',
+    '> > +\n~~~\nx\n~~~\n',
+  ])('keeps a closed first-block fence with its quote owner: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- a\n\t- b\n\tc\n',
     '1. a\n \t* b\n\tc\n',
   ])('places a tab-indented nested list at its authored marker: %s', (source) => {

@@ -275,6 +275,16 @@ function closesFence(line: string, marker: string): boolean {
   return count >= marker.length && /^[ \t]*$/.test(line.slice(count))
 }
 
+function closedFenceEnd(cursor: Cursor, openerOffset = 0): number | undefined {
+  const opener = cursor.peek(openerOffset)
+  const marker = opener ? fenceOpen(opener.text)?.marker : undefined
+  if (!marker) return undefined
+  for (let offset = openerOffset + 1; cursor.peek(offset); offset++) {
+    if (closesFence(cursor.peek(offset)!.text, marker)) return offset
+  }
+  return undefined
+}
+
 function attributedListMarker(line: string) {
   let indent = 0
   while (line[indent] === ' ') indent++
@@ -1501,13 +1511,7 @@ function nestedTaskFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
   if (depth !== 0 || stackLength !== 1 || frame.body.length !== 1 || frame.fenceMarker) return undefined
   const inner = listMarker(frame.body[0]!.text)
   if (!inner || !/^\[[ xX\-_>/!?]\] \+$/.test(inner.content)) return undefined
-  const opener = cursor.peek()
-  const fence = opener ? fenceOpen(opener.text)?.marker : undefined
-  if (!fence) return undefined
-  for (let offset = 1; cursor.peek(offset); offset++) {
-    if (closesFence(cursor.peek(offset)!.text, fence)) return offset
-  }
-  return undefined
+  return closedFenceEnd(cursor)
 }
 
 function takeListFirstBlock(cursor: Cursor, marker: NonNullable<ReturnType<typeof listMarker>>,
@@ -2610,9 +2614,25 @@ function quoteNeedsLazyBoundary(follower: string | undefined, last: string | und
 function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
   definitionNodes: BlockNode[], depth: number): BlockQuote | undefined {
   const first = cursor.peek()!
+  if (first.text !== '> +') return undefined
   const markerLineNested = cursor.owner.kind === 'list' &&
     (depth === 1 || depth === 2 && cursor.owner.parent?.kind === 'quote')
-  if (first.text !== '> +' || !(depth === 0 || markerLineNested)) return undefined
+  const nestedQuote = depth === 1 && cursor.owner.kind === 'quote'
+  if (depth === 0 || markerLineNested || nestedQuote) {
+    const fenceEnd = closedFenceEnd(cursor, 1)
+    if (fenceEnd !== undefined &&
+        (!cursor.peek(fenceEnd + 1) || isBlankLine(cursor.peek(fenceEnd + 1)!.text))) {
+      cursor.take()
+      const body: SourceLine[] = []
+      for (let offset = 1; offset <= fenceEnd; offset++) body.push(cursor.take())
+      const last = body.at(-1)!
+      return { type: 'block_quote',
+        children: parseBlocks(new Cursor(body, undefined, childOwner(cursor.owner, 'quote'),
+          cursor.physicalLines), inline, definitionNodes, depth + 1, false),
+        pos: position(first, last, 1, contentEndColumn(last)) }
+    }
+  }
+  if (!(depth === 0 || markerLineNested)) return undefined
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
   if (!follower || !(plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
@@ -2640,6 +2660,19 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let listOwner: QuoteListOwner | undefined
   while (cursor.peek()) {
     const line = cursor.peek()!
+    if (depth === 0 && body.length === 1 && body[0]!.text === '> +') {
+      const fenceEnd = closedFenceEnd(cursor)
+      if (fenceEnd !== undefined &&
+          (!cursor.peek(fenceEnd + 1) || isBlankLine(cursor.peek(fenceEnd + 1)!.text))) {
+        for (let offset = 0; offset <= fenceEnd; offset++) {
+          last = cursor.take()
+          body.push(last)
+        }
+        directParagraph = false
+        plainParagraph = false
+        continue
+      }
+    }
     const degraded = takeDegradedQuoteLazyLine(cursor, first, body)
     if (degraded) {
       body.push(degraded)
