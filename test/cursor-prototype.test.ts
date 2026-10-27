@@ -5,6 +5,25 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    ':: t\n:  x\n%% c\nz\n',
+    ':: t\n:  x\n %% c\n  z\n',
+    ':: t\n:   x\n  %% c\n   z\n',
+    ':: t\n:  x\n %% c\n\nz\n',
+  ])('keeps a plain line after a description-owned comment at its owner: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
+    ':: t\n:  x\n%% c\n- item\n',
+    ':: t\n:  x\n%% c\n# H\n',
+  ])('declines an unresolved description comment follower: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     ':: t\n: a\n  ```\n  b\n y\n  ```\n',
     ':: t\n: a\n  ```\n  :::\n y\n  ```\n',
   ])('ends a definition fence at its first below-column line: %s', (source) => {

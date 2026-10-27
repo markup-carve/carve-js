@@ -881,7 +881,7 @@ function definitionStructuralOffset(text: string, column: number): number | unde
   if (!text.startsWith(' '.repeat(column - 1))) {
     const indent = /^ */.exec(text)![0].length
     const content = text.slice(indent)
-    return indent > 0 && indent < column - 1 && LINE_COMMENT.test(content) &&
+    return indent < column - 1 && LINE_COMMENT.test(content) &&
       !RE_COMMENT_BLOCK_ANY.test(content) ? indent : undefined
   }
   let offset = column - 1
@@ -1042,13 +1042,30 @@ function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: nu
   number | undefined {
   if (!definitionStructuralLine(cursor.lines[end]?.text ?? '', column)) return undefined
   let after = end + 1
-  while (cursor.lines[after] && definitionStructuralLine(cursor.lines[after]!.text, column)) after++
+  while (cursor.lines[after] && definitionStructuralLine(cursor.lines[after]!.text, column) &&
+      !cursor.lines[after]!.text.startsWith('%%')) after++
+  const commentTail = definitionCommentTailEnd(cursor, after - 1, column)
+  if (cursor.lines[end]!.text.startsWith('%%') && commentTail === undefined) return undefined
+  if (commentTail !== undefined) after = commentTail
   const opener = cursor.lines[end]!.text
   const offset = definitionStructuralOffset(opener, column)!
   if (offset > column - 1 && RE_BLOCKQUOTE.test(opener.slice(offset)) &&
       plainQuoteText(cursor.lines[after]?.text ?? '')) return undefined
   return !cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(column - 1)) ?
     after : undefined
+}
+
+function definitionCommentTailEnd(cursor: Cursor, commentAt: number,
+  column: number): number | undefined {
+  const comment = cursor.lines[commentAt]?.text ?? ''
+  const indent = /^ */.exec(comment)![0].length
+  if (indent >= column - 1 || !LINE_COMMENT.test(comment) ||
+      RE_COMMENT_BLOCK_ANY.test(comment)) return undefined
+  const tail = cursor.lines[commentAt + 1]?.text
+  const tailIndent = /^ */.exec(tail ?? '')![0].length
+  if (!tail || tailIndent > column - 1 || !plainQuoteText(tail.slice(tailIndent)) ||
+      cursor.lines[commentAt + 2] && cursor.lines[commentAt + 2]!.text !== '') return undefined
+  return commentAt + 2
 }
 
 function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: SourceLine,
@@ -1346,6 +1363,12 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           body.push({ text: block.text.slice(offset), start: block.start + offset,
             number: block.number, baseColumn: (block.baseColumn ?? 1) + offset })
           last = block
+        }
+        if (cursor.at < end && definitionCommentTailEnd(cursor, cursor.at - 1, column) === cursor.at + 1) {
+          last = cursor.take()
+          const offset = last.text.startsWith(' '.repeat(column - 1)) ? column - 1 : 0
+          body.push({ text: last.text.slice(offset), start: last.start + offset,
+            number: last.number, baseColumn: (last.baseColumn ?? 1) + offset })
         }
         const blocks = parseBlocks(new Cursor(body, undefined,
           childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false)
