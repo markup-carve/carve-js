@@ -4455,10 +4455,17 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
     kind === undefined && cursor.peek(1) === undefined
   const physicalFollower = cursor.physicalLines[first.number]?.text
   const emptyListContainer = cursor.owner.kind === 'list' && cursor.peek(1) === undefined &&
-    (physicalFollower === undefined || physicalFollower === '' || physicalFollower[0] !== ' ')
+    (physicalFollower === undefined || physicalFollower === '' ||
+      physicalFollower[0] !== ' ' && physicalFollower[0] !== '\t')
+  const singleBody = cursor.peek(1)
+  const physicalAfterBody = singleBody && cursor.physicalLines[singleBody.number]?.text
+  const boundedListContainer = cursor.owner.kind === 'list' && singleBody !== undefined &&
+    cursor.peek(2) === undefined && plainQuoteText(singleBody.text) &&
+    (physicalAfterBody === undefined || physicalAfterBody !== '' &&
+      physicalAfterBody[0] !== ' ' && physicalAfterBody[0] !== '\t')
   if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
       !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition &&
-      !emptyListContainer) ||
+      !emptyListContainer && !boundedListContainer) ||
       unsupportedReferencesColon(opener)) {
     throw new UnsupportedCursorSyntax('nested or specialized colon container')
   }
