@@ -514,6 +514,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  :::\n', '- a\n  :::\ny\n', '- ::: d\n+\ntail\n'])
+  ('keeps an empty list-owned colon container at a physical boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- :::\n  - x\n', '- ::: note\n  - para text\n'])
+  ('declines a colon container with a separately collected nested body: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('uses a later quoted tilde closer before folding an open code span', () => {
     for (const count of [1, 2, 3, 10]) {
       const source = '> - outer\n>   - head\n>     ```\n>     body\n' + '>   ~~~\n'.repeat(count)

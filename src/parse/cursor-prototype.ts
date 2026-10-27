@@ -4453,8 +4453,12 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   const figureGroup = isFigureGroupOpener(first.text, !!cursor.owner.inFigureGroup)
   const emptyBareDefinition = cursor.owner.kind === 'definition' &&
     kind === undefined && cursor.peek(1) === undefined
+  const physicalFollower = cursor.physicalLines[first.number]?.text
+  const emptyListContainer = cursor.owner.kind === 'list' && cursor.peek(1) === undefined &&
+    (physicalFollower === undefined || physicalFollower === '' || physicalFollower[0] !== ' ')
   if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
-      !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition) ||
+      !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition &&
+      !emptyListContainer) ||
       unsupportedReferencesColon(opener)) {
     throw new UnsupportedCursorSyntax('nested or specialized colon container')
   }
