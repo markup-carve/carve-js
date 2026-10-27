@@ -2931,6 +2931,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     next: SourceLine | undefined): boolean => {
     const finalFence = frame.fenceMarker && !next && cursor.owner.allowUnclosedFence &&
       cursor.owner.fenceBoundary
+    const nextMarker = next && listMarker(next.text)
+    const differentRootBullet = frame.fenceMarker && stack.length === 1 && count === 1 &&
+      cursor.owner.kind === 'root' && nextMarker?.indent === frame.indent &&
+      !frame.ordered && nextMarker.bullet !== frame.bullet
     let nestedRootFence = false
     if (!finalFence && stack.length === 1 && count === 1 && frame.body.length === 1 &&
         next && plainQuoteText(next.text) &&
@@ -2938,13 +2942,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       const nestedFirst = listMarker(frame.body[0]!.text)
       nestedRootFence = nestedFirst !== undefined && fenceOpen(nestedFirst.content) !== null
     }
-    if (!finalFence && !nestedRootFence) return false
+    if (!finalFence && !nestedRootFence && !differentRootBullet) return false
     for (let index = 0; index < count; index++) {
       const blank = cursor.take()
       appendBody(frame, blank, 0)
       updateListFrameEnds(stack, blank, listSpan)
     }
-    if (nestedRootFence) {
+    if (nestedRootFence || differentRootBullet) {
       frame.fenceMayDedent = true
       if (next) frame.fenceBoundary = next
     }

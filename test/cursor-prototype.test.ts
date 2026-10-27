@@ -44,6 +44,7 @@ describe('experimental block cursor', () => {
 
   it.each([
     '- ```\n  b\n\n- s\n',
+    '- a\n- ```\n  b\n\n* s\n',
     '- outer\n  - head\n\n    ```\n    a\n  ```\n\n- next\n',
   ])('keeps an open list fence blank through the sibling boundary: %s', (source) => {
     const actual = parseCursorPrototype(source)
@@ -425,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2609)
+    expect(exact).toBeGreaterThanOrEqual(2610)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
