@@ -2549,4 +2549,12 @@ describe('experimental block cursor', () => {
   ('declines a data-table follower with unresolved container ownership: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
+
+  it.each(['- a\n  - b\n+\npara\n',
+    '- a\n  - b\n+\n> q\n'])
+  ('hands a column-zero continuation marker to the outer list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

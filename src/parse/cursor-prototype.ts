@@ -2627,11 +2627,26 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     return 'continue'
   }
+  const continuationOwner = (line: SourceLine): ListCursorFrame => {
+    const top = stack.at(-1)!
+    if (line.text !== '+' || top.fenceMarker || stack.length < 2) return top
+    let owner: ListCursorFrame | undefined
+    for (let index = stack.length - 2; index >= 0; index--) {
+      if (stack[index]!.indent === 0) { owner = stack[index]; break }
+    }
+    if (!owner) return top
+    while (stack.at(-1) !== owner) {
+      const done = stack.pop()!
+      flush(done)
+      done.list.pos = listSpan(done.first, done.last, done.spanColumn)
+    }
+    return owner
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
     rejectAmbiguousNestedPlus(marker)
-    const top = stack.at(-1)!
+    const top = continuationOwner(line)
     rejectAmbiguousListBoundary(marker, top, line)
     const nestedPlus = nestedPlusAtLine(cursor, top, stack.length, line)
     if (nestedPlus) {
