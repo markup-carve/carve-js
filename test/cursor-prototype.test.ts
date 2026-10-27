@@ -2302,6 +2302,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- > > ```\n  > > x\n  > > ```\n    > y\n',
+    '- > > > ~~~\n  > > > x\n  > > > ~~~\n    > y\n'])
+  ('keeps an overindented quote marker literal after a nested quote fence: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines the unresolved root tail after a nested quote fence', () => {
+    expect(() => parseCursorPrototype('- > > ```\n  > > x\n  > > ```\n    > y\ntail\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

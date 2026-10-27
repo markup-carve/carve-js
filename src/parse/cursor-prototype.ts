@@ -626,6 +626,26 @@ function quoteOwnedListMarker(cursor: Cursor, line: SourceLine,
     { line: { ...line, lazyText: true }, prefix, rootLazy: false }
 }
 
+function quotedFencePayload(text: string, depth: number): string | undefined {
+  let rest = text
+  for (let level = 0; level < depth; level++) {
+    if (rest[0] !== '>') return undefined
+    rest = rest.slice(rest[1] === ' ' ? 2 : 1)
+  }
+  return rest
+}
+
+function quotedFenceOpener(text: string): { marker: string; depth: number } | undefined {
+  let depth = 0
+  let rest = text
+  while (rest[0] === '>') {
+    rest = rest.slice(rest[1] === ' ' ? 2 : 1)
+    depth++
+  }
+  const marker = fenceOpen(rest)?.marker
+  return marker ? { marker, depth } : undefined
+}
+
 function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
   closedQuoteFence = false, next?: string): number {
   const firstBlockText = body?.[0]?.text
@@ -708,6 +728,12 @@ function shiftedQuotedHeading(body: SourceLine[], line: SourceLine, prefix: numb
 function listContinuationClaim(frame: ListCursorFrame, line: SourceLine,
   bodyPrefix: number, reachedPrefix: number, next?: SourceLine):
   { line: SourceLine; prefix: number } {
+  if (frame.closedQuoteFence && frame.quoteFenceDepth > 1 &&
+      line.text.slice(reachedPrefix).startsWith(' ') &&
+      line.text.trimStart().startsWith('>') && next &&
+      plainQuoteText(next.text) && !next.text.startsWith(' ')) {
+    throw new UnsupportedCursorSyntax('nested quoted fence tail owner')
+  }
   const prefix = bodyPrefix === reachedPrefix && !frame.fenceMarker ?
     listContinuationPrefix(line.text, bodyPrefix, frame.body, frame.closedQuoteFence,
       next?.text) : bodyPrefix
@@ -2313,7 +2339,7 @@ type ListCursorFrame = { list: List; first: SourceLine; last: SourceLine; indent
   item?: ListItem; itemFirst?: SourceLine; contentColumn?: number;
   fenceMarker: string | undefined; fencePrefix: number | undefined; fenceMayDedent: boolean;
   fenceBoundary?: SourceLine;
-  quoteFenceMarker: string | undefined; closedQuoteFence: boolean;
+  quoteFenceMarker: string | undefined; quoteFenceDepth: number; closedQuoteFence: boolean;
   body: SourceLine[];
   blankBeforeInvisible: boolean; lazyRootParagraph: boolean;
   retainedBelowColumnComment: boolean; bareFenceAfterRetainedComment: boolean;
@@ -2490,7 +2516,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(marker.delim ? { delim: marker.delim } : {}),
       ...(marker.bullet ? { bullet: marker.bullet } : {}), fenceMarker: undefined,
       fencePrefix: undefined, fenceMayDedent: false,
-      quoteFenceMarker: undefined, closedQuoteFence: false,
+      quoteFenceMarker: undefined, quoteFenceDepth: 0, closedQuoteFence: false,
       body: [], blankBeforeInvisible: false,
       lazyRootParagraph: false, retainedBelowColumnComment: false,
       bareFenceAfterRetainedComment: false, possibleInvisibleTail: false }
@@ -2648,16 +2674,19 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(line.ownedFirstBlock ? { ownedFirstBlock: true } : {}),
       ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
     if (frame.quoteFenceMarker && text[0] === '>') {
-      const inner = text.slice(text[1] === ' ' ? 2 : 1)
-      if (closesFence(inner, frame.quoteFenceMarker)) {
+      const inner = quotedFencePayload(text, frame.quoteFenceDepth)
+      if (inner !== undefined && closesFence(inner, frame.quoteFenceMarker)) {
         frame.quoteFenceMarker = undefined
         frame.closedQuoteFence = true
       }
     } else if (frame.closedQuoteFence &&
         (text === '' || text[0] === '>' || isBlockStart(text))) {
       frame.closedQuoteFence = false
+      frame.quoteFenceDepth = 0
     } else if (frame.body.length === 1 && text[0] === '>') {
-      frame.quoteFenceMarker = fenceOpen(text.slice(text[1] === ' ' ? 2 : 1))?.marker
+      const opened = quotedFenceOpener(text)
+      frame.quoteFenceMarker = opened?.marker
+      frame.quoteFenceDepth = opened?.depth ?? 0
     }
     if (frame.fenceMarker) {
       if (closesFence(text, frame.fenceMarker)) {
@@ -2904,6 +2933,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       current.fenceMayDedent = false
       delete current.fenceBoundary
       current.quoteFenceMarker = undefined
+      current.quoteFenceDepth = 0
       current.closedQuoteFence = false
       appendBody(current, line, marker.width + taskWidth)
       const firstBlock = takeListFirstBlock(cursor, marker, taskWidth, depth, current.contentColumn)
