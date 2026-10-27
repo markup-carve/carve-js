@@ -2285,6 +2285,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['- a\n  - inner\n    %% c\n   code\ntail\n',
+    '- a\n  - inner\n    %% c\n    %% d\n   *em*\ntail\n',
+    '1. a\n   - inner\n  %% c\n    code\n  tail\n'])
+  ('keeps a parent paragraph after a nested comment: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

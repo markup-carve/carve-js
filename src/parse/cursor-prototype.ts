@@ -2153,6 +2153,9 @@ function mayFoldRootListParagraph(cursor: Cursor,
   const next = cursor.peek()!
   const first = frame.body[0]
   const last = frame.body.at(-1)
+  const retainedCommentParagraph = first !== undefined && frame.body.length === 1 &&
+    first.text.startsWith(' ') && first.number > 1 &&
+    LINE_COMMENT.test(cursor.physicalLines[first.number - 2]?.text.trimStart() ?? '')
   const literalAbbreviation = frame.body.length >= 2 && first !== undefined &&
     last !== undefined && plainQuoteText(first.text) && ABBR_DEF.test(last.text)
   if (!(depth === 0 || depth === 1 &&
@@ -2160,7 +2163,7 @@ function mayFoldRootListParagraph(cursor: Cursor,
         cursor.owner.kind === 'quote')) ||
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       last?.number !== next.number - 1 ||
-      !(frame.lazyRootParagraph || literalAbbreviation ||
+      !(frame.lazyRootParagraph || retainedCommentParagraph || literalAbbreviation ||
         ownsBelowColumnQuotedLiteral(frame.body, next.text) ||
         frame.body.length === 1 &&
         first !== undefined &&
