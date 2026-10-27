@@ -1192,7 +1192,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
  * and the script path (i.e. `process.argv.slice(2)`). Returns the intended
  * process exit code.
  */
-export async function run(argv: string[], io: CliIO): Promise<number> {
+async function runCommand(argv: string[], io: CliIO): Promise<number> {
   const [sub, ...rest] = argv
   if (sub === '--help' || sub === '-h') {
     io.write(HELP)
@@ -1220,6 +1220,20 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
   // format flag or an input file, handled by runRender over the full argv.
   return runRender(argv, io)
+}
+
+/** Keep an error's class stable while leaving the explanatory text free. */
+export async function run(argv: string[], io: CliIO): Promise<number> {
+  let firstError = true
+  return runCommand(argv, { ...io, writeErr: message => {
+    if (!firstError) { io.writeErr(message); return }
+    firstError = false
+    const category = /--from-json input|encoded AST exceeds/.test(message) ? 'ast-json-invalid'
+      : /\bcannot read\b/.test(message) ? 'input-unreadable'
+        : /Unknown option|unknown source format|--from .* is required/.test(message) ? 'usage' : null
+    io.writeErr(category === null ? message :
+      `carve[${category}]: ${message.replace(/^carve(?: [a-z]+)?: /, '')}`)
+  } })
 }
 
 /**

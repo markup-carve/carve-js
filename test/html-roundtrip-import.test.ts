@@ -344,11 +344,11 @@ describe('a carrier that cannot be honored is not one', () => {
     expect(carveToHtml(htmlToCarve(html, { mode: 'roundtrip' }).value)).toContain('<p>X</p>')
   })
 
-  it('lets the FIRST abbreviation template define an abbreviation', () => {
+  it('keeps every abbreviation template in source order', () => {
     expect(htmlToCarve(
       '<p>x</p><template data-carve-abbreviations>*[X]: first</template>'
       + '<template data-carve-abbreviations>*[X]: second</template>',
-    ).value).toBe('*[X]: first\n\nx\n')
+    ).value).toBe('*[X]: first\n\n*[X]: second\n\nx\n')
   })
 
   it('refuses a second destination hiding behind a label the document bound', () => {
