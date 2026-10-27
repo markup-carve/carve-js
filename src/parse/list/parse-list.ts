@@ -365,7 +365,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const nestedContentOffset = itemSource.lastIndexOf(content)
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) && isListMarkerLine(content) &&
       /\+[ \t]*$/.test(content) && firstBlockSource !== undefined &&
-      indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset)
+      indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset) &&
+      (lexer.peek(1) === undefined || !isBlankLine(lexer.peek(1)!))
     if ((firstBlockEligible || stackedOwnedFollower) && (/^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
@@ -396,7 +397,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
     const nestedContentOffset = itemSource.lastIndexOf(head.content)
     const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(itemSource, nestedContentOffset)
-    const ownFollower = !isStackedFirstBlockQuoteMarker(itemSource) && isListMarkerLine(head.content) && attached.lines.length > 0 &&
+    const ownFollower = !isStackedFirstBlockQuoteMarker(itemSource) && isListMarkerLine(head.content) && attached.lines.length === 1 &&
       ownContentColumn >= 0 &&
       indentColumns((lexer.rootLines ?? lexer.lines)[attached.lineNumbers[0]! - 1] ?? attached.lines[0]!) === ownContentColumn
     const emptyQuotedFollower = isStackedFirstBlockQuoteMarker(itemSource) &&
