@@ -2575,11 +2575,11 @@ function takeListFrameDefinition(cursor: Cursor, inline: CursorInline,
     if (isBlankLine(part.text)) { owned.push({ ...part, text: '' }); continue }
     const claim = reachableListPrefix(part.text, contentColumn)
     if (claim === undefined) { owned.push(part); break }
+    if (offset > 1 && part.text.slice(claim).startsWith(' >')) break
     owned.push({ ...part, text: part.text.slice(claim), start: part.start + claim,
       baseColumn: (part.baseColumn ?? 1) + claim })
   }
-  if (owned.slice(2).some((part) => part.text.startsWith(' >') ||
-      /^ {1,2}#/.test(part.text) ||
+  if (owned.slice(2).some((part) => /^ {1,2}#/.test(part.text) ||
       rootLinkDef(part.text.trimStart()) || /^: +/.test(part.text))) {
     throw new UnsupportedCursorSyntax('list-owned definition boundary')
   }
