@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2610)
+    expect(exact).toBeGreaterThanOrEqual(2611)
   })
 
   it('matches the public AST and HTML across its migrated block families', () => {
@@ -2001,6 +2001,7 @@ describe('experimental block cursor', () => {
     '::: figure\n![one](a.png)\n:::\n^ Figure #\n',
     '::: figure "Title"\nText\n:::\n',
     '::: figure [label]\nText\n:::\n',
+    '::: figure\n:::: figure\n![one](a.png)\n^ (a) One\n::::\n:::\n^ Figure #: Outer only\n',
   ])('keeps figure groups and demoted figure containers exact: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
@@ -2097,8 +2098,7 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
-  it.each(['::: figure\n::: figure\nNested\n:::\n:::\n',
-    '> :::: references\n> :::\n',
+  it.each(['> :::: references\n> :::\n',
     ':::\n*[HTML]: Hyper Text\n\nThe HTML spec.\n:::\n',
     '::: "Careful"\nBody\n:::\n',
     '::: note\n```text\n::: tip\n```\nbody\n:::\nafter\n',

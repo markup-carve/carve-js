@@ -3699,9 +3699,6 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       RE_VALID_ADMONITION_OPEN.exec(text) ?? RE_ADMONITION_OPEN.exec(text) ??
       RE_LINE_BLOCK_OPEN.exec(text)
     if (nested) {
-      if (nested[2] === 'figure' || nested[2] === 'list-table') {
-        throw new UnsupportedCursorSyntax('nested specialized colon container')
-      }
       nestedClosers.push(new RegExp(`^:{${nested[1]!.length}}[ \t]*$`))
     } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
     body.push(cursor.take())
