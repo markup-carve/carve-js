@@ -959,8 +959,16 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['> quoted\n+\n- item\n> - next\n'])
-  ('declines a quoted list return with unresolved item ownership: %s', (source) => {
+  it.each(['> quoted\n+\n- item\n> - next\n',
+    '> quoted\n+\n* item\n> * next\n',
+    '> quoted\r\n+\r\n1. item\r\n> 2. next\r\n'])
+  ('resumes an attached list with a same-kind quoted item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> quoted\n+\n- item\n> - next\nend\n',
+    '> quoted\n+\n- item\n> * next\n'])
+  ('declines an unresolved quoted list return: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 

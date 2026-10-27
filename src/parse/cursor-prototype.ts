@@ -34,7 +34,7 @@ export class UnsupportedCursorSyntax extends Error {}
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
   spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
   ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean;
-  quoteResume?: boolean }
+  quoteResume?: boolean; quotedAttachedSibling?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -3030,6 +3030,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       continue
     }
     if (marker) {
+      if (line.quotedAttachedSibling) top.list.tight = false
       const quoteOwned = quoteOwnedListMarker(cursor, line, marker, top)
       if (quoteOwned) {
         cursor.take()
@@ -3496,10 +3497,20 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   const plain = plainQuoteText(follower?.text ?? '')
   const quotedAfter = after?.text[0] === '>' && RE_BLOCKQUOTE.test(after.text) ?
     after.text.slice(after.text[1] === ' ' ? 2 : 1) : undefined
+  const attachedMarker = listMarker(follower?.text ?? '')
+  const resumedMarker = listMarker(quotedAfter ?? '')
+  const sameAttachedList = attachedMarker?.indent === 0 && resumedMarker?.indent === 0 &&
+    attachedMarker.ordered === resumedMarker.ordered &&
+    attachedMarker.bullet === resumedMarker.bullet && attachedMarker.delim === resumedMarker.delim &&
+    !('attrs' in attachedMarker) && !('attrs' in resumedMarker) &&
+    plainQuoteText(attachedMarker.content) && plainQuoteText(resumedMarker.content)
+  const afterResumedList = cursor.peek(3)?.text
+  const boundedResumedList = sameAttachedList &&
+    (!afterResumedList || isBlankLine(afterResumedList))
   return (quotedContinuationFollower(cursor, body) || plain) &&
     (!after || isBlankLine(after.text) ||
-      listMarker(follower?.text ?? '')?.indent === 0 && quotedAfter !== undefined &&
-        !listMarker(quotedAfter) ||
+      attachedMarker?.indent === 0 && quotedAfter !== undefined &&
+        (!resumedMarker || boundedResumedList) ||
       plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
 }
 
@@ -3568,8 +3579,8 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
         listMarker(text) !== undefined
       cursor.take()
       const owned = quotedOwnedBodyLine(line, body, prefix, text)
-      body.push(attachedListReturn && !listMarker(text) ?
-        { ...owned, quoteResume: true } : owned)
+      body.push(attachedListReturn ? { ...owned,
+        ...(listMarker(text) ? { quotedAttachedSibling: true } : { quoteResume: true }) } : owned)
       attachedListReturn = false
       if (body.length === 1) firstFence = fenceOpen(text) !== null
       const plain: boolean = literalFence || plainQuoteText(text)
