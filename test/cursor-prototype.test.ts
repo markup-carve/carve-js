@@ -70,6 +70,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '- > +\n```\nx\n```\n',
+    '* > +\n~~~\nx\n\ny\n~~~\n',
+  ])('keeps a closed first-block fence with a list-owned quote: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '[^a]: +\n```\nx\n```\n\nsee[^a]\n',
     '[^long]: +\n~~~\nx\n\ny\n~~~\n',
   ])('keeps a closed first-block fence with its footnote owner: %s', (source) => {
