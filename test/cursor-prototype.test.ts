@@ -2361,6 +2361,11 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it('declines a nested fence whose dedented marker changes physical owner', () => {
+    const source = '- outer\n  - head\n\n        ```\n        a\n   ```\n\n  tail\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

@@ -4400,6 +4400,25 @@ function hoistBareListFootnote(lines: SourceLine[], inline: CursorInline,
   return lines.filter((line) => !consumed.has(line.number))
 }
 
+function hasDedentedNestedFenceBoundary(lines: readonly SourceLine[]): boolean {
+  for (let index = 0; index + 6 < lines.length; index++) {
+    if (lines[index + 1]!.text !== '' || lines[index + 5]!.text !== '') continue
+    const marker = listMarker(lines[index]!.text)
+    if (!marker || marker.indent === 0) continue
+    const opener = lines[index + 2]!.text
+    const openIndent = /^ */.exec(opener)![0].length
+    const fence = fenceOpen(opener.slice(openIndent))?.marker
+    if (!fence || openIndent <= marker.width) continue
+    const close = lines[index + 4]!.text
+    const closeIndent = /^ */.exec(close)![0].length
+    const tail = lines[index + 6]!.text
+    if (closeIndent > marker.indent && closeIndent < marker.width &&
+        closesFence(close.slice(closeIndent), fence) &&
+        tail.startsWith(' '.repeat(marker.indent)) && plainQuoteText(tail.trimStart())) return true
+  }
+  return false
+}
+
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
@@ -4414,6 +4433,10 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
   source = replaceLoneSurrogates(source)
   const lines = scanLines(source)
+  if ((source.includes('```') || source.includes('~~~')) &&
+      hasDedentedNestedFenceBoundary(lines)) {
+    throw new UnsupportedCursorSyntax('dedented nested fence owner')
+  }
   if (strippedBom) for (let i = 0; i < lines.length; i++) {
     lines[i]!.start++
     if (i === 0) lines[i]!.baseColumn = 2
