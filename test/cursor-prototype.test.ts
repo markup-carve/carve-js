@@ -2431,6 +2431,21 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each(['- a\n  [^f]: x\n  more\n\nsee[^f]\n',
+    '- a\n  [^f]: t\ntail\n\nx[^f]\n',
+    '- body\n\n  [^g]: n\n   > z\n\nafter\n',
+    '- body\n\n  [^g]: n\n   - item\n\nafter\n'])
+  ('collects a bounded footnote from its open list frame: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n\n  [^f]: t\n  more\n',
+    '- a\n\n  [^f]: t\n- sibling\n',
+    '- x\n  [^g]: b\n   [r]: /url\n\nSee [r][] and [^g].\n'])
+  ('declines an unresolved list footnote boundary: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['- intro\n  %% c\n - next\n',
     '- - intro\n  %% c\n - next\n',
     '- > intro\n  %% c\n - next\n'])

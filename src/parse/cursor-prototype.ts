@@ -2518,8 +2518,57 @@ function markInvisibleListGap(frame: ListCursorFrame, attrsSeen: boolean, text: 
   if (attrsSeen || LINE_COMMENT.test(text)) frame.blankBeforeInvisible = true
 }
 
+function takeListFrameFootnote(cursor: Cursor, inline: CursorInline, frame: ListCursorFrame,
+  depth: number, stackLength: number, ordered: boolean, reachedPrefix: number,
+  footnoteDefs?: Record<string, BlockNode[]>,
+  footnoteDefPos?: Record<string, Position>): number | undefined {
+  const line = cursor.peek()!
+  if (!line.text.startsWith('[^', reachedPrefix) || depth !== 0 || stackLength !== 1 ||
+      ordered || frame.fenceMarker || frame.item?.children.length !== 0 ||
+      !footnoteDefs || !footnoteDefPos) return undefined
+  const footnote = FOOTNOTE_DEF.exec(line.text.slice(reachedPrefix))
+  if (!footnote || !plainQuoteText(footnote[2] ?? '') ||
+      !frame.body.every((part) => isBlankLine(part.text) || plainQuoteText(part.text))) {
+    return undefined
+  }
+  const contentColumn = frame.contentColumn!
+  const afterNote = cursor.peek(1)?.text ?? ''
+  const ambiguousGap = frame.body.some((part) => isBlankLine(part.text)) &&
+    (afterNote.startsWith(' '.repeat(contentColumn - 1)) &&
+      plainQuoteText(afterNote.slice(reachedPrefix)) ||
+      listMarker(afterNote)?.indent === frame.indent)
+  if (ambiguousGap) throw new UnsupportedCursorSyntax('list-owned footnote gap')
+  const owned: SourceLine[] = []
+  for (let offset = 0; cursor.peek(offset); offset++) {
+    const candidate = cursor.peek(offset)!
+    if (isBlankLine(candidate.text)) { owned.push({ ...candidate, text: '' }); continue }
+    const claim = reachableListPrefix(candidate.text, contentColumn)
+    if (claim === undefined) { owned.push(candidate); break }
+    owned.push({ ...candidate, text: candidate.text.slice(claim),
+      start: candidate.start + claim,
+      baseColumn: (candidate.baseColumn ?? 1) + claim })
+  }
+  if (owned.slice(1).some((part) => LINE_COMMENT.test(part.text.trimStart()) ||
+      rootLinkDef(part.text.trimStart()) || FOOTNOTE_DEF.test(part.text.trimStart()) ||
+      /^ [^ ]/.test(part.text) && plainQuoteText(part.text.trimStart()))) {
+    throw new UnsupportedCursorSyntax('list-owned footnote continuation')
+  }
+  const nested = new Cursor(owned, undefined, ROOT_OWNER, cursor.physicalLines)
+  takeSimpleFootnote(nested, inline, owned[0]!, footnote, footnoteDefs, footnoteDefPos)
+  return nested.at
+}
+
+function shiftedColonAtListFrame(cursor: Cursor, frame: ListCursorFrame,
+  stackLength: number, prefixLength: number): ReturnType<typeof shiftedClosedListColon> {
+  if (stackLength !== 1 || frame.fenceMarker || beginsOpenQuotedParagraph(frame.body)) {
+    return undefined
+  }
+  return shiftedClosedListColon(cursor, prefixLength)
+}
+
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
-  first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>): List {
+  first: SourceLine, firstMarker: NonNullable<ReturnType<typeof listMarker>>,
+  footnoteDefs?: Record<string, BlockNode[]>, footnoteDefPos?: Record<string, Position>): List {
   const listSpan = (from: SourceLine, to: SourceLine, column: number): Position =>
     position(from, to, depth === 0 && from.baseColumn === undefined &&
       column === firstMarker.indent + 1 ? 1 : column, contentEndColumn(to))
@@ -3116,15 +3165,21 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       releaseRootListFenceAtBoundary(top, cursor.owner, stack.length)
       break
     }
+    const footnoteLines = takeListFrameFootnote(cursor, inline, top, depth, stack.length,
+      firstMarker.ordered, reachedPrefix, footnoteDefs, footnoteDefPos)
+    if (footnoteLines !== undefined) {
+      flush(top)
+      for (let offset = 0; offset < footnoteLines; offset++) cursor.take()
+      top.lazyRootParagraph = false
+      continue
+    }
     const nestedDefinition = cursor.simpleRootListDefinitions?.get(line.number)
     if (nestedDefinition) {
       flush(top)
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, true, nestedDefinition)
       continue
     }
-    const shiftedColon = stack.length === 1 && !top.fenceMarker &&
-      !beginsOpenQuotedParagraph(top.body) ?
-      shiftedClosedListColon(cursor, prefix.length) : undefined
+    const shiftedColon = shiftedColonAtListFrame(cursor, top, stack.length, prefix.length)
     if (shiftedColon) {
       for (let count = 0; count < shiftedColon.count; count++) {
         const owned = cursor.take()
@@ -4354,7 +4409,8 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const firstMarker = listMarker(first.text)
     if (firstMarker) {
-      emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker))
+      emit(parseList(cursor, inline, definitionNodes, depth, first, firstMarker,
+        footnoteDefs, footnoteDefPos))
       continue
     }
     const sigilFence = matchSigilFence(first.text)
