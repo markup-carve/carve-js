@@ -1766,6 +1766,7 @@ function convertInline(
     return referenceLiteralText(part, decodeHtmlEntitiesRaw, protectedSpans).replace(/\r\n?|\n/g, ' ').replace(/[!-\/:-@\[-`{-~]/g, '\\$&')
   }).join('')
   line = protectMarkdownSourceEscapes(line, protect, terminal)
+  line = decodeLiteralFootnoteClosingEscapes(line, protectedSpans)
 
 
 
@@ -2636,6 +2637,51 @@ function protectMarkdownSourceEscapes(line: string, protect: (s: string, source?
     }
   }
   return escaped
+}
+
+/** Move an inactive footnote-shaped run's bracket escape to its opener. */
+function decodeLiteralFootnoteClosingEscapes(line: string, protectedSpans: readonly string[]): string {
+  if (!line.includes('[^') || !line.includes('\x00')) return line
+  const replacements: Array<{ start: number; end: number; value: string }> = []
+  const tokenAt = /\x00P(\d+)\x00/y
+  let opener = -1
+  let closing: { start: number; end: number } | undefined
+  const keepLiteral = (): void => {
+    if (opener < 0 || closing === undefined) return
+    replacements.push({ start: opener, end: opener + 1, value: '\\[' })
+    replacements.push({ start: closing.start, end: closing.end, value: ']' })
+  }
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\n') { keepLiteral(); opener = -1; closing = undefined; continue }
+    if (line[i] === '\x00') {
+      tokenAt.lastIndex = i
+      const token = tokenAt.exec(line)
+      if (token) {
+        if (opener >= 0 && closing === undefined && protectedSpans[Number(token[1])] === '\\]') {
+          closing = { start: i, end: tokenAt.lastIndex }
+        }
+        i = tokenAt.lastIndex - 1
+        continue
+      }
+    }
+    if (line[i] === '\\') { i++; continue }
+    if (line[i] === '[' && line[i + 1] === '^') {
+      keepLiteral()
+      opener = i
+      closing = undefined
+    } else if (line[i] === ']') {
+      opener = -1
+      closing = undefined
+    }
+  }
+  keepLiteral()
+  if (replacements.length === 0) return line
+  let result = '', at = 0
+  for (const replacement of replacements) {
+    result += line.slice(at, replacement.start) + replacement.value
+    at = replacement.end
+  }
+  return result + line.slice(at)
 }
 
 /**
