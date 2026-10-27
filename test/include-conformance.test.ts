@@ -84,7 +84,12 @@ const files = readdirSync(vectorDir)
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>()
+const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>([
+  ['i01-inverted-line-range', [
+    { field: 'warnings', value: [{ rule: 'include-lines-invalid' }], reason: 'invalid range warning follows I1' },
+    { field: 'dependencies', value: [{ id: 'child', resolved: true }], reason: 'the resolved target remains a dependency' },
+  ]],
+])
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
