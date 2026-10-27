@@ -107,7 +107,7 @@ describe('a nested link and an autolink stay nodes', () => {
         '[https://e.com](z)\n',
         'https://e.com\n',
       ],
-      ['[<mailto:a@b.c>](z)\n', '<p><a href="z">a@b.c</a></p>', '[a@b.c](z)\n', 'a@b.c\n'],
+      ['[<mailto:a@b.c>](z)\n', '<p><a href="z">mailto:a@b.c</a></p>', '[mailto:a@b.c](z)\n', 'mailto:a@b.c\n'],
       [
         '[a [r][d] b](z)\n\n[d]: /dd\n',
         '<p><a href="z">a r b</a></p>',
