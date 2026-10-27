@@ -932,7 +932,7 @@ function definitionTermWrapText(cursor: Cursor, text: string, contentColumn: num
 }
 
 function definitionBodyWrapText(text: string, column: number): boolean {
-  if (/^ {0,3}[A-Za-z0-9]/.test(text)) return true
+  if (/^ *[A-Za-z0-9]/.test(text)) return true
   const indent = /^ */.exec(text)![0].length
   if (indent === column - 1 && /^\+ [^+]/.test(text.slice(indent))) return true
   return indent > 0 && indent < column - 1 &&

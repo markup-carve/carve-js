@@ -1405,7 +1405,8 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(':: term\n: +\nflush\n')).toThrow(UnsupportedCursorSyntax)
     expect(parseCursorPrototype(':: term\n: a\nnext\nthird\n'))
       .toStrictEqual(parse(':: term\n: a\nnext\nthird\n'))
-    expect(() => parseCursorPrototype(':: term\n: a\n    indented\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(':: term\n: a\n    indented\n'))
+      .toStrictEqual(parse(':: term\n: a\n    indented\n'))
     expect(() => parseCursorPrototype(':: term\n: a\nnext\n:: later\n: b\n')).toThrow(UnsupportedCursorSyntax)
   })
 
@@ -2569,5 +2570,14 @@ describe('experimental block cursor', () => {
   it('declines an ambiguous continuation after a quote-owned plus item', () => {
     expect(() => parseCursorPrototype('> - +\n>   - b\n> +\n> para\n'))
       .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([':: term\n:  definition\n    more\ntail\n',
+    ':: t\n: a\n     more\n',
+    ':: t\n:   a\n      123\n'])
+  ('keeps an indented plain line in its definition paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
   })
 })
