@@ -151,6 +151,7 @@ import {
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
+  probeBlockAttributes,
   subLexer,
   taskMatch,
   toCodepointPositions,
@@ -165,6 +166,7 @@ import {
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
+import { isValidAttrPayload } from '../extension/attribute-parser.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
 // state its unmarked lines are judged against.
@@ -201,6 +203,25 @@ interface QuoteCollect {
   innerOpenFence: string | null
   innerParagraphOpen: boolean
   innerItemParagraph: boolean
+}
+
+/** How many lines at the start of `at` are block attribute lines. */
+function leadingAttributeRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
+  let count = 0
+  while (at(count)?.startsWith('{')) {
+    const lines: string[] = []
+    for (let line = at(count); line !== undefined && !isBlankLine(line); line = at(count + lines.length)) {
+      const closed = line.includes('}')
+      // The same early refusal `probeBlockAttributes` makes, so a stray `{` scans one line.
+      if (lines.length > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return count
+      lines.push(line)
+      if (closed) break
+    }
+    const run = probeBlockAttributes(subLexer(lines, options, 0))
+    if (run === null) break
+    count += run.count
+  }
+  return count
 }
 
 // Why a refused first-block `> +` could not take its follower, or null when
@@ -735,11 +756,11 @@ export class ParseSession extends InlineParseSession {
     }
     // A dangling pending run (no following block) is dropped -- or, when the
     // caller split one stream in two, handed on to the next half.
-    if (carry) carry.attrs = pending
+    if (carry && !carry.last) carry.attrs = pending
     // Nothing is emitted for a run that died here, so this is the only place the
-    // fact exists. `carry` streams are excluded: there the run lives on in the
-    // other half, and reporting it at the seam would name a loss that is not
-    // happening (carve-js#2240).
+    // fact exists. A half that hands its run on is excluded: there the run lives
+    // on in the next half, and reporting it at the seam would name a loss that
+    // is not happening (carve-js#2240). The `last` half is the stream's end.
     // Two conditions, and both are load-bearing. `hostBodyRoot` rather than
     // `hostBody` because the latter is propagated, so a `::: note` inside a
     // description body would claim to BE that body; `out.length === 0` because a
@@ -2108,11 +2129,15 @@ export class ParseSession extends InlineParseSession {
     }
     const origin = lexer.contiguousOrigin?.lexer ?? lexer
     const indexBase = lexer.contiguousOrigin?.start ?? 0
-    const fenced = fencedBlockEnd({
-      at: (offset) => {
-        const line = lexer.peek(offset)
-        return line === undefined ? undefined : transform ? transform(line) : line
-      },
+    const at = (offset: number): string | undefined => {
+      const line = lexer.peek(offset)
+      return line === undefined ? undefined : transform ? transform(line) : line
+    }
+    // A leading attribute run belongs to the block after it, so a fence there
+    // still makes its body opaque to the container's boundaries.
+    const attributeLines = leadingAttributeRun(at, lexer.parseOptions)
+    const fencedFromAttributes = fencedBlockEnd({
+      at: (offset) => at(offset + attributeLines),
       index: closerIndex(lexer),
       cache,
       preciseClosers: () => {
@@ -2129,8 +2154,9 @@ export class ParseSession extends InlineParseSession {
       end: lexer.lineCount,
       contentColumn,
       indexBase,
-      base: lexer.pos,
+      base: lexer.pos + attributeLines,
     })
+    const fenced = fencedFromAttributes === -1 ? -1 : fencedFromAttributes + attributeLines
     let take = 0
     if (fenced !== -1) {
       take = fenced + 1
@@ -2172,12 +2198,13 @@ export class ParseSession extends InlineParseSession {
     quoteLevels = Infinity,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, markerColumn, quoteLevels, true)
-    const first = attached.lines[0]
+    const attributeLines = leadingAttributeRun(offset => attached.lines[offset], lexer.parseOptions)
+    const first = attached.lines[attributeLines]
     const last = attached.lines.at(-1)
     const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
     const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
     // The opener alone is no closer of its own (`- +` / ``` / `- x`).
-    const closedCode = codeMarker !== null && attached.lines.length > 1 && last !== undefined &&
+    const closedCode = codeMarker !== null && attached.lines.length > attributeLines + 1 && last !== undefined &&
       fenceCloseRe(codeMarker).test(last)
     const colon = first === undefined ? null : colonBlockOpenerRun(first)
     const closedColon = colon !== null && isFigureGroupOpener(first!, lexer.inFigureGroup) &&

@@ -6,14 +6,16 @@ describe('table-cell break conversion reports', () => {
   for (const item of cases) {
     it(item.name, () => {
       const ast = fromAstJson(item.ast)
+      // The trailing fixture predates carve#3735; its break now has a source spelling.
+      const expected = item.name === 'trailing' ? [] : item.diagnostics
       for (const maximum of [0, 1, 100]) {
         const result = renderCarveWithConversionReport(ast, {}, maximum)
-        expect(result.report.totalDiagnostics).toBe(item.diagnostics.length)
-        expect(result.report.truncated).toBe(item.diagnostics.length > maximum)
-        expect(result.report.diagnostics.map(({ code, node, field }) => ({ code, node, ...(field ? { field } : {}) }))).toEqual(item.diagnostics.slice(0, maximum))
+        expect(result.report.totalDiagnostics).toBe(expected.length)
+        expect(result.report.truncated).toBe(expected.length > maximum)
+        expect(result.report.diagnostics.map(({ code, node, field }) => ({ code, node, ...(field ? { field } : {}) }))).toEqual(expected.slice(0, maximum))
         expect(result.value).toBeDefined()
         const breaks = (html: string): number => (html.match(/<br(?:\s*\/?)?>/g) ?? []).length
-        const lost = item.diagnostics.filter(d => d.node === 'hard_break').length
+        const lost = expected.filter(d => d.node === 'hard_break').length
         expect(breaks(renderHtml(ast)) - breaks(carveToHtml(result.value!))).toBe(lost)
       }
     })
