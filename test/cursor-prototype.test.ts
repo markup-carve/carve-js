@@ -1543,6 +1543,19 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['> - a\n>   [r]: /u\n\nsee [t][r]\n',
+    '> * a\n>   [r]: /u\n\nsee [t][r]\n'])
+  ('hoists a bounded definition adjacent to its quoted list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('does not hoist a reference-shaped line inside a quoted marker-line fence', () => {
+    const source = '> - ```\n>   [r]: /u\n\nsee [t][r]\n'
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(actual.children.some((node) => node.type === 'link_reference_definition')).toBe(false)
+  })
+
   it.each(['> 1. a\n> \n>    [r]: /target\n',
     '> 10. a\n> \n>     [r]: /target\n',
     '> * a\n> \n>   [r]: /target\n'])

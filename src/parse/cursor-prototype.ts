@@ -4890,6 +4890,17 @@ function recordMarkerLineLinkDefinition(cursor: Cursor, line: SourceLine,
   return definitions
 }
 
+function indexedQuoteListDefinition(line: SourceLine, previous: SourceLine | undefined,
+  next: SourceLine | undefined, prefix: string | undefined,
+  hasNestedMarker: boolean): ReturnType<typeof rootLinkDef> {
+  if (!hasNestedMarker || !prefix || !line.text.startsWith(prefix + '[')) return null
+  const prior = previous?.text ?? ''
+  const simpleItem = (prior.startsWith('> - ') || prior.startsWith('> * ')) &&
+    plainQuoteText(prior.slice(4)) && !isBlockStart(prior.slice(4))
+  if (prior !== '> ' && !(simpleItem && (!next || isBlankLine(next.text)))) return null
+  return rootLinkDef(line.text.slice(prefix.length))
+}
+
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
@@ -4985,10 +4996,9 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
         (!simpleRootListNested && cursor.lines[line.number - 2]?.text === '' ||
          boundedAdjacentDefinitionTail(cursor.lines, line.number, simpleRootListPrefix)) ?
         rootLinkDef(line.text.slice(simpleRootListPrefix.length).trimStart()) : null
-      const quoteListDefinition = mayHaveNestedListDefinition && simpleQuoteListPrefix &&
-        line.text.startsWith(simpleQuoteListPrefix + '[') &&
-        cursor.lines[line.number - 2]?.text === '> ' ?
-        rootLinkDef(line.text.slice(simpleQuoteListPrefix.length)) : null
+      const quoteListDefinition = indexedQuoteListDefinition(line,
+        cursor.lines[line.number - 2], cursor.lines[line.number], simpleQuoteListPrefix,
+        mayHaveNestedListDefinition)
       if (simpleListDefinition || quoteListDefinition) {
         simpleRootListDefinitions!.set(line.number, (simpleListDefinition ?? quoteListDefinition)!)
       }
