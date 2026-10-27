@@ -170,7 +170,9 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   })
   const keyValues = { ...attrs.keyValues }
   delete keyValues.table
-  const tableAttrs: Attrs = { ...attrs, keyValues }
+  const tableAttrs: Attrs = { ...attrs }
+  if (Object.keys(keyValues).length) tableAttrs.keyValues = keyValues
+  else delete tableAttrs.keyValues
   if (attrs.order) tableAttrs.order = attrs.order.filter(key => key !== 'table')
   const hasAttrs = tableAttrs.id !== undefined || (tableAttrs.classes?.length ?? 0) > 0 || Object.keys(keyValues).length > 0
   const table: Table = { type: 'table', sourceFormat: code.lang, rows,
