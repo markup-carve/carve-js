@@ -18,7 +18,7 @@
  * `replaceChildNode()` semantics.
  */
 
-import { codeLines, codeTerminated, rawSource } from './verbatim-payload.js'
+import { rawSource } from './verbatim-payload.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { numberFootnotes } from './heading/footnote-numbering.js'
 import type {
@@ -882,12 +882,11 @@ function extractTextContent(node: NodeLike): string {
       for (const child of (node['children'] as NodeLike[]) ?? []) text += extractTextContent(child)
       return prefix + text
     }
-    case 'code_block': {
-      const content = (node['content'] as string) ?? ''
-      const lines = codeLines(content)
-      if (lines.length > 1) return '```\n' + content + (codeTerminated(content) ? '' : '\n') + '```'
-      return '`' + (lines[0] ?? '') + '`'
-    }
+    case 'code_block':
+      return ((node['content'] as string) ?? '').replace(/\n$/, '')
+    case 'heading_ref':
+      return ((node['resolvedText'] as NodeLike[] | undefined) ?? []).map(extractTextContent).join('') ||
+        ((node['target'] as string) ?? '')
     case 'link':
     case 'autolink': {
       let text = ''
