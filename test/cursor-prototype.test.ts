@@ -6,6 +6,31 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it('keeps a code include with an invalid line range as one literal text node', () => {
+    const source = '{{ data/p2.csv @code:csv @lines:2-1 }}\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an overindented quoted colon opener with a lazy follower', () => {
+    expect(() => parseCursorPrototype('>  ::: |\nx\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('attaches the second plus after a footnote definition', () => {
+    const source = '[^a]: q\n+\n+\n\nref [^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['# h', '---'])('keeps a root block after an attached first-block item: %s', (last) => {
+    const source = `- +\n  x\n${last}\n`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a tab-owned first block before a root quote', () => {
+    expect(() => parseCursorPrototype('- +\n\tx\n>\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each([
     '- item\n\n    ````\n    a\n   ```\n\n  tail\n',
     '- item\n\n    ```\n    a\n   ```\n\n  tail\n',

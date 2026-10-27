@@ -13,6 +13,7 @@ import { MAX_NESTING_DEPTH, commentLineContent } from './block/parse-block-scan-
 import { markAboveContentColumn } from './block/paragraph-indent.js'
 import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, isBlockImageLine } from './block/parse-quote-core.js'
 import { trimNonNbsp } from '../trim-non-nbsp.js'
+import { parseDirective } from '../include-directive.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { inlineSource } from './inline/parse-inline-core.js'
@@ -1627,6 +1628,8 @@ function takeQuoteCaption(cursor: Cursor, inline: CursorInline, quote: BlockQuot
 
 function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
   const first = cursor.peek()!
+  const codeInclude = first.text.includes('{{') &&
+    parseDirective(first.text.trim())?.code !== undefined
   const parts: ContentLine[] = []
   let last = first
   let captionLead: InlineNode[] | undefined
@@ -1637,6 +1640,7 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
         !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
           listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
+    if (codeInclude && parts.length > 0) break
     if (imageCaptionSlot && RE_CAPTION.test(cursor.peek()!.text)) break
     if (parts.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(parts[0]!.line.text) &&
         RE_CAPTION.test(cursor.peek()!.text)) imageCaptionSlot = true
@@ -1664,7 +1668,12 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     parts.push({ line, column, text: line.text.slice(column - 1) })
     last = line
   }
-  const paragraph: Paragraph = { type: 'paragraph', children: captionLead ?? inline.inlines(parts),
+  const literalInclude = codeInclude && !/^\{\{ +["“]/.test(parts[0]!.text)
+  const literalText = literalInclude ? dropTrailingWhitespace(parts[0]!.text) : ''
+  const children: InlineNode[] = literalInclude ? [{ type: 'text', value: literalText,
+    pos: position(first, first, parts[0]!.column, parts[0]!.column + literalText.length) }] :
+    captionLead ?? inline.inlines(parts)
+  const paragraph: Paragraph = { type: 'paragraph', children,
     pos: position(first, last, parts[0]!.column, last.text.replace(/[ \t]+$/, '').length + 1) }
   if (parts[0]!.column > 1 && paragraph.children[0]?.type === 'image') {
     markAboveContentColumn(paragraph)
@@ -1845,6 +1854,9 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
   const follower = cursor.peek()
   if (!follower) return undefined
   const after = cursor.peek(1)
+  if (follower.text[0] === '\t' && after && RE_BLOCKQUOTE.test(after.text)) {
+    throw new UnsupportedCursorSyntax('tab-owned first block before quote')
+  }
   if (markerLineNested && cursor.owner.kind === 'list' &&
       (follower.baseColumn ?? 1) > 1 &&
       !RE_BLOCKQUOTE.test(follower.text)) return undefined
@@ -1854,7 +1866,8 @@ function takeSimpleFirstBlockListPlus(cursor: Cursor, marker: NonNullable<Return
       (markerLineNested && RE_BLOCKQUOTE.test(follower.text)) ||
       (atContentColumn && plainQuoteText(follower.text.slice(prefix.length))))) return undefined
   if (after && !isBlankLine(after.text) && listMarker(after.text)?.indent !== 0 &&
-      after.text !== '+' && !RE_BLOCKQUOTE.test(after.text)) return undefined
+      after.text !== '+' && !RE_BLOCKQUOTE.test(after.text) &&
+      !RE_HEADING.test(after.text) && !BREAK.test(after.text)) return undefined
   cursor.take()
   return [{ line: follower, prefix: atContentColumn ? prefix.length : 0 }]
 }
@@ -3677,8 +3690,17 @@ function isSingleDefinitionOnlyQuote(children: BlockNode[], body: SourceLine[]):
     (rootLinkDef(body[0]!.text) !== null || FOOTNOTE_DEF.test(body[0]!.text))
 }
 
+function rejectOverindentedQuotedColon(cursor: Cursor, first: SourceLine): void {
+  const follower = cursor.peek(1)?.text
+  if (/^>  +:{3,}/.test(first.text) && follower &&
+      !follower.startsWith('>') && !follower.startsWith(' ')) {
+    throw new UnsupportedCursorSyntax('overindented quoted colon owner')
+  }
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
+  rejectOverindentedQuotedColon(cursor, first)
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
   if (firstBlock) return firstBlock
   const body: SourceLine[] = []
@@ -4345,11 +4367,13 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   if (footnote[2] === '{empty}' && plusFollower) {
     throw new UnsupportedCursorSyntax('empty footnote continuation')
   }
+  const doublePlus = plusFollower?.text === '+' &&
+    (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text)) ? plusFollower : undefined
   const attached = plusFollower && plainQuoteText(plusFollower.text) &&
     (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text) ||
       isBlockStart(cursor.peek(2)!.text)) ? plusFollower : undefined
-  if (attached) { cursor.take(); cursor.take() }
-  const commentTail = !attached && !structural && bodyLength === 0 &&
+  if (attached || doublePlus) { cursor.take(); cursor.take() }
+  const commentTail = !attached && !doublePlus && !structural && bodyLength === 0 &&
     footnote[2] && plainQuoteText(footnote[2]) ? takeFootnoteCommentTail(cursor, inline) : undefined
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
@@ -4361,7 +4385,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     parts.push({ line, column: nextColumn, text: line.text.slice(nextColumn - 1) })
   }
   const bodyLast = structural?.source.at(-1) ?? continuation.at(-1) ?? first
-  const last = commentTail?.last ?? attached ?? bodyLast
+  const last = commentTail?.last ?? attached ?? doublePlus ?? bodyLast
   const initialBody: BlockNode[] = initialQuote ? parseBlocks(new Cursor([{
     text: footnote[2]!.slice(bodyIndent), start: first.start + column - 1,
     number: first.number, baseColumn: column }], undefined,
@@ -4375,9 +4399,10 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     })),
     pos: position(continuation[0]!, continuation.at(-1)!,
       footnotePlainColumn(continuation[0]!)) } : undefined
-  const attachedBody: Paragraph | undefined = attached ? { type: 'paragraph',
-    children: inline.inlines([{ line: attached, column: 1, text: attached.text }]),
-    pos: position(attached, attached) } : undefined
+  const attachedLine = attached ?? doublePlus
+  const attachedBody: Paragraph | undefined = attachedLine ? { type: 'paragraph',
+    children: inline.inlines([{ line: attachedLine, column: 1, text: attachedLine.text }]),
+    pos: position(attachedLine, attachedLine) } : undefined
   const structuralBody = structural ? parseBlocks(new Cursor(structural.body, undefined,
     childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) : []
   Object.defineProperty(footnoteDefs, label, { value: footnote[2] === '{empty}' ? [] :
