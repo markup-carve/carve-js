@@ -1424,6 +1424,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: term\n: +\nflush block\n',
+    ':: t\n:  +\nflush\n'])
+  ('attaches one plain first block in a definition: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([':: t\n: - ```\ncode\n```\n',
     ':: t\n: - - ```\n      ```\nx\n',
     ':: t\n: - a\n    # H\ntail\n',
@@ -1453,7 +1459,8 @@ describe('experimental block cursor', () => {
   })
 
   it('keeps a bounded plain wrap and declines ambiguous definition followers', () => {
-    expect(() => parseCursorPrototype(':: term\n: +\nflush\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype(':: term\n: +\nflush\n'))
+      .toStrictEqual(parse(':: term\n: +\nflush\n'))
     expect(parseCursorPrototype(':: term\n: a\nnext\nthird\n'))
       .toStrictEqual(parse(':: term\n: a\nnext\nthird\n'))
     expect(parseCursorPrototype(':: term\n: a\n    indented\n'))

@@ -1162,7 +1162,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
   let mayWrapTerm = false
   let termContentColumn = 0
   let mayTermPlus = false
-  let mayFirstBlockQuote = false
+  let mayFirstBlock = false
   let definitionContentColumn = 0
   let definitionContentPlain = false
   let definitionContentBlock = false
@@ -1177,7 +1177,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
     if (term || definition) {
       if (/[ \t]$/.test(text)) throw new UnsupportedCursorSyntax('definition list trailing whitespace')
       mayWrapDefinition = definition && !/^: +\+[ \t]*$/.test(text)
-      mayFirstBlockQuote = definition && /^: +\+[ \t]*$/.test(text)
+      mayFirstBlock = definition && /^: +\+[ \t]*$/.test(text)
       if (definition) {
         const body = /^: +[ \t]*([^ \t].*)$/.exec(text)![1]!
         definitionContentColumn = text.length - body.length + 1
@@ -1233,7 +1233,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       end += 2
       break
     }
-    if (mayFirstBlockQuote && RE_BLOCKQUOTE.test(text) &&
+    if (mayFirstBlock && (RE_BLOCKQUOTE.test(text) || plainQuoteText(text)) &&
         (!cursor.lines[end + 1] || cursor.lines[end + 1]!.text === '')) {
       end++
       break
@@ -1422,7 +1422,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         continue
       }
       if (definition[1] === '+' && cursor.at < end &&
-          RE_BLOCKQUOTE.test(cursor.peek()!.text)) {
+          (RE_BLOCKQUOTE.test(cursor.peek()!.text) || plainQuoteText(cursor.peek()!.text))) {
         const follower = cursor.take()
         current.definitions.push(parseBlocks(new Cursor([follower], undefined,
           childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], depth + 1, false))
