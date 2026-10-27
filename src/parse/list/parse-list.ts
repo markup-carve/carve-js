@@ -369,10 +369,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const stackedMarker = content[markerEnd] === '+' &&
       /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
     const nestedContentOffset = stackedMarker ? itemSource.lastIndexOf(content) : -1
+    // A later blank can loosen the item, but cannot change this block's owner.
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
       firstBlockSource !== undefined &&
-      indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset) &&
-      (lexer.peek(1) === undefined || !isBlankLine(lexer.peek(1)!))
+      indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset)
     if ((firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
@@ -428,6 +428,25 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         outer.pos.startOffset = marker.offset
       }
     }
+    let loose = false
+    if (ownContentColumn >= 0) {
+      while (true) {
+        let gap = 0
+        while (isBlankLine(lexer.peek(gap))) gap++
+        const next = lexer.peek(gap)
+        if (next === undefined || indentColumns(next) < ownContentColumn ||
+            isSiblingMarker(shape, next)) break
+        for (let index = 0; index < gap; index++) lexer.consume()
+        const reached = session.collectAttachedListBlock(lexer, isItemAttachBoundary,
+          shape.baseIndent, false, ownContentColumn, itemQuoteDepth)
+        if (reached.lines.length === 0) break
+        const body = reached.lines.map(line => sliceColumns(line, ownContentColumn, true))
+        const bodyLexer = nestedSubLexer(lexer, body, reached.startLineIndex, reached.lineNumbers)
+        const laterBlocks = session.parseBlocks(bodyLexer, 0)
+        children.push(...laterBlocks)
+        if (gap > 0 && laterBlocks.some(block => block.type === 'paragraph')) loose = true
+      }
+    }
     const stackedItem: ListItem = { type: 'list_item', children }
     attachBlockPos(lexer, stackedItem, itemStartLineIndex, lexer.pos)
     markItem(stackedItem, head)
@@ -435,7 +454,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     while (isBlankLine(lexer.peek(blanks))) blanks++
     const sibling = lexer.peek(blanks)
     if (blanks === 0 || sibling === undefined || !isSiblingMarker(shape, sibling)) {
-      return { kind: 'item', item: stackedItem, next: 'continue' }
+      return { kind: 'item', item: stackedItem, next: loose ? 'loose' : 'continue' }
     }
     for (let k = 0; k < blanks; k++) lexer.consume()
     return { kind: 'item', item: stackedItem, next: blanks >= 3 ? 'end' : 'loose' }
