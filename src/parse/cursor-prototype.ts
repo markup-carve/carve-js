@@ -3030,9 +3030,34 @@ function simpleFootnoteStructuralLines(cursor: Cursor, nextIndex: number):
   return !after || isBlankLine(after.text) ? { source, body } : undefined
 }
 
+function takeFootnoteFirstFence(cursor: Cursor, inline: CursorInline, first: SourceLine,
+  footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
+  footnoteDefPos: Record<string, Position> | undefined): boolean {
+  if (footnote[2] !== '+' || cursor.owner.kind !== 'root' || !footnoteDefs || !footnoteDefPos) {
+    return false
+  }
+  const end = closedFenceEnd(cursor, 1)
+  if (end === undefined || cursor.peek(end + 1) && !isBlankLine(cursor.peek(end + 1)!.text)) {
+    return false
+  }
+  cursor.take()
+  const body: SourceLine[] = []
+  for (let offset = 1; offset <= end; offset++) body.push(cursor.take())
+  const label = footnote[1]!
+  if (Object.hasOwn(footnoteDefs, label)) return true
+  const blocks = parseBlocks(new Cursor(body, undefined,
+    childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false)
+  Object.defineProperty(footnoteDefs, label, { value: blocks,
+    enumerable: true, configurable: true, writable: true })
+  Object.defineProperty(footnoteDefPos, label, { value: position(first, body.at(-1)!),
+    enumerable: true, configurable: true, writable: true })
+  return true
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
+  if (takeFootnoteFirstFence(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)) return
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
