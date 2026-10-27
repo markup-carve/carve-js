@@ -4468,9 +4468,14 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   const emptyBareDefinition = cursor.owner.kind === 'definition' &&
     kind === undefined && cursor.peek(1) === undefined
   const physicalFollower = cursor.physicalLines[first.number]?.text
+  const belowListColumnParagraph = physicalFollower !== undefined &&
+    first.baseColumn !== undefined && /^ +\S/.test(physicalFollower) &&
+    /^ */.exec(physicalFollower)![0].length < first.baseColumn - 1 &&
+    plainQuoteText(physicalFollower.trimStart())
   const emptyListContainer = cursor.owner.kind === 'list' && cursor.peek(1) === undefined &&
     (physicalFollower === undefined || physicalFollower === '' ||
-      physicalFollower[0] !== ' ' && physicalFollower[0] !== '\t')
+      physicalFollower[0] !== ' ' && physicalFollower[0] !== '\t' ||
+      belowListColumnParagraph)
   const boundedListContainer = boundedListColonBody(cursor)
   if ((!atDocumentLevel && colonDepth === 0 && cursor.owner.kind !== 'quote' &&
       !simpleClosedListColon(cursor, opener[1]!, kind) && !emptyBareDefinition &&
