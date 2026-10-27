@@ -844,6 +844,7 @@ export {
   joinFragment,
   parseCellMarkers,
   readCellAttributeBlock,
+  scanCellMarkerRun,
   trimCellPadding,
 } from './table/parse-table-cells.js'
 export type { FragmentPlace, RawCell } from './table/parse-table-cells.js'

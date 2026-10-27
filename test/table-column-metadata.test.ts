@@ -89,6 +89,64 @@ describe('table column metadata', () => {
     expect(rules('{aligns="left"}\n|=> H |\n')).toContain('table-column-overlap')
   })
 
+  // Each cell is reported exactly when the missing space is what leaves it
+  // literal, which the rendered cell shows.
+  const padding = (source: string) =>
+    lintCarve(source).filter((w) => w.rule === 'table-marker-run-padding')
+  it.each([
+    ['=> a', '<th scope="col" style="text-align: right;">a</th>'],
+    ['=< a', '<th scope="col" style="text-align: left;">a</th>'],
+    ['=~ a', '<th scope="col" style="text-align: center;">a</th>'],
+    ['=<^ a', '<th scope="col" style="text-align: left; vertical-align: top;">a</th>'],
+    ['=?^ a', '<th scope="col" style="vertical-align: top;">a</th>'],
+    ['=>{.x} a', '<th scope="col" class="x" style="text-align: right;">a</th>'],
+    ['={.x} a', '<th scope="col" class="x">a</th>'],
+    ['= a', '<th scope="col">a</th>'],
+    ['> a', '<td style="text-align: right;">a</td>'],
+    // Literal for an invalid axis, not for a missing space.
+    ['=^ a', '<td>=^ a</td>'],
+    ['=<< a', '<td>=&lt;&lt; a</td>'],
+    ['^a', '<td>^a</td>'],
+    ['{.x} a', '<td class="x">a</td>'],
+    [' {.x}a', '<td>{.x}a</td>'],
+    ['{.x 1bad}a', '<td>{.x 1bad}a</td>'],
+  ])('does not report the padded or unrepairable cell |%s |', (cell, html) => {
+    const source = `|${cell} |\n`
+    expect(carveToHtml(source)).toContain(html)
+    expect(padding(source)).toEqual([])
+  })
+
+  it.each([
+    ['=>a', 2, 1, 'alignment run ">"'],
+    ['=<^a', 2, 2, 'alignment run "<^"'],
+    ['=>{.x}a', 2, 1, 'alignment run ">"'],
+    ['>\ta', 1, 1, 'alignment run ">"'],
+    ['=a', 1, 1, 'kind marker'],
+    ['=\ta', 1, 1, 'kind marker'],
+    ['={.x}a', 1, 5, 'kind marker'],
+    ['{.x}a', 1, 4, 'attribute block "{.x}"'],
+    ['{x y z}a', 1, 7, 'attribute block "{x y z}"'],
+    ['{.x}\ta', 1, 4, 'attribute block "{.x}"'],
+  ])('reports the unterminated run in |%s |', (cell, column, length, what) => {
+    const source = `|${cell} |\n`
+    expect(carveToHtml(source)).toContain(`<td>${cell.replace(/>/g, '&gt;').replace(/</g, '&lt;')}</td>`)
+    const [warning, ...rest] = padding(source)
+    expect(rest).toEqual([])
+    expect(warning).toMatchObject({ line: 1, column: column + 1 })
+    expect(warning!.end - warning!.start).toBe(length)
+    expect(warning!.message).toContain(what)
+  })
+
+  it('reports a glued attribute block ahead of literal "=" content', () => {
+    const source = '|{.x}=R|\n'
+    expect(carveToHtml(source)).toContain('<td>{.x}=R</td>')
+    const [warning, ...rest] = padding(source)
+    expect(rest).toEqual([])
+    expect(warning).toMatchObject({ line: 1, column: 2 })
+    expect(warning!.end - warning!.start).toBe(4)
+    expect(warning!.message).toContain('attribute block "{.x}"')
+  })
+
   it('renders ListTable columns and a footer through the shared spelling', () => {
     const source = [
       '{header-rows=1 footer-rows=1 aligns="left,right" valigns="top,bottom" widths="30,70"}',
