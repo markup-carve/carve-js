@@ -176,9 +176,9 @@ function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNo
         break
       case 'autolink':
         if (insideLink) {
-          const value = n.href.startsWith('mailto:')
+          const value = n.text ?? (n.href.startsWith('mailto:')
             ? n.href.slice('mailto:'.length)
-            : n.href
+            : n.href)
           out.push({ type: 'text', value } as Text)
         } else {
           out.push(n)
