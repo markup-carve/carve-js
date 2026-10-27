@@ -2750,6 +2750,12 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
     pos: position(first, follower, 1, contentEndColumn(follower)) }
 }
 
+function quotedContinuationFollower(cursor: Cursor, body: SourceLine[]): boolean {
+  const next = cursor.peek(1)?.text ?? ''
+  return listMarker(next)?.indent === 0 ||
+    body.at(-1)?.text === '' && plainQuoteText(next)
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
@@ -2848,7 +2854,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       continue
     }
     if (!cursor.owner.inList && line.text === '+' && body.length > 0 &&
-        listMarker(cursor.peek(1)?.text ?? '')?.indent === 0 &&
+        quotedContinuationFollower(cursor, body) &&
         (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) {
       const marker = cursor.take()
       body.push({ ...marker, text: '' })

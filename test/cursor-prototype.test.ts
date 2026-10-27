@@ -2246,6 +2246,13 @@ describe('experimental block cursor', () => {
       parse(source, { positions: false }))
   })
 
+  it('attaches a plain first block after a quote blank and continuation marker', () => {
+    const source = '> intro\n>\n+\nmore\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
   it.each(['- + a |\ntail\n', '- a\n  + b |\ntail\n',
     '- | a |\n  + b |\ntail\n', '- |= a |\n  + b |\ntail\n',
     '- | a |\n  + |\ntail\n'])
