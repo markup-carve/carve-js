@@ -466,14 +466,19 @@ export interface EmphasisMemo {
 export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): number | undefined {
   if (!memo.boldItalic) {
     memo.boldItalic = []
-    let offset = 0
-    for (;;) {
-      const close = text.indexOf('*/', offset)
-      if (close === -1) break
+    const codeEnds = backtickRunEnds(text)
+    for (let close = 0; close < text.length - 1; close++) {
+      if (text[close] === '\\') { close++; continue }
+      if (text[close] === '`') {
+        const end = codeEnds![close]!
+        if (end === -1) break
+        close = end - 1
+        continue
+      }
+      if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
       // (carve#3217), so that `*/` is content and a later one may close.
       if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2) && !/[A-Za-z0-9]/.test(text[close + 2] ?? '')) memo.boldItalic.push(close)
-      offset = close + 1
     }
   }
   const closers = memo.boldItalic
