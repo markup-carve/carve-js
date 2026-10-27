@@ -1625,6 +1625,9 @@ function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
         (fenceOpen(unindented) || RE_RAW_FENCE.test(unindented))) return true
   }
   if (!RE_CAPTION.test(text)) return isBlockStart(text)
+  if (listMarker(body[0]?.text ?? '') && body.length > 2 && body.at(-1)?.text === '' &&
+      body.slice(1, -1).every((line) => line.text !== '' && !RE_BLOCKQUOTE.test(line.text) &&
+        !fenceOpen(line.text) && !COLON_OPEN.test(line.text))) return false
   let only: string | undefined
   for (const line of body) {
     if (line.text === '') continue

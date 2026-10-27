@@ -4,6 +4,18 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it.each([
+    '- - text\n  $$\n  x\n  $$\n\n  ^ cap\n- c\n',
+    '- - text\n  ![i](x.png)\n\n  ^ cap\n- c\n',
+    '- - text\n  > q\n\n  ^ cap\n- c\n',
+    '- - text\n\n  ![i](x.png)\n\n  ^ cap\n- c\n',
+  ])('keeps a nested-list caption gap with its owner: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
   it('keeps a nested list fence blank before the released root paragraph', () => {
     const source = '- - ```\n\ntail\n'
     const actual = parseCursorPrototype(source)
