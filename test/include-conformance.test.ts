@@ -85,10 +85,14 @@ const files = readdirSync(vectorDir)
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
 const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>([
-  ['i01-inverted-line-range', [
-    { field: 'warnings', value: [{ rule: 'include-lines-invalid' }], reason: 'invalid range warning follows I1' },
-    { field: 'dependencies', value: [{ id: 'child', resolved: true }], reason: 'the resolved target remains a dependency' },
-  ]],
+  ...[
+    ['i01-lines-bom-only-file-has-no-lines', '<p>{{ bom.txt @lines:1-1 @code }}</p>'],
+    ['i01-lines-start-past-the-end-code', '<p>{{ two.txt @lines:3-3 @code }}</p>'],
+    ['i01c-code-marker-block-closer-on-the-same-line', '<p>{{ a.css @region:demo @code:css }}</p>'],
+    ['i01c-code-marker-keyword-is-case-sensitive', '<p>{{ a.js @region:demo @code:js }}</p>'],
+    ['i01c-code-section-conflict', '<p>{{ child #intro @code:js }}</p>'],
+  ].map(([name, html]): [string, Array<{ field: string; value: unknown; reason: string }>] =>
+    [name, [{ field: 'html', value: html, reason: 'a refused code include is literal under PART 10 I2 (#3759)' }]]),
 ])
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.

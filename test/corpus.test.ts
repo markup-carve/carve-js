@@ -1125,6 +1125,21 @@ const IMPLEMENTED = new Set([
   'a-wrapped-attribute-line-interrupts-like-a-one-line-attribute-line',
   'a-wrapped-attribute-line-opened-at-a-container-s-column-is-one-construct',
   'the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth',
+  // Categories added by the spec pin at 83357930; all are checked below.
+  'a-contentless-description-marker-folds-under-a-quoted-term',
+  'a-first-block-item-takes-the-next-owned-block',
+  'a-lone-brace-stays-inside-forced-emphasis',
+  'a-quoted-include-with-no-resolver-parses-inline-content',
+  'a-second-plus-starts-its-own-paragraph-after-attachment',
+  'an-enclosing-closer-ends-a-tag-name',
+  'an-overindented-colon-opener-keeps-the-quote-paragraph-open',
+  'an-unclosed-nested-fence-keeps-blanks-before-outer-text',
+  'citation-shaped-lines-remain-core-text',
+  'combined-emphasis-finds-a-later-nonempty-closer',
+  'invalid-include-line-ranges-remain-literal-in-core',
+  'raw-inline-image-bytes-stay-inside-a-paragraph',
+  'unresolved-footnote-literal-escapes-html-text',
+  'url-sinks-reject-schemes-after-emitted-value-normalization',
 ])
 
 /**
