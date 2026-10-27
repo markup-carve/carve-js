@@ -5359,7 +5359,10 @@ function writeQuotedInlineRun(
 /** Give quoted empty Markdown items a temporary body before block conversion. */
 function quoteEmptyItems(run: readonly PrefixedInlineLine[], emptyToken: string): PrefixedInlineLine[] {
   let fence: { prefix: string; char: string; width: number } | null = null
+  let previousEmptyItem = false
   return run.map((part, index) => {
+    const acceptedPreviousEmptyItem = previousEmptyItem
+    previousEmptyItem = false
     if (fence !== null && part.prefix !== fence.prefix) fence = null
     const lead = quotedItemLead(part.text)?.lead ?? ''
     const match = RE_MD_FENCE_LINE.exec(part.text.slice(lead.length))
@@ -5374,8 +5377,11 @@ function quoteEmptyItems(run: readonly PrefixedInlineLine[], emptyToken: string)
     const empty = /^([ \t]*(?:[-*+]|\d{1,9}[.)]))[ \t]*$/.exec(part.text)
     if (!empty || part.continued) return part
     const previous = run[index - 1]
-    const previousItem = previous !== undefined && /^(?:[ \t]*)(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/.test(previous.text)
+    const previousItem = previous !== undefined &&
+      /^(?:[ \t]*)(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/.test(previous.text) &&
+      (!/^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]*$/.test(previous.text) || acceptedPreviousEmptyItem)
     if (previous?.prefix === part.prefix && quoteParagraphIsOpen(previous.text) && !previousItem) return part
+    previousEmptyItem = true
     return { ...part, text: `${empty[1]} ${emptyToken}` }
   })
 }
