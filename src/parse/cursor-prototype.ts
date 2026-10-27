@@ -33,7 +33,7 @@ export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
   spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
-  ownedDefinition?: boolean; ownedDefinitionBody?: boolean }
+  ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -1761,6 +1761,7 @@ function rejectAmbiguousListBoundary(marker: ReturnType<typeof listMarker>,
 }
 
 function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
+  if (line.ownedFirstBlock) return
   if (body.at(-1)?.text.startsWith('>') &&
       mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
     throw new UnsupportedCursorSyntax('quote continuation across list boundary')
@@ -1841,14 +1842,19 @@ function nestedFirstFenceEnd(cursor: Cursor, frame: ListCursorFrame,
 
 function nestedSimpleFirstBlock(cursor: Cursor, frame: ListCursorFrame,
   stackLength: number, depth: number): boolean {
+  if (depth === 1 && stackLength === 1 && frame.body[0]?.text === '> +' &&
+      cursor.peek()?.ownedFirstBlock) return true
   if (depth !== 0 || stackLength > 2 || frame.body.length !== 1 || frame.fenceMarker) return false
   const inner = listMarker(frame.body[0]!.text)
   const follower = cursor.peek()
-  if (inner?.content !== '+' || !follower) return false
+  if (!inner || !follower) return false
   const prefix = stackLength === 2 && follower.text.startsWith(' '.repeat(frame.indent)) ?
     frame.indent : 0
-  if (!(stackLength === 1 && plainQuoteText(follower.text) ||
-      stackLength === 2 && RE_BLOCKQUOTE.test(follower.text.slice(prefix)))) return false
+  const stackedQuote = inner.content === '> +' && stackLength === 2 &&
+    prefix === frame.indent && plainQuoteText(follower.text.slice(prefix))
+  if (!(stackedQuote || inner.content === '+' &&
+      (stackLength === 1 && plainQuoteText(follower.text) ||
+       stackLength === 2 && RE_BLOCKQUOTE.test(follower.text.slice(prefix))))) return false
   const after = cursor.peek(1)
   return !after || isBlankLine(after.text)
 }
@@ -2623,6 +2629,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       ...(line.lazyText ? { lazyText: true } : {}),
       ...(line.ownedDefinition ? { ownedDefinition: true } : {}),
       ...(line.ownedDefinitionBody ? { ownedDefinitionBody: true } : {}),
+      ...(line.ownedFirstBlock ? { ownedFirstBlock: true } : {}),
       ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
     if (frame.quoteFenceMarker && text[0] === '>') {
       const inner = text.slice(text[1] === ' ' ? 2 : 1)
@@ -2712,7 +2719,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     cursor.take()
     const prefix = stack.length === 2 && line.text.startsWith(' '.repeat(frame.indent)) ?
       frame.indent : 0
-    appendBody(frame, line, prefix)
+    const ownedFirstBlock = listMarker(frame.body[0]?.text ?? '')?.content === '> +'
+    appendBody(frame, ownedFirstBlock ? { ...line, ownedFirstBlock: true } : line, prefix)
     updateListFrameEnds(stack, line, listSpan)
     return true
   }
@@ -3177,7 +3185,8 @@ function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
   const first = cursor.peek()!
   if (first.text !== '> +') return undefined
   const markerLineNested = cursor.owner.kind === 'list' &&
-    (depth === 1 || depth === 2 && cursor.owner.parent?.kind === 'quote')
+    (depth === 1 || depth === 2 && cursor.owner.parent?.kind === 'quote' ||
+      cursor.peek(1)?.ownedFirstBlock === true)
   const nestedQuote = depth === 1 && cursor.owner.kind === 'quote'
   if (depth === 0 || markerLineNested || nestedQuote) {
     const fenceEnd = closedFenceEnd(cursor, 1)

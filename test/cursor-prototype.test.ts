@@ -1412,6 +1412,16 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it('hands a stacked quote first-block follower through its list owners', () => {
+    const source = '- a\n  - - > +\n  b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an intervening-column stacked quote follower', () => {
+    const source = '- a\n  > > +\n    > q\n'
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('attaches a paragraph after a nested quote list continuation', () => {
     const source = '> > - a\n> +\n> para\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
