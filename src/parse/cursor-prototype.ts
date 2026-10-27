@@ -1656,8 +1656,26 @@ function isListGapBlockStart(text: string, body: SourceLine[]): boolean {
   return only === undefined || only.startsWith('![') || only.startsWith('$$') || isBlockStart(only)
 }
 
-function rejectAmbiguousNestedPlus(marker: ReturnType<typeof listMarker>): void {
-  if (marker && marker.indent > 0 && /^\+[ \t]*$/.test(marker.content)) {
+function rejectAmbiguousNestedPlus(cursor: Cursor, marker: ReturnType<typeof listMarker>): void {
+  if (!marker || marker.indent === 0 || !/^\+[ \t]*$/.test(marker.content)) return
+  const parent = listMarker(cursor.lines[0]?.text ?? '')
+  const next = cursor.peek(1)?.text ?? ''
+  const indent = /^ */.exec(next)![0].length
+  const opener = next.slice(indent)
+  const quote = RE_BLOCKQUOTE.test(opener) &&
+    (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))
+  const fence = fenceOpen(opener)?.marker
+  let closedFence = false
+  if (fence) for (let offset = 2; cursor.peek(offset); offset++) {
+    const line = cursor.peek(offset)!.text
+    if (line.startsWith(' '.repeat(indent)) &&
+        closesFence(line.slice(indent), fence)) {
+      closedFence = !cursor.peek(offset + 1) || isBlankLine(cursor.peek(offset + 1)!.text)
+      break
+    }
+  }
+  if (!parent || parent.ordered || indent > marker.indent + (marker.ordered ? 0 : 2) ||
+      !quote && !closedFence) {
     throw new UnsupportedCursorSyntax('indented first-block continuation marker')
   }
 }
@@ -2648,7 +2666,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   while (cursor.peek()) {
     const line = cursor.peek()!
     const marker = listMarker(line.text)
-    rejectAmbiguousNestedPlus(marker)
+    rejectAmbiguousNestedPlus(cursor, marker)
     const top = continuationOwner(line)
     rejectAmbiguousListBoundary(marker, top, line)
     const nestedPlus = nestedPlusAtLine(cursor, top, stack.length, line)

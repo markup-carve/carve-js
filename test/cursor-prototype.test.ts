@@ -2580,4 +2580,20 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- foo\n  - +\n    > b\n',
+    '- foo\n  1. +\n  > b\n',
+    '- foo\n  - +\n  ```\n  x\n  ```\n'])
+  ('attaches one terminal block after an indented first-block marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- a\n  - +\n> q\ntail\n',
+    '1. a\n  - +\n> q\n',
+    '- a\n  - +\n  - b\n'])
+  ('declines an unresolved indented first-block owner: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
 })
