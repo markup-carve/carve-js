@@ -3712,15 +3712,25 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       body[0]!.baseColumn ?? contentEndColumn(quoteLast) : contentEndColumn(quoteLast)) }
 }
 
+function closesColonOwner(text: string, width: number): boolean {
+  let offset = 0
+  while (text[offset] === ':') offset++
+  if (offset !== width) return false
+  while (offset < text.length) {
+    if (text[offset] !== ' ' && text[offset] !== '\t') return false
+    offset++
+  }
+  return true
+}
+
 function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
   const body: SourceLine[] = []
-  const closer = new RegExp(`^:{${openerLength}}[ \t]*$`)
-  const nestedClosers: RegExp[] = []
+  const nestedClosers: number[] = []
   let opaqueFence: string | undefined
   while (cursor.peek()) {
     const text = cursor.peek()!.text
     if (opaqueFence) {
-      const structuralCloser = (nestedClosers.at(-1) ?? closer).test(text) &&
+      const structuralCloser = closesColonOwner(text, nestedClosers.at(-1) ?? openerLength) &&
         !hasLaterFenceCloser(cursor, opaqueFence)
       if (!structuralCloser) {
         body.push(cursor.take())
@@ -3737,7 +3747,7 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       body.push(cursor.take())
       continue
     }
-    if ((nestedClosers.at(-1) ?? closer).test(text)) {
+    if (closesColonOwner(text, nestedClosers.at(-1) ?? openerLength)) {
       if (nestedClosers.length === 0) break
       nestedClosers.pop()
       body.push(cursor.take())
@@ -3748,7 +3758,7 @@ function takeColonBody(cursor: Cursor, openerLength: number): SourceLine[] {
       RE_LINE_BLOCK_OPEN.exec(text) ?? RE_QUOTE_BLOCK_OPEN.exec(text) ??
       RE_HARDBREAKS_OPEN.exec(text)
     if (nested) {
-      nestedClosers.push(new RegExp(`^:{${nested[1]!.length}}[ \t]*$`))
+      nestedClosers.push(nested[1]!.length)
     } else if (text.startsWith(':::')) throw new UnsupportedCursorSyntax('nested colon container')
     body.push(cursor.take())
   }

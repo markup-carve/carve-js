@@ -2114,6 +2114,12 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([':::\nOuter\n\n::::\nInner\n::::\n:::\n',
+    ':::: outer\n::: inner\n```\ncode\n::::\n:::\n::::\nafter *b*\n'])
+  ('matches each nested colon closer at its authored width: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['::: >\nCarol\n::: >\nBob\n:::\n:::\n',
     '::: note\n:::: \\\nA\nB\n::::\n:::\n'])
   ('keeps nested sigil fences with their colon owner: %s', (source) => {
