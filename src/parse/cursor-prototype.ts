@@ -3637,6 +3637,16 @@ function takeQuoteLazyBoundaryTail(cursor: Cursor, body: SourceLine[],
   return inlineCode
 }
 
+function isRootDefinitionOnlyQuote(cursor: Cursor, children: BlockNode[], body: SourceLine[]): boolean {
+  return cursor.owner.kind === 'root' && children.length === 0 && body.length > 1 &&
+    body.every((line) => rootLinkDef(line.text) !== null || FOOTNOTE_DEF.test(line.text))
+}
+
+function isSingleDefinitionOnlyQuote(children: BlockNode[], body: SourceLine[]): boolean {
+  return children.length === 0 && body.length === 1 &&
+    (rootLinkDef(body[0]!.text) !== null || FOOTNOTE_DEF.test(body[0]!.text))
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
@@ -3805,13 +3815,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   }
   const children = quoteChildrenAtCursor(cursor, inline, definitionNodes, depth, body,
     directParagraph, listOwner?.boundaryFence)
-  const onlyDefinition = children.length === 0 && body.length === 1 &&
-    (rootLinkDef(body[0]!.text) !== null || FOOTNOTE_DEF.test(body[0]!.text))
+  const onlyDefinition = isSingleDefinitionOnlyQuote(children, body)
+  const onlyRootDefinitions = isRootDefinitionOnlyQuote(cursor, children, body)
   const placedEndLine = children.at(-1)?.pos?.endLine
-  const quoteLast = placedEndLine && placedEndLine < last.number ?
+  const quoteLast = onlyRootDefinitions ? first : placedEndLine && placedEndLine < last.number ?
     cursor.physicalLines[placedEndLine - 1] ?? last : last
   return { type: 'block_quote', children,
-    pos: position(first, quoteLast, 1, onlyDefinition ?
+    pos: position(first, quoteLast, 1, onlyDefinition || onlyRootDefinitions ?
       body[0]!.baseColumn ?? contentEndColumn(quoteLast) : contentEndColumn(quoteLast)) }
 }
 
@@ -4529,8 +4539,11 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   const singleRootQuoteFootnote = cursor.owner.kind === 'quote' &&
     cursor.owner.parent?.kind === 'root' && cursor.lines.length === 1 &&
     FOOTNOTE_DEF.test(cursor.lines[0]!.text)
+  const rootQuoteDefinitions = cursor.owner.kind === 'quote' &&
+    cursor.owner.parent?.kind === 'root' && cursor.lines.length > 1 &&
+    cursor.lines.every((line) => rootLinkDef(line.text) !== null || FOOTNOTE_DEF.test(line.text))
   if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list' ||
-      singleRootQuoteFootnote) {
+      singleRootQuoteFootnote || rootQuoteDefinitions) {
     footnoteDefs ??= inline.footnoteDefs
     footnoteDefPos ??= inline.footnoteDefPos
   }

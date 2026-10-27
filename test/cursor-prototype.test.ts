@@ -561,8 +561,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('keeps a root quote with multiple collected definitions declined', () => {
-    expect(() => parseCursorPrototype('> [r]: /url\n> [^f]: note\n\nSee [r][] [^f].\n'))
+  it('places a root quote at its first marker after collecting two definitions', () => {
+    const source = '> [r]: /url\n> [^f]: note\n\nSee [r][] [^f].\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root quote with mixed definitions and prose declined', () => {
+    expect(() => parseCursorPrototype('> [r]: /url\n> [^f]: note\n> q\n'))
       .toThrow(UnsupportedCursorSyntax)
   })
 
