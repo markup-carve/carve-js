@@ -4537,8 +4537,8 @@ function runPartSourceLine(part: PrefixedInlineLine): number | undefined {
   return part.source === undefined ? undefined : importSourceLine?.(part.source)
 }
 
-function containerTableRows(run: readonly PrefixedInlineLine[]): boolean[] {
-  const held = heldByItem(run)
+function containerTableRows(run: readonly PrefixedInlineLine[], inheritedItemCol = 0): boolean[] {
+  const held = heldByItem(run, inheritedItemCol)
   const container = run.map(
     (part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`,
   )
@@ -4558,10 +4558,11 @@ function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
   terminal = true,
+  inheritedItemCol = 0,
 ): string[] {
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const joinedLines = new Set<number>()
-  const tableRows = containerTableRows(run)
+  const tableRows = containerTableRows(run, inheritedItemCol)
   let offset = 0
   const sourceSegments = run.flatMap((part, index) => {
     const entries = (part.sourceSegments ?? [{offset:0, line:runPartSourceLine(part)}]).map(entry => ({offset:offset + entry.offset, line:tableRows[index] ? null : entry.line}))
@@ -4596,7 +4597,7 @@ function restorePrefixedInlineRun(
       physicalLine += countNewlines(part.text) + 1
       return keep
     })
-  const held = heldByItem(run)
+  const held = heldByItem(run, inheritedItemCol)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
   // still carry a container it does not model: the OUTER item of `- - | a |` is
@@ -4628,7 +4629,7 @@ function restorePrefixedInlineRun(
   })
 
   const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`)
-  const inTable = containerTableRows(run)
+  const inTable = containerTableRows(run, inheritedItemCol)
 
   const out: string[] = []
   let tableWidth = 0
@@ -4763,9 +4764,9 @@ function restorePrefixedInlineRun(
  * quote holds peeled too: the item's marker, and the same columns under it, go
  * to `marker`, so a table inside a quoted item is found at the item's column.
  */
-function heldByItem(run: readonly PrefixedInlineLine[]): Array<{ marker: string; body: string }> {
-  let itemCol = 0
-  let itemKey = ''
+function heldByItem(run: readonly PrefixedInlineLine[], inheritedItemCol = 0): Array<{ marker: string; body: string }> {
+  let itemCol = inheritedItemCol
+  let itemKey = inheritedItemCol > 0 && run[0] ? `${run[0].prefix.length}:${peelQuoteMarkers(run[0].text).marker}` : ''
   return run.map((part) => {
     const held = peelQuoteMarkers(part.text)
     const key = `${part.prefix.length}:${held.marker}`
@@ -5331,7 +5332,8 @@ function writeQuotedInlineRun(
   const paddingFreeAtBlank = lastMarkerItem !== null && last !== undefined && resumed?.prefix === last.prefix &&
     (resumedIndent >= columnWidth(lastMarkerItem.lead) ||
       !resumed.hadLeadingTab && resumedIndent < 4 && isAsciiAlphanumeric(resumed.text.trimStart()[0]))
-  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect)
+  const inheritedItemCol = markers.get(run[0]?.prefix ?? '')?.itemAt(indentColumns(run[0]?.text ?? ''))?.content ?? 0
+  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run, afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l))
