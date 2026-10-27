@@ -4,6 +4,7 @@ import { finishList } from './parse-list-finish.js'
 import type { createRebasePass } from '../parse-rebase.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
+import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
@@ -361,10 +362,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
           sourceColumn(firstBlockSource, 0) === 0) &&
       !isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())
-    if (firstBlockEligible && (/^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content) ||
+    let markerEnd = content.length - 1
+    while (content[markerEnd] === ' ' || content[markerEnd] === '\t') markerEnd--
+    const stackedMarker = content[markerEnd] === '+' &&
+      /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
+    const nestedContentOffset = stackedMarker ? itemSource.lastIndexOf(content) : -1
+    const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
+      firstBlockSource !== undefined &&
+      indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset) &&
+      (lexer.peek(1) === undefined || !isBlankLine(lexer.peek(1)!))
+    if ((firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
-      return stackedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
+      return stackedFirstBlockItem(lexer, session, shape, head, itemSource, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
     }
     if (!firstBlockMarker) return { kind: 'none' }
     if (!firstBlockEligible || firstItemAttachBoundary(lexer.peek()!)) {
@@ -383,14 +393,40 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
   function stackedFirstBlockItem(
     lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead,
-    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
+    itemSource: string, firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
   ): FirstBlockOutcome {
     const itemStartLineIndex = head.startLineIndex
     const attached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, shape.baseIndent, false, firstBlockColumn, itemQuoteDepth)
     const lines = [head.content, ...attached.lines]
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
-    const sub = nestedSubLexer(lexer, lines, itemStartLineIndex, numbers)
-    const stackedItem: ListItem = { type: 'list_item', children: session.parseBlocks(sub, 0) }
+    const nestedContentOffset = itemSource.lastIndexOf(head.content)
+    const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(itemSource, nestedContentOffset)
+    const ownFollower = !isStackedFirstBlockQuoteMarker(itemSource) && isListMarkerLine(head.content) && attached.lines.length === 1 &&
+      ownContentColumn >= 0 &&
+      indentColumns((lexer.rootLines ?? lexer.lines)[attached.lineNumbers[0]! - 1] ?? attached.lines[0]!) === ownContentColumn
+    const emptyQuotedFollower = isStackedFirstBlockQuoteMarker(itemSource) &&
+      /^>\s*$/.test(attached.lines[0] ?? '') && /^> \+[ \t]*$/.test(head.content)
+    if (emptyQuotedFollower) lines[0] = head.content.replace(/\+[ \t]*$/, '>')
+    const sub = nestedSubLexer(lexer, ownFollower ? [lines[0]!] : lines, itemStartLineIndex,
+      ownFollower ? [numbers[0]!] : numbers)
+    const children = session.parseBlocks(sub, 0)
+    if (ownFollower) {
+      const follower = attached.lines.map(line => sliceColumns(line, ownContentColumn, true))
+      const followerLexer = nestedSubLexer(lexer, follower, attached.startLineIndex, attached.lineNumbers)
+      children.push(...session.parseBlocks(followerLexer, 0))
+    }
+    if (emptyQuotedFollower && children[0]?.type === 'block_quote' && children[0].children[0]?.type === 'block_quote') {
+      const outer = children[0]
+      attachBlockPos(lexer, outer.children[0]!, attached.startLineIndex, attached.startLineIndex + 1)
+      attachBlockPos(lexer, outer, itemStartLineIndex, lexer.pos)
+      if (outer.pos) {
+        const markerOffset = (lexer.lineAt(itemStartLineIndex) ?? '').indexOf('>')
+        const marker = lexer.sourceBoundary(itemStartLineIndex, markerOffset)
+        outer.pos.startColumn = marker.column
+        outer.pos.startOffset = marker.offset
+      }
+    }
+    const stackedItem: ListItem = { type: 'list_item', children }
     attachBlockPos(lexer, stackedItem, itemStartLineIndex, lexer.pos)
     markItem(stackedItem, head)
     let blanks = 0
