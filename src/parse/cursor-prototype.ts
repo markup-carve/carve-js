@@ -3671,7 +3671,8 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
     throw new UnsupportedCursorSyntax('empty footnote continuation')
   }
   const attached = plusFollower && plainQuoteText(plusFollower.text) &&
-    (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text)) ? plusFollower : undefined
+    (!cursor.peek(2) || isBlankLine(cursor.peek(2)!.text) ||
+      isBlockStart(cursor.peek(2)!.text)) ? plusFollower : undefined
   if (attached) { cursor.take(); cursor.take() }
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return

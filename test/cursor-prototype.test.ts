@@ -645,6 +645,8 @@ describe('experimental block cursor', () => {
   it.each([
     'See the note.[^n]\n\n[^n]: First paragraph of the note.\n+\nA second paragraph, joined with +.\n',
     '[^a]: intro\n+\nmore\n\nsee[^a]\n',
+    '[^n]: a\n+\npara\n> q\n\nsee[^n]\n',
+    '[^n]: a\n+\npara\n# Heading\n',
   ])('attaches one plain footnote paragraph after a root continuation marker: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
