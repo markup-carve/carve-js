@@ -1542,10 +1542,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           inlineFenceColumn = lastNonBlankColumn
       }
       const trailingRun = RE_FENCE.exec(lastNonBlankSource?.trimStart() ?? '')?.[2]
-      const mismatchedRun = trailingRun !== undefined && inlineFenceRun !== null &&
-        (trailingRun[0] !== inlineFenceRun[0] || trailingRun.length < inlineFenceRun.length)
       if (lazyState.inlineFenceParagraph && pendingBlankRun.count === 0 && inlineFenceRun !== null &&
-          inlineFencePriorText && !mismatchedRun)
+          inlineFencePriorText && trailingRun === undefined)
         childInlinePayloadBlanks.add(lexer.lineNumber(lexer.pos))
       if (!markerNoteItem && inlineFenceColumn >= 0) {
         const nextLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
@@ -3188,9 +3186,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             previousVisibleEnd !== undefined && !priorDivInlineCode &&
             !reachesNestedList && !authoredBlockParagraph && !belowInlineAdmonition &&
             (session.hasAuthoredBlankBetween(lexer, previousVisibleEnd, span.start,
-              previousVisibleType === 'list'
-                ? nestedListContentColumn === undefined ? childInlinePayloadBlanks : undefined
-                : opaqueBlankLines) ||
+              previousVisibleType === 'list' ? childInlinePayloadBlanks : opaqueBlankLines) ||
               previousVisibleType === 'list' &&
                 session.hasAuthoredBlankBetween(lexer, span.start - 2, span.start, childInlinePayloadBlanks))) loose = true
         previousVisibleSpan = span

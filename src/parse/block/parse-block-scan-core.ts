@@ -703,8 +703,21 @@ export function commentCloserInScope(
   // the container the same way the boundary is: the walk stops at the first run
   // past `end`, so it reads only runs written inside the opener's own scope.
   const end = commentScopeEnd(lexer, from, scope, memo)
-  for (let i = lo; i < at.length && at[i]!.line < end; i++) {
+  let i = lo
+  for (; i < at.length && at[i]!.line < end; i++) {
     if (at[i]!.depth === scope.quoteDepth) return true
+  }
+
+  // Keep the existing single-closer reading across a sibling item. A second
+  // closer inside that sibling makes its marker an opener of its own instead.
+  const sibling = lexer.lineAt(end) ?? ''
+  if (i < at.length && at[i]!.line === end && at[i]!.depth === scope.quoteDepth &&
+      isListMarkerLine(sibling) && indentColumns(sibling, scope.contentCol) < scope.contentCol) {
+    const siblingEnd = commentScopeEnd(lexer, end, scope, memo)
+    for (let next = i + 1; next < at.length && at[next]!.line < siblingEnd; next++) {
+      if (at[next]!.depth === scope.quoteDepth) return false
+    }
+    return true
   }
 
   return false
