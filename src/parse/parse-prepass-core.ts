@@ -842,6 +842,8 @@ export function spendLazyProbeBudget(lexer: Lexer, candidate: number, budget: nu
  */
 export interface PendingAttrCarry {
   attrs: Attrs | null
+  /** The stream ends with this half, so a run still pending at its end is dead. */
+  last?: boolean
 }
 
 /**

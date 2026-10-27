@@ -81,6 +81,19 @@ describe('lint reports a block attribute that reaches no block', () => {
     expect(at('- a\n\n  {.c}\n- b\n', 'unattached-block-attribute')).toEqual(['3:3'])
   })
 
+  // An item whose body holds a sublist is parsed in two halves with the run
+  // carried across the seam. The second half is the end of the stream, so a run
+  // still pending there is dead, not carried.
+  it.each([
+    ['- a\n  - b\n+\n{.x}\n- x\n- y\n', ['4:1']],
+    ['- a\n  - b\n+\n{.x}\n{.z}\n- x\n', ['4:1']],
+    ['- a\n  - b\n+\n{.x\n .z}\n1. x\n', ['4:1']],
+    ['- a\n  - b\n+\n{.x}\npara\n', []],
+    ['- a\n  {.x}\n  - b\n', []],
+  ])('after a sublist in the same item: %s', (source, locations) => {
+    expect(at(source, 'unattached-block-attribute')).toEqual(locations)
+  })
+
   it('reports one on a quote\'s last line, the case the clause is written around', () => {
     expect(at('> q\n> {.k}\n\ntail\n', 'unattached-block-attribute')).toEqual(['2:3'])
   })

@@ -756,11 +756,11 @@ export class ParseSession extends InlineParseSession {
     }
     // A dangling pending run (no following block) is dropped -- or, when the
     // caller split one stream in two, handed on to the next half.
-    if (carry) carry.attrs = pending
+    if (carry && !carry.last) carry.attrs = pending
     // Nothing is emitted for a run that died here, so this is the only place the
-    // fact exists. `carry` streams are excluded: there the run lives on in the
-    // other half, and reporting it at the seam would name a loss that is not
-    // happening (carve-js#2240).
+    // fact exists. A half that hands its run on is excluded: there the run lives
+    // on in the next half, and reporting it at the seam would name a loss that
+    // is not happening (carve-js#2240). The `last` half is the stream's end.
     // Two conditions, and both are load-bearing. `hostBodyRoot` rather than
     // `hostBody` because the latter is propagated, so a `::: note` inside a
     // description body would claim to BE that body; `out.length === 0` because a
