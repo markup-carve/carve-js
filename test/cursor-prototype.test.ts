@@ -426,7 +426,7 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2638)
+    expect(exact).toBeGreaterThanOrEqual(2639)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
@@ -444,6 +444,11 @@ describe('experimental block cursor', () => {
     '> > q\n> +\n> > r\n',
     ':: t\n: > > q\n  > +\n  > > r\n',
   ])('attaches a nested quote to its first-line quote owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root definition marker with a tab separator as paragraph text', () => {
+    const source = '::\tterm\n:  d\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 

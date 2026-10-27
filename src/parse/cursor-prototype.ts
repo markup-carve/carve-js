@@ -4647,6 +4647,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       emit(parseParagraphAtCursor(cursor, inline))
       continue
     }
+    if (atDocumentLevel && cursor.owner.kind === 'root' && /^::\t/.test(first.text)) {
+      emit(parseParagraphAtCursor(cursor, inline))
+      continue
+    }
     if (/^:{3,}>/.test(first.text)) {
       emit(parseParagraphAtCursor(cursor, inline))
       continue
