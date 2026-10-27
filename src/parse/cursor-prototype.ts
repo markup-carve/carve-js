@@ -657,6 +657,19 @@ function endsOpenQuotedParagraph(body: SourceLine[]): boolean {
     plainQuoteText(last.slice(last[1] === ' ' ? 2 : 1))
 }
 
+function shiftedQuotedHeading(body: SourceLine[], line: SourceLine, prefix: number): boolean {
+  return endsOpenQuotedParagraph(body) && body.at(-1)?.number === line.number - 1 &&
+    line.text[prefix] === ' ' && RE_HEADING.test(line.text.slice(prefix).trimStart())
+}
+
+function listContinuationClaim(frame: ListCursorFrame, line: SourceLine,
+  bodyPrefix: number, reachedPrefix: number): { line: SourceLine; prefix: number } {
+  const prefix = bodyPrefix === reachedPrefix && !frame.fenceMarker ?
+    listContinuationPrefix(line.text, bodyPrefix, frame.body, frame.closedQuoteFence) : bodyPrefix
+  return { line: shiftedQuotedHeading(frame.body, line, bodyPrefix) ?
+    { ...line, lazyText: true } : line, prefix }
+}
+
 function followsClosedListBlock(body: SourceLine[]): boolean {
   const last = body.at(-1)?.text
   return last !== undefined && (last === '' || parseBlockAttributeRun(last) !== null ||
@@ -2562,9 +2575,9 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       bodyPrefix = indentedListAttributePrefix(line.text, bodyPrefix)
     }
     if (consumeWrappedAttribute(top, bodyPrefix)) continue
+    const claim = listContinuationClaim(top, line, bodyPrefix, reachedPrefix)
     cursor.take()
-    appendBody(top, line, bodyPrefix === reachedPrefix && !top.fenceMarker ?
-      listContinuationPrefix(line.text, bodyPrefix, top.body, top.closedQuoteFence) : bodyPrefix)
+    appendBody(top, claim.line, claim.prefix)
     top.retainedBelowColumnComment = false
     updateListFrameEnds(stack, line, listSpan)
   }
