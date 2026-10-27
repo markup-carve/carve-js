@@ -21,7 +21,7 @@ import type { LinkDef } from './inline/inline-resolution.js'
 import { olKindOf, olStartOf, sourceColumnAt, type OlKind } from './list/parse-item-core.js'
 import { RE_ADMONITION_OPEN, RE_BLOCKQUOTE, RE_DIV_OPEN, RE_FENCE, RE_HARDBREAKS_OPEN, RE_HEADING, RE_LINE_BLOCK_OPEN, RE_ORDERED, RE_QUOTE_BLOCK_OPEN, RE_RAW_FENCE, RE_VALID_ADMONITION_OPEN, consumeLooseKey, deriveTableMetadata, extractItemAttr, isTableRow, matchLinkDef, parseBlockAttributeRun, probeBlockAttributes } from './parse-prepass-core.js'
 import { Lexer, isBlankLine } from './parse-lexer.js'
-import type { ParseOptions } from './block/parse-block-scan-core.js'
+import type { DanglingBlockAttributes, ParseOptions } from './block/parse-block-scan-core.js'
 import { commentBlockHasCloser, isFigureGroupOpener, parseCommentBlock, parseLineBlockWithHelpers, parseRawBlock, parseTableBlock } from './parse-core.js'
 import { delimitedTable, setDelimitedPayloadLines } from '../table/delimited-table.js'
 import { verbatimSpanEnd } from './inline/parse-brackets.js'
@@ -206,9 +206,14 @@ class CursorInline extends InlineParseSession {
   hasLeadingImage = false
   footnoteDefs?: Record<string, BlockNode[]>
   footnoteDefPos?: Record<string, Position>
+  danglingAttributes?: DanglingBlockAttributes[]
   constructor(readonly linkDefinitions: Map<string, LinkDef>,
     readonly abbreviations: Map<string, string>,
-    readonly positionless = false) { super() }
+    readonly positionless = false,
+    readonly recordDanglingAttributes = false) {
+    super()
+    if (recordDanglingAttributes) this.danglingAttributes = []
+  }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
   }
@@ -4675,6 +4680,25 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
         ...(label === undefined ? {} : { label }), pos }
 }
 
+function reportDanglingAtCursor(cursor: Cursor, inline: CursorInline,
+  pendingAt: SourceLine | undefined, children: BlockNode[]): void {
+  if (!pendingAt || !inline.recordDanglingAttributes) return
+  const authored = cursor.physicalLines[pendingAt.number - 1]?.text ?? ''
+  if (cursor.owner.kind === 'colon' && pendingAt.text === '{empty}' &&
+      /^: +\{empty\}$/.test(authored)) return
+  let wholeBodyOf: 'description' | 'footnote' | undefined
+  if (children.length === 0) {
+    if (cursor.owner.kind === 'definition' || cursor.owner.kind === 'colon' && /^: +\{/.test(authored)) {
+      wholeBodyOf = 'description'
+    } else if (cursor.owner.kind === 'colon' && /^\[\^[^\]]+\]: +\{/.test(authored)) {
+      wholeBodyOf = 'footnote'
+    }
+  }
+  inline.danglingAttributes!.push({ line: pendingAt.number, column: pendingAt.baseColumn ?? 1,
+    startOffset: pendingAt.start, endOffset: pendingAt.start + pendingAt.text.length,
+    ...(wholeBodyOf ? { wholeBodyOf } : {}) })
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -4693,11 +4717,13 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   }
   const children: BlockNode[] = []
   let pendingAttrs: Attrs | null = null
+  let pendingAt: SourceLine | undefined
   const emit = (input: BlockNode) => {
     let node = input
     if (node.type !== 'comment' && node.type !== 'abbreviation_def' && pendingAttrs) {
       node.attrs = mergeAttrs(pendingAttrs, node.attrs ?? {})
       pendingAttrs = null
+      pendingAt = undefined
     }
     const code = node.type === 'code_block' ? node :
       node.type === 'figure' && node.target.type === 'code_block' ? node.target : undefined
@@ -4727,6 +4753,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     const attrs = takeBlockAttrsAtCursor(cursor, atDocumentLevel)
     if (attrs) {
       pendingAttrs = pendingAttrs ? mergeAttrs(pendingAttrs, attrs) : attrs
+      pendingAt ??= first
       continue
     }
     const footnote = FOOTNOTE_DEF.exec(first.text)
@@ -4887,6 +4914,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     emit(parseParagraphAtCursor(cursor, inline))
   }
+  reportDanglingAtCursor(cursor, inline, pendingAt, children)
   return children
 }
 
@@ -5041,8 +5069,7 @@ function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
       extension.quoteCharacters) || opts.onUnclosedContainer || opts.onUnclosedCodeFence ||
-      opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata ||
-      opts.onDanglingBlockAttributes) {
+      opts.onRefusedContinuationMarker || opts.onInvalidContainerMetadata) {
     throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
   }
   const rawSource = source
@@ -5153,7 +5180,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     }
   }
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
-  const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false)
+  const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
+    opts.onDanglingBlockAttributes !== undefined)
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
@@ -5186,5 +5214,14 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (opts.positions !== false) toCodepointPositions(document, rawSource)
   if (inline.hasLeadingImage) promoteBlockImages(children, true)
   document.children = promoteCitationDefinitions(children)
+  if (opts.onDanglingBlockAttributes) {
+    const seen = new Set<string>()
+    for (const event of inline.danglingAttributes!) {
+      const key = `${event.startOffset}:${event.endOffset}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      opts.onDanglingBlockAttributes(event)
+    }
+  }
   return opts.positions === false ? dropPositions(document) : document
 }

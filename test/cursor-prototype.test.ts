@@ -6,6 +6,25 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it.each([
+    '{.x}\n',
+    '{.x}\n{#i}\n',
+    '- a\n  {.x}\n',
+    '> a\n> {.x}\n',
+    '::: note\n{.x}\n:::\n',
+    ':: t\n: {.x}\n',
+    ':: t\n: {empty}\n',
+    '\ufeff{.x}\n',
+  ])('reports dangling block attributes at their authored source span: %s', (source) => {
+    const established: object[] = []
+    const cursor: object[] = []
+    const expected = parse(source, { onDanglingBlockAttributes: (event) => established.push(event) })
+    const actual = parseCursorPrototype(source,
+      { onDanglingBlockAttributes: (event) => cursor.push(event) })
+    expect(actual).toStrictEqual(expected)
+    expect(cursor).toStrictEqual(established)
+  })
+
   it.each(['> +\n flush\n', '> +\n  flush\n', '> +\n flush\n\nafter\n'])
   ('keeps a leading quote plus in its paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
