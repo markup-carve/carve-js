@@ -524,6 +524,12 @@ describe('experimental block cursor', () => {
     collect(join(root, 'spec/tests'))
     collect(join(root, 'test/fixtures'))
     let exact = 0
+    const optionSets = [
+      { positions: false },
+      { defaultFrontmatterFormat: 'toml' },
+      { lowercaseHeadingIds: true, asciiHeadingIds: 'strict' as const },
+    ]
+    const optionMatches = [0, 0, 0]
     for (const path of files) {
       const source = readFileSync(path, 'utf8')
       let actual: ReturnType<typeof parseCursorPrototype>
@@ -537,9 +543,25 @@ describe('experimental block cursor', () => {
       if (JSON.stringify(actual) !== JSON.stringify(expected)) {
         expect(actual, path).toStrictEqual(expected)
       }
+      for (let index = 0; index < optionSets.length; index++) {
+        const options = optionSets[index]!
+        let candidate: ReturnType<typeof parseCursorPrototype>
+        try {
+          candidate = parseCursorPrototype(source, options)
+        } catch (error) {
+          if (error instanceof UnsupportedCursorSyntax) continue
+          throw error
+        }
+        const reference = parse(source, options)
+        if (JSON.stringify(candidate) !== JSON.stringify(reference)) {
+          expect(candidate, `${path}, options ${index}`).toStrictEqual(reference)
+        }
+        optionMatches[index]!++
+      }
       exact++
     }
     expect(exact).toBeGreaterThanOrEqual(2649)
+    for (const matches of optionMatches) expect(matches).toBeGreaterThanOrEqual(2700)
   })
 
   it('keeps a direct quoted child paragraph open at its content column', () => {
