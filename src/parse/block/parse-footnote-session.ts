@@ -109,24 +109,21 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // marker column. The body collector leaves the + as text below.
       lexer.reportRefusedContinuationMarker(lexer.pos, markerColumn + 1,
         'footnote', noteMarker.reason)
+      return 'stop'
     }
     if (pendingBlankRun.count === 0 && noteMarkerLine &&
         (isPhysicalContinuationMarker(sourceLine ?? ln) || noteMarker?.owner?.kind === 'footnote' && noteMarker.reason === undefined) &&
         sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)] ?? '', quotePrefixDepth(sourceLine ?? ln)) ===
           sourceColumn(sourceLine ?? ln) &&
         !isBlankLine((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)])) {
+      // Leave a refused marker for the enclosing parser to classify as text.
+      if (!attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine ?? ln), quotePrefixDepth(sourceLine ?? ln))) return 'stop'
       const plusLineNumber = lexer.lineNumber(lexer.pos)
       lexer.consume()
       pendingBlankRun.clear()
-      // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
-      // whether this `+` is a marker at all; when it is not, the line is an
-      // ordinary invisible line at document column 0, and a footnote body ends
-      // at one of those exactly as it ends at a comment line there
-      // (markup-carve/carve#1814). Asked one line early because this loop's
-      // own continuation branch would otherwise claim the following line before
-      // any extent is measured. The `+` is consumed either way, so the
-      // enclosing parse resumes on the line the marker did not take.
-      if (!attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine ?? ln), quotePrefixDepth(sourceLine ?? ln))) return 'stop'
+      // The note ends where a comment ends it (markup-carve/carve#1814).
+      // Check one line early so this branch does not claim the following line
+      // before measuring the attached block's extent.
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),

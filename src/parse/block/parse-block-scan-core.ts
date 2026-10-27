@@ -10,6 +10,7 @@ import {
   FENCE_TRAILING_WS,
   isBlockAttributeLine,
   isContinuationMarker,
+  isListMarkerLine,
   isLinkDefLine,
   isTableRow,
   leadingWhitespace,
@@ -758,7 +759,11 @@ export function commentScopeEnd(
     const raw = lexer.lineAt(i)!
     // The blank-line half first: it is two array reads, where the quote and
     // column measurements below are regexes, and it rejects almost every line.
-    if (isBlankLine(raw) || !isBlankLine(lexer.lineAt(i - 1) ?? '')) continue
+    if (isBlankLine(raw)) continue
+    // A sibling marker closes an item without a separating blank line.
+    const siblingItem = scope.contentCol > 0 && isListMarkerLine(raw) &&
+      indentColumns(raw, scope.contentCol) < scope.contentCol
+    if (!siblingItem && !isBlankLine(lexer.lineAt(i - 1) ?? '')) continue
     // AND A CONTINUATION MARKER IS NOT A DEPARTURE. `+` at column 0 after a
     // blank line attaches the next block to the item rather than ending it
     // (PART 17), so the fence is still inside its container and the closer

@@ -56,6 +56,7 @@ type LinkDefScan = {
   divs: PrepassDiv[]
   listCols: ListColumn[]
   sawDeflistTerm: boolean
+  deflistQuoteDepth: number | null
   openCols: OpenContainer[]
   prevBlank: boolean
   afterPreviousTerm: boolean
@@ -343,7 +344,14 @@ export function createLinkDefinitionCollector(
     // column survived the read.
     const containerOpenAbove = s.openCols.length > 0 || listCols.length > 0
     const marker = prepassMarker(unquoted)
-    if (RE_DEFLIST_TERM.test(unquoted)) s.sawDeflistTerm = true
+    if (s.deflistQuoteDepth !== null && v.rawQuoteDepth !== s.deflistQuoteDepth) {
+      s.sawDeflistTerm = false
+      s.deflistQuoteDepth = null
+    }
+    if (RE_DEFLIST_TERM.test(unquoted)) {
+      s.sawDeflistTerm = true
+      s.deflistQuoteDepth = v.rawQuoteDepth
+    }
     const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
     let deflistDef: RegExpExecArray | null = null
     // Test the RAW line for a block starter: a blockquote `>` is stripped by
@@ -494,7 +502,10 @@ export function createLinkDefinitionCollector(
     const marker = composed.peeled.find((entry) => !entry.quote)
     const col = marker?.marker ?? composed.column
     const rest = marker ? raw.slice(marker.marker) : view
-    const { term } = s
+    let { term } = s
+    const listMarker = prepassMarker(rest)
+    if (term && quotes === term.quotes && listMarker !== null &&
+        /\S/.test(rest.slice(listMarker[0].length))) term = s.term = null
     if (isBlankLine(view)) {
       s.term = null
       return false
@@ -1118,6 +1129,7 @@ export function createLinkDefinitionCollector(
       // line is a description marker only once one has been seen. Ungated, `: term`
       // in ordinary prose pushed a content column the parser never opens.
       sawDeflistTerm: false,
+      deflistQuoteDepth: null,
       // THE COMPOSED CONTENT-COLUMN STACK, absolute, outermost first - `listCols`
       // read through every container rather than through list markers alone.
       //
