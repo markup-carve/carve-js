@@ -167,6 +167,7 @@ import {
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
+import { isQuoteBlankLine } from './parse-lexer.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
 // state its unmarked lines are judged against.
@@ -291,7 +292,7 @@ export class ParseSession extends InlineParseSession {
     if (prefix === undefined) {
       prefix = [0]
       for (const line of lines) {
-        const quoteBlank = /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(line)
+        const quoteBlank = isQuoteBlankLine(line)
         prefix.push(prefix[prefix.length - 1]! + Number(isBlankLine(line) || quoteBlank))
       }
       this.authoredBlankPrefixes.set(lines, prefix)
@@ -303,7 +304,7 @@ export class ParseSession extends InlineParseSession {
     for (let lineNumber = start + 1; lineNumber <= end; lineNumber++) {
       if (opaqueBlankLines.has(lineNumber)) continue
       const line = lines[lineNumber - 1]!
-      if (isBlankLine(line) || /^(?:[ \t]*>[ \t]?)+[ \t]*$/.test(line)) return true
+      if (isBlankLine(line) || isQuoteBlankLine(line)) return true
     }
     return false
   }
@@ -1730,12 +1731,12 @@ export class ParseSession extends InlineParseSession {
       (!quoteTermContinuation && !lazyFootnote && startsInterruptingBlock(lexer, undefined, false))
   }
 
-  private appendLazyQuoteLine(q: QuoteCollect, ln: string, lineIndex: number): void {
+  private appendLazyQuoteLine(q: QuoteCollect, ln: string, lineIndex: number, termContinuation: boolean): void {
     const { lexer } = q
     // A line without the quote prefix cannot close an attribute opened inside it.
     q.state.attrRun = null
     const lazyLinkDef = this.isLinkDefLine(ln)
-    if (lazyLinkDef && lexer.declinedLinkDefLines.has(lexer.lineNumber(lineIndex))) {
+    if (lazyLinkDef) {
       lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
     }
     // THE LINE IS THE QUOTE'S LAZY TEXT, AND A MARKER DOES NOT SURVIVE THE
@@ -1771,7 +1772,7 @@ export class ParseSession extends InlineParseSession {
         lexer.reportRefusedContinuationMarker(lineIndex, indentColumns(ln) + 1, 'list item', markerDecision(lexer, lineIndex).reason)
       }
     }
-    q.inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || q.quoteTermContinuation
+    q.inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || termContinuation
       ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
     q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
     if (!lazyLinkDef) this.trackQuoteLine(q, ln, lineIndex)
@@ -1791,16 +1792,18 @@ export class ParseSession extends InlineParseSession {
     q.paragraphOpen ??= blockQuoteParagraphClaimOpen(state)
     if (q.handDown && q.handDown.paragraphOpen === undefined) q.handDown.paragraphOpen = q.paragraphOpen
     if (!q.paragraphOpen && !lazyFootnote) return false
+    let leaf = state
+    while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
+    const termContinuation = q.quoteTermContinuation ||
+      leaf.mode.kind === 'paragraph' && (leaf.mode.term === true || leaf.hosts?.terms.at(-1) === true)
     if (leadingWhitespace(ln) === 0 && (deflistMarkerLine(ln) || isListMarkerLine(ln)) &&
         !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
-      let leaf = state
-      while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
       // A marker at the surviving document column ends the open term.
       if (leaf.mode.kind === 'paragraph' && (leaf.mode.term || leaf.hosts?.terms.at(-1))) return false
     }
     const lineIndex = lexer.pos
     lexer.consume()
-    this.appendLazyQuoteLine(q, ln, lineIndex)
+    this.appendLazyQuoteLine(q, ln, lineIndex, termContinuation)
     return true
   }
 
@@ -2169,7 +2172,8 @@ export class ParseSession extends InlineParseSession {
           indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate) &&
           !lineOpensBlock(candidate)
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
-          !isContinuationMarker(candidate) && !isListMarkerLine(candidate)
+          !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
+          !deflistMarkerLine(candidate)
         if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
         take++
       }

@@ -965,6 +965,7 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
   for (;;) {
     const line = lexer.peek(count)
     if (line === undefined || (count > 0 && isBlankLine(line))) return null
+    if (count > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count))) return null
     const closed = line.includes('}')
     // A continuation is a complete attribute fragment: quoted values cannot
     // cross a newline. Reject a later opener before re-reading its whole tail.
