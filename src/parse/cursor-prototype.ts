@@ -921,6 +921,18 @@ function definitionBodyWrapText(text: string, column: number): boolean {
       text[indent] === '[' || text[indent] === '{' || text[indent] === '`')
 }
 
+function nestedDefinitionBodyEnd(cursor: Cursor, from: number, column: number): number | undefined {
+  const first = cursor.lines[from]?.text
+  if (!first || first.charCodeAt(column - 1) !== 58 ||
+      first.charCodeAt(column) !== 58 || first.charCodeAt(column + 1) !== 32) return undefined
+  const prefix = ' '.repeat(column - 1)
+  if (!first.startsWith(prefix)) return undefined
+  let after = from + 1
+  while (cursor.lines[after]?.text.startsWith(prefix) &&
+      cursor.lines[after]!.text.length > prefix.length) after++
+  return !cursor.lines[after] || cursor.lines[after]!.text === '' ? after : undefined
+}
+
 function boundedDefinitionParagraphEnd(lines: SourceLine[], from: number): number | undefined {
   const codeRun = /^ +(`{3,})[ \t]*$/.exec(lines[from]?.text ?? '')?.[1]
   if (codeRun) {
@@ -1005,7 +1017,7 @@ function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: nu
 }
 
 function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: SourceLine,
-  column: number, content: string, inline: CursorInline):
+  column: number, content: string, inline: CursorInline, depth: number):
   { blocks: BlockNode[]; last: SourceLine } | undefined {
   const prefix = ' '.repeat(column - 1)
   if (cursor.at >= end || !cursor.peek()!.text.startsWith(prefix)) return undefined
@@ -1028,7 +1040,7 @@ function takeDefinitionBlockContinuation(cursor: Cursor, end: number, line: Sour
     throw new UnsupportedCursorSyntax('definition body reference')
   }
   return { blocks: parseBlocks(new Cursor(body, undefined,
-    childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false), last }
+    childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false), last }
 }
 
 function lastPlacedDefinitionLine(blocks: BlockNode[], last: SourceLine,
@@ -1127,6 +1139,9 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
     }
     const attachedFenceEnd = mayWrapDefinition ? attachedDefinitionFenceEnd(cursor, end) : undefined
     if (attachedFenceEnd !== undefined) { end = attachedFenceEnd; break }
+    const nestedEnd = mayWrapDefinition && definitionContentPlain ?
+      nestedDefinitionBodyEnd(cursor, end, definitionContentColumn) : undefined
+    if (nestedEnd !== undefined) { end = nestedEnd; break }
     if (mayWrapDefinition && definitionContentPlain && definitionContentColumn > 1) {
       const structuralEnd = definitionStructuralFollowerEnd(cursor, end, definitionContentColumn)
       if (structuralEnd !== undefined) {
@@ -1182,7 +1197,7 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
 }
 
 function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
-  commentOpeners: ReadonlySet<number> | undefined): DefinitionList {
+  commentOpeners: ReadonlySet<number> | undefined, depth: number): DefinitionList {
   const first = cursor.peek()!
   const end = definitionListEnd(cursor, commentOpeners)
   const items: DefinitionItem[] = []
@@ -1231,6 +1246,25 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     } else if (definition && current) {
       const column = line.text.length - definition[1]!.length + 1
       const following = cursor.at < end ? cursor.peek() : undefined
+      const nestedEnd = !isBlockStart(definition[1]!) ?
+        nestedDefinitionBodyEnd(cursor, cursor.at, column) : undefined
+      if (nestedEnd !== undefined && nestedEnd <= end) {
+        const body: SourceLine[] = [{ text: definition[1]!, start: line.start + column - 1,
+          number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1 }]
+        while (cursor.at < nestedEnd) {
+          const follower = cursor.take()
+          body.push({ text: follower.text.slice(column - 1),
+            start: follower.start + column - 1, number: follower.number,
+            baseColumn: (follower.baseColumn ?? 1) + column - 1 })
+          last = follower
+        }
+        const blocks = parseBlocks(new Cursor(body, undefined,
+          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false)
+        current.definitions.push(blocks)
+        current.definitionLines.push(line.number)
+        current.definitionSpans.push(position(line, line))
+        continue
+      }
       if (!isBlockStart(definition[1]!) &&
           following && definitionStructuralLine(following.text, column)) {
         const body: SourceLine[] = [
@@ -1245,7 +1279,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           last = block
         }
         const blocks = parseBlocks(new Cursor(body, undefined,
-          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false)
+          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false)
         current.definitions.push(blocks)
         last = lastPlacedDefinitionLine(blocks, last, cursor.physicalLines)
         current.definitionLines.push(line.number)
@@ -1256,7 +1290,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           RE_BLOCKQUOTE.test(cursor.peek()!.text)) {
         const follower = cursor.take()
         current.definitions.push(parseBlocks(new Cursor([follower], undefined,
-          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false))
+          childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], depth + 1, false))
         current.definitionLines.push(line.number)
         current.definitionSpans.push(position(line, line))
         last = follower
@@ -1266,7 +1300,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const parts: ContentLine[] = [{ line, column, text: definition[1]! }]
       let definitionLast = line
       const continuation = blockBody ? takeDefinitionBlockContinuation(cursor, end, line,
-        column, definition[1]!, inline) : undefined
+        column, definition[1]!, inline, depth) : undefined
       if (continuation) {
         current.definitions.push(continuation.blocks)
         current.definitionLines.push(line.number)
@@ -1299,7 +1333,7 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
       const blocks = blockBody || mappedImageLine ? parseBlocks(new Cursor([{
         text: definition[1]!, start: line.start + column - 1,
         number: line.number, baseColumn: (line.baseColumn ?? 1) + column - 1,
-      }], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], 1, false) :
+      }], undefined, childOwner(cursor.owner, 'colon'), cursor.physicalLines), inline, [], depth + 1, false) :
         [{ type: 'paragraph' as const, children: inline.inlines(parts),
           pos: position(line, definitionLast, column,
             /^:{1,2}[ \t]*$/.test(definitionLast.text) ?
@@ -1314,13 +1348,13 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
         const body = [follower]
         while (cursor.at < end) body.push(cursor.take())
         current.definitions.at(-1)!.push(...parseBlocks(new Cursor(body, undefined,
-          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], 1, false))
+          childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false))
         last = body.at(-1)!
         continue
       }
       const attached: BlockNode[] = listMarker(follower.text) ?
         parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'definition'),
-          cursor.physicalLines), inline, [], 1, false) : [{ type: 'paragraph',
+          cursor.physicalLines), inline, [], depth + 1, false) : [{ type: 'paragraph',
         children: inline.inlines([{ line: follower, column: 1, text: follower.text }]),
         pos: position(follower, follower) }]
       current.definitions.at(-1)!.push(...attached)
@@ -3679,8 +3713,9 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       continue
     }
     if (/^:: +[ \t]*[^ \t]/.test(first.text) &&
-        (atDocumentLevel || (cursor.owner.kind === 'quote' && !cursor.owner.inList))) {
-      emit(parseSimpleDefinitionList(cursor, inline, commentOpeners))
+        (atDocumentLevel || cursor.owner.kind === 'definition' ||
+          (cursor.owner.kind === 'quote' && !cursor.owner.inList))) {
+      emit(parseSimpleDefinitionList(cursor, inline, commentOpeners, depth))
       continue
     }
     if (/^::[ \t]*$/.test(first.text)) {

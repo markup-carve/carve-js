@@ -5,6 +5,26 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    ':: a\n: b\n  :: c\n    # H\n',
+    ':: a\n: b\n  :: c\n  : d\n',
+    ':: a\n: b\n  :: c\n    ::: note\n    body\n    :::\n',
+  ])('keeps a nested definition at the outer body column: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it('caps nested definition bodies before the call stack grows without bound', () => {
+    let source = ''
+    for (let depth = 0; depth < 205; depth++) {
+      const prefix = '  '.repeat(depth)
+      source += `${prefix}:: t${depth}\n${prefix}: d${depth}\n`
+    }
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     ':: t\n: d\n ```\nx\n```\n',
     ':: t\n:  d\n ````\nx\n````\n\ntail\n',
   ])('keeps a below-column code run inside the definition paragraph: %s', (source) => {
