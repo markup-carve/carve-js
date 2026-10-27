@@ -2652,4 +2652,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
   })
+
+  it.each(['- a\n  *[A]: x\ntail\n',
+    '1. a\n   *[A]: x\ntail\n'])
+  ('keeps a literal abbreviation line in its list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
 })

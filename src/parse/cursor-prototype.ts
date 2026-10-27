@@ -2069,12 +2069,15 @@ function mayFoldRootListParagraph(cursor: Cursor,
   const next = cursor.peek()!
   const first = frame.body[0]
   const last = frame.body.at(-1)
+  const literalAbbreviation = frame.body.length >= 2 && first !== undefined &&
+    last !== undefined && plainQuoteText(first.text) && ABBR_DEF.test(last.text)
   if (!(depth === 0 || depth === 1 &&
       (cursor.owner.kind === 'list' || cursor.owner.kind === 'definition' ||
         cursor.owner.kind === 'quote')) ||
       stackLength !== 1 || frame.indent !== 0 || frame.fenceMarker ||
       last?.number !== next.number - 1 ||
-      !(frame.lazyRootParagraph || ownsBelowColumnQuotedLiteral(frame.body, next.text) ||
+      !(frame.lazyRootParagraph || literalAbbreviation ||
+        ownsBelowColumnQuotedLiteral(frame.body, next.text) ||
         frame.body.length === 1 &&
         first !== undefined &&
         (plainQuoteText(first.text) || listFirstBlockParagraphText(first.text)))) return false
