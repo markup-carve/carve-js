@@ -5,6 +5,22 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    '- a\n  ```\n  b\n y\n  ```\n',
+    '- ```\n  b\n y\n  ```\n',
+    '1. a\n   ~~~\n   b\n y\n   ~~~\n',
+  ])('ends a list-owned fence at a below-column line: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it('declines a list fence when the closer has a blank gap', () => {
+    expect(() => parseCursorPrototype('- a\n  ```\n  b\n y\n\n  ```\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
     ':: t\n:  x\n%% c\nz\n',
     ':: t\n:  x\n %% c\n  z\n',
     ':: t\n:   x\n  %% c\n   z\n',
