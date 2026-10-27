@@ -2337,7 +2337,16 @@ function reportUnterminatedMarkerRun(
       `The table alignment run "${spelling}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${blockSuffix} to make it alignment.`)
     return
   }
-  if (!run.header || TABLE_MARKER_GLYPHS.has(text[1] ?? '')) return
+  if (!run.header) {
+    // A glued `<`, `>` or `~` after the block has its own, more specific
+    // warning (block written before the alignment marker).
+    if (!run.attrs || TABLE_ALIGNMENT_MARKERS.has(text[run.end] ?? '')) return
+    const spelling = text.slice(0, run.end)
+    report(1, run.end,
+      `The table cell attribute block "${spelling}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the block to apply it to the cell.`)
+    return
+  }
+  if (TABLE_MARKER_GLYPHS.has(text[1] ?? '')) return
   report(1, run.end,
     `The table kind marker has no terminating space, so it is literal cell content. Add a space after the marker run${blockSuffix} to make it a header.`)
 }

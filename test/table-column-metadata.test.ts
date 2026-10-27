@@ -107,6 +107,9 @@ describe('table column metadata', () => {
     ['=^ a', '<td>=^ a</td>'],
     ['=<< a', '<td>=&lt;&lt; a</td>'],
     ['^a', '<td>^a</td>'],
+    ['{.x} a', '<td class="x">a</td>'],
+    [' {.x}a', '<td>{.x}a</td>'],
+    ['{.x 1bad}a', '<td>{.x 1bad}a</td>'],
   ])('does not report the padded or unrepairable cell |%s |', (cell, html) => {
     const source = `|${cell} |\n`
     expect(carveToHtml(source)).toContain(html)
@@ -121,6 +124,9 @@ describe('table column metadata', () => {
     ['=a', 1, 1, 'kind marker'],
     ['=\ta', 1, 1, 'kind marker'],
     ['={.x}a', 1, 5, 'kind marker'],
+    ['{.x}a', 1, 4, 'attribute block "{.x}"'],
+    ['{x y z}a', 1, 7, 'attribute block "{x y z}"'],
+    ['{.x}\ta', 1, 4, 'attribute block "{.x}"'],
   ])('reports the unterminated run in |%s |', (cell, column, length, what) => {
     const source = `|${cell} |\n`
     expect(carveToHtml(source)).toContain(`<td>${cell.replace(/>/g, '&gt;').replace(/</g, '&lt;')}</td>`)
@@ -129,6 +135,16 @@ describe('table column metadata', () => {
     expect(warning).toMatchObject({ line: 1, column: column + 1 })
     expect(warning!.end - warning!.start).toBe(length)
     expect(warning!.message).toContain(what)
+  })
+
+  it('reports a glued attribute block ahead of literal "=" content', () => {
+    const source = '|{.x}=R|\n'
+    expect(carveToHtml(source)).toContain('<td>{.x}=R</td>')
+    const [warning, ...rest] = padding(source)
+    expect(rest).toEqual([])
+    expect(warning).toMatchObject({ line: 1, column: 2 })
+    expect(warning!.end - warning!.start).toBe(4)
+    expect(warning!.message).toContain('attribute block "{.x}"')
   })
 
   it('renders ListTable columns and a footer through the shared spelling', () => {
