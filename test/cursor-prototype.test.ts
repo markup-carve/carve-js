@@ -426,7 +426,18 @@ describe('experimental block cursor', () => {
       }
       exact++
     }
-    expect(exact).toBeGreaterThanOrEqual(2624)
+    expect(exact).toBeGreaterThanOrEqual(2633)
+  })
+
+  it('keeps nested list code spans and outer unclosed fences with their owners', () => {
+    for (const source of [
+      '- outer\n  - head\n\n    ```\n    body\n  ```\n\n  tail\n',
+      '- outer\n  - head\n     ````\n     body\n  ```\n\n  tail\n',
+    ]) {
+      expect(parseCursorPrototype(source), source).toStrictEqual(parse(source))
+    }
+    const quoted = '> - outer\n>   - head\n>      ```\n>      body\n>   ```\n>\n>   tail\n'
+    expect(() => parseCursorPrototype(quoted)).toThrow(UnsupportedCursorSyntax)
   })
 
   it('keeps a colon-owned unclosed fence after invisible lines', () => {

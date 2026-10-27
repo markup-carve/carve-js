@@ -2128,7 +2128,7 @@ function startsNestedListAfterLongBlankRun(blanks: number,
   return blanks >= 3 && marker !== undefined && marker.indent > rootIndent
 }
 
-function closesOpenListCodeSpan(body: SourceLine[], follower: string,
+function entersOpenListCodeSpan(body: SourceLine[], follower: string,
   contentColumn: number | undefined): boolean {
   const closer = /^ +(`{3,})[ \t]*$/.exec(follower)
   if (!closer || contentColumn === undefined ||
@@ -2139,7 +2139,7 @@ function closesOpenListCodeSpan(body: SourceLine[], follower: string,
   for (let at = 0; at < text.length; at++) {
     if (text[at] !== '`') continue
     const span = verbatimSpanEnd(text, at)
-    if (!span.closed) return span.openLen === closer[1]!.length
+    if (!span.closed) return true
     at = span.end - 1
   }
   return false
@@ -2179,7 +2179,7 @@ function mayFoldNestedListParagraph(cursor: Cursor,
       (plainQuoteText(last) || nonRowPipe || top.body.at(-1)?.lazyText ||
         last === '+' && plainQuoteText(top.body.at(-2)?.text ?? ''))) return true
   return follower[0] === ' ' && follower.includes('`') &&
-    closesOpenListCodeSpan(top.body, follower, top.contentColumn) ||
+    entersOpenListCodeSpan(top.body, follower, top.contentColumn) ||
     follower[0] === ' ' && follower.includes('~') &&
     foldsListTildeRun(top.body, follower, top.contentColumn)
 }
@@ -2766,9 +2766,13 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         children: inline.inlines(frame.body.map((line) => ({ line, column: 1, text: line.text }))),
         pos: position(first, last, 1, last.text.replace(/[ \t]+$/, '').length + 1) })
     } else {
+      const unclosedAfterNestedList = cursor.owner.kind === 'root' &&
+        frame.item.children.at(-1)?.type === 'list' &&
+        fenceOpen(frame.body[0]!.text) !== null &&
+        frame.body.at(-1)?.number === cursor.physicalLines.at(-1)?.number
       frame.item.children.push(...parseBlocks(
         new Cursor(frame.body, undefined, childOwner(cursor.owner, 'list', allowEmptyFence,
-          frame.fenceMayDedent || cursor.owner.allowUnclosedFence,
+          frame.fenceMayDedent || cursor.owner.allowUnclosedFence || unclosedAfterNestedList,
           frame.fenceBoundary ?? cursor.owner.fenceBoundary,
           cursor.owner.kind === 'root' ? firstMarker.width : undefined),
           cursor.physicalLines),
