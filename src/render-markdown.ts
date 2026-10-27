@@ -1459,7 +1459,10 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       // author content and can hold a `<`, and `</#a<script>` is a complete
       // opening tag once this Markdown is rendered, so the target takes the
       // HTML pass while the writer's own delimiters stay literal (carve-js#894).
-      if (!node.href) return `</#${escapeMdHtml(stripControls(node.target))}>`
+      if (!node.href) {
+        const target = escapeMdHtml(stripControls(node.target))
+        return `</#${insideLabel ? target.replaceAll(']', '\\]') : target}>`
+      }
       // Suppress links cloned from the target even when the reference renders
       // as plain text (PART 12 §3a, markup-carve/carve#817). Label escaping
       // follows the brackets this writer emits.
