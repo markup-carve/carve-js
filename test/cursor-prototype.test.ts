@@ -1412,6 +1412,13 @@ describe('experimental block cursor', () => {
     }
   })
 
+  it.each([
+    '- intro\n\n   :: term\n   :  definition\n\n      > quote\n',
+    '- intro\n\n   :: term\n   :  definition\n',
+  ])('keeps a nested definition with its list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each([':: t\n', ':: t\n: d\n', ':: t\n:  d\n',
     ':: t\n: d\n:: u\n: e\n', ':: a\n:: b\n: c\n'])
   ('parses a standalone simple definition list: %s', (source) => {

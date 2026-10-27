@@ -32,7 +32,8 @@ import { verbatimSpanEnd } from './inline/parse-brackets.js'
 export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number;
-  spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean }
+  spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
+  ownedDefinition?: boolean; ownedDefinitionBody?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
   readonly kind: ContainerKind
@@ -626,15 +627,21 @@ function quoteOwnedListMarker(cursor: Cursor, line: SourceLine,
 }
 
 function listContinuationPrefix(line: string, base: number, body?: SourceLine[],
-  closedQuoteFence = false): number {
+  closedQuoteFence = false, next?: string): number {
   const firstBlockText = body?.[0]?.text
   if (firstBlockText && listMarker(firstBlockText)) return base
   let column = base
   while (line[column] === ' ') column++
   const block = line.slice(column)
   if (block.startsWith('>') && body && openColonRun(body, true) !== undefined) return base
+  const previousLine = body?.at(-1)
+  const previous = previousLine?.text ?? ''
+  if (block.startsWith('>') && previous === '' && body?.at(-2)?.ownedDefinitionBody &&
+      (next === undefined || isBlankLine(next))) return base
   return column > base && (!closedQuoteFence && block.startsWith('>') ||
-    RE_HEADING.test(block)) ? column : base
+    RE_HEADING.test(block) || body && previous === '' && /^:: +/.test(block) ||
+    previousLine?.ownedDefinition && column === (previousLine.baseColumn ?? 1) - 1 &&
+      /^: +/.test(block)) ? column : base
 }
 
 function tabbedListPrefix(line: string, contentColumn: number): number | undefined {
@@ -698,11 +705,17 @@ function shiftedQuotedHeading(body: SourceLine[], line: SourceLine, prefix: numb
 }
 
 function listContinuationClaim(frame: ListCursorFrame, line: SourceLine,
-  bodyPrefix: number, reachedPrefix: number): { line: SourceLine; prefix: number } {
+  bodyPrefix: number, reachedPrefix: number, next?: SourceLine):
+  { line: SourceLine; prefix: number } {
   const prefix = bodyPrefix === reachedPrefix && !frame.fenceMarker ?
-    listContinuationPrefix(line.text, bodyPrefix, frame.body, frame.closedQuoteFence) : bodyPrefix
+    listContinuationPrefix(line.text, bodyPrefix, frame.body, frame.closedQuoteFence,
+      next?.text) : bodyPrefix
+  const ownedDefinition = prefix > bodyPrefix && /^:: +/.test(line.text.slice(prefix))
+  const ownedDefinitionBody = prefix > bodyPrefix && frame.body.at(-1)?.ownedDefinition &&
+    /^: +/.test(line.text.slice(prefix))
   return { line: shiftedQuotedHeading(frame.body, line, bodyPrefix) ?
-    { ...line, lazyText: true } : line, prefix }
+    { ...line, lazyText: true } : ownedDefinition ? { ...line, ownedDefinition: true } :
+      ownedDefinitionBody ? { ...line, ownedDefinitionBody: true } : line, prefix }
 }
 
 function followsClosedListBlock(body: SourceLine[]): boolean {
@@ -1238,6 +1251,12 @@ function definitionListEnd(cursor: Cursor, commentOpeners: ReadonlySet<number> |
       end++
       break
     }
+    if (mayWrapDefinition && text === '' &&
+        definitionStructuralLine(cursor.lines[end + 1]?.text ?? '', definitionContentColumn) &&
+        (!cursor.lines[end + 2] || cursor.lines[end + 2]!.text === '')) {
+      end += 2
+      break
+    }
     const attachedFenceEnd = mayWrapDefinition ? attachedDefinitionFenceEnd(cursor, end) : undefined
     if (attachedFenceEnd !== undefined) { end = attachedFenceEnd; break }
     const nestedEnd = mayWrapDefinition && definitionContentPlain ?
@@ -1315,6 +1334,20 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
     if (line.text === '' && current) {
       if (cursor.at < end && current.definitions.length) {
         const follower = cursor.take()
+        const previous = cursor.lines[cursor.at - 3]
+        const definition = previous && /^: +[ \t]*([^ \t].*)$/.exec(previous.text)
+        const contentColumn = definition ? previous.text.length - definition[1]!.length + 1 : 0
+        const structuralOffset = contentColumn ?
+          definitionStructuralOffset(follower.text, contentColumn) : undefined
+        if (structuralOffset !== undefined) {
+          const body = { text: follower.text.slice(structuralOffset),
+            start: follower.start + structuralOffset, number: follower.number,
+            baseColumn: (follower.baseColumn ?? 1) + structuralOffset }
+          current.definitions.at(-1)!.push(...parseBlocks(new Cursor([body], undefined,
+            childOwner(cursor.owner, 'definition'), cursor.physicalLines), inline, [], depth + 1, false))
+          last = follower
+          continue
+        }
         const column = /^ */.exec(follower.text)![0].length + 1
         current.definitions.at(-1)!.push({ type: 'paragraph',
           children: inline.inlines([{ line: follower, column, text: follower.text.slice(column - 1) }]),
@@ -2363,6 +2396,14 @@ function loosensListGap(cursor: Cursor, body: SourceLine[], text: string,
   return text[0] !== '{' || wrappedListAttributeCount(cursor, prefix) <= 1
 }
 
+function listGapLoosens(cursor: Cursor, body: SourceLine[], text: string, blanks: number,
+  prefix: number, nestedContinuation: boolean): boolean {
+  if (blanks === 1 && (/^ +:: +/.test(text) ||
+      body.at(-2)?.ownedDefinitionBody && RE_BLOCKQUOTE.test(text.trimStart()))) return false
+  return blanks > 1 && RE_CAPTION.test(text) ||
+    loosensListGap(cursor, body, text, prefix, nestedContinuation)
+}
+
 function indentedListAttributePrefix(text: string, prefix: number): number {
   const remaining = text.slice(prefix)
   const attribute = remaining.trimStart()
@@ -2561,6 +2602,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     frame.body.push(prefix === 0 ? line : { text, start: line.start + prefix, number: line.number,
       baseColumn: (line.baseColumn ?? 1) + prefix,
       ...(line.lazyText ? { lazyText: true } : {}),
+      ...(line.ownedDefinition ? { ownedDefinition: true } : {}),
+      ...(line.ownedDefinitionBody ? { ownedDefinitionBody: true } : {}),
       ...(line.wrappedAttr ? { wrappedAttr: true } : {}) })
     if (frame.quoteFenceMarker && text[0] === '>') {
       const inner = text.slice(text[1] === ' ' ? 2 : 1)
@@ -2886,8 +2929,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
           blockText = following.text.slice(listContinuationPrefix(following.text, prefixLength))
         }
         markInvisibleListGap(continuationFrame, lookahead > 0, blockText)
-        if (blanks > 1 && RE_CAPTION.test(blockText) ||
-            loosensListGap(cursor, continuationFrame.body, blockText,
+        if (listGapLoosens(cursor, continuationFrame.body, blockText, blanks,
           prefixLength, nestedContinuation === true)) {
           blankLooseFrame(continuationFrame, top, next).list.tight = false
         }
@@ -2984,7 +3026,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       bodyPrefix = indentedListAttributePrefix(line.text, bodyPrefix)
     }
     if (consumeWrappedAttribute(top, bodyPrefix)) continue
-    const claim = listContinuationClaim(top, line, bodyPrefix, reachedPrefix)
+    const claim = listContinuationClaim(top, line, bodyPrefix, reachedPrefix, cursor.peek(1))
     cursor.take()
     appendBody(top, claim.line, claim.prefix)
     top.retainedBelowColumnComment = false
@@ -4135,7 +4177,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       atDocumentLevel, footnoteDefs, footnoteDefPos, colonDepth)
     if (colonNode) { emit(colonNode); continue }
     if (/^:: +[ \t]*[^ \t]/.test(first.text) &&
-        (atDocumentLevel || cursor.owner.kind === 'definition' ||
+        (atDocumentLevel || cursor.owner.kind === 'definition' || first.ownedDefinition ||
           (cursor.owner.kind === 'quote' && !cursor.owner.inList))) {
       emit(parseSimpleDefinitionList(cursor, inline, commentOpeners, depth))
       continue
