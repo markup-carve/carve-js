@@ -3765,6 +3765,14 @@ function rejectOverindentedQuotedColon(cursor: Cursor, first: SourceLine): void 
   }
 }
 
+function takeLeadingPlusQuoteFollower(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  if (body.length !== 1 || body[0]!.text !== '+') return undefined
+  const line = cursor.peek()
+  if (!line?.text.startsWith(' ') || !plainQuoteText(line.text.trimStart()) ||
+      cursor.peek(1) && !isBlankLine(cursor.peek(1)!.text)) return undefined
+  return cursor.take()
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   rejectOverindentedQuotedColon(cursor, first)
@@ -3781,6 +3789,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let attachedListReturn = false
   while (cursor.peek()) {
     const line = cursor.peek()!
+    const leadingPlusFollower = takeLeadingPlusQuoteFollower(cursor, body)
+    if (leadingPlusFollower) {
+      last = leadingPlusFollower
+      body.push(leadingPlusFollower)
+      directParagraph = false
+      continue
+    }
     if (line.claimedQuoteLazy) {
       last = cursor.take()
       body.push(last)

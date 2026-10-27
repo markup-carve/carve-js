@@ -6,6 +6,11 @@ import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
 describe('experimental block cursor', () => {
+  it.each(['> +\n flush\n', '> +\n  flush\n', '> +\n flush\n\nafter\n'])
+  ('keeps a leading quote plus in its paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps position-free image captions aligned with the public parser', () => {
     for (const source of [
       '![a][ok]\n^ cap\n\n[ok]: /p.png\n',
