@@ -41,6 +41,8 @@ const IMPLEMENTED = new Set([
   'a-class-key-value-shares-the-class-slot',
   'a-cross-reference-clones-heading-inline-nodes',
   'a-definition-opens-a-sibling-block-after-a-list',
+  'a-description-continues-after-any-blank-run',
+  'raw-inline-content-in-heading-ids',
   'a-final-tab-does-not-change-list-ownership-in-a-description',
   'a-flush-left-description-leaves-a-deeper-host',
   'a-flush-left-description-leaves-a-nested-term-s-host',

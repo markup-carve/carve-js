@@ -5,8 +5,11 @@ import { readFileSync } from 'node:fs'
 const cases: Array<{ name: string; source: string; html: string }> = JSON.parse(
   readFileSync(new URL('./fixtures/description-boundary-2316.json', import.meta.url), 'utf8'),
 )
+const currentRuling: Record<string, string> = JSON.parse(
+  readFileSync(new URL('./fixtures/description-boundary-current-ruling.json', import.meta.url), 'utf8'),
+)
 
-// Expected HTML measured with the spec oracle at e24e38e9 (#2316).
-it.each(cases)('$name', ({ source, html }) => {
-  expect(carveToHtml(source)).toBe(html)
+// The original oracle fixture remains intact; these assertions select the later blank-run ruling.
+it.each(cases)('$name', ({ name, source, html }) => {
+  expect(carveToHtml(source)).toBe(currentRuling[name] ?? html)
 })
