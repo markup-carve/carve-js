@@ -1593,6 +1593,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([':: term\n:  definition\n    > q\ntail\n',
+    ':: t\n: body\n   > q\nmore text\n'])
+  ('keeps a terminal lazy quote follower inside its definition body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a definition quote with an unbounded lazy follower', () => {
+    expect(() => parseCursorPrototype(':: term\n:  definition\n    > q\ntail\nnext\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
   it('reads adjacent quote and heading blocks in a definition body', () => {
     const source = ':: term\n:  intro\n   > quote\n   # heading\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -2030,9 +2041,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a raised definition quote with a lazy plain-line follower', () => {
-    expect(() => parseCursorPrototype(':: t\n:  d\n    > q\ntail\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps a raised definition quote with a terminal lazy follower exact', () => {
+    const source = ':: t\n:  d\n    > q\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([':: t\n:  d\n   %% c\ntail\n',

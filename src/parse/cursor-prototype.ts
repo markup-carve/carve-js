@@ -1122,7 +1122,14 @@ function definitionStructuralFollowerEnd(cursor: Cursor, end: number, column: nu
   const opener = cursor.lines[end]!.text
   const offset = definitionStructuralOffset(opener, column)!
   if (offset > column - 1 && RE_BLOCKQUOTE.test(opener.slice(offset)) &&
-      plainQuoteText(cursor.lines[after]?.text ?? '')) return undefined
+      plainQuoteText(cursor.lines[after]?.text ?? '')) {
+    const quoteContent = opener.slice(offset + (opener[offset + 1] === ' ' ? 2 : 1))
+    const follower = cursor.lines[after]!.text
+    return plainQuoteText(quoteContent) && !isBlockStart(quoteContent) &&
+      !isBlockStart(follower) &&
+      (!cursor.lines[after + 1] || isBlankLine(cursor.lines[after + 1]!.text)) ?
+      after + 1 : undefined
+  }
   return !cursor.lines[after] || !cursor.lines[after]!.text.startsWith(' '.repeat(column - 1)) ?
     after : undefined
 }
@@ -1491,6 +1498,15 @@ function parseSimpleDefinitionList(cursor: Cursor, inline: CursorInline,
           body.push({ text: block.text.slice(offset), start: block.start + offset,
             number: block.number, baseColumn: (block.baseColumn ?? 1) + offset })
           last = block
+        }
+        if (cursor.at < end && body.length === 2 &&
+            (body[1]!.baseColumn ?? 1) > column && RE_BLOCKQUOTE.test(body[1]!.text) &&
+            plainQuoteText(body[1]!.text.slice(body[1]!.text[1] === ' ' ? 2 : 1)) &&
+            !isBlockStart(body[1]!.text.slice(body[1]!.text[1] === ' ' ? 2 : 1)) &&
+            plainQuoteText(cursor.peek()!.text) && !isBlockStart(cursor.peek()!.text) &&
+            (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))) {
+          last = cursor.take()
+          body.push(last)
         }
         if (cursor.at < end && definitionCommentTailEnd(cursor, cursor.at - 1, column) === cursor.at + 1) {
           last = cursor.take()
