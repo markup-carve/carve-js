@@ -1735,6 +1735,9 @@ export class ParseSession extends InlineParseSession {
         (leadingWhitespace(ln) === 0 && (RE_FOOTNOTE_DEF.test(ln) || isLinkDefLine(ln) || isBlockAttributeLine(ln))) ||
         RE_COMMENT_LINE.test(ln)
       )) ||
+      (quoteTermContinuation && (RE_FENCE.test(ln) || RE_RAW_FENCE.test(ln)) &&
+        sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln) < quoteMarkerColumn + 2 &&
+        startsInterruptingBlock(lexer, undefined, false)) ||
       (lexer.hostBody !== null && RE_FOOTNOTE_DEF.test(ln.trimStart()) &&
         !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
         indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) >= quoteMarkerColumn) ||
