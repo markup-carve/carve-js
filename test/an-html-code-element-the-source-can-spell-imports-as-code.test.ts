@@ -25,6 +25,8 @@ describe('an HTML code element the Carve source can spell imports as code', () =
     ['p <code>a<!---->&#10;<!---->b</code> q\n', [['code', 'a\nb']]],
     ['Text\n<code><!---->&#10;<!---->code</code>\n', [['code', '\ncode']]],
     ['a <code>b<!---->&#10;<!---->c&#32;d</code>\n', [['code', 'b\nc d']]],
+    ['> <code>a<!---->&#10;<!---->b</code>\n', [['code', 'a\nb']]],
+    ['- <code>a<!---->&#10;<!---->b</code>\n', [['code', 'a\nb']]],
   ])('%j', (markdown, expected) => {
     expect(codes(migrateMarkdown(markdown).value)).toEqual(expected)
     expect(fallbacks(markdown)).toBe(0)
@@ -43,8 +45,6 @@ describe('an HTML code element the Carve source can spell imports as code', () =
   it.each([
     ['~~<code></code>~~\n', 'raw_inline'],
     ['<code></code> z\n', 'raw_inline'],
-    ['> <code>a<!---->&#10;<!---->b</code>\n', 'raw_inline'],
-    ['- <code>a<!---->&#10;<!---->b</code>\n', 'raw_inline'],
     ['a <code>b<!---->&#10;<!----><!---->&#10;<!---->c</code>\n', 'raw_inline'],
   ])('keeps %j as raw HTML with a loss', (markdown, kind) => {
     expect(codes(migrateMarkdown(markdown).value).map(([type]) => type)).toEqual([kind])
