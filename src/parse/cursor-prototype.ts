@@ -438,6 +438,14 @@ function quotedListPlainFollower(cursor: Cursor, body: SourceLine[], line: Sourc
   return quotedListPlainRun(cursor, body, line, active) && plainQuoteText(line.text)
 }
 
+function quotedListFirstBlockFollower(cursor: Cursor, body: SourceLine[],
+  line: SourceLine): boolean {
+  return body.at(-1)?.number === line.number - 1 &&
+    quoteListEndsInPlus(body.at(-1)!.text) &&
+    (RE_HEADING.test(line.text) || isTableRow(line.text)) &&
+    (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
+}
+
 function mayContinueQuoteLazily(follower: string | undefined, innerLast: string | undefined): boolean {
   if (!follower || !innerLast || follower.startsWith('^ ')) return false
   let finalBlock = innerLast.trimStart()
@@ -1733,13 +1741,14 @@ function mayFoldRootListParagraph(cursor: Cursor,
 function mayFoldMarkerLineNestedFollower(cursor: Cursor,
   frame: { body: SourceLine[]; fenceMarker: string | undefined },
   stackLength: number, depth: number): boolean {
-  if (depth !== 0 || stackLength !== 1 || frame.fenceMarker || frame.body.length !== 1) return false
+  if (!(depth === 0 || depth === 1 && cursor.owner.kind === 'quote') ||
+      stackLength !== 1 || frame.fenceMarker || frame.body.length !== 1) return false
   const first = frame.body[0]!
   const marker = listMarker(first.text)
   const follower = cursor.peek()!
   if (first.number !== follower.number - 1) return false
   if (first.text === '> +' && (RE_BLOCKQUOTE.test(follower.text) ||
-      RE_HEADING.test(follower.text)) && !cursor.peek(1)) return true
+      RE_HEADING.test(follower.text) || isTableRow(follower.text)) && !cursor.peek(1)) return true
   return marker !== undefined &&
     (plainQuoteText(marker.content) && plainQuoteText(follower.text) ||
       (marker.content === '+' || /^\[[ xX\-_>/!?]\] \+$/.test(marker.content)) &&
@@ -2598,24 +2607,30 @@ function quoteNeedsLazyBoundary(follower: string | undefined, last: string | und
   return mayContinueQuoteLazily(follower, last) && !wrappedAttributeTail || !!inlineCode
 }
 
+function takeQuoteFirstBlock(cursor: Cursor, inline: CursorInline,
+  definitionNodes: BlockNode[], depth: number): BlockQuote | undefined {
+  const first = cursor.peek()!
+  const markerLineNested = cursor.owner.kind === 'list' &&
+    (depth === 1 || depth === 2 && cursor.owner.parent?.kind === 'quote')
+  if (first.text !== '> +' || !(depth === 0 || markerLineNested)) return undefined
+  const follower = cursor.peek(1)
+  const after = cursor.peek(2)
+  if (!follower || !(plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
+      isTableRow(follower.text) || markerLineNested && RE_BLOCKQUOTE.test(follower.text)) ||
+      after && !isBlankLine(after.text)) return undefined
+  cursor.take()
+  cursor.take()
+  return { type: 'block_quote',
+    children: parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'quote'),
+      cursor.physicalLines),
+      inline, definitionNodes, depth + 1, false),
+    pos: position(first, follower, 1, contentEndColumn(follower)) }
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
-  const markerLineNested = depth === 1 && cursor.owner.kind === 'list'
-  if (first.text === '> +' && (depth === 0 || markerLineNested)) {
-    const follower = cursor.peek(1)
-    const after = cursor.peek(2)
-    if (follower && (plainQuoteText(follower.text) || RE_HEADING.test(follower.text) ||
-        markerLineNested && RE_BLOCKQUOTE.test(follower.text)) &&
-        (!after || isBlankLine(after.text))) {
-      cursor.take()
-      cursor.take()
-      return { type: 'block_quote',
-        children: parseBlocks(new Cursor([follower], undefined, childOwner(cursor.owner, 'quote'),
-          cursor.physicalLines),
-          inline, definitionNodes, depth + 1, false),
-        pos: position(first, follower, 1, contentEndColumn(follower)) }
-    }
-  }
+  const firstBlock = takeQuoteFirstBlock(cursor, inline, definitionNodes, depth)
+  if (firstBlock) return firstBlock
   const body: SourceLine[] = []
   let last = first
   let plainParagraph = true
@@ -2664,6 +2679,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       continue
     }
     if (quotedListSibling(cursor, body, line, quotedListRun)) {
+      body.push(cursor.take())
+      directParagraph = false
+      plainParagraph = false
+      last = line
+      continue
+    }
+    if (quotedListFirstBlockFollower(cursor, body, line)) {
       body.push(cursor.take())
       directParagraph = false
       plainParagraph = false

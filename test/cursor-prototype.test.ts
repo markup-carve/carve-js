@@ -37,6 +37,17 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> - > +\n# h\n',
+    '> - a\n> - > +\n# h\n',
+    '> +\n|= 2-col header | < |= header |\n',
+  ])('attaches a hosted quote first block at column zero: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    const expected = parse(source)
+    expect(actual).toStrictEqual(expected)
+    expect(renderHtml(actual)).toBe(renderHtml(expected))
+  })
+
+  it.each([
     '- a\n\t- b\n\tc\n',
     '1. a\n \t* b\n\tc\n',
   ])('places a tab-indented nested list at its authored marker: %s', (source) => {
@@ -790,12 +801,6 @@ describe('experimental block cursor', () => {
     '{table aligns=left,right,right}\n```csv\nItem,Qty,Price\nApple,12,0.40\n"Pear, green",3,0.55\n```\n^ Stock on hand\n',
   ])('maps delimited table cells to their fence payload: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-  })
-
-  it.each([
-    '> +\n|= 2-col header | < |= header |\n',
-  ])('declines table forms whose container ownership is not migrated: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
   it('resolves root abbreviations and retains line comments', () => {
