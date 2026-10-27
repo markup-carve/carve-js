@@ -2253,6 +2253,16 @@ describe('experimental block cursor', () => {
       parse(source, { positions: false }))
   })
 
+  it.each(['> > - a\n>   +\n>   - b\n',
+    '> > * a\n>   Q\n>   * b\n',
+    '> > - a\n>    %% c\n>    - b\n',
+    '> > - a\n>    \n>    - b\n'])
+  ('keeps an inner quoted list or its outer quote boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
   it.each(['- + a |\ntail\n', '- a\n  + b |\ntail\n',
     '- | a |\n  + b |\ntail\n', '- |= a |\n  + b |\ntail\n',
     '- | a |\n  + |\ntail\n'])

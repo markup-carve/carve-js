@@ -458,6 +458,20 @@ function quotedListPlainFollower(cursor: Cursor, body: SourceLine[], line: Sourc
   return quotedListPlainRun(cursor, body, line, active) && plainQuoteText(line.text)
 }
 
+function takeNestedQuoteListLazyLine(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  if (cursor.owner.kind !== 'quote' || cursor.owner.parent?.kind !== 'root') return undefined
+  const first = listMarker(body[0]?.text ?? '')
+  const line = cursor.peek()
+  if (!first || first.indent !== 0 || !plainQuoteText(first.content) || !line ||
+      body.at(-1)?.number !== line.number - 1 ||
+      !line.text.startsWith(' '.repeat(first.width)) ||
+      isBlankLine(line.text) ||
+      line.text.slice(first.width).trimStart().startsWith('%%')) return undefined
+  const owned = { ...cursor.take(), lazyText: true }
+  body.push(owned)
+  return owned
+}
+
 function quotedListFirstBlockFollower(cursor: Cursor, body: SourceLine[],
   line: SourceLine): boolean {
   return body.at(-1)?.number === line.number - 1 &&
@@ -2817,6 +2831,13 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
     const unmarked = takeUnmarkedQuoteParagraphLine(cursor, body, unclosedFenceParagraph)
     if (unmarked) {
       last = unmarked
+      continue
+    }
+    const nestedListLazy = takeNestedQuoteListLazyLine(cursor, body)
+    if (nestedListLazy) {
+      directParagraph = false
+      plainParagraph = false
+      last = nestedListLazy
       continue
     }
     if (quotedListPlainFollower(cursor, body, line, quotedListRun)) {
