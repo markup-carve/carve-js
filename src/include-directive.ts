@@ -14,6 +14,7 @@ export interface Directive {
   path: string
   section?: string
   lines?: { start: number; end: number }
+  invalidLines?: true
   region?: string
   code?: { lang?: string }
   /** Literal signed offset, or "auto" to derive it from the include site. */
@@ -97,6 +98,7 @@ export function parseDirective(
   const sectionPart = trimSpaces(m[4] ?? '')
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
+  let invalidLines = false
   let region: string | undefined
   let code: Directive['code']
   let shift: number | 'auto' = 0
@@ -131,14 +133,18 @@ export function parseDirective(
         if (part.startsWith('@')) onInvalidOption?.(part)
         return null
       }
+      if (part === '@lines:') {
+        if (!first('lines', part)) return null
+        invalidLines = true
+        continue
+      }
       if (!opt) return invalid()
       const [, key, value] = opt
       if (key === 'lines') {
         const lm = /^([1-9]\d*)-([1-9]\d*)$/.exec(value!)
-        if (!lm) return invalid()
-        lines = { start: Number(lm[1]), end: Number(lm[2]) }
-        if (lines.end < lines.start) return invalid()
         if (!first(key, part)) return null
+        if (!lm || !Number.isSafeInteger(Number(lm[1])) || !Number.isSafeInteger(Number(lm[2])) || Number(lm[2]) < Number(lm[1])) invalidLines = true
+        else lines = { start: Number(lm[1]), end: Number(lm[2]) }
       } else if (key === 'region') {
         if (!/^[A-Za-z_][\w-]*$/.test(value!)) return invalid()
         if (!first(key, part)) return null
@@ -160,6 +166,7 @@ export function parseDirective(
   const directive: Directive = { raw, path, shift }
   if (section !== undefined) directive.section = section
   if (lines !== undefined) directive.lines = lines
+  if (invalidLines) directive.invalidLines = true
   if (region !== undefined) directive.region = region
   if (code !== undefined) directive.code = code
   return directive

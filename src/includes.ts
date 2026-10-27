@@ -676,6 +676,10 @@ function resolveChild(
     return null
   }
   note(state, id, true)
+  if (d.invalidLines) {
+    warn(state, 'include-lines-invalid', `Include line range for "${d.path}" is invalid.`, node)
+    return null
+  }
   // The cycle guard compares canonical ids after resolution, so a resolver
   // that supplies ids catches "b.crv" vs "./b.crv" spellings of one file.
   if (state.stack.includes(id)) {
