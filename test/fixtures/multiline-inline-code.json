@@ -37,7 +37,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ ``x`\n [r]: /url``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -45,7 +45,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/url``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/url``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -65,7 +65,7 @@
   },
   {
     "source": "before ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -77,7 +77,7 @@
   },
   {
     "source": "before ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -137,7 +137,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url\n [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: /url\n [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -145,7 +145,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url\n [r]: /again``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/again``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/again``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: /url\n [r]: /again``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -237,7 +237,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ ``x`\n [r]: <>``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -245,7 +245,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: <>``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"&lt;&gt;``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: ``x`\n [r]: /url \"title\"``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -769,7 +769,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -777,7 +777,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -805,7 +805,7 @@
   },
   {
     "source": "> before `x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\nbefore `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -813,7 +813,7 @@
   },
   {
     "source": "> before `x``\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -869,7 +869,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x``\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -877,7 +877,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url\n>  [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x``\n [r\\]]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -969,7 +969,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -977,7 +977,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1501,7 +1501,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x```\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1509,7 +1509,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1529,7 +1529,7 @@
   },
   {
     "source": "before `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1541,7 +1541,7 @@
   },
   {
     "source": "before `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1601,7 +1601,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1609,7 +1609,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1701,7 +1701,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x```\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1709,7 +1709,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x```\n [r]: /url \"title\"`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2233,7 +2233,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2241,7 +2241,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2269,7 +2269,7 @@
   },
   {
     "source": "> before `x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\nbefore `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2277,7 +2277,7 @@
   },
   {
     "source": "> before `x````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2333,7 +2333,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2341,7 +2341,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url\n>  [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x````\n [r\\]]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2433,7 +2433,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2441,7 +2441,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2965,7 +2965,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x`````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2973,7 +2973,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2993,7 +2993,7 @@
   },
   {
     "source": "before `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3005,7 +3005,7 @@
   },
   {
     "source": "before `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3065,7 +3065,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3073,7 +3073,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3165,7 +3165,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x`````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3173,7 +3173,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x`````\n [r]: /url \"title\"`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3921,7 +3921,7 @@
   },
   {
     "source": "> ``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3929,7 +3929,7 @@
   },
   {
     "source": "> ``x`\n>  [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3949,7 +3949,7 @@
   },
   {
     "source": "/before/ ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3961,7 +3961,7 @@
   },
   {
     "source": "/before/ ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4273,7 +4273,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`</code></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ ``x`\n > nested``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4281,7 +4281,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  > nested``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`</code></p>\n  <blockquote><p>nested<code>{.example}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: ``x`\n %% comment``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4661,7 +4661,7 @@
   },
   {
     "source": "`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4673,7 +4673,7 @@
   },
   {
     "source": "`x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4705,7 +4705,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4713,7 +4713,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: `x``\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5013,7 +5013,7 @@
   },
   {
     "source": "/before/ `x``\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5025,7 +5025,7 @@
   },
   {
     "source": "/before/ `x``\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<blockquote><p>nested<code>{.example}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5409,7 +5409,7 @@
   },
   {
     "source": "> `x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n`x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5417,7 +5417,7 @@
   },
   {
     "source": "> `x```\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5437,7 +5437,7 @@
   },
   {
     "source": "/before/ `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5449,7 +5449,7 @@
   },
   {
     "source": "/before/ `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5761,7 +5761,7 @@
   },
   {
     "source": "> /before/ `x```\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x```</code></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x```\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5769,7 +5769,7 @@
   },
   {
     "source": "> /before/ `x```\n>  > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x```</code></p>\n  <blockquote><p>nested<code>{.example}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x```\n %% comment`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6149,7 +6149,7 @@
   },
   {
     "source": "`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6161,7 +6161,7 @@
   },
   {
     "source": "`x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6193,7 +6193,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6201,7 +6201,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: `x````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6501,7 +6501,7 @@
   },
   {
     "source": "/before/ `x````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6513,7 +6513,7 @@
   },
   {
     "source": "/before/ `x````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<blockquote><p>nested<code>{.example}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6897,7 +6897,7 @@
   },
   {
     "source": "> `x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n`x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6905,7 +6905,7 @@
   },
   {
     "source": "> `x`````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6925,7 +6925,7 @@
   },
   {
     "source": "/before/ `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -6937,7 +6937,7 @@
   },
   {
     "source": "/before/ `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7249,7 +7249,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`````</code></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x`````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7257,7 +7257,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`````</code></p>\n  <blockquote><p>nested<code>{.example}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x`````\n %% comment`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7821,7 +7821,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7829,7 +7829,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/url``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/url``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: /url``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7857,7 +7857,7 @@
   },
   {
     "source": "> before ``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\nbefore ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7865,7 +7865,7 @@
   },
   {
     "source": "> before ``x`\n>  [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7921,7 +7921,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url\n>  [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ ``x`\n [r]: /url\n [r]: /again``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7929,7 +7929,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url\n>  [r]: /again``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/again``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/again``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: ``x`\n [r\\]]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8021,7 +8021,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8029,7 +8029,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: <>``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"&lt;&gt;``{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"&lt;&gt;``{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n [r]: <>``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8553,7 +8553,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x``\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8561,7 +8561,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8581,7 +8581,7 @@
   },
   {
     "source": "before `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8593,7 +8593,7 @@
   },
   {
     "source": "before `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8653,7 +8653,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8661,7 +8661,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8753,7 +8753,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x``\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8761,7 +8761,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x``\n [r]: /url \"title\"`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9285,7 +9285,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9293,7 +9293,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9321,7 +9321,7 @@
   },
   {
     "source": "> before `x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\nbefore `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9329,7 +9329,7 @@
   },
   {
     "source": "> before `x```\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9385,7 +9385,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x```\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9393,7 +9393,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url\n>  [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x```\n [r\\]]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9485,7 +9485,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9493,7 +9493,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10017,7 +10017,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10025,7 +10025,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10045,7 +10045,7 @@
   },
   {
     "source": "before `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10057,7 +10057,7 @@
   },
   {
     "source": "before `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- before `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10117,7 +10117,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10125,7 +10125,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10217,7 +10217,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10225,7 +10225,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x````\n [r]: /url \"title\"`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10749,7 +10749,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10757,7 +10757,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/url`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: /url`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10785,7 +10785,7 @@
   },
   {
     "source": "> before `x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\nbefore `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10793,7 +10793,7 @@
   },
   {
     "source": "> before `x`````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10849,7 +10849,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x`````\n [r]: /url\n [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10857,7 +10857,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url\n>  [r]: /again`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/again`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x`````\n [r\\]]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10949,7 +10949,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10957,7 +10957,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"&lt;&gt;`{.example}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n [r]: <>`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11697,7 +11697,7 @@
   },
   {
     "source": "``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- ``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11709,7 +11709,7 @@
   },
   {
     "source": "``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11741,7 +11741,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ ``x`\n [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11749,7 +11749,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [^n]: note``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: ``x`\n [r]: /url\n [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12049,7 +12049,7 @@
   },
   {
     "source": "/before/ ``x`\n > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12061,7 +12061,7 @@
   },
   {
     "source": "/before/ ``x`\n > nested``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<blockquote><p>nested<code>{.example}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n > nested``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12445,7 +12445,7 @@
   },
   {
     "source": "> `x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n`x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12453,7 +12453,7 @@
   },
   {
     "source": "> `x``\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12473,7 +12473,7 @@
   },
   {
     "source": "/before/ `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12485,7 +12485,7 @@
   },
   {
     "source": "/before/ `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x``\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12797,7 +12797,7 @@
   },
   {
     "source": "> /before/ `x``\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x``</code></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x``\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12805,7 +12805,7 @@
   },
   {
     "source": "> /before/ `x``\n>  > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x``</code></p>\n  <blockquote><p>nested<code>{.example}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x``\n %% comment`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13185,7 +13185,7 @@
   },
   {
     "source": "`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13197,7 +13197,7 @@
   },
   {
     "source": "`x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13229,7 +13229,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x```\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13237,7 +13237,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: `x```\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13537,7 +13537,7 @@
   },
   {
     "source": "/before/ `x```\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13549,7 +13549,7 @@
   },
   {
     "source": "/before/ `x```\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<blockquote><p>nested<code>{.example}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13933,7 +13933,7 @@
   },
   {
     "source": "> `x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n`x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13941,7 +13941,7 @@
   },
   {
     "source": "> `x````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13961,7 +13961,7 @@
   },
   {
     "source": "/before/ `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -13973,7 +13973,7 @@
   },
   {
     "source": "/before/ `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- /before/ `x````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14285,7 +14285,7 @@
   },
   {
     "source": "> /before/ `x````\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x````</code></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14293,7 +14293,7 @@
   },
   {
     "source": "> /before/ `x````\n>  > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x````</code></p>\n  <blockquote><p>nested<code>{.example}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: `x````\n %% comment`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14673,7 +14673,7 @@
   },
   {
     "source": "`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14685,7 +14685,7 @@
   },
   {
     "source": "`x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "- `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14717,7 +14717,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n/before/ `x`````\n [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14725,7 +14725,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [^n]: note`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{.example}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: `x`````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -15025,7 +15025,7 @@
   },
   {
     "source": "/before/ `x`````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -15037,7 +15037,7 @@
   },
   {
     "source": "/before/ `x`````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><blockquote><p>nested<code>{.example}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<blockquote><p>nested<code>{.example}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n > nested`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",

@@ -145,7 +145,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/url``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/url``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ ``x`\n [r]: /url``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -161,7 +161,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/url``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/url``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ ``x`\n>  [r]: /url``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -193,7 +193,7 @@
   },
   {
     "source": "/before/ $``x`\n [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $``x`\n [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -209,7 +209,7 @@
   },
   {
     "source": "> /before/ $``x`\n>  [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See <a href=\"/url``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $``x`\n>  [r]: /url``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -233,7 +233,7 @@
   },
   {
     "source": "> ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -257,7 +257,7 @@
   },
   {
     "source": "> !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>x`</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>x`</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -265,7 +265,7 @@
   },
   {
     "source": "$``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: $``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -281,7 +281,7 @@
   },
   {
     "source": "> $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -305,7 +305,7 @@
   },
   {
     "source": "> before ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -329,7 +329,7 @@
   },
   {
     "source": "> before !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before x`</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before x`</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -337,7 +337,7 @@
   },
   {
     "source": "before $``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before $``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -353,7 +353,7 @@
   },
   {
     "source": "> before $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -361,7 +361,7 @@
   },
   {
     "source": "/before/ ``x`\n [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ ``x`\n [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -377,7 +377,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ ``x`\n>  [^n]: note``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -385,7 +385,7 @@
   },
   {
     "source": "/before/ !``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em> x`</p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> x`</p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ !``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -401,7 +401,7 @@
   },
   {
     "source": "> /before/ !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em> x`</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> x`</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ !``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -409,7 +409,7 @@
   },
   {
     "source": "/before/ $``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ $``x`\n [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -425,7 +425,7 @@
   },
   {
     "source": "> /before/ $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $``x`\n>  [^n]: note``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -577,7 +577,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: /url\n [r]: /again``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"/again``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"/again``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ ``x`\n [r]: /url\n [r]: /again``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -593,7 +593,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: /url\n>  [r]: /again``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"/again``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"/again``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ ``x`\n>  [r]: /url\n>  [r]: /again``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -625,7 +625,7 @@
   },
   {
     "source": "/before/ $``x`\n [r]: /url\n [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $``x`\n [r]: /url\n [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -641,7 +641,7 @@
   },
   {
     "source": "> /before/ $``x`\n>  [r]: /url\n>  [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See <a href=\"/again``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $``x`\n>  [r]: /url\n>  [r]: /again``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -793,7 +793,7 @@
   },
   {
     "source": "/before/ ``x`\n [r]: <>``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><p>See <a href=\"&lt;&gt;``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<p>See <a href=\"&lt;&gt;``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ ``x`\n [r]: <>``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -809,7 +809,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  [r]: <>``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p></blockquote><p>See <a href=\"&lt;&gt;``{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;``{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ ``x`\n>  [r]: <>``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -841,7 +841,7 @@
   },
   {
     "source": "/before/ $``x`\n [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $``x`\n [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -857,7 +857,7 @@
   },
   {
     "source": "> /before/ $``x`\n>  [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote><p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p></blockquote>\n<p>See <a href=\"&lt;&gt;``\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $``x`\n>  [r]: <>``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -961,7 +961,7 @@
   },
   {
     "source": "/before/ ``x`\n > nested``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`</code></p>\n<blockquote><p>nested<code>{=html}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ ``x`\n > nested``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -973,7 +973,7 @@
   },
   {
     "source": "> /before/ ``x`\n>  > nested``{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`</code></p>\n  <blockquote><p>nested<code>{=html}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "/before/ !``x`\n > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -993,7 +993,7 @@
   },
   {
     "source": "/before/ $``x`\n > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ $``x`\n > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1005,7 +1005,7 @@
   },
   {
     "source": "> /before/ $``x`\n>  > nested``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`\\)</span></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`\\)</span></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "`x``\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1153,7 +1153,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x``\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1169,7 +1169,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x``\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1201,7 +1201,7 @@
   },
   {
     "source": "/before/ $`x``\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x``\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1217,7 +1217,7 @@
   },
   {
     "source": "> /before/ $`x``\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x``\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1241,7 +1241,7 @@
   },
   {
     "source": "> `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1265,7 +1265,7 @@
   },
   {
     "source": "> !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>x``</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>x``</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1273,7 +1273,7 @@
   },
   {
     "source": "$`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: $`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1289,7 +1289,7 @@
   },
   {
     "source": "> $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1313,7 +1313,7 @@
   },
   {
     "source": "> before `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1337,7 +1337,7 @@
   },
   {
     "source": "> before !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before x``</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before x``</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1345,7 +1345,7 @@
   },
   {
     "source": "before $`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before $`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1361,7 +1361,7 @@
   },
   {
     "source": "> before $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1369,7 +1369,7 @@
   },
   {
     "source": "/before/ `x``\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x``\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1385,7 +1385,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x``\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1393,7 +1393,7 @@
   },
   {
     "source": "/before/ !`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em> x``</p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> x``</p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ !`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1409,7 +1409,7 @@
   },
   {
     "source": "> /before/ !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em> x``</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> x``</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ !`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1417,7 +1417,7 @@
   },
   {
     "source": "/before/ $`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ $`x``\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1433,7 +1433,7 @@
   },
   {
     "source": "> /before/ $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x``\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1585,7 +1585,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x``\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1601,7 +1601,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x``\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1633,7 +1633,7 @@
   },
   {
     "source": "/before/ $`x``\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x``\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1649,7 +1649,7 @@
   },
   {
     "source": "> /before/ $`x``\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x``\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1801,7 +1801,7 @@
   },
   {
     "source": "/before/ `x``\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x``\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1817,7 +1817,7 @@
   },
   {
     "source": "> /before/ `x``\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p></blockquote><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x``</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x``\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1849,7 +1849,7 @@
   },
   {
     "source": "/before/ $`x``\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x``\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1865,7 +1865,7 @@
   },
   {
     "source": "> /before/ $`x``\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x``\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1969,7 +1969,7 @@
   },
   {
     "source": "/before/ `x``\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x``</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x``</code></p>\n<blockquote><p>nested<code>{=html}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x``\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1981,7 +1981,7 @@
   },
   {
     "source": "> /before/ `x``\n>  > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x``</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x``</code></p>\n  <blockquote><p>nested<code>{=html}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "/before/ !`x``\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2001,7 +2001,7 @@
   },
   {
     "source": "/before/ $`x``\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ $`x``\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2013,7 +2013,7 @@
   },
   {
     "source": "> /before/ $`x``\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x``\\)</span></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x``\\)</span></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "`x```\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2161,7 +2161,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x```\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2177,7 +2177,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x```\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2209,7 +2209,7 @@
   },
   {
     "source": "/before/ $`x```\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x```\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2225,7 +2225,7 @@
   },
   {
     "source": "> /before/ $`x```\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x```\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2249,7 +2249,7 @@
   },
   {
     "source": "> `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2273,7 +2273,7 @@
   },
   {
     "source": "> !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>x```</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>x```</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2281,7 +2281,7 @@
   },
   {
     "source": "$`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: $`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2297,7 +2297,7 @@
   },
   {
     "source": "> $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2321,7 +2321,7 @@
   },
   {
     "source": "> before `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2345,7 +2345,7 @@
   },
   {
     "source": "> before !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before x```</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before x```</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2353,7 +2353,7 @@
   },
   {
     "source": "before $`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before $`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2369,7 +2369,7 @@
   },
   {
     "source": "> before $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2377,7 +2377,7 @@
   },
   {
     "source": "/before/ `x```\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x```\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2393,7 +2393,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x```\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2401,7 +2401,7 @@
   },
   {
     "source": "/before/ !`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em> x```</p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> x```</p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ !`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2417,7 +2417,7 @@
   },
   {
     "source": "> /before/ !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em> x```</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> x```</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ !`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2425,7 +2425,7 @@
   },
   {
     "source": "/before/ $`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ $`x```\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2441,7 +2441,7 @@
   },
   {
     "source": "> /before/ $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x```\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2593,7 +2593,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x```\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2609,7 +2609,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x```\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2641,7 +2641,7 @@
   },
   {
     "source": "/before/ $`x```\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x```\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2657,7 +2657,7 @@
   },
   {
     "source": "> /before/ $`x```\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x```\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2809,7 +2809,7 @@
   },
   {
     "source": "/before/ `x```\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x```\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2825,7 +2825,7 @@
   },
   {
     "source": "> /before/ `x```\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p></blockquote><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x```</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x```\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2857,7 +2857,7 @@
   },
   {
     "source": "/before/ $`x```\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x```\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2873,7 +2873,7 @@
   },
   {
     "source": "> /before/ $`x```\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x```\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2977,7 +2977,7 @@
   },
   {
     "source": "/before/ `x```\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x```</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x```</code></p>\n<blockquote><p>nested<code>{=html}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x```\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2989,7 +2989,7 @@
   },
   {
     "source": "> /before/ `x```\n>  > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x```</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x```</code></p>\n  <blockquote><p>nested<code>{=html}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "/before/ !`x```\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3009,7 +3009,7 @@
   },
   {
     "source": "/before/ $`x```\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ $`x```\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3021,7 +3021,7 @@
   },
   {
     "source": "> /before/ $`x```\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x```\\)</span></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x```\\)</span></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "`x````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3169,7 +3169,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3185,7 +3185,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x````\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3217,7 +3217,7 @@
   },
   {
     "source": "/before/ $`x````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3233,7 +3233,7 @@
   },
   {
     "source": "> /before/ $`x````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3257,7 +3257,7 @@
   },
   {
     "source": "> `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3281,7 +3281,7 @@
   },
   {
     "source": "> !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>x````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>x````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3289,7 +3289,7 @@
   },
   {
     "source": "$`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: $`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3305,7 +3305,7 @@
   },
   {
     "source": "> $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3329,7 +3329,7 @@
   },
   {
     "source": "> before `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3353,7 +3353,7 @@
   },
   {
     "source": "> before !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before x````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before x````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3361,7 +3361,7 @@
   },
   {
     "source": "before $`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before $`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3377,7 +3377,7 @@
   },
   {
     "source": "> before $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3385,7 +3385,7 @@
   },
   {
     "source": "/before/ `x````\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x````\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3401,7 +3401,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3409,7 +3409,7 @@
   },
   {
     "source": "/before/ !`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em> x````</p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> x````</p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ !`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3425,7 +3425,7 @@
   },
   {
     "source": "> /before/ !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em> x````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> x````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ !`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3433,7 +3433,7 @@
   },
   {
     "source": "/before/ $`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ $`x````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3449,7 +3449,7 @@
   },
   {
     "source": "> /before/ $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3601,7 +3601,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x````\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3617,7 +3617,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x````\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3649,7 +3649,7 @@
   },
   {
     "source": "/before/ $`x````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3665,7 +3665,7 @@
   },
   {
     "source": "> /before/ $`x````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3817,7 +3817,7 @@
   },
   {
     "source": "/before/ `x````\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x````\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3833,7 +3833,7 @@
   },
   {
     "source": "> /before/ `x````\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p></blockquote><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x````\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3865,7 +3865,7 @@
   },
   {
     "source": "/before/ $`x````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3881,7 +3881,7 @@
   },
   {
     "source": "> /before/ $`x````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3985,7 +3985,7 @@
   },
   {
     "source": "/before/ `x````\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x````</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x````</code></p>\n<blockquote><p>nested<code>{=html}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x````\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3997,7 +3997,7 @@
   },
   {
     "source": "> /before/ `x````\n>  > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x````</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x````</code></p>\n  <blockquote><p>nested<code>{=html}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "/before/ !`x````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4017,7 +4017,7 @@
   },
   {
     "source": "/before/ $`x````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ $`x````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4029,7 +4029,7 @@
   },
   {
     "source": "> /before/ $`x````\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x````\\)</span></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x````\\)</span></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "`x`````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4177,7 +4177,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x`````\n [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4193,7 +4193,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/url`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x`````\n>  [r]: /url`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4225,7 +4225,7 @@
   },
   {
     "source": "/before/ $`x`````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x`````\n [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4241,7 +4241,7 @@
   },
   {
     "source": "> /before/ $`x`````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See <a href=\"/url`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x`````\n>  [r]: /url`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4265,7 +4265,7 @@
   },
   {
     "source": "> `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4289,7 +4289,7 @@
   },
   {
     "source": "> !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>x`````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>x`````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4297,7 +4297,7 @@
   },
   {
     "source": "$`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: $`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4313,7 +4313,7 @@
   },
   {
     "source": "> $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4337,7 +4337,7 @@
   },
   {
     "source": "> before `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4361,7 +4361,7 @@
   },
   {
     "source": "> before !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before x`````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before x`````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4369,7 +4369,7 @@
   },
   {
     "source": "before $`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p>before <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: before $`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4385,7 +4385,7 @@
   },
   {
     "source": "> before $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p>before <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> before $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4393,7 +4393,7 @@
   },
   {
     "source": "/before/ `x`````\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ `x`````\n [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4409,7 +4409,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code>{=html}</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x`````\n>  [^n]: note`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4417,7 +4417,7 @@
   },
   {
     "source": "/before/ !`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em> x`````</p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> x`````</p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ !`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4433,7 +4433,7 @@
   },
   {
     "source": "> /before/ !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em> x`````</p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> x`````</p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ !`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4441,7 +4441,7 @@
   },
   {
     "source": "/before/ $`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: /before/ $`x`````\n [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4457,7 +4457,7 @@
   },
   {
     "source": "> /before/ $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See [r][], <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>, and [r\\]][].</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<code></code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x`````\n>  [^n]: note`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4609,7 +4609,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x`````\n [r]: /url\n [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4625,7 +4625,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"/again`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x`````\n>  [r]: /url\n>  [r]: /again`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4657,7 +4657,7 @@
   },
   {
     "source": "/before/ $`x`````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x`````\n [r]: /url\n [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4673,7 +4673,7 @@
   },
   {
     "source": "> /before/ $`x`````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See <a href=\"/again`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x`````\n>  [r]: /url\n>  [r]: /again`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4825,7 +4825,7 @@
   },
   {
     "source": "/before/ `x`````\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ `x`````\n [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4841,7 +4841,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p></blockquote><p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <code>x`````</code></p></blockquote>\n<p>See <a href=\"&lt;&gt;`{=html}\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ `x`````\n>  [r]: <>`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4873,7 +4873,7 @@
   },
   {
     "source": "/before/ $`x`````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": ":: term\n: /before/ $`x`````\n [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4889,7 +4889,7 @@
   },
   {
     "source": "> /before/ $`x`````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote><p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
+    "html": "<blockquote><p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p></blockquote>\n<p>See <a href=\"&lt;&gt;`\">r</a>, [^n], and [r\\]][].</p>"
   },
   {
     "source": "> :: term\n> : body\n> +\n> /before/ $`x`````\n>  [r]: <>`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4993,7 +4993,7 @@
   },
   {
     "source": "/before/ `x`````\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><code>x`````</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <code>x`````</code></p>\n<blockquote><p>nested<code>{=html}</code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ `x`````\n > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5005,7 +5005,7 @@
   },
   {
     "source": "> /before/ `x`````\n>  > nested`{=html}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><code>x`````</code></p><blockquote><p>nested<code>{=html}</code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <code>x`````</code></p>\n  <blockquote><p>nested<code>{=html}</code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "/before/ !`x`````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5025,7 +5025,7 @@
   },
   {
     "source": "/before/ $`x`````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><blockquote><p>nested<code></code></p></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n<blockquote><p>nested<code></code></p></blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- /before/ $`x`````\n > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5037,7 +5037,7 @@
   },
   {
     "source": "> /before/ $`x`````\n>  > nested`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<blockquote><p><em>before</em><span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p><blockquote><p>nested<code></code></p></blockquote></blockquote><p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<blockquote>\n  <p><em>before</em> <span class=\"math inline\" role=\"math\">\\(x`````\\)</span></p>\n  <blockquote><p>nested<code></code></p></blockquote>\n</blockquote>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "r[^n]\n\n[^n]: p ``x`\n  [r]: /url``{=html} q\n",
