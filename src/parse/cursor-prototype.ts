@@ -2852,11 +2852,29 @@ function ownsLazyNestedQuoteFollower(cursor: Cursor, frame: ListCursorFrame,
     (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
 }
 
-function mayFoldListOrOwnLazy(cursor: Cursor, frame: ListCursorFrame,
+function indentedRootListLazyFollower(frame: ListCursorFrame,
   stack: readonly ListCursorFrame[], depth: number, line: SourceLine,
   reachedPrefix: number | undefined): boolean {
-  return mayFoldListParagraph(cursor, frame, stack, depth) ||
-    ownsLazyNestedQuoteFollower(cursor, frame, line, reachedPrefix)
+  if (depth !== 0 || stack.length !== 1 || frame.indent === 0 ||
+      frame.contentColumn === undefined || reachedPrefix !== undefined ||
+      frame.fenceMarker || frame.body.at(-1)?.number !== line.number - 1 ||
+      !plainQuoteText(frame.body[0]?.text ?? '')) return false
+  const indent = /^ */.exec(line.text)![0].length
+  const content = line.text.slice(indent)
+  return indent >= frame.indent && indent < frame.contentColumn - 1 &&
+    content !== '' && !listMarker(line.text) && !LINE_COMMENT.test(content) &&
+    !RE_COMMENT_BLOCK_ANY.test(content) && !FOOTNOTE_DEF.test(content)
+}
+
+function foldedListOwnerLine(cursor: Cursor, frame: ListCursorFrame,
+  stack: readonly ListCursorFrame[], depth: number, line: SourceLine,
+  reachedPrefix: number | undefined): SourceLine | undefined {
+  if (mayFoldListParagraph(cursor, frame, stack, depth) ||
+      ownsLazyNestedQuoteFollower(cursor, frame, line, reachedPrefix)) {
+    return foldedNestedParagraphLine(frame.body, line)
+  }
+  return indentedRootListLazyFollower(frame, stack, depth, line, reachedPrefix) ?
+    { ...line, lazyText: true } : undefined
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
@@ -3478,9 +3496,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         continue
       }
     }
-    if (mayFoldListOrOwnLazy(cursor, top, stack, depth, line, reachedPrefix)) {
+    const foldedOwnerLine = foldedListOwnerLine(cursor, top, stack, depth, line, reachedPrefix)
+    if (foldedOwnerLine) {
       cursor.take()
-      appendBody(top, foldedNestedParagraphLine(top.body, line), 0, true)
+      appendBody(top, foldedOwnerLine, 0, true)
       updateListFrameEnds(stack, line, listSpan)
       continue
     }

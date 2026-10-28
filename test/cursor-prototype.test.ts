@@ -3518,6 +3518,16 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '  - c\n  ~~~\n',
+    '  - c\n  ```\n',
+    '  - c\n  # H\n',
+    '  - c\n  > q\n',
+    '  - c\n  [r]: /u\n',
+  ])('keeps a below-column line in an indented list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '- a\n  [^g]: more\n  ```\n[^f]: note\n> > deep\n%% c\ntext\n> > deep\n',
     '    b\n  - c\n  :  nested\n[^f]: note\n- a\n  [^g]: more\n    - d\n:: term\n',
     '[^f]: note\n  [r]: /u\n\n  ~~~\n```\n```\n  ```\n  :::\n',
