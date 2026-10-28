@@ -1021,6 +1021,11 @@ function expandChild(
         return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: fullContent, full: resolved.full, firstLine: resolved.base.line }
       }
       if (table) {
+        if (range && table.rows.some(row => row.pos &&
+          row.pos.startLine <= range.end && row.pos.endLine >= range.start &&
+          (row.pos.startLine < range.start || row.pos.endLine > range.end))) {
+          return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
+        }
         const headCount = table.rows.filter(row => row.cells[0]?.header).length
         let selected = d.rows ? table.rows.slice(d.rows.start - 1, d.rows.end) : table.rows.slice(headCount)
         if (d.rows && d.rows.start > table.rows.length) {
@@ -1722,7 +1727,7 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
         const code = child.children[0]
         if (d.code !== undefined && code?.type === 'code_block' && block.attrs) {
           code.attrs = block.attrs
-          child.children[0] = markedDelimitedTable(code) ?? code
+          if (!(d.rows || d.cols || d.lines || d.region)) child.children[0] = markedDelimitedTable(code) ?? code
         }
         mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
