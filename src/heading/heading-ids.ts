@@ -887,6 +887,11 @@ function resolveHeadingIdsImpl(
           // text came from - and `stripPositions` above removes them, because
           // cloned display text is not a contiguous slice of its own source
           // (carve#565).
+        } else if (ingested) {
+          // The wire may carry a destination that no longer has a visible
+          // target, such as a heading in an unused footnote definition.
+          delete n.href
+          delete n.resolvedText
         }
         // An UNRESOLVED crossref keeps its node too, rather than flattening to
         // a text node holding `</#target>`. §3a forbids that for the same

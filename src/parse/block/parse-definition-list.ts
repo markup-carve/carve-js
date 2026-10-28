@@ -253,6 +253,13 @@ export function createDefinitionListParser(
     sourceColumn(source, quotePrefixDepth(source) - Number(RE_BLOCKQUOTE.test(entry.trimStart())))
   const missingTermIndent = (source: number, term: number, host: number, retained: number): number =>
     Math.max(0, source - (source < term ? host : term) - retained)
+  const commentLeavesTerm = (lexer: Lexer, next: string, termColumn: number): boolean => {
+    const authored = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
+    const visible = stripLazyFrame(next).trimStart()
+    // A list retains its below-column comment with the item holding this term.
+    return lexer.hostBody !== 'list' && RE_COMMENT_LINE.test(visible) && commentFenceRun(visible) === undefined &&
+      sourceColumn(authored) < termColumn
+  }
   const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
     if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
     return lexer.hostBody === 'description' || returned ? termColumn : -1
@@ -319,6 +326,7 @@ export function createDefinitionListParser(
       let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
       let nestedItemParagraphOpen = false
+      let nestedItemRefusedAttachment = false
       let nestedAttributeRun: string | null = null
       let nestedDescriptionOpened = false
       // The next entry ends the body, and so does a line below its column after a
@@ -547,6 +555,9 @@ export function createDefinitionListParser(
         const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
         const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
           markerColumn, quotePrefixDepth(markerSource), true)
+        // An intervening line still reaches the description after this pull
+        // fails, but cannot open a block in the nested item's column.
+        nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
         for (let k = 0; k < attached.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...attached.lines)
         bodySourceLines.push(...attached.lines)
@@ -741,7 +752,7 @@ export function createDefinitionListParser(
         const localLine = dedented.replace(/^[ \t]+/, '')
         const lazyUnderNestedItem =
           nestedItemColumn > 0 &&
-          nestedItemParagraphOpen &&
+          (nestedItemParagraphOpen || nestedItemRefusedAttachment) &&
           indentColumns(ln) - contentCol < nestedItemColumn &&
           !isLinkDefLine(localLine) &&
           !RE_FOOTNOTE_DEF.test(localLine) &&
@@ -820,6 +831,7 @@ export function createDefinitionListParser(
         if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
           nestedItemColumn = markerContentColumn(flush)
           nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
+          nestedItemRefusedAttachment = false
         }
         // The base belongs to the block that established it and dies with it.
         if (!insideOpenFence(lazyState)) authoredBase = null
@@ -1132,6 +1144,20 @@ export function createDefinitionListParser(
         if (admission.kind === 'blank') return admitBlankLine()
         return admitLazyLine(ln)
       })
+      // A refused first-block marker owns no list child. The description's
+      // marker-line item starts at its authored source column, while its body
+      // sublexer starts at column zero. Rebase equal-source-column list markers
+      // to that same sublexer column so they remain siblings (§17 L4).
+      if (firstBlockOpenerContent(first) && isListMarkerLine(first)) {
+        const sourceOffset = markerSource.lastIndexOf(first)
+        const leadColumn = sourceOffset < 0 ? -1 : sourceColumnAt(markerSource, sourceOffset)
+        const rootLines = lexer.rootLines ?? lexer.lines
+        for (let index = 1; index < bodyLines.length; index++) {
+          const source = rootLines[bodyLineNumbers[index]! - 1]
+          if (source !== undefined && sourceColumn(source, quotePrefixDepth(source)) === leadColumn &&
+              isListMarkerLine(bodyLines[index]!.trimStart())) bodyLines[index] = bodyLines[index]!.trimStart()
+        }
+      }
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
@@ -1258,6 +1284,7 @@ export function createDefinitionListParser(
         const termFence: TermFenceState = { active: null, closesOnLine: false, memos: new Map() }
         while (!lexer.eof()) {
           const next = lexer.peek()!
+          if (commentLeavesTerm(lexer, next, termColumn)) break
           if (/^[ \t]+%%/.test(next)) {
             const first = lexer.pos
             const fence = RE_COMMENT_BLOCK_ANY.exec(next)
