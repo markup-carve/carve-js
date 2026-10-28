@@ -85,9 +85,10 @@ function refusedNoteMarkerAtBoundary(
 
 function quoteReleasesBelowLine(
   lexer: Lexer, admission: ContainerAdmission, authoredBodyColumn: number | undefined,
-  bodyColumn: number, retainedBelowComment: boolean, quoteOpen: boolean,
+  bodyColumn: number, retainedBelowComment: boolean, markerLineQuoteOpen: boolean,
+  quoteOpen: boolean,
 ): boolean {
-  return quoteOpen && !retainedBelowComment && admission.kind === 'below' &&
+  return markerLineQuoteOpen && quoteOpen && !retainedBelowComment && admission.kind === 'below' &&
     admission.sourceColumn < (authoredBodyColumn ?? bodyColumn) &&
     !isRetainableLineComment(lexer, admission.line) && matchedCommentFenceEnd(lexer) === undefined
 }
@@ -97,8 +98,10 @@ function reachesAuthoredNoteBody(
   defLineIndex: number,
 ): boolean {
   // A note on a list marker uses that item's lazy admission instead.
-  return admission.kind === 'content' || (lexer.hostBody !== 'list' || defLineIndex > 0) &&
+  return admission.kind === 'content' || lexer.hostBody !== 'description' &&
+    (lexer.hostBody !== 'list' || defLineIndex > 0) &&
     admission.kind === 'below' && authoredBodyColumn !== undefined &&
+    Number.isFinite(admission.sourceColumn) &&
     admission.sourceColumn >= authoredBodyColumn
 }
 
@@ -128,7 +131,8 @@ function framesBelowNoteLine(
   return !retainedBelowComment && admission.kind !== 'blank' && sourceLine !== undefined &&
     authoredBodyColumn !== undefined && admission.sourceColumn < authoredBodyColumn &&
     !RE_COMMENT_LINE.test(content.trimStart()) &&
-    !RE_FOOTNOTE_DEF.test(content.trimStart()) && !isLinkDefLine(content.trimStart())
+    !RE_FOOTNOTE_DEF.test(content.trimStart()) && !isLinkDefLine(content.trimStart()) &&
+    !isContinuationMarker(content.trimStart())
 }
 
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
@@ -224,7 +228,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // A quote on the note's marker line cannot lazily claim an unmarked line
     // below the note body floor. Ownership is chosen before the quote parses it.
     if (quoteReleasesBelowLine(lexer, admission, authoredBodyColumn, bodyColumn,
-      retainedBelowComment, markerLineQuoteOpen && lazyState.quoteInner !== null)) return 'stop'
+      retainedBelowComment, markerLineQuoteOpen, lazyState.quoteInner !== null)) return 'stop'
     // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
     // with no indentation (the same continuation marker lists and block quotes
     // use); the attached block ends at a blank line, another `+`, or the next
