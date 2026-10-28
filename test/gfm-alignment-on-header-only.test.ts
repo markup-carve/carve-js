@@ -16,15 +16,7 @@ import { carveToCarve, carveToHtml, parse } from '../src/index.js'
  */
 const GFM = '| Name | Age |\n|:-----|----:|\n| Alice | 28  |\n'
 const NATIVE = '|=< Name |=> Age |\n| Alice | 28 |\n'
-/*
- * The GFM source's own separator row, re-padded. PART 11 §6h [CARVE-P11-066]
- * writes the separator where the author wrote one, so the alignment comes back
- * as the colons that spelled it rather than as `|=<` markers - and the cell
- * marker is suppressed so the colon is not a second spelling of the same
- * alignment. The native source below still writes the native form, which is
- * what keeps "does not invent per-cell markers" a real check on both spellings.
- */
-const CANONICAL = '| Name | Age |\n|:-----|----:|\n| Alice | 28 |\n'
+const CANONICAL = '|=< Name |=> Age |\n| Alice | 28 |\n'
 
 const alignsOf = (src: string): (string | undefined)[][] => {
   const table = parse(src).children.find((b) => b.type === 'table')

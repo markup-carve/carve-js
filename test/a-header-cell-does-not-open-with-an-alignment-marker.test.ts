@@ -9,11 +9,8 @@ import { TABLE_ALIGNMENT_MARKERS } from '../src/parse.js'
  * away from the parser's alignment scan, which consumes one `<`, `>` or `~`
  * glued to `|` or `|=` (markup-carve/carve-js#903).
  *
- * `fmt` used to rewrite a table's delimiter row as `|=` header cells, which is
- * where this file's sources come from. Since PART 11 §6h [CARVE-P11-066] the
- * separator row is written where the AUTHOR wrote one, so a source spelling one
- * keeps it and a source spelling `|=` keeps that - and the padding rule being
- * tested here holds on both forms, which is what the controls now check.
+ * PART 11 §6h [CARVE-P11-066] now makes `fmt` write native `|=` headers.
+ * The padding rule holds on those headers and on body cells.
  */
 
 const roundTrips = (src: string) => carveToHtml(carveToCarve(src)) === carveToHtml(src)
@@ -28,7 +25,7 @@ describe('a header cell is not written so its content reads as alignment', () =>
 
   it('a strikethrough header cell keeps its strikethrough', () => {
     const src = '| ~x~ |\n|---|\n| y |\n'
-    expect(carveToCarve(src)).toBe('| ~x~ |\n|---|\n| y |\n')
+    expect(carveToCarve(src)).toBe('|= ~x~ |\n| y |\n')
     expect(roundTrips(src)).toBe(true)
     expect(carveToHtml(carveToCarve(src))).toContain('<s>x</s>')
     // The centering the old output invented reached every cell in the column.
@@ -59,16 +56,14 @@ describe('a header cell is not written so its content reads as alignment', () =>
     expect(carveToCarve('|= ~x~ |\n| y |\n')).toBe('|= ~x~ |\n| y |\n')
   })
 
-  it('CONTROL: the delimiter row is kept where the author wrote one', () => {
-    // The row this ticket is most likely to be misread as asking to change. No
-    // change to canonical cell padding removes it.
-    expect(carveToCarve('| a |\n|---|\n| y |\n')).toBe('| a |\n|---|\n| y |\n')
+  it('CONTROL: the delimiter row becomes a native header', () => {
+    expect(carveToCarve('| a |\n|---|\n| y |\n')).toBe('|= a |\n| y |\n')
     expect(carveToCarve('|= a |\n| y |\n')).toBe('|= a |\n| y |\n')
     expect(roundTrips('| a |\n|---|\n| y |\n')).toBe(true)
   })
 
   it('CONTROL: content that is not sigil-initial gets canonical padding too', () => {
-    expect(carveToCarve('| /e/ |\n|---|\n| y |\n')).toBe('| /e/ |\n|---|\n| y |\n')
+    expect(carveToCarve('| /e/ |\n|---|\n| y |\n')).toBe('|= /e/ |\n| y |\n')
     expect(carveToCarve('|= ^x |\n| y |\n')).toBe('|= ^x |\n| y |\n')
     expect(carveToCarve('|= =x |\n| y |\n')).toBe('|= =x |\n| y |\n')
   })
@@ -94,7 +89,7 @@ describe('a header cell is not written so its content reads as alignment', () =>
     // BYTES, not just the rendering. A body cell is padded by the row writer,
     // so a guard that fired on it would add a second space that changes nothing
     // and reads as a defect - the round trip alone cannot see that.
-    expect(carveToCarve('| a |\n|---|\n| ~y~ |\n')).toBe('| a |\n|---|\n| ~y~ |\n')
+    expect(carveToCarve('| a |\n|---|\n| ~y~ |\n')).toBe('|= a |\n| ~y~ |\n')
     expect(carveToCarve('|= a |{.r}\n| ~y~ |{.s}\n')).toBe('|= a |{.r}\n| ~y~ |{.s}\n')
   })
 

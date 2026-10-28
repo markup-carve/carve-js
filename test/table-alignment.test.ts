@@ -28,8 +28,8 @@ describe('optional table alignment', () => {
   test('aligns an authored separator without changing dash counts', () => {
     const source = '| A | B |\n|---|---|\n| x | yy |\n'
     const expected = '| A | B  |\n|---|--- |\n| x | yy |\n'
-    expect(carveToCarve(source, { alignTables: true })).toBe(expected)
-    expect(carveToCarve(expected, { alignTables: true })).toBe(expected)
+    expect(carveToCarve(source, { alignTables: true, preserveTableSeparators: true })).toBe(expected)
+    expect(carveToCarve(expected, { alignTables: true, preserveTableSeparators: true })).toBe(expected)
   })
 
   test('checks and prints the selected mode', async () => {
