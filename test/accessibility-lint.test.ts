@@ -11,7 +11,7 @@ describe('accessibility lint', () => {
   it('reports heading jumps but accepts descents', () => {
     const findings = lintAccessibility('# One\n\n### Three\n\n## Two\n')
     expect(findings).toHaveLength(1)
-    expect(findings[0]).toMatchObject({ rule: 'a11y/heading-jump', severity: 'warning' })
+    expect(findings[0]).toMatchObject({ rule: 'heading-level-skip', severity: 'warning' })
   })
 
   it('accepts described images and ordered headings', () => {

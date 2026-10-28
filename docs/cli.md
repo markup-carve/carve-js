@@ -130,6 +130,25 @@ definitions, and GitHub alert markers. `--caption-hints` adds a hint for a
 caption-looking paragraph next to a table or image. That hint is off by
 default because ordinary prose can use the same words.
 
+Unused link reference definitions and empty inline link destinations are
+reported by default. Add `--rule duplicate-reference-url`,
+`--rule non-descriptive-link-text`, or `--rule emphasis-as-heading` to enable
+those optional rules. Repeat `--rule` to select more than one. The API uses
+`lintCarve(source, { enabledRules: ['non-descriptive-link-text'] })`.
+
+A Carve line comment such as `%% carve-lint-disable-next-line heading-level-skip`
+suppresses that rule on the next physical line. Use `carve-lint-disable-line`
+for the same line, or `carve-lint-disable` and `carve-lint-enable` for document
+scopes. Commas or ASCII spaces separate rule ids; omitting ids selects every
+rule. The deprecated input alias `a11y/heading-jump` selects
+`heading-level-skip`, which is always the reported id. Directives in code,
+raw content, delimited comments, and fenced comments have no effect.
+
+`--ignore FILE` omits findings for that exact file id. API callers supply
+`ignoredFiles` and `fileId`. Include ids are relative to the include root.
+Ignoring a file leaves its included files' findings visible unless their own
+ids are ignored. Comment scopes stay within each source file.
+
 `carve lint --include-root DIR` also lints what a document pulls in through
 `{{ ... }}`, under the same containment and limits as `carve render`. Every rule
 runs on each Carve-mode include, and a `{table}` csv or tsv code include gets the

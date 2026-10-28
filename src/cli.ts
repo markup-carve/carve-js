@@ -72,6 +72,7 @@ import {
   type RenderResult,
   type RenderLossCode,
 } from './index.js'
+import { filterLintWarnings } from './lint.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
@@ -245,6 +246,8 @@ exits 1 if anything is reported, 0 if clean.
   lint options:
         --json       Emit semantic lint findings as structured JSON
         --caption-hints  Check caption-looking paragraphs next to tables and images
+        --rule ID    Enable an authoring rule (repeatable)
+        --ignore ID  Ignore findings for an exact source file id (repeatable)
         --include-root <dir>  Expand and lint includes within this root
         --from-djot  Also flag valid Carve whose meaning differs from Djot
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
@@ -1532,6 +1535,8 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let citationsEnabled: boolean
   let json: boolean
   let captionHints: boolean
+  let enabledRules: string[]
+  let ignoredFiles: string[]
   let includeRoot: string | undefined
   try {
     const parsed = parseArgs({
@@ -1543,6 +1548,8 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
         portable: { type: 'boolean' },
         json: { type: 'boolean' },
         'caption-hints': { type: 'boolean' },
+        rule: { type: 'string', multiple: true },
+        ignore: { type: 'string', multiple: true },
         // Repeatable, so a document can be checked against two hosts at once
         // and a second host's table can be added without a new flag.
         platform: { type: 'string', multiple: true },
@@ -1559,6 +1566,8 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     portable = parsed.values.portable ?? false
     json = parsed.values.json ?? false
     captionHints = parsed.values['caption-hints'] ?? false
+    enabledRules = parsed.values.rule ?? []
+    ignoredFiles = parsed.values.ignore ?? []
     includeRoot = parsed.values['include-root']
     // An unknown name is REFUSED here rather than silently ignored: on the API
     // an unknown host is a typed mistake the compiler catches, but a CLI flag
@@ -1595,15 +1604,18 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   const childFindings = (src: string, rootFindings: LintWarning[], file?: string): LintWarning[] => {
     if (!includeResolver) return []
     const extensions = citationsEnabled ? [citations()] : []
-    const lintOne = (text: string): LintWarning[] => [
-      ...djotMigrationWarnings(text).filter(w => fromDjot || w.category === 'carve-breakage').map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '', start: w.start, end: w.end })),
-      ...lintCarve(text, { portable, platforms, extensions, captionLookingParagraph: captionHints }),
+    const lintOne = (text: string, childFile?: string): LintWarning[] => [
+      ...filterLintWarnings(text, djotMigrationWarnings(text).filter(w => fromDjot || w.category === 'carve-breakage').map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '', start: w.start, end: w.end }))),
+      ...lintCarve(text, { portable, platforms, extensions, captionLookingParagraph: captionHints, enabledRules, ignoredFiles, fileId: childFile }),
     ]
-    return lintIncludes(src, { portable, platforms, extensions, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne, rootFindings)
+    return lintIncludes(src, { portable, platforms, extensions, ignoredFiles, fileId: file, includes: { resolve: includeResolver, ...(file ? { sourcePath: resolvePath(file) } : {}) } }, lintOne, rootFindings)
   }
   const lintSource = (src: string, file?: string) => {
-    const migration = djotMigrationWarnings(src).filter(w => fromDjot || w.category === 'carve-breakage')
-    const semantic = lintCarve(src, { portable, platforms, extensions: citationsEnabled ? [citations()] : [], captionLookingParagraph: captionHints })
+    const ignored = file !== undefined && ignoredFiles.includes(file)
+    const migration = ignored ? [] : filterLintWarnings(src, djotMigrationWarnings(src)
+      .filter(w => fromDjot || w.category === 'carve-breakage')
+      .map(w => ({ ...w, rule: w.rule ?? 'djot-migration', message: w.message ?? '' })))
+    const semantic = lintCarve(src, { portable, platforms, extensions: citationsEnabled ? [citations()] : [], captionLookingParagraph: captionHints, enabledRules, ignoredFiles, fileId: file })
     const children = childFindings(src, semantic, file)
     return { migration, semantic, children }
   }
