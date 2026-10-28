@@ -360,6 +360,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       (firstBlockColumn === itemMarkerColumn || firstBlockMarker &&
         firstBlockColumn === placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent ||
         firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
+        lexer.hostBody === 'description' && firstBlockColumn === 0 ||
         isStackedFirstBlockQuoteMarker(itemSource) &&
           stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
@@ -368,7 +369,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let markerEnd = content.length - 1
     while (content[markerEnd] === ' ' || content[markerEnd] === '\t') markerEnd--
     const stackedMarker = content[markerEnd] === '+' &&
-      /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
+      /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
     const nestedContentOffset = stackedMarker ? itemSource.lastIndexOf(content) : -1
     // A later blank can loosen the item, but cannot change this block's owner.
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
@@ -1355,6 +1356,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return candidate === undefined || isBlankLine(candidate) || indentColumns(candidate) !== 0
     }
     let deepAttributeClosed = false
+    const wrappedAttribute = { attrRun: null as string | null }
+    let wrappedAttributeFence: string | null = null
     // Facts about the line being admitted. The phases below set each one before
     // any later phase reads it, so none carries over from the previous line.
     let enclosingLazy = false
@@ -1452,6 +1455,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (deepAttr?.attrRun != null && (admission.kind !== 'content' ||
           lazyState.ownedColumn >= 0 && indentColumns(l) < contentCol + lazyState.ownedColumn) &&
           trackWrappedAttributeRun(deepAttr, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
+      // A nested item's run can be below this item's content column, leaving
+      // no deepest tracker. Keep the complete run as a separate source fact.
+      const sourceFence = /^(`{3,}|~{3,})/.exec(stripLazyFrame(l).trimStart())?.[1]
+      if (sourceFence !== undefined) {
+        if (wrappedAttributeFence === null) wrappedAttributeFence = sourceFence
+        else if (sourceFence[0] === wrappedAttributeFence[0] && sourceFence.length >= wrappedAttributeFence.length)
+          wrappedAttributeFence = null
+      }
+      const physicalAttributeLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
+      if (quotePrefixDepth(physicalAttributeLine) < itemQuoteDepth) wrappedAttribute.attrRun = null
+      else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
+          trackWrappedAttributeRun(wrappedAttribute, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
       const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
       const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
       if (currentSource !== undefined && endsInPlus(currentSource) &&
@@ -1791,7 +1806,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       if (
         lazyState.opaque === null && lexer.peek() !== undefined &&
-        !isBlankLine(lexer.peek()!) && !isItemAttachBoundary(lexer.peek()!)
+        !isBlankLine(lexer.peek()!) && !isItemAttachBoundary(lexer.peek()!) &&
+        !(isContinuationMarker(lexer.peek()!) && markerDecision(lexer, lexer.pos).reason !== undefined)
       ) {
         plusSeparators.add(nested.length)
         nested.push('')

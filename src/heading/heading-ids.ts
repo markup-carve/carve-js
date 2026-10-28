@@ -1170,6 +1170,36 @@ function captionFirstLineHasContent(children: InlineNode[]): boolean {
   return false
 }
 
+/** Recover caption context when a figure is promoted after paragraph parsing. */
+function markFirstCaptionNumber(caption: InlineNode[]): void {
+  for (let i = 0; i < caption.length; i++) {
+    const node = caption[i]!
+    if (node.type !== 'text') continue
+    const at = node.value.indexOf('#')
+    if (at < 0) continue
+    const before = node.value.slice(0, at)
+    const after = node.value.slice(at + 1)
+    const offset = [...before].length
+    const pos = node.pos
+    const point = pos && !before.includes('\n') ? {
+      ...pos,
+      ...(pos.startOffset === undefined ? {} : { startOffset: pos.startOffset + offset }),
+      ...(pos.endOffset === undefined || pos.startOffset === undefined ? {} : { endOffset: pos.startOffset + offset + 1 }),
+      ...(pos.startColumn === undefined ? {} : { startColumn: pos.startColumn + offset, endColumn: pos.startColumn + offset + 1 }),
+    } : undefined
+    const pieces: InlineNode[] = []
+    if (before) pieces.push({ ...node, value: before,
+      ...(pos?.startOffset === undefined ? {} : { pos: { ...pos, endOffset: pos.startOffset + offset,
+        ...(pos.startColumn === undefined ? {} : { endColumn: pos.startColumn + offset }) } }) })
+    pieces.push({ type: 'caption_number', ...(point ? { pos: point } : {}) })
+    if (after) pieces.push({ ...node, value: after,
+      ...(point?.endOffset === undefined ? {} : { pos: { ...pos!, startOffset: point.endOffset,
+        ...(point.endColumn === undefined ? {} : { startColumn: point.endColumn }) } }) })
+    caption.splice(i, 1, ...pieces)
+    return
+  }
+}
+
 /**
  * Promote a paragraph whose sole child is a (resolved) image to a block-level
  * image, matching the standalone inline-image rule and carve-php. A reference
@@ -1389,6 +1419,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
           : undefined
         caption[0] = pos ? { ...first, value: stripped, pos } : { ...first, value: stripped }
       }
+      markFirstCaptionNumber(caption)
       // Carry a leading block-attribute line (`{#id}` etc.) from the paragraph
       // onto the figure, matching a direct-image figure (which takes the attrs
       // at parse time) and carve-php -- otherwise `carve fmt` would drop it.

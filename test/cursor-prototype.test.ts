@@ -2965,7 +2965,8 @@ describe('experimental block cursor', () => {
   it.each(['- a\n  [^f]: x\n  more\n\nsee[^f]\n',
     '- a\n  [^f]: t\ntail\n\nx[^f]\n',
     '- body\n\n  [^g]: n\n   > z\n\nafter\n',
-    '- body\n\n  [^g]: n\n   - item\n\nafter\n'])
+    '- body\n\n  [^g]: n\n   - item\n\nafter\n',
+    '- body\n\n  [^g]: n\n    - item\n\nafter\n'])
   ('collects a bounded footnote from its open list frame: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })

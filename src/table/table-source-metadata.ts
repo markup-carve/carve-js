@@ -25,7 +25,7 @@ function positional(value: string | undefined, allowed: Set<string>): Array<stri
   }) ?? []
 }
 
-export function tableColumnsFromAttrs(attrs: Attrs | undefined): TableColumn[] | undefined {
+export function tableColumnsFromAttrs(attrs: Attrs | undefined, width: number): TableColumn[] | undefined {
   const kv = attrs?.keyValues
   if (!kv) return undefined
   const aligns = positional(kv.aligns, new Set(['left', 'right', 'center']))
@@ -34,7 +34,7 @@ export function tableColumnsFromAttrs(attrs: Attrs | undefined): TableColumn[] |
     const value = Number(raw.trim())
     return Number.isFinite(value) && value > 0 && value <= 100 ? Number(shiftDecimal(raw, -2) ?? String(value / 100)) : undefined
   }) ?? []
-  const count = Math.max(aligns.length, valigns.length, widths.length)
+  const count = Math.min(width, Math.max(aligns.length, valigns.length, widths.length))
   return count > 0 ? Array.from({ length: count }, (_, i) => ({
     ...(aligns[i] ? { align: aligns[i] as NonNullable<TableColumn['align']> } : {}),
     ...(valigns[i] ? { valign: valigns[i] as NonNullable<TableColumn['valign']> } : {}),
@@ -125,7 +125,7 @@ export function preservesTableRowGroups(table: Table, attrs: Attrs | undefined):
 
 export function preservesTableColumns(table: Table, attrs: Attrs | undefined): boolean {
   const columns = table.columns!
-  const rebuilt = tableColumnsFromAttrs(attrs)
+  const rebuilt = tableColumnsFromAttrs(attrs, table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0))
   return rebuilt !== undefined && rebuilt.length === columns.length && columns.every((column, i) => {
     const other = rebuilt[i]!
     return column.align === other.align && column.valign === other.valign && column.width === other.width

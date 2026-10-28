@@ -1956,8 +1956,10 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
 
   // An explicit source partition wins; otherwise retain the native leading
   // run of `|=` header rows.
+  const rejectedPartition = !node.rowGroups && ['header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
+    .some(key => node.attrs?.keyValues?.[key] !== undefined)
   let headerEnd = node.rowGroups ? node.rowGroups.headRows : 0
-  if (!node.rowGroups) {
+  if (!node.rowGroups && !rejectedPartition) {
     while (
       headerEnd < grid.length &&
       grid[headerEnd]!.some((e) => !e.skip) &&

@@ -14,6 +14,7 @@ import {
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
+import { firstBlockLastOpenerOffset, firstBlockOpenerContent } from '../list/parse-item-core.js'
 import {
   continueWrappedAttributeBlock,
   opensWrappedAttributeBlock,
@@ -97,6 +98,11 @@ function isPastTermEntry(lexer: Lexer, source: string, entry: string, termColumn
 
 function restoresDescriptionTermIndent(lexer: Lexer, sourceColumn: number): boolean {
   return lexer.hostBody === 'description' && sourceColumn > (lexer.hostSourceContentColumn ?? 0)
+}
+
+function dropsTermIndent(lexer: Lexer, sourceColumn: number, termColumn: number, retains: boolean): boolean {
+  return !retains && (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+    lexer.hostBody === 'list' && sourceColumn === termColumn)
 }
 
 type DefinitionListSession = {
@@ -534,6 +540,18 @@ export function createDefinitionListParser(
           lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!) }
           lazyState.lazyFoldable = false
         }
+      }
+      if (firstBlockOpenerContent(first) && !isContinuationMarker(first)) {
+        const lastOpener = firstBlockLastOpenerOffset(first) ?? 0
+        const sourceOffset = markerSource.lastIndexOf(first)
+        const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
+        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
+          markerColumn, quotePrefixDepth(markerSource), true)
+        for (let k = 0; k < attached.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
+        bodyLines.push(...attached.lines)
+        bodySourceLines.push(...attached.lines)
+        bodyLineNumbers.push(...attached.lineNumbers)
+        for (const line of attached.lines) track(line)
       }
       nestedLeadScans = descriptionLeadFenceScans(first)
       lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, () => true, true)
@@ -1327,7 +1345,7 @@ export function createDefinitionListParser(
               lexer.hostSourceContentColumn ?? 0, indentColumns(continuation))) + continuation
           }
           // A line below the item's content column keeps none of its indent in the term.
-          if (!retainsTermIndent && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
+          if (dropsTermIndent(lexer, nextSourceColumn, termColumn, retainsTermIndent)) {
             const stripped = continuation.replace(/^[ \t]+/, '')
             strippedIndent.set(lexer.pos, continuation.length - stripped.length)
             continuation = stripped

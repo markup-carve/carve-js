@@ -1289,8 +1289,9 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
     }
   }
 
+  const bottomIsContinuationMarker = quote === null && !hasNestedQuote && isContinuationMarker(bottom)
   return {
-    leavesParagraphOpen: (quote !== null || hasNestedQuote) && fenceShaped
+    leavesParagraphOpen: bottomIsContinuationMarker || (quote !== null || hasNestedQuote) && fenceShaped
       ? false : bottomBlockLeavesParagraphOpen(bottom),
     endsOnTableRow: quote === null && isTableRow(bottom),
     // A bare `+` at the bottom of the marker line is the CONTINUATION MARKER
@@ -1298,7 +1299,7 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
     // prose, so it opens no paragraph an INDENTED line could fold into - see
     // the fold branch that reads this (markup-carve/carve#1436).
     // A stacked quote's `+` (`- - > +`) is quote text when refused, which a lazy line continues.
-    bottomIsContinuationMarker: quote === null && !hasNestedQuote && isContinuationMarker(bottom),
+    bottomIsContinuationMarker,
     wrappedAttributeRun: opensWrappedAttributeBlock(bottom) ? bottom : null,
     quote,
   }

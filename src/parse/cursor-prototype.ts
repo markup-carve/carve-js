@@ -2757,6 +2757,7 @@ function takeListFrameFootnote(cursor: Cursor, inline: CursorInline, frame: List
   for (let offset = 0; cursor.peek(offset); offset++) {
     const candidate = cursor.peek(offset)!
     if (isBlankLine(candidate.text)) { owned.push({ ...candidate, text: '' }); continue }
+    if (offset > 0 && listMarker(candidate.text)?.indent === contentColumn) break
     const claim = reachableListPrefix(candidate.text, contentColumn)
     if (claim === undefined) {
       if (owned.length > 1 && owned.at(-1)?.text !== '' && owned.slice(1).some((part) =>

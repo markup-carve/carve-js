@@ -38,10 +38,10 @@ describe('a column-0 line after a description-hosted note is a top-level sibling
     )
   })
 
-  // A marker below the note floor folds into its open paragraph.
-  it('folds an opener one column shy of the note floor', () => {
+  // A marker one column short of the note floor reaches the description body.
+  it('returns a below-floor opener to the description body', () => {
     expect(carveToHtml(':: t\n:  [^f]: note\n    - nested\ntail\n')).toBe(
-      "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>",
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>nested\ntail</li>\n    </ul>\n  </dd>\n</dl>',
     )
   })
 })
