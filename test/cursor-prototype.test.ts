@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { toAstJson } from '../src/ast-json.js'
+import { createEditorSession } from '../src/editor-session.js'
 import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
@@ -3507,4 +3509,25 @@ describe('experimental block cursor', () => {
       ] }
       expect(parseCursorPrototype(source, options)).toStrictEqual(parse(source, options))
     })
+
+  it.each([
+    ['alpha *beta*\n', 0, 5, 'gamma'],
+    ['- a\n- b\n', 2, 3, 'x'],
+    ['> a\n', 2, 3, 'x'],
+  ] as const)('keeps editor snapshots and changes exact: %s', (source, from, to, insert) => {
+    const established = createEditorSession(source,
+      (text, options) => toAstJson(parse(text, options)), {}, true)
+    const cursor = createEditorSession(source,
+      (text, options) => toAstJson(parseCursorPrototype(text, options)), {}, true)
+    expect(cursor.snapshot().ast).toStrictEqual(established.snapshot().ast)
+    expect(cursor.snapshot().nodes).toStrictEqual(established.snapshot().nodes)
+    const change = [{ from, to, insert }]
+    const expected = established.update(change)
+    const actual = cursor.update(change)
+    expect(actual.ast).toStrictEqual(expected.ast)
+    expect(actual.nodes).toStrictEqual(expected.nodes)
+    expect(actual.changedPaths).toStrictEqual(expected.changedPaths)
+    expect(actual.reusedPreviousTree).toBe(expected.reusedPreviousTree)
+    expect(actual.parsedSourceBytes).toBe(expected.parsedSourceBytes)
+  })
 })
