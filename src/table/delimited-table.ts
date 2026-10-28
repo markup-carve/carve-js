@@ -120,19 +120,24 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   )
   if (data === null) return null
   const lines = payloadLines.get(code)
+  const lineStarts: number[] = []
+  if (lines) {
+    let start = 0
+    for (const line of lines) { lineStarts.push(start); start += line.text.length + 1 }
+  }
   const point = (index: number): { line: number; column: number; offset: number } | undefined => {
     if (!lines) return undefined
-    let cursor = 0
-    for (const line of lines) {
-      const end = cursor + line.text.length
-      if (index <= end) {
-        const prefix = line.text.slice(0, index - cursor)
-        const width = [...prefix].length
-        return { line: line.line, column: line.column + width, offset: line.offset + width }
-      }
-      cursor = end + 1
+    let lo = 0; let hi = lineStarts.length
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >>> 1
+      if (lineStarts[mid]! <= index) lo = mid
+      else hi = mid
     }
-    return undefined
+    const line = lines[lo]
+    const cursor = lineStarts[lo]
+    if (!line || cursor === undefined || index > cursor + line.text.length) return undefined
+    const width = [...line.text.slice(0, index - cursor)].length
+    return { line: line.line, column: line.column + width, offset: line.offset + width }
   }
   const position = (start: number, end: number): Position | undefined => {
     const a = point(start)
@@ -141,6 +146,7 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
       startLine: a.line, endLine: b.line,
       startColumn: a.column, endColumn: b.column,
       startOffset: a.offset, endOffset: b.offset,
+      ...(code.pos?.file ? { file: code.pos.file } : {}),
     } : undefined
   }
   const width = data.reduce((max, row) => Math.max(max, row.length), 0)
