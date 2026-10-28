@@ -646,6 +646,8 @@ describe('experimental block cursor', () => {
       if (JSON.stringify(actual) !== JSON.stringify(expected)) {
         expect(actual, path).toStrictEqual(expected)
       }
+      expect(renderHtml(resolve(actual), { sourceLine: true }), path)
+        .toBe(renderHtml(resolve(expected), { sourceLine: true }))
       const establishedEvents: object[] = []
       const cursorEvents: object[] = []
       const callbacks = (events: object[]) => ({
