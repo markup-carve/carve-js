@@ -453,7 +453,7 @@ export interface EmphasisMemo {
   failed: Map<string, Uint8Array>
   lastBrace: number
   lastCritic?: number
-  boldItalic?: number[]
+  boldItalic?: { closers: number[]; minimumOwners: number[]; width: number }
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
   // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
@@ -464,7 +464,8 @@ export interface EmphasisMemo {
 
 export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): number | undefined {
   if (!memo.boldItalic) {
-    memo.boldItalic = []
+    const closers: number[] = []
+    const owners: number[] = []
     const codeEnds = backtickRunEnds(text)
     const brackets = emphasisBrackets(text, memo)
     const destinations = linkDestinations(text, memo)
@@ -472,7 +473,9 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
     const attributes = new Map<number, number>()
     if (text.includes('{')) inlineOpaqueEnds(text, codeEnds, destinations, new Map(), attributes, brackets)
     let atom = 0
+    const boundaries: Array<{ open: number; end: number }> = []
     for (let close = 0; close < text.length - 1; close++) {
+      while (boundaries.length && boundaries.at(-1)!.end <= close) boundaries.pop()
       if (text[close] === '\\') { close++; continue }
       if (text[close] === '`') {
         const end = codeEnds![close]!
@@ -480,33 +483,42 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
         close = end - 1
         continue
       }
-      // Child inline constructs own their entire boundary. A closer in a
-      // label, extension body, destination, or atomic link is not reachable
-      // by the surrounding combined span.
       while (atom < atoms.length && atoms[atom]![1] <= close) atom++
       if (atom < atoms.length && atoms[atom]![0] === close) {
-        close = atoms[atom]![1] - 1
-        continue
+        boundaries.push({ open: close, end: atoms[atom]![1] })
       }
       if (text[close] === '[') {
         const end = brackets(close)
-        if (end !== undefined) { close = end; continue }
+        if (end !== undefined) boundaries.push({ open: close, end: end + 1 })
       }
       if (text[close] === '(' && text[close - 1] === ']') {
         const end = destinations.get(close)
-        if (end !== undefined) { close = end; continue }
+        if (end !== undefined) boundaries.push({ open: close, end: end + 1 })
       }
       if (text[close] === '{') {
         const end = attributes.get(close)
-        if (end !== undefined) { close = end - 1; continue }
+        if (end !== undefined) boundaries.push({ open: close, end })
       }
       if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
       // (carve#3217), so that `*/` is content and a later one may close.
-      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2) && !/[A-Za-z0-9]/.test(text[close + 2] ?? '')) memo.boldItalic.push(close)
+      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2) && !/[A-Za-z0-9]/.test(text[close + 2] ?? '')) {
+        closers.push(close)
+        owners.push(boundaries.at(-1)?.open ?? -1)
+      }
     }
+    // A closer belongs to a child only when that child's opener is after the
+    // combined opener. A combined span opened inside the child can still use
+    // a closer there. Minimum owner positions let each lookup skip inaccessible
+    // candidates in logarithmic time, even for many openers before many children.
+    let width = 1
+    while (width < closers.length) width *= 2
+    const minimumOwners = new Array<number>(width * 2).fill(Infinity)
+    for (let i = 0; i < owners.length; i++) minimumOwners[width + i] = owners[i]!
+    for (let i = width - 1; i > 0; i--) minimumOwners[i] = Math.min(minimumOwners[i * 2]!, minimumOwners[i * 2 + 1]!)
+    memo.boldItalic = { closers, minimumOwners, width }
   }
-  const closers = memo.boldItalic
+  const { closers, minimumOwners, width } = memo.boldItalic
   let low = 0
   let high = closers.length
   while (low < high) {
@@ -514,7 +526,14 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
     if (closers[mid]! <= start) low = mid + 1
     else high = mid
   }
-  return closers[low]
+  const nextReachable = (node: number, left: number, right: number): number | undefined => {
+    if (right <= low || minimumOwners[node]! >= start) return undefined
+    if (right - left === 1) return left
+    const middle = (left + right) >>> 1
+    return nextReachable(node * 2, left, middle) ?? nextReachable(node * 2 + 1, middle, right)
+  }
+  const index = nextReachable(1, 0, width)
+  return index === undefined ? undefined : closers[index]
 }
 
 export function newEmphasisMemo(): EmphasisMemo {
