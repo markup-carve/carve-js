@@ -2,21 +2,21 @@
   {
     "id": "row-1",
     "source": "[r][] [^p] [^c] [^d]\n\n1. - para\n  [^p]: n\n     tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <ul>\n      <li>para\n[^p]: n\ntail</li>\n    </ul>\n  </li>\n</ol>"
+    "html": "<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^c] [^d]</p>\n<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\ntail<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "row-2",
     "source": "[r][] [^p] [^c] [^d]\n\n1. - para\n     more\n  [^p]: n\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <ul>\n      <li>para\nmore\n[^p]: n</li>\n    </ul>\n  </li>\n</ol>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^c] [^d]</p>\n<ol>\n  <li>\n    <ul>\n      <li>para\nmore</li>\n    </ul>\n  </li>\n</ol>\n<div>\n  <p>tail</p>\n</div>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "row-3",
     "source": "[r][] [^p] [^c] [^d]\n\n1. :: t\n   : para\n     more\n  [^p]: n\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore\n[^p]: n\n<code>\nx</code></dd>\n    </dl>\n  </li>\n</ol>"
+    "html": "<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^c] [^d]</p>\n<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore</dd>\n    </dl>\n  </li>\n</ol>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\n<code>\nx</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "row-4",
     "source": "1. - para\n  [^p]: n\n\n[^p]\n",
-    "html": "<ol>\n  <li>\n    <ul>\n      <li>para\n[^p]: n</li>\n    </ul>\n  </li>\n</ol>\n<p>[^p]</p>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   }
 ]

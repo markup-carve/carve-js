@@ -72,22 +72,22 @@
   {
     "id": "inline-following-code-14",
     "source": "- a\n    ```\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-15",
     "source": "- a\n    ```\n\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-16",
     "source": "- a\n    ```\n      ~~~ =html\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-17",
     "source": "- a\n    ```\n\n      ~~~ =html\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~ =html\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-18",
@@ -102,22 +102,22 @@
   {
     "id": "inline-following-code-20",
     "source": "- a\n    ```\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-21",
     "source": "- a\n    ```\n\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-22",
     "source": "- a\n    ```\n        ~~~ =html\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-23",
     "source": "- a\n    ```\n\n        ~~~ =html\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~ =html\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-24",
@@ -192,22 +192,22 @@
   {
     "id": "inline-following-code-38",
     "source": "- a\n  \t```\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-39",
     "source": "- a\n  \t```\n\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-40",
     "source": "- a\n  \t```\n      ~~~ =html\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-41",
     "source": "- a\n  \t```\n\n      ~~~ =html\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~ =html\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-42",
@@ -222,22 +222,22 @@
   {
     "id": "inline-following-code-44",
     "source": "- a\n  \t```\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-45",
     "source": "- a\n  \t```\n\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-46",
     "source": "- a\n  \t```\n        ~~~ =html\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-47",
     "source": "- a\n  \t```\n\n        ~~~ =html\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~ =html\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    code\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "inline-following-code-48",
@@ -312,22 +312,22 @@
   {
     "id": "inline-following-code-62",
     "source": "> - a\n>     ```\n>       ~~~\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-63",
     "source": "> - a\n>     ```\n> \n>       ~~~\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-64",
     "source": "> - a\n>     ```\n>       ~~~ =html\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-65",
     "source": "> - a\n>     ```\n> \n>       ~~~ =html\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~ =html\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-66",
@@ -342,22 +342,22 @@
   {
     "id": "inline-following-code-68",
     "source": "> - a\n>     ```\n>         ~~~\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-69",
     "source": "> - a\n>     ```\n> \n>         ~~~\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-70",
     "source": "> - a\n>     ```\n>         ~~~ =html\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-71",
     "source": "> - a\n>     ```\n> \n>         ~~~ =html\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~ =html\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-72",
@@ -432,22 +432,22 @@
   {
     "id": "inline-following-code-86",
     "source": "> - a\n>   \t```\n>       ~~~\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-87",
     "source": "> - a\n>   \t```\n> \n>       ~~~\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-88",
     "source": "> - a\n>   \t```\n>       ~~~ =html\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-89",
     "source": "> - a\n>   \t```\n> \n>       ~~~ =html\n>       code\n>       ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~ =html\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-90",
@@ -462,22 +462,22 @@
   {
     "id": "inline-following-code-92",
     "source": "> - a\n>   \t```\n>         ~~~\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-93",
     "source": "> - a\n>   \t```\n> \n>         ~~~\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-94",
     "source": "> - a\n>   \t```\n>         ~~~ =html\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-95",
     "source": "> - a\n>   \t```\n> \n>         ~~~ =html\n>         code\n>         ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~ =html\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "inline-following-code-96",
@@ -552,22 +552,22 @@
   {
     "id": "inline-following-code-110",
     "source": "> > - a\n> >     ```\n> >       ~~~\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-111",
     "source": "> > - a\n> >     ```\n> > \n> >       ~~~\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-112",
     "source": "> > - a\n> >     ```\n> >       ~~~ =html\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-113",
     "source": "> > - a\n> >     ```\n> > \n> >       ~~~ =html\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~ =html\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-114",
@@ -582,22 +582,22 @@
   {
     "id": "inline-following-code-116",
     "source": "> > - a\n> >     ```\n> >         ~~~\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-117",
     "source": "> > - a\n> >     ```\n> > \n> >         ~~~\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-118",
     "source": "> > - a\n> >     ```\n> >         ~~~ =html\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-119",
     "source": "> > - a\n> >     ```\n> > \n> >         ~~~ =html\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~ =html\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-120",
@@ -672,22 +672,22 @@
   {
     "id": "inline-following-code-134",
     "source": "> > - a\n> >   \t```\n> >       ~~~\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-135",
     "source": "> > - a\n> >   \t```\n> > \n> >       ~~~\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-136",
     "source": "> > - a\n> >   \t```\n> >       ~~~ =html\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-137",
     "source": "> > - a\n> >   \t```\n> > \n> >       ~~~ =html\n> >       code\n> >       ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~ =html\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-138",
@@ -702,22 +702,22 @@
   {
     "id": "inline-following-code-140",
     "source": "> > - a\n> >   \t```\n> >         ~~~\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-141",
     "source": "> > - a\n> >   \t```\n> > \n> >         ~~~\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-142",
     "source": "> > - a\n> >   \t```\n> >         ~~~ =html\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n~~~ =html\ncode\n~~~\nafter</code></li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "inline-following-code-143",
     "source": "> > - a\n> >   \t```\n> > \n> >         ~~~ =html\n> >         code\n> >         ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        ~~~ =html\ncode\n~~~\nafter\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code></code>\n        code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "ordinary-closed-code-q0-`-blankfalse",
@@ -1547,22 +1547,22 @@
   {
     "id": "preservation-309",
     "source": "- a\n    ~~~\n    ```\n    code\n    ```\n # h\n",
-    "html": "<ul>\n  <li>a\n~~~\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n~~~\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "preservation-310",
     "source": "- a\n    ~~~\n    ```\n    code\n    ```\n ```\n x\n ```\n",
-    "html": "<ul>\n  <li>a\n~~~\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><code>\nx\n</code></p>"
+    "html": "<ul>\n  <li>a\n~~~\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "preservation-311",
     "source": "> - a\n>     ~~~\n>     ```\n>     code\n>     ```\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "preservation-312",
     "source": "> - a\n>     ~~~\n>     ```\n>     code\n>     ```\n>  ```\n>  x\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><code>\nx\n</code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <pre><code>x\n</code></pre>\n</blockquote>"
   },
   {
     "id": "preservation-313",
@@ -1932,7 +1932,7 @@
   {
     "id": "review-resume-67",
     "source": ": t\n    ```\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<p>: t\n<code></code></p>\n<p>~~~\ncode\n~~~\nafter</p>"
+    "html": "<p>: t\n<code></code></p><pre><code>code\n</code></pre><p>after</p>"
   },
   {
     "id": "review-resume-68",

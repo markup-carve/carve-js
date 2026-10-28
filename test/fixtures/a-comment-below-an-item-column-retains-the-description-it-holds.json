@@ -7,7 +7,7 @@
   {
     "id": "row-2",
     "source": "[r][] [^p] [^c] [^d]\n\n1. :: t\n   : para\n  %%%\n  c\n  %%%\n     tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>para</p>\n        <p>tail</p>\n      </dd>\n    </dl>\n  </li>\n</ol>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<p>tail</p>"
   },
   {
     "id": "row-3",
@@ -17,7 +17,7 @@
   {
     "id": "row-4",
     "source": "1. :: t\n   : para\n  %%%\ntail\n",
-    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>para</p>\n        <p>tail</p>\n      </dd>\n    </dl>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<p>tail</p>"
   },
   {
     "id": "row-5",

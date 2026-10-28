@@ -266,7 +266,6 @@ export const RE_PREPASS_ANY_FENCE_CLOSER = new RegExp(
 
 export const definitionListHelpers = { ...listHelpers,
   trackItemLazyState,
-  rebaseOverindentedBlocks,
   RE_ABBR_DEF,
   RE_COMMENT_BLOCK_ANY,
   RE_HEADING,
@@ -278,7 +277,6 @@ export const definitionListHelpers = { ...listHelpers,
   markerRunListIsQuoteHeld,
   nestedItemHoldsOpenParagraph,
   parseCommentBlock,
-  retainBelowColumnComment,
   sourceColumnAt,
   trimEndSpaceTab,
 }
@@ -357,7 +355,7 @@ export const inlineScannerHelpers = { ...listHelpers,
 }
 export const scanInlineInnerWithHelpers = createInlineScanner(inlineScannerHelpers)
 
-export const parseListWithHelpers = createListParser(listHelpers, trackItemLazyState, rebaseOverindentedBlocks)
+export const parseListWithHelpers = createListParser(listHelpers, trackItemLazyState)
 
 // ============================================================================
 // Attribute block parsing — {#id .class key=value key="value with spaces"}
@@ -496,7 +494,6 @@ import {
 export {
   FOOTNOTE_BODY_COLUMN,
   RE_INVISIBLE_BLOCK_LEAD,
-  aBodyRebaseWouldMoveALine,
   closerReachesBase,
   commentCloserLookup,
   continuesInlineFenceParagraph,
@@ -504,7 +501,6 @@ export {
   dropTrailingWhitespace,
   endsHeadingOrQuote,
   groupLineContent,
-  hostedColonBodyOpener,
   insideOpenFence,
   isParentAuthoredBlock,
   lineOpensItemBlock,
@@ -512,16 +508,9 @@ export {
   markerNoteCommentFenceOpeners,
   markerNoteFenceReach,
   markerNoteOpenerReach,
-  opaqueGroupCloses,
   openVerbatimRun,
   quotePrefixDepth,
   readCaptionText,
-  rebaseHelpers,
-  rebaseOverindentedBlocks,
-  rebasedCodeFenceEnd,
-  rebasedColonGroupEnd,
-  rebasedQuoteEnd,
-  sourceCodeFenceEnd,
   sourceColumn,
   sourceQuotePrefixEnd,
   trackItemLazyState,
@@ -677,8 +666,6 @@ export {
   stackedFollowerColumn,
   quoteIndentHasTab,
   restoreVerbatimBlanks,
-  retainBelowColumnComment,
-  retainCommentBoundary,
   romanToInt,
   sourceColumnAt,
   sourceQuoteBody,
@@ -870,7 +857,6 @@ import {
   dropTrailingWhitespace,
   endsHeadingOrQuote,
   openVerbatimRun,
-  rebaseOverindentedBlocks,
   trackItemLazyState,
 } from './block/parse-block-boundaries.js'
 
@@ -903,6 +889,5 @@ import {
   listHelpers,
   markerRunListIsQuoteHeld,
   nestedItemHoldsOpenParagraph,
-  retainBelowColumnComment,
   sourceColumnAt,
 } from './list/parse-item-core.js'

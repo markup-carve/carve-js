@@ -12,12 +12,12 @@
   {
     "id": "row-3",
     "source": "1. - para\n  %%%\n  c\n  %%%\ntail\n",
-    "html": "<ol>\n  <li>\n    <ul>\n      <li>para\n        tail\n      </li>\n    </ul>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>\n<p>tail</p>"
   },
   {
     "id": "row-4",
     "source": "1. - para\n  %%%%\n  c\n  %%%%\ntail\n",
-    "html": "<ol>\n  <li>\n    <ul>\n      <li>para\n        tail\n      </li>\n    </ul>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>\n<p>tail</p>"
   },
   {
     "id": "row-5",

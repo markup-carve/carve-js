@@ -2,62 +2,62 @@
   {
     "id": "review7-c01-comment-shaped-verse-01",
     "source": "- ::: |\n  %% c\n %%%\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-02",
     "source": "- ::: |\n  %% c\n %%%%\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-03",
     "source": "- ::: |\n  %% c\n %% c\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-04",
     "source": "- ::: |\n  %%%%\n %% c\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-05",
     "source": "- ::: |\n    %% c\n %%%%\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c<br>\n&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-06",
     "source": "- ::: |\n    %% c\n %% c\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c<br>\n&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-07",
     "source": "- a\n  ::: |\n  %% c\n %%%\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-08",
     "source": "- a\n  ::: |\n  %% c\n %%%%\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-09",
     "source": "- a\n  ::: |\n  %%%%\n %% c\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\n&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-10",
     "source": "- a\n  ::: |\n    %% c\n %%%\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c<br>\n&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-11",
     "source": "- a\n  ::: |\n    %% c\n %%%%\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c<br>\n&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-12",
     "source": "- a\n  ::: |\n    %%%%\n %% c\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%%<br>\n&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-01",
@@ -212,7 +212,7 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-01",
     "source": "- ::: box\n  %% c\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-02",
@@ -222,7 +222,7 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-03",
     "source": "- ::: box\n  x\n  %% c\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-04",
@@ -232,7 +232,7 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-05",
     "source": "- ::: box\n  %%%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-06",
@@ -242,7 +242,7 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-07",
     "source": "- ::: box\n  x\n  %%%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-08",
@@ -252,7 +252,7 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-09",
     "source": "- ::: box\n   %%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-10",
@@ -262,12 +262,12 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-11",
     "source": "- ::: box\n  x\n   %%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-12",
     "source": "- ::: box\n  x\n   %%%\n - ::: in\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c05-shifted-comment-shields-closer-01",
@@ -392,22 +392,22 @@
   {
     "id": "review7-c07-open-fence-tail-owner-15",
     "source": "- ::: box\n  - ```\n  :::\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    :::\nTAILX\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-16",
     "source": "- ::: box\n  - ```\n  :::\n      :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    :::\nTAILX\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-17",
     "source": "- ::: box\n  - ~~~\n  :::\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    :::\nTAILX\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-18",
     "source": "- ::: box\n  - ~~~\n  :::\n      :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    :::\nTAILX\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n    </div>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "control-paired-comment-line-block",

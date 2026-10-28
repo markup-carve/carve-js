@@ -7,22 +7,22 @@
   {
     "id": "corpus-615-8",
     "source": "- > para\n  >  [r]: /u\ntail\n\n[r][]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-9",
     "source": "- > para\n  >  [^f]: n\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "corpus-615-10",
     "source": "- > para\n  >  {#x}\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "corpus-615-11",
     "source": "> - > para\n>   >  [r]: /u\ntail\n\n[r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>[r][]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-12",
@@ -42,122 +42,122 @@
   {
     "id": "q-96",
     "source": "- > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-97",
     "source": "- > para\n  >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-98",
     "source": "- > para\n  >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-99",
     "source": "- > para\n  >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para\n# H\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <p>para</p>\n      <h1 id=\"H\">H</h1>\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-100",
     "source": "- a\n  > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>a\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-101",
     "source": "- a\n  > para\n  >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>a\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-102",
     "source": "- a\n  > para\n  >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>a\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-103",
     "source": "- a\n  > para\n  >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>para\n# H\ntail</p></blockquote>\n  </li>\n</ul>\n<p>[r][] [^f]</p>"
+    "html": "<ul>\n  <li>a\n    <blockquote>\n      <p>para</p>\n      <h1 id=\"H\">H</h1>\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-104",
     "source": ":: t\n: > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n  </dd>\n</dl>\n<p>[r][] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-105",
     "source": ":: t\n: > para\n  >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n  </dd>\n</dl>\n<p>[r][] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-106",
     "source": ":: t\n: > para\n  >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n  </dd>\n</dl>\n<p>[r][] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-107",
     "source": ":: t\n: > para\n  >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n# H\ntail</p></blockquote>\n  </dd>\n</dl>\n<p>[r][] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote>\n      <p>para</p>\n      <h1 id=\"H\">H</h1>\n    </blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-108",
     "source": "1. > para\n   >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n  </li>\n</ol>\n<p>[r][] [^f]</p>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-109",
     "source": "1. > para\n   >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n  </li>\n</ol>\n<p>[r][] [^f]</p>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-110",
     "source": "1. > para\n   >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n  </li>\n</ol>\n<p>[r][] [^f]</p>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-111",
     "source": "1. > para\n   >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote><p>para\n# H\ntail</p></blockquote>\n  </li>\n</ol>\n<p>[r][] [^f]</p>"
+    "html": "<ol>\n  <li>\n    <blockquote>\n      <p>para</p>\n      <h1 id=\"H\">H</h1>\n    </blockquote>\n  </li>\n</ol>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-112",
     "source": "> > para\n> >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-113",
     "source": "> > para\n> >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-114",
     "source": "> > para\n> >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-115",
     "source": "> > para\n> >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para\n# H\ntail</p></blockquote>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <p>para</p>\n    <h1 id=\"H\">H</h1>\n  </blockquote>\n</blockquote>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-116",
     "source": "> - > para\n>   >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\n[r]: /u\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-117",
     "source": "> - > para\n>   >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\n[^f]: n\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-118",
     "source": "> - > para\n>   >  {#k}\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\n{<span class=\"tag\"><strong>#k</strong></span>}\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "q-119",
     "source": "> - > para\n>   >  # H\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\n# H\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>[r][] [^f]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <p>para</p>\n        <h1 id=\"H\">H</h1>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p>[r][] [^f]</p>"
   },
   {
     "id": "qd-120",

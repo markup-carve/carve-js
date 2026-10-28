@@ -232,305 +232,305 @@
   {
     "id": "payload-tabs-0",
     "source": "- a\n\t```\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-1",
     "source": "- a\n\t```\n\t  \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>  \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-2",
     "source": "- a\n\t```\n  \t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-3",
     "source": "- a\n\t```\n\t \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code> \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-4",
     "source": "- a\n  \t```\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-5",
     "source": "- a\n  \t```\n\t  \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>  \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-6",
     "source": "- a\n  \t```\n  \t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-7",
     "source": "- a\n  \t```\n\t \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code> \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-8",
     "source": "- a\n \t```\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-9",
     "source": "- a\n \t```\n\t  \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>  \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-10",
     "source": "- a\n \t```\n  \t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-11",
     "source": "- a\n \t```\n\t \tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code> \tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-12",
     "source": "> - a\n> \t```\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-13",
     "source": "> - a\n> \t```\n> \t  \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-14",
     "source": "> - a\n> \t```\n>   \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-15",
     "source": "> - a\n> \t```\n> \t \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-16",
     "source": "> - a\n>   \t```\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-17",
     "source": "> - a\n>   \t```\n> \t  \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-18",
     "source": "> - a\n>   \t```\n>   \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-19",
     "source": "> - a\n>   \t```\n> \t \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-20",
     "source": "> - a\n>  \t```\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-21",
     "source": "> - a\n>  \t```\n> \t  \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-22",
     "source": "> - a\n>  \t```\n>   \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-23",
     "source": "> - a\n>  \t```\n> \t \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-24",
     "source": "> > - a\n> > \t```\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-25",
     "source": "> > - a\n> > \t```\n> > \t  \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-26",
     "source": "> > - a\n> > \t```\n> >   \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-27",
     "source": "> > - a\n> > \t```\n> > \t \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-28",
     "source": "> > - a\n> >   \t```\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-29",
     "source": "> > - a\n> >   \t```\n> > \t  \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-30",
     "source": "> > - a\n> >   \t```\n> >   \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-31",
     "source": "> > - a\n> >   \t```\n> > \t \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-32",
     "source": "> > - a\n> >  \t```\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-33",
     "source": "> > - a\n> >  \t```\n> > \t  \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "  \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-34",
     "source": "> > - a\n> >  \t```\n> >   \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "payload-tabs-35",
     "source": "> > - a\n> >  \t```\n> > \t \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code> \tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " \tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-0",
     "source": "- a\n  \t```\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-1",
     "source": "- a\n  \t```\n\t\t\n\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -552,17 +552,17 @@
   {
     "id": "extended-tab-4",
     "source": "- a\n  \t```\n\t\tcode\n  ```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-5",
     "source": "- a\n  \t```\n\t\t\n\tcode\n  ```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -584,17 +584,17 @@
   {
     "id": "extended-tab-8",
     "source": "- a\n  \t~~~\n\t\tcode\n\t~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-9",
     "source": "- a\n  \t~~~\n\t\t\n\tcode\n\t~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -616,17 +616,17 @@
   {
     "id": "extended-tab-12",
     "source": "- a\n  \t~~~\n\t\tcode\n  ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-13",
     "source": "- a\n  \t~~~\n\t\t\n\tcode\n  ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -648,17 +648,17 @@
   {
     "id": "extended-tab-16",
     "source": "- a\n  \t```js\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-17",
     "source": "- a\n  \t```js\n\t\t\n\tcode\n\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -680,17 +680,17 @@
   {
     "id": "extended-tab-20",
     "source": "- a\n  \t```js\n\t\tcode\n  ```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-21",
     "source": "- a\n  \t```js\n\t\t\n\tcode\n  ```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -760,17 +760,17 @@
   {
     "id": "extended-tab-32",
     "source": "> - a\n>   \t```\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-33",
     "source": "> - a\n>   \t```\n> \t\t\n> \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -792,17 +792,17 @@
   {
     "id": "extended-tab-36",
     "source": "> - a\n>   \t```\n> \t\tcode\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-37",
     "source": "> - a\n>   \t```\n> \t\t\n> \tcode\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -824,17 +824,17 @@
   {
     "id": "extended-tab-40",
     "source": "> - a\n>   \t~~~\n> \t\tcode\n> \t~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-41",
     "source": "> - a\n>   \t~~~\n> \t\t\n> \tcode\n> \t~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -856,17 +856,17 @@
   {
     "id": "extended-tab-44",
     "source": "> - a\n>   \t~~~\n> \t\tcode\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-45",
     "source": "> - a\n>   \t~~~\n> \t\t\n> \tcode\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -888,17 +888,17 @@
   {
     "id": "extended-tab-48",
     "source": "> - a\n>   \t```js\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-49",
     "source": "> - a\n>   \t```js\n> \t\t\n> \tcode\n> \t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -920,17 +920,17 @@
   {
     "id": "extended-tab-52",
     "source": "> - a\n>   \t```js\n> \t\tcode\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-53",
     "source": "> - a\n>   \t```js\n> \t\t\n> \tcode\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1000,17 +1000,17 @@
   {
     "id": "extended-tab-64",
     "source": "> > - a\n> >   \t```\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-65",
     "source": "> > - a\n> >   \t```\n> > \t\t\n> > \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1032,17 +1032,17 @@
   {
     "id": "extended-tab-68",
     "source": "> > - a\n> >   \t```\n> > \t\tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-69",
     "source": "> > - a\n> >   \t```\n> > \t\t\n> > \tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1064,17 +1064,17 @@
   {
     "id": "extended-tab-72",
     "source": "> > - a\n> >   \t~~~\n> > \t\tcode\n> > \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-73",
     "source": "> > - a\n> >   \t~~~\n> > \t\t\n> > \tcode\n> > \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1096,17 +1096,17 @@
   {
     "id": "extended-tab-76",
     "source": "> > - a\n> >   \t~~~\n> > \t\tcode\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-77",
     "source": "> > - a\n> >   \t~~~\n> > \t\t\n> > \tcode\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1128,17 +1128,17 @@
   {
     "id": "extended-tab-80",
     "source": "> > - a\n> >   \t```js\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-81",
     "source": "> > - a\n> >   \t```js\n> > \t\t\n> > \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1160,17 +1160,17 @@
   {
     "id": "extended-tab-84",
     "source": "> > - a\n> >   \t```js\n> > \t\tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "extended-tab-85",
     "source": "> > - a\n> >   \t```js\n> > \t\t\n> > \tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code class=\"language-js\">    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -1248,9 +1248,9 @@
   {
     "id": "review-tabs-1",
     "source": "- a\n\t\t```\n\t\t\t\tcode\n\t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>        code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\tcode\n"
+      "        code\n"
     ]
   },
   {
@@ -1258,7 +1258,7 @@
     "source": "- a\n\t\t```\n\t\t\t\t\n\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\t\n"
+      "        \n"
     ]
   },
   {
@@ -1296,9 +1296,9 @@
   {
     "id": "review-tabs-7",
     "source": "- a\n\t\t\t```\n\t\t\t\tcode\n\t\t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1306,7 +1306,7 @@
     "source": "- a\n\t\t\t```\n\t\t\t\t\n\t\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1344,9 +1344,9 @@
   {
     "id": "review-tabs-13",
     "source": "- a\n  \t\t\t```\n\t\t\t\tcode\n  \t\t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1354,7 +1354,7 @@
     "source": "- a\n  \t\t\t```\n\t\t\t\t\n  \t\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1392,9 +1392,9 @@
   {
     "id": "review-tabs-19",
     "source": "> - a\n> \t\t```\n> \t\t\t\tcode\n> \t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\tcode\n"
+      "        code\n"
     ]
   },
   {
@@ -1402,7 +1402,7 @@
     "source": "> - a\n> \t\t```\n> \t\t\t\t\n> \t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\t\n"
+      "        \n"
     ]
   },
   {
@@ -1440,9 +1440,9 @@
   {
     "id": "review-tabs-25",
     "source": "> - a\n> \t\t\t```\n> \t\t\t\tcode\n> \t\t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1450,7 +1450,7 @@
     "source": "> - a\n> \t\t\t```\n> \t\t\t\t\n> \t\t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1488,9 +1488,9 @@
   {
     "id": "review-tabs-31",
     "source": "> - a\n>   \t\t\t```\n> \t\t\t\tcode\n>   \t\t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1498,7 +1498,7 @@
     "source": "> - a\n>   \t\t\t```\n> \t\t\t\t\n>   \t\t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1536,9 +1536,9 @@
   {
     "id": "review-tabs-37",
     "source": "> > - a\n> > \t\t```\n> > \t\t\t\tcode\n> > \t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\tcode\n"
+      "        code\n"
     ]
   },
   {
@@ -1546,7 +1546,7 @@
     "source": "> > - a\n> > \t\t```\n> > \t\t\t\t\n> > \t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\t\n"
+      "        \n"
     ]
   },
   {
@@ -1584,9 +1584,9 @@
   {
     "id": "review-tabs-43",
     "source": "> > - a\n> > \t\t\t```\n> > \t\t\t\tcode\n> > \t\t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1594,7 +1594,7 @@
     "source": "> > - a\n> > \t\t\t```\n> > \t\t\t\t\n> > \t\t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1632,9 +1632,9 @@
   {
     "id": "review-tabs-49",
     "source": "> > - a\n> >   \t\t\t```\n> > \t\t\t\tcode\n> >   \t\t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -1642,7 +1642,7 @@
     "source": "> > - a\n> >   \t\t\t```\n> > \t\t\t\t\n> >   \t\t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\n"
+      "    \n"
     ]
   },
   {
@@ -1924,14 +1924,20 @@
   {
     "id": "tab-mixed-adjacent-4",
     "source": "- a\n\t\t```\n\t\tone\n\t```\n\t\t~~~\n\t\ttwo\n\t~~~\nafter\n",
-    "html": "<ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul>",
-    "codePayloads": []
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-5",
     "source": "- a\n\t\t```\n\t\tone\n  \t```\n\t\t~~~\n\t\ttwo\n  \t~~~\nafter\n",
-    "html": "<ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul>",
-    "codePayloads": []
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-6",
@@ -1990,14 +1996,20 @@
   {
     "id": "tab-mixed-adjacent-12",
     "source": "1. a\n\t\t```\n\t\tone\n\t```\n\t\t~~~\n\t\ttwo\n\t~~~\nafter\n",
-    "html": "<ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol>",
-    "codePayloads": []
+    "html": "<ol><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-13",
     "source": "1. a\n\t\t```\n\t\tone\n  \t```\n\t\t~~~\n\t\ttwo\n  \t~~~\nafter\n",
-    "html": "<ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol>",
-    "codePayloads": []
+    "html": "<ol><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-14",
@@ -2056,14 +2068,20 @@
   {
     "id": "tab-mixed-adjacent-20",
     "source": "> - a\n> \t\t```\n> \t\tone\n> \t```\n> \t\t~~~\n> \t\ttwo\n> \t~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-21",
     "source": "> - a\n> \t\t```\n> \t\tone\n>   \t```\n> \t\t~~~\n> \t\ttwo\n>   \t~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-22",
@@ -2122,14 +2140,20 @@
   {
     "id": "tab-mixed-adjacent-28",
     "source": "> 1. a\n> \t\t```\n> \t\tone\n> \t```\n> \t\t~~~\n> \t\ttwo\n> \t~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-29",
     "source": "> 1. a\n> \t\t```\n> \t\tone\n>   \t```\n> \t\t~~~\n> \t\ttwo\n>   \t~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-30",
@@ -2188,14 +2212,20 @@
   {
     "id": "tab-mixed-adjacent-36",
     "source": "> > - a\n> > \t\t```\n> > \t\tone\n> > \t```\n> > \t\t~~~\n> > \t\ttwo\n> > \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul></blockquote></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-37",
     "source": "> > - a\n> > \t\t```\n> > \t\tone\n> >   \t```\n> > \t\t~~~\n> > \t\ttwo\n> >   \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ul></blockquote></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-38",
@@ -2254,14 +2284,20 @@
   {
     "id": "tab-mixed-adjacent-44",
     "source": "> > 1. a\n> > \t\t```\n> > \t\tone\n> > \t```\n> > \t\t~~~\n> > \t\ttwo\n> > \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol></blockquote></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p></blockquote></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-45",
     "source": "> > 1. a\n> > \t\t```\n> > \t\tone\n> >   \t```\n> > \t\t~~~\n> > \t\ttwo\n> >   \t~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n<code>\none\n</code>\n~~~\ntwo\n~~~\nafter</li></ol></blockquote></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ol><p>after</p></blockquote></blockquote>",
+    "codePayloads": [
+      "one\n",
+      "two\n"
+    ]
   },
   {
     "id": "tab-mixed-adjacent-46",
@@ -2284,103 +2320,103 @@
   {
     "id": "tab-state-boundaries-0",
     "source": "- a\n  \t```\n  \tone\n      ```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ul>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-1",
     "source": "- a\n  \t```\n  \tone\n  \t```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ul>",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ul>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-2",
     "source": "1. a\n  \t```\n  \tone\n      ```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ol><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ol>",
+    "html": "<ol><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ol>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-3",
     "source": "1. a\n  \t```\n  \tone\n  \t```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ol><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ol>",
+    "html": "<ol><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ol>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-4",
     "source": "> - a\n>   \t```\n>   \tone\n>       ```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-5",
     "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-6",
     "source": "> 1. a\n>   \t```\n>   \tone\n>       ```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ol></blockquote>",
+    "html": "<blockquote><ol><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ol></blockquote>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-7",
     "source": "> 1. a\n>   \t```\n>   \tone\n>   \t```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ol></blockquote>",
+    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ol></blockquote>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-8",
     "source": "> > - a\n> >   \t```\n> >   \tone\n> >       ```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-9",
     "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-10",
     "source": "> > 1. a\n> >   \t```\n> >   \tone\n> >       ```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ol></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ol><li>a\n<code>\none\n</code>\ntwo\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ol></blockquote></blockquote>",
     "codePayloads": [
-      "one\n  ```\ntwo\n",
       "three\n"
     ]
   },
   {
     "id": "tab-state-boundaries-11",
     "source": "> > 1. a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code>\n~~~\nthree\n~~~\nfour\n~~~\nafter</code></li></ol></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ol></blockquote></blockquote>",
     "codePayloads": [
-      "one\n"
+      "one\n",
+      "three\n"
     ]
   },
   {
@@ -2410,9 +2446,9 @@
   {
     "id": "tab-blank-under-base-3",
     "source": "- a\n\t\t```\n\t\t\t\t\n\tcode\n\t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>        \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2442,9 +2478,9 @@
   {
     "id": "tab-blank-under-base-7",
     "source": "- a\n  \t\t```\n\t\t\t\t\n\tcode\n  \t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>        \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2474,9 +2510,9 @@
   {
     "id": "tab-blank-under-base-11",
     "source": "- a\n\t\t\t```\n\t\t\t\t\n\tcode\n\t\t\t```\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    \ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -2506,9 +2542,9 @@
   {
     "id": "tab-blank-under-base-15",
     "source": "> - a\n> \t\t```\n> \t\t\t\t\n> \tcode\n> \t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>        \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2538,9 +2574,9 @@
   {
     "id": "tab-blank-under-base-19",
     "source": "> - a\n>   \t\t```\n> \t\t\t\t\n> \tcode\n>   \t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>        \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2570,9 +2606,9 @@
   {
     "id": "tab-blank-under-base-23",
     "source": "> - a\n> \t\t\t```\n> \t\t\t\t\n> \tcode\n> \t\t\t```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -2602,9 +2638,9 @@
   {
     "id": "tab-blank-under-base-27",
     "source": "> > - a\n> > \t\t```\n> > \t\t\t\t\n> > \tcode\n> > \t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>        \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2634,9 +2670,9 @@
   {
     "id": "tab-blank-under-base-31",
     "source": "> > - a\n> >   \t\t```\n> > \t\t\t\t\n> > \tcode\n> >   \t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>        \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\t\ncode\n"
+      "        \ncode\n"
     ]
   },
   {
@@ -2666,9 +2702,9 @@
   {
     "id": "tab-blank-under-base-35",
     "source": "> > - a\n> > \t\t\t```\n> > \t\t\t\t\n> > \tcode\n> > \t\t\t```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    \ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\t\ncode\n"
+      "    \ncode\n"
     ]
   },
   {
@@ -2698,9 +2734,9 @@
   {
     "id": "blank-mixed-3",
     "source": "- a\n\n\t```\n\t\tcode\n\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -2730,9 +2766,9 @@
   {
     "id": "blank-mixed-7",
     "source": "- a\n\n\t```\n\t\tcode\n \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -2762,9 +2798,9 @@
   {
     "id": "blank-mixed-11",
     "source": "- a\n\n\t```\n\t\tcode\n  \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -2794,41 +2830,41 @@
   {
     "id": "blank-mixed-15",
     "source": "- a\n\n\t```\n\t\tcode\n   \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-16",
     "source": "- a\n\n\t```\n\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-17",
     "source": "- a\n\n\t```\n \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-18",
     "source": "- a\n\n\t```\n  \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-19",
     "source": "- a\n\n\t```\n\t\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -2858,73 +2894,73 @@
   {
     "id": "blank-mixed-23",
     "source": "- a\n\n\t```\n\t\tcode\n    ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-24",
     "source": "- a\n\n\t```\n\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-25",
     "source": "- a\n\n\t```\n \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-26",
     "source": "- a\n\n\t```\n  \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-27",
     "source": "- a\n\n\t```\n\t\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-28",
     "source": "- a\n\n\t```\n\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-29",
     "source": "- a\n\n\t```\n \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-30",
     "source": "- a\n\n\t```\n  \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-31",
     "source": "- a\n\n\t```\n\t\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -2954,9 +2990,9 @@
   {
     "id": "blank-mixed-35",
     "source": "- a\n\n \t```\n\t\tcode\n\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -2986,9 +3022,9 @@
   {
     "id": "blank-mixed-39",
     "source": "- a\n\n \t```\n\t\tcode\n \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3018,9 +3054,9 @@
   {
     "id": "blank-mixed-43",
     "source": "- a\n\n \t```\n\t\tcode\n  \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3050,41 +3086,41 @@
   {
     "id": "blank-mixed-47",
     "source": "- a\n\n \t```\n\t\tcode\n   \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-48",
     "source": "- a\n\n \t```\n\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-49",
     "source": "- a\n\n \t```\n \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-50",
     "source": "- a\n\n \t```\n  \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-51",
     "source": "- a\n\n \t```\n\t\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3114,73 +3150,73 @@
   {
     "id": "blank-mixed-55",
     "source": "- a\n\n \t```\n\t\tcode\n    ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-56",
     "source": "- a\n\n \t```\n\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-57",
     "source": "- a\n\n \t```\n \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-58",
     "source": "- a\n\n \t```\n  \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-59",
     "source": "- a\n\n \t```\n\t\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-60",
     "source": "- a\n\n \t```\n\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-61",
     "source": "- a\n\n \t```\n \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-62",
     "source": "- a\n\n \t```\n  \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-63",
     "source": "- a\n\n \t```\n\t\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3210,9 +3246,9 @@
   {
     "id": "blank-mixed-67",
     "source": "- a\n\n  \t```\n\t\tcode\n\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3242,9 +3278,9 @@
   {
     "id": "blank-mixed-71",
     "source": "- a\n\n  \t```\n\t\tcode\n \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3274,9 +3310,9 @@
   {
     "id": "blank-mixed-75",
     "source": "- a\n\n  \t```\n\t\tcode\n  \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3306,41 +3342,41 @@
   {
     "id": "blank-mixed-79",
     "source": "- a\n\n  \t```\n\t\tcode\n   \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-80",
     "source": "- a\n\n  \t```\n\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-81",
     "source": "- a\n\n  \t```\n \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-82",
     "source": "- a\n\n  \t```\n  \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-83",
     "source": "- a\n\n  \t```\n\t\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3370,73 +3406,73 @@
   {
     "id": "blank-mixed-87",
     "source": "- a\n\n  \t```\n\t\tcode\n    ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-88",
     "source": "- a\n\n  \t```\n\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-89",
     "source": "- a\n\n  \t```\n \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-90",
     "source": "- a\n\n  \t```\n  \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-91",
     "source": "- a\n\n  \t```\n\t\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-92",
     "source": "- a\n\n  \t```\n\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-93",
     "source": "- a\n\n  \t```\n \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-94",
     "source": "- a\n\n  \t```\n  \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-95",
     "source": "- a\n\n  \t```\n\t\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3466,9 +3502,9 @@
   {
     "id": "blank-mixed-99",
     "source": "- a\n\n   \t```\n\t\tcode\n\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3498,9 +3534,9 @@
   {
     "id": "blank-mixed-103",
     "source": "- a\n\n   \t```\n\t\tcode\n \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3530,9 +3566,9 @@
   {
     "id": "blank-mixed-107",
     "source": "- a\n\n   \t```\n\t\tcode\n  \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -3562,41 +3598,41 @@
   {
     "id": "blank-mixed-111",
     "source": "- a\n\n   \t```\n\t\tcode\n   \t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-112",
     "source": "- a\n\n   \t```\n\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-113",
     "source": "- a\n\n   \t```\n \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-114",
     "source": "- a\n\n   \t```\n  \tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-115",
     "source": "- a\n\n   \t```\n\t\tcode\n\t\t```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3626,73 +3662,73 @@
   {
     "id": "blank-mixed-119",
     "source": "- a\n\n   \t```\n\t\tcode\n    ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre>\n    tail\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>    code\n</code></pre>\n    tail\nafter\n  </li></ul>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-120",
     "source": "- a\n\n   \t```\n\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-121",
     "source": "- a\n\n   \t```\n \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-122",
     "source": "- a\n\n   \t```\n  \tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-123",
     "source": "- a\n\n   \t```\n\t\tcode\n      ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-124",
     "source": "- a\n\n   \t```\n\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-125",
     "source": "- a\n\n   \t```\n \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-126",
     "source": "- a\n\n   \t```\n  \tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-127",
     "source": "- a\n\n   \t```\n\t\tcode\n        ```\n    tail\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p>",
+    "html": "<ul><li>a\n    <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -3978,9 +4014,9 @@
   {
     "id": "blank-mixed-163",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n> \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4010,9 +4046,9 @@
   {
     "id": "blank-mixed-167",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>  \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4042,9 +4078,9 @@
   {
     "id": "blank-mixed-171",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>   \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4074,41 +4110,41 @@
   {
     "id": "blank-mixed-175",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>    \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-176",
     "source": "> - a\n> \n> \t```\n> \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-177",
     "source": "> - a\n> \n> \t```\n>  \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-178",
     "source": "> - a\n> \n> \t```\n>   \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-179",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4138,73 +4174,73 @@
   {
     "id": "blank-mixed-183",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>     ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-184",
     "source": "> - a\n> \n> \t```\n> \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-185",
     "source": "> - a\n> \n> \t```\n>  \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-186",
     "source": "> - a\n> \n> \t```\n>   \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-187",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-188",
     "source": "> - a\n> \n> \t```\n> \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-189",
     "source": "> - a\n> \n> \t```\n>  \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-190",
     "source": "> - a\n> \n> \t```\n>   \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-191",
     "source": "> - a\n> \n> \t```\n> \t\tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4234,9 +4270,9 @@
   {
     "id": "blank-mixed-195",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n> \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4266,9 +4302,9 @@
   {
     "id": "blank-mixed-199",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>  \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4298,9 +4334,9 @@
   {
     "id": "blank-mixed-203",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>   \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4330,41 +4366,41 @@
   {
     "id": "blank-mixed-207",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>    \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-208",
     "source": "> - a\n> \n>  \t```\n> \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-209",
     "source": "> - a\n> \n>  \t```\n>  \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-210",
     "source": "> - a\n> \n>  \t```\n>   \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-211",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4394,73 +4430,73 @@
   {
     "id": "blank-mixed-215",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>     ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-216",
     "source": "> - a\n> \n>  \t```\n> \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-217",
     "source": "> - a\n> \n>  \t```\n>  \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-218",
     "source": "> - a\n> \n>  \t```\n>   \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-219",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-220",
     "source": "> - a\n> \n>  \t```\n> \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-221",
     "source": "> - a\n> \n>  \t```\n>  \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-222",
     "source": "> - a\n> \n>  \t```\n>   \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-223",
     "source": "> - a\n> \n>  \t```\n> \t\tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4490,9 +4526,9 @@
   {
     "id": "blank-mixed-227",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n> \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4522,9 +4558,9 @@
   {
     "id": "blank-mixed-231",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>  \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4554,9 +4590,9 @@
   {
     "id": "blank-mixed-235",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>   \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4586,41 +4622,41 @@
   {
     "id": "blank-mixed-239",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>    \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-240",
     "source": "> - a\n> \n>   \t```\n> \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-241",
     "source": "> - a\n> \n>   \t```\n>  \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-242",
     "source": "> - a\n> \n>   \t```\n>   \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-243",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4650,73 +4686,73 @@
   {
     "id": "blank-mixed-247",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>     ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-248",
     "source": "> - a\n> \n>   \t```\n> \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-249",
     "source": "> - a\n> \n>   \t```\n>  \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-250",
     "source": "> - a\n> \n>   \t```\n>   \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-251",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-252",
     "source": "> - a\n> \n>   \t```\n> \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-253",
     "source": "> - a\n> \n>   \t```\n>  \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-254",
     "source": "> - a\n> \n>   \t```\n>   \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-255",
     "source": "> - a\n> \n>   \t```\n> \t\tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4746,9 +4782,9 @@
   {
     "id": "blank-mixed-259",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n> \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4778,9 +4814,9 @@
   {
     "id": "blank-mixed-263",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>  \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4810,9 +4846,9 @@
   {
     "id": "blank-mixed-267",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>   \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -4842,41 +4878,41 @@
   {
     "id": "blank-mixed-271",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>    \t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-272",
     "source": "> - a\n> \n>    \t```\n> \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-273",
     "source": "> - a\n> \n>    \t```\n>  \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-274",
     "source": "> - a\n> \n>    \t```\n>   \tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-275",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n> \t\t```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -4906,73 +4942,73 @@
   {
     "id": "blank-mixed-279",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>     ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n</code></pre>\n      tail\nafter\n    </li></ul></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-280",
     "source": "> - a\n> \n>    \t```\n> \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-281",
     "source": "> - a\n> \n>    \t```\n>  \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-282",
     "source": "> - a\n> \n>    \t```\n>   \tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-283",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>       ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-284",
     "source": "> - a\n> \n>    \t```\n> \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-285",
     "source": "> - a\n> \n>    \t```\n>  \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-286",
     "source": "> - a\n> \n>    \t```\n>   \tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-287",
     "source": "> - a\n> \n>    \t```\n> \t\tcode\n>         ```\n>     tail\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5258,9 +5294,9 @@
   {
     "id": "blank-mixed-323",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> > \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5290,9 +5326,9 @@
   {
     "id": "blank-mixed-327",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >  \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5322,9 +5358,9 @@
   {
     "id": "blank-mixed-331",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >   \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5354,41 +5390,41 @@
   {
     "id": "blank-mixed-335",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >    \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-336",
     "source": "> > - a\n> > \n> > \t```\n> > \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-337",
     "source": "> > - a\n> > \n> > \t```\n> >  \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-338",
     "source": "> > - a\n> > \n> > \t```\n> >   \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-339",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5418,73 +5454,73 @@
   {
     "id": "blank-mixed-343",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >     ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-344",
     "source": "> > - a\n> > \n> > \t```\n> > \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-345",
     "source": "> > - a\n> > \n> > \t```\n> >  \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-346",
     "source": "> > - a\n> > \n> > \t```\n> >   \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-347",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-348",
     "source": "> > - a\n> > \n> > \t```\n> > \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-349",
     "source": "> > - a\n> > \n> > \t```\n> >  \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-350",
     "source": "> > - a\n> > \n> > \t```\n> >   \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-351",
     "source": "> > - a\n> > \n> > \t```\n> > \t\tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5514,9 +5550,9 @@
   {
     "id": "blank-mixed-355",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> > \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5546,9 +5582,9 @@
   {
     "id": "blank-mixed-359",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >  \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5578,9 +5614,9 @@
   {
     "id": "blank-mixed-363",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >   \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5610,41 +5646,41 @@
   {
     "id": "blank-mixed-367",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >    \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-368",
     "source": "> > - a\n> > \n> >  \t```\n> > \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-369",
     "source": "> > - a\n> > \n> >  \t```\n> >  \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-370",
     "source": "> > - a\n> > \n> >  \t```\n> >   \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-371",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5674,73 +5710,73 @@
   {
     "id": "blank-mixed-375",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >     ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-376",
     "source": "> > - a\n> > \n> >  \t```\n> > \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-377",
     "source": "> > - a\n> > \n> >  \t```\n> >  \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-378",
     "source": "> > - a\n> > \n> >  \t```\n> >   \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-379",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-380",
     "source": "> > - a\n> > \n> >  \t```\n> > \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-381",
     "source": "> > - a\n> > \n> >  \t```\n> >  \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-382",
     "source": "> > - a\n> > \n> >  \t```\n> >   \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-383",
     "source": "> > - a\n> > \n> >  \t```\n> > \t\tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5770,9 +5806,9 @@
   {
     "id": "blank-mixed-387",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> > \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5802,9 +5838,9 @@
   {
     "id": "blank-mixed-391",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >  \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5834,9 +5870,9 @@
   {
     "id": "blank-mixed-395",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >   \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -5866,41 +5902,41 @@
   {
     "id": "blank-mixed-399",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >    \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-400",
     "source": "> > - a\n> > \n> >   \t```\n> > \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-401",
     "source": "> > - a\n> > \n> >   \t```\n> >  \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-402",
     "source": "> > - a\n> > \n> >   \t```\n> >   \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-403",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -5930,73 +5966,73 @@
   {
     "id": "blank-mixed-407",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >     ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-408",
     "source": "> > - a\n> > \n> >   \t```\n> > \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-409",
     "source": "> > - a\n> > \n> >   \t```\n> >  \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-410",
     "source": "> > - a\n> > \n> >   \t```\n> >   \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-411",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-412",
     "source": "> > - a\n> > \n> >   \t```\n> > \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-413",
     "source": "> > - a\n> > \n> >   \t```\n> >  \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-414",
     "source": "> > - a\n> > \n> >   \t```\n> >   \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-415",
     "source": "> > - a\n> > \n> >   \t```\n> > \t\tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -6026,9 +6062,9 @@
   {
     "id": "blank-mixed-419",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> > \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -6058,9 +6094,9 @@
   {
     "id": "blank-mixed-423",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >  \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -6090,9 +6126,9 @@
   {
     "id": "blank-mixed-427",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >   \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
@@ -6122,41 +6158,41 @@
   {
     "id": "blank-mixed-431",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >    \t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-432",
     "source": "> > - a\n> > \n> >    \t```\n> > \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-433",
     "source": "> > - a\n> > \n> >    \t```\n> >  \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-434",
     "source": "> > - a\n> > \n> >    \t```\n> >   \tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n\t```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-435",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> > \t\t```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n\t```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n\t```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
@@ -6186,73 +6222,73 @@
   {
     "id": "blank-mixed-439",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >     ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n</code></pre>\n        tail\nafter\n      </li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n"
+      "    code\n"
     ]
   },
   {
     "id": "blank-mixed-440",
     "source": "> > - a\n> > \n> >    \t```\n> > \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-441",
     "source": "> > - a\n> > \n> >    \t```\n> >  \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-442",
     "source": "> > - a\n> > \n> >    \t```\n> >   \tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n  ```\ntail\n"
+      "code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-443",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >       ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n  ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n  ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n  ```\ntail\n"
+      "    code\n  ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-444",
     "source": "> > - a\n> > \n> >    \t```\n> > \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-445",
     "source": "> > - a\n> > \n> >    \t```\n> >  \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-446",
     "source": "> > - a\n> > \n> >    \t```\n> >   \tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "code\n    ```\ntail\n"
+      "code\n    ```\n  tail\n"
     ]
   },
   {
     "id": "blank-mixed-447",
     "source": "> > - a\n> > \n> >    \t```\n> > \t\tcode\n> >         ```\n> >     tail\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n    ```\ntail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>    code\n    ```\n  tail\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      "\tcode\n    ```\ntail\n"
+      "    code\n    ```\n  tail\n"
     ]
   },
   {
