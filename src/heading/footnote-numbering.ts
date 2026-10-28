@@ -152,7 +152,7 @@ function visitInlineTree(
  * definition wins; a definition that is never referenced contributes no
  * entry and no number).
  */
-export function numberFootnotes(ast: Document): FootnoteNumbering {
+function collectFootnotes(ast: Document, assignNumbers: boolean): FootnoteNumbering {
   const defs = ast.footnoteDefs ?? {}
   const definitionByKey = new Map<string, string>()
   for (const label of Object.keys(defs)) {
@@ -173,7 +173,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
     // reference failed, and the numbering says so - the note a reader can see
     // then reads as a repeat of a reference the document does not contain.
     if (discarded) {
-      delete n.number
+      if (assignNumbers) delete n.number
       return
     }
     // Inline footnote (`^[content]`): always a fresh, anonymous entry.
@@ -182,7 +182,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       const entry: FootnoteOrderEntry = { inline: n.inline }
       if (n.pos?.startLine !== undefined) entry.sourceLine = n.pos.startLine
       order.push(entry)
-      n.number = orderIndex + 1
+      if (assignNumbers) n.number = orderIndex + 1
       refs.push({ node: n, orderIndex })
       return
     }
@@ -195,7 +195,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       // `defs` is unchanged; the profile filter can take a definition away
       // AFTER the document was numbered, and a skip would leave the number of
       // a footnote that no longer exists (carve-js#698).
-      delete n.number
+      if (assignNumbers) delete n.number
       return
     }
     const key = normalizeRefLabel(n.label)
@@ -208,7 +208,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       idx = order.length - 1
       labelIndexes.set(key, idx)
     }
-    n.number = idx + 1
+    if (assignNumbers) n.number = idx + 1
     refs.push({ node: n, orderIndex: idx })
   }
   for (const b of ast.children) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
@@ -223,6 +223,19 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
   }
   return { order, refs }
+}
+
+export function numberFootnotes(ast: Document): FootnoteNumbering {
+  return collectFootnotes(ast, true)
+}
+
+export function reachableFootnoteLabels(ast: Document): Set<string> {
+  if (!ast.footnoteDefs || Object.keys(ast.footnoteDefs).length === 0) return new Set()
+  const labels = new Set<string>()
+  for (const entry of collectFootnotes(ast, false).order) {
+    if (entry.label !== undefined) labels.add(entry.label)
+  }
+  return labels
 }
 
 /*
