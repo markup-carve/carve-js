@@ -55,6 +55,36 @@ describe('experimental block cursor', () => {
     })).toThrow(UnsupportedCursorSyntax)
   })
 
+  it('keeps generated container ownership and diagnostics exact on admitted shapes', () => {
+    const leads = ['::: d\n', '- ::: d\n', '- a\n  ::: d\n', '> ::: d\n', '::: |\n']
+    const bodies = ['', '  z\n', 'z\n', '\n', '  z\n\n']
+    const tails = ['', '+\ntail\n', '- next\n', ':::\n', 'tail\n', '# h\n']
+    const callbacks = (events: object[]) => ({
+      onUnclosedContainer: (event: object) => events.push({ kind: 'container', event }),
+      onInvalidContainerMetadata: (event: object) => events.push({ kind: 'invalid', event }),
+      onUnclosedCodeFence: (event: object) => events.push({ kind: 'fence', event }),
+      onDanglingBlockAttributes: (event: object) => events.push({ kind: 'dangling', event }),
+    })
+    let exact = 0
+    let declined = 0
+    for (const lead of leads) for (const body of bodies) for (const tail of tails) {
+      const source = lead + body + tail
+      const expectedEvents: object[] = []
+      const actualEvents: object[] = []
+      const expected = parse(source, callbacks(expectedEvents))
+      try {
+        const actual = parseCursorPrototype(source, callbacks(actualEvents))
+        expect(actual, source).toStrictEqual(expected)
+        expect(actualEvents, source).toStrictEqual(expectedEvents)
+        exact++
+      } catch (error) {
+        if (!(error instanceof UnsupportedCursorSyntax)) throw error
+        declined++
+      }
+    }
+    expect({ exact, declined }).toStrictEqual({ exact: 144, declined: 6 })
+  })
+
   it.each(['> +\n flush\n', '> +\n  flush\n', '> +\n flush\n\nafter\n'])
   ('keeps a leading quote plus in its paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
