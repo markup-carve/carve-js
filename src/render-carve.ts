@@ -5,6 +5,7 @@ import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table/table-display-width.js'
 import { trimCellPadding } from './parse/table/parse-table-cells.js'
+import { allocateDashes } from './parse/inline/parse-inline-core.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
@@ -1993,7 +1994,8 @@ function guardThematicBreakLines(body: string, inLineBlock: boolean): string {
   if (inLineBlock || !body.includes('-')) return body
   return body
     .split('\n')
-    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? `\\${line}` : line))
+    // A backslash would read `\---` as `-–`; the glyphs the run renders as keep the line.
+    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? allocateDashes(line.trimEnd().length) : line))
     .join('\n')
 }
 

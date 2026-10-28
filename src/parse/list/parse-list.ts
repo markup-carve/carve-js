@@ -3,6 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
+import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
@@ -352,13 +353,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { content, line, startLineIndex: itemStartLineIndex } = head
     const { itemSource, itemMarkerColumn, itemQuoteDepth } = placement
     const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
+
     const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
     const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
     const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
-      (firstBlockColumn === itemMarkerColumn || firstBlockMarker &&
+      // In a description body the marker and body columns are the host's, so only the content column reaches (corpus 750).
+      (firstBlockColumn === itemMarkerColumn && lexer.hostBodyRoot !== 'description' || firstBlockMarker &&
         firstBlockColumn === placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent ||
         firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
-        lexer.hostBody === 'description' && firstBlockColumn === 0 ||
         isStackedFirstBlockQuoteMarker(itemSource) &&
           stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
@@ -3226,12 +3228,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
-      // A note whose body continues after an authored blank is another block
-      // in this item even though the note itself renders in the endnotes.
-      let loose = hasBlank && !RE_FOOTNOTE_DEF.test(content) && nested.some((line, index) =>
-        RE_FOOTNOTE_DEF.test(line.trimStart()) &&
-        nested[index + 1] !== undefined && !isBlankLine(nested[index + 1]!) &&
-        !lineOpensItemBlock(nested[index + 1]!.trimStart()))
+      // A note's body is the note's paragraph, never the item's own (L1).
+      let loose = false
       let previousVisibleSpan: { start: number; end: number; startColumn: number } | undefined
       let previousVisibleType: BlockNode['type'] | undefined
       let previousVisibleBlock: BlockNode | undefined
@@ -3340,6 +3338,56 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     return item
   }
 
+  // A description body rebases only its marker line, so a refused `+` follower
+  // below the item's source content column is the body's, not the item's (corpus 750).
+  function refusedFollowerLeavesItem(lexer: Lexer, shape: ListShape, placement: ItemPlacement): boolean {
+    if (lexer.hostBodyRoot !== 'description' || placement.itemMarkerColumn === placement.physicalItemMarkerColumn) return false
+    const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+    if (source === undefined || isBlankLine(source) || isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())) return false
+    return sourceColumn(source, placement.itemQuoteDepth) < placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent
+  }
+
+  // Siblings group by their container and a comment is invisible, so a comment
+  // that closed the item above does not end the list (carve#3885).
+  function commentsBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
+    const line = lexer.peek()
+    if (line === undefined || !RE_COMMENT_LINE.test(line)) return
+    // Three consecutive blanks end the list; a comment line breaks the run.
+    let run = 0
+    for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) run++
+    let blanks = run
+    let longest = run
+    let k = lexer.pos
+    for (let at = lexer.peek(k - lexer.pos); at !== undefined && (isBlankLine(at) || RE_COMMENT_LINE.test(at)); at = lexer.peek(k - lexer.pos)) {
+      if (isBlankLine(at)) {
+        blanks++
+        longest = Math.max(longest, ++run)
+        k++
+        continue
+      }
+      run = 0
+      const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
+      let end = k
+      if (fence) {
+        for (let j = k + 1; lexer.peek(j - lexer.pos) !== undefined; j++) {
+          if (RE_COMMENT_BLOCK.exec(lexer.peek(j - lexer.pos)!.trimStart())?.[1] === fence) {
+            end = j
+            break
+          }
+        }
+      }
+      k = end + 1
+    }
+    if (k >= lexer.lineCount || longest >= 3) return
+    const start = lexer.pos
+    lexer.pos = k
+    const sibling = readItemHead(lexer, shape) !== null
+    lexer.pos = start
+    if (!sibling) return
+    if (blanks > 0) flags.loose = true
+    last.children.push(...session.parseInvisibleRun(lexer, k))
+  }
+
   return function parseList(lexer: Lexer, session: ParseSession): List {
     const shape = classifyList(lexer, helpers)
     const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = shape
@@ -3377,6 +3425,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !isBlankLine(a) && !isContinuationMarker(a))
 
     while (!lexer.eof()) {
+      if (items.length) commentsBeforeSibling(lexer, session, shape, items.at(-1)!, flags)
       const head = readItemHead(lexer, shape)
       if (!head) break
       const oneLine = oneLineItem(lexer, session, shape, head)
@@ -3398,6 +3447,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (firstBlock.next === 'end') break
         if (firstBlock.next === 'loose') flags.loose = true
         continue
+      }
+      if (firstBlock.kind === 'refused' && refusedFollowerLeavesItem(lexer, shape, placement)) {
+        const item: ListItem = { type: 'list_item', children: [] }
+        if (session.recordPositions) attachBlockPos(lexer, item, head.startLineIndex, lexer.pos)
+        items.push(markItem(item, head))
+        break
       }
       items.push(collectItem(lexer, session, shape, head, placement,
         firstBlock.kind === 'refused' ? '' : head.content, isItemAttachBoundary, flags))

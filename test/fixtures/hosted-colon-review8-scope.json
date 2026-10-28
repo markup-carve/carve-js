@@ -317,12 +317,12 @@
   {
     "id": "review8-c01-authored-div-base-034",
     "source": "- ::: box\n    %% c\n%%%\n- tail\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review8-c01-authored-div-base-035",
     "source": "- ::: box\n    %% c\n%% c\n- tail\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review8-c02-below-column-comment-008",
@@ -382,7 +382,7 @@
   {
     "id": "review8-c02-below-column-comment-011",
     "source": "> - ::: |\n> %%%\n>       - :::: |\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review8-c02-below-column-comment-012",
@@ -392,7 +392,7 @@
   {
     "id": "review8-c02-below-column-comment-013",
     "source": ">     - ::: |\n> %%%\n>       - - ::: |\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n    <li>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review8-c01-authored-div-base-036",
@@ -437,7 +437,7 @@
   {
     "id": "review8-c02-below-column-comment-020",
     "source": "> - ::: |\n>  %%%%\n>     - m\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <ul>\n    <li>m\nTAILX</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n    <li>m\nTAILX</li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review8-c02-below-column-comment-021",
@@ -787,7 +787,7 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-009",
     "source": "- ::: |\n  ::::\n  :::\n    :::\n%%%\n   - ::: in\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::</p>\n    </div>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::</p>\n    </div>\n    <div>\n\n    </div>\n  </li>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c04-marker-payload-frame-010",

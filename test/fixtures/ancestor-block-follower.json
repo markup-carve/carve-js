@@ -2,32 +2,32 @@
   {
     "id": "d2-false-# h",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "d2-false-> q",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "d2-false-:::",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "d2-false-```",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "d2-false-| a |",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "d2-false-[^x]: note",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "d2-false-payload",
@@ -37,32 +37,32 @@
   {
     "id": "d2-true-# h",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "d2-true-> q",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "d2-true-:::",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "d2-true-```",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "d2-true-| a |",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "d2-true-[^x]: note",
     "source": "> - a\n>   - b\n> \n>     ::: |\n>     %%%\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "d2-true-payload",
@@ -72,32 +72,32 @@
   {
     "id": "d3-false-# h",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "d3-false-> q",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "d3-false-:::",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "d3-false-```",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "d3-false-| a |",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "d3-false-[^x]: note",
     "source": "- a\n  - b\n    - c\n\n      ::: |\n      %%%\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "d3-false-payload",
@@ -107,32 +107,32 @@
   {
     "id": "d3-true-# h",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "d3-true-> q",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "d3-true-:::",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "d3-true-```",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "d3-true-| a |",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "d3-true-[^x]: note",
     "source": "> - a\n>   - b\n>     - c\n> \n>       ::: |\n>       %%%\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "d3-true-payload",
@@ -142,32 +142,32 @@
   {
     "id": "d4-false-# h",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "d4-false-> q",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "d4-false-:::",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "d4-false-```",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "d4-false-| a |",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "d4-false-[^x]: note",
     "source": "- a\n  - b\n    - c\n      - d\n\n        ::: |\n        %%%\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <div class=\"line-block\">\n                  <p></p>\n                </div>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "d4-false-payload",
@@ -177,32 +177,32 @@
   {
     "id": "d4-true-# h",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "d4-true-> q",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "d4-true-:::",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "d4-true-```",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "d4-true-| a |",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "d4-true-[^x]: note",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n> \n>         ::: |\n>         %%%\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d\n                  <div class=\"line-block\">\n                    <p></p>\n                  </div>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "d4-true-payload",

@@ -512,12 +512,12 @@
   {
     "id": "nested-185",
     "source": "- [^a]: text\n    more\n    [^b]: \n      :: t\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "nested-187",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      :: t\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "nested-188",
@@ -1052,12 +1052,12 @@
   {
     "id": "nested-377",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       :: t\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "nested-379",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       :: t\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "nested-380",
@@ -1237,7 +1237,7 @@
   {
     "id": "generic-41",
     "source": "- a\n    - child\n    :: b\n      more\n    ~~~\n    code\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n    more\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-44",
@@ -1267,7 +1267,7 @@
   {
     "id": "generic-50",
     "source": "- a\n    - child\n    :: b\n      more\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n    more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "generic-51",
@@ -1312,7 +1312,7 @@
   {
     "id": "generic-62",
     "source": "- a\n    - child\n    :: b\n      more\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n    more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "generic-63",
@@ -1457,7 +1457,7 @@
   {
     "id": "generic-113",
     "source": "- a\n    - child\n    :: b\n      :: t\n    ~~~\n    code\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-121",
@@ -1482,7 +1482,7 @@
   {
     "id": "generic-125",
     "source": "- a\n    - child\n    :: b\n      :: t\n      ~~~\n      code\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t\n    ~~~\n    code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-127",
@@ -1522,7 +1522,7 @@
   {
     "id": "generic-137",
     "source": "- a\n    - child\n    :: b\n      :: t\n        ~~~\n        code\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t\n      ~~~\n      code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>b</dt>\n      <dt>t\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "generic-139",
@@ -1692,7 +1692,7 @@
   {
     "id": "generic-329",
     "source": "- a\n    more\n    :: b\n      more\n    ~~~\n    code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n    more\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-330",
@@ -1727,7 +1727,7 @@
   {
     "id": "generic-338",
     "source": "- a\n    more\n    :: b\n      more\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n    more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "generic-339",
@@ -1772,7 +1772,7 @@
   {
     "id": "generic-350",
     "source": "- a\n    more\n    :: b\n      more\n        ~~~\n        code\n        ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n    more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b\n  more</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "generic-351",
@@ -1957,7 +1957,7 @@
   {
     "id": "generic-401",
     "source": "- a\n    more\n    :: b\n      :: t\n    ~~~\n    code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-409",
@@ -1972,7 +1972,7 @@
   {
     "id": "generic-411",
     "source": "- a\n    more\n    b\n      :: t\n      ~~~\n      code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\nb\n    <dl>\n      <dt>t\n    ~~~\n    code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\nb\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-412",
@@ -1982,7 +1982,7 @@
   {
     "id": "generic-413",
     "source": "- a\n    more\n    :: b\n      :: t\n      ~~~\n      code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t\n    ~~~\n    code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-415",
@@ -1992,7 +1992,7 @@
   {
     "id": "generic-417",
     "source": "- a\n    more\n    b\n\n      :: t\n      ~~~\n      code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\nb\n    <dl>\n      <dt>t\n    ~~~\n    code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\nb\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-418",
@@ -2002,7 +2002,7 @@
   {
     "id": "generic-419",
     "source": "- a\n    more\n    :: b\n\n      :: t\n      ~~~\n      code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t\n    ~~~\n    code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "generic-420",
@@ -2032,7 +2032,7 @@
   {
     "id": "generic-425",
     "source": "- a\n    more\n    :: b\n      :: t\n        ~~~\n        code\nafter\n",
-    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t\n      ~~~\n      code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\nmore\n    <dl>\n      <dt>b</dt>\n      <dt>t\n  ~~~\n  code\nafter</dt>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "generic-426",
@@ -2222,7 +2222,7 @@
   {
     "id": "generic-617",
     "source": "> - a\n>     - child\n>     :: b\n>       more\n>     ~~~\n>     code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n    more\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-620",
@@ -2252,7 +2252,7 @@
   {
     "id": "generic-626",
     "source": "> - a\n>     - child\n>     :: b\n>       more\n>       ~~~\n>       code\n>       ~~~\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n    more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "generic-627",
@@ -2297,7 +2297,7 @@
   {
     "id": "generic-638",
     "source": "> - a\n>     - child\n>     :: b\n>       more\n>         ~~~\n>         code\n>         ~~~\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n    more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "generic-639",
@@ -2442,7 +2442,7 @@
   {
     "id": "generic-689",
     "source": "> - a\n>     - child\n>     :: b\n>       :: t\n>     ~~~\n>     code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-697",
@@ -2467,7 +2467,7 @@
   {
     "id": "generic-701",
     "source": "> - a\n>     - child\n>     :: b\n>       :: t\n>       ~~~\n>       code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t\n    ~~~\n    code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-703",
@@ -2507,7 +2507,7 @@
   {
     "id": "generic-713",
     "source": "> - a\n>     - child\n>     :: b\n>       :: t\n>         ~~~\n>         code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t\n      ~~~\n      code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>b</dt>\n        <dt>t\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-715",
@@ -2677,7 +2677,7 @@
   {
     "id": "generic-905",
     "source": "> - a\n>     more\n>     :: b\n>       more\n>     ~~~\n>     code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n    more\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-906",
@@ -2712,7 +2712,7 @@
   {
     "id": "generic-914",
     "source": "> - a\n>     more\n>     :: b\n>       more\n>       ~~~\n>       code\n>       ~~~\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n    more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "generic-915",
@@ -2757,7 +2757,7 @@
   {
     "id": "generic-926",
     "source": "> - a\n>     more\n>     :: b\n>       more\n>         ~~~\n>         code\n>         ~~~\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n    more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b\n  more</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "generic-927",
@@ -2942,7 +2942,7 @@
   {
     "id": "generic-977",
     "source": "> - a\n>     more\n>     :: b\n>       :: t\n>     ~~~\n>     code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-985",
@@ -2957,7 +2957,7 @@
   {
     "id": "generic-987",
     "source": "> - a\n>     more\n>     b\n>       :: t\n>       ~~~\n>       code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\nb\n      <dl>\n        <dt>t\n    ~~~\n    code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\nb\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-988",
@@ -2967,7 +2967,7 @@
   {
     "id": "generic-989",
     "source": "> - a\n>     more\n>     :: b\n>       :: t\n>       ~~~\n>       code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t\n    ~~~\n    code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-991",
@@ -2977,7 +2977,7 @@
   {
     "id": "generic-993",
     "source": "> - a\n>     more\n>     b\n> \n>       :: t\n>       ~~~\n>       code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\nb\n      <dl>\n        <dt>t\n    ~~~\n    code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\nb\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-994",
@@ -2987,7 +2987,7 @@
   {
     "id": "generic-995",
     "source": "> - a\n>     more\n>     :: b\n> \n>       :: t\n>       ~~~\n>       code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t\n    ~~~\n    code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-996",
@@ -3017,7 +3017,7 @@
   {
     "id": "generic-1001",
     "source": "> - a\n>     more\n>     :: b\n>       :: t\n>         ~~~\n>         code\n> after\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t\n      ~~~\n      code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\nmore\n      <dl>\n        <dt>b</dt>\n        <dt>t\n  ~~~\n  code\nafter</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-1002",

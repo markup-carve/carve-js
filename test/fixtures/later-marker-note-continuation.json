@@ -357,7 +357,7 @@
   {
     "id": "later-97",
     "source": "- [^n]: \n    more\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "later-98",
@@ -367,7 +367,7 @@
   {
     "id": "later-99",
     "source": "- [^n]: \n    more\n\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "later-100",
@@ -507,7 +507,7 @@
   {
     "id": "later-137",
     "source": "- [^n]: \n    - child\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "later-138",
@@ -517,7 +517,7 @@
   {
     "id": "later-139",
     "source": "- [^n]: \n    - child\n\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "later-141",
@@ -932,7 +932,7 @@
   {
     "id": "later-257",
     "source": "> - [^n]: \n>     more\n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter [^n]\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "later-258",
@@ -942,7 +942,7 @@
   {
     "id": "later-259",
     "source": "> - [^n]: \n>     more\n> \n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter [^n]\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "later-260",
@@ -1082,7 +1082,7 @@
   {
     "id": "later-297",
     "source": "> - [^n]: \n>     - child\n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter [^n]\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "later-298",
@@ -1092,7 +1092,7 @@
   {
     "id": "later-299",
     "source": "> - [^n]: \n>     - child\n> \n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t\n  ~~~\n  code\nafter [^n]</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\nafter [^n]\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "later-301",

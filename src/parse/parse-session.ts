@@ -780,6 +780,24 @@ export class ParseSession extends InlineParseSession {
     return out
   }
 
+  /** Parse the blank and comment lines before `end`; comments render nothing, so only their nodes are kept. */
+  parseInvisibleRun(lexer: Lexer, end: number): BlockNode[] {
+    const out: BlockNode[] = []
+    while (lexer.pos < end) {
+      if (isBlankLine(lexer.peek()!)) {
+        lexer.consume()
+        continue
+      }
+      const startLine = lexer.pos
+      const node = this.parseBlockInner(lexer)
+      if (node) {
+        attachBlockPos(lexer, node, startLine, lexer.pos)
+        out.push(node)
+      }
+    }
+    return out
+  }
+
   private parseBlockInner(lexer: Lexer): BlockNode | null {
     const line = lexer.peek()!
     const hostedLinkDef =

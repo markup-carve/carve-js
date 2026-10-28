@@ -25,6 +25,9 @@ interface Frame {
   axes?: string | undefined
   run?: number | undefined
   closes?: ((rest: string) => boolean) | undefined
+  termCut?: number
+  lineBlock?: boolean | undefined
+  span?: string | null
 }
 
 interface Form {
@@ -36,6 +39,7 @@ interface Form {
   width?: number
   head?: number
   axes?: string
+  lineBlock?: boolean
 }
 
 const QUOTE_LINE = /^>(?: ([^\r\n]*)|[ \t]*$)/
@@ -154,10 +158,11 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     let out = ''
     let m = indentCols(src)
     const lineCuts: OwnershipCut[] = []
-    const lead = (target: number): void => {
+    // `spaces` writes a leading tab as the columns it reaches, so a term and its body read alike in both spellings.
+    const lead = (target: number, spaces = false): void => {
       const col = Math.min(target, m.col)
       const run = src.length - m.rest.length
-      if (col === m.col) out += src.slice(0, run)
+      if (col === m.col && !(spaces && out === '' && src.slice(0, run).includes('\t'))) out += src.slice(0, run)
       else {
         lineCuts.push({ at: out.length, removed: run - col })
         out += ' '.repeat(col)
@@ -210,9 +215,19 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     if (inner.kind === 'fence' && !missed) {
       // Step 1: an open payload tests its closer first.
       lead(Math.max(m.col - inner.cut, inner.canon))
-      if (m.rest !== '' && inner.closes!(m.rest)) {
+      if (m.rest !== '' && inner.span) {
+        const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
+        if (c && c[1]![0] === inner.span[0] &&
+            (inner.span[0] === '%' ? c[1]!.length === inner.span.length : c[1]!.length >= inner.span.length)) inner.span = null
+      } else if (m.rest !== '' && inner.closes!(m.rest)) {
         frames.pop()
         top().last = 'block'
+      } else if (inner.lineBlock) {
+        // A span in a line-block payload pairs past the column too (carve-php#3137).
+        const f = RE_FENCE.test(m.rest) || RE_RAW_FENCE.test(m.rest) ? /^(`{3,}|~{3,})/.exec(m.rest)![1]! : null
+        const comment = COMMENT_FENCE.exec(m.rest)
+        if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
+        else if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > at) inner.span = comment[1]!
       }
       finish()
       continue
@@ -242,11 +257,14 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       top().last = 'block'
     } else if (form.kind === 'text') {
       // A new paragraph starts at the owner's column, never inside a frame it did not reach.
-      lead(owner.para || !closedColumn || plusFollower ? Math.max(m.col - owner.cut, owner.canon) : owner.canon)
+      // A term's continuation moves with the term, so a later `:` body still follows it.
+      const term = owner.para && owner.last === 'term'
+      const cut = term ? owner.termCut! : owner.cut
+      lead(owner.para || !closedColumn || plusFollower ? Math.max(m.col - cut, owner.canon) : owner.canon, term)
       owner.para = true
-      owner.last = 'para'
+      if (!term) owner.last = 'para'
     } else {
-      lead(owner.canon)
+      lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
     }
     finish()
@@ -255,10 +273,13 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon): void {
       owner.para = false
       owner.last = form.kind
-      if (form.kind === 'term') owner.para = true
+      if (form.kind === 'term') {
+        owner.para = true
+        owner.termCut = col - canon
+      }
       if (form.kind === 'fence' || form.kind === 'colon') {
         frames.push({ kind: form.kind, col: owner.col, canon: owner.canon, cut: col - canon,
-          closes: form.closes, run: form.run, para: false, last: null })
+          closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null })
         return
       }
       if (form.kind === 'quote') {
@@ -308,8 +329,9 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     if (QUOTE_LINE.test(rest)) return { kind: 'quote', interrupts: true }
     const colon = COLON_FENCE.exec(rest)
     if (colon && COLON_CLOSER.test(rest)) {
-      for (let k = reach; k > 0; k--) {
-        if (frames[k]!.kind === 'colon' && frames[k]!.run === colon[1]!.length) return { kind: 'colon-close', frame: k, interrupts: true }
+      // A closer is read in its owner: only a colon body at the reached depth, or holding it directly, can take it.
+      for (let k = reach; k > 0 && frames[k]!.kind === 'colon'; k--) {
+        if (frames[k]!.run === colon[1]!.length) return { kind: 'colon-close', frame: k, interrupts: true }
       }
     }
     if (colon && isColonFenceOpener(rest)) {
@@ -317,7 +339,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       const interrupts = !COLON_CLOSER.test(rest)
       if (owner.para && !interrupts) return { kind: 'text', interrupts: false }
       if (RE_LINE_BLOCK_OPEN.test(rest)) {
-        return { kind: 'fence', interrupts, closes: (r) => COLON_CLOSER.exec(r)?.[1]!.length === run }
+        return { kind: 'fence', interrupts, lineBlock: true, closes: (r) => COLON_CLOSER.exec(r)?.[1]!.length === run }
       }
       return { kind: 'colon', run, interrupts }
     }

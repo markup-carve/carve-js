@@ -1352,62 +1352,62 @@
   {
     "id": "mixed-364",
     "source": "- :: term\n  :::note\n  : payload\n    ```\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-368",
     "source": "- :: term\n  :::note\n  : payload\n    ```\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-372",
     "source": "- :: term\n  :::note\n  : payload\n      ```\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-376",
     "source": "- :: term\n  :::note\n  : payload\n      ```\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-384",
     "source": "- :: term\n  :::note\n  : payload\n    ~~~\n    body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-388",
     "source": "- :: term\n  :::note\n  : payload\n    ~~~\n    body\n    ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-392",
     "source": "- :: term\n  :::note\n  : payload\n      ~~~\n      body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-396",
     "source": "- :: term\n  :::note\n  : payload\n      ~~~\n      body\n      ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-404",
     "source": "- :: term\n  :::note\n  : payload\n    ```=html\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-408",
     "source": "- :: term\n  :::note\n  : payload\n    ```=html\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-412",
     "source": "- :: term\n  :::note\n  : payload\n      ```=html\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-416",
     "source": "- :: term\n  :::note\n  : payload\n      ```=html\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-420",
@@ -1827,7 +1827,7 @@
   {
     "id": "review-23",
     "source": "  - :: a\n    :: b\n    : p\n       :: t2\n       ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <dl>\n          <dt>t2\n <code></code></dt>\n        </dl>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <dl>\n          <dt>t2</dt>\n        </dl>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-24",
@@ -2277,7 +2277,7 @@
   {
     "id": "review-113",
     "source": "- :: a\n  :: b\n  : p\n      :: t2\n      ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <dl>\n          <dt>t2\n  <code></code></dt>\n        </dl>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <dl>\n          <dt>t2</dt>\n        </dl>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-114",
@@ -3227,7 +3227,7 @@
   {
     "id": "review-303",
     "source": "> - :: a\n  :: b\n>   : p\n>     :: t2\n>    ```\n>  code\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>b</dt>\n</dl>\n<blockquote>\n  <p>: p</p>\n  <dl>\n    <dt>t2\n   <code>\n code</code></dt>\n  </dl>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>b</dt>\n</dl>\n<blockquote>\n  <p>: p</p>\n  <dl>\n    <dt>t2</dt>\n  </dl>\n  <pre><code>code\n</code></pre>\n</blockquote>"
   },
   {
     "id": "review-304",
