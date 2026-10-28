@@ -2921,16 +2921,16 @@ function collectSilentFailures(
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
-    if (node.type === 'code' || node.type === 'autolink' || node.type === 'heading_ref') {
+    if (node.type === 'code' || node.type === 'autolink' || node.type === 'heading_ref' || node.type === 'image') {
       const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
       if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
         atomicSpans.push([pos.startOffset, pos.endOffset])
     }
-    // A destination or title may cross a soft wrap, which the per-line slot scan cannot see.
-    if (node.type === 'link' || node.type === 'image') {
+    // A link destination or title may cross a soft wrap, which the per-line slot scan cannot see.
+    if (node.type === 'link') {
       const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
       const children = Array.isArray(node.children) ? node.children as Array<{ pos?: { endOffset?: number } }> : []
-      const from = node.type === 'image' ? pos?.startOffset : children.at(-1)?.pos?.endOffset ?? pos?.startOffset
+      const from = children.at(-1)?.pos?.endOffset ?? pos?.startOffset
       if (from !== undefined && pos?.endOffset !== undefined && from < pos.endOffset)
         atomicSpans.push([from, pos.endOffset])
     }
