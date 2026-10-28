@@ -30,12 +30,14 @@ describe('experimental block cursor', () => {
     '```\ncode\n',
     '```=html\n<b>raw</b>\n',
     '::: note\n```\ncode\n:::\n{.x}\n',
-  ])('reports unclosed fences and dangling attributes in source order: %s', (source) => {
+    '::: note \t"Title"\n```\ncode\n:::\n{.x}\n',
+  ])('reports cursor diagnostics in source order: %s', (source) => {
     const established: object[] = []
     const cursor: object[] = []
     const options = (events: object[]) => ({
       onUnclosedCodeFence: (event: object) => events.push({ kind: 'fence', event }),
       onDanglingBlockAttributes: (event: object) => events.push({ kind: 'dangling', event }),
+      onInvalidContainerMetadata: (event: object) => events.push({ kind: 'invalid', event }),
     })
     const expected = parse(source, options(established))
     const actual = parseCursorPrototype(source, options(cursor))
