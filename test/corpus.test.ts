@@ -1184,7 +1184,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ["620-generated-container-documents-16", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>\n    <ul>\n      <li>body</li>\n    </ul>\n  </li>\n</ul>\n" }],
   ["629-a-dangling-plus-marker-adds-nothing-and-a-nested-quote-reads-it-like-an-unnested-one-4", { reason: 'carve#3830 shared marker-body ruling', html: "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<p>para</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note\n+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
   ["629-a-dangling-plus-marker-adds-nothing-and-a-nested-quote-reads-it-like-an-unnested-one-8", { reason: 'carve#3830 shared marker-body ruling', html: "<blockquote>\n\n</blockquote>\n<p>para</p>\n" }],
-  ["637-definition-body-note-and-fence-owner-boundaries-4", { reason: 'carve#3830 shared marker-body ruling', html: "<ol>\n  <li>d</li>\n</ol>\n" }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

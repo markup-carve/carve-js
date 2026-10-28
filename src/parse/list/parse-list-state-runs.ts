@@ -87,6 +87,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     isBlockAttributeLine,
     isTableRow,
     lineOpensBlock,
+    markerLineState,
     markerPrefixLength,
     opensCodeFence,
     opensWrappedAttributeBlock,
@@ -209,13 +210,19 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     }
     const closedDescendantMarker = !rebased && !state.ownedAuthored && state.deepest?.invisibleAtColumn === true &&
       !state.deepest.lazyFoldable && marker
+    const closedFootnoteMarker = closedDescendantMarker && state.deepest?.inFootnoteBody === true
     state.ownedColumn = -1
     state.deepest = null
-    // A new marker after a closed descendant supplies no continuation
-    // claim. A line already admitted by an ancestor may still belong here.
+    // A new sibling marker replaces the closed descendant's claim with its
+    // own marker-line paragraph claim.
     if (!closedDescendantMarker) return false
-    state.retainedMarker = true
-    return endsOnBlock(state)
+    if (!closedFootnoteMarker) {
+      state.retainedMarker = true
+      return endsOnBlock(state)
+    }
+    state.retainedMarker = false
+    state.lazyFoldable = markerLineState(text).leavesParagraphOpen
+    return true
   }
 
   // THE DESCENDANT FRAME ANSWERS. One line, in the deeper item's coordinates,

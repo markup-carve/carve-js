@@ -2760,6 +2760,7 @@ class CarveRenderSession {
     }
     this.footnoteDefsByLine = new Map()
     this.documentFootnoteDefs = ast.footnoteDefs
+    this.documentFootnoteDefPos = ast.footnoteDefPos
     for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
       const line = pos?.startLine
       if (line !== undefined && !this.footnoteDefsByLine.has(line)) this.footnoteDefsByLine.set(line, label)
@@ -3803,7 +3804,11 @@ class CarveRenderSession {
         if (blocks === undefined) continue
         const written = this.renderOneFootnoteDef(label, blocks, ctx)
         this.footnotesWrittenInPlace.add(label)
-        return written
+        const noteColumn = ownValue(this.documentFootnoteDefPos, label)?.startColumn
+        const previousColumn = before.pos?.startColumn
+        const offset = after.type === 'list' && noteColumn !== undefined && previousColumn !== undefined
+          ? Math.max(0, noteColumn - previousColumn) : 0
+        return offset > 0 ? written.split('\n').map((text) => ' '.repeat(offset) + text).join('\n') : written
       }
     }
     return undefined
@@ -5645,6 +5650,7 @@ class CarveRenderSession {
   /** Footnote definitions live in a root map, not in `children`, so these are
    *  tracked by LABEL rather than by node identity. */
   private footnoteDefsByLine = new Map<number, string>()
+  private documentFootnoteDefPos: Document['footnoteDefPos']
 
   private footnotesWrittenInPlace = new Set<string>()
 
