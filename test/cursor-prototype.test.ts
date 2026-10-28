@@ -597,6 +597,18 @@ describe('experimental block cursor', () => {
       if (JSON.stringify(actual) !== JSON.stringify(expected)) {
         expect(actual, path).toStrictEqual(expected)
       }
+      const establishedEvents: object[] = []
+      const cursorEvents: object[] = []
+      const callbacks = (events: object[]) => ({
+        onDanglingBlockAttributes: (event: object) => events.push({ kind: 'dangling', event }),
+        onUnclosedCodeFence: (event: object) => events.push({ kind: 'fence', event }),
+        onInvalidContainerMetadata: (event: object) => events.push({ kind: 'invalid', event }),
+        onUnclosedContainer: (event: object) => events.push({ kind: 'container', event }),
+      })
+      const withCallbacks = parseCursorPrototype(source, callbacks(cursorEvents))
+      const establishedWithCallbacks = parse(source, callbacks(establishedEvents))
+      expect(withCallbacks, path).toStrictEqual(establishedWithCallbacks)
+      expect(cursorEvents, path).toStrictEqual(establishedEvents)
       for (let index = 0; index < optionSets.length; index++) {
         const options = optionSets[index]!
         let candidate: ReturnType<typeof parseCursorPrototype>
