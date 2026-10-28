@@ -325,6 +325,7 @@ export function createDefinitionListParser(
       let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
       let nestedItemParagraphOpen = false
+      let nestedItemRefusedAttachment = false
       let nestedAttributeRun: string | null = null
       let nestedDescriptionOpened = false
       // The next entry ends the body, and so does a line below its column after a
@@ -553,6 +554,9 @@ export function createDefinitionListParser(
         const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
         const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
           markerColumn, quotePrefixDepth(markerSource), true)
+        // An intervening line still reaches the description after this pull
+        // fails, but cannot open a block in the nested item's column.
+        nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
         for (let k = 0; k < attached.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...attached.lines)
         bodySourceLines.push(...attached.lines)
@@ -747,7 +751,7 @@ export function createDefinitionListParser(
         const localLine = dedented.replace(/^[ \t]+/, '')
         const lazyUnderNestedItem =
           nestedItemColumn > 0 &&
-          nestedItemParagraphOpen &&
+          (nestedItemParagraphOpen || nestedItemRefusedAttachment) &&
           indentColumns(ln) - contentCol < nestedItemColumn &&
           !isLinkDefLine(localLine) &&
           !RE_FOOTNOTE_DEF.test(localLine) &&
@@ -826,6 +830,7 @@ export function createDefinitionListParser(
         if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
           nestedItemColumn = markerContentColumn(flush)
           nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
+          nestedItemRefusedAttachment = false
         }
         // The base belongs to the block that established it and dies with it.
         if (!insideOpenFence(lazyState)) authoredBase = null
