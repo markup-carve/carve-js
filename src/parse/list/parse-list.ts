@@ -1790,6 +1790,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // every boundary there is.
       const { lines: attachedLines, lineNumbers: attachedLineNumbers } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, true, plusColumn, itemQuoteDepth)
       if (attachedLines.length === 0) {
+        // The next `+` is itself the block the first marker reaches; its own
+        // refusal remains text. Do not publish the first marker as a second
+        // literal line (§17 L3, successive markers).
+        if (isContinuationMarker(lexer.peek() ?? '')) {
+          plusSeparators.add(nested.length)
+          nestedOrigins.set(nested.length, { text: '', parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
+          nested.push('')
+          nestedSourceLines.push(undefined)
+          nestedLineNumbers.push(plusLineNumber)
+          trackItemLazyState('', lazyState)
+          return 'continue'
+        }
         const refused = lexer.lineAt(plusLineIndex) ?? '+'
         nested.push(sliceColumns(refused, Math.min(plusColumn, contentCol), true))
         nestedSourceLines.push(refused)
