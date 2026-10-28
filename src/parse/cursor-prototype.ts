@@ -2861,9 +2861,9 @@ function indentedRootListLazyFollower(frame: ListCursorFrame,
       !plainQuoteText(frame.body[0]?.text ?? '')) return false
   const indent = /^ */.exec(line.text)![0].length
   const content = line.text.slice(indent)
-  const belowMarkerFence = indent > 0 && indent < frame.indent &&
-    fenceOpen(content) !== null
-  return (indent >= frame.indent || belowMarkerFence) &&
+  const belowMarkerContainer = indent > 0 && indent < frame.indent &&
+    (fenceOpen(content) !== null || COLON_OPEN.test(content))
+  return (indent >= frame.indent || belowMarkerContainer) &&
     indent < frame.contentColumn - 1 &&
     content !== '' && !listMarker(line.text) && !LINE_COMMENT.test(content) &&
     !RE_COMMENT_BLOCK_ANY.test(content) && !FOOTNOTE_DEF.test(content)
