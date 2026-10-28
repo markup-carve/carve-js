@@ -43,6 +43,8 @@ const cases = readdirSync(corpusDir)
  *    `classes` inserted in different orders while holding the same values. The
  *    author-visible order is carried by `attrs.order`, which compares
  *    verbatim.
+ *  - `separatorWidths` records the authored GFM spelling. Canonical `fmt`
+ *    writes native headers and deliberately drops that source-only field.
  *
  * NOT INTO `attrs`. It holds named slots rather than nodes, and a `keyValues`
  * entry can be spelled `type`, `pos` or `srcByteLength` - descending would
@@ -70,6 +72,7 @@ function canonicalTree(value: unknown): unknown {
   const src: Record<string, unknown> = { ...(value as Record<string, unknown>) }
   delete src.srcByteLength
   delete src.pos
+  delete src.separatorWidths
   if (src.type === 'escaped_text') src.type = 'text'
 
   const out: Record<string, unknown> = {}

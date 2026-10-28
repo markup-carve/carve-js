@@ -55,12 +55,12 @@ const cases: Array<[string, string, string]> = [
   [
     'a table below a table',
     '- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n',
-    '- | a |\n  |-|\n+\n| a |\n|-|\n\nZ\n',
+    '- |= a |\n+\n|= a |\n\nZ\n',
   ],
   [
     'a table below a table, item in a div',
     '::: h\n- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n:::\n',
-    '::: h\n- | a |\n  |-|\n+\n| a |\n|-|\n\nZ\n:::\n',
+    '::: h\n- |= a |\n+\n|= a |\n\nZ\n:::\n',
   ],
   [
     'a quote below an emptied sub-list item',
@@ -134,6 +134,6 @@ describe('the spellings the fix leaves alone', () => {
 
 /** The tree without the source positions a re-spelling necessarily moves. */
 function shape(source: string): unknown {
-  const positional = /Spans$|Lines$|^pos$|^sourcePos$|^srcByteLength$/
+  const positional = /Spans$|Lines$|^pos$|^sourcePos$|^srcByteLength$|^separatorWidths$/
   return JSON.parse(JSON.stringify(parse(source), (k, v) => (positional.test(k) ? undefined : v)))
 }

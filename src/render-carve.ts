@@ -207,7 +207,7 @@ export function renderCarveForHtmlImport(ast: Document): string {
   hydrateResolvedEmptyReferences(ast)
   const session = new CarveRenderSession(true)
   try {
-    const value = session.renderCarve(ast)
+    const value = session.renderCarve(ast, { preserveTableSeparators: true })
     session.throwRefusedSpans()
     return value
   } catch (error) {
