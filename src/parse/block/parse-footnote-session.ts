@@ -1,6 +1,23 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { RE_FENCE } from '../parse-prepass-core.js'
+
+// The model's description closer search: a closer counts at or past the body column, a line below it is
+// searched past, and a document-column quote or definition ends the search.
+function noteCloserAhead(rootLines: readonly string[], fromLine: number, run: string, bodyColumn: number): boolean {
+  for (let j = fromLine; j < rootLines.length; j++) {
+    const line = rootLines[j]!
+    if (quotePrefixDepth(line) > 0) return false
+    const column = indentColumns(line)
+    const rest = line.trimStart()
+    if (column === 0 && (/^>/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || isLinkDefLine(rest) || /^\{/.test(rest))) return false
+    if (column < bodyColumn) continue
+    const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(rest)
+    if (closer && closer[1]![0] === run[0] && closer[1]!.length >= run.length) return true
+  }
+  return false
+}
 
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, markerColumn?: number, quoteLevels?: number, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
@@ -314,6 +331,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && /^:[ \t]+/.test(content.trimStart()))
         termTextContinuation = true
       if (/^(?:[-*+] |\d+[.)] )/.test(content)) hasContainedItem = true
+      // A fence keeps its claim when its closer lies past the body (carve#3891).
+      const fenceRun = RE_FENCE.test(content.trimStart()) ? /^(`{3,}|~{3,})/.exec(content.trimStart())![1]! : undefined
+      if (fenceRun && authoredBodyColumn !== undefined &&
+          noteCloserAhead(lexer.rootLines ?? lexer.lines, lexer.lineNumber(lexer.pos), fenceRun, authoredBodyColumn))
+        lexer.descendantFenceAnswers.set(`${lexer.lineNumber(lexer.pos)}:${fenceRun}`, true)
       // The tracker reads an overindented opener at its local zero. A fence
       // directly in the note needs its authored offset for closer lookahead;
       // a descendant item's fence leaves the note's paragraph state intact.
