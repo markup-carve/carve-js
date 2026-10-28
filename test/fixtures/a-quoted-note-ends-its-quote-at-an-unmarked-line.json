@@ -2,12 +2,12 @@
   {
     "id": "js-23-1",
     "source": "- > para\n     [^p]: n\n    tail\n",
-    "html": "<ul>\n<li>\n<blockquote><p>para</p></blockquote>\ntail\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-23-2",
     "source": "- > para\n        [^p]: n\n    tail\n",
-    "html": "<ul>\n<li>\n<blockquote><p>para</p></blockquote>\ntail\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-25-1",

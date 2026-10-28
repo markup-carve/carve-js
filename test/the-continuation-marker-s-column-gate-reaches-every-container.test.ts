@@ -38,13 +38,13 @@ describe("the continuation marker's column gate reaches every container", () => 
   }
 
   for (const [what, src] of BAND.slice(0, 4)) {
-    it(`leaves indented text outside ${what}, while a comment retains it`, () => {
+    it(`classifies the indented follower after ${what}`, () => {
       const footnote = what.startsWith('a footnote')
       const reference = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
       const notes = '<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1">'
       const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
       expect(html(marker(src))).toBe(footnote
-        ? '<p>+ more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
+        ? reference + notes + '<p>intro + more' + backlink + '</p></li></ol></section>'
         : '<dl><dt>term</dt><dd>intro + more</dd></dl>')
       expect(html(comment(src))).toBe(footnote
         ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'

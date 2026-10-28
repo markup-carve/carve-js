@@ -10,7 +10,7 @@ describe('an opener below a description returns to its item', () => {
 
   it('opens a note outside a nested description', () => {
     expect(carveToHtml('- a\n  :: term\n  :  detail\n    :: term\n    :  detail\n      [^n]: note\n       q\n1. ordered\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n    q\n  </li>\n</ul>\n<ol>\n  <li>ordered</li>\n</ol>',
+      "<ul>\n  <li>a\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n  </li>\n</ul>\n<ol>\n  <li>ordered</li>\n</ol>",
     )
   })
 

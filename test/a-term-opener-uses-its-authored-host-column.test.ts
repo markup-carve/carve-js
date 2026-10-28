@@ -18,6 +18,6 @@ it('ends an inner item at its marker column while a term is open', () => {
 
 it('lets a later term interrupt after a folded separator', () => {
   expect(normalized('- a\n   :: term\n  :  detail\n    :: term\n    :  detail\n      [^n]: note\n       q\n1. ordered\n')).toBe(
-    '<ul>\n<li>a\n<dl>\n<dt>term\n:  detail</dt>\n</dl>\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n</dl>\nq\n</li>\n</ul>\n<ol>\n<li>ordered</li>\n</ol>',
+    "<ul>\n<li>a\n<dl>\n<dt>term\n:  detail</dt>\n</dl>\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n</dl>\n</li>\n</ul>\n<ol>\n<li>ordered</li>\n</ol>",
   )
 })

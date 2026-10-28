@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// A footnote's extent takes no lazy line (CARVE-P0-012), so nothing after it is open to continue.
+// A footnote can take a lazy line while its paragraph remains open.
 const html = (source: string): string => carveToHtml(source).replace(/\s+/g, ' ').replace(/> </g, '><').trim()
 
 const quotedList = '<blockquote><ul><li>para</li></ul></blockquote>'
@@ -24,7 +24,7 @@ it.each([
 })
 
 it.each([
-  ['> - para\n>   [^f]: n\n>   more\ntail\n', '<blockquote><ul><li>para more tail </li></ul></blockquote>'],
+  ['> - para\n>   [^f]: n\n>   more\ntail\n', quotedList],
   ['> - para\n>   [r]: /u\ntail\n', `${quotedList}<p>tail</p>`],
 ])('keeps the unchanged neighbor %j', (source, expected) => {
   expect(html(source)).toBe(expected)

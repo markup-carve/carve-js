@@ -9,9 +9,9 @@ it('a footnote boundary leaves no list paragraph claim', () => {
   expect(normalize(carveToHtml(source))).toBe(normalize(expected))
 })
 
-it('a later item paragraph can claim a line below the item column', () => {
+it('an open nested note claims a later item line', () => {
   const source = '- a\n   [^n]: e\n     q\n  p\nl\n'
-  const expected = '<ul>\n  <li>a\n    p\nl\n  </li>\n</ul>'
+  const expected = "<ul>\n  <li>a</li>\n</ul>"
   expect(normalize(carveToHtml(source))).toBe(normalize(expected))
 })
 
@@ -33,15 +33,15 @@ it('a footnote in three quote levels leaves no claim for an unmarked line', () =
   expect(normalize(carveToHtml(source))).toBe(normalize(expected))
 })
 
-it('a new marked quote paragraph can claim its following unmarked line', () => {
+it('a marked quote line remains in an open note paragraph', () => {
   const source = '> q\n> [^n]: e\n>   - a\n> p\nx\n'
-  const expected = '<blockquote>\n  <p>q</p>\n  <p>p\nx</p>\n</blockquote>'
+  const expected = "<blockquote><p>q</p></blockquote>"
   expect(normalize(carveToHtml(source))).toBe(normalize(expected))
 })
 
-it('a marked paragraph after note body text takes an unmarked line', () => {
+it('a note paragraph keeps a marked and unmarked follower', () => {
   const source = '> q\n> [^n]: e\n>   - a\n>     q\n> p\nx\n'
-  const expected = '<blockquote>\n  <p>q</p>\n  <p>p\nx</p>\n</blockquote>'
+  const expected = "<blockquote><p>q</p></blockquote>"
   expect(normalize(carveToHtml(source))).toBe(normalize(expected))
 })
 
