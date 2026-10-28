@@ -14,7 +14,12 @@ import {
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
-import { continueWrappedAttributeBlock, opensWrappedAttributeBlock } from './parse-quote-core.js'
+import {
+  continueWrappedAttributeBlock,
+  opensWrappedAttributeBlock,
+  RE_DEFLIST_DEF as DEFINITION_MARKER,
+} from './parse-quote-core.js'
+import { RE_DEFLIST_TERM as TERM_MARKER } from '../parse-prepass-core.js'
 import type {
   definitionListHelpers,
   ItemLazyState,
@@ -26,6 +31,43 @@ import type { LinkDef } from '../inline/inline-resolution.js'
 
 // A phase's answer for one admitted line, or `undefined` to ask the next phase.
 type DescriptionVerdict = 'continue' | 'stop' | undefined
+
+function descriptionTermOwnerReached(
+  openTerm: boolean, opener: string, sourceColumn: number, ownerColumn: number,
+  opensBlock: (line: string) => boolean,
+): boolean {
+  return openTerm && !DEFINITION_MARKER.test(opener) && !TERM_MARKER.test(opener) &&
+    opensBlock(opener) && sourceColumn <= Math.max(0, ownerColumn)
+}
+
+function nestedTermOwnerReached(
+  hostBody: string | null, opener: string, sourceColumn: number, termColumn: number,
+  listColumn: number, opensBlock: (line: string) => boolean,
+): boolean {
+  return hostBody === 'description' && !DEFINITION_MARKER.test(opener) && !TERM_MARKER.test(opener) &&
+    sourceColumn <= termColumn - listColumn && opensBlock(opener)
+}
+
+function termBoundaryReached(
+  leavesTerm: boolean, hostBody: string | null, opener: string, sourceColumn: number,
+  termColumn: number, listColumn: number, opensBlock: (line: string) => boolean,
+): boolean {
+  return leavesTerm || nestedTermOwnerReached(hostBody, opener, sourceColumn, termColumn, listColumn, opensBlock)
+}
+
+function hasAttachedBlockOrMarker(
+  attached: readonly string[], next: string | undefined, isMarker: (line: string) => boolean,
+): boolean {
+  return attached.length > 0 || isMarker(next ?? '')
+}
+
+function sourceLineAt(lexer: Lexer, index: number, fallback: string): string {
+  return (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
+}
+
+function isItemLazyBelowHost(lexer: Lexer, column: number): boolean {
+  return lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) && column < lexer.hostContentColumn
+}
 
 type DefinitionListSession = {
   collectAttachedBlock(
@@ -463,7 +505,7 @@ export function createDefinitionListParser(
             sourceColumn(descriptionPlus),
             quotePrefixDepth(descriptionPlus),
           )
-          if (attached.length > 0) {
+          if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
             bodyBaseEligible.add(bodyLines.length)
             bodyLines.push('')
             bodySourceLines.push(undefined)
@@ -922,6 +964,10 @@ export function createDefinitionListParser(
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        const original = sourceLineAt(lexer, lexer.pos, ln)
+        if (descriptionTermOwnerReached(lazyState.inDefList === 'term', below,
+          sourceColumn(original, quotePrefixDepth(markerSource)), descriptionSourceColumn,
+          lineOpensItemBlock)) return 'stop'
         if (nestedAttributeRun !== null) {
           const result = continueWrappedAttributeBlock(nestedAttributeRun, below)
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
@@ -1152,8 +1198,11 @@ export function createDefinitionListParser(
           if (
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
-            leavesTerm ||
-            (!belowList && !nextPastTerm && !separatorBelowTerm && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
+              termColumn, listColumn, lineOpensItemBlock) ||
+            (!belowList && !nextPastTerm && !separatorBelowTerm &&
+              !isItemLazyBelowHost(lexer, entryColumn()) &&
+              !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))

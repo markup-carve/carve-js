@@ -107,6 +107,7 @@ export interface InlineScannerSession {
     text: string,
     i: number,
     prev: string,
+    source: InlineSource,
   ): { out: string; len: number; kind: string } | null
   substitutionAt(
     text: string,
@@ -494,7 +495,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       if (node.type !== 'comment') s.quoteContext = lastEmittedGlyph(node)
     }
     const prevForQuote = s.buf.length ? s.bufLast : s.quoteContext
-    const st = session.smartToken(text, i, prevForQuote)
+    const st = session.smartToken(text, i, prevForQuote, s.source)
     if (!st) return false
     if (st.kind === 'literal_hyphen_run') {
       // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the

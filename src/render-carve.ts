@@ -1,4 +1,5 @@
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
+import { renderHtml } from './render-html.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
@@ -65,6 +66,15 @@ function nestedTightItemLosesTightness(item: ListItem): boolean {
       (child.children[0]?.type === 'text' || child.children[0]?.type === 'escaped_text') && child.children[0].value === '+') &&
       (previous?.type === 'block_quote' || previous?.type === 'list' && previous.items.at(-1)?.children.length !== 0)
   })
+}
+
+function nestedListHasLiteralPlusTail(item: ListItem): boolean {
+  return item.children.some((child, index) =>
+    index > 0 && item.children[index - 1]?.type === 'list' &&
+    nestedFenceTail(item.children[index - 1]!) === undefined &&
+    child.type === 'paragraph' && child.children.length === 1 &&
+    (child.children[0]?.type === 'text' || child.children[0]?.type === 'escaped_text') &&
+    child.children[0].value === '+')
 }
 
 function reportNestedTightItemLosses(ast: Document, opts: CarveRenderOptions): void {
@@ -841,6 +851,16 @@ function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null,
   }
   return previous?.type === 'list' && fence === undefined && rendered.startsWith('+\n')
     ? `\\${rendered}` : rendered
+}
+
+function protectEmptyListTailBeforePlus(block: BlockNode, next: BlockNode | undefined): BlockNode {
+  if (block.type !== 'list' || next?.type !== 'paragraph' ||
+      next.children[0]?.type !== 'text' || next.children[0].value !== '+') return block
+  const last = block.items.at(-1)
+  if (last === undefined || last.children.length !== 0) return block
+  return { ...block, items: [...block.items.slice(0, -1), {
+    ...last, children: [{ type: 'comment', block: false, content: '' }],
+  }] }
 }
 
 /** Whether rendered text contains a character a re-parse can see. */
@@ -3667,7 +3687,7 @@ class CarveRenderSession {
         }
         const needsReadback = node.tight && (
           this.itemNeedsIndentedBlocks(ctx) &&
-            (nestedTightItemLosesTightness(item) || item.children.some((child, index) =>
+            (nestedTightItemLosesTightness(item) || nestedListHasLiteralPlusTail(item) || item.children.some((child, index) =>
               index > 0 && child.type === 'paragraph' && item.children[index - 1]?.type === 'paragraph')) ||
           item.children.some((child, index) => index > 0 &&
             ((child.type === 'code_block' || child.type === 'figure') && item.children[index - 1]?.type === 'list' ||
@@ -3709,8 +3729,14 @@ class CarveRenderSession {
             let inner: BlockNode | undefined = blocks[0]
             for (let depth = 1; depth < ctx.listDepth; depth++)
               inner = inner?.type === 'list' ? inner.items[0]?.children.find(block => block.type === 'list') : undefined
-            return inner?.type === 'list' && inner.tight === node.tight &&
-              stableJson(inner.items[0]) === stableJson(this.withoutRedundantIds(item))
+            if (inner?.type !== 'list' || inner.tight !== node.tight || inner.items[0] === undefined) return false
+            const expected = this.withoutRedundantIds(item)
+            if (stableJson(inner.items[0]) === stableJson(expected)) return true
+            if (!nestedListHasLiteralPlusTail(item)) return false
+            // The protective empty comment and escaped plus alter node types,
+            // while the tight item's HTML still preserves the imported meaning.
+            const asDocument = (entry: ListItem): Document => ({ type: 'document', children: [{ ...node, items: [entry] }] })
+            return renderHtml(asDocument(inner.items[0])) === renderHtml(asDocument(expected))
           } catch {
             return false
           }
@@ -3906,7 +3932,7 @@ class CarveRenderSession {
             separated = true
           }
         }
-        let rendered = this.renderBlock(b, ctx)
+        let rendered = this.renderBlock(protectEmptyListTailBeforePlus(b, next), ctx)
         if (
           b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx) &&
           nestedFenceTail(previousEmitted) === undefined
@@ -3942,7 +3968,9 @@ class CarveRenderSession {
           (next !== undefined && adjacentBlocksMerge(b, next)) ||
           (!separated &&
             previousEmitted !== null &&
-            anOpenParagraphReachesDown(previousEmitted) &&
+            (anOpenParagraphReachesDown(previousEmitted) ||
+              previousEmitted.type === 'list' && nestedFenceTail(previousEmitted) === undefined &&
+              b.type === 'paragraph' && rendered === '\\+') &&
             FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
             !opensWithAnAttributeLine(rendered))
         ) {

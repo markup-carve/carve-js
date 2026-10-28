@@ -917,6 +917,29 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
   let masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode, true, undefined, [], {}, nativeDjotCode)
+  if (norm.includes('%%%')) {
+    const offsets = [0]
+    for (const character of norm) offsets.push(offsets[offsets.length - 1]! + character.length)
+    const chars = masked.split('')
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return
+      if (Array.isArray(value)) { for (const child of value) visit(child); return }
+      const node = value as Record<string, unknown>
+      if (node.type === 'comment' && node.block === true) {
+        const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+        if (pos?.startOffset !== undefined && pos.endOffset !== undefined) {
+          const start = offsets[pos.startOffset] ?? norm.length
+          const end = offsets[pos.endOffset] ?? norm.length
+          for (let at = start; at < end; at++) if (chars[at] !== '\n') chars[at] = ' '
+        }
+        return
+      }
+      for (const [key, child] of Object.entries(node))
+        if (key !== 'pos' && key !== 'attrs') visit(child)
+    }
+    visit(parse(norm, { positions: true }))
+    masked = chars.join('')
+  }
   if (masked.includes('^') && masked.includes('|')) {
     const rows = djotTableRows(norm, masked)
     const chars = masked.split('')

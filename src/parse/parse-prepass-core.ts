@@ -113,10 +113,10 @@ export const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>/!?])\] +[ \t]*([^ \t\r\
 // space rather than competing with it. A block with nothing after it is not a
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 export const RE_ITEM_ATTR =
-  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t\r\n][^\r\n]*)$/
+  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[ \t]*[^ \t\r\n][^\r\n]*)$/
 
 export const RE_ITEM_ATTR_HEAD =
-  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +)(?=[^ \t])/
+  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[ \t]*)(?=[^ \t])/
 
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
