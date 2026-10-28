@@ -7,6 +7,7 @@ import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
 import { scanDestination } from '../../link-destination.js'
+import { GITHUB_ALERT_KINDS, GITHUB_ALERT_LABEL } from './markdown-github-alerts.js'
 
 interface Assessment {
   diagnostics: MigrationDiagnostic[]
@@ -36,7 +37,7 @@ function htmlShape(html: string): string {
     const children = (domChildren(node) ?? []).flatMap(visit)
     const layout = (child: Shape): boolean => typeof child === 'string' && /^[ \t\r\n]*$/.test(child)
     if (tag === 'section' && (domChildren(node) ?? []).some(child => /^h[1-6]$/.test(domTag(child) ?? ''))) return children.filter(child => !layout(child))
-    const structural = /^(root|ul|ol|li|blockquote|table|thead|tbody|tr)$/.test(tag)
+    const structural = /^(root|ul|ol|li|blockquote|aside|table|thead|tbody|tr)$/.test(tag)
     const attrs: [string, string][] = (domAttrs(node) ?? [])
       .filter(attr => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th') && !(attr.name === 'aria-label' && tag === 'input'))
       .map(attr => [attr.name, attr.value])
@@ -227,6 +228,12 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if (/^ {0,3}>/.test(line)) {
         const body: string[] = []; const start = i
         while (i < input.length && /^ {0,3}>/.test(input[i]!)) body.push(input[i++]!.replace(/^ {0,3}> ?/, ''))
+        const alert = depth === 0 && !/ {2}$/.test(body[0]!) ? GITHUB_ALERT_LABEL.exec(body[0]!.trimEnd()) : null
+        const kind = alert === null || !body.slice(1).some(text => text.trim() !== '') ? undefined : GITHUB_ALERT_KINDS[alert[1]!]
+        if (kind !== undefined) {
+          emit('github-alert', n, 'normalized')
+          html += `<aside class="admonition ${kind}" aria-label="${kind[0]!.toUpperCase()}${kind.slice(1)}">\n${blocks(body.slice(1), first + start + 1, depth + 1)}</aside>\n`; continue
+        }
         emit('block-quote', n); html += `<blockquote>\n${blocks(body, first + start, depth + 1)}</blockquote>\n`; continue
       }
       if ((match = /^ {0,3}([-+*]|\d{1,9}[.)])[ \t]+(.*)$/.exec(line))) {

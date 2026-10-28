@@ -194,6 +194,39 @@ text it renders.
 For an ordered task item, the migration report records the missing checkbox as
 `structure-unspellable` beside `fidelity-unverified`.
 
+**A GitHub alert becomes an admonition.** A top-level block quote whose first
+line is one of GitHub's five alert labels, alone on that line, imports as the
+matching admonition with the rest of the quote as its body and no title:
+
+| Markdown label   | Carve admonition |
+| ---------------- | ---------------- |
+| `[!NOTE]`        | `::: note`       |
+| `[!TIP]`         | `::: tip`        |
+| `[!IMPORTANT]`   | `::: info`       |
+| `[!WARNING]`     | `::: warning`    |
+| `[!CAUTION]`     | `::: danger`     |
+
+```md
+> [!WARNING]
+> Back up first.
+```
+
+migrates to
+
+```
+::: warning
+Back up first.
+:::
+```
+
+Everything GitHub's alert syntax does not define stays an ordinary quote: a
+label in another case (`[!note]`), an unknown label, text after the label on
+its line, a label line ending in a hard break, an escaped `\[!NOTE]`, an alert
+with no body, and an alert-shaped quote inside a list item or another quote
+(GitHub renders alerts only outside other elements). `carve lint` then reports
+the literal marker as `github-alert-marker`. The migration report records each
+conversion as `markdown-github-alert` with fidelity `normalized`.
+
 ## Migrating from Djot
 
 `djotToCarve(source)` converts a complete Djot document. Unlike

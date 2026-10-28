@@ -13,6 +13,7 @@ import { markdownEmphasis, recordMarkdownProtectedDepth } from './import/markdow
 import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markdown-gfm-autolinks.js'
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
+import { importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
 import { rewriteSameFileHeadingLinks, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
@@ -7031,9 +7032,13 @@ export function markdownToCarveWithLosses(
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     const trailingNewline = value.endsWith('\n')
     const changesLinks = value.includes('@') || usedBoundaryKey !== undefined
+    const written = value
     value = canonicalCarveWrite(value, {
       onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
-    }, changesLinks ? document => linkMarkdownEmailText(document, usedBoundaryKey) : undefined,
+    }, document => {
+      const alerts = importGithubAlerts(document, written)
+      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts
+    },
     value)
     if (!trailingNewline) value = value.replace(/\n$/, '')
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
