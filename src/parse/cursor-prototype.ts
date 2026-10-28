@@ -2507,7 +2507,8 @@ next: SourceLine | undefined): boolean {
 
 function nestedListSpanColumn(owner: ContainerOwner, hostColumn: number | undefined,
   markerIndent: number): number {
-  return owner.kind === 'root' ? hostColumn ?? markerIndent + 1 : markerIndent + 1
+  return owner.kind === 'root' || owner.kind === 'colon' ?
+    hostColumn ?? markerIndent + 1 : markerIndent + 1
 }
 
 function updateListFrameEnds(frames: Array<{ last: SourceLine; spanColumn: number;
@@ -2838,7 +2839,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     position(from, to, depth === 0 && from.baseColumn === undefined &&
       column === firstMarker.indent + 1 ? 1 : column, contentEndColumn(to))
   const newFrame = (line: SourceLine, marker: NonNullable<ReturnType<typeof listMarker>>,
-    hostColumn = marker.indent + 1): ListCursorFrame => {
+    hostColumn = marker.indent + 1, rootFrame = false): ListCursorFrame => {
     const list: List = { type: 'list', ordered: marker.ordered, tight: true, items: [] }
     let kind: OlKind | undefined
     if (marker.ordered) {
@@ -2856,7 +2857,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.delim === ')') list.delim = ')'
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
-    const spanColumn = cursor.owner.kind === 'colon' && line.baseColumn === undefined ? 1 :
+    const spanColumn = rootFrame && cursor.owner.kind === 'colon' && line.baseColumn === undefined ? 1 :
       Math.min(marker.indent + 1, hostColumn, marker.authoredIndent + 1)
     list.pos = listSpan(line, line, spanColumn)
     return { list, first: line, last: line,
@@ -2872,7 +2873,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       lazyRootParagraph: false, retainedBelowColumnComment: false,
       bareFenceAfterRetainedComment: false, possibleInvisibleTail: false }
   }
-  const stack = [newFrame(first, firstMarker)]
+  const stack = [newFrame(first, firstMarker, firstMarker.indent + 1, true)]
   const blankContinuationFrame = (next: SourceLine,
     marker: ReturnType<typeof listMarker>, top: ListCursorFrame,
     blankCount: number): ListCursorFrame | undefined => {

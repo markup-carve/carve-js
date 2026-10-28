@@ -10,6 +10,13 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
+    '::: note\n- a\n  - c\n',
+    '::: note\n- b\n    - d\ntail\n',
+  ])('retains the authored column of a nested list in a colon container: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '{.x}\n',
     '{.x}\n{#i}\n',
     '- a\n  {.x}\n',
