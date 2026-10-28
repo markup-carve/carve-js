@@ -630,8 +630,9 @@ describe('experimental block cursor', () => {
       { positions: false },
       { defaultFrontmatterFormat: 'toml' },
       { lowercaseHeadingIds: true, asciiHeadingIds: 'strict' as const },
+      { extensions: [{ name: 'quotes', quoteCharacters: ['«', '»', '‹', '›'] as const }] },
     ]
-    const optionMatches = [0, 0, 0]
+    const optionMatches = optionSets.map(() => 0)
     for (const path of files) {
       const source = readFileSync(path, 'utf8')
       let actual: ReturnType<typeof parseCursorPrototype>
@@ -3496,4 +3497,12 @@ describe('experimental block cursor', () => {
   ])('keeps list positions in a colon container exact: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
+
+  it.each(['"hello" and \'world\'\n', '- "quoted"\n', '> "quoted"\n'])('uses configured quote characters: %s', (source) => {
+      const options = { extensions: [
+        { name: 'first', quoteCharacters: ['《', '》', '〈', '〉'] as const },
+        { name: 'last', quoteCharacters: ['«', '»', '‹', '›'] as const },
+      ] }
+      expect(parseCursorPrototype(source, options)).toStrictEqual(parse(source, options))
+    })
 })

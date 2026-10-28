@@ -219,8 +219,13 @@ class CursorInline extends InlineParseSession {
     readonly recordDanglingAttributes = false,
     readonly recordUnclosedCodeFences = false,
     readonly recordInvalidMetadata = false,
-    readonly recordUnclosedContainers = false) {
+    readonly recordUnclosedContainers = false,
+    quoteCharacters?: readonly [string, string, string, string]) {
     super()
+    if (quoteCharacters) {
+      this.activeQuoteCharacters = quoteCharacters
+      this.quoteGlyphHasNul = quoteCharacters.some((glyph) => glyph.includes('\0'))
+    }
     if (recordDanglingAttributes || recordUnclosedCodeFences || recordInvalidMetadata ||
         recordUnclosedContainers) this.diagnostics = []
   }
@@ -5173,8 +5178,7 @@ function emitCursorDiagnostics(inline: CursorInline, opts: ParseOptions): void {
 }
 
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
-  if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
-      extension.quoteCharacters) ||
+  if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock) ||
       opts.onRefusedContinuationMarker) {
     throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
   }
@@ -5288,7 +5292,10 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
     opts.onDanglingBlockAttributes !== undefined, opts.onUnclosedCodeFence !== undefined,
-    opts.onInvalidContainerMetadata !== undefined, opts.onUnclosedContainer !== undefined)
+    opts.onInvalidContainerMetadata !== undefined, opts.onUnclosedContainer !== undefined,
+    opts.extensions?.map((extension) => extension.quoteCharacters)
+      .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
+      .at(-1))
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
