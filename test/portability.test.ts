@@ -38,8 +38,8 @@ describe('checkPortability — the divergences carve-js#546 documented', () => {
     expect(portable(': term\nSome intro prose.\n> A quote.\n')).toBe(false)
   })
 
-  it('reports a footnote definition taking a lazy continuation', () => {
-    expect(portable('[^a]: note\nSome intro prose.\n> A quote.\n')).toBe(false)
+  it('accepts a footnote definition taking a lazy continuation', () => {
+    expect(portable('[^a]: note\nSome intro prose.\n> A quote.\n')).toBe(true)
   })
 
   it('reports a heading inside a blockquote', () => {

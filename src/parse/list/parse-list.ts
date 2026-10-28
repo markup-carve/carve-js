@@ -3128,8 +3128,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
     const itemLead = content
+    // A note in the lead stream must see the next opener before the item
+    // splits its blocks. That opener may be lazy text below the note column.
     const keepStreamWhole =
-      firstBlockIdx === -1 || leadIsMarker || RE_FOOTNOTE_DEF.test(content) || leadOpensColonFence
+      firstBlockIdx === -1 || leadIsMarker || RE_FOOTNOTE_DEF.test(content) || leadOpensColonFence ||
+      nested.slice(0, firstBlockIdx).some(line => RE_FOOTNOTE_DEF.test(line.trimStart()))
     const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
     const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
     const mkSub = (
@@ -3197,7 +3200,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
-      let loose = false
+      // A note whose body continues after an authored blank is another block
+      // in this item even though the note itself renders in the endnotes.
+      let loose = hasBlank && !RE_FOOTNOTE_DEF.test(content) && nested.some((line, index) =>
+        RE_FOOTNOTE_DEF.test(line.trimStart()) &&
+        nested[index + 1] !== undefined && !isBlankLine(nested[index + 1]!) &&
+        !lineOpensItemBlock(nested[index + 1]!.trimStart()))
       let previousVisibleSpan: { start: number; end: number; startColumn: number } | undefined
       let previousVisibleType: BlockNode['type'] | undefined
       let previousVisibleBlock: BlockNode | undefined
