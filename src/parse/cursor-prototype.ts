@@ -555,6 +555,20 @@ function mayContinueQuoteLazily(follower: string | undefined, innerLast: string 
   return !interruptsParagraph(follower, ROOT_OWNER)
 }
 
+function finalNestedQuoteLazyListMarker(cursor: Cursor, body: SourceLine[],
+  line: SourceLine): boolean {
+  return cursor.owner.kind === 'root' &&
+    body[0]?.text.startsWith('>') === true && body.at(-1)?.lazyText === true &&
+    listMarker(body.at(-1)?.text ?? '') !== undefined &&
+    listMarker(line.text) !== undefined &&
+    (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
+}
+
+function continueQuoteLazily(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
+  return finalNestedQuoteLazyListMarker(cursor, body, line) ||
+    mayContinueQuoteLazily(line.text, body.at(-1)?.text)
+}
+
 function plainQuoteText(line: string): boolean {
   return /^(?:[\p{L}\p{N}]|\\#)/u.test(line) && !line.includes('\t') && !isBlockStart(line)
 }
@@ -4042,7 +4056,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
           (line.text[0] === '>' && !RE_BLOCKQUOTE.test(line.text))) &&
           (lazyColon || refusedFirstBlock || line.lazyText &&
             (listMarker(line.text) || RE_HEADING.test(line.text) || RE_BLOCKQUOTE.test(line.text)) ||
-            mayContinueQuoteLazily(line.text, body.at(-1)?.text))) {
+            continueQuoteLazily(cursor, body, line))) {
         const lazyLine = cursor.take()
         body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)
         directParagraph = false

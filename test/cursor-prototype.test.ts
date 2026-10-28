@@ -3519,6 +3519,13 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> > deep\n- b\n- b\n',
+    '> > deep\n- b\n1. one\n',
+  ])('keeps a final lazy list marker in its nested quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '  - c\n  ~~~\n',
     '  - c\n  ```\n',
     '  - c\n  # H\n',
