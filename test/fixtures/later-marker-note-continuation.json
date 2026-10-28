@@ -47,7 +47,7 @@
   {
     "id": "later-13",
     "source": "- [^n]: text\n    more\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-14",
@@ -57,7 +57,7 @@
   {
     "id": "later-15",
     "source": "- [^n]: text\n    more\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-16",
@@ -217,7 +217,7 @@
   {
     "id": "later-55",
     "source": "- [^n]: text\n    - child\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-56",
@@ -337,7 +337,7 @@
   {
     "id": "later-93",
     "source": "- [^n]: \n    more\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li>[^n]:\nmore</li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-94",
@@ -347,7 +347,7 @@
   {
     "id": "later-95",
     "source": "- [^n]: \n    more\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li>[^n]:\nmore</li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-96",
@@ -497,7 +497,7 @@
   {
     "id": "later-135",
     "source": "- [^n]: \n    - child\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-136",
@@ -622,7 +622,7 @@
   {
     "id": "later-173",
     "source": "> - [^n]: text\n>     more\n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-174",
@@ -632,7 +632,7 @@
   {
     "id": "later-175",
     "source": "> - [^n]: text\n>     more\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-176",
@@ -792,7 +792,7 @@
   {
     "id": "later-215",
     "source": "> - [^n]: text\n>     - child\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "later-216",
@@ -912,7 +912,7 @@
   {
     "id": "later-253",
     "source": "> - [^n]: \n>     more\n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore</li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-254",
@@ -922,7 +922,7 @@
   {
     "id": "later-255",
     "source": "> - [^n]: \n>     more\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore</li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-256",
@@ -1072,7 +1072,7 @@
   {
     "id": "later-295",
     "source": "> - [^n]: \n>     - child\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-296",

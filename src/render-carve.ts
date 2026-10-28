@@ -3796,6 +3796,9 @@ class CarveRenderSession {
     // is tracked by label - the same split the description write-back has.
     for (const [line, label] of this.footnoteDefsByLine) {
       if (line > from && line < to && !this.footnotesWrittenInPlace.has(label)) {
+        // A following paragraph can be claimed by this note's open body.
+        // Hoist the global definition unless a region marker fixes its place.
+        if (after.type === 'paragraph' && !this.staysAboveAMarker(line)) continue
         const blocks = ownValue(this.documentFootnoteDefs, label)
         if (blocks === undefined) continue
         const written = this.renderOneFootnoteDef(label, blocks, ctx)

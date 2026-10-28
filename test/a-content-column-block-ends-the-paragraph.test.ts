@@ -204,19 +204,9 @@ describe('a block at a container content column ends the paragraph', () => {
     )
   })
 
-  it('ends the footnote body at the body column, not at any indent', () => {
-    // `   more` is one column short of the definition's body column, so it is
-    // the ITEM's prose rather than the definition's - and prose leaves an open
-    // paragraph, which `tail` continues. Reading any indent as body kept the
-    // run open and ended the item instead.
-    //
-    // DIVERGENCE, uncovered by the corpus: carve-php `925f7dc` ends the item
-    // here. It renders `more` inside the item exactly as this does, so it has
-    // the line as the item's prose and still declines the fold - which is the
-    // half that cannot be right. `parseFootnoteDef`'s own boundary is what this
-    // follows.
+  it('keeps a below-column line in an open footnote paragraph', () => {
     expect(carveToHtml('- a\n  [^f]: t\n   more\ntail\n\nx[^f]\n')).toContain(
-      '<li>a\n    more\ntail\n  </li>',
+      '<p>t\nmore\ntail<a href="#fnref1"',
     )
   })
 
