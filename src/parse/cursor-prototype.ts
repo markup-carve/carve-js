@@ -2733,6 +2733,15 @@ function markInvisibleListGap(frame: ListCursorFrame, attrsSeen: boolean, text: 
   if (attrsSeen || LINE_COMMENT.test(text)) frame.blankBeforeInvisible = true
 }
 
+function loosenListAfterFootnote(frame: ListCursorFrame, cursor: Cursor,
+  footnoteLines: number): void {
+  const follower = cursor.peek(1)?.text ?? ''
+  if (footnoteLines > 1 && frame.body.some((part) => isBlankLine(part.text)) &&
+      /^ {4,}/.test(follower) && plainQuoteText(follower.trimStart())) {
+    frame.list.tight = false
+  }
+}
+
 function takeListFrameFootnote(cursor: Cursor, inline: CursorInline, frame: ListCursorFrame,
   depth: number, stackLength: number, ordered: boolean, reachedPrefix: number,
   footnoteDefs?: Record<string, BlockNode[]>,
@@ -3551,6 +3560,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     const footnoteLines = takeListFrameFootnote(cursor, inline, top, depth, stack.length,
       firstMarker.ordered, reachedPrefix, footnoteDefs, footnoteDefPos)
     if (footnoteLines !== undefined) {
+      loosenListAfterFootnote(top, cursor, footnoteLines)
       flush(top)
       for (let offset = 0; offset < footnoteLines; offset++) cursor.take()
       top.lazyRootParagraph = false
