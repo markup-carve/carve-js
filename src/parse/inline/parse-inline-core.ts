@@ -9,7 +9,7 @@ import {
   type CrossrefMemo,
   RE_AUTOLINK_STICKY,
 } from './parse-brackets.js'
-import { RE_INLINE_ATTR, RE_RAW_INLINE } from './parse-inline-opaque.js'
+import { inlineOpaqueEnds, RE_INLINE_ATTR, RE_RAW_INLINE } from './parse-inline-opaque.js'
 import { trimStructural } from '../parse-prepass-core.js'
 import { isCarveWhitespace } from '../../trim-non-nbsp.js'
 
@@ -466,6 +466,12 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
   if (!memo.boldItalic) {
     memo.boldItalic = []
     const codeEnds = backtickRunEnds(text)
+    const brackets = emphasisBrackets(text, memo)
+    const destinations = linkDestinations(text, memo)
+    const atoms = atomicLinkRegions(text)
+    const attributes = new Map<number, number>()
+    if (text.includes('{')) inlineOpaqueEnds(text, codeEnds, destinations, new Map(), attributes, brackets)
+    let atom = 0
     for (let close = 0; close < text.length - 1; close++) {
       if (text[close] === '\\') { close++; continue }
       if (text[close] === '`') {
@@ -473,6 +479,26 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
         if (end === -1) break
         close = end - 1
         continue
+      }
+      // Child inline constructs own their entire boundary. A closer in a
+      // label, extension body, destination, or atomic link is not reachable
+      // by the surrounding combined span.
+      while (atom < atoms.length && atoms[atom]![1] <= close) atom++
+      if (atom < atoms.length && atoms[atom]![0] === close) {
+        close = atoms[atom]![1] - 1
+        continue
+      }
+      if (text[close] === '[') {
+        const end = brackets(close)
+        if (end !== undefined) { close = end; continue }
+      }
+      if (text[close] === '(' && text[close - 1] === ']') {
+        const end = destinations.get(close)
+        if (end !== undefined) { close = end; continue }
+      }
+      if (text[close] === '{') {
+        const end = attributes.get(close)
+        if (end !== undefined) { close = end - 1; continue }
       }
       if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
