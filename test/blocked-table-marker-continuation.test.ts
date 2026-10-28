@@ -63,6 +63,6 @@ it('writes a blocked span cell attribute only on its marker', () => {
 
 it('locates a joined marker after a separator row', () => {
   const source = '| A |\n|---|\n| ^ |\n+ x |\n'
-  expect(carveToCarve(source)).toBe(source)
+  expect(carveToCarve(source)).toBe('|= A |\n| ^ |\n+ x |\n')
   expect(carveToHtml(source)).toContain('<th scope="col" rowspan="2">A x</th>')
 })

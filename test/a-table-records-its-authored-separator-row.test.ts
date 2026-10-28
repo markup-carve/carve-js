@@ -80,7 +80,7 @@ describe('the field is published on the wire', () => {
 
   it('fromAstJson accepts it and reproduces the row on the way out', () => {
     const payload = JSON.parse(JSON.stringify(toAstJson(parse('| a | b |\n|:-----|---:|\n| 1 | 2 |\n'))))
-    expect(renderCarve(fromAstJson(payload))).toBe('| a | b |\n|:-----|---:|\n| 1 | 2 |\n')
+    expect(renderCarve(fromAstJson(payload), { preserveTableSeparators: true })).toBe('| a | b |\n|:-----|---:|\n| 1 | 2 |\n')
   })
 
   it('refuses an EMPTY array, which is a presence claim no writer can spell', () => {
@@ -106,7 +106,7 @@ describe('the field is published on the wire', () => {
   it('reports a typed refusal when a width exceeds string capacity', () => {
     const table = tableOf('|= a |\n| 1 |\n')
     table.separatorWidths = [Number.MAX_SAFE_INTEGER]
-    expect(() => renderCarve({ type: 'document', children: [table] })).toThrow(/string capacity/)
+    expect(() => renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })).toThrow(/string capacity/)
   })
 
   it('the parser cannot produce an empty array either', () => {
@@ -140,7 +140,7 @@ describe('the writer reproduces the field', () => {
     ['| a | b |\n|---|\n| 1 | 2 |\n'],
     ['|= a |= b |\n| 1 | 2 |\n'],
   ])('round-trips %j byte-identically', (src) => {
-    expect(carveToCarve(src)).toBe(src)
+    expect(carveToCarve(src, { preserveTableSeparators: true })).toBe(src)
   })
 
   it('writes the colon from the CELL alignment, not from a second record of it', () => {
@@ -148,7 +148,7 @@ describe('the writer reproduces the field', () => {
     table.separatorWidths = [4, 2]
     table.rows[0]!.cells[0]!.align = 'center'
     table.rows[0]!.cells[1]!.align = 'right'
-    expect(renderCarve({ type: 'document', children: [table] })).toBe(
+    expect(renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })).toBe(
       '| a | b |\n|:----:|--:|\n| 1 | 2 |\n',
     )
   })
@@ -156,7 +156,7 @@ describe('the writer reproduces the field', () => {
   it('omits invalid widths in an unvalidated tree', () => {
     const table = tableOf('|= a |\n| 1 |\n')
     table.separatorWidths = [0]
-    expect(renderCarve({ type: 'document', children: [table] })).toBe('|= a |\n| 1 |\n')
+    expect(renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })).toBe('|= a |\n| 1 |\n')
   })
 
   it('spells the ENTRIES that exist, padding to the header width and truncating to it alike', () => {
@@ -167,12 +167,12 @@ describe('the writer reproduces the field', () => {
     // direction is the same break read the other way.
     const wide = tableOf('|= a |= b |\n| 1 | 2 |\n')
     wide.separatorWidths = [3, 3, 3]
-    expect(renderCarve({ type: 'document', children: [wide] })).toBe(
+    expect(renderCarve({ type: 'document', children: [wide] }, { preserveTableSeparators: true })).toBe(
       '| a | b |\n|---|---|---|\n| 1 | 2 |\n',
     )
     const narrow = tableOf('|= a |= b |\n| 1 | 2 |\n')
     narrow.separatorWidths = [4]
-    expect(renderCarve({ type: 'document', children: [narrow] })).toBe(
+    expect(renderCarve({ type: 'document', children: [narrow] }, { preserveTableSeparators: true })).toBe(
       '| a | b |\n|----|\n| 1 | 2 |\n',
     )
   })
@@ -181,7 +181,7 @@ describe('the writer reproduces the field', () => {
     const table = tableOf('|= a |= b |\n| 1 | 2 |\n')
     table.separatorWidths = [3]
     table.rows[0]!.cells[1]!.align = 'right'
-    const output = renderCarve({ type: 'document', children: [table] })
+    const output = renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })
     expect(tableOf(output).rows[0]!.cells[1]!.align).toBe('right')
     expect(tableOf(output).separatorWidths).toEqual([3])
   })
@@ -193,7 +193,7 @@ describe('the writer reproduces the field', () => {
       const cell = table.rows[0]!.cells[0]!
       cell.align = align
       cell.valign = valign
-      const output = renderCarve({ type: 'document', children: [table] })
+      const output = renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })
       const back = tableOf(output).rows[0]!.cells[0]!
       expect(back.align, output).toBe(align)
       expect(back.valign, output).toBe(valign)
@@ -205,7 +205,7 @@ describe('the writer reproduces the field', () => {
     table.rows[0]!.cells[0]!.align = 'center'
     table.separatorWidths = [3, 3]
     // The first entry has a cell to take a colon from; the second has none.
-    expect(renderCarve({ type: 'document', children: [table] })).toBe(
+    expect(renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })).toBe(
       '| a |\n|:---:|---|\n| 1 |\n',
     )
   })
@@ -221,8 +221,8 @@ describe('the writer reproduces the field', () => {
     // and `parse(fmt(x)) == parse(x)` is what catches it, over the FIELD and
     // not only over the rendered line.
     expect(tableOf(src).separatorWidths).toEqual(widths)
-    expect(tableOf(carveToCarve(src)).separatorWidths).toEqual(widths)
-    expect(carveToCarve(src)).toBe(src)
+    expect(tableOf(carveToCarve(src, { preserveTableSeparators: true })).separatorWidths).toEqual(widths)
+    expect(carveToCarve(src, { preserveTableSeparators: true })).toBe(src)
   })
 
   it('refuses widths that would promote non-header cells', () => {
@@ -230,6 +230,6 @@ describe('the writer reproduces the field', () => {
     // say something the tree does not.
     const table = tableOf('| a | b |\n| 1 | 2 |\n')
     table.separatorWidths = [3, 3]
-    expect(() => renderCarve({ type: 'document', children: [table] })).toThrow(/separatorWidths would promote/)
+    expect(() => renderCarve({ type: 'document', children: [table] }, { preserveTableSeparators: true })).toThrow(/separatorWidths would promote/)
   })
 })

@@ -57,6 +57,8 @@ import { escapeDestinationStructure } from './import/markdown/markdown-destinati
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
+  /** Reproduce a recorded GFM separator row for source-preserving output. */
+  preserveTableSeparators?: boolean
 }
 
 function nestedTightItemLosesTightness(item: ListItem): boolean {
@@ -2712,6 +2714,7 @@ function lastBoundary(node: InlineNode | undefined): string {
 class CarveRenderSession {
   private renderedVerbatimTail = false
   private alignTables = false
+  private preserveTableSeparators = false
   private indentedHostDepth = 0
 
   private refusedSpans: SourceUnspellableError[] = []
@@ -2728,6 +2731,7 @@ class CarveRenderSession {
 
   renderCarve(ast: Document, opts: CarveRenderOptions = {}, parsedSource?: string): string {
     this.alignTables = opts.alignTables === true
+    this.preserveTableSeparators = opts.preserveTableSeparators === true
     this.repeatedScopes = new WeakMap()
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
@@ -4225,14 +4229,12 @@ class CarveRenderSession {
     const continuations = node.rows.map(row => Array.from({ length: row.continuationLines ?? 0 }, () =>
       Array.from({ length: row.cells.length }, () => ' ')))
     const first = node.rows[0]
-    // [CARVE-P11-066]: a separator row is written where the AUTHOR wrote one,
-    // which `separatorWidths` is the record of. `tableNeedsDelimiterHeader` is
-    // the other way in - a header row whose spans the native `|=` form cannot
-    // spell - and it writes the canonical `---`.
-    if (node.separatorWidths?.length && first?.cells.length && !first.cells.every(cell => cell.header)) {
+    // Recorded separator widths describe the source spelling. Only the
+    // preservation mode writes them; canonical output uses native headers.
+    if (this.preserveTableSeparators && node.separatorWidths?.length && first?.cells.length && !first.cells.every(cell => cell.header)) {
       throw new SourceUnspellableError('table', 'separatorWidths would promote non-header cells', node)
     }
-    const authored = authoredSeparator(node)
+    const authored = this.preserveTableSeparators ? authoredSeparator(node) : undefined
     const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
     let separator = needsDelimiter
       ? authored ?? `|${first!.cells.map(cell => {
