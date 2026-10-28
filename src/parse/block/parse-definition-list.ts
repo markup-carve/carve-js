@@ -256,7 +256,8 @@ export function createDefinitionListParser(
   const commentLeavesTerm = (lexer: Lexer, next: string, termColumn: number): boolean => {
     const authored = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
     const visible = stripLazyFrame(next).trimStart()
-    return RE_COMMENT_LINE.test(visible) && commentFenceRun(visible) === undefined &&
+    // A list retains its below-column comment with the item holding this term.
+    return lexer.hostBody !== 'list' && RE_COMMENT_LINE.test(visible) && commentFenceRun(visible) === undefined &&
       sourceColumn(authored) < termColumn
   }
   const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
