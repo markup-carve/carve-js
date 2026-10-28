@@ -52,6 +52,7 @@ import {
 import { ownValue, setOwn } from '../own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
+import { mergeAttrs } from '../extension/attribute-merge.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -403,6 +404,17 @@ function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
     if (block.type === 'image') return {
       type: 'paragraph', children: [block], blockImage: true,
       ...(block.pos === undefined ? {} : { pos: block.pos }),
+    }
+    if (block.type === 'paragraph' && block.blockImage && block.attrs) {
+      const image = block.children.find((child): child is Image => child.type === 'image')
+      if (image) {
+        const { attrs, ...paragraph } = block
+        return {
+          ...paragraph,
+          children: block.children.map(child => child === image
+            ? { ...image, attrs: mergeAttrs(attrs, image.attrs ?? {}) } : child),
+        }
+      }
     }
     switch (block.type) {
       case 'block_quote':

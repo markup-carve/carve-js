@@ -1090,7 +1090,11 @@ export function lintCarve(
   const nextSuffix = new Map<string, number>()
   const explicitIdKinds = new Map<string, { id: string; kind: string }>()
   const explicitIdKindsByFold = new Map<string, { id: string; kind: string }>()
-  walkDocument(doc, (node) => {
+  const reachableNotes = reachableFootnoteLabels(doc)
+  const indexedDoc = { ...doc, footnoteDefs: Object.fromEntries(
+    Object.entries(doc.footnoteDefs ?? {}).filter(([label]) => reachableNotes.has(label)),
+  ) }
+  walkDocument(indexedDoc, (node) => {
     const id = (node as { attrs?: Attrs }).attrs?.id
     if (id === undefined) return
     allocated.add(id)
@@ -1180,12 +1184,12 @@ export function lintCarve(
       }
     }
   }
-  indexHeadings(doc.children, false)
-  for (const body of Object.values(doc.footnoteDefs ?? {})) indexHeadings(body, false)
+  indexHeadings(indexedDoc.children, false)
+  for (const body of Object.values(indexedDoc.footnoteDefs)) indexHeadings(body, false)
 
   // Captioned tables/figures with a `#` caption-number placeholder and an id
   // are also valid cross-reference targets after resolve() numbers captions.
-  walkDocument(doc, (node) => {
+  walkDocument(indexedDoc, (node) => {
     const attrs = node.attrs as { id?: string } | undefined
     if (attrs?.id === undefined) return
     if (node.type === 'table' && captionHasNumber(node.caption)) used.add(attrs.id)
