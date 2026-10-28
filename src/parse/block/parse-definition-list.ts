@@ -31,6 +31,11 @@ import type { LinkDef } from '../inline/inline-resolution.js'
 
 // A phase's answer for one admitted line, or `undefined` to ask the next phase.
 type DescriptionVerdict = 'continue' | 'stop' | undefined
+type TermFenceState = {
+  active: { marker: string; column: number } | null
+  closesOnLine: boolean
+  memos: Map<number, QuotedFenceCloserMemo>
+}
 
 function descriptionTermOwnerReached(
   openTerm: boolean, opener: string, sourceColumn: number, ownerColumn: number,
@@ -189,6 +194,39 @@ export function createDefinitionListParser(
     for (let end = sourceQuotePrefixEnd(line, 0); end >= 0; end = sourceQuotePrefixEnd(line, end)) body = end
     return entryColumnAt(line, body + leadingWhitespace(line.slice(body)))
   }
+  const inFoldedTermFence = (
+    state: TermFenceState, lexer: Lexer, line: string, entry: string,
+    source: string, column: number, pastOwner: boolean,
+  ): boolean => {
+    if (state.closesOnLine) {
+      state.active = null
+      state.closesOnLine = false
+    }
+    if (state.active !== null) {
+      state.closesOnLine = column === state.active.column &&
+        fenceCloseRe(state.active.marker).test(entry.trimStart())
+      return true
+    }
+    if (!pastOwner) return false
+    const opener = RE_FENCE.exec(line) ?? RE_RAW_FENCE.exec(line)
+    if (opener === null) return false
+    const marker = RE_FENCE.test(line) ? opener[2] : opener[1]
+    if (marker === undefined) return false
+    let memo = state.memos.get(column)
+    if (memo === undefined) state.memos.set(column, memo = new Map())
+    if (!itemFenceHasCloser(lexer, marker, lexer.pos, column, memo,
+      next => isBlankLine(next),
+      index => sourceColumn(sourceLineAt(lexer, index, lexer.lineAt(index) ?? ''),
+        quotePrefixDepth(source)))) return false
+    state.active = { marker, column }
+    return true
+  }
+  const termOwnerColumn = (lexer: Lexer, listColumn: number): number =>
+    lexer.hostBody === 'description' ? lexer.hostSourceContentColumn ?? listColumn : Infinity
+  const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
+    if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
+    return lexer.hostBody === 'description' || returned ? termColumn : -1
+  }
   return function parseDefinitionList(parseSession: DefinitionListSession, lexer: Lexer): DefinitionList {
     const items: DefinitionItem[] = []
     /**
@@ -233,6 +271,7 @@ export function createDefinitionListParser(
       let retainedBelowComment = false
       let belowCommentSpan = false
       let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
+      const sourceFenceMemos = new Map<number, QuotedFenceCloserMemo>()
       const authoredCodeFenceMemos = new Map<number, QuotedFenceCloserMemo>()
       let authoredCodeFenceCloses = false
       /**
@@ -543,6 +582,7 @@ export function createDefinitionListParser(
       const leavesBeforeSourceBody = (ln: string, sourceFollower: string, reachesSourceBody: boolean): DescriptionVerdict => {
         if (lazyState.opaque === null && (lexer.hostBody === 'list' || lexer.hostBody === 'description') &&
             !reachesSourceBody &&
+            !(lazyState.lazyFoldable && opensCodeFence(ln.trimStart())) &&
             !isRetainableLineComment(lexer, ln.trimStart()) && commentFenceRun(ln.trimStart()) === undefined &&
             sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn - contentCol &&
             // A quoted list marker still opens in a surviving description body.
@@ -882,6 +922,18 @@ export function createDefinitionListParser(
         const lineIndent = indentColumns(ln)
         const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const markedQuoteLine = quoteDepth > 0 && quotePrefixDepth(source) >= quoteDepth
+        const sourceInHost = sourceColumn(source, quotePrefixDepth(markerSource))
+        if (!markedQuoteLine && lazyState.lazyFoldable && opensCodeFence(below) &&
+            sourceInHost > bodySourceColumn - contentCol && sourceInHost < bodySourceColumn) {
+          const marker = RE_FENCE.exec(below)?.[2] ?? RE_RAW_FENCE.exec(below)?.[1]
+          if (marker !== undefined) {
+            let memo = sourceFenceMemos.get(sourceInHost)
+            if (memo === undefined) sourceFenceMemos.set(sourceInHost, memo = new Map())
+            if (itemFenceHasCloser(lexer, marker, lexer.pos, sourceInHost, memo, bodyEndsAt,
+              index => sourceColumn(sourceLineAt(lexer, index, lexer.lineAt(index) ?? ''),
+                quotePrefixDepth(markerSource)))) return false
+          }
+        }
         if (!markedQuoteLine && lineIndent > 0 && lineIndent < contentCol && opensCodeFence(below)) {
           const marker = RE_FENCE.exec(below)?.[2] ?? RE_RAW_FENCE.exec(below)?.[1]
           if (marker !== undefined) {
@@ -1053,6 +1105,7 @@ export function createDefinitionListParser(
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
       sub.hostBodyRoot = 'description'
+      sub.hostSourceContentColumn = bodySourceColumn
       return bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
     }
     /**
@@ -1150,6 +1203,7 @@ export function createDefinitionListParser(
         type TermPart = { lines: number[]; text: string } | Comment
         const parts: TermPart[] = [{ lines: [termLineIndex], text: t[1]! }]
         const strippedIndent = new Map<number, number>()
+        const termFence: TermFenceState = { active: null, closesOnLine: false, memos: new Map() }
         while (!lexer.eof()) {
           const next = lexer.peek()!
           if (/^[ \t]+%%/.test(next)) {
@@ -1182,6 +1236,9 @@ export function createDefinitionListParser(
             (authoredList || entryColumn() < lexer.hostContentColumn)
           const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
           const nextSourceColumn = sourceColumn(nextSource, quotePrefixDepth(nextSource))
+          const pastTermOwner = nextSourceColumn > termOwnerColumn(lexer, listColumn)
+          const foldedFenceLine = inFoldedTermFence(termFence, lexer, next, nextEntry,
+            nextSource, nextSourceColumn, pastTermOwner)
           // A separator between the item's content column and an over-indented term's column is term text.
           const separatorBelowTerm = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
             !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && RE_DEFLIST_DEF.test(nextEntry) &&
@@ -1198,7 +1255,7 @@ export function createDefinitionListParser(
           // keeps it as text. A term is not a paragraph: the oracle ends the term
           // and hands the document the fence, as it already does under a heading.
           // The test is column-0 anchored, so an indented fence still folds in.
-          if (
+          if (!foldedFenceLine && (
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
             termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
@@ -1208,8 +1265,9 @@ export function createDefinitionListParser(
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
-            (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
-          )
+            ((!pastTermOwner || isListMarkerLine(nextEntry)) &&
+              endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
+          ))
             break
           // The term is the other place a framed line becomes text. The frame
           // kept the opener tests above from claiming it; it comes off before
@@ -1325,9 +1383,10 @@ export function createDefinitionListParser(
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
+        // A marker left of this term belongs to a surviving outer owner.
         if (defMarkerOffset >= 0 &&
             entryColumnAt(defSource, defMarkerOffset) <
-              (lexer.definitionLeadFromItemMarker ? lexer.hostContentColumn : currentTermReturned ? currentTermSourceColumn : -1)) break
+              definitionEntryFloor(lexer, currentTermReturned, currentTermSourceColumn)) break
         const d = !entryReachesList() ? null : RE_DEFLIST_DEF.exec(peekEntry())
         if (!d) break
         lexer.consume()
