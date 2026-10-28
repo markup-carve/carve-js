@@ -102,9 +102,9 @@ describe('delimited table fences', () => {
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
-  it('keeps the default header with an invalid footer count', () => {
+  it('uses one body group with an invalid footer count', () => {
     const source = '{table footer-rows=x}\n```csv\nh\na\n```\n'
-    expect(carveToHtml(source)).toContain('<th scope="col">h</th>')
+    expect(carveToHtml(source)).toContain('<th scope="row">h</th>')
   })
 
   it('keeps a bare footer count and the caption span', () => {

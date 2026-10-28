@@ -42,6 +42,19 @@ describe('marked delimited include selection', () => {
     expect(lintCarve(source, { includes: { resolve: () => file } }).map(w => w.rule)).toContain('include-lines-table-rows-hint')
   })
 
+  it.each(['csv', 'tsv'])('keeps a %s slice through a quoted record as code', format => {
+    const separator = format === 'csv' ? ',' : '\t'
+    const payload = `A${separator}B\n"first\nmiddle\nlast"${separator}x\nZ${separator}y\n`
+    for (const line of [2, 3, 4]) {
+      const result = run(`{table}\n{{ data.${format} @code:${format} @lines:${line}-${line} }}`, payload)
+      expect(result.doc.children[0]?.type, `line ${line}`).toBe('code_block')
+      expect(result.html).toContain('<pre table="">')
+      expect(result.html).not.toContain('<table')
+    }
+    const whole = run(`{table}\n{{ data.${format} @code:${format} @lines:2-4 }}`, payload)
+    expect(whole.doc.children[0]?.type).toBe('table')
+  })
+
   it('decodes escaped commas and quotes in column names', () => {
     const result = run('{table}\n{{ data.csv @code:csv @cols:"Price\\, net,Plan\\\"s" }}', '"Plan""s","Price, net"\nA,10\n')
     expect(result.warnings).toEqual([])
