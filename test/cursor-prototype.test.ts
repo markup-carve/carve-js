@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+
 import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
@@ -3485,5 +3486,14 @@ describe('experimental block cursor', () => {
   it('declines a quoted footnote follower with a later nested paragraph', () => {
     expect(() => parseCursorPrototype('- a\n  > [^f]: n\n  - s\n  continuation\nplain\n'))
       .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    ':::\n    - d\n',
+    '::: note\n    - d\n',
+    ':::\n  - c\n',
+    '::: note\n    - d\n:::',
+  ])('keeps list positions in a colon container exact: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 })

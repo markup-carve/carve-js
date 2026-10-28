@@ -2851,7 +2851,8 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
       if (marker.delim === ')') list.delim = ')'
       if (marker.raw === '') list.bareMarker = true
     } else if (marker.bullet === '*') list.bulletChar = '*'
-    const spanColumn = Math.min(marker.indent + 1, hostColumn, marker.authoredIndent + 1)
+    const spanColumn = cursor.owner.kind === 'colon' && line.baseColumn === undefined ? 1 :
+      Math.min(marker.indent + 1, hostColumn, marker.authoredIndent + 1)
     list.pos = listSpan(line, line, spanColumn)
     return { list, first: line, last: line,
       indent: marker.indent, spanColumn,
