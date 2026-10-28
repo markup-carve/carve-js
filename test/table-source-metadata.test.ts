@@ -45,7 +45,6 @@ describe('table source metadata', () => {
   it.each([
     { aligns: 'right,left' },
     { aligns: 'invalid,right' },
-    { aligns: 'left,right,center' },
     { widths: '20,80' },
     { widths: 'invalid,60' },
     { valigns: 'bottom,top' },
@@ -54,6 +53,14 @@ describe('table source metadata', () => {
     const result = renderCarveWithConversionReport(ast)
     expect(result.report.diagnostics).toEqual([columnsDiagnostic])
     expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ attrs: { keyValues } })
+  })
+
+  it('ignores excess positional entries when checking retained column attributes', () => {
+    const keyValues = { aligns: 'left,right,center' }
+    const ast = document({ columns: [{ align: 'left' }, { align: 'right' }], attrs: { keyValues } })
+    const result = renderCarveWithConversionReport(ast)
+    expect(result.report.diagnostics).toEqual([])
+    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ columns: ast.children[0]?.type === 'table' ? ast.children[0].columns : undefined, attrs: { keyValues } })
   })
 
   it('preserves matching authored metadata without new diagnostics', () => {

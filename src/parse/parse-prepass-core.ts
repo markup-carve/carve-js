@@ -921,7 +921,7 @@ export function markedDelimitedTable(code: CodeBlock): Table | null {
 }
 
 export function deriveTableMetadata(table: Table): void {
-  const columns = tableColumnsFromAttrs(table.attrs)
+  const columns = tableColumnsFromAttrs(table.attrs, table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0))
   if (columns) table.columns = columns
   const attrs = table.sourceFormat && table.attrs?.keyValues?.['header-rows'] === undefined &&
     ['footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols'].some(key => table.attrs?.keyValues?.[key] !== undefined)
