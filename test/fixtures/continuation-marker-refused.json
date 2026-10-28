@@ -161,15 +161,7 @@
       "description": "In a footnote body the plus is ordinary text.",
       "source": "x[^a]\n\n[^a]: note\n+\n\npara\n",
       "expected": {
-        "findings": [
-          {
-            "line": 4,
-            "column": 1,
-            "includes": [
-              "+"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {

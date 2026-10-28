@@ -28,10 +28,9 @@ for (const [name, host, column] of [
   }
 }
 
-it('keeps a marker below the note body column in the host list', () => {
+it('keeps a below-column marker in an open note paragraph', () => {
   const source = ['- a', '  [^b]: inner', '   - c2', 'below', '', '[^b]'].join('\n')
   const [document, note] = carveToHtml(source).split('<section role="doc-endnotes"')
-  expect(document).toContain('<li>c2\nbelow</li>')
-  expect(note).toContain('<p>inner<a ')
-  expect(note).not.toContain('c2')
+  expect(document).not.toContain('<li>c2')
+  expect(note).toContain('<p>inner\n- c2\nbelow<a ')
 })

@@ -47,6 +47,7 @@ import {
   type UnclosedCodeFence,
   type RefusedContinuationMarker,
 } from './parse.js'
+import { destinationSlotEnds } from './link-destination.js'
 import { normalizeRefLabel } from './label-key.js'
 import {
   slugify,
@@ -61,7 +62,7 @@ import {
   resolveHeadingIds,
   type AsciiHeadingIdMode,
 } from './heading/heading-ids.js'
-import { numberFootnotes } from './heading/footnote-numbering.js'
+import { numberFootnotes, reachableFootnoteLabels } from './heading/footnote-numbering.js'
 import { adoptBlockFootnoteDefs } from './ast/legacy-nodes.js'
 import { applyTransforms } from './extension/extension-transforms.js'
 import { parseDocument } from './parse/parse-document.js'
@@ -71,11 +72,12 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './extension/bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, FigureGroup, Heading, Table } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, FigureGroup, Heading, InlineNode, Table } from './ast.js'
 import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './table/delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './parse/block/colon-fences.js'
 import { resolveTableSpans } from './table/table-spans.js'
+import { isUnresolvedReference } from './parse/inline/unresolved-reference.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {
@@ -175,7 +177,8 @@ function nearConsumedKey(word: string, key: string): boolean {
   return d[word.length]![key.length]! <= 1
 }
 
-function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) => void): void {
+function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) => void,
+  prune?: (node: Record<string, unknown>) => boolean): void {
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visit(item)
@@ -184,12 +187,137 @@ function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) 
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
     visitNode(node)
+    if (prune?.(node)) return
     for (const key of Object.keys(node)) {
       if (key !== 'pos' && key !== 'attrs') visit(node[key])
     }
   }
   visit(doc.children)
   if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
+}
+
+const genericLinkText = new Set(['here', 'click here', 'read more'])
+const foldVisibleText = (text: string): string => text.replace(/[ \t\r\n\f\v]+/g, ' ').replace(/^ | $/g, '').toLowerCase()
+
+function collectLinkAuthoringWarnings(
+  doc: Document, out: LintWarning[], toUtf16: (offset: number) => number,
+  enabledRules: readonly string[] | undefined, source: string,
+): void {
+  const enabled = new Set(enabledRules?.map(rule => rule === 'a11y/heading-jump' ? 'heading-level-skip' : rule))
+  const definitions: Array<Record<string, unknown>> = []
+  const used = new Set<string>()
+  const add = (node: Record<string, unknown>, rule: string, message: string): void => {
+    const position = locate(node as Positioned, toUtf16)
+    if (node.type === 'link_reference_definition') {
+      const prefix = source.slice(position.start, position.end).split(/\r?\n/)[0] ?? ''
+      const bracket = prefix.search(/\[(?:\\.|[^\]\\])*\]:/)
+      if (bracket > 0) {
+        position.start += bracket
+        position.column += Array.from(prefix.slice(0, bracket)).length
+      }
+    }
+    out.push({ ...position, rule, message })
+  }
+  walkDocument(doc, node => {
+    if (node.type === 'link_reference_definition') definitions.push(node)
+  })
+  const reachable = reachableFootnoteLabels(doc)
+  const published = { ...doc, footnoteDefs: Object.fromEntries(
+    Object.entries(doc.footnoteDefs ?? {}).filter(([label]) => reachable.has(label))),
+  }
+  walkDocument(published, node => {
+    if ((node.type === 'link' || node.type === 'image') && typeof node.ref === 'string' &&
+        !isUnresolvedReference(node as unknown as InlineNode))
+      used.add(normalizeRefLabel(node.ref))
+    if (node.type === 'link') {
+      const href = node.href as string
+      if (href === '' && node.rawRef === undefined)
+        add(node, 'empty-link-destination', 'This link has an empty destination.')
+      if (enabled.has('non-descriptive-link-text') && !isUnresolvedReference(node as unknown as InlineNode) &&
+          Array.isArray(node.children) && !node.children.some((child: { type: string }) => child.type === 'image')) {
+        const label = foldVisibleText(inlineText(node.children as InlineNode[]))
+        const aria = foldVisibleText(Object.entries((node.attrs as Attrs | undefined)?.keyValues ?? {})
+          .find(([key]) => key.toLowerCase() === 'aria-label')?.[1] ?? '')
+        if (genericLinkText.has(label) && (!aria || genericLinkText.has(aria)))
+          add(node, 'non-descriptive-link-text', 'Use descriptive link text or a specific aria-label.')
+      }
+    }
+    if (enabled.has('emphasis-as-heading') && node.type === 'paragraph' && Array.isArray(node.children)) {
+      const visible = (node.children as InlineNode[]).filter(child =>
+        child.type !== 'comment' && (child.type !== 'text' || foldVisibleText(child.value) !== ''))
+      if (visible.length === 1 && (visible[0]!.type === 'strong' || visible[0]!.type === 'emphasis') &&
+          foldVisibleText(inlineText((visible[0] as { children: InlineNode[] }).children)) !== '')
+        add(node, 'emphasis-as-heading', 'This emphasized paragraph looks like a heading.')
+    }
+  }, node => isUnresolvedReference(node as unknown as InlineNode))
+  definitions.sort((a, b) => ((a.pos as Positioned['pos'])?.startOffset ?? 0) -
+    ((b.pos as Positioned['pos'])?.startOffset ?? 0))
+  const firstLabelByUrl = new Map<string, string>()
+  for (const definition of definitions) {
+    const label = normalizeRefLabel(definition.label as string)
+    if (!used.has(label)) add(definition, 'unused-link-reference-definition', 'This link reference definition is unused.')
+    if (!enabled.has('duplicate-reference-url')) continue
+    const url = definition.href as string
+    const earlier = firstLabelByUrl.get(url)
+    if (earlier !== undefined && earlier !== label)
+      add(definition, 'duplicate-reference-url', 'This reference definition repeats an earlier URL.')
+    else if (earlier === undefined) firstLabelByUrl.set(url, label)
+  }
+}
+
+type LintDirective = { line: number; kind: 'disable' | 'enable' | 'disable-line' | 'disable-next-line'; ids: Set<string> | null }
+
+function suppressLintWarnings(
+  source: string, doc: Document, warnings: LintWarning[], toUtf16: (offset: number) => number,
+): LintWarning[] {
+  const directives: LintDirective[] = []
+  walkDocument(doc, node => {
+    if (node.type !== 'comment' || node.block === true || typeof node.content !== 'string') return
+    const pos = (node as Positioned).pos
+    if (!pos || !source.slice(toUtf16(pos.startOffset ?? 0)).startsWith('%% ')) return
+    const match = /^carve-lint-(disable-next-line|disable-line|disable|enable)(?:[ ,]+(.*))?$/.exec(node.content)
+    if (!match) return
+    const ids = match[2]?.trim()
+    directives.push({ line: pos.startLine, kind: match[1] as LintDirective['kind'],
+      ids: ids ? new Set(ids.split(/[ ,]+/).map(id => id === 'a11y/heading-jump' ? 'heading-level-skip' : id)) : null })
+  })
+  if (!directives.length) return warnings
+  directives.sort((a, b) => a.line - b.line)
+  const lineScopes = new Map<number, LintDirective[]>()
+  const docScopes: LintDirective[] = []
+  for (const directive of directives) {
+    if (directive.kind === 'disable' || directive.kind === 'enable') docScopes.push(directive)
+    else {
+      const at = directive.line + Number(directive.kind === 'disable-next-line')
+      const entries = lineScopes.get(at) ?? []
+      entries.push(directive)
+      lineScopes.set(at, entries)
+    }
+  }
+  let scopeIndex = 0
+  let allDisabled = false
+  const disabledRules = new Map<string, boolean>()
+  return [...warnings].sort((a, b) => a.line - b.line || a.start - b.start).filter(warning => {
+    while (scopeIndex < docScopes.length && docScopes[scopeIndex]!.line <= warning.line) {
+      const directive = docScopes[scopeIndex++]!
+      const disabled = directive.kind === 'disable'
+      if (directive.ids === null) {
+        allDisabled = disabled
+        disabledRules.clear()
+      } else for (const id of directive.ids) disabledRules.set(id, disabled)
+    }
+    return !lineScopes.get(warning.line)?.some(d => d.ids === null || d.ids.has(warning.rule)) &&
+      !(disabledRules.get(warning.rule) ?? allDisabled)
+  })
+}
+
+/** Apply source comment scopes to diagnostics supplied by another lint pass. */
+export function filterLintWarnings<T extends LintWarning>(source: string, warnings: T[]): T[] {
+  if (!warnings.length) return warnings
+  const map = codepointToUtf16Map(source)
+  const visible = new Set(suppressLintWarnings(source, parse(source, { positions: true }), warnings,
+    offset => map?.[offset] ?? offset))
+  return warnings.filter(warning => visible.has(warning))
 }
 
 /**
@@ -502,6 +630,11 @@ export interface LintOptions {
   platforms?: readonly LintPlatform[]
   extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
   includes?: { resolve: IncludeResolver; sourcePath?: string; maxDepth?: number; maxBytes?: number; maxResolverCalls?: number } | undefined
+  /** Exact file ids to omit from lint results. */
+  ignoredFiles?: readonly string[]
+  fileId?: string | undefined
+  /** Additional authoring rules. The heading alias is accepted for input compatibility. */
+  enabledRules?: readonly string[]
 }
 
 /** Maps a 1-based line and codepoint column in `text` to a UTF-16 offset; past the end clamps to its length. */
@@ -515,7 +648,7 @@ function utf16Locator(text: string): (line: number, column: number) => number {
   }
 }
 
-export function lintIncludes(source: string, options: LintOptions, lintOne: (source: string) => LintWarning[], rootFindings?: LintWarning[]): LintWarning[] {
+export function lintIncludes(source: string, options: LintOptions, lintOne: (source: string, file?: string) => LintWarning[], rootFindings?: LintWarning[]): LintWarning[] {
   if (!options.includes) return []
   const { resolve, sourcePath, maxDepth, maxBytes, maxResolverCalls } = options.includes
   const extensions = options.extensions as CarveExtension[] | undefined
@@ -557,10 +690,11 @@ export function lintIncludes(source: string, options: LintOptions, lintOne: (sou
   const convertChain = (sites: IncludeSite[]): IncludeSite[] =>
     sites.map(site => convertSite(site, site.file ?? sourcePath))
   for (const entry of result.included ?? []) {
+    if (options.ignoredFiles?.includes(entry.file)) continue
     const locate = locators.get(entry.fileSource) ?? utf16Locator(entry.fileSource)
     locators.set(entry.fileSource, locate)
     if (entry.mode === 'carve') {
-      for (const finding of lintOne(entry.source)) {
+      for (const finding of lintOne(entry.source, entry.file)) {
         const line = finding.line + entry.firstLine
         if (entry.lines && (line < entry.lines.start || line > entry.lines.end)) continue
         const start = locate(line, finding.column)
@@ -582,13 +716,27 @@ export function lintIncludes(source: string, options: LintOptions, lintOne: (sou
     }
   }
   for (const warning of result.warnings) {
+    const file = warning.includedBy ? warning.file : options.fileId ?? warning.file ?? sourcePath
+    if (file !== undefined && options.ignoredFiles?.includes(file)) continue
     if (warning.rule === 'include-id-rename' || warning.rule === 'include-footnote-rename' || warning.rule === 'include-heading-clamp') continue
     const warningSource = sources.get(warning.file ?? sourcePath) ?? source
     const map = offsetMap(warningSource)
     findings.push({ rule: warning.rule, message: warning.message, line: warning.line, column: warning.column, start: map?.[warning.start] ?? warning.start, end: map?.[warning.end] ?? warning.end, ...(warning.includedBy ? { file: warning.file, includedBy: convertChain(warning.includedBy) } : {}) })
   }
+  const visible = new Set<LintWarning>()
+  const byFile = new Map<string | undefined, LintWarning[]>()
+  for (const finding of findings) {
+    const file = finding.file ?? sourcePath
+    const group = byFile.get(file) ?? []
+    group.push(finding)
+    byFile.set(file, group)
+  }
+  for (const [file, group] of byFile) {
+    for (const finding of filterLintWarnings(sources.get(file) ?? source, group)) visible.add(finding)
+  }
   const seen = new Set<string>()
   return findings.filter((finding) => {
+    if (!visible.has(finding)) return false
     if (!finding.includedBy) return true
     const key = `${finding.file}\0${finding.line}\0${finding.column}\0${finding.rule}`
     if (seen.has(key)) return false
@@ -674,8 +822,13 @@ export function lintCarve(
     extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
     /** Opt-in hint for a paragraph resembling a caption next to a figure or table. */
     captionLookingParagraph?: boolean
+    ignoredFiles?: readonly string[]
+    fileId?: string | undefined
+    enabledRules?: readonly string[]
   } = {},
 ): LintWarning[] {
+  const fileId = opts.fileId ?? opts.includes?.sourcePath
+  const ignored = fileId !== undefined && opts.ignoredFiles?.includes(fileId)
   const unclosedContainers: UnclosedContainer[] = []
   const unclosedCodeFences: UnclosedCodeFence[] = []
   const refusedContinuationMarkers: RefusedContinuationMarker[] = []
@@ -1319,11 +1472,13 @@ export function lintCarve(
   }
   collectEmptyIncludePathWarnings(source, doc, out)
   collectContainedPlacementMarkers(doc, toUtf16, out, opts.extensions?.some((ext) => ext.name === 'citations') ?? false)
+  collectLinkAuthoringWarnings(doc, out, toUtf16, opts.enabledRules, source)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
-  if (!opts.includes) return out
-  const includeFindings = lintIncludes(source, opts, (src) => lintCarve(src, { ...opts, includes: undefined }), out)
-  return [...out, ...includeFindings]
+  const visible = ignored ? [] : suppressLintWarnings(source, doc, out, toUtf16)
+  if (!opts.includes) return visible
+  const includeFindings = lintIncludes(source, opts, (src, file) => lintCarve(src, { ...opts, includes: undefined, fileId: file }), visible)
+  return [...visible, ...includeFindings]
 }
 
 /**
@@ -2556,7 +2711,11 @@ function collectAuthoringWarnings(
   const visible = (line: string): string => {
     let result = line.replace(/\\[\\`*_/<>()\[\]]/g, match => ' '.repeat(match.length))
     result = result.replace(/(`+)(?:(?!\1).)*\1/g, match => ' '.repeat(match.length))
-    return result
+    const characters = result.split('')
+    for (const [open, end] of destinationSlotEnds(result)) {
+      if (result[open - 1] === ']') characters.fill(' ', open, end)
+    }
+    return characters.join('')
   }
   const rowAt = new Map<number, Table>()
   for (const table of tables) {

@@ -97,8 +97,8 @@ describe('a footnote body takes the first-block form', () => {
     )
   })
 
-  it('an invisible footnote definition below is passed over, as under `- +`', () => {
-    expect(carveToHtml('[^a]: +\n[^b]: n\nflush\n\nsee[^a]\n')).toBe(note(`      <p>flush${backlink}</p>`))
+  it('an invisible definition after the marker takes its own lazy follower', () => {
+    expect(carveToHtml('[^a]: +\n[^b]: n\nflush\n\nsee[^a]\n')).toBe(note(`      <p>${backlink}</p>`))
   })
 
   it('a bare `+` before a blank line stays the note text `+`', () => {

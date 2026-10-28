@@ -279,6 +279,8 @@ export class Lexer {
    */
   itemLazyLines: Set<number>
   hostContentColumn = 0
+  /** The enclosing marker body's content column in the original source. */
+  hostSourceContentColumn: number | undefined
   hostQuoteDepth = 0
   nonAuthoredDefinitionStarts = new Set<number>()
   returnedDescriptionOwnerColumns = new Map<number, number>()

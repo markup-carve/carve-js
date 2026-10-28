@@ -7694,6 +7694,14 @@ function prepareMarkdownLine(st: MarkdownConversion, ln: MarkdownLine, i: number
   if (lines[i]!.trim() === '' || listCols.length === 0) st.recentChildKind = null
   inlineRunSourceLine = sourceLine(i)
   if (i === st.footnoteEnd) {
+    // Markdown starts a new list here. Carve keeps a marker in an open note
+    // paragraph, so carry the source block boundary into the output.
+    if (/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]/.test(lines[i]!)) {
+      if (st.out.at(-1)?.trim() !== '') st.out.push('')
+      st.prevBlank = true
+      // The source list is at document level even with three optional spaces.
+      lines[i] = lines[i]!.replace(/^ {1,3}(?=(?:[-*+]|\d{1,9}[.)])[ \t])/, '')
+    }
     listCols.length = 0
     listMarkers.leave(0)
     st.itemParagraph = false
@@ -8557,7 +8565,8 @@ function writeContainerOpener(st: MarkdownConversion, ln: MarkdownLine, i: numbe
   }
   if (isList) {
     reportOrderedTask(line, sourceLine(i))
-    const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
+    const run = collectListInlineRun(footnote === null ? lines : lines.slice(0, st.footnoteEnd),
+      i, dialect, emptyMarkerLines.has(i))
     const item = sourceItem(line)
     const kind = item?.bullet ?? item?.delimiter ?? ''
     if ((afterTable || listCols.length === 0 && isStandardTableRow(out.at(-1) ?? '') || paragraphOpen && st.recentChildKind?.col === indentColumns(line) && st.recentChildKind.kind !== kind && !RE_LIST_MARKER.test(out.at(-1) ?? '')) && out.at(-1)?.trim() !== '') out.push('')

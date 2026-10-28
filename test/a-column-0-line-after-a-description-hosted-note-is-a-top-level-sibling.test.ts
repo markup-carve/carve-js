@@ -16,15 +16,10 @@ import { carveToHtml } from '../src/index.js'
  *   - `tail` at column 0 is at or below the `dd`'s base column, so PART 0's
  *     owner-selection gives it to the nearest surviving ancestor - the
  *     document. djot and markdown both read it this way.
- *   - `tail` at the `dd`'s own content column (3) is the description's content
- *     and stays in the `dd`.
+ *   - `tail` at the `dd`'s own content column (3) can continue the open note
+ *     paragraph and leaves no visible description content.
  *
- * The bug: a footnote def on the marker line never passed through the def-body
- * tracker, so `inFootnoteBody` stayed false and the note's floor continuation
- * re-armed `lazyFoldable`. A column-0 trailing line then folded into the `dd`
- * instead of falling to the document. Seeding the run from the marker line
- * lets the tracker suppress the fold, and the two columns answer by column
- * again.
+ * The note's open paragraph now also takes plain lazy lines below its floor.
  */
 
 describe('a column-0 line after a description-hosted note is a top-level sibling', () => {
@@ -36,20 +31,17 @@ describe('a column-0 line after a description-hosted note is a top-level sibling
     )
   })
 
-  // The distinction the fix must NOT over-generalize: a trailing line AT the
-  // `dd`'s content column is the description's own content and stays in it.
-  it('keeps a trailing line at the dd content column inside the dd', () => {
+  // A line at the description column can still continue the open note.
+  it('keeps a trailing line at the dd column in the note', () => {
     expect(carveToHtml(':: t\n:  [^f]: note\n     - nested\n   tail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>tail</dd>\n</dl>',
+      "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>",
     )
   })
 
-  // The control: an opener one column shy of the note floor does not reach the
-  // note. It is a list in the `dd`, the column-0 line lazily continues the
-  // list item, and nothing changes.
-  it('leaves an opener one column shy of the note floor in the dd', () => {
+  // A marker below the note floor folds into its open paragraph.
+  it('folds an opener one column shy of the note floor', () => {
     expect(carveToHtml(':: t\n:  [^f]: note\n    - nested\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>nested\ntail</li>\n    </ul>\n  </dd>\n</dl>',
+      "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>",
     )
   })
 })

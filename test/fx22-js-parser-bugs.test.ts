@@ -31,10 +31,10 @@ describe('container ownership regressions', () => {
     )
   })
 
-  it('folds a marker-column description line into its nested term', () => {
-    expect(compact(carveToHtml('- - :: t0\n  : a0\n'))).toContain('<dt>t0: a0</dt>')
+  it('returns a marker-column description line to the outer item', () => {
+    expect(compact(carveToHtml('- - :: t0\n  : a0\n'))).toContain('<dt>t0</dt></dl></li></ul>: a0')
     expect(compact(carveToHtml('- :: t\n  : a\n'))).toContain('<dt>t</dt><dd>a</dd>')
-    expect(compact(carveToHtml(' - 1. :: t\n   : a\n'))).toContain('<dt>t: a</dt>')
+    expect(compact(carveToHtml(' - 1. :: t\n   : a\n'))).toContain('<dt>t</dt></dl></li></ol>: a')
     expect(compact(carveToHtml('> - 1. :: t\n>   : a\n'))).not.toContain('<dt>t: a</dt>')
   })
 

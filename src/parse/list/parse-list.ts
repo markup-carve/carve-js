@@ -954,6 +954,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let returnedTermSourceColumn: number | undefined
     let returnedTermOwnerColumn: number | undefined
     let returnedParagraphColumn: number | undefined
+    let nestedTermOwnsSeparator = false
     let definitionHostColumn: number | undefined
     let definitionAuthored = false
     let definitionBodyColumn: number | undefined
@@ -1005,6 +1006,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let consumedNoteParagraphBefore = false
     let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
     let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
+    const leadNestedContentColumn = nestedOwnerColumn < 0 ? Infinity : contentCol + nestedOwnerColumn
+    const leadHasDeeperItem = nestedOwnerColumn >= 0 &&
+      markerContentColumn(content.slice(nestedOwnerColumn), terminatorFree) >= 0
+    const leadBottomIsTerm = nestedOwnerColumn >= 0 && content.includes(':: ') && RE_DEFLIST_TERM.test(
+      markerLineBottomBlock(content, session.markerPrefixMemo(lexer, itemStartLineIndex)),
+    )
+    const leadNestedTerm = nestedOwnerColumn >= 0 && leadBottomIsTerm
     let nestedOwnerIsList = false
     let quotedFootnoteColumn: number | undefined
     let quotedFootnoteOffset = 0
@@ -2013,31 +2021,36 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
       }
       sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
-      const hostMarkerColumn = lexer.hostMarkerColumn ?? 0
-      const hostIndent = Math.max(0, hostMarkerColumn - quoteBodyColumn(itemSource, itemQuoteDepth))
-      // Compare marker widths after removing the host's authored indent.
-      // A quote prefix contributes columns, but it is not authored indent.
-      const termOwnerColumn = lexer.hostBody === 'list'
-        ? physicalItemMarkerColumn + Math.max(0,
-          contentCol - baseIndent - (lexer.hostContentColumn - hostMarkerColumn) - hostIndent)
-        : physicalItemMarkerColumn + 1
+      // A nested item's authored marker column is its boundary even when its
+      // marker is wider than the parent's. The next column is still inside it.
+      const termOwnerColumn = physicalItemMarkerColumn
       // A term written on the item marker line begins at the item's content
-      // column. A separator at the outer marker column leaves that item;
+      // column. A separator at the item's marker column leaves it;
       // one between those columns is only a continuation of the term.
       if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
-          sourceDepth === itemQuoteDepth && sourceMarkerColumn < termOwnerColumn &&
+          sourceDepth === itemQuoteDepth && sourceMarkerColumn <= termOwnerColumn &&
           !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) return 'stop'
       markerTermText = markerLineTerm && sourceDescription !== null &&
         lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth &&
         sourceMarkerColumn < physicalItemMarkerColumn + contentCol - baseIndent &&
-        sourceMarkerColumn >= termOwnerColumn
+        sourceMarkerColumn > termOwnerColumn
       if (RE_DEFLIST_DEF.test(sourceQuoteBody(sourceLine).trimStart()) && lazyState.inDefList === 'term' &&
           definitionHostColumn !== undefined && sourceMarkerColumn < definitionHostColumn &&
           sourceMarkerColumn <= physicalItemMarkerColumn && sourceDepth === itemQuoteDepth) return 'stop'
-      if (pendingBlankRun.count > 0) returnedParagraphColumn = undefined
+      if (pendingBlankRun.count > 0) {
+        returnedParagraphColumn = undefined
+        nestedTermOwnsSeparator = false
+      }
       return undefined
     }
     const readDefinitionBand = (l: string): Decision | undefined => {
+      if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
+          leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
+        nestedTermOwnsSeparator = true
+      if (sourceDescription !== null && lw === contentCol && leadNestedTerm && !leadHasDeeperItem &&
+          lazyState.inDefList === false && lazyState.deepest?.inDefList !== 'term' &&
+          pendingBlankRun.count === 0)
+        returnedParagraphColumn = sourceMarkerColumn
       if (sourceDescription !== null && returnedTermSourceColumn !== undefined &&
           sourceMarkerColumn < returnedTermSourceColumn &&
           definitionHostColumn !== undefined && sourceMarkerColumn > definitionHostColumn)
@@ -2182,6 +2195,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         dedented = placed.trimStart()
       if (sourceDescription !== null && returnedParagraphColumn === sourceMarkerColumn &&
           survivingItemParagraph) dedented = placed.trimStart()
+      if (leadNestedTerm && !leadHasDeeperItem && returnedParagraphColumn !== undefined &&
+          lazyState.descriptionHasTerm === false &&
+          isListMarkerLine(placed.trimStart()) &&
+          sourceMarkerColumn >= contentCol) dedented = placed.trimStart()
       // Lists and invisible definitions keep their authored bases for extent checks.
       if (authoredDescriptionBodyColumn !== undefined &&
           authoredDescriptionBodyColumn > trackedDescriptionBodyColumn &&
@@ -2211,7 +2228,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // and is not in `nested`), dedented it to column 0, and parseFence then
       // closed the fence there, losing the rest of its body
       // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
-      if (lazyState.opaque?.kind !== 'code' && (lazyState.literalColon === undefined || leadingWhitespace(dedented) === 0)) {
+      if (lazyState.opaque?.kind !== 'code' && (lazyState.literalColon === undefined || leadingWhitespace(dedented) === 0) &&
+          !(nestedTermOwnsSeparator && indentColumns(l) >= leadNestedContentColumn &&
+            RE_DEFLIST_TERM.test(dedented.trimStart()))) {
         authoredBaseEligible.add(nested.length)
         if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
         if (firstBodyMarkerColumn === undefined) {
@@ -2667,7 +2686,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             (opensCodeFence(l.trimStart()) && followsBelowColumnComment())))) &&
         (quoteParagraphMarker || captionParagraphMarker || belowOpenDescription || (lw > baseIndent && lw < contentCol &&
           (lazyState.deepest?.lazyFoldable !== false || lazyState.inDefList === 'description' ||
-            lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+            lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) ||
+          (leadBottomIsTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+            takenBelowColumn.has(nested.length - 1)) ||
+          (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into what the item is still holding open, rather than
           // ending the list. Under symmetric §10 no list marker interrupts a
@@ -2708,6 +2730,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
       if (markerTermText && !shape.isTask) return LAZY_FRAME + l.trimStart()
+      if (leadNestedTerm && !leadHasDeeperItem && returnedParagraphColumn !== undefined &&
+          lazyState.descriptionHasTerm === false &&
+          indentColumns(l, contentCol) < contentCol &&
+          RE_DEFLIST_TERM.test(l.trimStart())) return LAZY_FRAME + l.trimStart()
       let lazyLine = l
       if (sourceAfterNestedNote) lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       // A caption line below the column reaches no host: it folds as text (§10 I7).
@@ -2987,6 +3013,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ]),
           undefined,
           contentCol,
+          leadIsMarker && RE_DEFLIST_TERM.test(descendantLead),
         )
       }
       if (leadOwnsExtent) {
@@ -3128,8 +3155,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
     const itemLead = content
+    // A note in the lead stream must see the next opener before the item
+    // splits its blocks. That opener may be lazy text below the note column.
     const keepStreamWhole =
-      firstBlockIdx === -1 || leadIsMarker || RE_FOOTNOTE_DEF.test(content) || leadOpensColonFence
+      firstBlockIdx === -1 || leadIsMarker || RE_FOOTNOTE_DEF.test(content) || leadOpensColonFence ||
+      nested.slice(0, firstBlockIdx).some(line => RE_FOOTNOTE_DEF.test(line.trimStart()))
     const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
     const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
     const mkSub = (
@@ -3197,7 +3227,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
-      let loose = false
+      // A note whose body continues after an authored blank is another block
+      // in this item even though the note itself renders in the endnotes.
+      let loose = hasBlank && !RE_FOOTNOTE_DEF.test(content) && nested.some((line, index) =>
+        RE_FOOTNOTE_DEF.test(line.trimStart()) &&
+        nested[index + 1] !== undefined && !isBlankLine(nested[index + 1]!) &&
+        !lineOpensItemBlock(nested[index + 1]!.trimStart()))
       let previousVisibleSpan: { start: number; end: number; startColumn: number } | undefined
       let previousVisibleType: BlockNode['type'] | undefined
       let previousVisibleBlock: BlockNode | undefined

@@ -32,10 +32,9 @@ describe('a tight item', () => {
     expect(list('- a\n+\nb\n+\nc\n\nx\n')).toBe('<ul> <li>a b c </li> </ul>')
   })
 
-  it('renders a paragraph after a collected definition bare', () => {
-    // Corpus 228. The definition renders nothing, so what remains is a tight
-    // item holding two paragraphs.
-    expect(list('- a\n  [^f]: x\n  more\n\nsee[^f]\n')).toBe('<ul> <li>a more </li> </ul>')
+  it('keeps the item tight when its note takes the follower', () => {
+    // Corpus 228. The open note takes the follower, leaving one item paragraph.
+    expect(list('- a\n  [^f]: x\n  more\n\nsee[^f]\n')).toBe('<ul> <li>a</li> </ul>')
   })
 
   it('still renders a paragraph after a closed block bare', () => {

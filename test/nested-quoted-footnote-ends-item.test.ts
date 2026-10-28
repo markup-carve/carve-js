@@ -22,9 +22,9 @@ it('keeps a lazy line while the nested quote paragraph is still open', () => {
   )
 })
 
-it('keeps a line after a new marked quote paragraph', () => {
+it('ends a nested quote after a note takes its next line', () => {
   expect(normalized(carveToHtml('- h0\n  1. h1\n    > quote\n    > [^n]: note\n    > p\nq\n'))).toBe(
-    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote>\n<p>quote</p>\n<p>p\nq</p>\n</blockquote>\n</li>\n</ul>',
+    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote><p>quote</p></blockquote>\n</li>\n</ul>',
   )
 })
 
