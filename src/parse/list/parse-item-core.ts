@@ -989,10 +989,12 @@ export function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quo
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
-  // An unquoted follower at document column zero remains available to a
-  // stacked first-block opener. A quoted follower keeps its own quote frame
-  // and must reach the marker's column inside that frame.
-  if (firstBlock && quotePrefixDepth(line) === 0 && sourceColumn(line, 0) === 0) return !isListMarkerLine(line)
+  // In the document frame, a block quote at column zero is an attachable
+  // first block. An unquoted follower also reaches a stacked quote opener.
+  // A quoted follower in an existing quote must reach the marker's column
+  // inside that quote.
+  if (firstBlock && (quoteLevels === 0 || quotePrefixDepth(line) === 0) &&
+      sourceColumn(line, 0) === 0) return !isListMarkerLine(line)
   if (quoteLevels === Infinity) {
     let offset = 0
     for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
