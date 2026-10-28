@@ -74,8 +74,8 @@ function sourceLineAt(lexer: Lexer, index: number, fallback: string): string {
   return (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
 }
 
-function isItemLazyBelowHost(lexer: Lexer, column: number): boolean {
-  return lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) && column < lexer.hostContentColumn
+function isItemLazyLine(lexer: Lexer): boolean {
+  return lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
 }
 
 function isMarkerLineTermText(lexer: Lexer, line: string, column: number, termColumn: number): boolean {
@@ -1294,7 +1294,7 @@ export function createDefinitionListParser(
             termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
               termColumn, listColumn, lexer.hostSourceContentColumn ?? 0, lineOpensItemBlock) ||
             (!belowList && !nextPastTerm && !separatorBelowTerm && !markerTermText &&
-              !isItemLazyBelowHost(lexer, entryColumn()) &&
+              !isItemLazyLine(lexer) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
