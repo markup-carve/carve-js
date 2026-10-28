@@ -3870,6 +3870,10 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
   const line = cursor.peek()
   if (!line) return undefined
   if (line.claimedQuoteLazy) return cursor.take()
+  const previous = body.at(-1)
+  if (previous?.lazyText && previous.number === line.number - 1 &&
+      listMarker(previous.text) && /^ {2}[^ ]/.test(line.text) &&
+      plainQuoteText(line.text.trimStart())) return { ...cursor.take(), lazyText: true }
   if (cursor.owner.kind !== 'root') return undefined
   const listQuote = body.length > 0 && /^- > \+$/.test(body.at(-1)!.text) &&
     /^ [^ ]/.test(line.text)

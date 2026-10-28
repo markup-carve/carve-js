@@ -3513,6 +3513,7 @@ describe('experimental block cursor', () => {
     '- \t- B\n',
     '> - > +\n> - > +\n s\n',
     '>  {c\n> }\na\n',
+    '> > deep\n- b\n  a\n',
   ])('keeps a newly specified list or quote owner: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
