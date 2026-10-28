@@ -1314,7 +1314,9 @@ export function createDefinitionListParser(
             strippedIndent.set(lexer.pos, continuation.length - stripped.length)
             continuation = stripped
           }
-          if (nextPastTerm && lexer.hostBody === 'list') {
+          const retainsTermIndent = nextPastTerm || lexer.definitionLeadFromItemMarker &&
+            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && nextSourceColumn > termColumn
+          if (retainsTermIndent && lexer.hostBody === 'list') {
             const sourceIndent = entryLeadColumn(nextSource) - termColumn
             const retainedIndent = indentColumns(continuation)
             if (sourceIndent > retainedIndent)
@@ -1325,7 +1327,7 @@ export function createDefinitionListParser(
               lexer.hostSourceContentColumn ?? 0, indentColumns(continuation))) + continuation
           }
           // A line below the item's content column keeps none of its indent in the term.
-          if (!nextPastTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
+          if (!retainsTermIndent && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
             const stripped = continuation.replace(/^[ \t]+/, '')
             strippedIndent.set(lexer.pos, continuation.length - stripped.length)
             continuation = stripped

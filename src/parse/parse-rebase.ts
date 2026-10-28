@@ -213,6 +213,11 @@ function deeperOwnerTakes(run: RebaseRun, i: number, line: string, base: number)
         (lineOpensItemBlock(text) && !opensCodeFence(text) && !RE_COMMENT_LINE.test(text)))) return true
     run.childColonWidth = null
   }
+  // A term on a descendant marker line can take an under-column continuation.
+  // That continuation does not release the containing item: a later line at
+  // its content column still belongs to it.
+  if (base > 0 && run.ownedParagraphOpen &&
+      (!lineOpensItemBlock(text) || RE_DEFLIST_DEF.test(text))) return true
   // An unmatched fence below a child's column continues its paragraph. Keep
   // the child column so a later line at that column is still the child's.
   return run.ownedParagraphOpen && opensCodeFence(text) &&
@@ -261,7 +266,8 @@ function takeMarkerLine(run: RebaseRun, i: number, line: string, base: number, m
   run.ownedMarkerBase = base
   const childContent = markerFreeContent(line.trimStart())
   run.ownedParagraphOpen = bottomBlockLeavesParagraphOpen(childContent) &&
-    colonFenceOpenerLen(childContent) === null && !opensCodeFence(childContent)
+    colonFenceOpenerLen(childContent) === null && !opensCodeFence(childContent) ||
+    RE_DEFLIST_TERM.test(childContent)
   run.childColonWidth = colonFenceOpenerLen(childContent)
 }
 
@@ -395,6 +401,11 @@ function definitionStep(run: RebaseRun, def: DefinitionRun, j: number): number {
   const candidate = run.lines[j]!
   if (isBlankLine(candidate)) return definitionBlank(run, def, j)
   const column = indentColumns(candidate)
+  // A separator admitted below a marker-line term's host column is term
+  // text. Keep that state when measuring the following authored block.
+  if (def.termOpen && run.descriptionItem && !run.includeSublists &&
+      RE_DEFLIST_DEF.test(candidate.trimStart()) && run.sourceLines?.[j] !== undefined &&
+      sourceColumn(run.sourceLines[j]!) < run.termHostContentColumn) return extend(def, j)
   const belowDescription = definitionBelowDescription(run, def, j, column)
   if (belowDescription !== undefined) return belowDescription
   return column < def.base ? definitionBelowBase(run, def, j, column) : definitionAtOrPastBase(run, def, j, column)
@@ -831,6 +842,7 @@ return function rebaseOverindentedBlocks(
   hostOwnedBlockStarts?: ReadonlySet<number>,
   termSourceLines?: readonly (string | undefined)[],
   termHostContentColumn = -1,
+  leadNestedTerm = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   if (!mayRebase(lines, eligible)) return ownedBlanks
@@ -862,7 +874,7 @@ return function rebaseOverindentedBlocks(
     probe: () => quoteProbe ??= new Lexer([]),
     ownedColumn: leadNestedColumn,
     ownedMarkerBase: -1,
-    ownedParagraphOpen: false,
+    ownedParagraphOpen: leadNestedTerm,
     markerColonEnd: -1,
     inlineLeadPayload: false,
     childColonWidth: null,
