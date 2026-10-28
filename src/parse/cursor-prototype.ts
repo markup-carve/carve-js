@@ -302,6 +302,13 @@ function rootLinkDef(line: string) {
   return line.startsWith('[') && (!line.startsWith('[^') || line[2] === ']') ? matchLinkDef(line) : null
 }
 
+function footnoteBodyLinkDef(line: SourceLine, previous: SourceLine | undefined,
+  next: SourceLine | undefined) {
+  return line.number === 2 && previous?.number === 1 && FOOTNOTE_DEF.test(previous.text) &&
+    /^ {2,}\[/.test(line.text) && (!next || isBlankLine(next.text)) ?
+    rootLinkDef(line.text.trimStart()) : null
+}
+
 function boundedAdjacentDefinitionTail(lines: SourceLine[], lineNumber: number,
   prefix: string): boolean {
   const next = lines[lineNumber]
@@ -1888,7 +1895,7 @@ function rejectAmbiguousListBoundary(marker: ReturnType<typeof listMarker>,
 }
 
 function rejectListQuoteBoundary(body: SourceLine[], line: SourceLine): void {
-  if (line.ownedFirstBlock) return
+  if (line.ownedFirstBlock || line.lazyText) return
   if (body.at(-1)?.text.startsWith('>') &&
       mayContinueQuoteLazily(line.text, body.at(-1)?.text)) {
     throw new UnsupportedCursorSyntax('quote continuation across list boundary')
@@ -2737,7 +2744,13 @@ function takeListFrameFootnote(cursor: Cursor, inline: CursorInline, frame: List
     const candidate = cursor.peek(offset)!
     if (isBlankLine(candidate.text)) { owned.push({ ...candidate, text: '' }); continue }
     const claim = reachableListPrefix(candidate.text, contentColumn)
-    if (claim === undefined) { owned.push(candidate); break }
+    if (claim === undefined) {
+      if (owned.length > 1 && owned.at(-1)?.text !== '' && owned.slice(1).some((part) =>
+        fenceOpen(part.text) !== null || listMarker(part.text) !== undefined)) {
+        throw new UnsupportedCursorSyntax('list-owned footnote structural boundary')
+      }
+      break
+    }
     owned.push({ ...candidate, text: candidate.text.slice(claim),
       start: candidate.start + claim,
       baseColumn: (candidate.baseColumn ?? 1) + claim })
@@ -2830,6 +2843,20 @@ function shiftedColonAtListFrame(cursor: Cursor, frame: ListCursorFrame,
     return undefined
   }
   return shiftedClosedListColon(cursor, prefixLength)
+}
+
+function ownsLazyNestedQuoteFollower(cursor: Cursor, frame: ListCursorFrame,
+  line: SourceLine, reachedPrefix: number | undefined): boolean {
+  return reachedPrefix === undefined && line.lazyText === true &&
+    frame.body.at(-1)?.text === '> +' && /^ [^ ]/.test(line.text) &&
+    (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))
+}
+
+function mayFoldListOrOwnLazy(cursor: Cursor, frame: ListCursorFrame,
+  stack: readonly ListCursorFrame[], depth: number, line: SourceLine,
+  reachedPrefix: number | undefined): boolean {
+  return mayFoldListParagraph(cursor, frame, stack, depth) ||
+    ownsLazyNestedQuoteFollower(cursor, frame, line, reachedPrefix)
 }
 
 function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number,
@@ -3005,6 +3032,10 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
   }
   const appendBody = (frame: ListCursorFrame, line: SourceLine, prefix: number,
     rootLazy = false) => {
+    if (frame.body.length === 0 && /^[-*.] \t/.test(line.text)) {
+      line = { ...line, lazyText: true }
+      rootLazy = true
+    }
     const claimed = quoteListLazyLine(frame.body, line, prefix)
     line = claimed.line
     prefix = claimed.prefix
@@ -3447,7 +3478,7 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
         continue
       }
     }
-    if (mayFoldListParagraph(cursor, top, stack, depth)) {
+    if (mayFoldListOrOwnLazy(cursor, top, stack, depth, line, reachedPrefix)) {
       cursor.take()
       appendBody(top, foldedNestedParagraphLine(top.body, line), 0, true)
       updateListFrameEnds(stack, line, listSpan)
@@ -3813,6 +3844,20 @@ function takeLeadingPlusQuoteFollower(cursor: Cursor, body: SourceLine[]): Sourc
   return cursor.take()
 }
 
+function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): SourceLine | undefined {
+  const line = cursor.peek()
+  if (!line) return undefined
+  if (line.claimedQuoteLazy) return cursor.take()
+  if (cursor.owner.kind !== 'root') return undefined
+  const listQuote = body.length > 0 && /^- > \+$/.test(body.at(-1)!.text) &&
+    /^ [^ ]/.test(line.text)
+  const bracedParagraph = body.length === 2 && /^ +\{[^}]+$/.test(body[0]!.text) &&
+    body[1]!.text === '}' && plainQuoteText(line.text)
+  return (listQuote || bracedParagraph) &&
+    (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text)) ?
+    { ...cursor.take(), lazyText: true } : undefined
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   rejectOverindentedQuotedColon(cursor, first)
@@ -3836,8 +3881,9 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
       directParagraph = false
       continue
     }
-    if (line.claimedQuoteLazy) {
-      last = cursor.take()
+    const ownedLazy = takeCursorQuoteLazyFollower(cursor, body)
+    if (ownedLazy) {
+      last = ownedLazy
       body.push(last)
       directParagraph = false
       continue
@@ -4176,12 +4222,15 @@ function footnotePlainColumn(line: SourceLine): number {
   return /^[ \t]*/.exec(line.text)![0].length + 1
 }
 
-function simpleFootnoteParagraphLine(line: SourceLine | undefined, allowList = false): boolean {
+function simpleFootnoteParagraphLine(line: SourceLine | undefined, allowList = false,
+  allowLazy = false): boolean {
   if (!line) return false
   const prefix = footnotePlainColumn(line) - 1
-  if (sourceColumnAt(line.text, prefix) < 2) return false
+  if (!allowLazy && sourceColumnAt(line.text, prefix) < 2) return false
   const content = line.text.slice(prefix)
   return plainQuoteText(content) ||
+    allowLazy && content === '+' ||
+    allowLazy && prefix === 1 && rootLinkDef(content) !== null ||
     allowList && !(line.text[0] === '\t' && content[0] === ' ') && listMarker(content) !== undefined ||
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
 }
@@ -4460,6 +4509,19 @@ function takeBoundedFootnoteBlocks(cursor: Cursor, inline: CursorInline, first: 
   return true
 }
 
+function simpleFootnoteLazyFirstLine(cursor: Cursor, footnote: RegExpExecArray,
+  next: string | undefined, nextIndex: number): boolean {
+  if (nextIndex !== 1 || next === undefined || cursor.owner.kind !== 'root' ||
+      footnote[2] === undefined || FOOTNOTE_DEF.test(next.trimStart())) return false
+  const indented = /^ {1,2}[^ ]/.test(next)
+  if (!plainQuoteText(footnote[2]) && !(footnote[2] === '+' && indented)) return false
+  return next === next.trimStart() && (plainQuoteText(next) || next === '+' &&
+    (/^ {1,2}[^ ]/.test(cursor.peek(2)?.text ?? '') ||
+      !cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) ||
+    /^ - +\S/.test(next) || /^ \[[^\]]+\]: +\S/.test(next) ||
+    footnote[2] === '+' && indented
+}
+
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
   footnote: RegExpExecArray, footnoteDefs: Record<string, BlockNode[]> | undefined,
   footnoteDefPos: Record<string, Position> | undefined): void {
@@ -4470,13 +4532,21 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   let nextIndex = 1
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
+  const lazyFirstLine = simpleFootnoteLazyFirstLine(cursor, footnote, next, nextIndex)
+  const bodyDefinition = cursor.peek(nextIndex) &&
+    footnoteBodyLinkDef(cursor.peek(nextIndex)!, first, cursor.peek(nextIndex + 1))
+  if (bodyDefinition && cursor.peek(nextIndex + 2)?.text.startsWith('  ')) {
+    throw new UnsupportedCursorSyntax('footnote definition after body link')
+  }
   const hasBodyLine = next !== undefined &&
-    sourceColumnAt(next, /^[ \t]*/.exec(next)![0].length) >= 2
+    !bodyDefinition &&
+    (sourceColumnAt(next, /^[ \t]*/.exec(next)![0].length) >= 2 || lazyFirstLine)
   const separated = hasBodyLine && nextIndex > 1
   const structural = hasBodyLine ? simpleFootnoteStructuralLines(cursor, nextIndex) : undefined
   let bodyLength = 0
   if (hasBodyLine && !structural) {
-    while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength), !separated)) bodyLength++
+    while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength), !separated,
+      lazyFirstLine)) bodyLength++
   }
   const initialQuote = footnote[2] !== undefined && RE_BLOCKQUOTE.test(footnote[2])
   if (!footnote[2] || initialQuote && hasBodyLine && !separated ||
@@ -4824,7 +4894,9 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
       takeSimpleFootnote(cursor, inline, first, footnote, footnoteDefs, footnoteDefPos)
       continue
     }
-    const definition = rootLinkDef(first.text)
+    const definition = rootLinkDef(first.text) ||
+      atDocumentLevel && footnoteBodyLinkDef(first, cursor.physicalLines[first.number - 2],
+        cursor.physicalLines[first.number])
     if (definition) {
       takeLinkDefinitionAtCursor(cursor, inline, definitionNodes, atDocumentLevel, definition)
       continue
@@ -4998,7 +5070,7 @@ function hoistBareListFootnote(lines: SourceLine[], inline: CursorInline,
   const strip = (line: SourceLine): SourceLine => ({ ...line, text: line.text.slice(3),
     start: line.start + 3, baseColumn: (line.baseColumn ?? 1) + 3 })
   const owned = [strip(note)]
-  if (follower.text.startsWith('     ')) owned.push(strip(follower))
+  if (follower.text.startsWith('    ')) owned.push(strip(follower))
   const nested = new Cursor(owned, undefined, ROOT_OWNER, lines)
   const match = FOOTNOTE_DEF.exec(owned[0]!.text)
   if (!match) return undefined
@@ -5280,7 +5352,10 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       }
       simpleRootListDefinitions = recordMarkerLineLinkDefinition(cursor, line,
         linkDefinitions, simpleRootListDefinitions)
-      const match = rootLinkDef(line.text) || simpleListDefinition || quoteListDefinition ||
+      const match = rootLinkDef(line.text) ||
+        footnoteBodyLinkDef(line, cursor.physicalLines[line.number - 2],
+          cursor.physicalLines[line.number]) ||
+        simpleListDefinition || quoteListDefinition ||
         (quoteDefinition ? rootLinkDef(line.text.slice(2)) : null)
       if (match) linkDefinitions.set(normalizeRefLabel(match.label),
         { rawLabel: match.label, line: line.number - 1, href: match.href,

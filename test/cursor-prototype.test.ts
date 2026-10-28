@@ -3509,6 +3509,22 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- \t- B\n',
+    '> - > +\n> - > +\n s\n',
+    '>  {c\n> }\na\n',
+  ])('keeps a newly specified list or quote owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- a\n  [^g]: more\n  ```\n[^f]: note\n> > deep\n%% c\ntext\n> > deep\n',
+    '    b\n  - c\n  :  nested\n[^f]: note\n- a\n  [^g]: more\n    - d\n:: term\n',
+    '[^f]: note\n  [r]: /u\n\n  ~~~\n```\n```\n  ```\n  :::\n',
+  ])('declines an unresolved owner after a footnote: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it.each(['"hello" and \'world\'\n', '- "quoted"\n', '> "quoted"\n'])('uses configured quote characters: %s', (source) => {
       const options = { extensions: [
         { name: 'first', quoteCharacters: ['《', '》', '〈', '〉'] as const },
