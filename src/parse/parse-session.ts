@@ -119,6 +119,7 @@ import {
   mergeAttrs,
   nestedColonLexer,
   nestedSubLexer,
+  rebaseOverindentedBlocks,
   normalizeRefLabel,
   normalizedSourceLines,
   opaqueGroupCloser,
@@ -247,6 +248,7 @@ function refusedFirstBlockReason(follower: string | undefined, marker: string): 
 
 
 export class ParseSession extends InlineParseSession {
+  private rootHasTableRow = new WeakMap<readonly string[], boolean>()
   /**
    * `text` with a trailing comment and its whole separating run removed, for a
    * container's `[label]`.
@@ -1312,6 +1314,35 @@ export class ParseSession extends InlineParseSession {
     return bq
   }
 
+  private divBodyLexer(lexer: Lexer, body: Parameters<typeof nestedColonLexer>[1], start: number): Lexer {
+    const sub = nestedColonLexer(lexer, body, start)
+    const root = lexer.rootLines ?? lexer.lines
+    let hasTableRow = this.rootHasTableRow.get(root)
+    if (hasTableRow === undefined) {
+      hasTableRow = root.some(line => isTableRow(sourceQuoteBody(line).trimStart()))
+      this.rootHasTableRow.set(root, hasTableRow)
+    }
+    if (!hasTableRow) return sub
+    const listColumns = new Set<number>()
+    let hasSiblingTable = false
+    for (let index = 0; index < sub.lineCount; index++) {
+      const line = sub.lineAt(index)!
+      const column = indentColumns(line)
+      const content = line.trimStart()
+      if (column > 0 && listColumns.has(column) && isTableRow(content)) {
+        hasSiblingTable = true
+        break
+      }
+      if (isListMarkerLine(content)) listColumns.add(column)
+    }
+    if (!hasSiblingTable) return sub
+    const lines = Array.from({ length: sub.lineCount }, (_line, index) => sub.lineAt(index)!)
+    const rebased = lines.slice()
+    rebaseOverindentedBlocks(rebased, undefined, -1, true)
+    if (rebased.every((line, index) => line === lines[index])) return sub
+    return nestedSubLexer(lexer, rebased, start, lines.map((_line, index) => sub.lineNumber(index)))
+  }
+
   private parseDiv(lexer: Lexer): Div {
     const openLineIndex = lexer.pos
     const m = RE_DIV_OPEN.exec(lexer.consume())!
@@ -1323,7 +1354,7 @@ export class ParseSession extends InlineParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
+    const subLexer = this.divBodyLexer(lexer, inner, openLineIndex + 1)
     // No inline opener attributes (strict djot): a bare `:::` carries none;
     // a preceding block-attribute line attaches them in parseBlocks.
     const node: Div = { type: 'div', children: this.parseBlocks(subLexer, 0) }

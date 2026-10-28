@@ -843,6 +843,16 @@ function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null,
     ? `\\${rendered}` : rendered
 }
 
+function protectEmptyListTailBeforePlus(block: BlockNode, next: BlockNode | undefined): BlockNode {
+  if (block.type !== 'list' || next?.type !== 'paragraph' ||
+      next.children[0]?.type !== 'text' || next.children[0].value !== '+') return block
+  const last = block.items.at(-1)
+  if (last === undefined || last.children.length !== 0) return block
+  return { ...block, items: [...block.items.slice(0, -1), {
+    ...last, children: [{ type: 'comment', block: false, content: '' }],
+  }] }
+}
+
 /** Whether rendered text contains a character a re-parse can see. */
 function spellsSomething(rendered: string): boolean {
   return /[^ \t\n\r]/.test(rendered)
@@ -3906,7 +3916,7 @@ class CarveRenderSession {
             separated = true
           }
         }
-        let rendered = this.renderBlock(b, ctx)
+        let rendered = this.renderBlock(protectEmptyListTailBeforePlus(b, next), ctx)
         if (
           b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx) &&
           nestedFenceTail(previousEmitted) === undefined

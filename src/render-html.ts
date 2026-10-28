@@ -2114,30 +2114,29 @@ function renderTableRowFlat(
   for (const [column, entry] of cells.entries()) {
     if (entry.skip) continue
     const tag = entry.cell.header || promoteToHeader || column < rowHeadColumns ? 'th' : 'td'
-    const attrs: string[] = []
+    const spans: string[] = []
+    const styleAttrs: string[] = []
     const emitted = new Set<string>()
     if (entry.rowspan > 1) {
-      attrs.push(`rowspan="${entry.rowspan}"`)
+      spans.push(`rowspan="${entry.rowspan}"`)
       emitted.add('rowspan')
     }
     if (entry.colspan > 1) {
-      attrs.push(`colspan="${entry.colspan}"`)
+      spans.push(`colspan="${entry.colspan}"`)
       emitted.add('colspan')
     }
     if (entry.align || entry.valign) {
       const styles = `${entry.align ? `text-align: ${entry.align};` : ''}${entry.align && entry.valign ? ' ' : ''}${entry.valign ? `vertical-align: ${entry.valign};` : ''}`
-      attrs.push(`style="${styles}"`)
+      styleAttrs.push(`style="${styles}"`)
       emitted.add('style')
     }
-    // Author cell attributes (a `{...}` glued to the opening pipe) come first,
-    // then the structural span / alignment attributes; any author copy of a
-    // structural key actually emitted here is dropped to avoid a duplicate.
-    // The scope default LEADS the author's attributes, which is the order the
-    // corpus pins (`<th scope="col" class="highlight">`).
+    // Computed spans precede authored attributes. Alignment style follows
+    // authored attributes; an authored copy of an emitted key is dropped.
     const attrStr =
       cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
+      (spans.length ? ' ' + spans.join(' ') : '') +
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
-      (attrs.length ? ' ' + attrs.join(' ') : '')
+      (styleAttrs.length ? ' ' + styleAttrs.join(' ') : '')
     const content = entry.cell.blocks === undefined
       ? renderInlines(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? [], opts)
       : renderBlocks(entry.cell.blocks, opts, 0)

@@ -429,10 +429,20 @@ export class InlineParseSession {
   protected activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
   protected quoteGlyphHasNul = false
 
+  private sourceCharacterAfter(text: string, source: InlineSource): string {
+    if (this.activeDocument === null) return ''
+    const offset = this.pointAt(source, text, text.length)?.offset
+    if (offset === undefined || (!source.lineAnchors && !source.anchoredRanges &&
+      (source.baseOffset === 0 || this.activeDocument[offset - 1] !== text[text.length - 1]))) return ''
+    const codepoint = this.activeDocument.codePointAt(offset)
+    return codepoint === undefined ? '' : String.fromCodePoint(codepoint)
+  }
+
   private smartToken(
     text: string,
     i: number,
     prev: string,
+    source: InlineSource,
   ): { out: string; len: number; kind: string } | null {
     const candidates = smartTokensByFirst.get(text[i]!)
     if (candidates) {
@@ -469,11 +479,12 @@ export class InlineParseSession {
     }
     const c = text[i]!
     if (c === '"') {
-      const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, text[i + 1] ?? '')
+      const next = i + 1 < text.length ? codePointAfter(text, i) : this.sourceCharacterAfter(text, source)
+      const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      const next = codePointAfter(text, i)
+      const next = i + 1 < text.length ? codePointAfter(text, i) : this.sourceCharacterAfter(text, source)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
       if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
@@ -1045,7 +1056,7 @@ export class InlineParseSession {
       }
       return {
         line: anchor.line,
-        column: anchor.column + withinLine,
+        column: Math.max(1, anchor.column + withinLine),
         offset: anchor.offset + withinLine,
       }
     }

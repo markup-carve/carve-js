@@ -65,6 +65,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     isPhysicalContinuationMarker,
     isRetainableLineComment,
     isStackedFirstBlockQuoteMarker,
+    isTableRow,
     itemFenceHasCloser,
     lazyContinuationEndsList,
     leadingWhitespace,
@@ -373,13 +374,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
       firstBlockSource !== undefined &&
       indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset)
-    if ((firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
+    if (lexer.peek() !== undefined && (firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
         isStackedFirstBlockQuoteMarker(itemSource)) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
     }
     if (!firstBlockMarker) return { kind: 'none' }
-    if (!firstBlockEligible || firstItemAttachBoundary(lexer.peek()!)) {
+    if (!firstBlockEligible || lexer.peek() === undefined || firstItemAttachBoundary(lexer.peek()!)) {
       const reason: RefusedContinuationMarker['reason'] = firstBlockSource === undefined ? 'document'
         : isBlankLine(firstBlockSource) ? 'blank'
           : isListMarkerLine((lexer.peek() ?? '').trimStart()) ? 'sibling'
@@ -510,7 +511,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const fbItem: ListItem = { type: 'list_item', children: fbChildren }
     attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
     markItem(fbItem, head)
-    return { kind: 'item', item: fbItem, next: 'continue' }
+    let blanks = 0
+    while (isBlankLine(lexer.peek(blanks))) blanks++
+    const sibling = lexer.peek(blanks)
+    if (blanks === 0 || sibling === undefined || !isSiblingMarker(shape, sibling)) {
+      return { kind: 'item', item: fbItem, next: 'continue' }
+    }
+    for (let index = 0; index < blanks; index++) lexer.consume()
+    return { kind: 'item', item: fbItem, next: blanks >= 3 ? 'end' : 'loose' }
   }
 
   function leadLazyState(
@@ -2000,7 +2008,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // column. A separator at the outer marker column leaves that item;
       // one between those columns is only a continuation of the term.
       if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
-          sourceDepth === itemQuoteDepth && sourceMarkerColumn <= physicalItemMarkerColumn) return 'stop'
+          sourceDepth === itemQuoteDepth && sourceMarkerColumn <= physicalItemMarkerColumn &&
+          !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) return 'stop'
       markerTermText = markerLineTerm && sourceDescription !== null &&
         lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth &&
         sourceMarkerColumn < contentCol && sourceMarkerColumn > physicalItemMarkerColumn
@@ -2622,6 +2631,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
+      (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
       (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
         (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
@@ -3292,6 +3302,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
      */
     const isItemAttachBoundary = (a: string): boolean => {
       if (isBlankLine(a)) return true
+      // At end of input a second bare plus has no block to attach. It is the
+      // first marker's paragraph, not a boundary that refuses the first marker.
+      if (isContinuationMarker(a) && (lexer.peek(1) === undefined || isBlankLine(lexer.peek(1)))) return false
       const ind = indentColumns(a, baseIndent + 1)
       if (ind < baseIndent) return true
       if (ind !== baseIndent) return false

@@ -85,7 +85,7 @@ export const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
 export const RE_CAPTION = /^\^ +(.*[^ \t\n\r].*)$/
 
-export const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')? *\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
+export const RE_BARE_IMAGE = /^ {0,3}!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')? *\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
 
 // The same fence seen from a position that CONSUMES it. A comment is recognized
 // at any column (carve#624), but where a line ENDS an item or opens a block the
@@ -1048,8 +1048,12 @@ export function isBlockImageLine(line: string): boolean {
   // where that tail reads it.
   return (
     m !== null &&
+    // A nonempty untitled source ends immediately at `)`. Empty destinations
+    // have their own padding slot, while a title permits trailing spaces.
+    (m[2] === '' || m[3] !== undefined || m[4] !== undefined ||
+      line[line.indexOf('](') + 2 + m[2]!.length] === ')') &&
     // Check the whole line because opaque spans can extend beyond the label.
-    buildBracketMap(line)(1) === 2 + m[1]!.length &&
+    buildBracketMap(line)(line.indexOf('[')) === line.indexOf('[') + 1 + m[1]!.length &&
     (m[2] === '' || linkDestinationValue(m[2]!) !== null) &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
@@ -1065,6 +1069,10 @@ export function isBlockImageLine(line: string): boolean {
 // afterwards (promoteBlockImages).
 export function imageIsBlock(lexer: Lexer): boolean {
   const next = lexer.peek(1)
+  if (/^ {1,3}!\[/.test(lexer.peek() ?? '')) {
+    return RE_CAPTION.test(next ?? '') ||
+      (next !== undefined && isBlankLine(next) && RE_CAPTION.test(lexer.peek(2) ?? ''))
+  }
   if (next === undefined || isBlankLine(next) || RE_CAPTION.test(next)) return true
   // Peek-1 interruption: advance past the image line, reuse the paragraph
   // interruption test, then rewind.

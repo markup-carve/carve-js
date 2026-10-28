@@ -1042,7 +1042,7 @@ describe('table spans on import', () => {
     const imported = htmlToCarve(html)
     expect(imported.value).toContain('| ^ | b |\n| ^ | c |')
     expect(imported.report.diagnostics).toEqual([])
-    expect(carveToHtml(imported.value)).toContain('<th scope="col" rowspan="3">H</th>')
+    expect(carveToHtml(imported.value)).toContain('<th rowspan="3" scope="col">H</th>')
   })
 
   it('keeps an inferred header span in a later column', () => {
