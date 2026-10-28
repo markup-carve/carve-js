@@ -55,6 +55,23 @@ describe('experimental block cursor', () => {
     })).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '> - x\ntail\n',
+    '> - x\n- a\n',
+    '> - x\n:  meaning\n',
+    '> - x\n+\n',
+  ])('declines a quoted list with an unresolved physical follower: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    '> - x\n  [r]: /url\n\nSee [r][].\n',
+    '> - x\n  +\n',
+    '> - x\n^ Caption\n',
+  ])('retains exact quoted list followers with known owners: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps generated container ownership and diagnostics exact on admitted shapes', () => {
     const leads = ['::: d\n', '- ::: d\n', '- a\n  ::: d\n', '> ::: d\n', '::: |\n']
     const bodies = ['', '  z\n', 'z\n', '\n', '  z\n\n']

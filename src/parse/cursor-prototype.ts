@@ -5104,13 +5104,26 @@ function indexedQuoteListDefinition(line: SourceLine, previous: SourceLine | und
 }
 
 function rejectAmbiguousShallowListOwnership(lines: SourceLine[], source: string): void {
+  if (lines.length < 2) return
   // A nested quote can keep ownership of a later, shallow list marker after
   // another block has started. The cursor list frame cannot yet make that
   // decision from physical columns alone.
-  if (lines.length < 3) return
   let nestedQuoteSeen = false
   for (let index = 0; index < lines.length; index++) {
     const text = lines[index]!.text
+    // A flush-left follower can still belong to a quoted list item's paragraph.
+    if (text[0] === '>' && text[1] === ' ' && index + 1 < lines.length &&
+        (text[2] === '-' || text[2] === '*' || /^[0-9A-Za-z]$/.test(text[2] ?? ''))) {
+      const quotedMarker = listMarker(text.slice(2))
+      const follower = lines[index + 1]!.text
+      if (quotedMarker && plainQuoteText(quotedMarker.content) &&
+          follower !== '' && !RE_BLOCKQUOTE.test(follower) &&
+          follower[0] !== ' ' && follower[0] !== '\t' &&
+          !follower.startsWith('^ ')) {
+        throw new UnsupportedCursorSyntax('quoted list physical follower owner')
+      }
+    }
+    if (lines.length < 3) continue
     const marker = listMarker(text)
     if (index >= 2 && marker?.indent === 1 &&
         listMarker(lines[index - 1]!.text)?.indent === 1 &&
