@@ -2649,8 +2649,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
-      !(lexer.hostBody === 'list' && lw > baseIndent && lw < contentCol &&
-        lineOpensItemBlock(l.trimStart())) &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
       (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
