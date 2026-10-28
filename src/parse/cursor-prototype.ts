@@ -80,6 +80,9 @@ class Cursor {
   sharedLexer?: Lexer
   fenceCloserSuffix?: { backtick: Uint32Array; tilde: Uint32Array }
   simpleRootListDefinitions?: Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>
+  plusAttachRisk = false
+  plusAdjacentRisk = false
+  unclosedFenceAfterText = false
   constructor(readonly lines: SourceLine[], readonly rootSource?: string,
     readonly owner: ContainerOwner = ROOT_OWNER,
     readonly physicalLines: SourceLine[] = lines,
@@ -1676,6 +1679,14 @@ function positionlessImageCaptionIsText(inline: CursorInline, image: InlineNode,
       /`{2,}/.test(first.text))
 }
 
+// A lone `+` before a list marker is paragraph text unless an earlier list, quote or footnote
+// in this owner may claim the attachment (a directly preceding list, or a quote or footnote
+// until a blank line); then the old split applies.
+function plusMayAttachList(cursor: Cursor): boolean {
+  if (cursor.owner.inList || (cursor.owner.kind !== 'root' && cursor.owner.kind !== 'colon')) return true
+  return cursor.plusAttachRisk || cursor.plusAdjacentRisk
+}
+
 function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode {
   const first = cursor.peek()!
   const codeInclude = first.text.includes('{{') &&
@@ -1688,7 +1699,8 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || ((!interruptsParagraphAtCursor(cursor) || cursor.peek()!.lazyText) &&
         !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
-          listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
+          listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText &&
+          plusMayAttachList(cursor))) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
     if (codeInclude && parts.length > 0) break
     if (imageCaptionSlot && RE_CAPTION.test(cursor.peek()!.text)) break
@@ -1718,6 +1730,11 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
     const column = /^[ \t]*/.exec(line.text)![0].length + 1
     parts.push({ line, column, text: line.text.slice(column - 1) })
     last = line
+  }
+  if (parts.length > 2 && parts[0]!.text.trim() === '+' && listMarker(parts[1]!.text) &&
+      parts.some((part) => (part.text[0] === '`' || part.text[0] === '~') && fenceOpen(part.text) ||
+        rootLinkDef(part.text) !== null)) {
+    throw new UnsupportedCursorSyntax('plus paragraph swallowing a fence or link definition')
   }
   const literalInclude = codeInclude && !/^\{\{ +["“]/.test(parts[0]!.text)
   const literalText = literalInclude ? dropTrailingWhitespace(parts[0]!.text) : ''
@@ -4282,14 +4299,21 @@ function footnotePlainColumn(line: SourceLine): number {
   return /^[ \t]*/.exec(line.text)![0].length + 1
 }
 
+// Flush-left lines a root footnote paragraph keeps as lazy text instead of handing back to the root.
+function footnoteLazyOwnedLine(text: string): boolean {
+  return !text.includes('\t') && (listMarker(text) !== undefined || /^: +\S/.test(text))
+}
+
 function simpleFootnoteParagraphLine(line: SourceLine | undefined, allowList = false,
-  allowLazy = false): boolean {
+  allowLazy = false, afterPlus = false, allowOwned = false): boolean {
   if (!line) return false
   const prefix = footnotePlainColumn(line) - 1
   if (!allowLazy && sourceColumnAt(line.text, prefix) < 2) return false
   const content = line.text.slice(prefix)
   return plainQuoteText(content) ||
     allowLazy && content === '+' ||
+    allowOwned && prefix === 0 && !(afterPlus && listMarker(content) !== undefined) &&
+      footnoteLazyOwnedLine(content) ||
     allowLazy && prefix === 1 && rootLinkDef(content) !== null ||
     allowList && !(line.text[0] === '\t' && content[0] === ' ') && listMarker(content) !== undefined ||
     ((content[0] === '*' || content[0] === '_' || content[0] === '`') && !isBlockStart(content))
@@ -4574,12 +4598,36 @@ function simpleFootnoteLazyFirstLine(cursor: Cursor, footnote: RegExpExecArray,
   if (nextIndex !== 1 || next === undefined || cursor.owner.kind !== 'root' ||
       footnote[2] === undefined || FOOTNOTE_DEF.test(next.trimStart())) return false
   const indented = /^ {1,2}[^ ]/.test(next)
+  if (cursor.owner === ROOT_OWNER && cursor.rootSource !== undefined && plainQuoteText(footnote[2]) && next === next.trimStart() &&
+      footnoteLazyOwnedLine(next)) return true
   if (!plainQuoteText(footnote[2]) && !(footnote[2] === '+' && indented)) return false
   return next === next.trimStart() && (plainQuoteText(next) || next === '+' &&
     (/^ {1,2}[^ ]/.test(cursor.peek(2)?.text ?? '') ||
       !cursor.peek(2) || isBlankLine(cursor.peek(2)!.text))) ||
     /^ - +\S/.test(next) || /^ \[[^\]]+\]: +\S/.test(next) ||
     footnote[2] === '+' && indented
+}
+
+function footnoteLazyOwnedNext(cursor: Cursor, next: string | undefined): boolean {
+  return cursor.owner === ROOT_OWNER && cursor.rootSource !== undefined && next !== undefined &&
+    footnoteLazyOwnedLine(next) && next === next.trimStart()
+}
+
+function footnoteCommentFollows(text: string | undefined, next: string | undefined): boolean {
+  return text !== undefined && text !== '' && plainQuoteText(text) && next !== undefined && /^%%/.test(next)
+}
+
+// A lazy list or definition line ends the footnote paragraph only if nothing indented follows it.
+function rejectOpenLazyOwnedBody(cursor: Cursor, nextIndex: number, bodyLength: number): void {
+  let owned = false
+  for (let i = 0; i < bodyLength; i++) owned ||= footnoteLazyOwnedLine(cursor.peek(nextIndex + i)!.text)
+  if (!owned) return
+  let after = nextIndex + bodyLength
+  while (cursor.peek(after)?.text !== undefined && isBlankLine(cursor.peek(after)!.text)) after++
+  const text = cursor.peek(after)?.text
+  if (text !== undefined && /^[ \t]/.test(text)) {
+    throw new UnsupportedCursorSyntax('footnote body continues after lazy list or definition line')
+  }
 }
 
 function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceLine,
@@ -4593,6 +4641,7 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   while (cursor.peek(nextIndex)?.text === '') nextIndex++
   const next = cursor.peek(nextIndex)?.text
   const lazyFirstLine = simpleFootnoteLazyFirstLine(cursor, footnote, next, nextIndex)
+  const lazyOwned = lazyFirstLine && footnoteLazyOwnedNext(cursor, next)
   const bodyDefinition = cursor.peek(nextIndex) &&
     footnoteBodyLinkDef(cursor.peek(nextIndex)!, first, cursor.peek(nextIndex + 1))
   if (bodyDefinition && cursor.peek(nextIndex + 2)?.text.startsWith('  ')) {
@@ -4606,8 +4655,10 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   let bodyLength = 0
   if (hasBodyLine && !structural) {
     while (simpleFootnoteParagraphLine(cursor.peek(nextIndex + bodyLength), !separated,
-      lazyFirstLine)) bodyLength++
+      lazyFirstLine, bodyLength > 0 && cursor.peek(nextIndex + bodyLength - 1)!.text.trim() === '+',
+      lazyOwned)) bodyLength++
   }
+  if (lazyOwned) rejectOpenLazyOwnedBody(cursor, nextIndex, bodyLength)
   const initialQuote = footnote[2] !== undefined && RE_BLOCKQUOTE.test(footnote[2])
   if (!footnote[2] || initialQuote && hasBodyLine && !separated ||
       (footnote[2] !== '{empty}' && isBlockStart(footnote[2]) && !initialQuote) ||
@@ -4634,6 +4685,10 @@ function takeSimpleFootnote(cursor: Cursor, inline: CursorInline, first: SourceL
   if (attached || doublePlus) { cursor.take(); cursor.take() }
   const commentTail = !attached && !doublePlus && !structural && bodyLength === 0 &&
     footnote[2] && plainQuoteText(footnote[2]) ? takeFootnoteCommentTail(cursor, inline) : undefined
+  if (!commentTail && !structural && !attached && !doublePlus && bodyLength === 0 && nextIndex === 1 &&
+      footnoteCommentFollows(footnote[2], next)) {
+    throw new UnsupportedCursorSyntax('flush-left comment after footnote paragraph')
+  }
   const label = footnote[1]!
   if (!footnoteDefs || !footnoteDefPos || Object.hasOwn(footnoteDefs, label)) return
   const bodyIndent = /^[ \t]*/.exec(footnote[2]!)![0].length
@@ -4752,7 +4807,11 @@ function takeLinkDefinitionAtCursor(cursor: Cursor, inline: CursorInline,
     throw new UnsupportedCursorSyntax('nested link definition')
   }
   cursor.take()
-  if (inline.linkDefinitions.get(normalizeRefLabel(definition.label))?.line !== first.number - 1) return
+  const registered = inline.linkDefinitions.get(normalizeRefLabel(definition.label))
+  if (registered === undefined && (cursor.unclosedFenceAfterText || definition.label.startsWith('^'))) {
+    throw new UnsupportedCursorSyntax('link definition after an unclosed fence that may be paragraph text')
+  }
+  if (registered?.line !== first.number - 1) return
   const definitionLine = atDocumentLevel && cursor.owner.kind === 'root' ? first :
     cursor.physicalLines[first.number - 1] ?? first
   definitionNodes.push({ type: 'link_reference_definition', label: definition.label, href: definition.href,
@@ -4889,6 +4948,14 @@ function reportDanglingAtCursor(cursor: Cursor, inline: CursorInline,
     ...(wholeBodyOf ? { wholeBodyOf } : {}) } })
 }
 
+// An indented `[^x]:` line in the text run above a fence keeps the later link definition exact.
+function indentedFootnoteInRun(lines: SourceLine[], index: number): boolean {
+  for (let i = index; i >= 0 && lines[i]!.text !== ''; i--) {
+    if (/^[ \t]+\[\^[^\]]+\]:/.test(lines[i]!.text)) return true
+  }
+  return false
+}
+
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -4938,7 +5005,10 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
   }
   while (cursor.peek()) {
     const first = cursor.peek()!
-    if (isBlankLine(first.text)) { cursor.take(); continue }
+    if (isBlankLine(first.text)) { cursor.plusAdjacentRisk = false; cursor.take(); continue }
+    const prior = children.at(-1)?.type
+    cursor.plusAttachRisk = prior === 'list'
+    cursor.plusAdjacentRisk = prior === 'block_quote' || cursor.plusAdjacentRisk
     if (first.lazyText) { emit(parseParagraphAtCursor(cursor, inline)); continue }
     const attrs = takeBlockAttrsAtCursor(cursor, atDocumentLevel)
     if (attrs) {
@@ -4948,6 +5018,7 @@ function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: Bloc
     }
     const footnote = FOOTNOTE_DEF.exec(first.text)
     if (footnote) {
+      cursor.plusAdjacentRisk = true
       if (!footnoteDefs || !footnoteDefPos) {
         throw new UnsupportedCursorSyntax('nested or multiline footnote definition')
       }
@@ -5338,6 +5409,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   const linkDefinitions = new Map<string, LinkDef>()
   const abbreviations = new Map<string, string>()
   let openFence: string | undefined
+  let fenceAfterText = false
+  let fenceLineIndex = 0
   let openComment: number | undefined
   let simpleRootListPrefix: string | undefined
   let simpleRootListNested = false
@@ -5392,7 +5465,14 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
         continue
       }
       const fence = fenceOpen(line.text)
-      if (fence) { openFence = fence.marker; continue }
+      if (fence) {
+        openFence = fence.marker
+        const prev = cursor.lines[line.number - 2]?.text
+        fenceLineIndex = line.number
+        fenceAfterText = prev !== undefined && prev !== '' && plainQuoteText(prev.trimStart()) &&
+          !indentedFootnoteInRun(cursor.lines, line.number - 2)
+        continue
+      }
       const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
       if (comment && commentOpeners.has(line.start)) {
         openComment = comment[1]!.length
@@ -5427,6 +5507,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
       if (abbr) abbreviations.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
     }
   }
+  cursor.unclosedFenceAfterText = openFence !== undefined && fenceAfterText &&
+    !cursor.lines.slice(fenceLineIndex).some((l) => fenceOpen(l.text.trimStart()))
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
     opts.onDanglingBlockAttributes !== undefined, opts.onUnclosedCodeFence !== undefined,

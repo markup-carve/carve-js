@@ -215,6 +215,80 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    '+\n- a\n',
+    '+\n1. one\n',
+    '  +\n  - c\n',
+    '+\n  - c\n',
+    'x\n\n+\n- s\n',
+    '[^f]: note\n\n+\n- s\n',
+    '::: note\n+\n- a\n:::\n',
+    '- a\n\n%% c\n\n+\n- s\n',
+  ])('keeps a list marker after a lone plus as paragraph text without a list sibling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- a\n\n+\n- s\n',
+    '- a\n\n::: note\nx\n:::\n\n+\n- s\n',
+  ])('still attaches a lone plus after a list sibling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '[^f]: note\n- a\n',
+    '[^f]: note\n- a\n- b\n',
+    '[^f]: note\n1. one\n',
+    '[^f]: note\n:  meaning\n',
+    '[^f]: note\n:  meaning\n- b\n',
+    '[^f]: note\n- a\ntext\n',
+    '[^f]: note\n- a\n\n- b\n',
+  ])('keeps flush-left list and definition lines in the footnote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '[^f]: note\n+\n1. one\n~~~\n\n\n  text\n:: term\n',
+    '%% c\n[^f]: note\n> q\n1. one\n+\n1. one\n```\n',
+    '\n[^f]: note\n  - c\n+\n- b\n',
+  ])('never admits a wrong tree for plus/list owner cases: %s', (source) => {
+    try {
+      expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnsupportedCursorSyntax)
+    }
+  })
+
+  it.each([
+    '[^f]: note\n- a\n\n  ~~~\n',
+    '[^f]: note\n- b\n+\n\n  [r]: /u\n',
+    '  :::\ntext\n  :::\n  \n[^f]: note\n- a\n\n  ~~~\n',
+    '+\n- b\n~~~\n[r]: /u\n',
+    '+\n- a\n~~~\n> - x\n  :::\n:  meaning\n',
+    'text\n~~~\n[r]: /u\n',
+    '- a\n  [^g]: more\n  text\n  :  nested\n%% c\n    b\n',
+  ])('declines instead of admitting a wrong tree: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    '  :::\n  [^g]: more\n    b\n~~~\n+\n[r]: /u\n  :::\n> q\n',
+    'x\n  [^g]: m\n    b\n~~~\n[r]: /u\n',
+  ])('keeps a link definition exact after an unclosed fence in a footnote-like text run: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    'b\n~~~\n+\n[r]: /u\n',
+    '> q\n+\n- b\n[r]: /u\n',
+  ])('declines a link definition after an unclosed fence or plus-swallowed list: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('declines a flush-left line comment after a footnote paragraph', () => {
+    expect(() => parseCursorPrototype('[^f]: note\n%% c\n')).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('attaches the second plus after a footnote definition', () => {
     const source = '[^a]: q\n+\n+\n\nref [^a]\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
