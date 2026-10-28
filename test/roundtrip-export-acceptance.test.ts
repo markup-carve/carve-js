@@ -73,7 +73,7 @@ function carrierText(node: any) {
   }).join('')
 }
 const normalizedHtml = (html: string) => html.trim()
-const HEADING_CARRIER_ORDER_AHEAD = new Set(['cross-reference-unicode-heading', 'cross-reference-assigned-id'])
+const HEADING_CARRIER_ORDER_AHEAD = new Set<string>()
 
 for (const fixture of fixtures.exportImport) {
   test(`shared roundtrip export: ${fixture.id}`, () => {

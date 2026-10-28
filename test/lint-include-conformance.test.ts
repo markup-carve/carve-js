@@ -12,7 +12,7 @@ describe('lint include conformance', () => {
     const includes = vector.resolver === 'virtual'
       ? { resolve: (path: string) => vector.files?.[path] ?? null, sourcePath: suite.sourcePath }
       : undefined
-    const actual = lintCarve(vector.entry, includes ? { includes } : {}).map(w => ({
+    const actual = lintCarve(vector.entry, includes ? { includes } : {}).filter(w => w.severity !== 'Hint').map(w => ({
       rule: w.rule, file: w.file ?? suite.sourcePath, line: w.line, column: w.column,
       ...(w.includedBy ? { includedBy: w.includedBy.map(site => ({ file: site.file, line: site.line, column: site.column })) } : {}),
     })).sort(order)

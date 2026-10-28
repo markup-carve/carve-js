@@ -7,7 +7,7 @@ import { run, type CliIO } from '../src/cli.js'
 
 const root = resolve(process.cwd(), 'spec')
 const expected = JSON.parse(readFileSync(resolve(root, 'tests/lint-authoring/expectations.json'), 'utf8')) as {
-  cases: Array<{ file: string; expected: Array<[string, number]>; optInAheadOfPin: Array<[string, number]> }>
+  cases: Array<{ file: string; expected: Array<[string, number]>; optInAheadOfPin?: Array<[string, number]> }>
 }
 const pairs = (rows: Array<{ rule: string; line: number }>): Array<[string, number]> =>
   rows.map(row => [row.rule, row.line] as [string, number]).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
@@ -39,7 +39,7 @@ describe('authoring acceptance suite', () => {
         ...lintCarve(source),
       ])
       expect(actual).toEqual(pairs(entry.expected.map(([rule, line]) => ({ rule, line }))))
-      if (entry.optInAheadOfPin.length) {
+      if (entry.optInAheadOfPin?.length) {
         const optIn = pairs(lintCarve(source, { captionLookingParagraph: true })
           .filter(warning => warning.rule === 'caption-looking-paragraph'))
         expect(optIn).toEqual(pairs(entry.optInAheadOfPin.map(([rule, line]) => ({ rule, line }))))

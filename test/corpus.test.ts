@@ -34,6 +34,16 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-later-term-after-a-shifted-separator-opens-in-the-outer-item',
+  'a-task-item-uses-the-ordered-item-column-rule',
+  'invalid-table-metadata-keeps-the-table',
+  'lazy-quote-owners',
+  'lint-directives-are-invisible-in-rendered-content',
+  'model-inline-frames-and-html-attributes',
+  'model-syntax-boundaries-and-ownership',
+  'opaque-reference-and-inline-bounds',
+  'the-deepest-quoted-paragraph-takes-a-lazy-line-across-missed-prefixes',
+  'visible-footnote-headings',
   'a-nested-first-block-item-releases-the-next-root-block',
   'compact-single-paragraph-quote',
   'consecutive-continuation-markers-in-a-div-hosted-quote',
@@ -1166,29 +1176,18 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ["212-a-flush-left-line-after-a-footnote-definition-belongs-to-the-document", { reason: 'carve#3830 shared marker-body ruling', html: "<p>a</p>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note\nb<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["219-a-definition-below-a-footnote-body-s-column-is-the-document-s-own-text", { reason: 'carve#3830 shared marker-body ruling', html: "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> and [t][r]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note\n[r]: /u<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["228-a-line-at-a-footnote-definition-s-own-column-followed-by-non-blank-text-forms-its-own-tight-block", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>a</li>\n</ul>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>x\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-4", { reason: 'carve#3830 shared marker-body ruling', html: "<blockquote>\n  <p>q</p>\n  <div>\n    <p>a</p>\n  </div>\n</blockquote>\n" }],
-  ["287-a-column-zero-definition-ends-an-open-list-item-2", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>a</li>\n</ul>\n" }],
-  ["358-what-a-content-column-block-does-not-reach-2", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>a</li>\n</ul>\n<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>t\nmore\nb<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["374-a-collected-definition-closes-the-item-paragraph-3", { reason: 'carve#3830 shared marker-body ruling', html: "<ol>\n  <li>a</li>\n</ol>\n" }],
-  ["435-the-continuation-marker-s-column-gate-reaches-every-container-2", { reason: 'carve#3830 shared marker-body ruling', html: "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>intro\n+\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["435-the-continuation-marker-s-column-gate-reaches-every-container-4", { reason: 'carve#3830 shared marker-body ruling', html: "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>intro\n+\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["437-a-leading-continuation-marker-in-a-footnote-body-or-a-quote-is-text-2", { reason: 'carve#3830 shared marker-body ruling', html: "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\nflush<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["454-a-block-opener-past-a-nested-footnote-definition-opens-in-the-item-3", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li><p>body</p></li>\n</ul>\n<p>after</p>\n" }],
-  ["454-a-block-opener-past-a-nested-footnote-definition-opens-in-the-item-4", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>body</li>\n</ul>\n<p>after</p>\n" }],
-  ["461-a-column-0-line-after-a-description-hosted-note-is-a-document-sibling-3", { reason: 'carve#3830 shared marker-body ruling', html: "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n" }],
-  ["461-a-column-0-line-after-a-description-hosted-note-is-a-document-sibling-4", { reason: 'carve#3830 shared marker-body ruling', html: "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n" }],
-  ["620-generated-container-documents-16", { reason: 'carve#3830 shared marker-body ruling', html: "<ul>\n  <li>\n    <ul>\n      <li>body</li>\n    </ul>\n  </li>\n</ul>\n" }],
-  ["629-a-dangling-plus-marker-adds-nothing-and-a-nested-quote-reads-it-like-an-unnested-one-4", { reason: 'carve#3830 shared marker-body ruling', html: "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<p>para</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note\n+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n" }],
-  ["629-a-dangling-plus-marker-adds-nothing-and-a-nested-quote-reads-it-like-an-unnested-one-8", { reason: 'carve#3830 shared marker-body ruling', html: "<blockquote>\n\n</blockquote>\n<p>para</p>\n" }],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
+// carve-js#3808: shifted separator prefix remains a parser lag.
 const behindSpec = new Map<string, string>([
+  // carve-js#3809: the nested item after a footnote definition is still dropped.
+  ['454-a-block-opener-past-a-nested-footnote-definition-opens-in-the-item-4', '<ul>\n  <li>body</li>\n</ul>\n<p>after</p>'],
+  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item", "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling\n  tail</dt>\n    </dl>\n  </li>\n</ul>"],
+  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item-2", "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n      : a\n      <dl>\n        <dt>sibling\n   tail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"],
+  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item-3", "<div class=\"box\">\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n      : a\n      <dl>\n        <dt>sibling\n  tail</dt>\n      </dl>\n    </li>\n  </ul>\n</div>"],
+  ["744-a-task-item-uses-the-ordered-item-column-rule", "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling\n    tail</dt>\n    </dl>\n  </li>\n</ul>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

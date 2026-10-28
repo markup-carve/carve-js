@@ -20,6 +20,8 @@ import { replaceLoneSurrogates } from './well-formed.js'
 import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading/heading-ids.js'
 import { promoteCitationDefinitions } from './extension/citations.js'
 import { markedDelimitedTable, parse, normalizeRefLabel } from './parse.js'
+import { deriveTableMetadata } from './parse/parse-prepass-core.js'
+import { setDelimitedPayloadLines } from './table/delimited-table.js'
 import { mergeRun } from './coalesce-text-runs.js'
 import { forEachChildBlockList } from './parse/block/block-children.js'
 import { DocumentIdRegistry, visitDocumentIds } from './ast/document-ids.js'
@@ -611,7 +613,7 @@ function resolveChild(
   node: Text,
 ): { source: string; id: string; base: SliceBase; full: string } | null {
   if (!state.opts.resolve) return null
-  if (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1 || (d.code !== undefined && d.section !== undefined)) {
+  if (!d.rows && (Number(d.section !== undefined) + Number(d.lines !== undefined) + Number(d.region !== undefined) > 1 || (d.code !== undefined && d.section !== undefined))) {
     warn(state, 'include-selection-conflict', `Include "${d.path}" cannot combine selectors.`, node)
     return null
   }
@@ -688,8 +690,21 @@ function resolveChild(
     return null
   }
   note(state, id, true)
+  if (d.repeatedTableOption) return null
+  if (d.rows && (d.section !== undefined || d.lines !== undefined || d.region !== undefined)) {
+    warn(state, 'include-selection-conflict', `Include "${d.path}" cannot combine selectors.`, node)
+    return null
+  }
   if (d.invalidLines) {
     warn(state, 'include-lines-invalid', `Include line range for "${d.path}" is invalid.`, node)
+    return null
+  }
+  if (d.invalidRows || d.invalidCols) {
+    warn(state, d.invalidRows ? 'include-rows-invalid' : 'include-cols-invalid', `Include table option for "${d.path}" is invalid.`, node)
+    return null
+  }
+  if ((d.rows || d.cols) && (!d.tableAttrs || (d.code?.lang !== 'csv' && d.code?.lang !== 'tsv'))) {
+    warn(state, d.rows ? 'include-rows-invalid' : 'include-cols-invalid', `Include table options require a marked CSV or TSV block.`, node)
     return null
   }
   // The cycle guard compares canonical ids after resolution, so a resolver
@@ -981,6 +996,88 @@ function expandChild(
       type: 'document',
       children: [{ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
         pos: { startLine, endLine, startColumn, endColumn, startOffset, endOffset, file: resolved.id } }],
+    }
+    if (d.tableAttrs && (d.code.lang === 'csv' || d.code.lang === 'tsv') && (d.rows || d.cols || d.lines || d.region)) {
+      const fullLines = spans.map((span, index) => index === 0 && span.start === 0 ? span.text.replace(/^\uFEFF/, '') : span.text)
+      const fullContent = resolved.full === '\uFEFF' ? '' : fullLines.map(line => `${line}\n`).join('')
+      let fileOffset = 0
+      let previousStart = 0
+      const sourcePayloadLines = spans.map((span, index) => {
+        fileOffset += codepoints(resolved.full.slice(previousStart, span.start))
+        previousStart = span.start
+        return { offset: fileOffset + (index === 0 && resolved.full.startsWith('\uFEFF') ? 1 : 0),
+          line: index + 1, column: index === 0 && resolved.full.startsWith('\uFEFF') ? 2 : 1,
+          text: fullLines[index]! }
+      })
+      const fullCode: CodeBlock = { type: 'code_block', content: fullContent, lang: d.code.lang, attrs: d.tableAttrs,
+        pos: { startLine: 1, endLine: spans.length, startColumn: resolved.full.startsWith('\uFEFF') ? 2 : 1,
+          endColumn: 1, startOffset: resolved.full.startsWith('\uFEFF') ? 1 : 0,
+          endOffset: codepoints(resolved.full), file: resolved.id } }
+      setDelimitedPayloadLines(fullCode, sourcePayloadLines)
+      const table = markedDelimitedTable(fullCode)
+      if (!table) {
+        if (!d.rows && !d.cols) return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
+        child.children = [fullCode]
+        return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: fullContent, full: resolved.full, firstLine: resolved.base.line }
+      }
+      if (table) {
+        const headCount = table.rows.filter(row => row.cells[0]?.header).length
+        let selected = d.rows ? table.rows.slice(d.rows.start - 1, d.rows.end) : table.rows.slice(headCount)
+        if (d.rows && d.rows.start > table.rows.length) {
+          warn(state, 'include-rows-out-of-range', `Include record range for "${d.path}" starts past end of file.`, node)
+          return null
+        }
+        if (range) {
+          const slicedCode: CodeBlock = { ...(child.children[0] as CodeBlock), attrs: d.tableAttrs }
+          setDelimitedPayloadLines(slicedCode, sourcePayloadLines.slice(range.start - 1, range.end))
+          const sliced = markedDelimitedTable(slicedCode)
+          if (!sliced) return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
+          selected = sliced.rows.filter(row => (row.pos?.startLine ?? range.start) > headCount)
+          for (const row of selected) for (const cell of row.cells) cell.header = false
+        }
+        table.rows = [...table.rows.slice(0, headCount), ...selected.filter(row => !table.rows.slice(0, headCount).includes(row))]
+        if (d.cols) {
+          let columns: number[]
+          if (Array.isArray(d.cols)) {
+            if (headCount === 0) {
+              warn(state, 'include-cols-invalid', `Named include columns require a header row.`, node)
+              return null
+            }
+            const headers = table.rows[0]?.cells.map(cell => cell.children?.map(item => item.type === 'text' ? item.value : '').join('') ?? '') ?? []
+            columns = []
+            for (const name of d.cols) {
+              const matches = headers.flatMap((header, index) => header === name ? [index] : [])
+              if (name === '' || matches.length === 0) {
+                warn(state, 'include-cols-invalid', `Include column "${name}" is missing or empty.`, node)
+                return null
+              }
+              if (matches.length > 1) {
+                warn(state, 'include-cols-invalid', `Include column "${name}" is ambiguous.`, node)
+                return null
+              }
+              if (columns.includes(matches[0]!)) {
+                warn(state, 'include-cols-duplicate', `Include column "${name}" is duplicated.`, node)
+                return null
+              }
+              columns.push(matches[0]!)
+            }
+          } else {
+            if (d.tableAttrs.keyValues?.['header-rows'] !== '0') {
+              warn(state, 'include-cols-invalid', `Numeric include columns require header-rows=0.`, node)
+              return null
+            }
+            if (d.cols.end > (table.rows[0]?.cells.length ?? 0)) {
+              warn(state, 'include-cols-invalid', `Include column range exceeds the file width.`, node)
+              return null
+            }
+            columns = Array.from({ length: d.cols.end - d.cols.start + 1 }, (_, i) => d.cols && !Array.isArray(d.cols) ? d.cols.start - 1 + i : i)
+          }
+          for (const row of table.rows) row.cells = columns.map(index => row.cells[index]!).filter(Boolean)
+        }
+        delete table.rowGroups
+        deriveTableMetadata(table)
+        child.children = [table]
+      }
     }
     return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
   }
@@ -1619,6 +1716,7 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
       },
     )
     if (d) {
+      if (block.attrs?.keyValues?.table === '') d.tableAttrs = block.attrs
       const site = siteOf(new RunText(block.children as RunNode[]), 0, source.length, state)
       const merged = includeChild(d, state, text, site, (child, file, reach) => {
         const code = child.children[0]
@@ -1636,7 +1734,12 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
     // A whole-paragraph directive that failed to parse was already reported
     // here; skip the inline scan so it is not warned about twice. The shape
     // test alone misses an option value holding a brace (`@code:j{s`).
-    if (reported || shaped) return [block]
+    if (reported || shaped) {
+      if (!d && /@(?:rows|cols)(?::|(?= |\}))/u.test(source)) {
+        block.children = [{ type: 'text', value: source, ...(block.pos ? { pos: block.pos } : {}) }]
+      }
+      return [block]
+    }
   }
   block.children = expandInlines(block.children, state)
   return [block]

@@ -91,6 +91,8 @@ export interface LintWarning {
   column: number
   /** Stable rule id, e.g. "broken-crossref". */
   rule: string
+  /** Advisory finding that does not indicate a malformed document. */
+  severity?: 'Hint' | 'warning' | 'error'
   /** Human-readable explanation of the silent degradation. */
   message: string
   /**
@@ -704,6 +706,18 @@ export function lintIncludes(source: string, options: LintOptions, lintOne: (sou
       const block = entry.block
       const format = block.type === 'table' ? block.sourceFormat : block.attrs?.keyValues?.table === '' ? block.lang : undefined
       if (format !== 'csv' && format !== 'tsv') continue
+      const site = entry.includedBy.at(-1)
+      if (site) {
+        const parentSource = sources.get(site.file ?? sourcePath)
+        const map = parentSource === undefined ? undefined : offsetMap(parentSource)
+        const raw = parentSource?.slice(map?.[site.start] ?? site.start, map?.[site.end] ?? site.end)
+        if (raw && /(?:^|\s)@lines:/.test(raw)) findings.push({
+          rule: 'include-lines-table-rows-hint', severity: 'Hint', message: 'Use @rows to select complete CSV/TSV records.',
+          ...(site.file ?? sourcePath ? { file: site.file ?? sourcePath } : {}), line: site.line, column: site.column,
+          start: map?.[site.start] ?? site.start, end: map?.[site.end] ?? site.end,
+          ...(entry.includedBy.length > 1 ? { includedBy: convertChain(entry.includedBy.slice(0, -1)) } : {}),
+        })
+      }
       const { rows, malformedLine } = delimitedRecordLocations(entry.payload, format === 'csv' ? ',' : '\t')
       const at = (payloadLine: number): number => (block.pos?.startLine ?? 1) + payloadLine - 1
       const span = (fileLine: number): Pick<LintWarning, 'start' | 'end'> => ({ start: locate(fileLine, 1), end: locate(fileLine + 1, 1) })
