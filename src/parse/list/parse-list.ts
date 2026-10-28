@@ -2013,24 +2013,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
       }
       sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
-      const hostMarkerColumn = lexer.hostMarkerColumn ?? 0
-      const hostIndent = Math.max(0, hostMarkerColumn - quoteBodyColumn(itemSource, itemQuoteDepth))
-      // Compare marker widths after removing the host's authored indent.
-      // A quote prefix contributes columns, but it is not authored indent.
-      const termOwnerColumn = lexer.hostBody === 'list'
-        ? physicalItemMarkerColumn + Math.max(0,
-          contentCol - baseIndent - (lexer.hostContentColumn - hostMarkerColumn) - hostIndent)
-        : physicalItemMarkerColumn + 1
+      // A nested item's authored marker column is its boundary even when its
+      // marker is wider than the parent's. The next column is still inside it.
+      const termOwnerColumn = physicalItemMarkerColumn
       // A term written on the item marker line begins at the item's content
-      // column. A separator at the outer marker column leaves that item;
+      // column. A separator at the item's marker column leaves it;
       // one between those columns is only a continuation of the term.
       if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
-          sourceDepth === itemQuoteDepth && sourceMarkerColumn < termOwnerColumn &&
+          sourceDepth === itemQuoteDepth && sourceMarkerColumn <= termOwnerColumn &&
           !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) return 'stop'
       markerTermText = markerLineTerm && sourceDescription !== null &&
         lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth &&
         sourceMarkerColumn < physicalItemMarkerColumn + contentCol - baseIndent &&
-        sourceMarkerColumn >= termOwnerColumn
+        sourceMarkerColumn > termOwnerColumn
       if (RE_DEFLIST_DEF.test(sourceQuoteBody(sourceLine).trimStart()) && lazyState.inDefList === 'term' &&
           definitionHostColumn !== undefined && sourceMarkerColumn < definitionHostColumn &&
           sourceMarkerColumn <= physicalItemMarkerColumn && sourceDepth === itemQuoteDepth) return 'stop'
