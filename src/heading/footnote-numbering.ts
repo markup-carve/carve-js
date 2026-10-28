@@ -230,6 +230,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
 }
 
 export function reachableFootnoteLabels(ast: Document): Set<string> {
+  if (!ast.footnoteDefs || Object.keys(ast.footnoteDefs).length === 0) return new Set()
   const labels = new Set<string>()
   for (const entry of collectFootnotes(ast, false).order) {
     if (entry.label !== undefined) labels.add(entry.label)
