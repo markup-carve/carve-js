@@ -2926,6 +2926,14 @@ function collectSilentFailures(
       if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
         atomicSpans.push([pos.startOffset, pos.endOffset])
     }
+    // A destination or title may cross a soft wrap, which the per-line slot scan cannot see.
+    if (node.type === 'link' || node.type === 'image') {
+      const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+      const children = Array.isArray(node.children) ? node.children as Array<{ pos?: { endOffset?: number } }> : []
+      const from = node.type === 'image' ? pos?.startOffset : children.at(-1)?.pos?.endOffset ?? pos?.startOffset
+      if (from !== undefined && pos?.endOffset !== undefined && from < pos.endOffset)
+        atomicSpans.push([from, pos.endOffset])
+    }
     if (node.type === 'strong' || node.type === 'emphasis') {
       const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
       if (pos?.startOffset !== undefined) pairedEmphasisOpeners.add(pos.startOffset)
