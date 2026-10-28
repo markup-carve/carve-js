@@ -9,7 +9,7 @@ it('keeps a nested quote plus as a paragraph when a missed-prefix line follows',
 it('opens an outer task term after the child term is released', () => {
   const html = carveToHtml('* [ ] - :: t\n      : a\n      :: sibling\n      tail\n')
   expect(html).toContain(': a\n    <dl>')
-  expect(html).toMatch(/<dt>sibling\n\s+tail<\/dt>/)
+  expect(html).toMatch(/<dt>sibling\ntail<\/dt>/)
 })
 
 it('keeps a below-marker separator in the task child term', () => {

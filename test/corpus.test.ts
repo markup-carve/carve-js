@@ -1176,18 +1176,16 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['461-a-column-0-line-after-a-description-hosted-note-is-a-document-sibling-4', {
+    reason: 'PART 0 O2 returns the below-floor list marker to its description host (carve#3865)',
+    html: '<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>nested\ntail</li>\n    </ul>\n  </dd>\n</dl>',
+  }],
+])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
-// carve-js#3808: shifted separator prefix remains a parser lag.
 const behindSpec = new Map<string, string>([
-  // carve-js#3809: the nested item after a footnote definition is still dropped.
-  ['454-a-block-opener-past-a-nested-footnote-definition-opens-in-the-item-4', '<ul>\n  <li>body</li>\n</ul>\n<p>after</p>'],
-  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item", "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling\n  tail</dt>\n    </dl>\n  </li>\n</ul>"],
-  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item-2", "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n      : a\n      <dl>\n        <dt>sibling\n   tail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"],
-  ["743-a-later-term-after-a-shifted-separator-opens-in-the-outer-item-3", "<div class=\"box\">\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n      : a\n      <dl>\n        <dt>sibling\n  tail</dt>\n      </dl>\n    </li>\n  </ul>\n</div>"],
-  ["744-a-task-item-uses-the-ordered-item-column-rule", "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling\n    tail</dt>\n    </dl>\n  </li>\n</ul>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
