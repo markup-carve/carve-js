@@ -8,6 +8,7 @@
  */
 
 import { unescapeAttrValue } from './extension/attribute-parser.js'
+import type { Attrs } from './ast.js'
 
 export interface Directive {
   raw: string
@@ -15,6 +16,12 @@ export interface Directive {
   section?: string
   lines?: { start: number; end: number }
   invalidLines?: true
+  rows?: { start: number; end: number }
+  invalidRows?: true
+  cols?: string[] | { start: number; end: number }
+  invalidCols?: true
+  repeatedTableOption?: true
+  tableAttrs?: Attrs
   region?: string
   code?: { lang?: string }
   /** Literal signed offset, or "auto" to derive it from the include site. */
@@ -80,6 +87,50 @@ function trimSpaces(value: string): string {
   return value.slice(start, end)
 }
 
+function optionParts(rest: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let quote = ''
+  for (let i = 0; i < rest.length; i++) {
+    const char = rest[i]!
+    if (quote) {
+      if (char === '\\') i++
+      else if (char === quote) quote = ''
+    } else if (char === '"' || char === "'") quote = char
+    else if (char === ' ' || (char === '@' && i > start)) {
+      if (i > start) parts.push(rest.slice(start, i))
+      start = char === ' ' ? i + 1 : i
+    }
+  }
+  if (start < rest.length) parts.push(rest.slice(start))
+  return parts
+}
+
+function range(value: string): { start: number; end: number } | undefined {
+  const match = /^([1-9]\d*)-([1-9]\d*)$/.exec(value)
+  if (!match) return undefined
+  const start = Number(match[1]); const end = Number(match[2])
+  return Number.isSafeInteger(start) && Number.isSafeInteger(end) && start <= end ? { start, end } : undefined
+}
+
+function columnNames(value: string): string[] | undefined {
+  const quote = value[0]
+  if (quote !== '"' || value.at(-1) !== quote) return undefined
+  const names: string[] = []
+  let current = ''
+  for (let i = 1; i < value.length - 1; i++) {
+    const char = value[i]!
+    if (char === '\\') {
+      if (i + 1 >= value.length - 1) return undefined
+      current += value[++i]
+    } else if (char === quote) return undefined
+    else if (char === ',') { names.push(current); current = '' }
+    else current += char
+  }
+  names.push(current)
+  return names.every(name => name !== '') ? names : undefined
+}
+
 /**
  * Parse one candidate directive token. Returns null when the token is not a
  * well-formed directive per spec I1 -- a bad shape, or an unrecognized or
@@ -99,6 +150,11 @@ export function parseDirective(
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
   let invalidLines = false
+  let rows: Directive['rows']
+  let invalidRows = false
+  let cols: Directive['cols']
+  let invalidCols = false
+  let repeatedTableOption = false
   let region: string | undefined
   let code: Directive['code']
   let shift: number | 'auto' = 0
@@ -115,7 +171,7 @@ export function parseDirective(
   const rest = trimSpaces(m[5] ?? '')
   if (rest) {
     // An option needs no whitespace before its `@` either (carve#2773).
-    for (const part of rest.split(/ +|(?=@)/).filter(Boolean)) {
+    for (const part of optionParts(rest)) {
       // `include_section` is one slot: a second name is malformed, not ignored.
       if (section !== undefined && SECTION_TOKEN_RE.test(part)) {
         onSecondSection?.(part)
@@ -126,7 +182,7 @@ export function parseDirective(
         code = {}
         continue
       }
-      const opt = OPTION_RE.exec(part)
+      const opt = OPTION_RE.exec(part) ?? (/^@cols:(["'])(.*)\1$/.test(part) ? ['','cols',part.slice(6)] : null)
       const invalid = (): null => {
         // Spec I1: an unrecognized (or malformed) option makes the directive
         // unresolvable - Warning + literal, never silent.
@@ -138,13 +194,27 @@ export function parseDirective(
         invalidLines = true
         continue
       }
+      if (part === '@rows:' || part === '@cols:' || part === '@rows' || part === '@cols') {
+        const key = part.startsWith('@rows') ? 'rows' : 'cols'
+        if (!first(key, part)) { repeatedTableOption = true; continue }
+        if (key === 'rows') invalidRows = true
+        else invalidCols = true
+        continue
+      }
       if (!opt) return invalid()
       const [, key, value] = opt
       if (key === 'lines') {
-        const lm = /^([1-9]\d*)-([1-9]\d*)$/.exec(value!)
         if (!first(key, part)) return null
-        if (!lm || !Number.isSafeInteger(Number(lm[1])) || !Number.isSafeInteger(Number(lm[2])) || Number(lm[2]) < Number(lm[1])) invalidLines = true
-        else lines = { start: Number(lm[1]), end: Number(lm[2]) }
+        lines = range(value!)
+        if (!lines) invalidLines = true
+      } else if (key === 'rows') {
+        if (!first(key, part)) { repeatedTableOption = true; continue }
+        rows = range(value!)
+        if (!rows) invalidRows = true
+      } else if (key === 'cols') {
+        if (!first(key, part)) { repeatedTableOption = true; continue }
+        cols = range(value!) ?? columnNames(value!)
+        if (!cols) invalidCols = true
       } else if (key === 'region') {
         if (!/^[A-Za-z_][\w-]*$/.test(value!)) return invalid()
         if (!first(key, part)) return null
@@ -167,6 +237,11 @@ export function parseDirective(
   if (section !== undefined) directive.section = section
   if (lines !== undefined) directive.lines = lines
   if (invalidLines) directive.invalidLines = true
+  if (rows) directive.rows = rows
+  if (invalidRows) directive.invalidRows = true
+  if (cols) directive.cols = cols
+  if (invalidCols) directive.invalidCols = true
+  if (repeatedTableOption) directive.repeatedTableOption = true
   if (region !== undefined) directive.region = region
   if (code !== undefined) directive.code = code
   return directive

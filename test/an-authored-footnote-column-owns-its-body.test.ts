@@ -10,7 +10,7 @@ describe('an authored footnote column owns its body', () => {
 
   it('keeps a marker below the body in the open note', () => {
     expect(carveToHtml('. d\n   [^n]: e\n    - a\n')).toBe(
-      "<ol>\n  <li>d</li>\n</ol>",
+      "<ol>\n  <li>d\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ol>",
     )
   })
 

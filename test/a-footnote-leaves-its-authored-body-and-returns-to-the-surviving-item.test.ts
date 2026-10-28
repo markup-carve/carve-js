@@ -26,7 +26,7 @@ const cases = [
   },
   {
     source: '- 1. ordered\n    1. ordered\n      [^n]: note\n        1. ordered\n     q\n     1. ordered\n',
-    html: "<ul>\n  <li>\n    <ol>\n      <li>ordered\n1. ordered</li>\n    </ol>\n  </li>\n</ul>",
+    html: "<ul>\n  <li>\n    <ol>\n      <li>ordered\n1. ordered\n        <ol>\n          <li>ordered</li>\n        </ol>\n      </li>\n    </ol>\n  </li>\n</ul>",
   },
 ]
 

@@ -2152,9 +2152,14 @@ export class ParseSession extends InlineParseSession {
     if (isStackedFirstBlockQuoteMarker(sourceLine)) {
       // A stacked opener line also takes a follower at one of its own opener columns (CARVE-P9-067).
       const depth = quotePrefixDepth(sourceLine)
-      const atOpener = stackedOpenerColumns(sourceLine, depth).includes(stackedFollowerColumn(nextSource, sourceLine, depth))
-      // Inside a host quote, column 0 is the host's: only an unprefixed line reaches the document's.
-      if (depth > 0 && quotePrefixDepth(nextSource) >= depth) return atOpener
+      const followerDepth = quotePrefixDepth(nextSource)
+      const sharedDepth = Math.min(depth, followerDepth)
+      const atOpener = stackedOpenerColumns(sourceLine, sharedDepth).includes(
+        stackedFollowerColumn(nextSource, sourceLine, sharedDepth),
+      )
+      // A partly quoted follower is measured inside the quotes it retained.
+      // Its physical column zero cannot attach a deeper first-block marker.
+      if (followerDepth > 0) return atOpener
       return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), depth, true) || atOpener
     }
     return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine, 0), 0, true)

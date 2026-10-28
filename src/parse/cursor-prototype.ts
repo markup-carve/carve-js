@@ -3885,6 +3885,15 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
   if (!line) return undefined
   if (line.claimedQuoteLazy) return cursor.take()
   const previous = body.at(-1)
+  const previousMarker = listMarker(previous?.text ?? '')
+  const firstMarker = listMarker(body[0]?.text ?? '')
+  if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'root' &&
+      previous?.number === line.number - 1 && body.length >= 2 &&
+      previousMarker?.content === '> +' && firstMarker?.content === '> +' &&
+      /^ [^ ]/.test(line.text) && plainQuoteText(line.text.trimStart()) &&
+      (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))) {
+    return { ...cursor.take(), lazyText: true }
+  }
   if (previous?.lazyText && previous.number === line.number - 1 &&
       listMarker(previous.text) && /^ {2}[^ ]/.test(line.text) &&
       plainQuoteText(line.text.trimStart())) return { ...cursor.take(), lazyText: true }
@@ -5110,7 +5119,9 @@ function hoistBareListFootnote(lines: SourceLine[], inline: CursorInline,
   const strip = (line: SourceLine): SourceLine => ({ ...line, text: line.text.slice(3),
     start: line.start + 3, baseColumn: (line.baseColumn ?? 1) + 3 })
   const owned = [strip(note)]
-  if (follower.text.startsWith('    ')) owned.push(strip(follower))
+  if (follower.text.startsWith('    ') && listMarker(follower.text)?.indent !== 4) {
+    owned.push(strip(follower))
+  }
   const nested = new Cursor(owned, undefined, ROOT_OWNER, lines)
   const match = FOOTNOTE_DEF.exec(owned[0]!.text)
   if (!match) return undefined
