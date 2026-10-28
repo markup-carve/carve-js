@@ -232,7 +232,8 @@ export class InlineParseSession {
       tables[m] = new Int32Array(n + 2).fill(-1)
       raws[m] = new Int32Array(n + 2).fill(-1)
     }
-    if (markers.length === 0 && !text.includes('{#')) {
+    // Attribute tails can hide bare closers even when no braced pair is open.
+    if (markers.length === 0 && !text.includes('{')) {
       this.rememberPairTables(text, tables)
       return tables
     }
