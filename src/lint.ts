@@ -2707,7 +2707,8 @@ function collectAuthoringWarnings(
   tables: readonly Table[],
   verbatimLines: ReadonlySet<number>,
   listItemLines: ReadonlySet<number>,
-  listIndentLines: ReadonlySet<number>,
+  atomicSpans: readonly [number, number][],
+  pairedEmphasisOpeners: ReadonlySet<number>,
   push: SilentFailurePush,
   captionLookingParagraph: boolean,
 ): void {
@@ -2728,6 +2729,35 @@ function collectAuthoringWarnings(
     const characters = result.split('')
     for (const [open, end] of destinationSlotEnds(result)) {
       if (result[open - 1] === ']') characters.fill(' ', open, end)
+    }
+    return characters.join('')
+  }
+  const lineOffsets: number[] = []
+  for (let offset = 0, index = 0; index < lines.length; index++) {
+    lineOffsets.push(offset)
+    offset += lines[index]!.length + 1
+  }
+  const atomicByLine = new Map<number, [number, number][]>()
+  for (const [from, to] of atomicSpans) {
+    let low = 0
+    let high = lines.length
+    while (low < high) {
+      const mid = (low + high) >>> 1
+      if (lineOffsets[mid]! <= from) low = mid + 1
+      else high = mid
+    }
+    for (let line = Math.max(0, low - 1); line < lines.length && lineOffsets[line]! < to; line++) {
+      const start = lineOffsets[line]!
+      if (from >= start + lines[line]!.length) continue
+      const spans = atomicByLine.get(line + 1) ?? []
+      spans.push([Math.max(0, from - start), Math.min(lines[line]!.length, to - start)])
+      atomicByLine.set(line + 1, spans)
+    }
+  }
+  const visibleAt = (line: string, lineNumber: number, prefix: number): string => {
+    const characters = visible(line).split('')
+    for (const [from, to] of atomicByLine.get(lineNumber) ?? []) {
+      characters.fill(' ', Math.max(0, from - prefix), Math.min(line.length, to - prefix))
     }
     return characters.join('')
   }
@@ -2769,7 +2799,7 @@ function collectAuthoringWarnings(
     const stripped = stripContainerPrefixesKeepIndent(raw)
     const prefix = raw.length - stripped.length
     const column = prefix + stripped.search(/\S/) + 1
-    const text = visible(stripped)
+    const text = visibleAt(stripped, at, prefix)
     const row = rowAt.has(at)
     if (paragraphAt.has(at)) {
       const shape = /^\s*\|(?:=|\s|[^\s|])/.exec(stripped)
@@ -2779,7 +2809,7 @@ function collectAuthoringWarnings(
         push(at, Math.max(column, 1), 1, 'table-shaped-paragraph',
           'This table-shaped line lacks a closing pipe and renders as paragraph text; close the table row.')
       }
-      if (index > 0 && !listItemLines.has(at) && !listIndentLines.has(at) &&
+      if (index > 0 && !listItemLines.has(at) &&
           /^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(raw) &&
           !/^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(lines[index - 1]!) &&
           !/^\s*$/.test(lines[index - 1]!) && paragraphAt.has(at - 1)) {
@@ -2788,7 +2818,7 @@ function collectAuthoringWarnings(
           'This list marker is part of the preceding paragraph; add a blank line before the list.')
       }
       if (/^\s*:\s+\S/.test(stripped) && index > 0 && paragraphAt.has(at - 1) &&
-          !/^\s*::\s/.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? ''))) {
+          !/^\s*:: /.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? ''))) {
         push(at, Math.max(column, 1), 1, 'markdown-definition-paragraph',
           'This markdown definition remains paragraph text; use a :: term line before the definition.')
       }
@@ -2821,10 +2851,16 @@ function collectAuthoringWarnings(
       const strong = /(^|[\s([{])([*/])(?=\w)/g
       for (const match of text.matchAll(strong)) {
         const start = match.index! + match[1]!.length
+        const offset = lineOffsets[index]! + prefix + start
+        if (pairedEmphasisOpeners.has(offset)) continue
         const delimiter = match[2]!
         let remainder = text.slice(start + 1)
         const endLine = paragraphEndAt.get(at) ?? at
-        for (let next = at + 1; next <= endLine; next++) remainder += `\n${visible(stripContainerPrefixesKeepIndent(lines[next - 1] ?? ''))}`
+        for (let next = at + 1; next <= endLine; next++) {
+          const nextRaw = lines[next - 1] ?? ''
+          const nextStripped = stripContainerPrefixesKeepIndent(nextRaw)
+          remainder += `\n${visibleAt(nextStripped, next, nextRaw.length - nextStripped.length)}`
+        }
         if (!remainder.includes(delimiter)) {
           push(at, prefix + start + 1, 1, 'unclosed-inline-emphasis',
             `This ${delimiter === '*' ? 'strong' : 'emphasis'} opener is unclosed in its paragraph; add a closer.`)
@@ -2872,6 +2908,8 @@ function collectSilentFailures(
   const headings: Positioned[] = []
   const paragraphs: Positioned[] = []
   const tables: Table[] = []
+  const atomicSpans: [number, number][] = []
+  const pairedEmphasisOpeners = new Set<number>()
   const walk = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) walk(item)
@@ -2879,6 +2917,15 @@ function collectSilentFailures(
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
+    if (node.type === 'code' || node.type === 'autolink' || node.type === 'heading_ref') {
+      const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+      if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
+        atomicSpans.push([pos.startOffset, pos.endOffset])
+    }
+    if (node.type === 'strong' || node.type === 'emphasis') {
+      const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+      if (pos?.startOffset !== undefined) pairedEmphasisOpeners.add(pos.startOffset)
+    }
     if (node.type === 'heading') headings.push(node as Positioned)
     else if (node.type === 'paragraph') paragraphs.push(node as Positioned)
     else if (node.type === 'table') tables.push(node as unknown as Table)
@@ -2910,7 +2957,7 @@ function collectSilentFailures(
       if (line) listItemLines.add(line)
     }
   })
-  collectAuthoringWarnings(lines, headings, paragraphs, tables, verbatimLines, listItemLines, listIndentLines, push, captionLookingParagraph)
+  collectAuthoringWarnings(lines, headings, paragraphs, tables, verbatimLines, listItemLines, atomicSpans, pairedEmphasisOpeners, push, captionLookingParagraph)
 
   // 1. Trailing attribute block on a heading: literal text, not attributes.
   for (const h of headings) {
