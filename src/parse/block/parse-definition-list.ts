@@ -1144,6 +1144,20 @@ export function createDefinitionListParser(
         if (admission.kind === 'blank') return admitBlankLine()
         return admitLazyLine(ln)
       })
+      // A refused first-block marker owns no list child. The description's
+      // marker-line item starts at its authored source column, while its body
+      // sublexer starts at column zero. Rebase equal-source-column list markers
+      // to that same sublexer column so they remain siblings (§17 L4).
+      if (firstBlockOpenerContent(first) && isListMarkerLine(first)) {
+        const sourceOffset = markerSource.lastIndexOf(first)
+        const leadColumn = sourceOffset < 0 ? -1 : sourceColumnAt(markerSource, sourceOffset)
+        const rootLines = lexer.rootLines ?? lexer.lines
+        for (let index = 1; index < bodyLines.length; index++) {
+          const source = rootLines[bodyLineNumbers[index]! - 1]
+          if (source !== undefined && sourceColumn(source, quotePrefixDepth(source)) === leadColumn &&
+              isListMarkerLine(bodyLines[index]!.trimStart())) bodyLines[index] = bodyLines[index]!.trimStart()
+        }
+      }
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.

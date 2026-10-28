@@ -200,6 +200,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   }
   if (!firstBlockAttached) {
     trackItemLazyState(m[2]!, lazyState, () => false)
+    const nestedBody = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]
+    if (nestedBody !== undefined) trackItemLazyState(nestedBody, lazyState, () => false)
     if (/^\+[ \t]*$/.test(m[2]!) && firstBlockRefusesList(lexer)) lazyState.lazyFoldable = false
   }
   const markerLineQuoteOpen = lazyState.quoteInner !== null
