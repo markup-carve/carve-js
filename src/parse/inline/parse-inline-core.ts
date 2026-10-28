@@ -473,7 +473,7 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
     const attributes = new Map<number, number>()
     if (text.includes('{')) inlineOpaqueEnds(text, codeEnds, destinations, new Map(), attributes, brackets)
     let atom = 0
-    const boundaries: Array<{ open: number; end: number }> = []
+    const boundaries: Array<{ open: number; end: number; opaque: boolean }> = []
     for (let close = 0; close < text.length - 1; close++) {
       while (boundaries.length && boundaries.at(-1)!.end <= close) boundaries.pop()
       if (text[close] === '\\') { close++; continue }
@@ -484,20 +484,24 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
         continue
       }
       while (atom < atoms.length && atoms[atom]![1] <= close) atom++
-      if (atom < atoms.length && atoms[atom]![0] === close) {
-        boundaries.push({ open: close, end: atoms[atom]![1] })
+      // Destination, attribute, and atomic-link contents are text to the
+      // outer scanner. A `[` inside one must not open a bracket boundary that
+      // reaches past that opaque region.
+      const opaque = boundaries.at(-1)?.opaque === true
+      if (!opaque && atom < atoms.length && atoms[atom]![0] === close) {
+        boundaries.push({ open: close, end: atoms[atom]![1], opaque: true })
       }
-      if (text[close] === '[') {
+      if (!opaque && text[close] === '[') {
         const end = brackets(close)
-        if (end !== undefined) boundaries.push({ open: close, end: end + 1 })
+        if (end !== undefined) boundaries.push({ open: close, end: end + 1, opaque: false })
       }
-      if (text[close] === '(' && text[close - 1] === ']') {
+      if (!opaque && text[close] === '(' && text[close - 1] === ']') {
         const end = destinations.get(close)
-        if (end !== undefined) boundaries.push({ open: close, end: end + 1 })
+        if (end !== undefined) boundaries.push({ open: close, end: end + 1, opaque: true })
       }
-      if (text[close] === '{') {
+      if (!opaque && text[close] === '{') {
         const end = attributes.get(close)
-        if (end !== undefined) boundaries.push({ open: close, end })
+        if (end !== undefined) boundaries.push({ open: close, end, opaque: true })
       }
       if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
