@@ -3523,6 +3523,8 @@ describe('experimental block cursor', () => {
     '  - c\n  # H\n',
     '  - c\n  > q\n',
     '  - c\n  [r]: /u\n',
+    '    - d\n  ~~~\n',
+    '    - d\n  ```\n',
   ])('keeps a below-column line in an indented list paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
