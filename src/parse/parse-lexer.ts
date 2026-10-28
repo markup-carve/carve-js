@@ -283,6 +283,7 @@ export class Lexer {
   nonAuthoredDefinitionStarts = new Set<number>()
   returnedDescriptionOwnerColumns = new Map<number, number>()
   definitionLeadFromItemMarker = false
+  hostTaskMarker = false
   hostedFootnoteLines: Set<number>
   /**
    * EVERY line a block quote admitted as lazy continuation text.

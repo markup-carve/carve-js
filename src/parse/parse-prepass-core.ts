@@ -183,7 +183,7 @@ export function isContinuationMarker(line: string): boolean {
   return RE_CONTINUATION_MARKER.test(line)
 }
 
-export const RE_BLOCKQUOTE = /^>(?: (.*)|[\t][ \t]*|)$/
+export const RE_BLOCKQUOTE = /^>(?: ([^\r\n]*)|[\t][ \t]*|)$/
 
 export const RE_VALID_ADMONITION_OPEN = balancedLabelMatcher(
   /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\n]*\]))?[ \t]*$/,

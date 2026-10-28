@@ -107,6 +107,7 @@ import {
   lazyProbeFrame,
   leadingWhitespace,
   lineOpensBlock,
+  lineOpensItemBlock,
   linkDestinationValue,
   literalCommentHasCloser,
   markAboveContentColumn,
@@ -612,6 +613,7 @@ export class ParseSession extends InlineParseSession {
     probe.hostContentColumn = lexer.hostContentColumn
     probe.hostQuoteDepth = lexer.hostQuoteDepth
     probe.definitionLeadFromItemMarker = lexer.definitionLeadFromItemMarker
+    probe.hostTaskMarker = lexer.hostTaskMarker
     probe.nonAuthoredDefinitionStarts = lexer.nonAuthoredDefinitionStarts
     probe.returnedDescriptionOwnerColumns = lexer.returnedDescriptionOwnerColumns
     probe.atDocumentLevel = lexer.atDocumentLevel
@@ -1154,7 +1156,7 @@ export class ParseSession extends InlineParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
+    const subLexer = this.fencedBodyLexer(lexer, inner, openLineIndex + 1)
     subLexer.consumesHostedLinkDefs =
       lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
     if (isFigureGroup) subLexer.inFigureGroup = true
@@ -1246,7 +1248,7 @@ export class ParseSession extends InlineParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
+    const subLexer = this.fencedBodyLexer(lexer, inner, openLineIndex + 1)
     const children = this.parseBlocks(subLexer, 0)
     for (const child of children) {
       if (child.type === 'paragraph') {
@@ -1280,7 +1282,7 @@ export class ParseSession extends InlineParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
+    const subLexer = this.fencedBodyLexer(lexer, inner, openLineIndex + 1)
     const bq: BlockQuote = { type: 'block_quote', fenced: true, children: this.parseBlocks(subLexer, 0) }
     const quoteEndIndex = lexer.pos
     // The collector excludes its own closer from `inner`. At EOF without a
@@ -1314,7 +1316,7 @@ export class ParseSession extends InlineParseSession {
     return bq
   }
 
-  private divBodyLexer(lexer: Lexer, body: Parameters<typeof nestedColonLexer>[1], start: number): Lexer {
+  private fencedBodyLexer(lexer: Lexer, body: Parameters<typeof nestedColonLexer>[1], start: number): Lexer {
     const sub = nestedColonLexer(lexer, body, start)
     const root = lexer.rootLines ?? lexer.lines
     let hasTableRow = this.rootHasTableRow.get(root)
@@ -1324,18 +1326,27 @@ export class ParseSession extends InlineParseSession {
     }
     if (!hasTableRow) return sub
     const listColumns = new Set<number>()
-    let hasSiblingTable = false
+    const activeLists: Array<{ marker: number; body: number }> = []
+    let hasSiblingBlock = false
     for (let index = 0; index < sub.lineCount; index++) {
       const line = sub.lineAt(index)!
       const column = indentColumns(line)
       const content = line.trimStart()
-      if (column > 0 && listColumns.has(column) && isTableRow(content)) {
-        hasSiblingTable = true
+      while (activeLists.length > 0 && column <= activeLists.at(-1)!.marker) activeLists.pop()
+      const owner = activeLists.at(-1)
+      const belowListContent = owner !== undefined && column < owner.body
+      if (column > 0 &&
+          (listColumns.has(column) && isTableRow(content) ||
+            lexer.hostBody === 'list' && belowListContent && lineOpensItemBlock(content))) {
+        hasSiblingBlock = true
         break
       }
-      if (isListMarkerLine(content)) listColumns.add(column)
+      if (isListMarkerLine(content)) {
+        listColumns.add(column)
+        activeLists.push({ marker: column, body: column + markerContentColumn(content) })
+      }
     }
-    if (!hasSiblingTable) return sub
+    if (!hasSiblingBlock) return sub
     const lines = Array.from({ length: sub.lineCount }, (_line, index) => sub.lineAt(index)!)
     const rebased = lines.slice()
     rebaseOverindentedBlocks(rebased, undefined, -1, true)
@@ -1354,7 +1365,7 @@ export class ParseSession extends InlineParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = this.divBodyLexer(lexer, inner, openLineIndex + 1)
+    const subLexer = this.fencedBodyLexer(lexer, inner, openLineIndex + 1)
     // No inline opener attributes (strict djot): a bare `:::` carries none;
     // a preceding block-attribute line attaches them in parseBlocks.
     const node: Div = { type: 'div', children: this.parseBlocks(subLexer, 0) }
@@ -2223,7 +2234,8 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        const attachedLiteralPlus = take === 0 && !acceptFirstNonList && isContinuationMarker(candidate)
+        const attachedLiteralPlus = take === 0 && !acceptFirstNonList && isContinuationMarker(candidate) &&
+          markerDecision(lexer, lexer.pos).reason !== undefined
         if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
         take++
       }
