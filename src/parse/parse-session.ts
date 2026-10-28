@@ -2154,11 +2154,12 @@ export class ParseSession extends InlineParseSession {
       const depth = quotePrefixDepth(sourceLine)
       const followerDepth = quotePrefixDepth(nextSource)
       const sharedDepth = Math.min(depth, followerDepth)
-      const atOpener = stackedOpenerColumns(sourceLine, sharedDepth).includes(
-        stackedFollowerColumn(nextSource, sourceLine, sharedDepth),
-      )
-      // A partly quoted follower is measured inside the quotes it retained.
-      // Its physical column zero cannot attach a deeper first-block marker.
+      const openerColumns = stackedOpenerColumns(sourceLine, sharedDepth)
+      const followerColumn = stackedFollowerColumn(nextSource, sourceLine, sharedDepth)
+      const atOpener = openerColumns.includes(followerColumn)
+      // A partly quoted follower reaches only the surviving quote's opener.
+      // The deeper quote marker's physical column cannot replace its missing prefix.
+      if (followerDepth > 0 && followerDepth < depth) return followerColumn === openerColumns[0]
       if (followerDepth > 0) return atOpener
       return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), depth, true) || atOpener
     }

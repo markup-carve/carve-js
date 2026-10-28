@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { ContainerBlankBuffer, runIndentationContainer } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, markerColumn?: number, quoteLevels?: number, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
@@ -28,23 +28,45 @@ function footnoteFenceColumn(content: string, bodyColumn: number, hasContainedIt
     lineOpensItemBlock(content.trimStart()) ? indentColumns(content) : 0)
 }
 
-function itemMarkerLeavesNote(lexer: Lexer, sourceLine: string | undefined, authoredBodyColumn: number | undefined, markerLineNote: boolean): boolean {
+function priorListContentReached(lexer: Lexer, defLineIndex: number, column: number): boolean {
+  const root = lexer.rootLines ?? lexer.lines
+  const markerLine = root[lexer.lineNumber(defLineIndex) - 2]
+  if (markerLine === undefined) return false
+  let offset = markerLine.match(/^(?:> )*/)?.[0].length ?? 0
+  while (markerLine[offset] === ' ' || markerLine[offset] === '\t') offset++
+  const opener = /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )/
+  for (let depth = 0; depth < 16; depth++) {
+    const match = opener.exec(markerLine.slice(offset))
+    if (match === null) return false
+    offset += match[0].length
+    if (sourceColumnAt(markerLine, offset) === column) return true
+    while (markerLine[offset] === ' ') offset++
+  }
+  return false
+}
+
+function itemMarkerLeavesNote(lexer: Lexer, defLineIndex: number, sourceLine: string | undefined, authoredBodyColumn: number | undefined, markerLineNote: boolean): boolean {
   if (lexer.hostBody !== 'list' || lexer.hostBodyRoot === 'footnote' || markerLineNote ||
-      sourceLine === undefined || authoredBodyColumn === undefined ||
-      (lexer.hostMarkerColumn === 0 && authoredBodyColumn <= lexer.hostContentColumn + FOOTNOTE_BODY_COLUMN)) return false
+      sourceLine === undefined || authoredBodyColumn === undefined) return false
   const column = sourceColumn(sourceLine)
+  const noteColumn = authoredBodyColumn - FOOTNOTE_BODY_COLUMN
+  if (column < noteColumn && priorListContentReached(lexer, defLineIndex, noteColumn) &&
+      !priorListContentReached(lexer, defLineIndex, column)) return false
   return column >= lexer.hostContentColumn && column < authoredBodyColumn &&
     isListMarkerLine(sourceQuoteBody(sourceLine).trimStart())
 }
 
 function sourceOwnerLeavesNote(
   lexer: Lexer, sourceLine: string | undefined, authoredBodyColumn: number | undefined,
-  pendingBlanks: number, line: string, bodyColumn: number, markerLineNote: boolean,
+  pendingBlanks: number, line: string, bodyColumn: number, markerLineNote: boolean, defLineIndex: number,
 ): boolean {
-  if (itemMarkerLeavesNote(lexer, sourceLine, authoredBodyColumn, markerLineNote)) return true
-  return lexer.hostBody === 'description' && pendingBlanks > 0 &&
+  if (itemMarkerLeavesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, markerLineNote)) return true
+  return lexer.hostBody === 'description' &&
     authoredBodyColumn !== undefined && sourceLine !== undefined && !isBlankLine(sourceLine) &&
-    sourceColumn(sourceLine) < authoredBodyColumn && indentColumns(line, bodyColumn) >= bodyColumn
+    sourceColumn(sourceLine) < authoredBodyColumn &&
+    (pendingBlanks > 0 && indentColumns(line, bodyColumn) >= bodyColumn ||
+      isListMarkerLine(sourceQuoteBody(sourceLine).trimStart()) &&
+        sourceColumn(sourceLine) >= authoredBodyColumn - FOOTNOTE_BODY_COLUMN)
 }
 
 function refusedNoteMarkerAtBoundary(
@@ -74,7 +96,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const bodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
   const authoredLine = lexer.rootLines?.[lexer.lineNumber(defLineIndex) - 1]
   const authoredBodyColumn = authoredLine === undefined ? undefined
-    : sourceColumn(authoredLine) + FOOTNOTE_BODY_COLUMN
+    : sourceColumnAt(authoredLine, Math.max(0, authoredLine.lastIndexOf(defLineRaw.trimStart()))) + FOOTNOTE_BODY_COLUMN
   const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
@@ -135,7 +157,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
     const sourceLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1]
-    if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex === 0)) return 'stop'
+    if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex === 0, defLineIndex)) return 'stop'
     if (lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
         sourceLine !== undefined && !isBlankLine(sourceLine) &&
         indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn) return 'stop'
@@ -292,6 +314,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       (retainedBelowComment || canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState) ||
         ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
+        (lexer.hostBody === 'list' && sourceLine !== undefined && authoredBodyColumn !== undefined &&
+          sourceColumn(sourceLine) < authoredBodyColumn - FOOTNOTE_BODY_COLUMN &&
+          isListMarkerLine(sourceQuoteBody(sourceLine).trimStart())) ||
         !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
     ) {
       const content = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())

@@ -115,21 +115,38 @@ export function isPhysicalContinuationMarker(line: string): boolean {
 }
 
 export function isStackedFirstBlockQuoteMarker(line: string): boolean {
-  return /^[ \t]*(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
+  return /^[ \t]*(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
 }
 
 export function firstBlockOpenerContent(line: string): boolean {
-  if (!endsInPlus(line)) return false
+  return firstBlockLastOpenerOffset(line) !== undefined
+}
+
+export function firstBlockLastOpenerOffset(line: string): number | undefined {
+  if (!endsInPlus(line)) return undefined
   let rest = line.trimStart()
+  let offset = line.length - rest.length
+  let lastOpener = offset
   for (let depth = 0; depth < 8; depth++) {
-    if (isContinuationMarker(rest)) return true
+    if (isContinuationMarker(rest)) return lastOpener
     const marker = taskMatch(rest) ?? unorderedMatch(rest) ?? orderedMatch(rest)
-    if (marker !== null) { rest = marker.at(-1) ?? ''; continue }
+    if (marker !== null) {
+      lastOpener = offset
+      const next = marker.at(-1) ?? ''
+      offset += rest.length - next.length
+      rest = next
+      continue
+    }
     const quote = quotedLineText(rest, false)
-    if (quote !== null) { rest = quote; continue }
-    return false
+    if (quote !== null) {
+      lastOpener = offset
+      offset += rest.length - quote.length
+      rest = quote
+      continue
+    }
+    return undefined
   }
-  return false
+  return undefined
 }
 
 /**
@@ -788,7 +805,7 @@ export function stackedOpenerColumns(line: string, levels: number): number[] {
   while (line[offset] === ' ' || line[offset] === '\t') offset++
   const columns = [sourceColumnAt(line, offset)]
   let quoteColumn = -1
-  const opener = /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
+  const opener = /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
   for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
     if (match[0] === '> ') quoteColumn = sourceColumnAt(line, offset)
     offset += match[0].length
