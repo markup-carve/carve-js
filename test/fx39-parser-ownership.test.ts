@@ -4,6 +4,10 @@ import { carveToHtml } from '../src/index.js'
 const render = (source: string) => carveToHtml(source)
 
 describe('nested blocks keep the owner selected by authored columns', () => {
+  it('releases a quoted block after a blank following an unused note', () => {
+    const html = render('[^n]: # H\n\n> </#H>\n')
+    expect(html).toContain('<blockquote><p>&lt;/#H&gt;</p></blockquote>')
+  })
   it('keeps an intervening opener in the description after a refused first block', () => {
     const html = render(':: t\n: - +\n   # H\n')
     expect(html).toContain('<p># H</p>')

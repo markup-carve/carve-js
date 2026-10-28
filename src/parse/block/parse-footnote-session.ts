@@ -93,11 +93,10 @@ function quoteReleasesBelowLine(
 }
 
 function reachesAuthoredNoteBody(
-  admission: ContainerAdmission, sourceLine: string | undefined, authoredBodyColumn: number | undefined,
+  admission: ContainerAdmission, authoredBodyColumn: number | undefined,
 ): boolean {
   return admission.kind === 'content' || admission.kind === 'below' &&
-    sourceLine !== undefined && authoredBodyColumn !== undefined &&
-    sourceColumn(sourceLine) >= authoredBodyColumn
+    authoredBodyColumn !== undefined && admission.sourceColumn >= authoredBodyColumn
 }
 
 function markerLineCommentContinuesNote(
@@ -279,7 +278,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // tab: three engines, three readings (carve#796, carve-js#725). A rejected
     // continuation does not indent differently, it LEAVES the note and lands in
     // the document body, so the split moved content between blocks.
-    if (reachesAuthoredNoteBody(admission, sourceLine, authoredBodyColumn)) {
+    if (reachesAuthoredNoteBody(admission, authoredBodyColumn)) {
       for (let k = 0; k < pendingBlankRun.count; k++) {
         bufferedBlanks.add(bodyLines.length)
         bodyLines.push('')
