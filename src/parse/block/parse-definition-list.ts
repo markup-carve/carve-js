@@ -55,9 +55,13 @@ function nestedTermOwnerReached(
 
 function termBoundaryReached(
   leavesTerm: boolean, hostBody: string | null, opener: string, sourceColumn: number,
-  termColumn: number, listColumn: number, opensBlock: (line: string) => boolean,
+  termColumn: number, listColumn: number, hostContentColumn: number,
+  opensBlock: (line: string) => boolean,
 ): boolean {
-  return leavesTerm || nestedTermOwnerReached(hostBody, opener, sourceColumn, termColumn, listColumn, opensBlock)
+  return leavesTerm ||
+    (hostBody === 'description' && sourceColumn <= hostContentColumn &&
+      (DEFINITION_MARKER.test(opener.trimStart()) || TERM_MARKER.test(opener.trimStart()))) ||
+    nestedTermOwnerReached(hostBody, opener, sourceColumn, termColumn, listColumn, opensBlock)
 }
 
 function hasAttachedBlockOrMarker(
@@ -77,6 +81,22 @@ function isItemLazyBelowHost(lexer: Lexer, column: number): boolean {
 function isMarkerLineTermText(lexer: Lexer, line: string, column: number, termColumn: number): boolean {
   return lexer.definitionLeadFromItemMarker && !lexer.hostTaskMarker && lexer.hostMarkerColumn !== undefined &&
     DEFINITION_MARKER.test(line) && column >= lexer.hostMarkerColumn && column < termColumn
+}
+
+function isBelowColumnListAfterTerm(state: ItemLazyState, atDocumentColumn: boolean, line: string,
+  isListMarker: (line: string) => boolean): boolean {
+  return state.inDefList === 'term' && state.opaque === null && !atDocumentColumn && isListMarker(line)
+}
+
+function isPastTermEntry(lexer: Lexer, source: string, entry: string, termColumn: number,
+  markerTermText: boolean, entryLeadColumn: (line: string) => number): boolean {
+  return !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+    (TERM_MARKER.test(entry) || DEFINITION_MARKER.test(entry)) &&
+    (entryLeadColumn(source) > termColumn || markerTermText)
+}
+
+function restoresDescriptionTermIndent(lexer: Lexer, sourceColumn: number): boolean {
+  return lexer.hostBody === 'description' && sourceColumn > (lexer.hostSourceContentColumn ?? 0)
 }
 
 type DefinitionListSession = {
@@ -223,6 +243,10 @@ export function createDefinitionListParser(
   }
   const termOwnerColumn = (lexer: Lexer, listColumn: number): number =>
     lexer.hostBody === 'description' ? lexer.hostSourceContentColumn ?? listColumn : Infinity
+  const termContinuationSourceColumn = (source: string, entry: string): number =>
+    sourceColumn(source, quotePrefixDepth(source) - Number(RE_BLOCKQUOTE.test(entry.trimStart())))
+  const missingTermIndent = (source: number, term: number, host: number, retained: number): number =>
+    Math.max(0, source - (source < term ? host : term) - retained)
   const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
     if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
     return lexer.hostBody === 'description' || returned ? termColumn : -1
@@ -1025,6 +1049,16 @@ export function createDefinitionListParser(
         if (descriptionTermOwnerReached(lazyState.inDefList === 'term', below,
           sourceColumn(original, quotePrefixDepth(markerSource)), descriptionSourceColumn,
           lineOpensItemBlock)) return 'stop'
+        if (isBelowColumnListAfterTerm(lazyState, atDocumentColumn, below, isListMarkerLine)) {
+          const lineIndex = lexer.pos
+          bodyBaseEligible.add(bodyLines.length)
+          bodyLines.push(below)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          track(below, lineIndex)
+          lexer.consume()
+          return 'continue'
+        }
         if (nestedAttributeRun !== null) {
           const result = continueWrappedAttributeBlock(nestedAttributeRun, below)
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
@@ -1235,7 +1269,7 @@ export function createDefinitionListParser(
             entryColumn() < listColumn &&
             (authoredList || entryColumn() < lexer.hostContentColumn)
           const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
-          const nextSourceColumn = sourceColumn(nextSource, quotePrefixDepth(nextSource))
+          const nextSourceColumn = termContinuationSourceColumn(nextSource, nextEntry)
           const pastTermOwner = nextSourceColumn > termOwnerColumn(lexer, listColumn)
           const foldedFenceLine = inFoldedTermFence(termFence, lexer, next, nextEntry,
             nextSource, nextSourceColumn, pastTermOwner)
@@ -1246,9 +1280,8 @@ export function createDefinitionListParser(
             nextSourceColumn >= lexer.hostContentColumn
           const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn && !separatorBelowTerm
           const markerTermText = isMarkerLineTermText(lexer, nextEntry, entryColumn(), termColumn)
-          const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-            (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
-            (entryLeadColumn(nextSource) > termColumn || markerTermText)
+          const nextPastTerm = isPastTermEntry(lexer, nextSource, nextEntry, termColumn,
+            markerTermText, entryLeadColumn)
           // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
           // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
           // interruption from a fence with no closer ahead so an OPEN PARAGRAPH
@@ -1259,7 +1292,7 @@ export function createDefinitionListParser(
             isBlankLine(next) ||
             RE_CAPTION.test(next) ||
             termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
-              termColumn, listColumn, lineOpensItemBlock) ||
+              termColumn, listColumn, lexer.hostSourceContentColumn ?? 0, lineOpensItemBlock) ||
             (!belowList && !nextPastTerm && !separatorBelowTerm && !markerTermText &&
               !isItemLazyBelowHost(lexer, entryColumn()) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
@@ -1286,6 +1319,10 @@ export function createDefinitionListParser(
             const retainedIndent = indentColumns(continuation)
             if (sourceIndent > retainedIndent)
               continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
+          }
+          if (restoresDescriptionTermIndent(lexer, nextSourceColumn)) {
+            continuation = ' '.repeat(missingTermIndent(nextSourceColumn, termColumn,
+              lexer.hostSourceContentColumn ?? 0, indentColumns(continuation))) + continuation
           }
           // A line below the item's content column keeps none of its indent in the term.
           if (!nextPastTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
