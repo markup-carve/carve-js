@@ -3253,6 +3253,10 @@ class CarveRenderSession {
       let previousBlock: BlockNode | null = null
       let previousMoved = false
       for (const block of blocks) {
+        if (item === undefined && previousBlock !== null && parts.length > 0) {
+          const footnote = this.listFootnoteAfter(previousBlock, block, ctx)
+          if (footnote !== undefined) parts[parts.length - 1] += `\n${footnote}`
+        }
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
         let rendered = this.renderBlock(block, ctx)
         const codeCaptionGap = previousBlock ? codeIncludeCaptionGap(previousBlock, block) : null
@@ -3808,14 +3812,33 @@ class CarveRenderSession {
         if (blocks === undefined) continue
         const written = this.renderOneFootnoteDef(label, blocks, ctx)
         this.footnotesWrittenInPlace.add(label)
-        const noteColumn = ownValue(this.documentFootnoteDefPos, label)?.startColumn
-        const previousColumn = before.pos?.startColumn
-        const offset = after.type === 'list' && noteColumn !== undefined && previousColumn !== undefined
-          ? Math.max(0, noteColumn - previousColumn) : 0
-        return offset > 0 ? written.split('\n').map((text) => ' '.repeat(offset) + text).join('\n') : written
+        return written
       }
     }
     return undefined
+  }
+
+  private listFootnoteAfter(before: BlockNode, after: BlockNode, ctx: CarveContext): string | undefined {
+    if (before.type !== 'list') return undefined
+    const item = before.items.at(-1)
+    const contentColumn = item?.children[0]?.pos?.startColumn
+    const from = before.pos?.endLine
+    const to = after.pos?.startLine
+    if (contentColumn === undefined || item?.pos?.startColumn === undefined || from === undefined || to === undefined) return undefined
+    const definitions: string[] = []
+    for (const [line, label] of this.footnoteDefsByLine) {
+      const pos = ownValue(this.documentFootnoteDefPos, label)
+      if (line <= from || line >= to || pos?.startColumn !== contentColumn || this.footnotesWrittenInPlace.has(label)) continue
+      const blocks = ownValue(this.documentFootnoteDefs, label)
+      if (blocks === undefined) continue
+      const written = this.renderOneFootnoteDef(label, blocks, ctx)
+      this.footnotesWrittenInPlace.add(label)
+      const offset = ' '.repeat(Math.max(0, contentColumn - item.pos.startColumn))
+      const paragraph = blocks.length === 1 && blocks[0]?.type === 'paragraph'
+      definitions.push(written.split('\n').map((text, index) =>
+        offset + (index > 0 && paragraph ? text.replace(/^  /, '') : text)).join('\n'))
+    }
+    return definitions.length > 0 ? definitions.join('\n') : undefined
   }
 
   /**
