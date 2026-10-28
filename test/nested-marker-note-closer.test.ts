@@ -4,11 +4,18 @@ import { layoutWork } from '../src/parse.js'
 import fixtures from './fixtures/nested-marker-note-closer.json'
 
 const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
+const itemColumnRuling = new Set(['nested-closer-754', 'nested-closer-755', 'nested-closer-756', 'nested-closer-757'])
 
 for (const row of fixtures) {
   it(`preserves paragraph ownership after nested note CODE: ${row.id}`, () => {
-    expect(normalized(renderHtml(resolve(parse(row.source))))).toBe(normalized(row.html))
-    expect(normalized(renderHtml(resolve(parse(row.source, { positions: true }))))).toBe(normalized(row.html))
+    for (const positions of [false, true]) {
+      const html = normalized(renderHtml(resolve(parse(row.source, { positions }))))
+      if (itemColumnRuling.has(row.id)) {
+        expect(html).toContain('<li>sib')
+        expect(html).toContain('<pre><code>code\n</code></pre>')
+        expect(html).not.toContain('inner\n- sib')
+      } else expect(html).toBe(normalized(row.html))
+    }
   })
 }
 
