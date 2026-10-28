@@ -12,9 +12,10 @@ for (const diagnostic of diagnostics) {
 }
 ```
 
-The draft implements `a11y/image-alt` and `a11y/heading-jump`. The same API can
-serve a CLI, browser editor, CI check, or LSP, avoiding separate regex-based
-implementations that disagree about parsed structure.
+The API reports `a11y/image-alt` and `heading-level-skip`. The authoring lint
+API accepts `a11y/heading-jump` as a deprecated input alias for
+`heading-level-skip` until the next minor release. Findings use the canonical
+`heading-level-skip` id.
 
 This is an authoring aid, not a WCAG-conformance claim. Decorative-image
 semantics, configuration, nested traversal coverage, and additional rules are

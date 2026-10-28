@@ -1,0 +1,465 @@
+{
+  "rules": [
+    {
+      "version": 1,
+      "rule": "unused-link-reference-definition",
+      "vectors": [
+        {
+          "name": "unused-top",
+          "description": "An unused definition is omitted.",
+          "source": "[r]: /u\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 1,
+                "includes": [
+                  "unused"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "used-top",
+          "description": "A rendered use counts.",
+          "source": "[r]: /u\n\n[x][r]\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "unused-quote",
+          "description": "Definitions in quotes are checked.",
+          "source": "> [r]: /u\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "unused"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "used-list",
+          "description": "A use in a list counts.",
+          "source": "[r]: /u\n\n- [x][r]\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "unused-in-code",
+          "description": "Code is not a definition.",
+          "source": "```carve\n[r]: /u\n```\n",
+          "expected": {
+            "findings": []
+          }
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "rule": "empty-link-destination",
+      "vectors": [
+        {
+          "name": "empty-top",
+          "description": "An inline link with an empty URL is reported.",
+          "source": "[x]()\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 1,
+                "includes": [
+                  "empty"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "spaces",
+          "description": "Whitespace does not supply a destination.",
+          "source": "[x](  )\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 1,
+                "includes": [
+                  "empty"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty-quote",
+          "description": "A link in a quote is checked.",
+          "source": "> [x]()\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "empty"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "nonempty-list",
+          "description": "A link with a destination is quiet.",
+          "source": "- [x](/u)\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "empty-definition",
+          "description": "A definition uses its own existing rule.",
+          "source": "[r]:\n\n[x][r]\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "code",
+          "description": "Code is not an inline link.",
+          "source": "`[x]()`\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "tab-is-not-padding",
+          "description": "A tab is not empty destination padding.",
+          "source": "[x](\t)\n",
+          "expected": {
+            "findings": []
+          }
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "rule": "duplicate-reference-url",
+      "vectors": [
+        {
+          "name": "same-url",
+          "description": "A later distinct definition repeats a URL.",
+          "source": "[a]: /u\n[b]: /u\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 2,
+                "column": 1,
+                "includes": [
+                  "URL"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "same-url-quote",
+          "description": "A definition in a quote uses the same URL namespace.",
+          "source": "[a]: /u\n> [b]: /u\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 2,
+                "column": 3,
+                "includes": [
+                  "URL"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "different-url",
+          "description": "Different URLs are quiet.",
+          "source": "[a]: /u\n[b]: /v\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "same-label",
+          "description": "A duplicate label belongs to its own rule.",
+          "source": "[a]: /u\n[a]: /u\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "code",
+          "description": "Code has no reference definition.",
+          "source": "[a]: /u\n```carve\n[b]: /u\n```\n",
+          "expected": {
+            "findings": []
+          }
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "rule": "non-descriptive-link-text",
+      "vectors": [
+        {
+          "name": "click-here",
+          "description": "A generic link label is reported.",
+          "source": "[click here](/u)\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 1,
+                "includes": [
+                  "descriptive"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "read-more-quote",
+          "description": "Nested links are checked.",
+          "source": "> [read more](/u)\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "descriptive"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "here-list",
+          "description": "Links in list items are checked.",
+          "source": "- [here](/u)\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "descriptive"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "specific",
+          "description": "Specific link text is quiet.",
+          "source": "[Read the guide](/u)\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "literal",
+          "description": "Literal bracket text is quiet.",
+          "source": "[click here][missing]\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "aria-label",
+          "description": "A specific accessible name is quiet.",
+          "source": "[here](/u){aria-label=\"Documentation\"}\n",
+          "expected": {
+            "findings": []
+          }
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "rule": "emphasis-as-heading",
+      "vectors": [
+        {
+          "name": "bold-paragraph",
+          "description": "A paragraph made only of strong text is reported.",
+          "source": "*Title*\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 1,
+                "includes": [
+                  "heading"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emphasis-quote",
+          "description": "A quote paragraph is checked.",
+          "source": "> /Title/\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "heading"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emphasis-list",
+          "description": "A list paragraph is checked.",
+          "source": "- /Title/\n",
+          "expected": {
+            "findings": [
+              {
+                "line": 1,
+                "column": 3,
+                "includes": [
+                  "heading"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "real-heading",
+          "description": "A heading is quiet.",
+          "source": "# Title\n",
+          "expected": {
+            "findings": []
+          }
+        },
+        {
+          "name": "with-prose",
+          "description": "Visible surrounding prose is quiet.",
+          "source": "Read /Title/ now.\n",
+          "expected": {
+            "findings": []
+          }
+        }
+      ]
+    }
+  ],
+  "suppression": {
+    "version": 1,
+    "rule": "heading-level-skip",
+    "file": "doc.crv",
+    "vectors": [
+      {
+        "name": "same-line",
+        "source": "# One\n\n### Three %% carve-lint-disable-line heading-level-skip\n",
+        "expected": []
+      },
+      {
+        "name": "legacy-heading-alias",
+        "source": "# One\n\n### Three %% carve-lint-disable-line a11y/heading-jump\n",
+        "expected": []
+      },
+      {
+        "name": "same-line-does-not-reach-next",
+        "source": "# One %% carve-lint-disable-line heading-level-skip\n\n### Three\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            3
+          ]
+        ]
+      },
+      {
+        "name": "next-line",
+        "source": "# One\n%% carve-lint-disable-next-line heading-level-skip\n### Three\n",
+        "expected": []
+      },
+      {
+        "name": "next-line-stops-at-blank",
+        "source": "# One\n%% carve-lint-disable-next-line heading-level-skip\n\n### Three\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            4
+          ]
+        ]
+      },
+      {
+        "name": "document-until-enable",
+        "source": "# One\n%% carve-lint-disable heading-level-skip\n### Three\n%% carve-lint-enable heading-level-skip\n##### Five\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            5
+          ]
+        ]
+      },
+      {
+        "name": "all-rules",
+        "source": "# One\n%% carve-lint-disable\n### Three\n",
+        "expected": []
+      },
+      {
+        "name": "container-source-line",
+        "source": "# One\n> %% carve-lint-disable-next-line heading-level-skip\n> ### Three\n",
+        "expected": []
+      },
+      {
+        "name": "in-code-is-inert",
+        "source": "# One\n```carve\n%% carve-lint-disable heading-level-skip\n```\n### Three\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            5
+          ]
+        ]
+      },
+      {
+        "name": "in-fenced-comment-is-inert",
+        "source": "# One\n%%%\n%% carve-lint-disable heading-level-skip\n%%%\n### Three\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            5
+          ]
+        ]
+      },
+      {
+        "name": "ignore-current-file",
+        "source": "# One\n### Three\n",
+        "expected": [],
+        "ignoredFiles": [
+          "doc.crv"
+        ]
+      },
+      {
+        "name": "other-file-not-ignored",
+        "source": "# One\n### Three\n",
+        "expected": [
+          [
+            "heading-level-skip",
+            2
+          ]
+        ],
+        "ignoredFiles": [
+          "other.crv"
+        ]
+      }
+    ]
+  }
+}

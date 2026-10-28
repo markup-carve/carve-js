@@ -248,7 +248,7 @@ describe('lintCarve — unresolved reference images', () => {
 
   it('names the definition label a reference image misses only by case', () => {
     const w = lintCarve('![b][Logo]\n\n[logo]: logo.png')
-    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link', 'unused-link-reference-definition'])
     expect(w[0]!.message).toBe(
       'Reference image ![b][Logo] matches no link definition; the label "logo" differs only in case, and reference labels are case-sensitive, so it renders as literal text.',
     )
