@@ -2807,7 +2807,7 @@ function collectAuthoringWarnings(
     const row = rowAt.has(at)
     if (paragraphAt.has(at)) {
       const shape = /^\s*\|(?:=|\s|[^\s|])/.exec(stripped)
-      if (shape && !isTableRow(stripped.trimStart()) && /\|/.test(stripped.slice(1)) &&
+      if (shape && !isTableRow(stripped.trimStart()) && /\S/.test(stripped.slice(stripped.indexOf('|') + 1)) &&
           (at === 1 || !/^\s*\|/.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? '')) ||
            isTableRow(stripContainerPrefixesKeepIndent(lines[index - 1] ?? '').trimStart()))) {
         push(at, Math.max(column, 1), 1, 'table-shaped-paragraph',
