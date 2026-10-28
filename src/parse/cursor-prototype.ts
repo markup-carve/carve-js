@@ -205,6 +205,7 @@ type CursorDiagnostic =
   | { kind: 'dangling'; event: DanglingBlockAttributes }
   | { kind: 'fence'; event: UnclosedCodeFence }
   | { kind: 'invalid'; event: UnclosedContainer }
+  | { kind: 'container'; event: UnclosedContainer }
 
 class CursorInline extends InlineParseSession {
   // Image promotion only changes paragraphs whose first inline node is an image.
@@ -217,9 +218,11 @@ class CursorInline extends InlineParseSession {
     readonly positionless = false,
     readonly recordDanglingAttributes = false,
     readonly recordUnclosedCodeFences = false,
-    readonly recordInvalidMetadata = false) {
+    readonly recordInvalidMetadata = false,
+    readonly recordUnclosedContainers = false) {
     super()
-    if (recordDanglingAttributes || recordUnclosedCodeFences || recordInvalidMetadata) this.diagnostics = []
+    if (recordDanglingAttributes || recordUnclosedCodeFences || recordInvalidMetadata ||
+        recordUnclosedContainers) this.diagnostics = []
   }
   tableInlines(text: string, source?: InlineSource, captionContext = false): InlineNode[] {
     return this.parseInline(text, this.abbreviations, this.linkDefinitions, source, captionContext)
@@ -1763,6 +1766,15 @@ function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   }, lexer)
   cursor.at = lexer.pos
   block.pos = position(first, cursor.lines[cursor.at - 1] ?? first)
+  if (inline.recordUnclosedContainers) {
+    const width = RE_LINE_BLOCK_OPEN.exec(first.text)?.[1]?.length
+    if (width && !closesColonOwner(cursor.lines[cursor.at - 1]?.text ?? '', width)) {
+      inline.diagnostics!.push({ kind: 'container', event: {
+        kind: 'line block', line: first.number, column: first.baseColumn ?? 1,
+        startOffset: first.start, endOffset: first.start + width, fenceWidth: width,
+      } })
+    }
+  }
   return block
 }
 
@@ -4674,6 +4686,23 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   if (kind === undefined && body.some((line) => ABBR_DEF.test(line.text))) {
     throw new UnsupportedCursorSyntax('abbreviation inside bare container')
   }
+  const finalBodyLine = body.at(-1) ?? first
+  const continuationBoundary = cursor.owner.kind === 'list' &&
+    cursor.lines[0]?.number === first.number &&
+    cursor.physicalLines[finalBodyLine.number]?.text === '+'
+  if (cursor.owner.kind === 'list' && !continuationBoundary &&
+      cursor.physicalLines[finalBodyLine.number]?.text === '+' &&
+      cursor.lines[0]?.number !== first.number) {
+    throw new UnsupportedCursorSyntax('nested list container continuation owner')
+  }
+  if (!cursor.peek() && !continuationBoundary && inline.recordUnclosedContainers) {
+    inline.diagnostics!.push({ kind: 'container', event: {
+      kind: kind === undefined ? 'div' : GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
+      line: first.number, column: first.baseColumn ?? 1,
+      startOffset: first.start, endOffset: first.start + opener[1]!.length,
+      fenceWidth: opener[1]!.length,
+    } })
+  }
   const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
   const owner = childOwner(cursor.owner, 'colon', false, boundary !== undefined, boundary)
   const children = parseBlocks(new Cursor(body, undefined,
@@ -5113,19 +5142,25 @@ function emitCursorDiagnostics(inline: CursorInline, opts: ParseOptions): void {
       if (seen.has(key)) continue
       seen.add(key)
       opts.onUnclosedCodeFence?.(event)
-    } else {
+    } else if (diagnostic.kind === 'invalid') {
       const event = diagnostic.event
       const key = `invalid:${event.startOffset}:${event.endOffset}`
       if (seen.has(key)) continue
       seen.add(key)
       opts.onInvalidContainerMetadata?.(event)
+    } else {
+      const event = diagnostic.event
+      const key = `container:${event.startOffset}:${event.endOffset}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      opts.onUnclosedContainer?.(event)
     }
   }
 }
 
 export function parseCursorPrototype(source: string, opts: ParseOptions = {}): Document {
   if (opts.extensions?.some((extension) => extension.matchInline || extension.matchBlock ||
-      extension.quoteCharacters) || opts.onUnclosedContainer ||
+      extension.quoteCharacters) ||
       opts.onRefusedContinuationMarker) {
     throw new UnsupportedCursorSyntax('parser options and callbacks are not migrated')
   }
@@ -5239,7 +5274,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
     opts.onDanglingBlockAttributes !== undefined, opts.onUnclosedCodeFence !== undefined,
-    opts.onInvalidContainerMetadata !== undefined)
+    opts.onInvalidContainerMetadata !== undefined, opts.onUnclosedContainer !== undefined)
   const definitionNodes: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}

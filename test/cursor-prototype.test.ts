@@ -31,6 +31,9 @@ describe('experimental block cursor', () => {
     '```=html\n<b>raw</b>\n',
     '::: note\n```\ncode\n:::\n{.x}\n',
     '::: note \t"Title"\n```\ncode\n:::\n{.x}\n',
+    '- ::: d\n+\ntail\n',
+    '::: |\n---\n',
+    'before\n:::\nafter\n',
   ])('reports cursor diagnostics in source order: %s', (source) => {
     const established: object[] = []
     const cursor: object[] = []
@@ -38,11 +41,18 @@ describe('experimental block cursor', () => {
       onUnclosedCodeFence: (event: object) => events.push({ kind: 'fence', event }),
       onDanglingBlockAttributes: (event: object) => events.push({ kind: 'dangling', event }),
       onInvalidContainerMetadata: (event: object) => events.push({ kind: 'invalid', event }),
+      onUnclosedContainer: (event: object) => events.push({ kind: 'container', event }),
     })
     const expected = parse(source, options(established))
     const actual = parseCursorPrototype(source, options(cursor))
     expect(actual).toStrictEqual(expected)
     expect(cursor).toStrictEqual(established)
+  })
+
+  it('declines a nested list container with a continuation marker', () => {
+    expect(() => parseCursorPrototype('- a\n  ::: d\n+\ntail\n', {
+      onUnclosedContainer: () => {},
+    })).toThrow(UnsupportedCursorSyntax)
   })
 
   it.each(['> +\n flush\n', '> +\n  flush\n', '> +\n flush\n\nafter\n'])
@@ -1146,8 +1156,8 @@ describe('experimental block cursor', () => {
       parse(frontmatter, { defaultFrontmatterFormat: 'toml' }))
     const rendererOnly = { extensions: [{ name: 'renderer-only', renderers: {} }] }
     expect(parseCursorPrototype('Text\n', rendererOnly)).toStrictEqual(parse('Text\n', rendererOnly))
-    expect(() => parseCursorPrototype('Text\n', { onUnclosedContainer: () => {} }))
-      .toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('Text\n', { onUnclosedContainer: () => {} }))
+      .toStrictEqual(parse('Text\n', { onUnclosedContainer: () => {} }))
   })
 
   it('replaces lone surrogates before scanning without changing raw byte length', () => {
