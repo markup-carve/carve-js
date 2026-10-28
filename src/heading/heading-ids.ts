@@ -27,6 +27,7 @@ import type {
   Text,
 } from '../ast.js'
 import { DocumentIdRegistry } from '../ast/document-ids.js'
+import { reachableFootnoteLabels } from './footnote-numbering.js'
 import { SMART_PUNCTUATION_GLYPHS } from '../ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js'
 import { TRANSLIT_MAP } from '../translit-map.js'
@@ -566,6 +567,10 @@ function resolveHeadingIdsImpl(
   // from the parsed AST's inlineText so it agrees with the heading slug
   // exactly — no regex pre-pass guesswork.
   const headingRefs = new Map<string, string>()
+  const reachableNotes = reachableFootnoteLabels(doc)
+  const visibleFootnoteDefs = doc.footnoteDefs
+    ? Object.fromEntries(Object.entries(doc.footnoteDefs).filter(([label]) => reachableNotes.has(label)))
+    : undefined
 
   const assignHeadingId = (
     heading: { attrs?: Attrs; children: InlineNode[] },
@@ -639,14 +644,14 @@ function resolveHeadingIdsImpl(
   // before auto-slugging headings, so a heading's auto id never collides with
   // an explicit `{#id}` elsewhere -- two elements sharing a DOM id is invalid
   // HTML. Matches carve-php, which reserves all explicit ids up front.
-  if (!ingested) visitDocumentIds(doc, (id) => {
+  if (!ingested) visitDocumentIds({ ...doc, footnoteDefs: visibleFootnoteDefs ?? {} }, (id) => {
     used.reserve(id)
   })
 
   assignIds(doc.children, false)
   // Not `inBlockquote`: a note body is not quoted material, and the flag only
   // exists to keep a quoted heading out of the section-wrapping path.
-  for (const body of Object.values(doc.footnoteDefs ?? {})) assignIds(body, false)
+  for (const body of Object.values(visibleFootnoteDefs ?? {})) assignIds(body, false)
 
   // Two-pass resolution: implicit-heading refs must be finalized
   // BEFORE crossref cloning, otherwise a forward `</#id>` could clone
