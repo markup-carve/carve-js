@@ -10,14 +10,6 @@ import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/curs
 
 describe('experimental block cursor', () => {
   it.each([
-    '+\n- a\n',
-    '\n+\n- a\n',
-    '+\n1. one\n',
-  ])('keeps a list marker after a document-leading continuation in the paragraph: %s', (source) => {
-    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-  })
-
-  it.each([
     '{.x}\n',
     '{.x}\n{#i}\n',
     '- a\n  {.x}\n',

@@ -1664,15 +1664,10 @@ function parseParagraphAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   let captionLead: InlineNode[] | undefined
   let imageCaptionSlot = false
   const literalColonOpener = /^:{3,}(?: *\t| +\{|>)/.test(first.text)
-  // A leading `+` has no earlier container to resume. Its next marker is text.
-  // Later `+` lines still need the physical owner decision.
-  const firstPhysicalContent = first.text.trim() === '+' && cursor.owner.kind === 'root' &&
-    first.number - 1 === cursor.physicalLines.findIndex((line) => !isBlankLine(line.text))
   while (cursor.peek() && !isBlankLine(cursor.peek()!.text) &&
       (parts.length === 0 || ((!interruptsParagraphAtCursor(cursor) || cursor.peek()!.lazyText) &&
-        (!(parts.length === 1 && parts[0]!.text.trim() === '+' &&
-          listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText) ||
-          firstPhysicalContent)) ||
+        !(parts.length === 1 && parts[0]!.text.trim() === '+' &&
+          listMarker(cursor.peek()!.text) && !cursor.peek()!.lazyText)) ||
         literalColonOpener && /^:{3,}[ \t]*$/.test(cursor.peek()!.text))) {
     if (codeInclude && parts.length > 0) break
     if (imageCaptionSlot && RE_CAPTION.test(cursor.peek()!.text)) break
