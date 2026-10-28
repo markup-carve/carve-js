@@ -228,7 +228,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
       !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
-      (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
+      (retainedBelowComment || lazyState.lazyFoldable ||
+        ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
         !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
     ) {

@@ -69,6 +69,11 @@ function isItemLazyBelowHost(lexer: Lexer, column: number): boolean {
   return lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) && column < lexer.hostContentColumn
 }
 
+function isMarkerLineTermText(lexer: Lexer, line: string, column: number, termColumn: number): boolean {
+  return lexer.definitionLeadFromItemMarker && lexer.hostMarkerColumn !== undefined &&
+    DEFINITION_MARKER.test(line) && column >= lexer.hostMarkerColumn && column < termColumn
+}
+
 type DefinitionListSession = {
   collectAttachedBlock(
     lexer: Lexer,
@@ -1183,9 +1188,7 @@ export function createDefinitionListParser(
             termColumn > lexer.hostContentColumn && nextSourceColumn < termColumn &&
             nextSourceColumn >= lexer.hostContentColumn
           const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn && !separatorBelowTerm
-          const markerTermText = lexer.definitionLeadFromItemMarker && lexer.hostMarkerColumn !== undefined &&
-            RE_DEFLIST_DEF.test(nextEntry) &&
-            entryColumn() > lexer.hostMarkerColumn && entryColumn() < lexer.hostContentColumn
+          const markerTermText = isMarkerLineTermText(lexer, nextEntry, entryColumn(), termColumn)
           const nextPastTerm = !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
             (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
             (entryLeadColumn(nextSource) > termColumn || markerTermText)
@@ -1200,7 +1203,7 @@ export function createDefinitionListParser(
             RE_CAPTION.test(next) ||
             termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
               termColumn, listColumn, lineOpensItemBlock) ||
-            (!belowList && !nextPastTerm && !separatorBelowTerm &&
+            (!belowList && !nextPastTerm && !separatorBelowTerm && !markerTermText &&
               !isItemLazyBelowHost(lexer, entryColumn()) &&
               !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||

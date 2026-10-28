@@ -1809,6 +1809,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           itemQuoteDepth, physicalItemMarkerColumn, contentCol, baseIndent,
           previousNestedLine: nestedSourceLines.at(-1) })
       if (plusAfterBlank) blankBeforeNestedContinuation = true
+      if (content === '' && RE_FIRST_BLOCK_MARKER.test(head.content) && nested.length === 0 &&
+          isContinuationMarker(l) && listPlusReason !== null) {
+        nested.push(l)
+        nestedSourceLines.push(markerSource)
+        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+        return 'continue'
+      }
       if (listPlusReason !== null && acceptedPlusLine === lexer.lineNumber(lexer.pos) - 1) {
         // A directly successive refused marker stays with the item reached by
         // the first marker, regardless of what refused its own follower.
@@ -1886,6 +1894,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) < sourceColumn(lastItemSource) + FOOTNOTE_BODY_COLUMN &&
         !lineOpensItemBlock(l.trimStart())
       if (!isBlankLine(l) && lw === baseIndent && lexer.hostBody === 'list' &&
+          !(markerLineTerm && RE_DEFLIST_DEF.test(l.trimStart())) &&
           (lineOpensItemBlock(l.trimStart()) || deflistMarkerLine(stripLazyFrame(l))) &&
           sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) ===
             lexer.lineStartColumn(itemStartLineIndex) - 1 + baseIndent &&
@@ -2004,15 +2013,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
       }
       sourceDescription = RE_DEFLIST_DEF.exec(sourceEntry)
+      const hostMarkerColumn = lexer.hostMarkerColumn ?? 0
+      const hostIndent = Math.max(0, hostMarkerColumn - quoteBodyColumn(itemSource, itemQuoteDepth))
+      // Compare marker widths after removing the host's authored indent.
+      // A quote prefix contributes columns, but it is not authored indent.
+      const termOwnerColumn = lexer.hostBody === 'list'
+        ? physicalItemMarkerColumn + Math.max(0,
+          contentCol - baseIndent - (lexer.hostContentColumn - hostMarkerColumn) - hostIndent)
+        : physicalItemMarkerColumn
       // A term written on the item marker line begins at the item's content
       // column. A separator at the outer marker column leaves that item;
       // one between those columns is only a continuation of the term.
       if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
-          sourceDepth === itemQuoteDepth && sourceMarkerColumn <= physicalItemMarkerColumn &&
+          sourceDepth === itemQuoteDepth && sourceMarkerColumn < termOwnerColumn &&
           !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) return 'stop'
       markerTermText = markerLineTerm && sourceDescription !== null &&
         lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth &&
-        sourceMarkerColumn < contentCol && sourceMarkerColumn > physicalItemMarkerColumn
+        sourceMarkerColumn < physicalItemMarkerColumn + contentCol - baseIndent &&
+        sourceMarkerColumn >= termOwnerColumn
       if (RE_DEFLIST_DEF.test(sourceQuoteBody(sourceLine).trimStart()) && lazyState.inDefList === 'term' &&
           definitionHostColumn !== undefined && sourceMarkerColumn < definitionHostColumn &&
           sourceMarkerColumn <= physicalItemMarkerColumn && sourceDepth === itemQuoteDepth) return 'stop'
@@ -2631,6 +2649,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
+      !(lexer.hostBody === 'list' && lw > baseIndent && lw < contentCol &&
+        lineOpensItemBlock(l.trimStart())) &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
       (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
@@ -2689,6 +2709,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
+      if (markerTermText) return LAZY_FRAME + l.trimStart()
       let lazyLine = l
       if (sourceAfterNestedNote) lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       // A caption line below the column reaches no host: it folds as text (§10 I7).
@@ -3254,7 +3275,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
         }
         if ((child.type === 'paragraph' || child.type === 'image' ||
-            child.type === 'figure' && child.target.type === 'image') &&
+            child.type === 'figure' && (child.target.type === 'image' || child.target.type === 'paragraph')) &&
             previousVisibleEnd !== undefined && !priorDivInlineCode &&
             !reachesNestedList && !authoredBlockParagraph && !belowInlineAdmonition &&
             (session.hasAuthoredBlankBetween(lexer, previousVisibleEnd, span.start,
