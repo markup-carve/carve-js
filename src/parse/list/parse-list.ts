@@ -1771,14 +1771,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         return 'continue'
       }
-      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) return 'continue'
+      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) {
+        const refused = lexer.lineAt(plusLineIndex) ?? '+'
+        const text = sliceColumns(refused, Math.min(plusColumn, contentCol), true)
+        nested.push(text)
+        nestedSourceLines.push(refused)
+        nestedLineNumbers.push(plusLineNumber)
+        trackItemLazyState(text, lazyState)
+        return 'continue'
+      }
       lexer.attachmentBoundaries.add(plusLineNumber)
-      plusSeparators.add(nested.length)
-      nestedOrigins.set(nested.length, { text: '', parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
-      nested.push('')
-      nestedSourceLines.push(undefined)
-      nestedLineNumbers.push(plusLineNumber)
-      trackItemLazyState('', lazyState)
       // A boundary line inside a fence THIS attached block opened is that
       // fence's body, exactly as it is in the indented body (carve#975 for
       // the marker, corpus category 279 for the blank, the dedent and the
@@ -1787,6 +1789,20 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // severed a code fence from its opener and a colon fence severed on
       // every boundary there is.
       const { lines: attachedLines, lineNumbers: attachedLineNumbers } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, true, plusColumn, itemQuoteDepth)
+      if (attachedLines.length === 0) {
+        const refused = lexer.lineAt(plusLineIndex) ?? '+'
+        nested.push(sliceColumns(refused, Math.min(plusColumn, contentCol), true))
+        nestedSourceLines.push(refused)
+        nestedLineNumbers.push(plusLineNumber)
+        trackItemLazyState(refused, lazyState)
+        return 'continue'
+      }
+      plusSeparators.add(nested.length)
+      nestedOrigins.set(nested.length, { text: '', parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
+      nested.push('')
+      nestedSourceLines.push(undefined)
+      nestedLineNumbers.push(plusLineNumber)
+      trackItemLazyState('', lazyState)
       if (descendantOpaque === null && !nested.some(line => isListMarkerLine(line.trimStart())) &&
           attachedLines[0] !== undefined &&
           (RE_FENCE.test(attachedLines[0]) || RE_RAW_FENCE.test(attachedLines[0]))) {
