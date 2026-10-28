@@ -2982,6 +2982,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ]),
           undefined,
           contentCol,
+          leadIsMarker && RE_DEFLIST_TERM.test(markerLineBottomBlock(content)),
         )
       }
       if (leadOwnsExtent) {
