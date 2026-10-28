@@ -2499,6 +2499,11 @@ class Importer {
       // dropping it unconditionally lost a line on every all-blank payload,
       // including this engine's own HTML (carve-js#2342, raised by codex review).
       const content = this.codeText(node, path, depth, true, code, lang)
+      if (content.length > 0 && !content.endsWith('\n')) {
+        this.report.add('structure-unspellable',
+          'A Carve code block adds a terminal newline missing from the <pre> payload',
+          'warning', path, node)
+      }
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(label !== undefined ? { label } : {}), ...(attrs ? { attrs } : {}) }]
     }
     // The synthetic element `pruneFootnoteContainers` leaves where an endnotes
