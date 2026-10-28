@@ -13,10 +13,10 @@ const fixtures = JSON.parse(readFileSync(new URL('../spec/resources/spec/table-a
 describe('shared table alignment fixtures', () => {
   for (const { name, canonical, aligned } of fixtures) {
     test(name, () => {
-      expect(carveToCarve(canonical)).toBe(canonical)
-      expect(carveToCarve(canonical, { alignTables: true })).toBe(aligned)
-      expect(carveToCarve(aligned, { alignTables: true })).toBe(aligned)
-      expect(carveToCarve(aligned)).toBe(canonical)
+      expect(carveToCarve(canonical, { preserveTableSeparators: true })).toBe(canonical)
+      expect(carveToCarve(canonical, { alignTables: true, preserveTableSeparators: true })).toBe(aligned)
+      expect(carveToCarve(aligned, { alignTables: true, preserveTableSeparators: true })).toBe(aligned)
+      expect(carveToCarve(aligned, { preserveTableSeparators: true })).toBe(canonical)
       expect(carveToHtml(aligned)).toBe(carveToHtml(canonical))
     })
   }

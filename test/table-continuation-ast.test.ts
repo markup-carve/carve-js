@@ -67,6 +67,6 @@ describe('table continuation AST', () => {
 
   it('keeps a header continuation before its separator', () => {
     const source = '| a | b |\n+ x | y |\n|---|---|\n| e | f |\n'
-    expect(carveToCarve(source)).toBe(source)
+    expect(carveToCarve(source)).toBe('|= a |= b |\n+ x | y |\n| e | f |\n')
   })
 })

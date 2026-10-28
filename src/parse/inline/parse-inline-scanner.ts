@@ -298,6 +298,9 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     unescapeAttrValue,
     verbatimSpanEnd,
   } = helpers
+  const RE_MENTION_AT = new RegExp(RE_MENTION.source.slice(1), 'y')
+  const RE_TAG_AT = new RegExp(RE_TAG.source.slice(1), 'y')
+  const DIRECTIVE_AT = new RegExp(DIRECTIVE_SCAN_RE.source, 'y')
 
   // A trailing `{...}` on a link or image tail. An invalid payload (`{2=v}`)
   // is literal (§14), and an empty-attr `{…}` is literal too -- neither is
@@ -1071,14 +1074,16 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanMention(s: InlineScan): boolean {
     const { text, i } = s
     if (i !== 0 && /[A-Za-z0-9_]/.test(text[i - 1]!)) return false
-    const m = RE_MENTION.exec(text.slice(i))
+    RE_MENTION_AT.lastIndex = i
+    const m = RE_MENTION_AT.exec(text)
     if (!m) return false
     return emitAtCursor(s, { type: 'mention', user: m[1]! } as Mention, m[0].length)
   }
 
   function scanTag(s: InlineScan): boolean {
     const { text, i } = s
-    const m = RE_TAG.exec(text.slice(i))
+    RE_TAG_AT.lastIndex = i
+    const m = RE_TAG_AT.exec(text)
     const tagBoundary = i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)
     if (m && tagBoundary) return emitAtCursor(s, { type: 'tag', name: m[1]! } as Tag, m[0].length)
     // Bare `#` (not a tag) in a caption = number placeholder, first only.
@@ -1118,8 +1123,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanInvalidLineRangeDirective(s: InlineScan): boolean {
     const { text, i } = s
     if (text.slice(i, i + 2) !== '{{') return false
-    DIRECTIVE_SCAN_RE.lastIndex = i
-    const found = DIRECTIVE_SCAN_RE.exec(text)
+    DIRECTIVE_AT.lastIndex = i
+    const found = DIRECTIVE_AT.exec(text)
     if (!found || found.index !== i || !parseDirective(found[0])?.invalidLines) return false
     flush(s)
     emit(s, { type: 'text', value: found[0] }, i, i + found[0].length)
