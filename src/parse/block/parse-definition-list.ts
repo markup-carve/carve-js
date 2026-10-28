@@ -253,6 +253,12 @@ export function createDefinitionListParser(
     sourceColumn(source, quotePrefixDepth(source) - Number(RE_BLOCKQUOTE.test(entry.trimStart())))
   const missingTermIndent = (source: number, term: number, host: number, retained: number): number =>
     Math.max(0, source - (source < term ? host : term) - retained)
+  const commentLeavesTerm = (lexer: Lexer, next: string, termColumn: number): boolean => {
+    const authored = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
+    const visible = stripLazyFrame(next).trimStart()
+    return RE_COMMENT_LINE.test(visible) && commentFenceRun(visible) === undefined &&
+      sourceColumn(authored) < termColumn
+  }
   const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
     if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
     return lexer.hostBody === 'description' || returned ? termColumn : -1
@@ -1258,6 +1264,7 @@ export function createDefinitionListParser(
         const termFence: TermFenceState = { active: null, closesOnLine: false, memos: new Map() }
         while (!lexer.eof()) {
           const next = lexer.peek()!
+          if (commentLeavesTerm(lexer, next, termColumn)) break
           if (/^[ \t]+%%/.test(next)) {
             const first = lexer.pos
             const fence = RE_COMMENT_BLOCK_ANY.exec(next)
