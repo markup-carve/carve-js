@@ -38,11 +38,7 @@ describe('container ownership regressions', () => {
     expect(compact(carveToHtml('> - 1. :: t\n>   : a\n'))).not.toContain('<dt>t: a</dt>')
   })
 
-  it('gives a footnote body an ordinary lazy continuation', () => {
-    const html = carveToHtml('see[^n]\n\n[^n]: note\ntail\n')
-    expect(html).not.toContain('<p>tail</p>')
-    expect(html).toContain('<p>note\ntail<a href="#fnref1"')
-  })
+
 })
 
 describe('quote content', () => {

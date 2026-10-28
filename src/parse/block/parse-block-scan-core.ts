@@ -217,6 +217,7 @@ export function nestedSubLexer(
   sub.nonAuthoredDefinitionStarts = parent.nonAuthoredDefinitionStarts
   sub.returnedDescriptionOwnerColumns = parent.returnedDescriptionOwnerColumns
   sub.definitionLeadFromItemMarker = parent.definitionLeadFromItemMarker
+  sub.hostTaskMarker = parent.hostTaskMarker
   sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
   if (contiguous) {
     const origin = parent.contiguousOrigin

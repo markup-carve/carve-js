@@ -70,7 +70,7 @@ function isItemLazyBelowHost(lexer: Lexer, column: number): boolean {
 }
 
 function isMarkerLineTermText(lexer: Lexer, line: string, column: number, termColumn: number): boolean {
-  return lexer.definitionLeadFromItemMarker && lexer.hostMarkerColumn !== undefined &&
+  return lexer.definitionLeadFromItemMarker && !lexer.hostTaskMarker && lexer.hostMarkerColumn !== undefined &&
     DEFINITION_MARKER.test(line) && column >= lexer.hostMarkerColumn && column < termColumn
 }
 

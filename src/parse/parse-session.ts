@@ -613,6 +613,7 @@ export class ParseSession extends InlineParseSession {
     probe.hostContentColumn = lexer.hostContentColumn
     probe.hostQuoteDepth = lexer.hostQuoteDepth
     probe.definitionLeadFromItemMarker = lexer.definitionLeadFromItemMarker
+    probe.hostTaskMarker = lexer.hostTaskMarker
     probe.nonAuthoredDefinitionStarts = lexer.nonAuthoredDefinitionStarts
     probe.returnedDescriptionOwnerColumns = lexer.returnedDescriptionOwnerColumns
     probe.atDocumentLevel = lexer.atDocumentLevel
@@ -1323,7 +1324,7 @@ export class ParseSession extends InlineParseSession {
       hasTableRow = root.some(line => isTableRow(sourceQuoteBody(line).trimStart()))
       this.rootHasTableRow.set(root, hasTableRow)
     }
-    if (!hasTableRow && lexer.hostBody !== 'list') return sub
+    if (!hasTableRow) return sub
     const listColumns = new Set<number>()
     const activeLists: Array<{ marker: number; body: number }> = []
     let hasSiblingBlock = false

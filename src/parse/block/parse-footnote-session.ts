@@ -1,17 +1,10 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { ContainerBlankBuffer, runIndentationContainer } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, markerColumn?: number, quoteLevels?: number, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
-}
-
-function canTakePlainLazyLine(lexer: Lexer, defLineIndex: number, line: string, paragraphOpen: boolean): boolean {
-  const content = line.trimStart()
-  return paragraphOpen &&
-    !(defLineIndex === 0 && (lexer.hostBody === 'list' || lexer.hostBody === 'description')) &&
-    !lineOpensItemBlock(content) && !RE_CAPTION.test(content)
 }
 
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
@@ -235,8 +228,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
       !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
-      (retainedBelowComment || canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState.lazyFoldable) ||
-        ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
+      (retainedBelowComment || ((lazyState.lazyFoldable || (nestedMarkerHasText && bodyLines.length > 1)) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
         !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
     ) {

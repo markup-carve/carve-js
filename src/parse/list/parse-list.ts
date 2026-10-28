@@ -2020,7 +2020,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const termOwnerColumn = lexer.hostBody === 'list'
         ? physicalItemMarkerColumn + Math.max(0,
           contentCol - baseIndent - (lexer.hostContentColumn - hostMarkerColumn) - hostIndent)
-        : physicalItemMarkerColumn
+        : physicalItemMarkerColumn + 1
       // A term written on the item marker line begins at the item's content
       // column. A separator at the outer marker column leaves that item;
       // one between those columns is only a continuation of the term.
@@ -2707,7 +2707,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
-      if (markerTermText) return LAZY_FRAME + l.trimStart()
+      if (markerTermText && !shape.isTask) return LAZY_FRAME + l.trimStart()
       let lazyLine = l
       if (sourceAfterNestedNote) lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       // A caption line below the column reaches no host: it folds as text (§10 I7).
@@ -3157,6 +3157,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       sub.hostMarkerColumn = itemMarkerColumn
       sub.hostContentColumn = itemMarkerColumn + contentCol - baseIndent
       sub.definitionLeadFromItemMarker = nestedOffset === -1 && markerLineTerm
+      sub.hostTaskMarker = shape.isTask
       return sub
     }
     const carry: PendingAttrCarry = { attrs: null }
