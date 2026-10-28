@@ -65,7 +65,7 @@ function sourceOwnerLeavesNote(
     authoredBodyColumn !== undefined && sourceLine !== undefined && !isBlankLine(sourceLine) &&
     sourceColumn(sourceLine) < authoredBodyColumn &&
     (pendingBlanks > 0 && indentColumns(line, bodyColumn) >= bodyColumn ||
-      isListMarkerLine(sourceQuoteBody(sourceLine).trimStart()) &&
+      defLineIndex === 0 && isListMarkerLine(sourceQuoteBody(sourceLine).trimStart()) &&
         sourceColumn(sourceLine) >= authoredBodyColumn - FOOTNOTE_BODY_COLUMN)
 }
 
