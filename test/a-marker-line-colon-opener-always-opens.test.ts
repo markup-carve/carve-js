@@ -14,7 +14,7 @@ after
     expect(carveToHtml(`- :::
  y
   :::
-`)).toBe('<ul>\n  <li>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>y\n:::</p>')
+`)).toBe('<ul>\n  <li>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>y</p>\n<div>\n\n</div>')
   })
 
   it('releases unprefixed prose from both the quote and the list', () => {

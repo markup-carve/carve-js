@@ -74,31 +74,31 @@
   {
     "id": "space-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -236,31 +236,31 @@
   {
     "id": "tab-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -638,31 +638,31 @@
   {
     "id": "labeled-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -818,31 +818,31 @@
   {
     "id": "space-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -980,31 +980,31 @@
   {
     "id": "tab-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1382,31 +1382,31 @@
   {
     "id": "labeled-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {

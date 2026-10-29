@@ -342,32 +342,32 @@
   {
     "id": "review7-c07-open-fence-tail-owner-05",
     "source": "- a\n   :::\n %%%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-06",
     "source": "- a\n   :::\n %%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-07",
     "source": "- a\n   :::\n %% c\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-08",
     "source": "- a\n    :::\n %%%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-09",
     "source": "- a\n    :::\n %%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-10",
     "source": "- a\n    :::\n %% c\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-11",

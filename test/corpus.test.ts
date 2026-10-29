@@ -34,6 +34,29 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-below-column-line-returns-to-its-definition-body',
+  'a-below-column-term-stays-in-the-footnote-paragraph',
+  'a-closed-footnote-child-releases-a-flush-line',
+  'a-content-tab-does-not-hide-a-description-boundary',
+  'a-description-keeps-a-list-marker-below-its-hosted-footnote',
+  'a-footnote-heading-does-not-loosen-its-host-item',
+  'a-generic-extension-parses-its-captured-content-as-inline-content',
+  'a-heading-inside-the-intervening-band-stays-description-text',
+  'a-hosted-footnote-keeps-a-heading-at-its-body-floor',
+  'a-lazy-line-keeps-its-plus-through-three-quote-levels',
+  'a-literal-bracket-run-bounds-emphasis-like-a-resolved-one',
+  'a-mention-or-tag-keeps-its-full-spelling-in-a-strong-child',
+  'a-native-header-continues-a-promoted-gfm-header-run',
+  'a-note-claimed-fence-line-keeps-the-item-loose',
+  'a-promoted-gfm-header-keeps-following-native-headers-before-the-body',
+  'a-promoted-image-merges-block-attributes-before-inline-attributes',
+  'a-quote-at-the-start-of-a-span-opens',
+  'a-table-ends-a-footnote-paragraph-claim',
+  'a-task-item-keeps-a-lazy-term-one-column-below-its-child-marker',
+  'a-task-item-uses-its-authored-term-base-one-column-past-a-child-marker',
+  'an-editorial-comment-contributes-nothing-to-a-heading-id',
+  'an-intervening-column-refuses-a-description-hosted-first-block',
+  'invalid-body-row-metadata-leaves-one-table-body',
   'a-later-term-after-a-shifted-separator-opens-in-the-outer-item',
   'a-task-item-uses-the-ordered-item-column-rule',
   'invalid-table-metadata-keeps-the-table',
@@ -1177,15 +1200,15 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['461-a-column-0-line-after-a-description-hosted-note-is-a-document-sibling-4', {
-    reason: 'PART 0 O2 returns the below-floor list marker to its description host (carve#3865)',
-    html: '<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>nested\ntail</li>\n    </ul>\n  </dd>\n</dl>',
-  }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
 const behindSpec = new Map<string, string>([
+  // carve-js#3892: a literal bracket run bounds emphasis (carve#3906).
+  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one', '<p><strong>[*g*] x</strong></p>'],
+  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one-2', '<p><u>[_g_] x</u> and <em>[/g/] x</em></p>'],
+  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one-3', '<p><strong>a [*g*] x</strong></p>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

@@ -21,6 +21,8 @@ import { carveToHtml } from '../src/index.js'
 // column, and at an over-indent of one that residue is exactly one column - the
 // same one the rebased opener carries - so the group closed on a run the
 // container never placed at its base.
+//
+// Since carve#3908 a bare `:::` in the band interrupts (§10 I1), so family 2's run opens a document div.
 
 describe('a raised fence keeps a below-column run as payload', () => {
   it.each([
@@ -57,7 +59,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'family 2: a band closer at an over-indent of one, blank before',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <div>\n          <p>a\n:::</p>\n        </div>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
     ],
     [
       'family 2: a band closer at an over-indent of one, no blank before',
@@ -67,12 +69,12 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'family 2: the trailing line at the child column joins the div',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a\n:::</p>\n          <p>tail</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
     ],
     [
       'family 2: the trailing line past the child column joins the div',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a\n:::</p>\n          <p>tail</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
     ],
   ])('%s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
@@ -103,7 +105,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a band closer at no over-indent is payload already',
       '- outer\n  - head\n\n    :::\n    a\n :::\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <div>\n          <p>a\n:::</p>\n        </div>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
     ],
     [
       'a colon closer at the fence base still closes',

@@ -92,17 +92,17 @@
   {
     "name": "reader scope 7, quote depth 0",
     "source": "- a\n  ~~~\n    :::\n    - m\n",
-    "html": "<ul>\n  <li>a\n~~~\n:::\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n~~~\n    <div>\n      <ul>\n        <li>m</li>\n      </ul>\n    </div>\n  </li>\n</ul>"
   },
   {
     "name": "reader scope 7, quote depth 1",
     "source": "> - a\n>   ~~~\n>     :::\n>     - m\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n:::\n      <ul>\n        <li>m</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <div>\n        <ul>\n          <li>m</li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "name": "reader scope 7, quote depth 2",
     "source": "> > - a\n> >   ~~~\n> >     :::\n> >     - m\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n~~~\n:::\n        <ul>\n          <li>m</li>\n        </ul>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n~~~\n        <div>\n          <ul>\n            <li>m</li>\n          </ul>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "name": "reader scope 8, quote depth 0",

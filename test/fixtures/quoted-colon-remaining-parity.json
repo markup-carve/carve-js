@@ -632,7 +632,7 @@
   {
     "id": "audit-126",
     "source": "> -   ::: box\n>     x\n>   :::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>x\n:::\n- tail</p></div></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "audit-127",
@@ -657,12 +657,12 @@
   {
     "id": "audit-131",
     "source": ">  - ::: box\n>    body\n> - next\n>    :::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>body</p></div></li></ul><ul><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n    <li>next\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "audit-132",
     "source": "> - a\n>    - ::: box\n>      body\n>   - next\n>      :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul><ul><li>next\n          <div></div></li></ul></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>\n          <div class=\"box\">\n            <p>body</p>\n          </div>\n        </li>\n        <li>next\n          <div>\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "audit-133",
@@ -857,12 +857,12 @@
   {
     "id": "review-dedented-line-comment",
     "source": "> - ::: |\n>   x\n> %% note\n>   y\n>   :::\ntail\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li></ul><p>y\n:::</p></blockquote><p>tail</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n  <p>y</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "shifted-initial-marker-descendant",
     "source": ">  - a\n>    - ::: box\n>      body\n> - next\n>      :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li></ul><ul><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>\n          <div class=\"box\">\n            <p>body</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n    <li>next\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "js-blank-literal",
@@ -1042,7 +1042,7 @@
   {
     "id": "shift-nested-bare-4-False",
     "source": ">   - a\n> - b\n>     - c\n>     :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
+    "html": "<blockquote>\n  <ul>\n    <li>a</li>\n    <li>b\n      <ul>\n        <li>c</li>\n      </ul>\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ol>\n  <li>lazy</li>\n</ol>"
   },
   {
     "id": "shift-nested-bare-4-True",

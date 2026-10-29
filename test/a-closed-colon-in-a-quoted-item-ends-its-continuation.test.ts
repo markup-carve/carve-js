@@ -173,8 +173,9 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
 
   it('forgets a candidate after its item dedents into quoted prose', () => {
     const source = '> - ::: box\n>\n> para\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
-    expect(carveToHtml(source)).toContain('para\n:::\n- tail')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    // carve#3908: the bare `:::` interrupts the quoted paragraph.
+    expect(carveToHtml(source)).toContain('<p>para</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>')
   })
 
   it('releases unprefixed prose before a later quoted fence', () => {
@@ -234,8 +235,8 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
 
   it('keeps the item column for a quoted dedented lazy paragraph', () => {
     const source = '> - ::: box\n> lazy\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(["block_quote"])
-    expect(carveToHtml(source)).toBe("<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n  <p>lazy\n:::\n- tail</p>\n</blockquote>")
+    expect(parse(source).children.map(node => node.type)).toEqual(["block_quote", "list"])
+    expect(carveToHtml(source)).toBe("<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n  <p>lazy</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>")
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 

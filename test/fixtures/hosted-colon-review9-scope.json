@@ -52,7 +52,7 @@
   {
     "id": "review9-g3",
     "source": "> - :::\n>   x\n  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <p>x\n:::</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<div>\n\n</div>"
   },
   {
     "id": "review9-g3-unquoted",
