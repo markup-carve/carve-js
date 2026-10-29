@@ -237,6 +237,7 @@ export {
 } from './lint.js'
 export { migrateCaseOnlyReferences } from './import/markdown/case-migrate.js'
 export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './parse/block/colon-fences.js'
+export { decisionTrace, decisionTraceJsonLines, type TraceRecord } from './parse/decision-trace.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './extension/details.js'
 export { semanticSpan } from './semantic-span.js'
