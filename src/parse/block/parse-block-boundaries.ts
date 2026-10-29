@@ -632,7 +632,7 @@ export function markerNoteCommentFenceOpeners(lines: readonly string[], absorbed
  */
 export function coveredNoteComment(lexer: Lexer, line: string, floor: number): number {
   if (isBlankLine(line) || indentColumns(line, floor) < floor) return -1
-  const text = line.trimStart()
+  const text = line.replace(/^[ \t]+/, '')
   if (!RE_COMMENT_LINE.test(text)) return -1
   const run = commentFenceRun(text)
   if (run === undefined) return lexer.pos
@@ -640,7 +640,7 @@ export function coveredNoteComment(lexer: Lexer, line: string, floor: number): n
     const candidate = lexer.lineAt(at)!
     if (isBlankLine(candidate)) continue
     if (indentColumns(candidate, floor) < floor) return -1
-    if (commentFenceRun(candidate.trimStart()) === run) return at
+    if (commentFenceRun(candidate.replace(/^[ \t]+/, '')) === run) return at
   }
   return -1
 }

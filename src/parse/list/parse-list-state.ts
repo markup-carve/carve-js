@@ -196,7 +196,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   function noteLazyLine(line: LazyLine): boolean {
     const text = line.content.trimStart()
     // A comment below the body is a block of the host, never note text.
-    if (RE_COMMENT_LINE.test(text)) return false
+    if (RE_COMMENT_LINE.test(line.content.replace(/^[ \t]+/, ''))) return false
     const fence = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
     if (fence !== undefined) return !line.hasFenceCloser(fence)
     return bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
