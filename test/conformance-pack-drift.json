@@ -16,13 +16,7 @@
         "fences-56d1f5344d97",
         "fences-bedb43ef18bd",
         "fences-e9ba3b5bea07",
-        "guards-1896a4d3c0df",
-        "guards-2695a633b55b",
-        "guards-6a4ad2a68474",
-        "guards-76670b8ac8cc",
         "guards-934580a849cc",
-        "guards-d0b05f75b7ec",
-        "guards-fdf755d48a9e",
         "notes-2e2c3497bc39",
         "notes-b468d41965eb",
         "notes-d347fc2706eb",
@@ -77,17 +71,6 @@
         "fences-d34ea35bff3e",
         "fences-dccc1ff8cf70",
         "fences-e0c82ffb018d"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the guards family",
-      "cases": [
-        "guards-02e71f5b0ea8",
-        "guards-05f66789a38f",
-        "guards-2becc3d4c2d3",
-        "guards-49c4da782f33",
-        "guards-52ae2e8b1ecc"
       ]
     },
     {
