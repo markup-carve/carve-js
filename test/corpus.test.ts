@@ -1180,6 +1180,10 @@ const IMPLEMENTED = new Set([
   'raw-inline-image-bytes-stay-inside-a-paragraph',
   'unresolved-footnote-literal-escapes-html-text',
   'url-sinks-reject-schemes-after-emitted-value-normalization',
+  // Categories added by the spec pin at c1b9d9a8 (carve#3914).
+  'a-combined-token-inside-a-forced-span-stops-at-the-span-s-closer',
+  'a-nested-braced-span-hides-an-editorial-closer',
+  'an-attribute-block-after-a-span-behind-a-guarding-opener-belongs-to-that-span',
 ])
 
 /**
