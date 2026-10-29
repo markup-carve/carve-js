@@ -563,7 +563,9 @@ export function createDefinitionListParser(
         // trailing line then folded into the `dd` instead of falling to the
         // document, where PART 0's owner selection places a line below the dd's
         // base column (markup-carve/carve#1974).
-        lazyState.inFootnoteBody = RE_FOOTNOTE_DEF.test(first)
+        lazyState.inFootnoteBody = false
+        // The note's own frame answers the lazy question (carve#3885).
+        if (RE_FOOTNOTE_DEF.test(first)) trackItemLazyState(first, lazyState)
         if (firstIsColonContainer) lazyState.divDepth = 1
         if (RE_LINE_BLOCK_OPEN.test(first)) lazyState.literalColon = { width: colonFenceOpenerLen(first)!, column: 0 }
         const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
