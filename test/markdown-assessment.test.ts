@@ -210,3 +210,34 @@ it('assesses a table autolink whose destination holds an escaped pipe', () => {
     ['markdown-table-cell', 'preserved'],
   ])
 })
+
+describe('list item bodies', () => {
+  const report = (source: string) => rows(source).map(row => [row.code, row.fidelity, row.confidence, row.path])
+  const preserved = (...entries: [string, number][]) => entries.map(([code, line]) => [`markdown-${code}`, 'preserved', 'exact', `line:${line}`])
+
+  it.each([
+    ['a quote in a loose item', '- Item.\n\n  > x\n', preserved(['bullet-list', 1], ['list-item', 1], ['paragraph', 1], ['block-quote', 3], ['paragraph', 3])],
+    ['a nested quote in a loose item', '- Item.\n\n  > a\n  >> b\n', preserved(['bullet-list', 1], ['list-item', 1], ['paragraph', 1], ['block-quote', 3], ['paragraph', 3], ['block-quote', 4], ['paragraph', 4])],
+    ['a quote in a tight item', '- Item.\n  > x\n', preserved(['bullet-list', 1], ['list-item', 1], ['block-quote', 2], ['paragraph', 2])],
+    ['a quote in an ordered item', '1. Item.\n\n   > x\n', preserved(['ordered-list', 1], ['list-item', 1], ['paragraph', 1], ['block-quote', 3], ['paragraph', 3])],
+    ['a quoted item before a sibling', '- Item.\n\n  > x\n- Two.\n', preserved(['bullet-list', 1], ['list-item', 1], ['paragraph', 1], ['block-quote', 3], ['paragraph', 3], ['list-item', 4], ['paragraph', 4])],
+    ['a second paragraph in an item', '- Item.\n\n  Para.\n', preserved(['bullet-list', 1], ['list-item', 1], ['paragraph', 1], ['paragraph', 3])],
+    ['a continuation line in a tight item', '- a\n  b\n', preserved(['bullet-list', 1], ['list-item', 1], ['soft-break', 1])],
+  ])('assesses %s', (_, source, expected) => {
+    expect(report(source)).toEqual(expected)
+  })
+
+  it('reads an alert label inside a list item as a quote', () => {
+    const source = '> Outer quote.\n>\n> > [!NOTE]\n> > Inside a quote.\n\n- Item.\n\n  > [!TIP]\n  > Inside a list item.\n'
+    expect(report(source)).toEqual(preserved(
+      ['block-quote', 1], ['paragraph', 1], ['block-quote', 3], ['paragraph', 3], ['soft-break', 3],
+      ['bullet-list', 6], ['list-item', 6], ['paragraph', 6], ['block-quote', 8], ['paragraph', 8], ['soft-break', 8],
+    ))
+  })
+
+  it('fails closed for item shapes it does not model', () => {
+    for (const source of ['- a\nb\n', '- [ ] t\n\n  > q\n']) {
+      expect(rows(source)).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified' }))
+    }
+  })
+})
