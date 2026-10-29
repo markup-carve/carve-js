@@ -60,8 +60,8 @@ describe('a stacked quote plus behind more than one opener', () => {
 
   // An indented `>` is no host quote prefix (`> a` / `  > b`), so the follower is lazy text.
   for (const [source, html] of [
-    ['> - > +\n  > b\n', '<blockquote><ul><li><blockquote><p>b</p></blockquote></li></ul></blockquote>'],
-    ['> - - > +\n    > b\n', '<blockquote><ul><li><ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul></blockquote>'],
+    ['> - > +\n  > b\n', '<blockquote><ul><li><blockquote><p>+b</p></blockquote></li></ul></blockquote>'],
+    ['> - - > +\n    > b\n', '<blockquote><ul><li><ul><li><blockquote><p>+b</p></blockquote></li></ul></li></ul></blockquote>'],
   ]) {
     it(`reads the indented quote marker in ${JSON.stringify(source)} as a quote`, () => {
       expect(flat(carveToHtml(source))).toBe(html)

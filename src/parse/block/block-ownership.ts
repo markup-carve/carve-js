@@ -24,6 +24,11 @@ interface Frame {
   last: string | null
   markerCol?: number
   markerCanon?: number
+  // Document column of the marker and the line that opened the frame.
+  docMarker?: number
+  line?: number
+  // The line holding this frame's lone first-block `+`.
+  plus?: number | undefined
   axes?: string | undefined
   run?: number | undefined
   closes?: ((rest: string, col: number) => boolean) | undefined
@@ -157,7 +162,7 @@ const quotedRest = (line: string): string => quotedMeasure(line).rest
  * the owner's content column, so the block readers only meet openers at a
  * content column. Indentation is only ever removed.
  */
-export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: Map<number, OwnershipCut[]> } {
+export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number> } {
   const result = lines.slice(0, start)
   const cuts = new Map<number, OwnershipCut[]>()
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
@@ -166,6 +171,8 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; ahead?: AheadIndex } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
+  // Quote first-block `+` lines whose follower stands at an ineligible raw column.
+  const refusedPlus = new Set<number>()
 
   for (let at = start; at < lines.length; at++) {
     let src = lines[at]!
@@ -194,8 +201,15 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
 
     let reached = 0
     let plus: Frame | null = null
+    // A quote's first-block `+` reads a follower by its raw column (CARVE-P9-067).
+    const quotePlus = top().kind === 'quote' && top().plus === at - 1 ? top() : null
+    const baseAt = quotePlus ? frames.findIndex((f) => f.line === at - 1) : -1
+    let stackCol = quotePlus ? null as number | null : undefined
+    // Column 0 of the follower's own quote level, past host quote prefixes.
+    let zero = 0
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
+      if (stackCol === null && f.line === at - 1) stackCol = -1
       // A lone `+` reaches the marker column of an open marker container.
       if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && m.col === f.markerCol &&
           (f.kind === 'quote' || m.col < f.col)) {
@@ -204,8 +218,10 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       }
       if (f.kind === 'quote') {
         if (!isQuoteLine(m.rest)) break
+        if (stackCol === -1) stackCol = docColumn(lines[at]!, m.rest)
         lead(frames[k - 1]!.canon)
         take(src.length - quoteRest(src).length)
+        if (k < baseAt) zero = docColumn(lines[at]!, src)
         m = indentCols(src)
         reached = k
         continue
@@ -224,6 +240,12 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     const plusFollower = afterPlus
     afterPlus = false
     const missed = reached < frames.length - 1
+    // A follower at an ineligible raw column refuses the `+` whatever block it starts (CARVE-P9-067, carve#3421).
+    const stacked = typeof stackCol === 'number' && stackCol >= 0
+    if (quotePlus && (missed || stacked) && m.rest !== '' && !CONT_MARKER.test(m.rest)) {
+      const col = stacked ? stackCol! : docColumn(lines[at]!, m.rest)
+      if (col !== 0 && col !== zero && col !== frames[baseAt]!.docMarker && col !== quotePlus.docMarker) refusedPlus.add(at - 1)
+    }
     reach = reached
     const inner = top()
     if (inner.kind === 'fence' && !missed) {
@@ -304,7 +326,8 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
         return
       }
       if (form.kind === 'quote') {
-        const quote: Frame = { kind: 'quote', col: 0, canon: 0, cut: 0, para: false, last: null, markerCol: col, markerCanon: canon }
+        const quote: Frame = { kind: 'quote', col: 0, canon: 0, cut: 0, para: false, last: null, markerCol: col, markerCanon: canon,
+          docMarker: docColumn(lines[at]!, src), line: at }
         frames.push(quote)
         take(src.length - quoteRest(src).length)
         m = indentCols(src)
@@ -313,7 +336,8 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       }
       if (form.kind === 'item' || form.kind === 'note' || form.kind === 'dd') {
         const frame: Frame = { kind: form.kind, col: col + form.width!, canon: canon + form.width!,
-          cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes }
+          cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes,
+          docMarker: docColumn(lines[at]!, src), line: at }
         frames.push(frame)
         take(form.head!)
         m = indentCols(src)
@@ -329,6 +353,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
         lead(m.col)
         frame.absorbs = absorbsColon(m.rest)
         frame.para = true
+        if (CONT_MARKER.test(m.rest)) frame.plus = at
         frame.last = 'para'
         return
       }
@@ -343,7 +368,14 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       apply(frame, col, form, canon + m.col)
     }
   }
-  return { lines: result, cuts }
+  return { lines: result, cuts, refusedPlus }
+
+  // The document column where `rest`, a suffix of `line`, starts.
+  function docColumn(line: string, rest: string): number {
+    let col = 0
+    for (const ch of line.slice(0, line.length - rest.length)) col = ch === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1
+    return col
+  }
 
   function absorbsColon(rest: string): boolean {
     const trimmed = rest.replace(/[ \t]+$/, '')

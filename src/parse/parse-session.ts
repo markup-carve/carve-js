@@ -2113,6 +2113,7 @@ export class ParseSession extends InlineParseSession {
         nextQuoted !== null &&
         !isStackedFirstBlockQuoteMarker(sourceLine)) return false
     const lineNumber = lexer.lineNumber(lineIndex)
+    if (lexer.refusedQuotePlus.has(lineNumber - 1)) return false
     let chain = lexer.quoteChainEndsInPlus.get(lineNumber)
     if (chain !== undefined && chain.size === 0 && endsInPlus(content)) chain = undefined
     // A probe that parsed a nested quote first measured a shorter chain.
