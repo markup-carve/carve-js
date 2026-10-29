@@ -1075,6 +1075,8 @@ export function parseBlockAttributeRun(src: string): Attrs | null {
 
   if (count === 0) return null
   if (count === 1) return first
+  // A glued run is one physical line: only a lone block may wrap (carve#4078).
+  if (src.includes('\n')) return null
   const out: Attrs = {}
   if (id !== undefined) out.id = id
   if (classes.length) out.classes = classes
