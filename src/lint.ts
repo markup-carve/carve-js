@@ -1084,7 +1084,10 @@ export function lintCarve(
     const key = `${fence.line}:${column}`
     if (seenFence.has(key)) continue
     seenFence.add(key)
-    const start = sourceOffset(fence.line, column)
+    // A tab makes the visual column differ from the character index, so take the offset from the marker itself.
+    const start = column === fence.column
+      ? sourceOffset(fence.line, column)
+      : lineOffsets[fence.line - 1]! + sourceLines[fence.line - 1]!.indexOf(fence.marker)
     const ending = fence.reason === 'document' ? 'it runs to the end of the document'
       : fence.reason === 'continuation' ? `a continuation marker on line ${fence.endLine} ends it`
         : `it ends at the end of its container on line ${fence.endLine}`
