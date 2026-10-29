@@ -60,6 +60,12 @@ export interface IncludeSite {
   file?: string
 }
 
+const positionIncludeSites = new WeakMap<object, IncludeSite[]>()
+
+export function includeSitesForPosition(pos: object): IncludeSite[] | undefined {
+  return positionIncludeSites.get(pos)
+}
+
 /** Warning emitted by {@link expandIncludes}. */
 export interface IncludeWarning {
   /** 1-based line number when source positions are available. */
@@ -1164,7 +1170,7 @@ function expandChild(
   // Measured after expansion so a child that only passes through to nested
   // includes is levelled by the headings those actually contributed.
   shiftBlocks(child.children, auto ? autoShift(child, state) : stated, state)
-  stampSourceFile(child, resolved.id)
+  stampSourceFile(child, resolved.id, reach)
   state.file = outerFile
   state.sites.pop()
   return { doc: child, file: resolved.id, reach, mode: 'carve', source: resolved.source, full: resolved.full, firstLine: resolved.base.line, ...(lines ? { lines } : {}) }
@@ -1178,7 +1184,7 @@ function expandChild(
  * is set yet, so a grandchild keeps the file IT came from rather than being
  * overwritten by the file that pulled its parent in.
  */
-function stampSourceFile(child: Document, file: string): void {
+function stampSourceFile(child: Document, file: string, reach: IncludeSite[]): void {
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visit(item)
@@ -1186,7 +1192,10 @@ function stampSourceFile(child: Document, file: string): void {
     }
     if (value === null || typeof value !== 'object') return
     const node = value as { pos?: { file?: string } }
-    if (node.pos && node.pos.file === undefined) node.pos.file = file
+    if (node.pos && node.pos.file === undefined) {
+      node.pos.file = file
+      positionIncludeSites.set(node.pos, reach)
+    }
     for (const [key, inner] of Object.entries(value)) {
       if (key !== 'pos') visit(inner)
     }
