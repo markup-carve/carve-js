@@ -1472,7 +1472,8 @@ export function createDefinitionListParser(
         if (!d) break
         lexer.consume()
         definitionLines.push(lexer.lineNumber(defLineIndex))
-        definitions.push(parseDefBody(d[2]!, defLineIndex, deflistContentCol(d[1]!)))
+        // A tab after the separator's spaces is leading whitespace, which stops no opener (PART 0 S3).
+        definitions.push(parseDefBody(d[2]!.replace(/^[ \t]+/, ''), defLineIndex, deflistContentCol(d[1]!)))
         // The description's own extent anchors to its MARKER LINE. The wire
         // derives the END from the placed children (definition-list-wire.ts), so
         // this only supplies the start and the fallback when the body produced no
