@@ -538,89 +538,151 @@ export const groupLineContent = (line: string, base: number): string =>
 export const closerReachesBase = (index: number, folded: ReadonlySet<number> | undefined): boolean =>
   folded?.has(index) !== true
 
-export function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>): 'closed' | 'unclosed' | 'boundary' | null {
-  let closer: RegExp | null = null
-  let openerColumn = -1
-  let childColumn = -1
-  let childCloser: RegExp | null = null
-  let childOpenerColumn = -1
-  let afterBlank = false
-  for (const [index, line] of lines.entries()) {
+type FenceReach = 'closed' | 'unclosed' | 'boundary' | null
+
+/** Resumable state of `markerNoteFenceReach`; `settled` holds an answer no appended line can change. */
+export interface FenceReachScan {
+  lines: readonly string[]
+  markerCount: number
+  commentCount: number
+  next: number
+  settled?: FenceReach
+  // Set once a line falls below the note body with a fence open: later lines only search for its closer.
+  boundaryAt: number
+  closer: RegExp | null
+  openerColumn: number
+  childColumn: number
+  childCloser: RegExp | null
+  childOpenerColumn: number
+  afterBlank: boolean
+}
+
+export function markerNoteFenceReach(
+  lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>, resume?: FenceReachScan,
+): FenceReach {
+  const reusable = resume !== undefined && resume.lines === lines && resume.markerCount === absorbedMarkers.size &&
+    resume.commentCount === comments.size && resume.next <= lines.length
+  const fresh: FenceReachScan = {
+    lines, markerCount: absorbedMarkers.size, commentCount: comments.size, next: 0, boundaryAt: -1,
+    closer: null, openerColumn: -1, childColumn: -1, childCloser: null, childOpenerColumn: -1, afterBlank: false,
+  }
+  const state = reusable ? resume : resume === undefined ? fresh : Object.assign(resume, fresh, { settled: undefined })
+  if (state.settled !== undefined) return state.settled
+  if (state.boundaryAt >= 0) {
+    for (; state.next < lines.length; state.next++) {
+      const candidate = lines[state.next]!
+      if (indentColumns(candidate) === state.openerColumn && state.closer!.test(candidate.trimStart())) return state.settled = 'boundary'
+    }
+    return 'unclosed'
+  }
+  for (let index = state.next; index < lines.length; index++) {
+    state.next = index + 1
     if (comments.has(index)) continue
+    const line = lines[index]!
     const column = indentColumns(line)
     if (column < FOOTNOTE_BODY_COLUMN && !isBlankLine(line)) {
-      if (closer === null) return null
-      const laterCloser = lines.slice(index + 1).some(candidate =>
-        indentColumns(candidate) === openerColumn && closer!.test(candidate.trimStart()))
-      return laterCloser ? 'boundary' : 'unclosed'
+      if (state.closer === null) return state.settled = null
+      state.boundaryAt = index
+      return markerNoteFenceReach(lines, absorbedMarkers, comments, state)
     }
-    if (isBlankLine(line)) { afterBlank = true; continue }
+    if (isBlankLine(line)) { state.afterBlank = true; continue }
     const text = line.trimStart()
-    if (closer !== null) {
-      if (column === openerColumn && closer.test(text)) return 'closed'
+    if (state.closer !== null) {
+      if (column === state.openerColumn && state.closer.test(text)) return state.settled = 'closed'
       continue
     }
-    if (childCloser !== null) {
-      if (column === childOpenerColumn && childCloser.test(text)) childCloser = null
+    if (state.childCloser !== null) {
+      if (column === state.childOpenerColumn && state.childCloser.test(text)) state.childCloser = null
       continue
     }
-    if (childColumn >= 0 && column < childColumn && !isBlankLine(line)) childColumn = -1
+    if (state.childColumn >= 0 && column < state.childColumn && !isBlankLine(line)) state.childColumn = -1
     const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
-    if (childColumn >= 0 && column >= childColumn) {
+    if (state.childColumn >= 0 && column >= state.childColumn) {
       if (fence !== null) {
-        childCloser = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
-        childOpenerColumn = column
+        state.childCloser = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
+        state.childOpenerColumn = column
       }
       continue
     }
     if (isListMarkerLine(text)) {
-      if (!absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
-      afterBlank = false
+      if (!absorbedMarkers.has(index)) state.childColumn = column + markerContentColumn(text)
+      state.afterBlank = false
       continue
     }
-    if (afterBlank && RE_COMMENT_LINE.test(text)) return null
-    afterBlank = false
-    if (RE_FOOTNOTE_DEF.test(text) || (lineOpensItemBlock(text) && fence === null && !RE_COMMENT_LINE.test(text))) return null
+    if (state.afterBlank && RE_COMMENT_LINE.test(text)) return state.settled = null
+    state.afterBlank = false
+    if (RE_FOOTNOTE_DEF.test(text) || (lineOpensItemBlock(text) && fence === null && !RE_COMMENT_LINE.test(text))) return state.settled = null
     if (fence !== null) {
-      closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
-      openerColumn = column
+      state.closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
+      state.openerColumn = column
     }
   }
-  return closer === null ? null : 'unclosed'
+  return state.closer === null ? null : 'unclosed'
 }
 
-export function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>, outerTailOnly = false): number[] {
-  const openers: number[] = []
-  let closer: RegExp | null = null
-  let openerColumn = -1
-  let childColumn = -1
-  let belowNoteBody = false
-  let nestedMarkerSeen = false
-  for (const [index, line] of lines.entries()) {
+/** Resumable state of `markerNoteCommentFenceOpeners`, so a collector that re-asks after every appended line stays linear. */
+export interface CommentFenceOpenerScan {
+  lines: readonly string[]
+  outerTailOnly: boolean
+  markerCount: number
+  commentCount: number
+  next: number
+  // A comment line whose opener test waits for the line after it.
+  pending: number
+  closer: RegExp | null
+  openerColumn: number
+  childColumn: number
+  belowNoteBody: boolean
+  nestedMarkerSeen: boolean
+  openers: number[]
+}
+
+export function markerNoteCommentFenceOpeners(
+  lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>, outerTailOnly = false,
+  resume?: CommentFenceOpenerScan,
+): number[] {
+  // The scan reads a prefix, so it resumes while that prefix and both sets are unchanged.
+  const reusable = resume !== undefined && resume.lines === lines && resume.outerTailOnly === outerTailOnly &&
+    resume.markerCount === absorbedMarkers.size && resume.commentCount === comments.size && resume.next <= lines.length
+  const fresh: CommentFenceOpenerScan = {
+    lines, outerTailOnly, markerCount: absorbedMarkers.size, commentCount: comments.size, next: 0, pending: -1,
+    closer: null, openerColumn: -1, childColumn: -1, belowNoteBody: false, nestedMarkerSeen: false, openers: [],
+  }
+  const state = reusable ? resume : resume === undefined ? fresh : Object.assign(resume, fresh)
+  const openers = state.openers
+  if (state.pending >= 0 && state.pending + 1 < lines.length) {
+    const next = lines[state.pending + 1]!
+    if (indentColumns(next) >= FOOTNOTE_BODY_COLUMN && opensCodeFence(next.trimStart())) openers.push(state.pending + 1)
+    state.pending = -1
+  }
+  for (let index = state.next; index < lines.length; index++) {
+    state.next = index + 1
+    const line = lines[index]!
     if (isBlankLine(line) || comments.has(index)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
-    if (column < FOOTNOTE_BODY_COLUMN) belowNoteBody = true
-    if (closer !== null) {
-      if (column === openerColumn && closer.test(text)) closer = null
+    if (column < FOOTNOTE_BODY_COLUMN) state.belowNoteBody = true
+    if (state.closer !== null) {
+      if (column === state.openerColumn && state.closer.test(text)) state.closer = null
       continue
     }
-    if (childColumn >= 0 && column < childColumn) childColumn = -1
+    if (state.childColumn >= 0 && column < state.childColumn) state.childColumn = -1
     const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
     if (fence !== null) {
-      closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
-      openerColumn = column
+      state.closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
+      state.openerColumn = column
     }
-    if (childColumn >= 0 && column >= childColumn) continue
+    if (state.childColumn >= 0 && column >= state.childColumn) continue
     if (RE_FOOTNOTE_DEF.test(text) || (isListMarkerLine(text) && !absorbedMarkers.has(index))) {
       // A later comment and fence cannot grant the outer item a tail claim.
       // The rebase scan still needs that fence opener at its authored column.
-      if (outerTailOnly) nestedMarkerSeen = true
-      if (isListMarkerLine(text)) childColumn = column + markerContentColumn(text)
+      if (outerTailOnly) state.nestedMarkerSeen = true
+      if (isListMarkerLine(text)) state.childColumn = column + markerContentColumn(text)
     }
-    if (!nestedMarkerSeen && !belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
-        indentColumns(lines[index + 1] ?? '') >= FOOTNOTE_BODY_COLUMN &&
-        opensCodeFence(lines[index + 1]?.trimStart() ?? '')) openers.push(index + 1)
+    if (!state.nestedMarkerSeen && !state.belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text)) {
+      if (index + 1 >= lines.length) state.pending = index
+      else if (indentColumns(lines[index + 1]!) >= FOOTNOTE_BODY_COLUMN && opensCodeFence(lines[index + 1]!.trimStart())) openers.push(index + 1)
+    }
   }
   return openers
 }
