@@ -1,0 +1,52 @@
+[
+  {
+    "id": "3926-fence-after-sub-list-after-marker-note",
+    "source": "R[^a].\n\n- [^a]: first\n   - i\n    ```\n    code\n    ```\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>\n    <ul>\n      <li>i</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "heading-after-sub-list-after-marker-note",
+    "source": "R[^a].\n\n- [^a]: first\n   - i\n    # h\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>\n    <ul>\n      <li>i</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "quote-after-sub-list-after-hosted-note",
+    "source": "R[^a].\n\n- x\n  [^a]: first\n   - i\n    > q\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>x\n    <ul>\n      <li>i</li>\n    </ul>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "break-after-sub-list-after-hosted-note",
+    "source": "R[^a].\n\n- x\n  [^a]: first\n   - i\n     ---\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>x\n    <ul>\n      <li>i\n        <hr>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "colon-after-ordered-sub-list-after-marker-note",
+    "source": "R[^a].\n\n- [^a]: first\n   1. i\n    ::: x\n    :::\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>\n    <ol>\n      <li>i</li>\n    </ol>\n    <div class=\"x\">\n\n    </div>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "attribute-after-task-sub-list-after-marker-note",
+    "source": "R[^a].\n\n- [^a]: first\n   - [ ] i\n    {.c}\n    p\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"i\"> i</li>\n    </ul>\n    <p class=\"c\">p</p>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "tilde-after-sub-list-after-nested-marker-note",
+    "source": "R[^a].\n\n- a\n  - [^a]: first\n     - i\n      ~~~\n      c\n      ~~~\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>a\n    <ul>\n      <li>\n        <ul>\n          <li>i</li>\n        </ul>\n        <pre><code>c\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "sub-list-after-ordered-marker-note",
+    "source": "R[^a].\n\n1. [^a]: first\n - i\n   # h\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ol>\n  <li></li>\n</ol>\n<ul>\n  <li>i\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "text-after-sub-list-after-ordered-marker-note",
+    "source": "R[^a].\n\n1. [^a]: first\n  - i\n   text\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ol>\n  <li></li>\n</ol>\n<ul>\n  <li>i\ntext</li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "sub-list-after-continued-hosted-note",
+    "source": "R[^a].\n\n- x\n  [^a]: first\n    more\n   - i\n    # h\n",
+    "html": "<p>R<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<ul>\n  <li>x\n    <ul>\n      <li>i</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>first\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  }
+]
