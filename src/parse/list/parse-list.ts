@@ -1887,6 +1887,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // At the first line past a marker-line note, the note's last block answers (carve#3885).
     const noteClaimEnds = (): boolean => {
       markerNoteClaimChecked = true
+      // A comment the note covered closed its paragraph.
+      if (pendingNoteComments.size > 0) return true
       const claim = verbatimOnlyLazyState()
       const claimClosers = buildCloserIndex(nested)
       trackItemLazyState(content, claim, marker => codeCloserPossible(claimClosers, marker, -1), true, () => false,
@@ -2177,6 +2179,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
         !insideOpenFence(lazyState) &&
         !insideOpenQuoteParagraph(lazyState) &&
+        // A marker at an open description's body column is the description's block.
+        !(lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined &&
+          indentColumns(placed, lazyState.descriptionColumn) >= lazyState.descriptionColumn) &&
         (RE_ORDERED.test(l) ||
           RE_UNORDERED.test(l) ||
           RE_TASK.test(l) ||

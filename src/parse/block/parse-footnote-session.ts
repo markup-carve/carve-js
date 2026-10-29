@@ -369,9 +369,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // The tracker reads an overindented opener at its local zero. A fence
       // directly in the note needs its authored offset for closer lookahead;
       // a descendant item's fence leaves the note's paragraph state intact.
-      trackItemLazyState(framedBelow ? 'text' : trackedFootnoteContent(content), lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos,
-        footnoteFenceColumn(content, bodyColumn, hasContainedItem),
-        new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
+      // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
+      const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
+        ? content : trackedFootnoteContent(content)
+      trackItemLazyState(tracked, lazyState, (marker, extra = 0) => itemFenceHasCloser(lexer, marker, lexer.pos,
+        footnoteFenceColumn(content, bodyColumn, hasContainedItem) + extra,
+        new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), true, undefined,
+        framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false })
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       lexer.consume()

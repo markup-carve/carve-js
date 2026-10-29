@@ -1,5 +1,6 @@
 import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../parse.js'
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
+import { isListMarkerLine } from '../parse-prepass-core.js'
 import type { listStateHelpers } from '../../parse.js'
 import { createRunPhases, endsOnBlock, type CommentCloser, type FenceCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
@@ -176,15 +177,26 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       descriptionShift = frame.descriptionColumn
       noteLine = sliceColumns(noteLine, descriptionShift, true)
     }
+    // A caller that reads descendant frames reads a list item's in the note's body too.
     trackItemLazyState(noteLine, frame,
-      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn + descriptionShift), true, () => false)
+      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn + descriptionShift), true, () => false,
+      line.facts?.descendantFrames === true && (noteFrameOwnsItem(frame) || isListMarkerLine(noteLine.trimStart()))
+        ? { terminatorFree: line.facts.terminatorFree, whitespace: leadingWhitespace(noteLine), descendantFrames: true }
+        : undefined)
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
     return true
   }
 
+  function noteFrameOwnsItem(frame: ItemLazyState): boolean {
+    for (let at: ItemLazyState | undefined = frame; at !== undefined; at = at.noteFrame) if (at.ownedColumn >= 0) return true
+    return false
+  }
+
   function noteLazyLine(line: LazyLine): boolean {
     const text = line.content.trimStart()
+    // A comment below the body is a block of the host, never note text.
+    if (RE_COMMENT_LINE.test(text)) return false
     const fence = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
     if (fence !== undefined) return !line.hasFenceCloser(fence)
     return bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
@@ -426,7 +438,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.deepest = null
     const base = state.opaque.column ?? 0
     const column = indentColumns(content, base + 1)
-    if (column <= base && state.opaque.close.test(content.trimStart())) state.opaque = null
+    if (column <= base && state.opaque.close.test(content.replace(/^[ \t]+/, ''))) state.opaque = null
     return endsOnBlock(state)
   }
 
