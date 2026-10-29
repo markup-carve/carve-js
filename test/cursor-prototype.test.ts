@@ -2590,6 +2590,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '  - c\n    b\n>> - z\n>> 1. y\n',
+    '[^f]: note\n>> - z\n',
+    '  [^g]: more\n>> 1. y\n',
+  ])('keeps an unspaced quote-shaped line with its open owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['> :  d\n   :  b\n', '> :  d\n      :  b\n'])
   ('keeps a colon-shaped lazy line in a quote paragraph: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))

@@ -3328,6 +3328,14 @@ function foldedListOwnerLine(cursor: Cursor, frame: ListCursorFrame,
       ownsLazyNestedQuoteFollower(cursor, frame, line, reachedPrefix)) {
     return foldedNestedParagraphLine(frame.body, line)
   }
+  const event = line.event
+  if (depth === 0 && stack.length === 1 && reachedPrefix === undefined &&
+      event?.lazy && event.reached === 'doc' && event.missed.length === 1 &&
+      event.missed[0] === 'item' && event.kind === 'text' && line.text[0] !== '{' &&
+      frame.body.at(-1)?.number === line.number - 1 &&
+      frame.body.every((part) => plainQuoteText(part.text))) {
+    return { ...line, lazyText: true }
+  }
   return indentedRootListLazyFollower(frame, stack, depth, line, reachedPrefix) ?
     { ...line, lazyText: true } : undefined
 }
@@ -4804,10 +4812,18 @@ function footnoteLazyOwnedLine(text: string): boolean {
   return !text.includes('\t') && (listMarker(text) !== undefined || /^: +\S/.test(text))
 }
 
+function rootNoteLazyText(line: SourceLine | undefined): boolean {
+  const event = line?.event
+  return event?.lazy === true && event.kind === 'text' && event.reached === 'doc' &&
+    event.missed.length === 1 && event.missed[0] === 'note' &&
+    line?.text.startsWith('>> ') === true
+}
+
 function simpleFootnoteBodyLine(cursor: Cursor, index: number, bodyLength: number, separated: boolean,
   lazyFirstLine: boolean, lazyOwned: boolean): boolean {
   const afterPlus = bodyLength > 0 && cursor.peek(index - 1)!.text.trim() === '+'
   return simpleFootnoteParagraphLine(cursor.peek(index), !separated, lazyFirstLine, afterPlus, lazyOwned) ||
+    rootNoteLazyText(cursor.peek(index)) ||
     separated && bodyLength > 0 && lazyPlainNoteLine(cursor.peek(index)) ||
     bodyLength > 0 && cursor.peek(index)?.noteLazy === true && cursor.peek(index)?.claimedQuoteLazy === true ||
     bodyLength > 0 && (openFenceStaysLazy(cursor, index) ||
@@ -5164,6 +5180,7 @@ function simpleFootnoteLazyFirstLine(cursor: Cursor, footnote: RegExpExecArray,
   next: string | undefined, nextIndex: number): boolean {
   if (nextIndex !== 1 || next === undefined || cursor.owner.kind !== 'root' ||
       footnote[2] === undefined || FOOTNOTE_DEF.test(next.trimStart())) return false
+  if (rootNoteLazyText(cursor.peek(nextIndex))) return true
   const indented = /^ {1,2}[^ ]/.test(next)
   if (cursor.owner === ROOT_OWNER && cursor.rootSource !== undefined && plainQuoteText(footnote[2]) && next === next.trimStart() &&
       footnoteLazyOwnedLine(next)) return true
