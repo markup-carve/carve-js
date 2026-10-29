@@ -529,6 +529,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     return { kind: 'item', item: fbItem, next: blanks >= 3 ? 'end' : 'loose' }
   }
 
+  // A sub-item on a task item's marker line stands past the box, at its own column.
+  function taskBoxLeadShift(head: ItemHead, content: string, terminatorFree: boolean): number {
+    if (unorderedMatch(content, terminatorFree) === null && orderedMatch(content, terminatorFree) === null &&
+      taskMatch(content, terminatorFree) === null) return 0
+    return Math.max(0, head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength - 2)
+  }
+
+  // So the lines below it are read from that sub-item's column. A line short of
+  // it lowers the shift for the rest, which keeps a later fence's payload indent.
+  function dedentTaskLead(nested: string[], shift: number): void {
+    for (let k = 0; k < nested.length; k++) {
+      const text = nested[k]!
+      if (isBlankLine(text)) continue
+      shift = Math.min(shift, indentColumns(text))
+      if (shift > 0) nested[k] = sliceColumns(text, shift, true)
+    }
+  }
+
   function leadLazyState(
     lexer: Lexer, session: ParseSession, content: string, itemStartLineIndex: number, markerLineTerm: boolean,
   ): { leadState: ReturnType<typeof markerLineState>; lazyState: ItemLazyState } {
@@ -915,6 +933,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { startLineIndex: itemStartLineIndex, line, terminatorFree, checked, taskState, leadOrigin } = head
     const itemAttrs = head.attr ? head.attr.attrs : undefined
     const { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth } = placement
+    const taskLeadShift = isTask ? taskBoxLeadShift(head, content, terminatorFree) : 0
     const nested: string[] = []
     let commentPayloadCandidates: Map<number, string> | undefined
     const nestedLineNumbers: number[] = []
@@ -3026,6 +3045,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (!isBlankLine(text) && indentColumns(text) >= taskNoteShift + FOOTNOTE_BODY_COLUMN) nested[k] = sliceColumns(text, taskNoteShift, true)
       }
     }
+    if (taskLeadShift > 0) dedentTaskLead(nested, taskLeadShift)
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it

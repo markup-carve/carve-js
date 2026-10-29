@@ -1,0 +1,57 @@
+[
+  {
+    "id": "issue-heading",
+    "source": "- [ ] - para\n        # H\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para\n        <h1 id=\"H\">H</h1>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "attribute-line",
+    "source": "- [ ] 1. para\n         {.c}\n         p\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ol>\n      <li>para\n        <p class=\"c\">p</p>\n      </li>\n    </ol>\n  </li>\n</ul>"
+  },
+  {
+    "id": "break",
+    "source": "- [ ] - para\n        ---\ntail\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para\n        <hr>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "table-row",
+    "source": "- [x] - para\n        | a |\ntail\n",
+    "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <ul>\n      <li>para\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "quote-line",
+    "source": "- [ ] - para\n        > q\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para\n        <blockquote><p>q</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "nested-task",
+    "source": "- [ ] - [ ] para\n        # H\ntail\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"para\"> para\n        <h1 id=\"H\">H</h1>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "deeper-stack",
+    "source": "- - [ ] - para\n          # H\n- tail\n",
+    "html": "<ul>\n  <li>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled> \n        <ul>\n          <li>para\n            <h1 id=\"H\">H</h1>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n  <li>tail</li>\n</ul>"
+  },
+  {
+    "id": "sibling-at-marker-column",
+    "source": "- [ ] - s0\n      - s\n tail\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>s0</li>\n      <li>s\ntail</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "line-at-the-sub-item-marker",
+    "source": "- [ ] - para\n      # H\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para</li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n  </li>\n</ul>"
+  },
+  {
+    "id": "line-at-the-task-content-column",
+    "source": "- [ ] - para\n    # H\ntail\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para</li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "lazy-line",
+    "source": "- [ ] - para\nlazy\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para\nlazy</li>\n    </ul>\n  </li>\n</ul>"
+  }
+]
