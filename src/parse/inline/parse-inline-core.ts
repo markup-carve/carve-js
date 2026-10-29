@@ -463,6 +463,9 @@ export interface EmphasisMemo {
   closes?: Map<string, number>
   // `failed` for the walk that opens every guarded child.
   failedGuardsOpen?: Map<string, Uint8Array>
+  // Walks, keyed as `closes`, that close only with their start's guarded child
+  // blocked, so that child's attribute block is content.
+  startBlocked?: Set<string>
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
   // The same, with every glued bracket taking a destination (`nested` in the

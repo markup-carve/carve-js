@@ -339,6 +339,68 @@ export class InlineParseSession {
       }
       if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitBracedOpener(text, at)) openerMarks.add(++at)
     }
+    // Inside a `{X` span the run after a bare closer attaches only if that pair
+    // forms: a bare X is literal there (E3), and so is an opener whose guard
+    // is an X or has no closer. Otherwise the run is text and its `X}` is
+    // reachable, as the model's re-read of an unattached block finds.
+    const lastOpener = new Map<string, Int32Array>()
+    const nextCloser = new Map<string, Int32Array>()
+    const openerTable = (d: string): Int32Array => {
+      let table = lastOpener.get(d)
+      if (!table) {
+        table = new Int32Array(n + 1).fill(-1)
+        for (let i = 0; i < n; i++) table[i + 1] = text[i] === d && bareOpener(text, i) !== 'none' ? i : table[i]!
+        lastOpener.set(d, table)
+      }
+      return table
+    }
+    const attributeRunAt = (at: number): boolean => {
+      const end = attributes.get(at)
+      return end !== undefined && text[at] === '{' && (text[at + 1] !== '#' && text[at + 1] !== '%' || attributeTails.get(at) === end)
+    }
+    // The first bare closer of `d` the scan can reach from each position.
+    const closerTable = (d: string): Int32Array => {
+      let table = nextCloser.get(d)
+      if (!table) {
+        table = new Int32Array(n + 2).fill(-1)
+        for (let i = n - 1; i >= 0; i--) {
+          const opaqueEnd = attributes.get(i)
+          const codeEnd = text[i] === '`' ? codeEnds?.[i] : undefined
+          const bracketEnd = text[i] === '[' ? brackets?.(i) : undefined
+          if (text[i] === '\\') table[i] = table[i + 2]!
+          else if (lineComments.has(i)) table[i] = table[lineComments.get(i)!]!
+          else if (codeEnd !== undefined) table[i] = codeEnd === -1 ? -1 : table[codeEnd]!
+          else if (opaqueEnd !== undefined && !(attributeRunAt(i) && '/*_~='.includes(text[i - 1] ?? ''))) table[i] = table[opaqueEnd]!
+          else if (bracketEnd !== undefined) table[i] = table[(destinations.get(bracketEnd + 1) ?? bracketEnd) + 1]!
+          else table[i] = canCloseBarePair(text, i, d, openerMarks) ? i : table[i + 1]!
+        }
+        nextCloser.set(d, table)
+      }
+      return table
+    }
+    let bracedOpens: Int32Array | undefined
+    const bracedOpenBefore = (): Int32Array => {
+      if (!bracedOpens) {
+        bracedOpens = new Int32Array(n + 1).fill(-1)
+        for (let i = 0; i < n; i++) bracedOpens[i + 1] = openerMarks.has(i) ? i : bracedOpens[i]!
+      }
+      return bracedOpens
+    }
+    // `limit`: the `X}` the span would close at with the run opaque; a guard
+    // closer past it is outside the span (E2a).
+    const bareRunIsContent = (at: number, marker: string, limit: number): boolean => {
+      const owner = text[at - 1]
+      if (owner === undefined || !'/*_~='.includes(owner) || text[at - 2] === '\\') return false
+      if (owner === marker) return true
+      const open = openerTable(owner)[at - 1]!
+      // No opener on this side of a braced opener, or one an earlier closer
+      // takes: the pair cannot form.
+      if (open === -1 || bracedOpenBefore()[at - 1]! > open || closerTable(owner)[open + 1]! < at - 1) return true
+      if (open === 0 || bareOpener(text, open) !== 'guarded') return false
+      const guard = text[open - 1]!
+      const guardClose = closerTable(guard)[open + 1]!
+      return guard === marker || bareOpener(text, open - 1) === 'none' || guardClose === -1 || (limit !== -1 && guardClose > limit)
+    }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
@@ -352,6 +414,8 @@ export class InlineParseSession {
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
       const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
+      // A `{#` or `{%` that closes as a comment stays opaque whatever precedes it.
+      const isAttributeRun = attributeRunAt(j)
       let bareId = -1
       let bareClose = -1
       let bareTail: number | undefined
@@ -410,7 +474,7 @@ export class InlineParseSession {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
           stop = codeEnd !== -1 ? table[after(codeEnd)]! : raw[j]!
-        } else if (attributeEnd !== undefined) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
+        } else if (attributeEnd !== undefined && !(isAttributeRun && bareRunIsContent(j, PAIR_MARKERS[m]!, table[attributeEnd]!))) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
           ? raw[j]! : table[ch === '<' ? after(attributeEnd) : attributeEnd]!
         else if (bracketEnd !== undefined) stop = table[after(bracketEnd + 1)]!
         else if (pairDestinationEnd !== undefined) stop = table[after(pairDestinationEnd + 1)]!
@@ -1188,7 +1252,9 @@ export class InlineParseSession {
     waiver.mode = 'all'
     if (close !== -1 && this.closesWithGuardsOpen(text, from, delim, memo, end, waiver)) return close
     waiver.mode = 'none'
-    return this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
+    const blockedClose = this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
+    if (blockedClose !== -1) (memo.startBlocked ??= new Set()).add(`${delim}${from}:${end}`)
+    return blockedClose
   }
 
   private findEmphasisCloseIn(
@@ -1360,7 +1426,10 @@ export class InlineParseSession {
 
   private guardOpens(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
     if (at === from) waiver.atStart = true
-    return waiver.mode === 'all' || (waiver.mode === 'decide' && this.opensBefore(text, at, from, delim, memo, end))
+    if (waiver.mode !== 'decide') return waiver.mode === 'all'
+    // A guard that closes only with this child blocked leaves its attribute
+    // block content, so an outer closer inside it stays reachable (PART 9 E2).
+    return this.opensBefore(text, at, from, delim, memo, end) && (at === from || memo.startBlocked?.has(`${text[at - 1]}${at}:${end}`) !== true)
   }
 
   // Whether the `_` or `/` before `at` opens a span that closes, so `at`
