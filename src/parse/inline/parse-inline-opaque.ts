@@ -163,6 +163,75 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
     }
     return valueStops[start]!
   }
+  // Where a construct that takes an attribute run ends (CARVE-P4-002): a run
+  // anywhere else attaches to nothing, so it is text and hides no closer.
+  const constructEnds = new Set<number>()
+  // Per delimiter, the last index before each position where it can open.
+  const openers = new Map<string, Int32Array>()
+  const openerBefore = (d: string, at: number): number => {
+    let table = openers.get(d)
+    if (!table) {
+      table = new Int32Array(text.length + 1).fill(-1)
+      for (let i = 0; i < text.length; i++) {
+        const prev = text[i - 1]
+        const next = text[i + 1]
+        const opens = text[i] === d && next !== undefined && !isCarveWhitespace(next) && next !== d && prev !== d && prev !== '{'
+          && (prev === undefined || !/[\p{L}\p{N}]/u.test(prev))
+        table[i + 1] = opens ? i : table[i]!
+      }
+      openers.set(d, table)
+    }
+    return table[at]!
+  }
+  // Per marker, the `X}` closers that pair with an earlier `{X` opener.
+  const bracedClosers = new Map<string, Set<number>>()
+  const closesBraced = (d: string, closer: number): boolean => {
+    let closers = bracedClosers.get(d)
+    if (!closers) {
+      closers = new Set()
+      const opens: number[] = []
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === '\\') i++
+        else if (text[i] === '{' && text[i + 1] === d) { opens.push(i); i++ }
+        else if (text[i] === d && text[i + 1] === '}' && opens.length && opens.at(-1)! + 2 < i) { opens.pop(); closers.add(i) }
+      }
+      bracedClosers.set(d, closers)
+    }
+    return closers.has(closer)
+  }
+  // The last `{~` opener and the last `~>` before each position.
+  let tildes: { open: Int32Array; arrow: Int32Array } | undefined
+  const attached = (at: number): boolean => {
+    if (constructEnds.has(at) || lastLabelClose === at - 1) return true
+    const before = text[at - 1]
+    if (before === undefined) return false
+    if (before === '}') {
+      const marker = text[at - 2]
+      if (marker === undefined || !'*_/~^,=+-'.includes(marker)) return false
+      if (!closesBraced(marker, at - 2)) return false
+      // A substitution takes no attribute run (CARVE-P3-017).
+      if (marker === '~') {
+        if (!tildes) {
+          const open = new Int32Array(text.length + 1).fill(-1)
+          const arrow = new Int32Array(text.length + 1).fill(-1)
+          for (let i = 0; i < text.length; i++) {
+            open[i + 1] = text[i] === '{' && text[i + 1] === '~' ? i : open[i]!
+            arrow[i + 1] = text[i] === '~' && text[i + 1] === '>' ? i : arrow[i]!
+          }
+          tildes = { open, arrow }
+        }
+        const open = tildes.open[at - 2]!
+        return open === -1 || tildes.arrow[at - 3]! < open + 2
+      }
+      return true
+    }
+    if (before === ':') return /:[A-Za-z0-9+-][A-Za-z0-9_+-]*:$/.test(text.slice(Math.max(0, at - 66), at))
+    if (!'*_/~^,='.includes(before)) return false
+    // A bare closer follows a non-space and closes an opener that can open.
+    const inner = text[at - 2]
+    if (inner === undefined || isCarveWhitespace(inner) || inner === before || inner === '{') return false
+    return openerBefore(before, at - 2) !== -1
+  }
   let quoteStops: { double: Int32Array; single: Int32Array } | undefined
   const quoteEnd = (start: number): number => {
     if (!quoteStops) {
@@ -187,8 +256,10 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
     while (labels.length && labels.at(-1)! <= at) lastLabelClose = labels.pop()!
     if (text[at] === '[') { const close = brackets?.(at); if (close !== undefined) labels.push(close) }
     if (text[at] === '\\') { at++; continue }
-    const protectedEnd = destinations.get(at) ?? (text[at] === '`' && (codeEnds?.[at] ?? -1) !== -1 ? codeEnds![at] : undefined)
-    if (protectedEnd !== undefined) { at = protectedEnd - 1; continue }
+    const destinationEnd = destinations.get(at)
+    if (destinationEnd !== undefined) constructEnds.add(destinationEnd + 1)
+    const protectedEnd = destinationEnd ?? (text[at] === '`' && (codeEnds?.[at] ?? -1) !== -1 ? codeEnds![at] : undefined)
+    if (protectedEnd !== undefined) { constructEnds.add(protectedEnd); at = protectedEnd - 1; continue }
     if (text.startsWith('%%', at) && (at === 0 || /[ \n]/.test(text[at - 1]!) || text[at - 1] === '[' && brackets?.(at - 1) !== undefined)) {
       const newline = text.indexOf('\n', at)
       const end = Math.min(newline === -1 ? text.length : newline, labels.at(-1) ?? text.length)
@@ -208,7 +279,7 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
       }
       RE_AUTOLINK_STICKY.lastIndex = at
       const autolink = RE_AUTOLINK_STICKY.exec(text)
-      if (autolink) { ends.set(at, at + autolink[0].length); at += autolink[0].length - 1; continue }
+      if (autolink) { ends.set(at, at + autolink[0].length); constructEnds.add(at + autolink[0].length); at += autolink[0].length - 1; continue }
     }
     if (text[at] === '{' && text[at + 1] === '#' && lastLabelClose === at - 1 && !spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd)) {
       const attribute = RE_INLINE_ATTR.exec(text.slice(at))
@@ -227,7 +298,7 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
         close = last >= at + 2 ? text.indexOf(`${marker}}`, at + 2) : -1
         nextComments.set(marker, close)
       }
-      const prefix = marker === '#' && !spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd) ? RE_INLINE_ATTR.exec(text.slice(at)) : null
+      const prefix = marker === '#' && attached(at) && !spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd) ? RE_INLINE_ATTR.exec(text.slice(at)) : null
       const prefixEnd = prefix && isValidInlineAttrPayload(prefix[1]!) && !isEmptyAttrs(parseAttrs(prefix[1]!)) ? at + prefix[0].length : undefined
       if (prefixEnd !== undefined) attributeTails.set(at, prefixEnd)
       if (close !== -1 && (marker === '%' || close > at + 2)) {
@@ -236,11 +307,12 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
         continue
       }
     }
-    if (text[at] !== '{' || spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd)) continue
+    if (text[at] !== '{' || !attached(at) || spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd)) continue
     const match = RE_INLINE_ATTR.exec(text.slice(at))
     if (match && isValidInlineAttrPayload(match[1]!) && !isEmptyAttrs(parseAttrs(match[1]!))) {
       ends.set(at, at + match[0].length)
       attributeTails.set(at, at + match[0].length)
+      constructEnds.add(at + match[0].length)
       at += match[0].length - 1
     }
   }

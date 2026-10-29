@@ -456,6 +456,9 @@ export interface EmphasisMemo {
   boldItalic?: { closers: number[]; minimumOwners: number[]; width: number }
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
+  // The same, with every glued bracket taking a destination (`nested` in the
+  // core grammar), as the editorial insert, delete and substitution scans read.
+  nestedDestinations?: Map<number, number>
   // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
   // resolves a label with, so the scan hides exactly the run the parser builds.
   brackets?: BracketClose
@@ -598,10 +601,11 @@ export function atomicLinkRegions(text: string): Array<[number, number]> {
 // Only a bracket pair the parser can build a link or image from has a
 // destination: not a footnote reference `[^n]` nor an inline note `^[...]`. The
 // attribute block after the `)` is not part of what E2a hides.
-export function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number> {
-  if (memo.destinations) return memo.destinations
+export function linkDestinations(text: string, memo: EmphasisMemo, nested = false): Map<number, number> {
+  if (nested ? memo.nestedDestinations : memo.destinations) return (nested ? memo.nestedDestinations : memo.destinations)!
   const found = new Map<number, number>()
-  memo.destinations = found
+  if (nested) memo.nestedDestinations = found
+  else memo.destinations = found
   const firstLinkTail = text.indexOf('](')
   if (firstLinkTail === -1) return found
   const sharedSlots: { first: number; ends?: Map<number, number> } = { first: firstLinkTail + 1 }
@@ -613,13 +617,21 @@ export function linkDestinations(text: string, memo: EmphasisMemo): Map<number, 
   const destinationOpeners = new Set((sharedSlots.ends ??= destinationSlotEnds(text, sharedSlots.first)).keys())
   const atoms = atomicLinkRegions(text)
   let atom = 0
+  // Glued brackets pair up left to right: a run glued to a text half is the
+  // label of a reference pair and takes no destination (`[b][a](u)`). A
+  // footnote or note bracket does not start a pair.
+  const textHalves = new Set<number>()
   for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
     while (atom < atoms.length && atoms[atom]![1] <= open) atom++
     if (atom < atoms.length && atoms[atom]![0] < open) continue
     const close = brackets(open)
     if (close === undefined) continue
+    if (!nested && textHalves.has(open - 1)) continue
+    // A `{^` opener owns its `^`, so the bracket after it is no inline note.
+    const note = !nested && (text[open + 1] === '^' || text[open - 1] === '^' && text[open - 2] !== '{')
+    if (!note) textHalves.add(close)
     if (close + 1 <= covered) continue
-    if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
+    if (text[close + 1] !== '(' || note) continue
     if (!destinationOpeners.has(close + 1)) continue
     const scanned = scanDestination(text, close + 1)
     if (scanned === null) continue

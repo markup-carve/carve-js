@@ -59,6 +59,8 @@ import {
   verbatimSpanEnd,
 } from '../parse-core.js'
 
+const EDITORIAL_INSERT = PAIR_MARKERS.indexOf('+')
+const EDITORIAL_DELETE = PAIR_MARKERS.indexOf('-')
 const smartTokensByFirst = new Map<string, typeof SMART_TOKENS>()
 for (const token of SMART_TOKENS) {
   const first = token[0][0]!
@@ -127,7 +129,8 @@ export class InlineParseSession {
     return null
   }
 
-  private substitutionScans: SubstitutionScanner | undefined
+  // `labels`: the destinations only the `nested` reading has, by start.
+  private substitutionScans: { scanner: SubstitutionScanner; labels: Array<[number, number]> } | undefined
 
   /**
    * A substitution's pair end and top-level arrow, or null for a forced strike.
@@ -135,9 +138,11 @@ export class InlineParseSession {
    */
   private substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
     if (text[open + 1] !== '~' || splitBracedOpener(text, open)) return null
-    const end = this.bracedPairEnd(text, open, '~}')
+    let end = this.bracedPairEnd(text, open, '~}')
     if (end === -1) return null
     if (this.substitutionScans === undefined) {
+      const paired = linkDestinations(text, newEmphasisMemo())
+      const labels: Array<[number, number]> = []
       const hosts = new Map<number, number>()
       const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
       for (let at = 0; at < text.length; at++) {
@@ -145,7 +150,10 @@ export class InlineParseSession {
         const close = brackets?.(at)
         if (close !== undefined) hosts.set(at, close + 1)
       }
-      for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
+      for (const [at, close] of linkDestinations(text, newEmphasisMemo(), true)) {
+        hosts.set(at, close + 1)
+        if (!paired.has(at)) labels.push([at, close])
+      }
       // An autolink or a cross-reference is atomic (PART 9 E2a): a `~>` ending one is no arrow.
       for (const [at, end] of atomicLinkRegions(text)) if (!hosts.has(at)) hosts.set(at, end)
       for (let at = 0; at < text.length; at++) {
@@ -154,10 +162,28 @@ export class InlineParseSession {
         const close = this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
       }
-      this.substitutionScans = new SubstitutionScanner(text, hosts)
+      labels.sort((a, b) => a[0] - b[0])
+      this.substitutionScans = { scanner: new SubstitutionScanner(text, hosts), labels }
     }
-    const arrow = this.substitutionScans.findArrow(open + 2, end - 2)
-    return arrow === -1 ? null : { end, arrow }
+    // The substitution reads a reference label's parentheses as a destination
+    // (`nested`), so a `~}` inside one does not close it.
+    const labels = this.substitutionScans.labels
+    let lo = 0
+    for (let hi = labels.length; lo < hi;) {
+      const mid = (lo + hi) >> 1
+      if (labels[mid]![0] <= open + 1) lo = mid + 1
+      else hi = mid
+    }
+    for (let i = lo; i < labels.length && labels[i]![0] < end - 2; i++) {
+      const close = labels[i]![1]
+      if (close < end - 2) continue
+      const next = this.pairCloser(text, close + 1, '~')
+      if (next === -1) return null
+      end = next + 2
+    }
+    const arrow = this.substitutionScans.scanner.findArrow(open + 2, end - 2)
+    if (arrow === -1) return null
+    return { end, arrow }
   }
 
   private commentCloserPositions: Map<string, number> | undefined
@@ -240,7 +266,9 @@ export class InlineParseSession {
     const ends = new Int32Array(n + 2).fill(-1)
     const codeEnds = backtickRunEnds(text)
     const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
-    const destinations = linkDestinations(text, newEmphasisMemo())
+    const destinationMemo = newEmphasisMemo()
+    const destinations = linkDestinations(text, destinationMemo)
+    const editorialDestinations = text.includes('{+') || text.includes('{-') ? linkDestinations(text, destinationMemo, true) : destinations
     const lineComments = new Map<number, number>()
     const attributeTails = new Map<number, number>()
     const barePairs = new Map<number, { close: number; end: number }>()
@@ -254,6 +282,11 @@ export class InlineParseSession {
     const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
     for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
     const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
+    // The editorial scan (`edScan`) reads no attribute run and no glued pair.
+    const editorialMarker = PAIR_MARKERS.split('').map((_, m) => m === EDITORIAL_INSERT || m === EDITORIAL_DELETE)
+    const sameEnd = (end: number): number => end
+    const afterFor = editorialMarker.map(editorial => editorial ? sameEnd : afterAttributes)
+    const destinationsFor = editorialMarker.map(editorial => editorial ? editorialDestinations : destinations)
     const bracketEnds = new Set<number>()
     const openerMarks = new Set<number>()
     for (let at = 0; at < n; at++) {
@@ -325,25 +358,28 @@ export class InlineParseSession {
         const isCloser = next === '}' && ch === PAIR_MARKERS[m] && (!openerMarks.has(j) || ch === '+' || ch === '-')
         raw[j] = next === '}' && ch === PAIR_MARKERS[m] ? j : raw[j + 1]!
         let stop: number
+        const editorial = editorialMarker[m]!
+        const pairDestinationEnd = destinationsFor[m]!.get(j)
+        const after = afterFor[m]!
         const commentEnd = lineComments.get(j)
         if (bracketEnds.has(j)) stop = -1
         else if (commentEnd !== undefined) stop = raw[j] !== -1 && raw[j]! < commentEnd ? raw[j]! : table[commentEnd]!
         else if (codeEnd !== undefined) {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
-          stop = codeEnd !== -1 ? table[afterAttributes(codeEnd)]! : raw[j]!
+          stop = codeEnd !== -1 ? table[after(codeEnd)]! : raw[j]!
         } else if (attributeEnd !== undefined) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
-          ? raw[j]! : table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
-        else if (bracketEnd !== undefined) stop = table[afterAttributes(bracketEnd + 1)]!
-        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
+          ? raw[j]! : table[ch === '<' ? after(attributeEnd) : attributeEnd]!
+        else if (bracketEnd !== undefined) stop = table[after(bracketEnd + 1)]!
+        else if (pairDestinationEnd !== undefined) stop = table[after(pairDestinationEnd + 1)]!
         else if (isCloser) stop = j
         else if (ch === '{' && nextId !== -1 && (nextId !== m || FORCED_TYPE[next!] !== undefined) && ends[j] !== -1) {
           // A matched child owns its closer, including a child of this kind.
           // Unmatched openers leave the following closer visible.
-          stop = table[afterAttributes(ends[j]!)]!
+          stop = table[after(ends[j]!)]!
         } else {
           stop = table[j + 1]!
-          if (bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
+          if (!editorial && bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
         }
         table[j] = stop
       }
@@ -1133,6 +1169,14 @@ export class InlineParseSession {
         const m = RE_RAW_INLINE_STICKY.exec(text)
         if (m) {
           j = this.pairAttributeEnd(text, j + m[0].length) - 1
+          continue
+        }
+      }
+      // An attached attribute run is opaque, such as one after a `:name:` shortcode.
+      if (ch === '{' && text[j - 1] === ':') {
+        const tail = this.pairAttributeEnd(text, j)
+        if (tail > j) {
+          j = tail - 1
           continue
         }
       }
