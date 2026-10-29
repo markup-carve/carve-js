@@ -39,6 +39,8 @@ import type {
 } from '../../ast.js'
 import { isLiteralInlineDirective, scanDirectiveShape } from '../../include-directive.js'
 
+const RE_EMPTY_ATTR = /\{ *\}/y
+
 const ordinaryAscii = new Uint8Array(128)
 for (let code = 48; code <= 57; code++) ordinaryAscii[code] = 1
 for (let code = 65; code <= 90; code++) ordinaryAscii[code] = 1
@@ -980,17 +982,25 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     return emitAtCursor(s, { type: 'smart_punctuation', kind: 'en_dash', value: '{--}' } as SmartPunctuation, 4)
   }
 
+  function execAt(re: RegExp, text: string, at: number): RegExpExecArray | null {
+    re.lastIndex = at
+    return re.exec(text)
+  }
+
   function scanAttachedAttrs(s: InlineScan, hasBrace: boolean): boolean {
     const { text, i, out } = s
     // Inline attribute block — attaches to preceding node. It must be GLUED:
     // a non-empty `buf` means unflushed text (e.g. a space) sits between the
     // preceding node and the `{`, so the block is NOT attached -- it stays
     // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
-    const attr = !s.buf && hasBrace && !spanAttrProvablyInvalid(text, i, s.quoteEnd, s.valueEnd) ? RE_INLINE_ATTR.exec(text.slice(i)) : null
+    // A bracketed span's run also takes the blessed empty block as a member
+    // that adds nothing (CARVE-P9-021, carve#4077).
+    const empty = !s.buf && hasBrace && out.at(-1)?.type === 'span' ? execAt(RE_EMPTY_ATTR, text, i) : null
+    const attr = empty ?? (!s.buf && hasBrace && !spanAttrProvablyInvalid(text, i, s.quoteEnd, s.valueEnd) ? RE_INLINE_ATTR.exec(text.slice(i)) : null)
     // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
     // whole block literal (§14), same strict rule as block/span attrs — so
     // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
-    if (!attr || !out.length || !isValidInlineAttrPayload(attr[1]!)) return false
+    if (!attr || !out.length || (!empty && !isValidInlineAttrPayload(attr[1]!))) return false
     const prev = out[out.length - 1]!
     const parsed = parseAttrs(attr[1]!)
     // A `{...}` that yields no real attribute is literal text (PART 9
@@ -1002,8 +1012,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     // the attrs attach and are silently discarded at render (mentions/tags
     // are stable inert spans that do not take attributes). Matches
     // carve-rs / carve-php, which keep the `{...}` literal in these cases.
-    if (ATTR_INERT_PREV.has(prev.type) || isEmptyAttrs(parsed)) return false
-    ;(prev as { attrs?: Attrs }).attrs = accumulateAttrs(
+    if (ATTR_INERT_PREV.has(prev.type) || (isEmptyAttrs(parsed) && !empty)) return false
+    if (!empty) (prev as { attrs?: Attrs }).attrs = accumulateAttrs(
       (prev as { attrs?: Attrs }).attrs,
       parsed,
     )
