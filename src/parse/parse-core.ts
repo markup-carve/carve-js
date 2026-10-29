@@ -636,7 +636,7 @@ export {
   stripVerbatimPadding,
   symbolOpensAt,
 } from './inline/parse-inline-core.js'
-export type { AnchorRange, EmphasisMatch, EmphasisMemo, InlinePairView, InlineSource } from './inline/parse-inline-core.js'
+export type { AnchorRange, BarePair, EmphasisMatch, EmphasisMemo, InlinePairView, InlineSource } from './inline/parse-inline-core.js'
 export {
   OpenMarkerClassifier,
   RE_COLON_RUN,
