@@ -22,8 +22,8 @@ for (const prefix of ['', '> ', '> > ']) for (const fence of ['```', '~~~']) {
 
 it('does not close a note fence with a deeper delimiter', () => {
   const html = carveToHtml('- [^n]: text\n    ```\n    code\n        ```\n    more\nafter [^n]')
-  expect(html).toContain('<code>\ncode\n</code>')
-  expect(html).not.toMatch(/<li id="fn1">[\s\S]*<pre><code>/)
+  // The run past the opener is payload, so `after` folds into the open paragraph (CARVE-P2-006).
+  expect(html).toBe('<ul>\n  <li></li>\n</ul>')
 })
 
 it('measures the note body from an ordered item content column', () => {

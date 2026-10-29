@@ -4,7 +4,7 @@ import type { ParseOptions, UnclosedContainer, RefusedContinuationMarker, Stripp
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
-import type { OwnershipCut } from './block/block-ownership.js'
+import type { OverindentedOpener, OwnershipCut } from './block/block-ownership.js'
 
 export const TRAILING_WS = '[ \\t]*$'
 
@@ -150,13 +150,21 @@ export class Lexer {
     return this.lineView ? this.lineView.lexer.lineAt(this.lineView.start + index) : this.storedLines[index]
   }
 
+  /** Root lines whose quote first-block `+` the walk refused by its follower's raw column. */
+  refusedQuotePlus: Set<number>
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; the offset map already holds it, the column does not. */
   ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts }: { lines: string[]; cuts: Map<number, OwnershipCut[]> }): void {
+  applyOwnership({ lines, cuts, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number>; overindented?: OverindentedOpener[] }): void {
+    for (const o of overindented ?? []) {
+      this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
+        column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
+        kind: o.kind, owner: o.owner, contentColumn: o.contentColumn, authoredColumn: o.column })
+    }
+    for (const index of refusedPlus ?? []) this.refusedQuotePlus.add(index)
     if (!cuts.size) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
     for (const [index, lineCuts] of cuts) {
@@ -378,7 +386,7 @@ export class Lexer {
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
   /** Attachment lookahead results, keyed by the view's content column. */
-  attachmentScans?: Map<number, AttachedViewScan>
+  attachmentScans?: Map<number | string, AttachedViewScan>
   attachmentFenceClosers?: AttachmentFenceClosers
   scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
@@ -469,6 +477,7 @@ export class Lexer {
     this.consumedContinuationLines = inherited?.consumedContinuationLines ?? new Set()
     this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
     this.firstBlockQuoteColumns = inherited?.firstBlockQuoteColumns ?? new Map()
+    this.refusedQuotePlus = inherited?.refusedQuotePlus ?? new Set()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()

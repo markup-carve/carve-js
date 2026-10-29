@@ -40,10 +40,11 @@ describe('an escalation reaches the block that failed, not the document', () => 
   // The two halves apart, so the joined case below cannot be read as either
   // one of them changing on its own.
   it('escalates a block whose minimal form opens a heading it does not have', () => {
-    // Indented, so the text IS `## H` rather than a heading. At column zero the
-    // minimal form would open one, so this block escalates - in full, by §2's
+    // Escaped, so the text IS `## H` rather than a heading (an indented `##`
+    // opens one under rule A, carve#3885). Bare, the minimal form would open
+    // one, so this block escalates - in full, by §2's
     // THE UNIT IS THE OPENER: the run is `##`, not its first character.
-    expect(written('  ## H\n')).toBe('\\#\\# H\n')
+    expect(written('\\#\\# H\n')).toBe('\\#\\# H\n')
   })
 
   it('leaves a block whose minimal form re-parses as itself alone', () => {
@@ -53,7 +54,7 @@ describe('an escalation reaches the block that failed, not the document', () => 
   it('does not spread the escalation from the block that needed it', () => {
     // Corpus 396 in markup-carve/carve#1516. Before §2b the second paragraph
     // came back `plain \(b\) text`, escaped because a DIFFERENT block failed.
-    expect(written('  ## H\n\nplain (b) text\n')).toBe('\\#\\# H\n\nplain (b) text\n')
+    expect(written('\\#\\# H\n\nplain (b) text\n')).toBe('\\#\\# H\n\nplain (b) text\n')
   })
 
   it('reaches the inline run before the block containing it', () => {
@@ -80,7 +81,7 @@ describe('an escalation reaches the block that failed, not the document', () => 
     // A ROW OPENS ON ITS LEADING PIPE, so that is the occurrence escaped and
     // the closing pipe stays bare - the block is what escalates, and §2 still
     // decides each occurrence inside it.
-    expect(written(' | a |\n | b |\n\nsee (c) 50% now\n')).toBe(
+    expect(written('\\| a |\n\\| b |\n\nsee (c) 50% now\n')).toBe(
       '\\| a |\n\\| b |\n\nsee (c) 50% now\n',
     )
   })
@@ -88,6 +89,6 @@ describe('an escalation reaches the block that failed, not the document', () => 
   it('escalates every block in a document where every block fails', () => {
     // The conservative form is still reachable - it is just arrived at because
     // each block needed it, rather than because one did.
-    expect(written('  ## H\n\n  ### I\n')).toBe('\\#\\# H\n\n\\#\\#\\# I\n')
+    expect(written('\\#\\# H\n\n\\#\\#\\# I\n')).toBe('\\#\\# H\n\n\\#\\#\\# I\n')
   })
 })

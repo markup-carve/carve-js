@@ -323,3 +323,138 @@ export function findDirectives(
   }
   return spans
 }
+
+/** The end of a quoted run opening at `from` on its line, or -1 when it never closes. */
+function quotedRunEnd(text: string, from: number): number {
+  const quote = text[from]
+  for (let i = from + 1; i < text.length; i++) {
+    const char = text[i]
+    if (char === '\n') return -1
+    if (char === '\\') i++
+    else if (char === quote) return i
+  }
+  return -1
+}
+
+/** The last scans, keyed by text: openers are tried left to right, so these keep a run of them linear. */
+const pairMemo = { text: '', from: 0, at: -1, newline: -1 }
+const closerMemo = { text: '', from: 0, at: -1, stop: -1 }
+
+/** Whether a `}}` follows `from` on its line, quotes aside: none means no closer. */
+function pairBeforeLineEnd(text: string, from: number): boolean {
+  if (pairMemo.text !== text || from < pairMemo.from || from > pairMemo.at) {
+    const at = text.indexOf('}}', from)
+    pairMemo.text = text
+    pairMemo.from = from
+    pairMemo.at = at === -1 ? Infinity : at
+    const newline = at === -1 ? -1 : text.slice(from, at).lastIndexOf('\n')
+    pairMemo.newline = newline === -1 ? -1 : from + newline
+  }
+  return pairMemo.at !== Infinity && pairMemo.newline < from
+}
+
+/** The first `}}` at or after `from` outside a terminated quoted run, or -1. */
+function closerIndex(text: string, from: number): number {
+  if (closerMemo.text === text && from >= closerMemo.from &&
+      (from <= closerMemo.at || closerMemo.at === -1 && from <= closerMemo.stop)) return closerMemo.at
+  if (!pairBeforeLineEnd(text, from)) return -1
+  let quoted = false
+  let found = -1
+  let i = from
+  for (; i < text.length; i++) {
+    const char = text[i]
+    if (char === '\n') break
+    if (char === '"' || char === "'") {
+      quoted = true
+      const end = quotedRunEnd(text, i)
+      if (end !== -1) i = end
+    } else if (char === '}' && text[i + 1] === '}') {
+      found = i
+      break
+    }
+  }
+  if (!quoted) Object.assign(closerMemo, { text, from, at: found, stop: i })
+  return found
+}
+
+const OPTION_KEY_RE = /^[A-Za-z_][\w-]*/
+const OPTION_VALUE_RE = /^[^}|"'\\ \t\r\n@]+/
+
+export interface DirectiveShape {
+  end: number
+  quoted: boolean
+  /** Each option's key and raw value; null for a bare option. */
+  options: [string, string | null][]
+}
+
+/**
+ * The `include_directive` (PART 6) opening at `open`, read by its SHAPE only:
+ * any identifier key, value or not. PART 10 I2 decides a code include line
+ * from this spelling, so an unknown or malformed option must not unmake it.
+ */
+export function scanDirectiveShape(text: string, open = 0): DirectiveShape | null {
+  if (text.slice(open, open + 2) !== '{{') return null
+  const closer = closerIndex(text, open + 2)
+  if (closer === -1) return null
+  const inner = text.slice(open + 2, closer)
+  let i = 0
+  while (inner[i] === ' ') i++
+  if (i === 0) return null
+  const quoted = inner[i] === '"'
+  if (quoted) {
+    const end = quotedRunEnd(inner, i)
+    if (end === -1) return null
+    i = end + 1
+  } else {
+    const start = i
+    while (i < inner.length && !'#@} '.includes(inner[i]!)) i++
+    if (i === start) return null
+  }
+  let j = i
+  while (inner[j] === ' ') j++
+  if (inner[j] === '#') {
+    const name = /^\w[\w-]*/.exec(inner.slice(j + 1))
+    if (!name) return null
+    i = j + 1 + name[0].length
+  }
+  const options: [string, string | null][] = []
+  for (;;) {
+    j = i
+    while (inner[j] === ' ') j++
+    if (inner[j] !== '@') break
+    const key = OPTION_KEY_RE.exec(inner.slice(j + 1))
+    if (!key) return null
+    i = j + 1 + key[0].length
+    if (inner[i] !== ':') {
+      options.push([key[0], null])
+      continue
+    }
+    if (inner[i + 1] === '"' || inner[i + 1] === "'") {
+      const end = quotedRunEnd(inner, i + 1)
+      if (end === -1) return null
+      options.push([key[0], inner.slice(i + 2, end)])
+      i = end + 1
+    } else {
+      const value = OPTION_VALUE_RE.exec(inner.slice(i + 1))
+      if (!value) return null
+      options.push([key[0], value[0]])
+      i += 1 + value[0].length
+    }
+  }
+  return /^ +$/.test(inner.slice(i)) ? { end: closer + 2, quoted, options } : null
+}
+
+/**
+ * A directive that stays literal text in core inline content: an invalid
+ * `@lines` range, or a bare `@code` on a bare path.
+ */
+export function isLiteralInlineDirective(shape: DirectiveShape): boolean {
+  return shape.options.some(([key, value]) => key === 'lines'
+    ? !/^([1-9]\d*)-([1-9]\d*)$/.test(value ?? '') || lineRangeReversed(value!)
+    : key === 'code' && value === null && !shape.quoted)
+}
+
+function lineRangeReversed(value: string): boolean {
+  const [start, end] = value.split('-').map(BigInt)
+  return start! > end!
+}

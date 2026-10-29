@@ -460,13 +460,8 @@ export interface EmphasisMemo {
   lastBrace: number
   lastCritic?: number
   boldItalic?: { closers: number[]; minimumOwners: number[]; width: number }
-  // Closer walks run for a guarded opener's look-behind, by delimiter, start and end.
+  // Closer walks run for an outer opener's E2 check, by delimiter, start and end.
   closes?: Map<string, number>
-  // `failed` for the walk that opens every guarded child.
-  failedGuardsOpen?: Map<string, Uint8Array>
-  // Walks, keyed as `closes`, that close only with their start's guarded child
-  // blocked, so that child's attribute block is content.
-  startBlocked?: Set<string>
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
   // The same, with every glued bracket taking a destination (`nested` in the

@@ -29,6 +29,13 @@ const destinationValue = (token: string): string | undefined => {
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
 
+/** Whether a quote body's last line is paragraph text a lazy line can continue. */
+function endsInParagraph(body: readonly string[]): boolean {
+  const last = body.at(-1)!
+  if (last.trim() === '' || /^ {0,3}#/.test(last) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(last)) return false
+  return body.filter(line => /^ {0,3}(?:`{3,}|~{3,})/.test(line)).length % 2 === 0
+}
+
 function htmlShape(html: string): string {
   const visit = (node: P5Node): Shape[] => {
     if (node.nodeName === '#text') return [domValue(node) ?? '']
@@ -42,9 +49,42 @@ function htmlShape(html: string): string {
       .filter(attr => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th') && !(attr.name === 'aria-label' && tag === 'input'))
       .map(attr => [attr.name, attr.value])
     attrs.sort()
-    return [[tag, attrs, structural ? children.filter(child => !layout(child)) : children]]
+    // A tight item's text ends in layout whitespace before a nested block.
+    const blockText = (child: Shape): Shape => typeof child === 'string' ? child.replace(/[ \t\r\n]+$/, '') : child
+    return [[tag, attrs, structural ? children.filter(child => !layout(child)).map(blockText) : children]]
   }
   return JSON.stringify(visit(parseFragment(html)))
+}
+
+const listMarker = /^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+)(.*)$/
+
+interface ListItemLines { line: number; body: string[] }
+
+/**
+ * Split a list into items: each item's marker line content plus the lines indented to its
+ * content column, dedented. A blank line between items or inside an item makes the list loose.
+ */
+function listItemsAt(input: readonly string[], at: number, ordered: boolean): { items: ListItemLines[]; next: number; loose: boolean } {
+  const items: ListItemLines[] = []
+  let i = at, loose = false, match: RegExpExecArray | null
+  while (i < input.length && (match = listMarker.exec(input[i]!)) && /\d/.test(match[2]!) === ordered) {
+    const spaces = match[3]!.length > 4 ? 1 : match[3]!.length
+    const column = match[1]!.length + match[2]!.length + spaces
+    const body = [match[4]!]
+    const line = i++
+    let end = i
+    while (end < input.length) {
+      const text = input[end]!
+      if (text.trim() === '') { end++; continue }
+      if (!text.startsWith(' '.repeat(column))) break
+      for (; i < end; i++) body.push('')
+      body.push(text.slice(column)); i = ++end
+    }
+    if (body.slice(1).some(text => text === '')) loose = true
+    items.push({ line, body })
+    if (i < end && end < input.length && (match = listMarker.exec(input[end]!)) && /\d/.test(match[2]!) === ordered) { loose = true; i = end }
+  }
+  return { items, next: i, loose }
 }
 
 /** A bounded grammar proves the constructs it reads; ambiguous syntax remains unassessed. */
@@ -145,7 +185,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
     }
     return result
   }
-  const blocks = (input: string[], first: number, depth = 0): string => {
+  const blocks = (input: string[], first: number, depth = 0, tight = false): string => {
     if (depth > 64) { complete = false; return '' }
     let html = ''
     for (let i = 0; i < input.length;) {
@@ -228,7 +268,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if (/^ {0,3}>/.test(line)) {
         const body: string[] = []; const start = i
         while (i < input.length && /^ {0,3}>/.test(input[i]!)) body.push(input[i++]!.replace(/^ {0,3}> ?/, ''))
-        const alert = depth === 0 && !/ {2}$/.test(body[0]!) ? GITHUB_ALERT_LABEL.exec(body[0]!.trimEnd()) : null
+        const alert = depth === 0 && !/ {2}$/.test(body[0]!) ? GITHUB_ALERT_LABEL.exec(body[0]!.replace(/^ {0,3}/, '').trimEnd()) : null
+        if (alert !== null) {
+          // Lazy continuation lines extend the body's open paragraph.
+          while (i < input.length && endsInParagraph(body) && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
+        }
         const kind = alert === null || !body.slice(1).some(text => text.trim() !== '') ? undefined : GITHUB_ALERT_KINDS[alert[1]!]
         if (kind !== undefined) {
           emit('github-alert', n, 'normalized')
@@ -236,23 +280,28 @@ export function assessMarkdown(source: string, value: string): Assessment {
         }
         emit('block-quote', n); html += `<blockquote>\n${blocks(body, first + start, depth + 1)}</blockquote>\n`; continue
       }
-      if ((match = /^ {0,3}([-+*]|\d{1,9}[.)])[ \t]+(.*)$/.exec(line))) {
-        const ordered = /\d/.test(match[1]!), tag = ordered ? 'ol' : 'ul'; emit(ordered ? 'ordered-list' : 'bullet-list', n)
-        const open = `<${tag}${ordered && parseInt(match[1]!, 10) !== 1 ? ` start="${parseInt(match[1]!, 10)}"` : ''}`
+      if (listMarker.test(line)) {
+        const ordered = /\d/.test(listMarker.exec(line)![2]!), tag = ordered ? 'ol' : 'ul'
+        const start = parseInt(listMarker.exec(line)![2]!, 10)
+        const { items: listItems, next, loose } = listItemsAt(input, i, ordered)
+        if (listItems.some(item => item.body.some(text => text.trim() !== '' && /^ *\t/.test(text)))) complete = false
+        emit(ordered ? 'ordered-list' : 'bullet-list', n)
+        const open = `<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}`
         let items = '', taskList = true
-        while (i < input.length && (match = /^ {0,3}([-+*]|\d{1,9}[.)])[ \t]+(.*)$/.exec(input[i]!)) && /\d/.test(match[1]!) === ordered) {
-          emit('list-item', first + i); const body = match[2]!
-          const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body)
-          if (task && ordered) {
-            if (orderedTaskMarkerIsUnspellable(lines[first + i - 1] ?? '')) emit('ordered-task', first + i, 'dropped', 'structure-unspellable')
-            items += `<li>${escape(body.slice(0, 3))} ${inline(task[2]!, first + i)}</li>\n`
+        for (const { line: at, body: [body, ...rest] } of listItems) {
+          emit('list-item', first + at)
+          const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body!)
+          if (task && rest.length) { complete = false; taskList = false; items += '<li></li>\n' }
+          else if (task && ordered) {
+            if (orderedTaskMarkerIsUnspellable(lines[first + at - 1] ?? '')) emit('ordered-task', first + at, 'dropped', 'structure-unspellable')
+            items += `<li>${escape(body!.slice(0, 3))} ${inline(task[2]!, first + at)}</li>\n`
           } else if (task) {
-            emit('bullet-task', first + i); taskList = true
+            emit('bullet-task', first + at); taskList = true
             const done = task[1] !== ' '
-            items += `<li${done ? ' data-task-state="x"' : ''}><input type="checkbox"${done ? ' checked' : ''} disabled aria-label="${escape(task[2]!)}"> ${inline(task[2]!, first + i)}</li>\n`
-          } else { taskList = false; items += `<li>${inline(body, first + i)}</li>\n` }
-          i++
+            items += `<li${done ? ' data-task-state="x"' : ''}><input type="checkbox"${done ? ' checked' : ''} disabled aria-label="${escape(task[2]!)}"> ${inline(task[2]!, first + at)}</li>\n`
+          } else { taskList = false; items += `<li>${blocks([body!, ...rest], first + at, depth + 1, !loose)}</li>\n` }
         }
+        i = next
         html += `${open}${!ordered && taskList ? ' class="task-list"' : ''}>\n${items}</${tag}>\n`; continue
       }
       if (/^ {0,3}</.test(line) && /^(?: {0,3}<(?:div|table|script|style|pre|!--)(?:[\s>]|$))/i.test(line)) {
@@ -263,10 +312,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
       }
       const body: string[] = [line]; i++
       while (i < input.length && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
-      emit('paragraph', n)
+      if (!tight) emit('paragraph', n)
       if (body.some(text => /\t/.test(text))) complete = false
       const beforeInline = diagnostics.length
       const content = inline(body.join('\n').trim(), n)
+      if (tight) { html += `${content}\n`; continue }
       const loneImage = diagnostics.slice(beforeInline).some(row => row.code === 'markdown-image' || row.code === 'markdown-reference-link') && /^<img\b[^>]*>$/.test(content)
       html += loneImage ? `${content}\n` : `<p>${content}</p>\n`
     }

@@ -18,7 +18,7 @@ import { createInlineScanner, type InlineScannerSession } from './inline/parse-i
 import { createLineBlockParser, type LineBlockHost } from './block/parse-line-block.js'
 import { createLinkDefinitionCollector } from './parse-link-definitions.js'
 import { createTableBlockParser, type TableBlockHost } from './table/parse-table-block.js'
-export { mergeAttrs } from '../extension/attribute-merge.js'
+export { mergeAttrs, recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
 export { parseAttrs } from '../extension/attribute-parser.js'
 export type { LinkDef } from './inline/inline-resolution.js'
 export { normalizeRefLabel } from '../label-key.js'
@@ -579,6 +579,7 @@ export type {
   DanglingBlockAttributes,
   ParseOptions,
   RefusedContinuationMarker,
+  OverindentedOpenerReport,
   StrippedLineOrigin,
   UnclosedCodeFence,
   UnclosedContainer,
@@ -648,6 +649,7 @@ export {
   isStackedFirstBlockQuoteMarker,
   lazyContinuationEndsList,
   listHelpers,
+  quotedNoteFirstBlockMarker,
   markerClassifiers,
   markerDecision,
   markerRunListIsQuoteHeld,
@@ -813,6 +815,7 @@ export {
   trackQuoteHostFence,
   trackWrappedAttributeRun,
   walkContainerPrefix,
+  walkMarkerOwnerPrefix,
 } from './block/parse-quote-core.js'
 export type {
   BlockQuoteLazyMode,

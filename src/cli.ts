@@ -71,6 +71,7 @@ import {
   type HtmlImportMode,
   type RenderResult,
   type RenderLossCode,
+  decisionTraceJsonLines,
 } from './index.js'
 import { filterLintWarnings } from './lint.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
@@ -111,6 +112,8 @@ Usage:
                                    Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
+  carve trace [file]               Print the block decision trace as JSON lines
+                                   (carve docs/decision-trace.md)
   carve migrate --from FORMAT [options] [file]
                                    Convert html, markdown (md), djot or bbcode to
                                    Carve. --mode, --adapter and --list-table
@@ -868,7 +871,8 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
       const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''
-      io.writeErr(`${file}${at} ${loss.code} - ${loss.message}\n`)
+      const chain = loss.includedBy?.map(site => `${site.file}:${site.line}:${site.column}`).join(' > ')
+      io.writeErr(`${loss.file ?? file}${at} ${loss.code} - ${loss.message}${chain ? ` (included from ${chain})` : ''}\n`)
     }
     if (result.truncated) {
       io.writeErr(`${file}: ${effectiveTotal - effectiveLosses.length} additional render losses omitted from the bounded report\n`)
@@ -1191,6 +1195,16 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       throw e
     }
     if (!writeIncludeReport(values['report-includes'], expanded.dependencies, io)) return 2
+    const root = realpathSync(absoluteRoot(includeRoot!))
+    const display = (id: string): string => {
+      const path = relative(root, id)
+      return path === '..' || path.startsWith(`..${sep}`) ? id : path.split(sep).join('/')
+    }
+    for (const loss of result.losses) {
+      if (!loss.file || !loss.includedBy) continue
+      loss.file = display(loss.file)
+      loss.includedBy = loss.includedBy.map((site, index) => ({ ...site, file: index === 0 ? positionals[0] ?? '<stdin>' : display(site.file) }))
+    }
     return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
   }
 
@@ -1263,6 +1277,7 @@ async function runCommand(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'diff') return runDiff(rest, io)
   if (sub === 'merge') return runMerge(rest, io)
   if (sub === 'portability') return runPortability(rest, io)
+  if (sub === 'trace') return runTrace(rest, io)
   if (sub === 'migrate') return runMigrate(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
@@ -1452,6 +1467,23 @@ async function loadDjot(io: CliIO): Promise<DjotEngine | undefined> {
       '  npm install @djot/djot\n',
   )
   return undefined
+}
+
+/** `carve trace file.crv` - the ownership decision of every line, for trace-diff. */
+async function runTrace(args: string[], io: CliIO): Promise<number> {
+  if (args.length > 1 || (args[0]?.startsWith('-') && args[0] !== '-')) {
+    io.writeErr('carve trace: usage: carve trace [file]\n')
+    return 2
+  }
+  let src: string
+  try {
+    src = args[0] !== undefined && args[0] !== '-' ? io.readFile(resolvePath(args[0])) : await io.readStdin()
+  } catch {
+    io.writeErr(`carve trace: cannot read ${args[0]}\n`)
+    return 2
+  }
+  io.write(decisionTraceJsonLines(src))
+  return 0
 }
 
 /** `carve portability file.crv` - render with both engines and compare. */

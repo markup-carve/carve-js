@@ -32,20 +32,7 @@
   "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
     "a fence after a footnote boundary closes without claiming the next line": "#3921"
   },
-  "a-line-block-pairs-fence-runs-past-its-content-column.test.ts": {
-    "round-trips paired payload runs in a list line block": "#3921",
-    "round-trips paired payload runs in a quoted list line block": "#3921"
-  },
-  "a-line-leaving-a-nested-footnote-restores-the-item-paragraph.test.ts": {
-    "does not restore the item paragraph while its nested note stays open": "#3920"
-  },
   "a-line-retained-after-a-comment-opens-the-deepest-paragraph.test.ts": {
-    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted ::: inner and a comment span": "#3918",
-    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted inner and a comment span": "#3918",
-    "preserves inline code continuation * tail in the writer": "#3918",
-    "preserves inline code continuation - tail in the writer": "#3918",
-    "preserves inline code continuation 1. tail in the writer": "#3918",
-    "preserves inline code continuation a) tail in the writer": "#3918",
     "retains a marker after a comment without claiming document text": "#3922"
   },
   "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
@@ -59,16 +46,8 @@
   "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
     "does not claim a quote marker inside an inline code span": "#3921"
   },
-  "an-escalation-reaches-the-block-that-failed.test.ts": {
-    "an escalation reaches the block that failed, not the document > does not spread the escalation from the block that needed it": "#3921",
-    "an escalation reaches the block that failed, not the document > escalates a block whose minimal form opens a heading it does not have": "#3921",
-    "an escalation reaches the block that failed, not the document > escalates every block in a document where every block fails": "#3921",
-    "an escalation reaches the block that failed, not the document > widens to the block when escaping the run is not enough": "#3921"
-  },
   "an-imported-source-is-a-writer-fixed-point.test.ts": {
-    "an imported source is a carve fmt fixed point > 507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-13: the imported source is what the writer emits": "#3921",
-    "an imported source is a carve fmt fixed point > 561-a-line-block-payload-span-pairs-past-the-content-column-2: the imported source is what the writer emits": "#3921",
-    "an imported source is a carve fmt fixed point > 561-a-line-block-payload-span-pairs-past-the-content-column: the imported source is what the writer emits": "#3921"
+    "an imported source is a carve fmt fixed point > 507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-13: the imported source is what the writer emits": "#3921"
   },
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
@@ -256,11 +235,8 @@
     "the non-HTML render ledger > records the output every renderer still produces": "#3921"
   },
   "corpus.test.ts": {
-    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph": "#3918",
-    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph-2": "#3918",
     "spec corpus > 581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2": "#3920",
     "spec corpus > 612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence-2": "#3922",
-    "spec corpus > 649-a-first-block-plus-refuses-a-follower-at-an-intervening-column-5": "#3922",
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },
   "deep-term-comment-code-tails.test.ts": {
@@ -284,9 +260,6 @@
     "keeps the definition term column after its comment: comment-term-claude-755": "#3922"
   },
   "definition-description-code-ownership.test.ts": {
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [13]": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [37]": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [61]": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-282'": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-371'": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922",
@@ -307,9 +280,6 @@
   "djot-task-bullet-separators.test.ts": {
     "Only Native task prefixes become checkboxes": "#3921"
   },
-  "empty-list-after-table-takes-flush-left-line.test.ts": {
-    "does not attach a flush-left heading as the first block": "#3920"
-  },
   "fmt-adjacent-tight-lists-in-description.test.ts": {
     "adjacent tight lists stay in a description body": "#3921"
   },
@@ -322,8 +292,7 @@
     "fmt keeps a region marker on its line (CARVE-P11-073) > normalization-outside-a-region-leaves-it-alone: fmt writes the fixture bytes": "#3921"
   },
   "formatter-parity-regressions.test.ts": {
-    "normalizes a constructed carriage return before guarding a quote line": "#3921",
-    "preserves rendered content when formatting \"~``` x\\n[d]: u ```\\n\"": "#3921"
+    "normalizes a constructed carriage return before guarding a quote line": "#3921"
   },
   "heading-between-rejected-and-admitted-fences.test.ts": {
     "reads paragraph ownership and keeps source positions in range: heading-text-band-1": "#3922",
@@ -376,9 +345,6 @@
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
     "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
   },
-  "item-paragraph-em-dash-guard.test.ts": {
-    "guarded em dashes in item and description paragraphs > heading followed by a loose paragraph": "#3921"
-  },
   "later-marker-note-continuation.test.ts": {
     "keeps a later marker in the continued note paragraph: later-12": "#3922",
     "keeps a later marker in the continued note paragraph: later-14": "#3922",
@@ -421,9 +387,6 @@
     "keeps the tail outside the marker note after 'ordered-note-adjacent'": "#3922",
     "keeps the tail outside the marker note after 'ordered-note-code'": "#3922",
     "keeps the tail outside the marker note after 'ordered-note-raw'": "#3922"
-  },
-  "multiline-inline-code.test.ts": {
-    "preserves a constructed Code value after line-ending normalization: \"\\n[r]: /url\"": "#3922"
   },
   "nested-list-source-boundaries.test.ts": {
     "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
@@ -490,9 +453,8 @@
     "preserves paragraph ownership after nested note CODE: nested-36": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-732": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-733": "#3917",
     "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-754": "#3919",
-    "preserves paragraph ownership after nested note CODE: nested-closer-755": "#3919",
     "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-764": "#3919",
@@ -522,9 +484,7 @@
     "quoted comments retain stored host columns > '06-second-literal-depth2-width4-paired' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > 'nested-colon-depth1-code' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 1": "#3918",
-    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 2": "#3918"
+    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922"
   },
   "quoted-link-definition-in-footnote.test.ts": {
     "quoted link definitions in footnote bodies > keeps a marker-line quote paragraph open across its first continuation": "#3922"
@@ -544,7 +504,6 @@
     "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
   },
   "verbatim-continuation-guards.test.ts": {
-    "preserves display math around > continuation continuations": "#3921",
-    "preserves display math around [r]: /target continuations": "#3921"
+    "preserves display math around > continuation continuations": "#3921"
   }
 }

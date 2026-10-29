@@ -10,7 +10,7 @@ const html = (source: string) => carveToHtml(source).trim()
 
 describe('a substitution arrow', () => {
   it.each([
-    ['inside an unclosed code span', '{~`a~>b~}', '<p><s><code>a~&gt;b</code></s></p>'],
+    ['inside an unclosed code span', '{~`a~>b~}', '<p>{~<code>a~&gt;b~}</code></p>'],
     ['inside a closed code span', '{~a `x~>y` b~}', '<p><s>a <code>x~&gt;y</code> b</s></p>'],
     ['escaped', '{~a\\~>b~}', '<p><s>a~&gt;b</s></p>'],
   ])('does not split the pair %s', (_, source, expected) => {

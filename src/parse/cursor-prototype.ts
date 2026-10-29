@@ -35,7 +35,7 @@ export class UnsupportedCursorSyntax extends Error {}
 
 interface SourceLine { text: string; start: number; number: number; baseColumn?: number; lead?: number;
   spanEndColumn?: number; lazyText?: boolean; wrappedAttr?: boolean;
-  ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean;
+  ownedDefinition?: boolean; ownedDefinitionBody?: boolean; ownedFirstBlock?: boolean; refusedPlus?: boolean;
   quoteResume?: boolean; quotedAttachedSibling?: boolean; claimedQuoteLazy?: boolean; ownedLazy?: boolean; noteLazy?: boolean; quoteListLazy?: boolean; quoteParaLazy?: boolean; plusAfterPara?: boolean; abbrText?: boolean; cutAfterMarker?: boolean; event?: LineEvent; ownerEnd?: OwnerEnd; textFence?: boolean }
 type ContainerKind = 'root' | 'quote' | 'colon' | 'list' | 'definition'
 interface ContainerOwner {
@@ -192,6 +192,7 @@ function applyOwnership(lines: SourceLine[], source: string, knownFrom?: number)
     if (quoteParagraphLazyOwner(owner)) lines[index]!.quoteParaLazy = true
   }
   for (const [index, event] of owned.events) lines[index]!.event = event
+  for (const index of owned.refusedPlus) lines[index]!.refusedPlus = true
   for (const [index, end] of owned.ownerEnds) lines[index]!.ownerEnd = end
   for (const index of owned.textFences) lines[index]!.textFence = true
   for (const index of owned.plusAfterPara) lines[index]!.plusAfterPara = true
@@ -3723,9 +3724,22 @@ function parseList(cursor: Cursor, inline: CursorInline, definitionNodes: BlockN
     }
     return owner
   }
+  const takeRefusedPlus = (line: SourceLine): boolean => {
+    if (!line.refusedPlus || line.text !== '+') return false
+    const follower = cursor.peek(1)?.text ?? ''
+    if (listMarker(follower) || FOOTNOTE_DEF.test(follower) ||
+        /^: +/.test(follower) && cursor.peek(2)?.text.trim() === '+') {
+      throw new UnsupportedCursorSyntax('refused plus before structural follower')
+    }
+    cursor.take()
+    appendBody(stack.at(-1)!, { ...line, lazyText: true }, 0, true)
+    updateListFrameEnds(stack, line, listSpan)
+    return true
+  }
   while (cursor.peek()) {
     const line = cursor.peek()!
     if (line.quoteResume) break
+    if (takeRefusedPlus(line)) continue
     const marker = listMarker(line.text)
     const inlineFence = unclosedNestedInlineFence(cursor, stack.at(-1)!, stack.length)
     if (inlineFence) {

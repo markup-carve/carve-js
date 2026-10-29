@@ -533,7 +533,8 @@ describe('lintCarve — indented fenced-code delimiter', () => {
   it('does not flag an indented fence opener at the top level, which opens code', () => {
     const w = lintCarve('  ```\n  code\n  ```\n')
     expect(w.map((x) => x.rule)).not.toContain('fence-delimiter-indentation')
-    expect(w).toEqual([])
+    // carve#3992: the opener past the document's content column is reported, nothing else.
+    expect(w.map((x) => x.rule)).toEqual(['block-opener-overindented'])
   })
 
   it('does not flag an indented tilde fence, which opens code', () => {

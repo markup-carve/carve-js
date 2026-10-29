@@ -4,9 +4,11 @@ import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
 import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
+import { columnCodeCloserIndex } from '../block/parse-block-scan-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
+import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
@@ -45,8 +47,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     blockQuoteParagraphOpen,
     bodyHoldsOpenCommentSpan,
     bottomBlockLeavesParagraphOpen,
-    buildCloserIndex,
-    codeCloserPossible,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
@@ -71,6 +71,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     isPhysicalContinuationMarker,
     isRetainableLineComment,
     isStackedFirstBlockQuoteMarker,
+    quotedNoteFirstBlockMarker,
     isTableRow,
     itemFenceHasCloser,
     lazyContinuationEndsList,
@@ -97,6 +98,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     prefixWalkBound,
     quoteBodyColumn,
     stackedOpenerColumns,
+    opensWrappedAttributeBlock,
     trackWrappedAttributeRun,
     stackedFollowerColumn,
     quoteIndentHasTab,
@@ -115,7 +117,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     unorderedMarkerChar,
     unorderedMatch,
     verbatimOnlyLazyState,
-    walkContainerPrefix,
+    walkMarkerOwnerPrefix,
   } = helpers
   function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
     physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
@@ -353,7 +355,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   /** An item whose first block is attached by a `+` on the marker line, or stacked behind a quote marker. */
   function firstBlockItem(
     lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
-    isItemAttachBoundary: AttachBoundary, firstItemAttachBoundary: AttachBoundary,
+    isItemAttachBoundary: AttachBoundary, firstItemAttachBoundary: AttachBoundary, flags: ListFlags,
   ): FirstBlockOutcome {
     const { content, line, startLineIndex: itemStartLineIndex } = head
     const { itemSource, itemMarkerColumn, itemQuoteDepth } = placement
@@ -380,8 +382,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
       firstBlockSource !== undefined &&
       indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset)
+    // The walk refused this line's quote `+` by its follower's raw column (CARVE-P9-067).
+    const refusedQuotePlus = lexer.refusedQuotePlus.has(lexer.lineNumber(itemStartLineIndex) - 1)
     if (lexer.peek() !== undefined && (firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
-        isStackedFirstBlockQuoteMarker(itemSource)) &&
+        isStackedFirstBlockQuoteMarker(itemSource) && !refusedQuotePlus) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
     }
@@ -397,7 +401,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     lexer.reportRefusedContinuationMarker(itemStartLineIndex,
       lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', undefined, true)
-    return attachedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
+    return attachedFirstBlockItem(lexer, session, shape, head, placement, firstBlockColumn, itemQuoteDepth,
+      isItemAttachBoundary, flags)
   }
 
   function stackedFirstBlockItem(
@@ -473,19 +478,32 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   // EMPTY code block and the closer an inline code span, which is the same
   // damage category 278 pins one level in.
   function attachedFirstBlockItem(
-    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead,
-    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
+    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary, flags: ListFlags,
   ): FirstBlockOutcome {
     const { baseIndent } = shape
+    // `firstBlockColumn` is a source column; this lexer's lines start at the item's frame.
+    const localBlockColumn = Math.max(0, firstBlockColumn - placement.physicalItemMarkerColumn + baseIndent)
     const {
       lines: attached,
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
-    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
+    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth,
+      localBlockColumn)
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
+    // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3).
+    if (attached.length > 1 && !lineOpensBlock(sliceColumns(attached[0]!, localBlockColumn, true))) {
+      const cut = attached.findIndex((line, index) => index > 0 &&
+        indentColumns(line) === placement.contentCol && isListMarkerLine(line.trimStart()))
+      if (cut > 0) {
+        lexer.pos -= attached.length - cut
+        attached.length = cut
+        attachedLineNumbers.length = cut
+      }
+    }
     for (let index = 0; index < attached.length; index++) {
-      attached[index] = sliceColumns(attached[index]!, firstBlockColumn, true)
+      attached[index] = sliceColumns(attached[index]!, localBlockColumn, true)
     }
     // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
     // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
@@ -515,6 +533,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
     const fbChildren = session.parseBlocks(sub, 0)
     const fbItem: ListItem = { type: 'list_item', children: fbChildren }
+    // The item ends at the attached block's boundary; its body goes on only at its content column (§17 L4).
+    let gap = 0
+    while (isBlankLine(lexer.peek(gap))) gap++
+    const bodyLine = lexer.peek(gap)
+    if (bodyLine !== undefined && indentColumns(bodyLine) >= placement.contentCol && !isSiblingMarker(shape, bodyLine)) {
+      const rest = collectItem(lexer, session, shape, head, placement, '', isItemAttachBoundary, flags)
+      fbChildren.push(...rest.children)
+      attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
+      markItem(fbItem, head)
+      return { kind: 'item', item: fbItem, next: flags.hardBoundary ? 'end' : 'continue' }
+    }
     attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
     markItem(fbItem, head)
     let blanks = 0
@@ -525,6 +554,29 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     for (let index = 0; index < blanks; index++) lexer.consume()
     return { kind: 'item', item: fbItem, next: blanks >= 3 ? 'end' : 'loose' }
+  }
+
+  // A sub-item on a task item's marker line stands past the box, at its own column.
+  function taskBoxLeadShift(head: ItemHead, content: string, terminatorFree: boolean): number {
+    if (unorderedMatch(content, terminatorFree) === null && orderedMatch(content, terminatorFree) === null &&
+      taskMatch(content, terminatorFree) === null) return 0
+    return Math.max(0, head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength - 2)
+  }
+
+  // So the lines below it are read from that sub-item's column. A line short of
+  // it lowers the shift for the rest, which keeps a later fence's payload indent.
+  function dedentTaskLead(nested: string[], shift: number): void {
+    for (let k = 0; k < nested.length; k++) {
+      const text = nested[k]!
+      if (isBlankLine(text)) continue
+      const indent = indentColumns(text)
+      if (indent > 0 && indent < shift) {
+        nested[k] = sliceColumns(text, indent - 1, true)
+        continue
+      }
+      shift = Math.min(shift, indent)
+      if (shift > 0) nested[k] = sliceColumns(text, shift, true)
+    }
   }
 
   function leadLazyState(
@@ -544,6 +596,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       wrappedAttributeRun: null,
       quote: null,
     } : markerLineState(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
+    const memo = session.markerPrefixMemo(lexer, itemStartLineIndex)
+    const ownedColumn = noFollower || RE_BLOCKQUOTE.test(content) ? -1 : walkMarkerOwnerPrefix(content, memo) || -1
     const lazyState: ItemLazyState = {
       opaque: null,
       invisibleAtColumn: false,
@@ -571,10 +625,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // one seeds nothing: a bare indented line below it is not the quote's
       // content, and whether it is the quote's lazy text is the question
       // `quoteInner` answers.
-      ownedColumn: noFollower || RE_BLOCKQUOTE.test(content)
-        ? -1
-        : walkContainerPrefix(content, session.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
+      ownedColumn,
       ownedAuthored: false,
+      ownedQuote: () => ownedColumn > 0 ? markerLineQuoteState(content.slice(ownedColumn), memo) : null,
     }
     return { leadState, lazyState }
   }
@@ -912,6 +965,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { startLineIndex: itemStartLineIndex, line, terminatorFree, checked, taskState, leadOrigin } = head
     const itemAttrs = head.attr ? head.attr.attrs : undefined
     const { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth } = placement
+    const taskLeadShift = isTask ? taskBoxLeadShift(head, content, terminatorFree) : 0
     const nested: string[] = []
     let commentPayloadCandidates: Map<number, string> | undefined
     const nestedLineNumbers: number[] = []
@@ -1339,6 +1393,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lazyState.footnoteBodyColumn = markerNoteFloor - contentCol
     }
     const noteParagraphMarkers = new Set<number>()
+    // Filled by the first scan, which resets any state it cannot resume.
+    const commentFenceTailScan = {} as CommentFenceOpenerScan
+    const fenceReachScan = {} as FenceReachScan
     const markerNoteFenceMemos = new Map<number, QuotedFenceCloserMemo>()
     const itemParagraphFences = new Set<number>()
     let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
@@ -1471,8 +1528,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           wrappedAttributeFence = null
       }
       const physicalAttributeLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
+      // An opener indented below this item's content column, or one an enclosing item
+      // admitted as lazy, is paragraph text, so its closer ends no paragraph (PART 0 O2, O3).
+      const lazyAttributeOpener = wrappedAttribute.attrRun === null &&
+        opensWrappedAttributeBlock(stripLazyFrame(l).trimStart()) && (l.startsWith(LAZY_FRAME) ||
+          indentColumns(l) > 0 && (admission.kind === 'below' || admission.kind === 'outside' ||
+            lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
       if (quotePrefixDepth(physicalAttributeLine) < itemQuoteDepth) wrappedAttribute.attrRun = null
-      else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
+      else if (lazyAttributeOpener) {
+        // Not a run: the line reads as text.
+      } else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
           trackWrappedAttributeRun(wrappedAttribute, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
       const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
       const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
@@ -1497,6 +1562,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sourceColumn(precedingSource) > itemMarkerColumn &&
           sourceColumn(physicalFollower, itemQuoteDepth) > itemMarkerColumn &&
           sourceColumn(physicalFollower, itemQuoteDepth) < itemMarkerColumn + contentCol - baseIndent) return 'stop'
+      // A note's `+` also takes a non-list block at document column zero (CARVE-P9-067).
+      if (pendingBlankRun.count === 0 && precedingSource !== undefined && physicalFollower !== undefined &&
+          quotedNoteFirstBlockMarker(precedingBody) && sourceColumn(precedingSource) > itemMarkerColumn &&
+          indentColumns(physicalFollower) === 0 && (itemQuoteDepth === 0 || quotePrefixDepth(physicalFollower) === 0) &&
+          !isListMarkerLine(l.trimStart()) && !isBlankLine(l)) {
+        const pulled = session.collectAttachedListBlock(lexer, isItemAttachBoundary, 0, false, 0, 0)
+        nested.push(...pulled.lines)
+        nestedSourceLines.push(...pulled.lines)
+        nestedLineNumbers.push(...pulled.lineNumbers)
+        return 'continue'
+      }
       if (pendingBlankRun.count === 0 && precedingSource !== undefined && precedingContent !== undefined &&
           firstBlockOpenerContent(precedingContent) && sourceColumn(precedingSource) > itemMarkerColumn &&
           physicalFollower !== undefined && sourceColumn(physicalFollower, itemQuoteDepth) ===
@@ -1581,10 +1657,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         consumedNoteCloserBodyColumn = undefined
       }
       noteReach = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol
-        ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) : null
+        ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines, fenceReachScan) : null
       fenceBoundaryTail = noteReach === 'boundary'
       commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-        markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true).length > 0
+        markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true, commentFenceTailScan).length > 0
       noteParagraphOpen = markerNoteParagraph
       if (!isBlankLine(l)) {
         markerNoteParagraph = false
@@ -1765,7 +1841,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         return 'continue'
       }
-      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) {
+      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!) ||
+          lexer.refusedQuotePlus.has(plusLineNumber - 1)) {
         const refused = lexer.lineAt(plusLineIndex) ?? '+'
         const text = sliceColumns(refused, Math.min(plusColumn, contentCol), true)
         nested.push(text)
@@ -1814,9 +1891,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           (RE_FENCE.test(attachedLines[0]) || RE_RAW_FENCE.test(attachedLines[0]))) {
         authoredDescendantFenceBlanks = 0
       }
+      // `plusColumn` is a source column; the attached lines are this lexer's.
+      const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
       for (let k = 0; k < attachedLines.length; k++) {
-        const attachedLine = plusColumn > contentCol
-          ? sliceColumns(attachedLines[k]!, plusColumn, true) : attachedLines[k]!
+        const attachedLine = localPlusColumn > contentCol
+          ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
         nested.push(attachedLine)
         nestedSourceLines.push(attachedLines[k])
         nestedLineNumbers.push(attachedLineNumbers[k]!)
@@ -1890,12 +1969,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A comment the note covered closed its paragraph.
       if (pendingNoteComments.size > 0) return true
       const claim = verbatimOnlyLazyState()
-      const claimClosers = buildCloserIndex(nested)
-      trackItemLazyState(content, claim, marker => codeCloserPossible(claimClosers, marker, -1), true, () => false,
+      const claimCloser = columnCodeCloserIndex(nested)
+      trackItemLazyState(content, claim, (marker, extra = 0) => claimCloser(marker, -1, extra, extra), true, () => false,
         { whitespace: 0, descendantFrames: true, terminatorFree: true })
       for (let index = 0; index < nested.length; index++) {
         const text = nested[index]!
-        trackItemLazyState(text, claim, marker => codeCloserPossible(claimClosers, marker, index), true, () => false,
+        trackItemLazyState(text, claim, (marker, extra = 0) => claimCloser(marker, index, extra, Math.max(extra, indentColumns(text))), true, () => false,
           { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
       }
       return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
@@ -2079,7 +2158,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
         nestedTermOwnsSeparator = true
-      if (sourceDescription !== null && lw === contentCol && sourceMarkerColumn >= leadNestedMarkerColumn &&
+      if (sourceDescription !== null && lw === contentCol && sourceMarkerColumn === leadNestedMarkerColumn &&
           leadNestedTerm && !leadHasDeeperItem &&
           lazyState.inDefList === false && lazyState.deepest?.inDefList !== 'term' &&
           pendingBlankRun.count === 0)
@@ -2333,7 +2412,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
         isListMarkerLine(dedented.trimStart())
       if (noteParagraphOpen && !followsBlank && (markerNoteFirstText || continuedMarkerNoteText) && isListMarkerLine(dedented.trimStart())) noteParagraphMarkers.add(nested.length - 1)
-      trackedContent = markerNoteFirstText || continuedMarkerNoteText ? 'text' : dedented
+      // An absorbed colon run keeps its spelling so the run below it stays text (CARVE-P9-016).
+      trackedContent = (markerNoteFirstText || continuedMarkerNoteText) && !RE_COLON_RUN.test(dedented.trimStart())
+        ? 'text' : dedented
       markerNoteFirstText = false
       if (isMarker && lazyState.opaque === null) {
         const markerContent = markerFreeContent(dedented)
@@ -2838,7 +2919,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, contentCol) < contentCol && !RE_COMMENT_LINE.test(l)) {
         lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       } else if (indentColumns(l, contentCol) < contentCol &&
-          (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()))) {
+          (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()) ||
+            opensWrappedAttributeBlock(l.trimStart()) && indentColumns(l) > 0)) {
         // A below-column opener stays text; comments keep their source column.
         const flushed = l.replace(/^[ \t]+/, '')
         // After a retaining comment the body owns the opener (carve#3285).
@@ -3002,11 +3084,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A task item's marker-line note rebases the lines reaching its body at its own source column.
     const taskNoteShift = isTask && markerNoteItem ? markerNoteFloor - FOOTNOTE_BODY_COLUMN - contentCol : 0
     if (taskNoteShift > 0) {
+      // A line below the body has left the note, and so has every line after it.
       for (let k = 0; k < nested.length; k++) {
         const text = nested[k]!
-        if (!isBlankLine(text) && indentColumns(text) >= taskNoteShift + FOOTNOTE_BODY_COLUMN) nested[k] = sliceColumns(text, taskNoteShift, true)
+        if (isBlankLine(text)) continue
+        if (indentColumns(text) < taskNoteShift + FOOTNOTE_BODY_COLUMN) break
+        nested[k] = sliceColumns(text, taskNoteShift, true)
       }
     }
+    if (taskLeadShift > 0) dedentTaskLead(nested, taskLeadShift)
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
@@ -3422,7 +3508,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         items.push(wrappedItem)
         continue
       }
-      const firstBlock = firstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, firstItemAttachBoundary)
+      const firstBlock = firstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, firstItemAttachBoundary, flags)
       if (firstBlock.kind === 'item') {
         items.push(firstBlock.item)
         if (firstBlock.next === 'end') break

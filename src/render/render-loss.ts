@@ -1,4 +1,5 @@
 import type { Position } from '../ast.js'
+import { includeSitesForPosition } from '../includes.js'
 
 export type RenderTarget = 'html' | 'markdown' | 'plain' | 'ansi' | 'carve'
 export type RenderLossCode =
@@ -27,6 +28,8 @@ interface RenderLossBase {
   nodeType: 'inline' | 'block'
   message: string
   pos?: Position
+  file?: string
+  includedBy?: Array<{ file: string; line: number; column: number }>
 }
 
 export type RenderLoss =
@@ -298,7 +301,14 @@ export function checkedRender(
   const value = render((loss) => {
     totalLosses++
     lossCounts[loss.code] = (lossCounts[loss.code] ?? 0) + 1
-    if (losses.length < maximum) losses.push(loss)
+    if (losses.length < maximum) {
+      const sites = loss.pos && includeSitesForPosition(loss.pos)
+      const { file, ...pos } = loss.pos ?? {} as Position
+      losses.push({ ...loss, ...(loss.pos ? { pos } : {}), ...(file && sites?.length ? {
+        file,
+        includedBy: sites.map(site => ({ file: site.file ?? '<stdin>', line: site.line, column: site.column })),
+      } : {}) })
+    }
   })
   const result: RenderResult = {
     value,

@@ -72,6 +72,7 @@ export type {
   QuoteLazyHint,
   QuotedFenceCloserMemo,
   RefusedContinuationMarker,
+  OverindentedOpenerReport,
   StrippedLineOrigin,
   UnclosedCodeFence,
   UnclosedContainer,

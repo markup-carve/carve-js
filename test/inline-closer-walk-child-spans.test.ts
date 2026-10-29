@@ -45,12 +45,12 @@ describe('an attribute block after a span behind a guarding opener belongs to th
   ])('%s', (source, expected) => expect(html(source)).toBe(expected))
 
   it.each([
-    ['/_a_{title="/"} b', '<p><em><u>a</u>{title=“</em>”} b</p>'],
-    ['*/_a_{title="*"} b c*', '<p><strong>/_a_{title=“</strong>”} b c*</p>'],
+    ['/_a_{title="/"} b', '<p>/<u title="/">a</u> b</p>'],
+    ['*/_a_{title="*"} b c*', '<p><strong>/<u title="*">a</u> b c</strong></p>'],
   ])('keeps the guard when the opener before it never closes: %s', (source, expected) => expect(html(source)).toBe(expected))
 
   it.each([
-    ['/_a_{t="/"} /_a_{t="/"}', '<p><em><u>a</u>{t=“</em>”} <em><u>a</u>{t=“</em>”}</p>'],
+    ['/_a_{t="/"} /_a_{t="/"}', '<p><em><u t="/">a</u> /_a_{t=“</em>”}</p>'],
     ['/_a_{t="/"} /_b_{t="/"} c/', '<p><em><u t="/">a</u> /_b_{t=“</em>”} c/</p>'],
     ['_*a*{t="_"} _*b*{t="_"} c_', '<p><u><strong t="_">a</strong> _*b*{t=“</u>”} c_</p>'],
     // All three engines; the spec model differs (markup-carve/carve#3915).

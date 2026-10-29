@@ -42,6 +42,7 @@ carve lint --caption-hints file.crv # also check likely missed captions
 carve diff a.crv b.crv     # semantic changes, ignoring source reflow
 carve merge base.crv ours.crv theirs.crv # merge independent edits
 carve portability file.crv # report where the document reads differently in Djot
+carve trace file.crv       # print the block decision trace as JSON lines
 carve --help
 carve --version            # or -V: prints `carve-js <version>`
 ```
@@ -173,6 +174,25 @@ unsoundness (carve-js#546). Carve's deliberate departures (`/italic/`, `=mark=`,
 quoted link titles) are divergences and are reported as such. It needs
 djot.js, which this package does not depend on - `npm install @djot/djot`
 alongside. See [Portability](migration.md#portability).
+
+`carve trace` prints the decision trace of the spec repository's
+[`docs/decision-trace.md`](https://github.com/markup-carve/carve/blob/main/docs/decision-trace.md):
+a header line, then one JSON record per source line naming the step that
+decided its owner (`S1` payload, `S2` an accepted `+`, `S4` lazy, `S5` apply),
+the owner path (`doc/item:1/quote:2`), the governing clause and the line's
+form. The records come from `ownLines`, the ownership walk `parse` runs, so the
+normal parse does no trace work. In a checkout of the spec repository next to
+this one (or with `CARVE_JS_DIR` set), after `npm run build`:
+
+```bash
+node scripts/trace-diff.mjs input.crv --engine js
+```
+
+prints the first line where carve-js decides differently from the spec model.
+A decision carve-js takes in a block reader after the walk, such as refusing a
+`+` whose follower cannot attach, shows up as a difference at that line. The
+same records are available as `decisionTrace(source)` and
+`decisionTraceJsonLines(source)`.
 
 `carve-version-unsupported` reads a frontmatter `carve-version:` key - the
 author-facing declaration of which Carve version a document targets - and warns

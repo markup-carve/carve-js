@@ -30,6 +30,7 @@ import { DocumentIdRegistry } from '../ast/document-ids.js'
 import { reachableFootnoteLabels } from './footnote-numbering.js'
 import { SMART_PUNCTUATION_GLYPHS } from '../ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js'
+import { recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
 import { TRANSLIT_MAP } from '../translit-map.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { hasCaptionAtContentColumn, hasLazySecondLine } from '../parse/block/paragraph-indent.js'
@@ -1362,6 +1363,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // §15), matching a direct block image `{#id}\n![…](…)`. Otherwise the id
       // would be lost when the paragraph wrapper is dropped.
       if (b.attrs) img.attrs = mergeAttrs(b.attrs, img.attrs ?? {})
+      recordPromotedImageBlockRun(img, b.attrs ?? {})
       blocks[i] = img as unknown as BlockNode
       continue
     }

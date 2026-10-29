@@ -37,7 +37,7 @@ import type {
   Tag,
   Text,
 } from '../../ast.js'
-import { DIRECTIVE_SCAN_RE, parseDirective } from '../../include-directive.js'
+import { isLiteralInlineDirective, scanDirectiveShape } from '../../include-directive.js'
 
 const ordinaryAscii = new Uint8Array(128)
 for (let code = 48; code <= 57; code++) ordinaryAscii[code] = 1
@@ -68,7 +68,9 @@ export interface InlineScannerSession {
     noClose?: EmphasisMemo,
     end?: number,
     inBracketRun?: boolean,
+    guardOpen?: boolean,
   ): EmphasisMatch | null
+  bareOpenerStands(text: string, i: number, guardOpen: boolean): boolean
   pairView(offset: number): InlinePairView
   plainInlineWord(
     text: string,
@@ -156,6 +158,11 @@ interface InlineScan {
   // Caption number placeholder: only the first bare `#` in a caption becomes one.
   captionNumberEmitted: boolean
   emphasisNoClose: EmphasisMemo | undefined
+  // The delimiter stack's unpaired open entries at this level: the last one's
+  // position, and the kinds held (E3), so a `_` or `/` guard counts only
+  // where it stands as one (carve#3973 X1).
+  openEntryAt: number
+  openEntryKinds: string
   crossrefMemo: CrossrefMemo | undefined
   commentLineEnd: number
   bracketRuns: Array<{ start: number; close: number }>
@@ -301,7 +308,6 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   } = helpers
   const RE_MENTION_AT = new RegExp(RE_MENTION.source.slice(1), 'y')
   const RE_TAG_AT = new RegExp(RE_TAG.source.slice(1), 'y')
-  const DIRECTIVE_AT = new RegExp(DIRECTIVE_SCAN_RE.source, 'y')
 
   // A trailing `{...}` on a link or image tail. An invalid payload (`{2=v}`)
   // is literal (§14), and an empty-attr `{…}` is literal too -- neither is
@@ -375,6 +381,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       quoteContext: '',
       captionNumberEmitted: false,
       emphasisNoClose: undefined,
+      openEntryAt: -1,
+      openEntryKinds: '',
       crossrefMemo: undefined,
       commentLineEnd: -1,
       bracketRuns: [],
@@ -1096,9 +1104,17 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
   function scanEmphasis(s: InlineScan): boolean {
     const { text, i } = s
+    const guardOpen = s.openEntryAt === i - 1
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
-      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0)
-    if (!em) return false
+      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0, guardOpen)
+    if (!em) {
+      const ch = text[i]!
+      if (!s.openEntryKinds.includes(ch) && s.session.bareOpenerStands(text, i, guardOpen)) {
+        s.openEntryAt = i
+        s.openEntryKinds += ch
+      }
+      return false
+    }
     flush(s)
     const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node
     emit(s, node, i, em.end)
@@ -1124,12 +1140,11 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanInvalidLineRangeDirective(s: InlineScan): boolean {
     const { text, i } = s
     if (text.slice(i, i + 2) !== '{{') return false
-    DIRECTIVE_AT.lastIndex = i
-    const found = DIRECTIVE_AT.exec(text)
-    if (!found || found.index !== i || !parseDirective(found[0])?.invalidLines) return false
+    const shape = scanDirectiveShape(text, i)
+    if (!shape || !isLiteralInlineDirective(shape)) return false
     flush(s)
-    emit(s, { type: 'text', value: found[0] }, i, i + found[0].length)
-    s.i += found[0].length
+    emit(s, { type: 'text', value: text.slice(i, shape.end) }, i, shape.end)
+    s.i = shape.end
     return true
   }
 

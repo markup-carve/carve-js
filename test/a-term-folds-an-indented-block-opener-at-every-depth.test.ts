@@ -73,7 +73,8 @@ describe('lintCarve - definition-term-block-folded', () => {
   it('reports the first folded opener once per term, and nothing else on it', () => {
     const source = ':: a\n: b\n  :: c\n    ::: note\n    body\n    :::\n'
     expect(reports(source)).toEqual([])
-    expect(lintCarve(source)).toHaveLength(0)
+    // carve#3992: the note opener stands two columns past the description's content column.
+    expect(lintCarve(source).map((w) => w.rule)).toEqual(['block-opener-overindented'])
     expect(lintCarve('- item\n\n  :: c\n    # H\n').map((w) => w.rule)).toEqual(['list-item-block-overindented'])
   })
 

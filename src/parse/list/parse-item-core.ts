@@ -96,6 +96,8 @@ import {
   startsInterruptingBlock,
   trackBlockQuoteLazyState,
   walkContainerPrefix,
+  walkMarkerOwnerPrefix,
+  opensWrappedAttributeBlock,
   trackWrappedAttributeRun,
 } from '../block/parse-quote-core.js'
 
@@ -116,6 +118,12 @@ export function isPhysicalContinuationMarker(line: string): boolean {
 
 export function isStackedFirstBlockQuoteMarker(line: string): boolean {
   return /^[ \t]*(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
+}
+
+/** A quoted line whose innermost new container is a note opened with `+` (CARVE-P9-067). */
+export function quotedNoteFirstBlockMarker(line: string): boolean {
+  return /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )*\[\^[^\]]+\]: +\+[ \t]*$/
+    .test(sourceQuoteBody(line).trimStart())
 }
 
 export function firstBlockOpenerContent(line: string): boolean {
@@ -1117,6 +1125,7 @@ export interface ItemLineFacts {
 }
 
 export const listHelpers = {
+  opensWrappedAttributeBlock,
   trackWrappedAttributeRun,
   FOOTNOTE_BODY_COLUMN,
   LAZY_FRAME,
@@ -1176,6 +1185,7 @@ export const listHelpers = {
   isPhysicalContinuationMarker,
   isRetainableLineComment,
   isStackedFirstBlockQuoteMarker,
+  quotedNoteFirstBlockMarker,
   isTableRow,
   itemFenceHasCloser,
   lazyContinuationEndsList,
@@ -1223,5 +1233,6 @@ export const listHelpers = {
   unorderedMarkerChar,
   unorderedMatch,
   verbatimOnlyLazyState,
-  walkContainerPrefix
+  walkContainerPrefix,
+  walkMarkerOwnerPrefix,
 }

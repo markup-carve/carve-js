@@ -648,6 +648,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       inner,
       () => true,
       line.facts?.quoteFenceCloser ?? (() => true),
+      // A descent hands each nested quote's fence its own depth to look up.
+      line.facts?.quoteFenceCloser === undefined ? undefined : { levels: 0, askedBelowTop: false },
     )
     state.quoteInner = inner
     state.lazyFoldable = blockQuoteParagraphOpen(inner)

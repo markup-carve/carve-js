@@ -25,7 +25,8 @@ function alertAdmonition(node: BlockNode, source: string): Admonition | undefine
   const [head, ...rest] = node.children
   if (head?.type !== 'paragraph' || head.attrs) return undefined
   const kind = alertKind(head.children[0], source)
-  if (kind === undefined) return undefined
+  // The label must sit on the quote's own first line, not after a blank `>`.
+  if (kind === undefined || node.pos === undefined || head.children[0]!.pos?.startLine !== node.pos.startLine) return undefined
   const after = head.children[1]
   if (after !== undefined && after.type !== 'soft_break') return undefined
   const tail = head.children.slice(2)

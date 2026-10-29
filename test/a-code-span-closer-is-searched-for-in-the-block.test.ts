@@ -19,7 +19,7 @@ describe('a code span opened inside a braced pair', () => {
   })
 
   it.each([
-    ['an unclosed run ends at the pair closer', '{~` ~}', '<p><s><code></code></s></p>'],
+    ['an unclosed run ends at the pair closer', '{~` ~}', '<p>{~<code> ~}</code></p>'],
     ['a closed run inside the pair', '{*a`b`c*}', '<p><strong>a<code>b</code>c</strong></p>'],
     ['a deletion with no span', '{-y-}', '<p><del>y</del></p>'],
     ['an empty pair is literal', '{**}', '<p>{**}</p>'],
