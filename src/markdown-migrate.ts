@@ -13,7 +13,7 @@ import { markdownEmphasis, recordMarkdownProtectedDepth } from './import/markdow
 import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markdown-gfm-autolinks.js'
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
-import { importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
+import { GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
 import { rewriteSameFileHeadingLinks, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
@@ -5302,7 +5302,10 @@ function collectEmptyQuoteRun(
       const candidate = quotedLine(lines[next]!, contentCol)
       if (candidate === null || candidate.prefix !== empty.prefix) break
       if (candidate.text.trim() !== '') {
-        if (indentColumns(candidate.text) < 4 && canonicalQuoteBodyLines(['', candidate.text]).length === 1)
+        // A GitHub alert label below an empty quote line is quote text
+        // (CARVE-P2-033), so the empty line stays to keep it off the first line.
+        const label = contentCol === 0 && empty.prefix.trim() === '>' && GITHUB_ALERT_LABEL.test(candidate.text.trim())
+        if (!label && indentColumns(candidate.text) < 4 && canonicalQuoteBodyLines(['', candidate.text]).length === 1)
           return collectBlockquoteInlineRun(lines, next, dialect, contentCol, markers)
         break
       }

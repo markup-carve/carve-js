@@ -29,6 +29,13 @@ const destinationValue = (token: string): string | undefined => {
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
 type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
 
+/** Whether a quote body's last line is paragraph text a lazy line can continue. */
+function endsInParagraph(body: readonly string[]): boolean {
+  const last = body.at(-1)!
+  if (last.trim() === '' || /^ {0,3}#/.test(last) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(last)) return false
+  return body.filter(line => /^ {0,3}(?:`{3,}|~{3,})/.test(line)).length % 2 === 0
+}
+
 function htmlShape(html: string): string {
   const visit = (node: P5Node): Shape[] => {
     if (node.nodeName === '#text') return [domValue(node) ?? '']
@@ -228,7 +235,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if (/^ {0,3}>/.test(line)) {
         const body: string[] = []; const start = i
         while (i < input.length && /^ {0,3}>/.test(input[i]!)) body.push(input[i++]!.replace(/^ {0,3}> ?/, ''))
-        const alert = depth === 0 && !/ {2}$/.test(body[0]!) ? GITHUB_ALERT_LABEL.exec(body[0]!.trimEnd()) : null
+        const alert = depth === 0 && !/ {2}$/.test(body[0]!) ? GITHUB_ALERT_LABEL.exec(body[0]!.replace(/^ {0,3}/, '').trimEnd()) : null
+        if (alert !== null) {
+          // Lazy continuation lines extend the body's open paragraph.
+          while (i < input.length && endsInParagraph(body) && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
+        }
         const kind = alert === null || !body.slice(1).some(text => text.trim() !== '') ? undefined : GITHUB_ALERT_KINDS[alert[1]!]
         if (kind !== undefined) {
           emit('github-alert', n, 'normalized')
