@@ -242,6 +242,8 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const inner = (state.deepest ??= {
       ...verbatimOnlyLazyState(),
       lazyFoldable: state.lazyFoldable && inlineMarker !== undefined && !hasFenceCloser(inlineMarker, run),
+      // The marker line's quote is the sub-item's first block, so its next line continues it.
+      quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
     })
     trackItemLazyState(
       dedented,

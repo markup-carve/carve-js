@@ -117,7 +117,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     unorderedMarkerChar,
     unorderedMatch,
     verbatimOnlyLazyState,
-    walkContainerPrefix,
+    walkMarkerOwnerPrefix,
   } = helpers
   function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
     physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
@@ -546,6 +546,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       wrappedAttributeRun: null,
       quote: null,
     } : markerLineState(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
+    const memo = session.markerPrefixMemo(lexer, itemStartLineIndex)
+    const ownedColumn = noFollower || RE_BLOCKQUOTE.test(content) ? -1 : walkMarkerOwnerPrefix(content, memo) || -1
     const lazyState: ItemLazyState = {
       opaque: null,
       invisibleAtColumn: false,
@@ -573,10 +575,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // one seeds nothing: a bare indented line below it is not the quote's
       // content, and whether it is the quote's lazy text is the question
       // `quoteInner` answers.
-      ownedColumn: noFollower || RE_BLOCKQUOTE.test(content)
-        ? -1
-        : walkContainerPrefix(content, session.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
+      ownedColumn,
       ownedAuthored: false,
+      ownedQuote: () => ownedColumn > 0 ? markerLineQuoteState(content.slice(ownedColumn), memo) : null,
     }
     return { leadState, lazyState }
   }

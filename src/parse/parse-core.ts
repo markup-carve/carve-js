@@ -814,6 +814,7 @@ export {
   trackQuoteHostFence,
   trackWrappedAttributeRun,
   walkContainerPrefix,
+  walkMarkerOwnerPrefix,
 } from './block/parse-quote-core.js'
 export type {
   BlockQuoteLazyMode,
