@@ -197,9 +197,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const below = lexer.peek()
   if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) &&
       attachesAtDocumentColumnZero(lexer, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true)) {
+    // An attached paragraph ends at an opener that reaches the body column: that line is the body's.
+    const attachedParagraph = !lineOpensItemBlock(below.trimStart())
+    const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
     const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
       lexer,
-      (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a),
+      (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
+        (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)),
       0, true, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true,
     )
     firstBlockAttached = true

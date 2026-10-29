@@ -130,11 +130,13 @@ function isAttrLine(text: string): boolean {
   return lists > 0
 }
 
-function quotedRest(line: string): string {
-  let rest = indentCols(line).rest
-  while (QUOTE_LINE.test(rest)) rest = indentCols(quoteRest(rest)).rest
-  return rest
+function quotedMeasure(line: string): { col: number; rest: string } {
+  let m = indentCols(line)
+  while (QUOTE_LINE.test(m.rest)) m = indentCols(quoteRest(m.rest))
+  return m
 }
+
+const quotedRest = (line: string): string => quotedMeasure(line).rest
 
 /**
  * Rule A (carve#3885): every line is first matched against the open containers,
@@ -149,7 +151,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
-  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number> } | null = null
+  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; byColumn: Map<string, number[]> } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
 
@@ -324,6 +326,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   return { lines: result, cuts }
 
   function classify(rest: string, owner: Frame, at: number): Form {
+    rest = rest.replace(/[ \t]+$/, '')
     if (rest === '') return { kind: 'blank', interrupts: true }
     if (!OPENER_LEAD.test(rest)) return TEXT
     if (QUOTE_LINE.test(rest)) return { kind: 'quote', interrupts: true }
@@ -349,7 +352,8 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
         const c = PURE_FENCE.exec(r)
         return !!(c && c[1]![0] === run[0] && c[1]!.length >= run.length)
       }
-      const reachable = (closerRuns().widest[run[0]!]![at + 1] ?? 0) >= run.length
+      // A closer below the owner's column never matches (CARVE-P0-014).
+      const reachable = (widestFrom(run[0] as '`' | '~', owner.col)[at + 1] ?? 0) >= run.length
       if (owner.para && !reachable) return { kind: 'text', interrupts: false }
       return { kind: 'fence', interrupts: reachable, closes }
     }
@@ -363,8 +367,8 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     const note = NOTE_HEAD.exec(rest)
     if (note && FOOTNOTE_DEF.test(rest)) return { kind: 'note', width: 2, head: note[0].length, interrupts: true }
     const marker = matchMarker(rest)
-    // §10 I2: under an open paragraph a marker opens only in a list item.
-    if (marker && owner.para && owner.kind !== 'item') return { kind: 'text', interrupts: false }
+    // §10 I2: under an open paragraph a marker opens only in a list item. A term is not such a paragraph.
+    if (marker && owner.para && owner.kind !== 'item' && owner.last !== 'term') return { kind: 'text', interrupts: false }
     if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)
@@ -384,7 +388,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   function closerRuns(): NonNullable<typeof runs> {
     if (runs) return runs
     const widest = { '`': new Array<number>(lines.length + 1).fill(0), '~': new Array<number>(lines.length + 1).fill(0) }
-    runs = { widest, lastComment: new Map() }
+    runs = { widest, lastComment: new Map(), byColumn: new Map() }
     for (let j = lines.length - 1; j >= 0; j--) {
       const rest = quotedRest(lines[j]!)
       widest['`'][j] = widest['`'][j + 1]!
@@ -398,5 +402,23 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       if (comment && !runs.lastComment.has(comment[1]!.length)) runs.lastComment.set(comment[1]!.length, j)
     }
     return runs
+  }
+
+  // The widest closer run of `char` at or after every line, counting only closers at `col` or deeper.
+  function widestFrom(char: '`' | '~', col: number): number[] {
+    const key = `${char}${col}`
+    const all = closerRuns()
+    const cached = all.byColumn.get(key)
+    if (cached) return cached
+    const widest = new Array<number>(lines.length + 1).fill(0)
+    for (let j = lines.length - 1; j >= 0; j--) {
+      widest[j] = widest[j + 1]!
+      const m = quotedMeasure(lines[j]!)
+      if (m.col < col) continue
+      const c = PURE_FENCE.exec(m.rest)
+      if (c && c[1]![0] === char) widest[j] = Math.max(widest[j]!, c[1]!.length)
+    }
+    all.byColumn.set(key, widest)
+    return widest
   }
 }

@@ -1324,7 +1324,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A note is an invisible definition: a below-column line after its text
     // or code finds no open paragraph (CARVE-P0-009). A container the note
     // opens is read by its own leaf instead, as before.
-    const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
+    // After a task box the note reads its body from its own source column.
+    const markerNoteFloor = (isTask ? baseIndent + head.markerLine.length - leadingWhitespace(head.markerLine) - content.length
+      : contentCol) + FOOTNOTE_BODY_COLUMN
     const noteParagraphMarkers = new Set<number>()
     const markerNoteFenceMemos = new Map<number, QuotedFenceCloserMemo>()
     const itemParagraphFences = new Set<number>()
@@ -3033,6 +3035,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     frameNoteCommentFences(nested, commentFenceOpeners, noteParagraphMarkers)
     // Rebasing can reveal a fence opened past the item's content column.
     // Its payload markers must not split the collected stream (#2212).
+    // A task item's marker-line note rebases the lines reaching its body at its own source column.
+    const taskNoteShift = isTask && markerNoteItem ? markerNoteFloor - FOOTNOTE_BODY_COLUMN - contentCol : 0
+    if (taskNoteShift > 0) {
+      for (let k = 0; k < nested.length; k++) {
+        const text = nested[k]!
+        if (!isBlankLine(text) && indentColumns(text) >= taskNoteShift + FOOTNOTE_BODY_COLUMN) nested[k] = sliceColumns(text, taskNoteShift, true)
+      }
+    }
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
