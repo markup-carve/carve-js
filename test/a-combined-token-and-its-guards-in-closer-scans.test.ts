@@ -19,7 +19,7 @@ describe('a combined token is opaque to the closer walk (carve-js#3910)', () => 
 describe('a bare pair forms only if every guard before it does (carve-js#3913)', () => {
   it.each([
     ['{/x /_=a={t="/}"} a_ b/}', '<p><em>x /_=a={t=“</em>”} a_ b/}</p>'],
-    ['{*x /_=a={t="*}"} a_ b*}', '<p><strong>x /_=a={t=“</strong>”} a_ b*}</p>'],
+    ['{*x /_=a={t="*}"} a_ b*}', '<p><strong>x /<u><mark t="*}">a</mark> a</u> b</strong></p>'],
     ['{/x {/_=a={t="/}"} a_ b/}', '<p>{/x <em><u><mark t="/}">a</mark> a</u> b</em></p>'],
   ])('%s', (source, expected) => expect(html(source)).toBe(expected))
 })

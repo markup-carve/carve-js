@@ -122,14 +122,14 @@ describe('an escaped delimiter closes no braced pair', () => {
     [
       'an unclosed run ending at the pair closer',
       '{~` ~}\n',
-      '<p><s><code></code></s></p>',
+      '<p>{~<code> ~}</code></p>',
     ],
     // Inside a verbatim run a backslash is content, so the closer an unclosed
     // run ends at still counts.
     [
       'an unclosed run before an escaped closer',
       '{*a`b\\*}\n',
-      '<p><strong>a<code>b\\</code></strong></p>',
+      '<p>{*a<code>b\\*}</code></p>',
     ],
     [
       'a bare pair with an escaped delimiter',

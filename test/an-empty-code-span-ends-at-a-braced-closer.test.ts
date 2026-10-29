@@ -1,26 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml } from '../src/index.js'
 
-// An empty code span is written as an unclosed run, so only a braced closer can
-// end an emphasis around it (carve-js#1773, markup-carve/carve#2051).
-describe('an emphasis ending in an empty code span', () => {
+// An unclosed run takes the rest of the block, a braced closer included, so the
+// pair has no closer and its opener is text (markup-carve/carve#3973 X5). The
+// writer closes the run it reads.
+describe('an unclosed run inside a braced pair', () => {
   it.each([
-    ['{~` ~}\n', '{~``~}\n'],
-    ['a {~` ~} b\n', 'a {~``~} b\n'],
-    ['{*`  *}\n', '{*``*}\n'],
-    ['{~`~}\n', '{~``~}\n'],
-    ['{/` /}\n', '{/``/}\n'],
-    ['{_` _}\n', '{_``_}\n'],
-    ['{=` =}\n', '{=``=}\n'],
-  ])('writes %j with the braced closer', (src, want) => {
+    ['{~` ~}\n', '{~` ~}`\n'],
+    ['a {~` ~} b\n', 'a {~` ~} b`\n'],
+    ['{*`  *}\n', '{*`  *}`\n'],
+    ['{~`~}\n', '{~`~}`\n'],
+    ['{/` /}\n', '{/` /}`\n'],
+    ['{_` _}\n', '{_` _}`\n'],
+    ['{=` =}\n', '{=` =}`\n'],
+    ['{~`a ~}\n', '{~`a ~}`\n'],
+  ])('writes %j as text and a closed run', (src, want) => {
     const out = carveToCarve(src)
     expect(out).toBe(want)
     expect(carveToHtml(out)).toBe(carveToHtml(src))
     expect(carveToCarve(out)).toBe(out)
-  })
-
-  it('keeps the bare closer when the code span has content', () => {
-    expect(carveToCarve('{~`a ~}\n')).toBe('~`a`~\n')
   })
 
   it('leaves an emphasis that holds no code span bare', () => {

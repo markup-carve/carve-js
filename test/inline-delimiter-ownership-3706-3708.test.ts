@@ -9,9 +9,14 @@ describe('inline delimiter ownership', () => {
     expect(html('/*x*/')).toBe('<p><strong><em>x</em></strong></p>')
   })
 
-  it.each(['*', '~', '=', '_'])('does not reuse a %s opener mark as a closer', (mark) => {
-    const source = `{${mark}{${mark}}`
-    expect(html(source)).toBe(`<p>${source}</p>`)
+  // `{X}` is characters (carve#3973 X6), so its X closes the outer pair.
+  it.each([
+    ['*', 'strong'],
+    ['~', 's'],
+    ['=', 'mark'],
+    ['_', 'u'],
+  ])('reads the %s of an empty brace group as a closer', (mark, tag) => {
+    expect(html(`{${mark}{${mark}}`)).toBe(`<p><${tag}>{</${tag}></p>`)
   })
 
   it.each([

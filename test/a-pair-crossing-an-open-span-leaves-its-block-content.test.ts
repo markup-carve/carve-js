@@ -20,6 +20,6 @@ describe('a pair crossing an open span does not hide its block (carve-js#3941)',
   // The italic is guarded by the underline, which closes nowhere else, so
   // pairing blocks it and the strike takes the block.
   it('keeps the block where the crossing opener is blocked', () => {
-    expect(html('_/~/b/~{t=_} b=')).toBe('<p>_/<s t="_"><em>b</em></s> b=</p>')
+    expect(html('_/~/b/~{t=_} b=')).toBe('<p><u><em>~/b</em>~{t=</u>} b=</p>')
   })
 })

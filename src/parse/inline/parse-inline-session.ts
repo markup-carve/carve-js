@@ -86,10 +86,6 @@ function canCloseBarePair(text: string, at: number, marker: string, openerMarks:
 
 // Each closed editorial comment body `{#...#}` mapped to its end, as `edScan`
 // steps over it whole (PART 9 E2a, ruled 2026-10-15).
-// How a closer walk reads a guarded child (see `bareOpener`): decided per
-// child, all opened, or none. `atStart`: the walk's own opener guards one.
-interface Waiver { mode: 'decide' | 'all' | 'none'; atStart: boolean }
-
 function editorialCommentEnds(text: string): Map<number, number> {
   const ends = new Map<number, number>()
   if (!text.includes('{#')) return ends
@@ -106,8 +102,8 @@ function editorialCommentEnds(text: string): Map<number, number> {
 }
 
 // Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
-// `guarded`: the look-behind holds only when that character is text, which
-// the closer walk decides (the PART 3 note under the bare templates).
+// `guarded`: it opens only where that character is an open entry on the
+// stack (the PART 3 note under the bare templates, carve#3973 X1).
 function bareOpener(text: string, at: number): 'open' | 'guarded' | 'none' {
   const ch = text[at]!
   const next = text[at + 1]
@@ -337,7 +333,8 @@ export class InlineParseSession {
         const close = brackets?.(at)
         if (close !== undefined) bracketEnds.add(close)
       }
-      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitBracedOpener(text, at)) openerMarks.add(++at)
+      // `{X}` is characters (CARVE-P3-014): its X is no opener mark.
+      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && text[at + 2] !== '}' && !splitBracedOpener(text, at)) openerMarks.add(++at)
     }
     // Inside a `{X` span the run after a bare closer attaches only if that pair
     // forms: a bare X is literal there (E3), and so is an opener whose guard
@@ -398,9 +395,7 @@ export class InlineParseSession {
       }
       return false
     }
-    // `limit`: the `X}` the span would close at with the run opaque; a guard
-    // closer past it is outside the span (E2a).
-    const bareRunIsContent = (at: number, marker: string, limit: number): boolean => {
+    const bareRunIsContent = (at: number, marker: string): boolean => {
       const owner = text[at - 1]
       if (owner === undefined || !'/*_~='.includes(owner) || text[at - 2] === '\\') return false
       if (owner === marker) return true
@@ -409,11 +404,11 @@ export class InlineParseSession {
       // takes: the pair cannot form.
       if (open === -1 || bracedOpenBefore()[at - 1]! > open || closerTable(owner)[open + 1]! < at - 1) return true
       if (crossedPair(open, at - 1, marker)) return true
-      // A guarded opener forms only if every guard before it does.
+      // A guarded opener forms only if every guard before it is an open entry
+      // where it stands (carve#3973 X1).
       for (let at = open; at > 0 && bareOpener(text, at) === 'guarded' && !openerMarks.has(at - 1); at--) {
         const guard = text[at - 1]!
-        const guardClose = closerTable(guard)[open + 1]!
-        if (guard === marker || bareOpener(text, at - 1) === 'none' || guardClose === -1 || (limit !== -1 && guardClose > limit)) return true
+        if (guard === marker || bareOpener(text, at - 1) === 'none') return true
       }
       return false
     }
@@ -424,7 +419,8 @@ export class InlineParseSession {
       // Where the pair opening here ends, if it closes at all.
       if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined && !splitBracedOpener(text, j)) {
         const stop = tables[nextId]![j + 2]!
-        ends[j] = stop === -1 ? -1 : stop + 2
+        // An empty group `{XX}` is characters (CARVE-P3-014), so it owns no closer.
+        ends[j] = stop === -1 || stop === j + 2 ? -1 : stop + 2
       }
       const codeEnd = ch === '`' ? codeEnds![j]! : undefined
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
@@ -487,10 +483,10 @@ export class InlineParseSession {
         else if (editorialCommentEnd !== undefined) stop = table[editorialCommentEnd]!
         else if (commentEnd !== undefined) stop = raw[j] !== -1 && raw[j]! < commentEnd ? raw[j]! : table[commentEnd]!
         else if (codeEnd !== undefined) {
-          // An unclosed run ends at the pair's closer instead of running to the
-          // end of the block (markup-carve/carve#2056).
-          stop = codeEnd !== -1 ? table[after(codeEnd)]! : raw[j]!
-        } else if (attributeEnd !== undefined && !(isAttributeRun && bareRunIsContent(j, PAIR_MARKERS[m]!, table[attributeEnd]!))) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
+          // An unclosed run takes the rest of the block, inside a pair too
+          // (carve#3973 X5), so the pair has no closer.
+          stop = codeEnd !== -1 ? table[after(codeEnd)]! : -1
+        } else if (attributeEnd !== undefined && !(isAttributeRun && bareRunIsContent(j, PAIR_MARKERS[m]!))) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
           ? raw[j]! : table[ch === '<' ? after(attributeEnd) : attributeEnd]!
         else if (bracketEnd !== undefined) stop = table[after(bracketEnd + 1)]!
         else if (pairDestinationEnd !== undefined) stop = table[after(pairDestinationEnd + 1)]!
@@ -843,6 +839,7 @@ export class InlineParseSession {
       delimitedCommentClose: this.delimitedCommentClose.bind(this),
       extendPosTo: this.extendPosTo.bind(this),
       matchEmphasis: this.matchEmphasis.bind(this),
+      bareOpenerStands: this.bareOpenerStands.bind(this),
       pairView: this.pairView.bind(this),
       plainInlineWord: this.plainInlineWord.bind(this),
       positionCitationItems: this.positionCitationItems.bind(this),
@@ -868,17 +865,33 @@ export class InlineParseSession {
     noClose: EmphasisMemo = newEmphasisMemo(),
     end = text.length,
     inBracketRun = false,
+    guardOpen = false,
   ): EmphasisMatch | null {
     // E2b (markup-carve/carve#3897): a literal bracket run bounds emphasis like
     // a resolved one, so no span opened outside it is reachable inside it.
-    if (!inBracketRun || this.openKinds === NO_OPEN_KINDS) return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+    if (!inBracketRun || this.openKinds === NO_OPEN_KINDS) return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end, guardOpen)
     const outer = this.openKinds
     this.openKinds = NO_OPEN_KINDS
     try {
-      return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+      return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end, guardOpen)
     } finally {
       this.openKinds = outer
     }
+  }
+
+  // Whether the bare delimiter at `i` is pushed as an open entry (E4 under E3).
+  // `guardOpen`: the `_` or `/` before it is itself an open entry there, so it
+  // does not guard (carve#3973 X1).
+  bareOpenerStands(text: string, i: number, guardOpen: boolean): boolean {
+    const delim = text[i]!
+    const after = text[i + 1]
+    const before = text[i - 1]
+    if (!after || isCarveWhitespace(after) || extendsGrapheme(text, i + 1)) return false
+    if (after === delim || before === delim || this.openKinds.has(delim)) return false
+    if (before && /[A-Za-z0-9]/.test(before)) return false
+    if (delim === '=' && after === '>') return false
+    if (!guardOpen && (before === '_' || ((delim === '/' || delim === '_') && before === '/'))) return false
+    return true
   }
 
   private matchEmphasisIn(
@@ -888,13 +901,14 @@ export class InlineParseSession {
     inFootnote: boolean,
     noClose: EmphasisMemo,
     end: number,
+    guardOpen: boolean,
   ): EmphasisMatch | null {
     const c = text[i]!
 
     // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
     if (c === '/' && text[i + 1] === '*') {
       const start = i + 2
-      const close = this.combinedTokenClose(text, i, noClose)
+      const close = this.combinedTokenClose(text, i, noClose, guardOpen)
       if (close !== undefined && close + 2 <= end) {
         const inner = text.slice(start, close)
         const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
@@ -924,35 +938,9 @@ export class InlineParseSession {
     // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
     for (const [delim, type] of emphasisPairs) {
       if (c === delim) {
-        const after = text[i + 1]
-        const before = text[i - 1]
-        // Opener must be followed by a non-whitespace character (CARVE-P3-013;
-        // a tab counts, PART 7).
-        if (!after || isCarveWhitespace(after)) continue
-        if (extendsGrapheme(text, i + 1)) continue
-        // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
-        // same delimiter (before OR after) does not open, so a doubled
-        // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
-        // uniformly with `//x//` and `__x__`. Applies to all five.
-        if (after === delim || before === delim) continue
-        // E3: a second opener of an open kind is content.
-        if (this.openKinds.has(delim)) continue
-        // Word-boundary opener (spec §9): every bare delimiter can't open after
-        // an alphanumeric or `_`, keeping paths/identifiers/numbers literal
-        // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
-        // forced `{X…X}` family for deliberate intraword emphasis.
-        if (before && /[A-Za-z0-9_]/.test(before)) continue
-        // A HIGHLIGHT DOES NOT OPEN BEFORE `>` (markup-carve/carve#1442). `=>`
-        // stopped being an arrow, which exposed its `=` to this machinery for the
-        // first time: `d => e; x != y` opened here and closed on the `=` of `!=`,
-        // rendering `<mark>&gt; e; x !</mark>` out of two things that are not
-        // emphasis at all. The spec's Ohm grammar carries the same guard, and it
-        // costs nothing real - a highlight whose content starts with `>` is a
-        // shape nobody writes, while `=>` in prose about code is everywhere.
-        if (delim === '=' && after === '>') continue
-        // Italic/underline additionally can't open after `/` (path protection,
-        // e.g. snake_/case/).
-        if ((delim === '/' || delim === '_') && before === '/') continue
+        // CARVE-P3-013 and PART 9 §9: flanking, word boundary, no doubled
+        // delimiter, E3, `=>`, and the `_` / `/` guard.
+        if (!this.bareOpenerStands(text, i, guardOpen)) continue
         // Find closer that's not preceded by space
         const close = this.cachedFindEmphasisClose(text, i + 1, delim, noClose, end)
         if (close !== -1) {
@@ -1249,31 +1237,6 @@ export class InlineParseSession {
     visited?: number[],
     end = text.length,
   ): number {
-    const waiver: Waiver = { mode: 'decide', atStart: false }
-    const close = this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
-    if (!waiver.atStart) return close
-    // As `pairGuarded` does: with every guarded child open, an opener that
-    // closes nowhere is no span, so it blocks the child it guards and that
-    // child's attribute block is content.
-    waiver.mode = 'all'
-    if (close !== -1 && this.closesWithGuardsOpen(text, from, delim, memo, end, waiver)) return close
-    waiver.mode = 'none'
-    const blockedClose = this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
-    if (blockedClose !== -1) (memo.startBlocked ??= new Set()).add(`${delim}${from}:${end}`)
-    return blockedClose
-  }
-
-  private findEmphasisCloseIn(
-    text: string,
-    from: number,
-    delim: string,
-    memo: EmphasisMemo,
-    failed: Uint8Array | undefined,
-    visited: number[] | undefined,
-    end: number,
-    waiver: Waiver,
-    ownGuardOpens?: boolean,
-  ): number {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
     this.pairEndTables(text)
@@ -1288,9 +1251,8 @@ export class InlineParseSession {
       visited?.push(j)
       const ch = text[j]!
       const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? this.pairBareAttributes(text, j) : undefined
-      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver)) &&
-        !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, memo, end, lastOpener, () =>
-          ownGuardOpens ??= this.findEmphasisCloseIn(text, from, delim, memo, undefined, undefined, end, { ...waiver }, false) !== -1))) {
+      if (child && (!child.guarded || this.guardStands(text, j, from, delim)) &&
+        !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, delim, memo, end, lastOpener))) {
         attached?.set(child.close + 1, child.end)
         if (!this.crossedByGluedOpener(text, j, child.close, delim, memo, end)) (spent ??= new Set()).add(child.close)
       }
@@ -1411,11 +1373,6 @@ export class InlineParseSession {
       }
       if (ch !== delim && '/*_~='.includes(ch) && !this.openKinds.has(ch) && bareOpener(text, j) !== 'none') (lastOpener ??= new Map()).set(ch, j)
       if (ch === delim) {
-        if (text[j - 1] === '{' && text[j + 1] === '}' && !splitBracedOpener(text, j - 1)) {
-          let slash = j - 2
-          while (text[slash] === '\\') slash--
-          if ((j - 2 - slash) % 2 === 0) continue
-        }
         // Closer must not be preceded by whitespace (CARVE-P3-013).
         const prev = text[j - 1]
         if (prev === undefined || isCarveWhitespace(prev)) continue
@@ -1439,24 +1396,13 @@ export class InlineParseSession {
     return stop === -1 || stop === open + 2 ? -1 : stop + 2
   }
 
-  // A walk with every guarded child open reads the same from any start, so
-  // its failures are kept per delimiter like the main walk's.
-  private closesWithGuardsOpen(text: string, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
-    const failed = (memo.failedGuardsOpen ??= new Map()).get(delim)
-    if (failed !== undefined && failed[from] === 1) return false
-    const visited: number[] = []
-    if (this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver) !== -1) return true
-    const marks = failed ?? new Uint8Array(text.length + 1)
-    for (const j of visited) marks[j] = 1
-    memo.failedGuardsOpen.set(delim, marks)
-    return false
-  }
-
   // The `*/` closing a combined token opened at `at`, or undefined.
-  private combinedTokenClose(text: string, at: number, memo: EmphasisMemo): number | undefined {
+  private combinedTokenClose(text: string, at: number, memo: EmphasisMemo, guardOpen = false): number | undefined {
     // bare_opener('/'): the outer `/` does not open after a word character
     // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
-    if (/[A-Za-z0-9_/]/.test(text[at - 1] ?? '')) return undefined
+    // A `_` or `/` guard that is an open entry does not block it (carve#3973 X1).
+    const before = text[at - 1] ?? ''
+    if (/[A-Za-z0-9]/.test(before) || (!guardOpen && (before === '_' || before === '/'))) return undefined
     const start = at + 2
     // A bold-italic span requires a non-whitespace char right after `/*`
     // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
@@ -1477,42 +1423,30 @@ export class InlineParseSession {
 
   // A span of another kind open at the child's opener that closes before the
   // child's closer demotes that opener (E2), so the child's block is content.
-  // An opener the walk's own delimiter guards stays open only if the walk
-  // closes without this demotion; otherwise pairing blocks it.
-  private crossedByOpenSpan(text: string, at: number, close: number, from: number, memo: EmphasisMemo, end: number, lastOpener: Map<string, number>, ownGuardOpens: () => boolean): boolean {
+  private crossedByOpenSpan(text: string, at: number, close: number, from: number, delim: string, memo: EmphasisMemo, end: number, lastOpener: Map<string, number>): boolean {
     for (const [d, open] of lastOpener) {
       if (d === text[at]) continue
-      const opener = bareOpener(text, open)
-      if (opener !== 'open' && open !== from) continue
+      if (bareOpener(text, open) !== 'open' && !this.guardStands(text, open, from, delim)) continue
       const key = `${d}${open + 1}:${end}`
       let outer = memo.closes?.get(key)
       if (outer === undefined) (memo.closes ??= new Map()).set(key, outer = this.cachedFindEmphasisClose(text, open + 1, d, memo, end))
-      if (outer > at && outer < close && (opener === 'open' || open !== from || ownGuardOpens())) return true
+      if (outer > at && outer < close) return true
     }
     return false
   }
 
-  private guardOpens(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
-    if (at === from) waiver.atStart = true
-    if (waiver.mode !== 'decide') return waiver.mode === 'all'
-    // A guard that closes only with this child blocked leaves its attribute
-    // block content, so an outer closer inside it stays reachable (PART 9 E2).
-    return this.opensBefore(text, at, from, delim, memo, end) && (at === from || memo.startBlocked?.has(`${text[at - 1]}${at}:${end}`) !== true)
-  }
-
-  // Whether the `_` or `/` before `at` opens a span that closes, so `at`
-  // starts that span's run. At `from` it is the opener being walked.
-  private opensBefore(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number): boolean {
+  // Whether the `_` or `/` before the opener at `at` is an open entry where
+  // that opener stands, so it does not guard it (carve#3973 X1). At `from` it
+  // is the walk's own opener.
+  private guardStands(text: string, at: number, from: number, delim: string): boolean {
     if (at === from) return true
     const d = text[at - 1]!
     const before = text[at - 2]
-    if (d === delim || this.openKinds.has(d) || before === d) return false
+    if (d === delim || this.openKinds.has(d) || before === d || before === '\\') return false
     if (before !== undefined && /[A-Za-z0-9]/.test(before)) return false
-    if ((before === '_' || before === '/') && !this.opensBefore(text, at - 1, from, delim, memo, end)) return false
-    const key = `${d}${at}:${end}`
-    let close = memo.closes?.get(key)
-    if (close === undefined) (memo.closes ??= new Map()).set(key, close = this.cachedFindEmphasisClose(text, at, d, memo, end))
-    return close !== -1
+    if (isCarveWhitespace(text[at])) return false
+    if ((before === '_' || (before === '/' && (d === '/' || d === '_'))) && !this.guardStands(text, at - 1, from, delim)) return false
+    return true
   }
 
   // The last index of the braced inline opening at `open`, or -1.
@@ -1524,7 +1458,7 @@ export class InlineParseSession {
     const marker = text[open + 1]
     if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-') && !splitBracedOpener(text, open)) {
       const stop = this.pairCloser(text, open + 2, marker)
-      if (stop !== -1) return this.pairAttributeEnd(text, stop + 2) - 1
+      if (stop > open + 2) return this.pairAttributeEnd(text, stop + 2) - 1
     }
     if (marker === '#' && !extendsGrapheme(text, open + 2)) {
       memo.lastCritic ??= text.lastIndexOf('#}')
