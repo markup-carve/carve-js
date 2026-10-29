@@ -37,7 +37,7 @@ carve-js/
 │   ├── render/             Renderer helpers
 │   ├── source/             Source positions and errors
 │   ├── table/              Table layout and spans
-│   ├── cli.ts              `carve` binary (render, fmt, flatten, fix, lint, diff, merge, portability, migrate)
+│   ├── cli.ts              `carve` binary (render, fmt, flatten, fix, lint, diff, merge, portability, trace, migrate)
 │   └── index.ts            Public API
 ├── test/                   Vitest suites + the spec corpus runner
 ├── spec/                   git submodule → markup-carve/carve
