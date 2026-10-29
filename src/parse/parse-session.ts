@@ -1555,7 +1555,12 @@ export class ParseSession extends InlineParseSession {
     for (const attachedLine of attached) inner.push(attachedLine)
     innerLineNumbers.push(...attachedLineNumbers)
     if (attached.length > 0) {
-      inner.push('')
+      // The separator is not fence payload (§17 L3): an unclosed attached fence is closed instead.
+      const opener = attached[leadingAttributeRun(offset => attached[offset], lexer.parseOptions)]
+      const code = opener === undefined ? null : RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+      const run = code === null ? null : RE_FENCE.test(opener!) ? code[2]! : code[1]!
+      const unclosed = run !== null && attached.length > 1 && !fenceCloseRe(run).test(attached.at(-1)!)
+      inner.push(unclosed ? run : '')
       innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
     }
     this.trackUntrackedQuoteLines(q)
@@ -1828,6 +1833,9 @@ export class ParseSession extends InlineParseSession {
     const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
       indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) < q.quoteMarkerColumn
     if (this.interruptsQuoteLazily(q, ln, lazyFootnote)) return false
+    // A list marker interrupts the one-line paragraph a refused quoted note `+` forms (§10 I2).
+    const preceding = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2] ?? ''
+    if (isListMarkerLine(ln) && quotedNoteFirstBlockMarker(preceding) && sourceQuoteBody(preceding).startsWith('[^')) return false
     // A non-`>` line inside an open fence/comment, or after a block that left no
     // open paragraph (heading/table/fence/thematic/div), terminates the quote
     // instead of being swallowed. This is also what ends the quote on a lazy
@@ -2160,8 +2168,12 @@ export class ParseSession extends InlineParseSession {
     markerColumn = 0,
     quoteLevels = Infinity,
     acceptFirstNonList = false,
+    viewSlice = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
+    // The block is measured where its caller reads it, which a first-block `+` slices further.
+    const view = viewSlice === 0 ? transform
+      : (line: string) => sliceColumns(transform ? transform(line) : line, viewSlice, true)
     // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
     // (§17 L3, markup-carve/carve#1814). The predicate existed but only the list
     // item's three attach paths called it, so the footnote body, the definition
@@ -2177,16 +2189,17 @@ export class ParseSession extends InlineParseSession {
       return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
     }
     const scans = lexer.attachmentScans ??= new Map()
-    let cache = scans.get(contentColumn)
+    const cacheKey = viewSlice === 0 ? contentColumn : `${contentColumn}:${viewSlice}`
+    let cache = scans.get(cacheKey)
     if (cache === undefined) {
       cache = {}
-      scans.set(contentColumn, cache)
+      scans.set(cacheKey, cache)
     }
     const origin = lexer.contiguousOrigin?.lexer ?? lexer
     const indexBase = lexer.contiguousOrigin?.start ?? 0
     const at = (offset: number): string | undefined => {
       const line = lexer.peek(offset)
-      return line === undefined ? undefined : transform ? transform(line) : line
+      return line === undefined ? undefined : view ? view(line) : line
     }
     // A leading attribute run belongs to the block after it, so a fence there
     // still makes its body opaque to the container's boundaries.
@@ -2207,7 +2220,7 @@ export class ParseSession extends InlineParseSession {
         return origin.attachmentFenceClosers
       },
       end: lexer.lineCount,
-      contentColumn,
+      contentColumn: contentColumn + viewSlice,
       indexBase,
       base: lexer.pos + attributeLines,
     })
@@ -2231,7 +2244,7 @@ export class ParseSession extends InlineParseSession {
         if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
         take++
       }
-      const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
+      const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition)
       if (measured < take) take = measured
     }
     const startLineIndex = lexer.pos
@@ -2254,11 +2267,14 @@ export class ParseSession extends InlineParseSession {
     endAtFoldedDefinition = true,
     markerColumn = 0,
     quoteLevels = Infinity,
+    viewSlice = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
-    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, markerColumn, quoteLevels, true)
-    const attributeLines = leadingAttributeRun(offset => attached.lines[offset], lexer.parseOptions)
-    const first = attached.lines[attributeLines]
-    const last = attached.lines.at(-1)
+    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, markerColumn, quoteLevels, true,
+      viewSlice)
+    const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
+    const attributeLines = leadingAttributeRun(offset => view(attached.lines[offset]), lexer.parseOptions)
+    const first = view(attached.lines[attributeLines])
+    const last = view(attached.lines.at(-1))
     const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
     const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
     // The opener alone is no closer of its own (`- +` / ``` / `- x`).
@@ -2273,7 +2289,7 @@ export class ParseSession extends InlineParseSession {
       const closer = fenceCloseRe(codeMarker)
       let rest = 0
       for (let line = lexer.peek(rest); line !== undefined; line = lexer.peek(++rest)) {
-        if (isBlankLine(line) || closer.test(line)) {
+        if (isBlankLine(line) || closer.test(view(baseIndent === 0 ? line : sliceColumns(line, baseIndent))!)) {
           rest = 0
           break
         }

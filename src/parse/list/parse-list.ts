@@ -355,7 +355,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   /** An item whose first block is attached by a `+` on the marker line, or stacked behind a quote marker. */
   function firstBlockItem(
     lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
-    isItemAttachBoundary: AttachBoundary, firstItemAttachBoundary: AttachBoundary,
+    isItemAttachBoundary: AttachBoundary, firstItemAttachBoundary: AttachBoundary, flags: ListFlags,
   ): FirstBlockOutcome {
     const { content, line, startLineIndex: itemStartLineIndex } = head
     const { itemSource, itemMarkerColumn, itemQuoteDepth } = placement
@@ -401,7 +401,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     lexer.reportRefusedContinuationMarker(itemStartLineIndex,
       lexer.lineStartColumn(itemStartLineIndex) + line.indexOf('+'), 'list item', undefined, true)
-    return attachedFirstBlockItem(lexer, session, shape, head, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
+    return attachedFirstBlockItem(lexer, session, shape, head, placement, firstBlockColumn, itemQuoteDepth,
+      isItemAttachBoundary, flags)
   }
 
   function stackedFirstBlockItem(
@@ -477,19 +478,32 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   // EMPTY code block and the closer an inline code span, which is the same
   // damage category 278 pins one level in.
   function attachedFirstBlockItem(
-    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead,
-    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary,
+    lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
+    firstBlockColumn: number, itemQuoteDepth: number, isItemAttachBoundary: AttachBoundary, flags: ListFlags,
   ): FirstBlockOutcome {
     const { baseIndent } = shape
+    // `firstBlockColumn` is a source column; this lexer's lines start at the item's frame.
+    const localBlockColumn = Math.max(0, firstBlockColumn - placement.physicalItemMarkerColumn + baseIndent)
     const {
       lines: attached,
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
-    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth)
+    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, firstBlockColumn, itemQuoteDepth,
+      localBlockColumn)
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
+    // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3).
+    if (attached.length > 1 && !lineOpensBlock(sliceColumns(attached[0]!, localBlockColumn, true))) {
+      const cut = attached.findIndex((line, index) => index > 0 &&
+        indentColumns(line) === placement.contentCol && isListMarkerLine(line.trimStart()))
+      if (cut > 0) {
+        lexer.pos -= attached.length - cut
+        attached.length = cut
+        attachedLineNumbers.length = cut
+      }
+    }
     for (let index = 0; index < attached.length; index++) {
-      attached[index] = sliceColumns(attached[index]!, firstBlockColumn, true)
+      attached[index] = sliceColumns(attached[index]!, localBlockColumn, true)
     }
     // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
     // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
@@ -519,6 +533,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
     const fbChildren = session.parseBlocks(sub, 0)
     const fbItem: ListItem = { type: 'list_item', children: fbChildren }
+    // The item ends at the attached block's boundary; its body goes on only at its content column (§17 L4).
+    let gap = 0
+    while (isBlankLine(lexer.peek(gap))) gap++
+    const bodyLine = lexer.peek(gap)
+    if (bodyLine !== undefined && indentColumns(bodyLine) >= placement.contentCol && !isSiblingMarker(shape, bodyLine)) {
+      const rest = collectItem(lexer, session, shape, head, placement, '', isItemAttachBoundary, flags)
+      fbChildren.push(...rest.children)
+      attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
+      markItem(fbItem, head)
+      return { kind: 'item', item: fbItem, next: flags.hardBoundary ? 'end' : 'continue' }
+    }
     attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
     markItem(fbItem, head)
     let blanks = 0
@@ -1816,7 +1841,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         return 'continue'
       }
-      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) {
+      if (!attachesAtDocumentColumnZero(lexer, plusColumn, itemQuoteDepth) || lexer.peek() === undefined || isBlankLine(lexer.peek()!) ||
+          lexer.refusedQuotePlus.has(plusLineNumber - 1)) {
         const refused = lexer.lineAt(plusLineIndex) ?? '+'
         const text = sliceColumns(refused, Math.min(plusColumn, contentCol), true)
         nested.push(text)
@@ -1865,9 +1891,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           (RE_FENCE.test(attachedLines[0]) || RE_RAW_FENCE.test(attachedLines[0]))) {
         authoredDescendantFenceBlanks = 0
       }
+      // `plusColumn` is a source column; the attached lines are this lexer's.
+      const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
       for (let k = 0; k < attachedLines.length; k++) {
-        const attachedLine = plusColumn > contentCol
-          ? sliceColumns(attachedLines[k]!, plusColumn, true) : attachedLines[k]!
+        const attachedLine = localPlusColumn > contentCol
+          ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
         nested.push(attachedLine)
         nestedSourceLines.push(attachedLines[k])
         nestedLineNumbers.push(attachedLineNumbers[k]!)
@@ -3480,7 +3508,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         items.push(wrappedItem)
         continue
       }
-      const firstBlock = firstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, firstItemAttachBoundary)
+      const firstBlock = firstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, firstItemAttachBoundary, flags)
       if (firstBlock.kind === 'item') {
         items.push(firstBlock.item)
         if (firstBlock.next === 'end') break

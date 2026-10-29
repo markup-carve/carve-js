@@ -204,6 +204,8 @@ export function ownLines(
   let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; ahead?: AheadIndex } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
+  let plusColumn = -1
+  let plusRun = 0
   // Quote first-block `+` lines whose follower stands at an ineligible raw column.
   const refusedPlus = new Set<number>()
   const overindented: OverindentedOpener[] = []
@@ -269,12 +271,19 @@ export function ownLines(
       plus.para = false
       lead(plus.markerCanon!)
       finish()
+      plusRun = afterPlus && plus.kind !== 'quote' && m.col === plusColumn ? plusRun + 1 : 1
+      plusColumn = plus.kind === 'quote' ? -1 : m.col
       afterPlus = true
       if (trace) emit(at, 'S2', ownerPath(), 'CARVE-P9-067', 'plus', { cell: 'B-plus-start' })
       continue
     }
     const plusFollower = afterPlus
     afterPlus = false
+    // A follower left of a lone item `+`'s raw column refuses it; the canonical lead hides that (§17 L3).
+    if (plusFollower && plusColumn >= 0 && m.rest !== '' && !CONT_MARKER.test(m.rest) && m.col < plusColumn) {
+      // A run of markers reaching only each other is refused with its last one.
+      for (let k = 1; k <= plusRun; k++) refusedPlus.add(at - k)
+    }
     const missed = reached < frames.length - 1
     // A follower at an ineligible raw column refuses the `+` whatever block it starts (CARVE-P9-067, carve#3421).
     const stacked = typeof stackCol === 'number' && stackCol >= 0
