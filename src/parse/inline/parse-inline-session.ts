@@ -697,6 +697,10 @@ export class InlineParseSession {
   }
 
   private openKinds: ReadonlySet<string> = NO_OPEN_KINDS
+  // The text being scanned is a bare emphasis body whose closing `/` follows
+  // it, so a `*` at its end starts a `*/` closer token (carve#4042).
+  private tailSlash = false
+  private combinedShapeCache = new Map<string, Array<[number, number]>>()
 
   /** `openKinds` with `delim` added. */
   private withOpenKind(delim: string): ReadonlySet<string> {
@@ -753,6 +757,7 @@ export class InlineParseSession {
     opensHostRun = false,
     separateQuoteScope = false,
     pairs?: InlinePairView,
+    tailSlash = false,
   ): InlineNode[] {
     if (inlineDepthState.value >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
@@ -780,6 +785,8 @@ export class InlineParseSession {
     this.substitutionScans = undefined
     const outer = this.openKinds
     this.openKinds = kinds
+    const outerTailSlash = this.tailSlash
+    this.tailSlash = tailSlash
     try {
       if (pairs !== undefined) {
         this.pairEndText = text
@@ -808,6 +815,7 @@ export class InlineParseSession {
       this.bareAttributePairs = outerPair.barePairs
       this.substitutionScans = outerSubstitutions
       this.openKinds = outer
+      this.tailSlash = outerTailSlash
       inlineDepthState.value--
       this.inlinePairFrameDepth--
     }
@@ -837,6 +845,7 @@ export class InlineParseSession {
       bracedPairEnd: this.bracedPairEnd.bind(this),
       criticPairEnd: this.criticPairEnd.bind(this),
       delimitedCommentClose: this.delimitedCommentClose.bind(this),
+      inlineCommentEnd: this.inlineCommentEnd.bind(this),
       extendPosTo: this.extendPosTo.bind(this),
       matchEmphasis: this.matchEmphasis.bind(this),
       bareOpenerStands: this.bareOpenerStands.bind(this),
@@ -946,7 +955,7 @@ export class InlineParseSession {
         if (close !== -1) {
           const inner = text.slice(i + 1, close)
           return {
-            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim)) },
+            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim), false, false, undefined, delim === '/') },
             end: close + 1,
           }
         }
@@ -1287,9 +1296,9 @@ export class InlineParseSession {
       // publishes, or the reverse, is a span whose two halves disagree. The scan
       // starts past its own opener, so the run-start arm cannot reach it.
       if (opensInlineComment(text, j)) {
-        const newline = text.indexOf('\n', j + 2)
-        if (newline === -1) return -1
-        j = newline
+        const commentEnd = this.inlineCommentEnd(text, j)
+        if (commentEnd === text.length) return -1
+        j = commentEnd - 1
         continue
       }
       // Comment contents are transparent to the surrounding emphasis structure.
@@ -1385,6 +1394,68 @@ export class InlineParseSession {
       }
     }
     return -1
+  }
+
+  // Where the `%%` comment at `at` ends: its line end, or the closer token of
+  // the `/*` ... `*/` shape it stands in, whether or not that shape forms
+  // (PART 9 §9 P1, §21a, carve#4042).
+  inlineCommentEnd(text: string, at: number, lineEnd = this.lineEndFrom(text, at)): number {
+    const close = this.shapeCloseAround(text, at) ?? (this.tailSlash && text.endsWith('*') ? this.shapeCloseAround(text + '/', at) : undefined)
+    return close !== undefined && close < lineEnd ? close : lineEnd
+  }
+
+  private lineEndFrom(text: string, at: number): number {
+    const newline = text.indexOf('\n', at)
+    return newline === -1 ? text.length : newline
+  }
+
+  private shapeCloseAround(text: string, at: number): number | undefined {
+    const shapes = this.combinedShapes(text)
+    let low = 0
+    let high = shapes.length
+    while (low < high) {
+      const mid = (low + high) >>> 1
+      if (shapes[mid]![0] < at) low = mid + 1
+      else high = mid
+    }
+    const shape = shapes[low - 1]
+    return shape !== undefined && shape[1] > at ? shape[1] : undefined
+  }
+
+  // The lexical `/*` ... `*/` shapes of `text` as [opener, closer token] pairs,
+  // before the stack decides whether each forms.
+  private combinedShapes(text: string): Array<[number, number]> {
+    const cached = this.combinedShapeCache.get(text)
+    if (cached) return cached
+    const shapes: Array<[number, number]> = []
+    if (text.includes('/*')) {
+      const memo = newEmphasisMemo()
+      const codeEnds = text.includes('`') ? backtickRunEnds(text) : undefined
+      for (let o = 0; o < text.length - 2; o++) {
+        const ch = text[o]!
+        if (ch === '\\') { o++; continue }
+        if (ch === '`') {
+          const end = codeEnds![o]!
+          if (end === -1) break
+          o = end - 1
+          continue
+        }
+        if (opensInlineComment(text, o)) {
+          const newline = text.indexOf('\n', o + 2)
+          if (newline === -1) break
+          o = newline
+          continue
+        }
+        if (ch !== '/' || text[o + 1] !== '*' || /[A-Za-z0-9]/.test(text[o - 1] ?? '') || isCarveWhitespace(text[o + 2]) || extendsGrapheme(text, o + 2)) continue
+        const close = combinedSpanCloser(text, o + 2, memo)
+        if (close === undefined) continue
+        shapes.push([o, close])
+        o = close + 1
+      }
+    }
+    if (this.combinedShapeCache.size > 256) this.combinedShapeCache.clear()
+    this.combinedShapeCache.set(text, shapes)
+    return shapes
   }
 
   // The exclusive end of the forced span or insertion/deletion opening at `open`, or -1.

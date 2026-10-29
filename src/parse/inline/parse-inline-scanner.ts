@@ -54,6 +54,7 @@ export interface InlineScannerSession {
   bracedPairEnd(text: string, open: number, closer: string): number
   criticPairEnd(text: string, open: number, closer: '+}' | '-}'): number
   delimitedCommentClose(text: string, from: number): number
+  inlineCommentEnd(text: string, at: number, lineEnd?: number): number
   extendPosTo(
     node: InlineNode,
     source: InlineSource,
@@ -565,7 +566,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       const nl = text.indexOf('\n', i)
       s.commentLineEnd = nl === -1 ? text.length : nl
     }
-    const end = Math.min(s.commentLineEnd, commentRun?.close ?? text.length)
+    const end = Math.min(s.session.inlineCommentEnd(text, i, s.commentLineEnd), commentRun?.close ?? text.length)
     const content = trimEndSpaceTab(text.slice(i + 2, end).replace(/^ /, ''))
     emit(s, { type: 'comment', block: false, content } as Comment, i, end)
     s.i = end
