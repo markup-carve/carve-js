@@ -336,17 +336,45 @@ function quotedRunEnd(text: string, from: number): number {
   return -1
 }
 
+/** The last scans, keyed by text: openers are tried left to right, so these keep a run of them linear. */
+const pairMemo = { text: '', from: 0, at: -1, newline: -1 }
+const closerMemo = { text: '', from: 0, at: -1, stop: -1 }
+
+/** Whether a `}}` follows `from` on its line, quotes aside: none means no closer. */
+function pairBeforeLineEnd(text: string, from: number): boolean {
+  if (pairMemo.text !== text || from < pairMemo.from || from > pairMemo.at) {
+    const at = text.indexOf('}}', from)
+    pairMemo.text = text
+    pairMemo.from = from
+    pairMemo.at = at === -1 ? Infinity : at
+    const newline = at === -1 ? -1 : text.slice(from, at).lastIndexOf('\n')
+    pairMemo.newline = newline === -1 ? -1 : from + newline
+  }
+  return pairMemo.at !== Infinity && pairMemo.newline < from
+}
+
 /** The first `}}` at or after `from` outside a terminated quoted run, or -1. */
 function closerIndex(text: string, from: number): number {
-  for (let i = from; i < text.length; i++) {
+  if (closerMemo.text === text && from >= closerMemo.from &&
+      (from <= closerMemo.at || closerMemo.at === -1 && from <= closerMemo.stop)) return closerMemo.at
+  if (!pairBeforeLineEnd(text, from)) return -1
+  let quoted = false
+  let found = -1
+  let i = from
+  for (; i < text.length; i++) {
     const char = text[i]
-    if (char === '\n') return -1
+    if (char === '\n') break
     if (char === '"' || char === "'") {
+      quoted = true
       const end = quotedRunEnd(text, i)
       if (end !== -1) i = end
-    } else if (char === '}' && text[i + 1] === '}') return i
+    } else if (char === '}' && text[i + 1] === '}') {
+      found = i
+      break
+    }
   }
-  return -1
+  if (!quoted) Object.assign(closerMemo, { text, from, at: found, stop: i })
+  return found
 }
 
 const OPTION_KEY_RE = /^[A-Za-z_][\w-]*/
