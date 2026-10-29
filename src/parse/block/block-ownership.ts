@@ -82,7 +82,6 @@ interface Frame {
   termCut?: number
   lineBlock?: boolean | undefined
   span?: string | null
-  openAt?: number
   // Lint grouping: the line of the last table row read in this frame.
   tableLine?: number
 }
@@ -394,7 +393,7 @@ export function ownLines(
       continue
     }
     if (inner.kind === 'fence') {
-      ownerEnds.set(at, { at, opener: inner.openAt!, reached: frames[reached]!.kind,
+      ownerEnds.set(at, { at, opener: inner.opened!, reached: frames[reached]!.kind,
         missed: frames.slice(reached + 1).map((f) => f.kind) })
       frames.pop()
     }
@@ -462,8 +461,7 @@ export function ownLines(
       if (form.kind === 'fence' || form.kind === 'colon') {
         frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at,
           col: owner.col, canon: owner.canon, cut: col - canon,
-          closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null,
-          ...(form.kind === 'fence' ? { openAt: at } : {}) })
+          closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null })
         return
       }
       if (form.kind === 'quote') {

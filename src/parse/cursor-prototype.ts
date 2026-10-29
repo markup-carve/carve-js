@@ -2153,7 +2153,8 @@ function parseLineBlockAtCursor(cursor: Cursor, inline: CursorInline): BlockNode
   if (inline.recordUnclosedContainers) {
     const width = RE_LINE_BLOCK_OPEN.exec(first.text)?.[1]?.length
     if (width && !closesColonOwner(cursor.lines[cursor.at - 1]?.text ?? '', width)) {
-      const rawColumn = inline.rawLines?.[first.number - 1]?.indexOf(':') ?? -1
+      const rawColumn = inline.rawLines?.[first.number - 1]?.indexOf(':'.repeat(width),
+        (first.baseColumn ?? 1) - 1) ?? -1
       const offset = cursor.owner.kind === 'quote' && rawColumn >= 0 ?
         rawColumn + 1 - (first.baseColumn ?? 1) : 0
       inline.diagnostics!.push({ kind: 'container', event: {
@@ -5544,7 +5545,7 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
   }
   if (!cursor.peek() && !continuationBoundary && inline.recordUnclosedContainers) {
     const rawColonLine = inline.rawLines?.[first.number - 1]
-    const rawColonColumn = rawColonLine?.indexOf(opener[1]!) ?? -1
+    const rawColonColumn = rawColonLine?.indexOf(opener[1]!, (first.baseColumn ?? 1) - 1) ?? -1
     const quoteOffset = cursor.owner.parent?.kind === 'quote' && rawColonColumn >= 0 ?
       rawColonColumn + 1 - (first.baseColumn ?? 1) : 0
     inline.diagnostics!.push({ kind: 'container', event: {
@@ -5599,7 +5600,7 @@ function reportDanglingAtCursor(cursor: Cursor, inline: CursorInline,
     }
   }
   const rawLine = inline.rawLines?.[pendingAt.number - 1]
-  const rawColumn = rawLine?.indexOf(pendingAt.text) ?? -1
+  const rawColumn = rawLine?.indexOf(pendingAt.text, (pendingAt.baseColumn ?? 1) - 1) ?? -1
   const offset = cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'list' &&
     rawColumn >= 0 ? rawColumn + 1 - (pendingAt.baseColumn ?? 1) : 0
   inline.diagnostics!.push({ kind: 'dangling', event: { line: pendingAt.number,
@@ -5614,7 +5615,8 @@ function fenceDiagnosticColumn(cursor: Cursor, inline: CursorInline,
     first.lead === 1 && first.ownerEnd?.missed.includes('fence') ? 1 : first.baseColumn ?? 1
   const rawQuoteLine = cursor.owner.kind === 'list' && cursor.owner.parent?.kind === 'quote' ?
     inline.rawLines?.[first.number - 1] : undefined
-  return rawQuoteLine === undefined ? column : rawQuoteLine.indexOf(marker) + 1 || column
+  return rawQuoteLine === undefined ? column :
+    rawQuoteLine.indexOf(marker, (first.baseColumn ?? 1) - 1) + 1 || column
 }
 
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
