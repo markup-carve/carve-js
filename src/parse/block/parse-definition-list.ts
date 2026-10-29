@@ -359,6 +359,31 @@ export function createDefinitionListParser(
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
+        // The model's description closer search: a closer at the body column counts, a line below it is
+        // searched past, and the next entry, a document-column quote or definition, or a blank run
+        // followed by a line short of the body ends the search (CARVE-P0-014).
+        const descriptionCloserAhead = (run: string, from: number): boolean => {
+          const lines = lexer.rootLines ?? lexer.lines
+          for (let j = from; j < lines.length; j++) {
+            const line = lines[j]!
+            if (quotePrefixDepth(line) > 0) return false
+            if (isBlankLine(line)) {
+              let k = j + 1
+              while (k < lines.length && isBlankLine(lines[k]!)) k++
+              if (k >= lines.length || indentColumns(lines[k]!) < bodySourceColumn) return false
+              j = k - 1
+              continue
+            }
+            const column = indentColumns(line)
+            const rest = line.trimStart()
+            if (column < bodySourceColumn && (RE_DEFLIST_TERM.test(rest) || RE_DEFLIST_DEF.test(rest))) return false
+            if (column === 0 && (/^>/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || /^\[[^\]]+\]:/.test(rest) || /^\{/.test(rest))) return false
+            if (column !== bodySourceColumn) continue
+            const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(rest)
+            if (closer && closer[1]![0] === run[0] && closer[1]!.length >= run.length) return true
+          }
+          return false
+        }
         const hasFenceCloser = (marker: string, extraColumns = 0): boolean => {
           if (atLineIndex === undefined) return true
           // A failed search is reusable only at the same pair of eligible columns.
@@ -385,6 +410,11 @@ export function createDefinitionListParser(
           // an over-indented descendant fence that closes at its holding column
           // into inline verbatim.
           if (extraColumns === 0) {
+            if (!answer && quotePrefixDepth(markerSource) === 0 &&
+                descriptionCloserAhead(marker, lexer.lineNumber(atLineIndex))) {
+              lexer.descendantFenceAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, true)
+              return true
+            }
             lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
           }
           return answer
