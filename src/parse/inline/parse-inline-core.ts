@@ -472,6 +472,9 @@ export interface EmphasisMemo {
   crossref?: CrossrefMemo
 }
 
+const combinedCloserAt = (text: string, at: number): boolean =>
+  at > 0 && !isCarveWhitespace(text[at - 1]) && !extendsGrapheme(text, at + 2) && !/[A-Za-z0-9]/.test(text[at + 2] ?? '')
+
 // `bracedEnd` gives the exclusive end of a forced span or editorial frame
 // opening at a `{`, or -1, as the parser pairs it.
 export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo, bracedEnd?: (open: number) => number): number | undefined {
@@ -493,6 +496,14 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
         const end = codeEnds![close]!
         if (end === -1) break
         close = end - 1
+        continue
+      }
+      // A `%%` comment inside the shape ends at the next closer token, and
+      // nothing in it is an atom (PART 9 §9 P1, carve#4042).
+      if (text[close] === '%' && text[close + 1] === '%' && (text[close - 1] === ' ' || text[close - 1] === '\n')) {
+        let k = close + 2
+        while (k < text.length - 1 && text[k] !== '\n' && !(text[k] === '*' && text[k + 1] === '/' && combinedCloserAt(text, k))) k++
+        close = k - 1
         continue
       }
       while (atom < atoms.length && atoms[atom]![1] <= close) atom++
@@ -521,7 +532,7 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
       if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
       // (carve#3217), so that `*/` is content and a later one may close.
-      if (close > 0 && !isCarveWhitespace(text[close - 1]) && !extendsGrapheme(text, close + 2) && !/[A-Za-z0-9]/.test(text[close + 2] ?? '')) {
+      if (combinedCloserAt(text, close)) {
         closers.push(close)
         owners.push(boundaries.at(-1)?.open ?? -1)
       }
