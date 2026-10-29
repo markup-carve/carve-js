@@ -315,9 +315,10 @@ function collectEscapeUnits(ast: Document): object[] {
 /**
  * The writer's spellings of a multi-line verbatim span, in the order it tries
  * them: the guard as the marker list places it, the guard on every continuation
- * line, no guard, and each of the three padded.
+ * line, no guard, every continuation line lazy with no container prefix, and
+ * each of the four padded.
  */
-const VERBATIM_SPELLINGS = 6
+const VERBATIM_SPELLINGS = 8
 
 function verbatimPayloadKey(nodeType: string, content: string): string {
   return `${nodeType}\u0000${content.replace(/\r\n?/g, '\n')}`
@@ -5209,23 +5210,23 @@ class CarveRenderSession {
   private verbatimLineGuardNodes: InlineNode[] = []
 
   private verbatimLineGuardPattern(): string {
-    return `${this.sentinels[6]}(?:[gd][0-9]+${this.sentinels[6]})?`
+    return `${this.sentinels[6]}(?:[gdz][0-9]+${this.sentinels[6]})?`
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
     const payload = node.type === 'code' ? node.value : 'content' in node && typeof node.content === 'string' ? node.content : undefined
-    const guards = payload === undefined ? 0 : this.verbatimSpelling(nodeType, payload) % 3
+    const guards = payload === undefined ? 0 : this.verbatimSpelling(nodeType, payload) % 4
     // A blank value line has no spelling at all and stays the known carve-out it was.
     if (payload !== undefined && ctx.lineBlockDepth === 0 && payload.includes('\n') && !/\n[ \t]*(?:\n|$)/.test(payload)) this.multiLineVerbatim.set(verbatimPayloadKey(nodeType, payload), node)
     const listed = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
-    const marker = guards === 1 ? /\n(?=[^\n])/g : listed
+    const marker = guards === 1 || guards === 3 ? /\n(?=[^\n])/g : listed
     if (this.termKeepsLineIndent && listed.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
     if (ctx.lineBlockDepth > 0 || guards === 2 || !written.includes('\n') || !marker.test(written)) return written
     marker.lastIndex = 0
     const ownsDescriptionColumn = this.descriptionParagraph && nodeType === 'code' && /^`{3,}\n/.test(written)
-    const guard = `${this.sentinels[6]}${ownsDescriptionColumn ? 'd' : 'g'}${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
+    const guard = `${this.sentinels[6]}${guards === 3 ? 'z' : ownsDescriptionColumn ? 'd' : 'g'}${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
     return written.replace(marker, `\n${guard}`)
   }
 
@@ -5254,7 +5255,7 @@ class CarveRenderSession {
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
     const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad = codeSpanNeedsPad(content)
-      || (this.verbatimSpelling(nodeType, content) >= 3 && !/^[\r\n]|[\r\n]$/.test(content))
+      || (this.verbatimSpelling(nodeType, content) >= 4 && !/^[\r\n]|[\r\n]$/.test(content))
     // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
     // writer refuses it instead of emitting the nearest form (carve-js#1344).
     // Same throw path as the empty `raw_inline`, and the same sentence: the
@@ -5385,6 +5386,7 @@ class CarveRenderSession {
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}d[0-9]+${this.sentinels[6]}`, 'gm'), '$1')
+        .replace(new RegExp(`^[ \\t>]*${this.sentinels[6]}z[0-9]+${this.sentinels[6]}`, 'gm'), '')
         .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([^\\n])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
