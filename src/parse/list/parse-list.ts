@@ -7,6 +7,7 @@ import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
+import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
@@ -1339,6 +1340,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lazyState.footnoteBodyColumn = markerNoteFloor - contentCol
     }
     const noteParagraphMarkers = new Set<number>()
+    // Filled by the first scan, which resets any state it cannot resume.
+    const commentFenceTailScan = {} as CommentFenceOpenerScan
+    const fenceReachScan = {} as FenceReachScan
     const markerNoteFenceMemos = new Map<number, QuotedFenceCloserMemo>()
     const itemParagraphFences = new Set<number>()
     let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
@@ -1581,10 +1585,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         consumedNoteCloserBodyColumn = undefined
       }
       noteReach = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol
-        ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) : null
+        ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines, fenceReachScan) : null
       fenceBoundaryTail = noteReach === 'boundary'
       commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-        markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true).length > 0
+        markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true, commentFenceTailScan).length > 0
       noteParagraphOpen = markerNoteParagraph
       if (!isBlankLine(l)) {
         markerNoteParagraph = false
