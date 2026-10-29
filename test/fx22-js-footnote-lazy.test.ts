@@ -12,10 +12,10 @@ it('ends a footnote paragraph at an interrupting block', () => {
   expect(html).toContain('<h1>Heading</h1>')
 })
 
-it('keeps a below-column link definition as note paragraph text', () => {
+it('collects a below-column link definition after a note', () => {
   const html = carveToHtml('[^n]: note\n [r]: /u\n\nsee[^n] and [t][r]\n')
   expect(html).not.toContain('<p>[r]: /u</p>')
-  expect(html).toContain('note\n[r]: /u')
+  expect(html).toContain('<a href="/u">t</a>')
 })
 
 it('keeps a refused plus as text in an open note paragraph', () => {
@@ -29,9 +29,9 @@ it('returns a marker below the note body column to the enclosing item', () => {
   expect(html).toContain('<li>body\n    <ul>')
 })
 
-it('loosens a list when a note after a blank keeps a prose follower', () => {
+it('keeps a list tight when a note after a blank keeps a prose follower', () => {
   const html = carveToHtml('- body\n\n  [^g]: n\n   prose\n\nafter\n')
-  expect(html).toContain('<li><p>body</p></li>')
+  expect(html).toContain('<li>body</li>')
 })
 
 it('lets a description-hosted note keep a follower below its column', () => {

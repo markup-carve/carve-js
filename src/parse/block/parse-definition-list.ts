@@ -168,7 +168,6 @@ export function createDefinitionListParser(
     insideOpenFence,
     insideOpenQuoteParagraph,
     isBlockAttributeLine,
-    isColonFenceOpener,
     isContinuationMarker,
     isLinkDefLine,
     isListMarkerLine,
@@ -182,17 +181,13 @@ export function createDefinitionListParser(
     markerDecision,
     markerLineState,
     markerRunListIsQuoteHeld,
-    matchedCommentFenceEnd,
     nestedItemHoldsOpenParagraph,
     nestedSubLexer,
     newCommentSpanScan,
     opensCodeFence,
     parseCommentBlock,
     quotePrefixDepth,
-    rebaseOverindentedBlocks,
     restoreVerbatimBlanks,
-    retainBelowColumnComment,
-    retainCommentBoundary,
     sourceColumn,
     sourceColumnAt,
     startsInterruptingBlock,
@@ -305,7 +300,6 @@ export function createDefinitionListParser(
         ownedColumn: -1,
         ownedAuthored: false,
       }
-      let retainedBelowComment = false
       let belowCommentSpan = false
       let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       const sourceFenceMemos = new Map<number, QuotedFenceCloserMemo>()
@@ -365,6 +359,31 @@ export function createDefinitionListParser(
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
+        // The model's description closer search: a closer at the body column counts, a line below it is
+        // searched past, and the next entry, a document-column quote or definition, or a blank run
+        // followed by a line short of the body ends the search (CARVE-P0-014).
+        const descriptionCloserAhead = (run: string, from: number): boolean => {
+          const lines = lexer.rootLines ?? lexer.lines
+          for (let j = from; j < lines.length; j++) {
+            const line = lines[j]!
+            if (quotePrefixDepth(line) > 0) return false
+            if (isBlankLine(line)) {
+              let k = j + 1
+              while (k < lines.length && isBlankLine(lines[k]!)) k++
+              if (k >= lines.length || indentColumns(lines[k]!) < bodySourceColumn) return false
+              j = k - 1
+              continue
+            }
+            const column = indentColumns(line)
+            const rest = line.trimStart()
+            if (column < bodySourceColumn && (RE_DEFLIST_TERM.test(rest) || RE_DEFLIST_DEF.test(rest))) return false
+            if (column === 0 && (/^>/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || /^\[[^\]]+\]:/.test(rest) || /^\{/.test(rest))) return false
+            if (column !== bodySourceColumn) continue
+            const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(rest)
+            if (closer && closer[1]![0] === run[0] && closer[1]!.length >= run.length) return true
+          }
+          return false
+        }
         const hasFenceCloser = (marker: string, extraColumns = 0): boolean => {
           if (atLineIndex === undefined) return true
           // A failed search is reusable only at the same pair of eligible columns.
@@ -391,6 +410,11 @@ export function createDefinitionListParser(
           // an over-indented descendant fence that closes at its holding column
           // into inline verbatim.
           if (extraColumns === 0) {
+            if (!answer && quotePrefixDepth(markerSource) === 0 &&
+                descriptionCloserAhead(marker, lexer.lineNumber(atLineIndex))) {
+              lexer.descendantFenceAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, true)
+              return true
+            }
             lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
           }
           return answer
@@ -426,7 +450,6 @@ export function createDefinitionListParser(
         if (nestedLeadScans !== undefined) {
           lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, hasFenceCloser, atContentColumn)
         }
-        retainedBelowComment = false
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
       // item's `authoredBaseEligible` one collector over. A below-column lazy line
@@ -540,7 +563,9 @@ export function createDefinitionListParser(
         // trailing line then folded into the `dd` instead of falling to the
         // document, where PART 0's owner selection places a line below the dd's
         // base column (markup-carve/carve#1974).
-        lazyState.inFootnoteBody = RE_FOOTNOTE_DEF.test(first)
+        lazyState.inFootnoteBody = false
+        // The note's own frame answers the lazy question (carve#3885).
+        if (RE_FOOTNOTE_DEF.test(first)) trackItemLazyState(first, lazyState)
         if (firstIsColonContainer) lazyState.divDepth = 1
         if (RE_LINE_BLOCK_OPEN.test(first)) lazyState.literalColon = { width: colonFenceOpenerLen(first)!, column: 0 }
         const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
@@ -914,7 +939,7 @@ export function createDefinitionListParser(
           indentColumns(bodySourceLines.at(-1) ?? '', contentCol) < contentCol &&
           (isLinkDefLine(bodySourceLines.at(-1)?.trimStart() ?? '') ||
             RE_FOOTNOTE_DEF.test(bodySourceLines.at(-1)?.trimStart() ?? ''))
-        if (belowLeadColon && !retainedBelowComment && !RE_COMMENT_LINE.test(below) &&
+        if (belowLeadColon && !RE_COMMENT_LINE.test(below) &&
             (RE_HR.test(below) || isTableRow(below) ||
               // A list marker, and a fence with no closer, are paragraph text
               // here as anywhere (PART 9 §10 I2, I4).
@@ -922,24 +947,6 @@ export function createDefinitionListParser(
                 (!/^[`~]/.test(below) || startsInterruptingBlock(lexer, below))) || isBlockAttributeLine(below) ||
                 /^:{3,}[ \t]*$/.test(below)) &&
                 !(priorLazyDefinition && opensCodeFence(below))))) return 'stop'
-        // At document column 0 a definition is a document-level interrupter (CARVE-P0-010).
-        // A matched fence an enclosing item took from below its column answers
-        // as the `%%` line it would be there: it retains the body (CARVE-P9-053).
-        if (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) && lazyState.opaque === null &&
-            (lazyState.lazyFoldable || retainedBelowComment) && commentFenceRun(below) !== undefined) {
-          const end = matchedCommentFenceEnd(lexer)
-          if (end !== undefined) {
-            while (lexer.pos < end) {
-              const line = lexer.peek()!
-              bodyLines.push(line)
-              bodySourceLines.push(line)
-              bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
-              lexer.consume()
-            }
-            retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
-            return 'continue'
-          }
-        }
         // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
         // THE COLUMN" (markup-carve/carve-js#2255, markup-carve/carve#2488). The
         // body ends at one of those, which is right for an opener and for the `%%`
@@ -955,24 +962,21 @@ export function createDefinitionListParser(
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
           track(below)
-          if (belowCommentSpan) {
-            retainCommentBoundary(lazyState)
-            retainedBelowComment = true
-            belowCommentSpan = false
-          }
+          belowCommentSpan = false
           lexer.consume()
           return 'continue'
         }
+        // A comment below the body's column closes the body (carve#3885).
+        if (lazyState.opaque === null && RE_COMMENT_LINE.test(below)) return 'stop'
         const lastBodyLine = bodyLines.at(-1)?.trimStart() ?? ''
         if (atDocumentColumn && lazyState.divDepth > 0 && lazyState.opaque === null &&
-            !retainedBelowComment &&
             !RE_COMMENT_LINE.test(below) &&
             ((colonFenceShapeEndsLazyContinuation(first) &&
               (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
               !lazyState.lazyFoldable)) return 'stop'
         return undefined
       }
-      const belowBandInterrupts = (ln: string, below: string, atDocumentColumn: boolean, retained: boolean): boolean => {
+      const belowBandInterrupts = (ln: string, below: string, atDocumentColumn: boolean): boolean => {
         const lineIndent = indentColumns(ln)
         const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const markedQuoteLine = quoteDepth > 0 && quotePrefixDepth(source) >= quoteDepth
@@ -997,7 +1001,7 @@ export function createDefinitionListParser(
             return itemFenceHasCloser(lexer, marker, lexer.pos, lineIndent, memo, bodyEndsAt)
           }
         }
-        return startsInterruptingBlock(lexer, below, !retained, false, atDocumentColumn)
+        return startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
       }
       const foldsLazyLine = (
         ln: string,
@@ -1006,20 +1010,19 @@ export function createDefinitionListParser(
         belowLeadColon: boolean,
         quoteFootnoteBelowBody: boolean,
       ): boolean => (
-        (lazyState.lazyFoldable || quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan ||
+        (lazyState.lazyFoldable || quoteFootnoteBelowBody || belowCommentSpan ||
           (belowLeadColon && bodyLines.length > 1 && RE_COMMENT_LINE.test(below)) ||
           (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') &&
             (bodyLines.at(-1)?.startsWith(LAZY_FRAME) === true ||
               (!nestedDescriptionOpened && indentColumns(bodySourceLines.at(-1) ?? '') > contentCol &&
                 isBlockAttributeLine(bodyLines.at(-1)?.trimStart() ?? ''))))) &&
         !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
-        (quoteFootnoteBelowBody || retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
+        (quoteFootnoteBelowBody || belowCommentSpan || (lazyState.opaque === null &&
           ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
           (indentColumns(ln, contentCol) < contentCol &&
             (lazyState.divDepth > 0 || lazyState.inDefList === 'term') ||
             (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
-            !belowBandInterrupts(ln, below, atDocumentColumn, retainedBelowComment)))
-        && !(retainedBelowComment && atDocumentColumn && isColonFenceOpener(below))
+            !belowBandInterrupts(ln, below, atDocumentColumn)))
       )
       const foldLazyLine = (ln: string, below: string, atDocumentColumn: boolean): 'continue' => {
         const lineIndex = lexer.pos
@@ -1045,8 +1048,6 @@ export function createDefinitionListParser(
         const folded =
           RE_CAPTION.test(below) && lazyState.opaque === null
             ? LAZY_FRAME + below
-            : retainedBelowComment && !RE_COMMENT_LINE.test(below)
-            ? below
             : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
                 (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
               ? LAZY_FRAME + below
@@ -1059,7 +1060,6 @@ export function createDefinitionListParser(
         // Track the body's reading: retained openers stay flush, while a
         // clamped fence continues the paragraph.
         track(folded, undefined, false)
-        retainedBelowComment = retainBelowColumnComment(folded, lazyState, false)
         const commentRun = commentFenceRun(below)
         if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
         lexer.consume()
@@ -1161,9 +1161,6 @@ export function createDefinitionListParser(
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
-      rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
-        undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines,
-        false, true, true, authoredOpeners, undefined, bodySourceLines)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol

@@ -532,42 +532,42 @@
   {
     "id": "heading-child-negative-4",
     "source": "- a\n      ```\n\n    # h\n    ~~~\n    code\n    ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\n~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-5",
     "source": "- a\n      ```\n\n    ## h\n    ~~~\n    code\n    ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ## h\n~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-6",
     "source": "- a\n      ```\n\n    # h\n\n    ~~~\n    code\n    ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\n    ~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-7",
     "source": "- a\n      ```\n\n    ## h\n\n    ~~~\n    code\n    ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ## h\n    ~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-8",
     "source": "- a\n        ```\n\n      # h\n      ~~~\n      code\n      ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\n~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-9",
     "source": "- a\n        ```\n\n      ## h\n      ~~~\n      code\n      ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ## h\n~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-10",
     "source": "- a\n        ```\n\n      # h\n\n      ~~~\n      code\n      ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\n    ~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-child-negative-11",
     "source": "- a\n        ```\n\n      ## h\n\n      ~~~\n      code\n      ~~~\n- next\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ## h\n    ~~~\ncode\n~~~\n  </li>\n  <li>next</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>"
   },
   {
     "id": "heading-text-band-0",
@@ -582,7 +582,7 @@
   {
     "id": "heading-text-band-2",
     "source": "- a\n    ```\n  # h\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-3",
@@ -597,7 +597,7 @@
   {
     "id": "heading-text-band-5",
     "source": "- a\n    ```\n  # h\n\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-6",
@@ -617,7 +617,7 @@
   {
     "id": "heading-text-band-9",
     "source": "- a\n    ```\n  # h\n  text\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    text\n~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    text\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-10",
@@ -632,7 +632,7 @@
   {
     "id": "heading-text-band-12",
     "source": "- a\n    ```\n  ## h\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-13",
@@ -647,7 +647,7 @@
   {
     "id": "heading-text-band-15",
     "source": "- a\n    ```\n  ## h\n\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-16",
@@ -667,7 +667,7 @@
   {
     "id": "heading-text-band-19",
     "source": "- a\n    ```\n  ## h\n  text\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    text\n~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h2 id=\"h\">h</h2>\n    text\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-20",
@@ -682,7 +682,7 @@
   {
     "id": "heading-text-band-22",
     "source": "- a\n    ```\n\n  # h\n      ~~~\n      code\n      ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-text-band-23",

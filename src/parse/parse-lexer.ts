@@ -4,6 +4,7 @@ import type { ParseOptions, UnclosedContainer, RefusedContinuationMarker, Stripp
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
+import type { OwnershipCut } from './block/block-ownership.js'
 
 export const TRAILING_WS = '[ \\t]*$'
 
@@ -147,6 +148,30 @@ export class Lexer {
   lineAt(index: number): string | undefined {
     if (index < 0 || index >= this.lineCount) return undefined
     return this.lineView ? this.lineView.lexer.lineAt(this.lineView.start + index) : this.storedLines[index]
+  }
+
+  /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
+  private ownershipCuts?: Map<number, OwnershipCut[]>
+  /** Columns a leading cut removed; the offset map already holds it, the column does not. */
+  private ownershipLeads?: Map<number, number>
+
+  /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
+  applyOwnership({ lines, cuts }: { lines: string[]; cuts: Map<number, OwnershipCut[]> }): void {
+    if (!cuts.size) return
+    const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
+    for (const [index, lineCuts] of cuts) {
+      if (lineCuts[0]!.at === 0) {
+        const removed = lineCuts.shift()!.removed
+        offsets[index]! += removed
+        this.ownershipLeads ??= new Map()
+        this.ownershipLeads.set(index, removed)
+      }
+      if (!lineCuts.length) cuts.delete(index)
+    }
+    this.sourceOffsetMap = offsets
+    if (cuts.size) this.ownershipCuts = cuts
+    this.lines = lines
+    this.leadingWhitespaceLines = []
   }
 
   useLineView(lexer: Lexer, start: number, length: number): void {
@@ -589,7 +614,10 @@ export class Lexer {
     if (boundary) {
       return boundary.parent.sourceBoundary(boundary.line, boundary.start + Math.max(0, column - boundary.synthetic))
     }
-    return { offset: this.lineOffset(lineIndex) + column, column: this.lineStartColumn(lineIndex) + column }
+    let shift = 0
+    const lead = this.ownershipLeads?.get(lineIndex) ?? 0
+    for (const cut of this.ownershipCuts?.get(lineIndex) ?? []) if (cut.at <= column) shift += cut.removed
+    return { offset: this.lineOffset(lineIndex) + column + shift, column: this.lineStartColumn(lineIndex) + column + shift + lead }
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */

@@ -75,7 +75,7 @@ it('ends a caption claim on a block attribute at its host column', () => {
   expect(html).toContain('    <ul class="x">\n      <li>m</li>')
 })
 
-it('folds an attribute past the caption host column', () => {
+it('attaches an attribute past the caption host column to the next block', () => {
   const html = carveToHtml('- a\n  > q\n  ^ cap\n   {.x}\n  - m')
-  expect(html).toContain('<figcaption>cap\n {.x}\n- m</figcaption>')
+  expect(html).toContain('<figcaption>cap</figcaption>\n    </figure>\n    <ul class="x">')
 })

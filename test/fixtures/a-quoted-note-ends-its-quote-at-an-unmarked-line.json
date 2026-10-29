@@ -12,16 +12,16 @@
   {
     "id": "js-25-1",
     "source": "> [^c]: para\n>   - li\ntail\n",
-    "html": "<blockquote>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n\n</blockquote>"
   },
   {
     "id": "js-25-2",
     "source": "> [^c]: para\n>       - li\nx\n",
-    "html": "<blockquote>\n</blockquote>\n<p>x</p>"
+    "html": "<blockquote>\n\n</blockquote>"
   },
   {
     "id": "js-70-1",
     "source": "- > para\n  > [^f]: n\n  >   - sub\ntail[^f]\n",
-    "html": "<ul>\n<li>\n<blockquote><p>para</p></blockquote>\n</li>\n</ul>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<p>n\n- sub<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n</li>\n</ol>\n</section>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   }
 ]

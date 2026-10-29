@@ -11,9 +11,9 @@ describe('definition-like lines stay in their paragraph', () => {
     expect(JSON.stringify(parse(source))).not.toContain('link_reference_definition')
   })
 
-  it.each([2, 3])('keeps a quoted definition with %i spaces open for lazy prose', (spaces) => {
+  it.each([2, 3])('closes the paragraph for a quoted definition with %i spaces', (spaces) => {
     expect(html(`>${' '.repeat(spaces)}[d]: u\n)\n`)).toBe(
-      '<blockquote><p>[d]: u\n)</p></blockquote>',
+      '<blockquote>\n\n</blockquote>\n<p>)</p>',
     )
   })
 
@@ -33,14 +33,15 @@ describe('definition-like lines stay in their paragraph', () => {
     )
   })
 
-  it('ends the quote after a footnote definition inside a quoted list', () => {
+  // The note's open paragraph takes the line lazily (carve#3885).
+  it('folds the line into a footnote definition inside a quoted list', () => {
     expect(html('> - a\n>   [^f]: u\n)\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<p>)</p>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>',
     )
   })
 
-  it('keeps an underindented definition in the same tight-list paragraph', () => {
-    expect(html('* : |\n [f]: t\n')).toBe('<ul>\n  <li>: |\n[f]: t</li>\n</ul>')
+  it('collects an underindented definition below a tight-list paragraph', () => {
+    expect(html('* : |\n [f]: t\n')).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
   it.each(['', '  '])('collects a definition at an eligible column (%j)', (indent) => {

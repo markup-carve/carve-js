@@ -47,8 +47,8 @@ describe("the continuation marker's column gate reaches every container", () => 
         ? reference + notes + '<p>intro + more' + backlink + '</p></li></ol></section>'
         : '<dl><dt>term</dt><dd>intro + more</dd></dl>')
       expect(html(comment(src))).toBe(footnote
-        ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'
-        : '<dl><dt>term</dt><dd><p>intro</p><p>more</p></dd></dl>')
+        ? '<p>more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
+        : '<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>')
     })
   }
 

@@ -530,15 +530,14 @@ describe('lintCarve — verbatim regions still suppress in-block warnings', () =
 describe('lintCarve — indented fenced-code delimiter', () => {
   const rulesOf = (src: string) => lintCarve(src).map((w) => w.rule)
 
-  it('flags an indented fence opener at the top level', () => {
+  it('does not flag an indented fence opener at the top level, which opens code', () => {
     const w = lintCarve('  ```\n  code\n  ```\n')
-    expect(w.map((x) => x.rule)).toContain('fence-delimiter-indentation')
-    expect(w[0].message).toContain('column-exact')
-    expect(w[0].line).toBe(1)
+    expect(w.map((x) => x.rule)).not.toContain('fence-delimiter-indentation')
+    expect(w).toEqual([])
   })
 
-  it('flags an indented tilde fence', () => {
-    expect(rulesOf(' ~~~\n x\n ~~~\n')).toContain('fence-delimiter-indentation')
+  it('does not flag an indented tilde fence, which opens code', () => {
+    expect(rulesOf(' ~~~\n x\n ~~~\n')).not.toContain('fence-delimiter-indentation')
   })
 
   it('does not flag a column-0 fence', () => {

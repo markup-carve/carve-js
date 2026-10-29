@@ -22,13 +22,13 @@ const doc = (lead: string, indent: number, marker: string): string =>
 describe('a list marker outside the fold window opens an item', () => {
   // `- lead` hands its body out at column 2, so column 1 is the whole window.
   it.each([
-    [0, 'collect'],
-    [1, 'text'],
-    [2, 'collect'],
-    [3, 'collect'],
-    [6, 'collect'],
-  ])('reads column %i under a two-column item as %s', (indent, answer) => {
-    for (const marker of ['- ', '1. ']) {
+    [0, 'collect', 'collect'],
+    [1, 'collect', 'text'],
+    [2, 'collect', 'collect'],
+    [3, 'collect', 'collect'],
+    [6, 'collect', 'collect'],
+  ])('reads column %i under a two-column item as %s (bullet) and %s (ordered)', (indent, bullet, ordered) => {
+    for (const [marker, answer] of [['- ', bullet], ['1. ', ordered]]) {
       const html = carveToHtml(doc('- lead', indent, marker))
       expect(html.includes('href="/t"'), `${indent} ${marker}`).toBe(answer === 'collect')
       expect(html.includes('[t]: /t'), `${indent} ${marker}`).toBe(answer === 'text')
@@ -37,13 +37,13 @@ describe('a list marker outside the fold window opens an item', () => {
 
   // `1. lead` hands its body out at column 3, so the window is 1 and 2.
   it.each([
-    [0, 'collect'],
-    [1, 'text'],
-    [2, 'text'],
-    [3, 'collect'],
-    [5, 'collect'],
-  ])('reads column %i under a three-column item as %s', (indent, answer) => {
-    for (const marker of ['- ', '1. ']) {
+    [0, 'collect', 'collect'],
+    [1, 'text', 'collect'],
+    [2, 'text', 'collect'],
+    [3, 'collect', 'collect'],
+    [5, 'collect', 'collect'],
+  ])('reads column %i under a three-column item as %s (bullet) and %s (ordered)', (indent, bullet, ordered) => {
+    for (const [marker, answer] of [['- ', bullet], ['1. ', ordered]]) {
       const html = carveToHtml(doc('1. lead', indent, marker))
       expect(html.includes('href="/t"'), `${indent} ${marker}`).toBe(answer === 'collect')
       expect(html.includes('[t]: /t'), `${indent} ${marker}`).toBe(answer === 'text')
@@ -53,14 +53,14 @@ describe('a list marker outside the fold window opens an item', () => {
   // `-   lead` hands its body out at column 4: the window widens with it, and
   // the two rows in the middle are the ones column equality got backwards.
   it.each([
-    [0, 'collect'],
-    [1, 'text'],
-    [2, 'text'],
-    [3, 'text'],
-    [4, 'collect'],
-    [5, 'collect'],
-  ])('reads column %i under a four-column item as %s', (indent, answer) => {
-    for (const marker of ['- ', '1. ']) {
+    [0, 'collect', 'collect'],
+    [1, 'collect', 'text'],
+    [2, 'collect', 'text'],
+    [3, 'collect', 'text'],
+    [4, 'collect', 'collect'],
+    [5, 'collect', 'collect'],
+  ])('reads column %i under a four-column item as %s (bullet) and %s (ordered)', (indent, bullet, ordered) => {
+    for (const [marker, answer] of [['- ', bullet], ['1. ', ordered]]) {
       const html = carveToHtml(doc('-   lead', indent, marker))
       expect(html.includes('href="/t"'), `${indent} ${marker}`).toBe(answer === 'collect')
       expect(html.includes('[t]: /t'), `${indent} ${marker}`).toBe(answer === 'text')
@@ -91,7 +91,7 @@ describe('a list marker outside the fold window opens an item', () => {
     )
   })
 
-  it('leaves a marker inside the window as the item\'s own text', () => {
+  it('reads a marker inside the window by its family', () => {
     // The other direction, and the one column equality answered by accident: a
     // marker at column 2 under `-   lead` lands exactly on the open item's
     // content column while sitting INSIDE its window. It is lead text, so a
@@ -99,7 +99,7 @@ describe('a list marker outside the fold window opens an item', () => {
     // the link table holding it are the two halves the pass may not have at
     // once.
     expect(carveToHtml('-   lead\n  - [t]: /t\n\n[go][t]\n')).toBe(
-      '<ul>\n  <li>lead\n- [t]: /t</li>\n</ul>\n<p>[go][t]</p>',
+      '<ul>\n  <li>lead</li>\n  <li></li>\n</ul>\n<p><a href="/t">go</a></p>',
     )
     expect(carveToHtml('1. lead\n - [t]: /t\n\n[go][t]\n')).toBe(
       '<ol>\n  <li>lead\n- [t]: /t</li>\n</ol>\n<p>[go][t]</p>',
@@ -123,8 +123,8 @@ describe('a list marker outside the fold window opens an item', () => {
   // 392 three-line column shapes: 209 diverged before this file's change, 34
   // still diverged with the window alone, none do with the stack held still.
   it.each([
-    ['a fold under a four-column item', '-   lead\n - prose\n - [t]: /t', 'text'],
-    ['a wider fold under the same item', '-   lead\n - prose\n   - [t]: /t', 'text'],
+    ['a fold under a four-column item', '-   lead\n - prose\n - [t]: /t', 'collect'],
+    ['a wider fold under the same item', '-   lead\n - prose\n   - [t]: /t', 'collect'],
     ['a nest below a fold', '- lead\n - prose\n  - [t]: /t', 'collect'],
     ['a nest below a fold under an ordered item', '1. lead\n  - prose\n   - [t]: /t', 'collect'],
   ])('measures the line after %s against the item that is really open', (_name, source, answer) => {

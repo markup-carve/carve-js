@@ -44,7 +44,7 @@
     {
       "name": "08-named-depth1-%% note-closed",
       "source": "> - ::: box\n>   body\n> %% note\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "09-named-depth1-%% note-open",
@@ -54,7 +54,7 @@
     {
       "name": "10-named-depth1-%%%-closed",
       "source": "> - ::: box\n>   body\n> %%%\n>   payload\n> %%%\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "11-named-depth1-%%%-open",
@@ -64,7 +64,7 @@
     {
       "name": "12-named-depth1-%%%-closed",
       "source": "> - ::: box\n>   body\n> %%%\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "13-named-depth1-%%%-open",
@@ -74,7 +74,7 @@
     {
       "name": "14-named-depth2-%% note-closed",
       "source": "> > - ::: box\n> >   body\n> > %% note\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "15-named-depth2-%% note-open",
@@ -84,7 +84,7 @@
     {
       "name": "16-named-depth2-%%%-closed",
       "source": "> > - ::: box\n> >   body\n> > %%%\n> >   payload\n> > %%%\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <p>:::</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "17-named-depth2-%%%-open",
@@ -94,7 +94,7 @@
     {
       "name": "18-named-depth2-%%%-closed",
       "source": "> > - ::: box\n> >   body\n> > %%%\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "19-named-depth2-%%%-open",
@@ -114,7 +114,7 @@
     {
       "name": "22-preservation-22",
       "source": "> - a\n> %% note\n>   ```\n>   x\n>   ```\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <pre><code>x\n</code></pre>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "23-preservation-23",
@@ -134,7 +134,7 @@
     {
       "name": "overindented-next-depth1-commentcol0-colon",
       "source": "> - ::: box\n>   body\n> %%%\n> hidden\n> %%%\n>   prose\n>     ::: note\n>     code\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <p>prose\n::: note\ncode\n- tail</p>\n</blockquote>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <p>prose</p>\n  <aside class=\"admonition note\" aria-label=\"Note\">\n    <p>code\n- tail</p>\n  </aside>\n</blockquote>"
     },
     {
       "name": "overindented-next-depth1-commentcol4-colon",
@@ -154,7 +154,7 @@
     {
       "name": "overindented-next-depth2-commentcol0-colon",
       "source": "> > - ::: box\n> >   body\n> > %%%\n> > hidden\n> > %%%\n> >   prose\n> >     ::: note\n> >     code\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <p>prose\n::: note\ncode\n- tail</p>\n  </blockquote>\n</blockquote>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <p>prose</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>code\n- tail</p>\n    </aside>\n  </blockquote>\n</blockquote>"
     },
     {
       "name": "overindented-next-depth2-commentcol4-colon",
@@ -184,22 +184,22 @@
     {
       "name": "marker-candidate-comment-depth1-column3",
       "source": "> - ::: box\n>   %%%\n>   hidden\n>   %%%\n>    :::\nlazy\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::\nlazy</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>lazy</p>\n<blockquote>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "marker-candidate-comment-depth1-column4",
       "source": "> - ::: box\n>   %%%\n>   hidden\n>   %%%\n>     :::\nlazy\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::\nlazy</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>lazy</p>\n<blockquote>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "marker-candidate-comment-depth2-column3",
       "source": "> > - ::: box\n> >   %%%\n> >   hidden\n> >   %%%\n> >    :::\nlazy\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::\nlazy</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>lazy</p>\n<blockquote>\n  <blockquote>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "marker-candidate-comment-depth2-column4",
       "source": "> > - ::: box\n> >   %%%\n> >   hidden\n> >   %%%\n> >     :::\nlazy\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::\nlazy</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>lazy</p>\n<blockquote>\n  <blockquote>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     }
   ]
 }

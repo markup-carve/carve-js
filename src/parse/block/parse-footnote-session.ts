@@ -1,6 +1,33 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine, isColonFenceOpener, isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, rebaseOverindentedBlocks, restoreVerbatimBlanks, retainBelowColumnComment, sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { buildCloserIndex, codeCloserPossible } from './parse-block-scan-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, attachesAtDocumentColumnZero, bodyHoldsOpenCommentSpan, firstBlockRefusesList, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, itemFenceHasCloser, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { RE_FENCE } from '../parse-prepass-core.js'
+
+// The model's closer search for a body: a closer counts at the body column, a line below it is
+// searched past, and a document-column quote or definition, or a blank run followed by a line short of the
+// body, ends the search (CARVE-P0-014).
+function closerAheadPastColumn(rootLines: readonly string[], fromLine: number, run: string, bodyColumn: number): boolean {
+  for (let j = fromLine; j < rootLines.length; j++) {
+    const line = rootLines[j]!
+    if (quotePrefixDepth(line) > 0) return false
+    if (isBlankLine(line)) {
+      // A blank run ends the body unless the next line reaches it.
+      let k = j + 1
+      while (k < rootLines.length && isBlankLine(rootLines[k]!)) k++
+      if (k >= rootLines.length || indentColumns(rootLines[k]!) < bodyColumn) return false
+      j = k - 1
+      continue
+    }
+    const column = indentColumns(line)
+    const rest = line.trimStart()
+    if (column === 0 && (/^>/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || isLinkDefLine(rest) || /^\{/.test(rest))) return false
+    if (column !== bodyColumn) continue
+    const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(rest)
+    if (closer && closer[1]![0] === run[0] && closer[1]!.length >= run.length) return true
+  }
+  return false
+}
 
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, markerColumn?: number, quoteLevels?: number, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
@@ -8,13 +35,12 @@ interface FootnoteHooks {
 }
 
 function canTakePlainLazyLine(
-  lexer: Lexer, defLineIndex: number, line: string,
+  line: string,
   state: ReturnType<typeof verbatimOnlyLazyState>,
 ): boolean {
   const content = line.trimStart()
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
     state.deepest?.opaque == null && !state.deepest?.divDepth &&
-    !(defLineIndex === 0 && lexer.hostBody === 'list') &&
     !RE_CAPTION.test(content)
 }
 
@@ -49,9 +75,12 @@ function priorListContentReached(lexer: Lexer, defLineIndex: number, column: num
   return false
 }
 
-function itemMarkerLeavesNote(lexer: Lexer, defLineIndex: number, sourceLine: string | undefined, authoredBodyColumn: number | undefined, markerLineNote: boolean): boolean {
-  if (lexer.hostBody !== 'list' || lexer.hostBodyRoot === 'footnote' || markerLineNote ||
+function itemMarkerLeavesNote(lexer: Lexer, defLineIndex: number, sourceLine: string | undefined, authoredBodyColumn: number | undefined): boolean {
+  if (lexer.hostBody !== 'list' || lexer.hostBodyRoot === 'footnote' ||
       sourceLine === undefined || authoredBodyColumn === undefined) return false
+  // A note opening a quote in the item answers through the quote's lazy rule.
+  const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1]
+  if (defLineIndex === 0 && defSource !== undefined && quotePrefixDepth(defSource) > lexer.hostQuoteDepth) return false
   const column = sourceColumn(sourceLine)
   const noteColumn = authoredBodyColumn - FOOTNOTE_BODY_COLUMN
   if (column < noteColumn && priorListContentReached(lexer, defLineIndex, noteColumn) &&
@@ -62,9 +91,9 @@ function itemMarkerLeavesNote(lexer: Lexer, defLineIndex: number, sourceLine: st
 
 function sourceOwnerLeavesNote(
   lexer: Lexer, sourceLine: string | undefined, authoredBodyColumn: number | undefined,
-  pendingBlanks: number, line: string, bodyColumn: number, markerLineNote: boolean, defLineIndex: number,
+  pendingBlanks: number, line: string, bodyColumn: number, defLineIndex: number,
 ): boolean {
-  if (itemMarkerLeavesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, markerLineNote)) return true
+  if (itemMarkerLeavesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn)) return true
   return lexer.hostBody === 'description' &&
     authoredBodyColumn !== undefined && sourceLine !== undefined && !isBlankLine(sourceLine) &&
     sourceColumn(sourceLine) < authoredBodyColumn &&
@@ -81,16 +110,6 @@ function refusedNoteMarkerAtBoundary(
 ): boolean {
   return pending.count === 0 && state.opaque === null && !canContinueLazily &&
     marker?.owner?.kind === 'footnote' && marker.reason !== undefined
-}
-
-function quoteReleasesBelowLine(
-  lexer: Lexer, admission: ContainerAdmission, authoredBodyColumn: number | undefined,
-  bodyColumn: number, retainedBelowComment: boolean, markerLineQuoteOpen: boolean,
-  quoteOpen: boolean,
-): boolean {
-  return markerLineQuoteOpen && quoteOpen && !retainedBelowComment && admission.kind === 'below' &&
-    admission.sourceColumn < (authoredBodyColumn ?? bodyColumn) &&
-    !isRetainableLineComment(lexer, admission.line) && matchedCommentFenceEnd(lexer) === undefined
 }
 
 function reachesAuthoredNoteBody(
@@ -114,21 +133,34 @@ function markerLineCommentContinuesNote(
     isRetainableLineComment(lexer, line)
 }
 
+/** Whether the nested note opened at `defIndex` still ends on an open paragraph. */
+function nestedNoteParagraphOpen(bodyLines: readonly string[], defIndex: number): boolean {
+  const def = RE_FOOTNOTE_DEF.exec((bodyLines[defIndex] ?? '').trimStart())
+  if (def === null) return false
+  const column = indentColumns(bodyLines[defIndex]!) + FOOTNOTE_BODY_COLUMN
+  const lines = bodyLines.slice(defIndex + 1).map(line => isBlankLine(line) ? '' : sliceColumns(line, column, true))
+  const closers = buildCloserIndex(lines)
+  const frame = verbatimOnlyLazyState()
+  trackItemLazyState(def[2]!, frame, marker => codeCloserPossible(closers, marker, -1))
+  lines.forEach((line, index) => trackItemLazyState(line, frame, marker => codeCloserPossible(closers, marker, index)))
+  return canTakePlainLazyLine('', frame)
+}
+
 function nestedSourceBodyLeft(
   lexer: Lexer, defLineIndex: number, nestedSourceBodyColumn: number | undefined,
   sourceLine: string | undefined,
 ): boolean {
   return lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
-    sourceLine !== undefined && !isBlankLine(sourceLine) &&
-    indentColumns(sourceLine, nestedSourceBodyColumn) < nestedSourceBodyColumn
+    sourceLine !== undefined && !isBlankLine(sourceQuoteBody(sourceLine)) &&
+    sourceColumn(sourceLine) < nestedSourceBodyColumn
 }
 
 function framesBelowNoteLine(
   admission: ContainerAdmission, sourceLine: string | undefined,
-  authoredBodyColumn: number | undefined, content: string, retainedBelowComment: boolean,
+  authoredBodyColumn: number | undefined, content: string,
 ): boolean {
   // Definitions register at their own columns, including below a note body.
-  return !retainedBelowComment && admission.kind !== 'blank' && sourceLine !== undefined &&
+  return admission.kind !== 'blank' && sourceLine !== undefined &&
     authoredBodyColumn !== undefined && admission.sourceColumn < authoredBodyColumn &&
     !RE_COMMENT_LINE.test(content.trimStart()) &&
     !RE_FOOTNOTE_DEF.test(content.trimStart()) && !isLinkDefLine(content.trimStart()) &&
@@ -169,6 +201,18 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     markerColumn + (defLineRaw.replace(/^[ \t]+/, '').length - m[2]!.length)
   const pendingBlankRun = new ContainerBlankBuffer()
   let nestedSourceBodyColumn: number | undefined
+  let nestedDefBodyIndex = -1
+  // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
+  let nestedOpenMemo = { index: -1, length: 0, open: false }
+  const nestedParagraphStillOpen = (): boolean => {
+    const memo = nestedOpenMemo
+    if (memo.index === nestedDefBodyIndex && memo.open) {
+      while (memo.length < bodyLines.length && lexer.itemLazyLines.has(bodyLineNumbers[memo.length]!)) memo.length++
+      if (memo.length === bodyLines.length) return true
+    }
+    nestedOpenMemo = { index: nestedDefBodyIndex, length: bodyLines.length, open: nestedNoteParagraphOpen(bodyLines, nestedDefBodyIndex) }
+    return nestedOpenMemo.open
+  }
   const noteSpanScan = newCommentSpanScan()
   const lazyState = verbatimOnlyLazyState()
   // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
@@ -180,9 +224,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const below = lexer.peek()
   if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) &&
       attachesAtDocumentColumnZero(lexer, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true)) {
+    // An attached paragraph ends at an opener that reaches the body column: that line is the body's.
+    const attachedParagraph = !lineOpensItemBlock(below.trimStart())
+    const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
     const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
       lexer,
-      (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a),
+      (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
+        (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)),
       0, true, sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw), 0, true,
     )
     firstBlockAttached = true
@@ -204,9 +252,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (nestedBody !== undefined) trackItemLazyState(nestedBody, lazyState, () => false)
     if (/^\+[ \t]*$/.test(m[2]!) && firstBlockRefusesList(lexer)) lazyState.lazyFoldable = false
   }
-  const markerLineQuoteOpen = lazyState.quoteInner !== null
-  let retainedBelowComment = false
-  let retainedBelowQuotedComment = false
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   let termTextContinuation = false
   let hasContainedItem = false
@@ -216,21 +261,18 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
     const sourceLine = admission.sourceLine
-    if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex === 0, defLineIndex)) return 'stop'
-    if (nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, sourceLine)) return 'stop'
+    if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
+    // A line leaving a nested note's body is still that note's lazy line (carve#3885).
+    if (nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, sourceLine) &&
+        !(pendingBlankRun.count === 0 && nestedParagraphStillOpen() &&
+          !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))) return 'stop'
     if (admission.kind === 'blank') {
-      retainedBelowComment = false
-      retainedBelowQuotedComment = false
       termTextContinuation = false
       trackItemLazyState('', lazyState)
       pendingBlankRun.add(ln, lexer.lineNumber(lexer.pos))
       lexer.consume()
       return 'continue'
     }
-    // A quote on the note's marker line cannot lazily claim an unmarked line
-    // below the note body floor. Ownership is chosen before the quote parses it.
-    if (quoteReleasesBelowLine(lexer, admission, authoredBodyColumn, bodyColumn,
-      retainedBelowComment, markerLineQuoteOpen, lazyState.quoteInner !== null)) return 'stop'
     // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
     // with no indentation (the same continuation marker lists and block quotes
     // use); the attached block ends at a blank line, another `+`, or the next
@@ -238,7 +280,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // which case all three are body text (corpus category 279).
     const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
     const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
-    const noteCanLazy = canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState)
+    const noteCanLazy = canTakePlainLazyLine(ln, lazyState)
     if (refusedNoteMarkerAtBoundary(pendingBlankRun, lazyState, noteCanLazy, noteMarker)) {
       // The note still owns this marker even when the next block misses its
       // marker column. The body collector leaves the + as text below.
@@ -298,23 +340,20 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(pendingBlankRun.lines[k])
       }
       pendingBlankRun.clear()
-      // Only a quoted comment's follower is taken flush; after a `%%` line the
-      // follower keeps its columns, so a term there keeps its description.
-      const content: string = retainedBelowQuotedComment && !RE_COMMENT_LINE.test(ln.trimStart())
-        ? ln.trimStart() : sliceColumns(ln, bodyColumn, true)
-      const belowQuotedComment = lazyState.quoteInner !== null && RE_COMMENT_LINE.test(content.trimStart())
+      const content: string = sliceColumns(ln, bodyColumn, true)
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
       if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(content.trimStart()))
         lexer.hostedFootnoteLines.add(lexer.lineNumber(lexer.pos))
       if (lexer.hostBody === 'list' && defLineIndex === 0 && RE_FOOTNOTE_DEF.test(ln.trimStart()) && sourceLine !== undefined) {
-        nestedSourceBodyColumn = indentColumns(sourceLine) + FOOTNOTE_BODY_COLUMN
+        nestedSourceBodyColumn = sourceColumn(sourceLine) + FOOTNOTE_BODY_COLUMN
+        nestedDefBodyIndex = bodyLines.length
       }
       if (content !== content.trimStart() && lazyState.opaque === null && commentFenceUntil <= lexer.pos)
         commentFenceUntil = matchedCommentFenceEnd(lexer) ?? commentFenceUntil
       if (lexer.pos < commentFenceUntil) belowColumnCommentFence.add(bodyLines.length)
       // Past the body column a definition is term text; at it, it registers (CARVE-P0-010).
-      const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content, retainedBelowComment)
+      const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       bodyLines.push(framedBelow
         ? LAZY_FRAME + content.trimStart() : termTextContinuation && RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && content !== content.trimStart() &&
         (RE_FOOTNOTE_DEF.test(content.trimStart()) || isLinkDefLine(content.trimStart()))
@@ -322,14 +361,21 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && /^:[ \t]+/.test(content.trimStart()))
         termTextContinuation = true
       if (/^(?:[-*+] |\d+[.)] )/.test(content)) hasContainedItem = true
+      // A fence keeps its claim when its closer lies past the body (carve#3891).
+      const fenceRun = RE_FENCE.test(content.trimStart()) ? /^(`{3,}|~{3,})/.exec(content.trimStart())![1]! : undefined
+      if (fenceRun && authoredBodyColumn !== undefined &&
+          closerAheadPastColumn(lexer.rootLines ?? lexer.lines, lexer.lineNumber(lexer.pos), fenceRun, authoredBodyColumn))
+        lexer.descendantFenceAnswers.set(`${lexer.lineNumber(lexer.pos)}:${fenceRun}`, true)
       // The tracker reads an overindented opener at its local zero. A fence
       // directly in the note needs its authored offset for closer lookahead;
       // a descendant item's fence leaves the note's paragraph state intact.
-      trackItemLazyState(framedBelow ? 'text' : trackedFootnoteContent(content), lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos,
-        footnoteFenceColumn(content, bodyColumn, hasContainedItem),
-        new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
-      retainedBelowComment = belowQuotedComment && /^[ \t]*>/.test(lexer.peek(1) ?? '')
-      retainedBelowQuotedComment = retainedBelowComment
+      // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
+      const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
+        ? content : trackedFootnoteContent(content)
+      trackItemLazyState(tracked, lazyState, (marker, extra = 0) => itemFenceHasCloser(lexer, marker, lexer.pos,
+        footnoteFenceColumn(content, bodyColumn, hasContainedItem) + extra,
+        new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), true, undefined,
+        framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false })
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       lexer.consume()
@@ -354,28 +400,12 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       lexer.consume()
-    } else if (
-      pendingBlankRun.count === 0 && indentColumns(ln, bodyColumn) < bodyColumn && ln !== ln.trimStart() &&
-      (retainedBelowComment || lazyState.lazyFoldable) && lazyState.opaque === null &&
-      matchedCommentFenceEnd(lexer) !== undefined
-    ) {
-      // A matched fence below the column retains the note as a `%%` line does.
-      const end = matchedCommentFenceEnd(lexer)!
-      while (lexer.pos < end) {
-        const line = lexer.peek()!
-        belowColumnCommentFence.add(bodyLines.length)
-        bodyLines.push(line)
-        bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
-        bodySourceLines.push(line)
-        lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
-        lexer.consume()
-      }
-      retainedBelowComment = retainBelowColumnComment('%%', lazyState, false)
-      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
+    } else if (lazyState.opaque === null && RE_COMMENT_LINE.test(ln.trimStart())) {
+      // A comment below the body's column closes the body (carve#3885).
+      return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
-      !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
-      (retainedBelowComment || canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState) ||
+      (canTakePlainLazyLine(ln, lazyState) ||
         markerLineCommentContinuesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, ln) ||
         ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
@@ -384,12 +414,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           isListMarkerLine(sourceQuoteBody(sourceLine).trimStart())) ||
         !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
     ) {
-      const content = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
-        ? ln.trimStart()
-        : ln
+      const content = ln
       // An open definition term takes below-column lines as term text, even
       // when a line would otherwise look like a block opener.
-      const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content, retainedBelowComment)
+      const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       bodyLines.push(lazyState.inDefList === 'term' || framedBelow
         ? LAZY_FRAME + content.trimStart() : content)
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -397,8 +425,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
       trackItemLazyState(trackedLiteralLine(content, framedBelow), lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, markerColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), false,
         (run) => commentBlockHasCloser(lexer, run))
-      retainedBelowComment = retainBelowColumnComment(content, lazyState, false)
-      retainedBelowQuotedComment = retainedBelowComment && lazyState.quoteInner !== null
       lexer.consume()
     } else {
       return 'stop'
@@ -410,14 +436,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // its authored column as a local base (carve#1729). The collector has
     // already removed the fixed two-column body margin.
     // A fence taken below the column keeps that column, as a `%%` line does.
-    const rebaseEligible = belowColumnCommentFence.size === 0 ? undefined
-      : new Set(bodyLines.map((_, k) => k).filter((k) => !belowColumnCommentFence.has(k)))
     if (bodyLines.length !== 1 || !/^[A-Za-z][A-Za-z0-9 .]*$/.test(bodyLines[0]!)) {
-      rebaseOverindentedBlocks(
-        bodyLines, rebaseEligible, -1, true, true, undefined, undefined, undefined, false,
-        undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
-        undefined, undefined, false, false, true,
-      )
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
       )

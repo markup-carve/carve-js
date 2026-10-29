@@ -89,10 +89,10 @@ describe('a reference image with a caption', () => {
     expect(doc.children.map((c) => c.type)).toEqual(['paragraph', 'link_reference_definition'])
   })
 
-  it('does not promote an image indented above the content column', () => {
+  it('promotes an image indented above the content column', () => {
     // The strict column-0 rule the promotion is gated on.
     const doc = parse('- text\n\n    ![a][ok]\n    ^ cap\n\n[ok]: /p.png\n')
     const json = JSON.stringify(doc)
-    expect(json).not.toContain('"figure"')
+    expect(json).toContain('"figure"')
   })
 })

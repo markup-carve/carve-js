@@ -5,6 +5,7 @@ import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table/table-display-width.js'
 import { trimCellPadding } from './parse/table/parse-table-cells.js'
+import { allocateDashes } from './parse/inline/parse-inline-core.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
@@ -27,7 +28,6 @@ import type {
   VerbatimCellWrap,
 } from './ast.js'
 import {
-  aBodyRebaseWouldMoveALine,
   cellPayloadIsSpanMarker,
   buildBracketMap,
   opensFrontmatter,
@@ -142,6 +142,10 @@ function trimStartNonNbsp(text: string): string {
   let start = 0
   while (start < text.length && isWsNonNbsp(text[start]!)) start++
   return start === 0 ? text : text.slice(start)
+}
+
+function inContainer(ctx: CarveContext): boolean {
+  return ctx.listDepth > 0 || ctx.quoteDepth > 0 || ctx.colonFenceDepth > 0 || ctx.atAnAuthoredBodyColumn
 }
 
 interface CarveContext {
@@ -846,11 +850,7 @@ function nestedFenceTail(previous: BlockNode | null): 'plain' | 'task' | undefin
 
 function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null, inItem = false): string {
   const fence = inItem ? nestedFenceTail(previous) : undefined
-  const escapedPlus = rendered === '\\+' || rendered.startsWith('\\+\n')
-  const barePlus = rendered === '+' || rendered.startsWith('+\n')
-  if (fence === 'task' && (escapedPlus || barePlus)) {
-    return ` +${rendered.slice(escapedPlus ? 2 : 1)}`
-  }
+  if (fence === 'task' && (rendered === '+' || rendered.startsWith('+\n'))) return `\\${rendered}`
   return previous?.type === 'list' && fence === undefined && rendered.startsWith('+\n')
     ? `\\${rendered}` : rendered
 }
@@ -1016,67 +1016,6 @@ function romanMarker(n: number): string {
     }
   }
   return out || 'I'
-}
-
-/**
- * One extra column, when a definition list's payload needs a base of its own.
- */
-function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): string {
-  if (!atAnAuthoredBodyColumn) return rendered
-  if (!aBodyRebaseWouldMoveALine(rendered)) return rendered
-
-  // A BLANK LINE STAYS BLANK. Indenting it produces a line of nothing but
-  // spaces, which this writer never emits.
-  const raised = rendered
-    .split('\n')
-    .map((line) => (line === '' ? line : ` ${line}`))
-    .join('\n')
-
-  // AT A RAISED BASE A BLANK LINE ENDS THE DESCRIPTION. The raise exists
-  // because the payload has to stay inside the `dd`; a blank written above that
-  // payload hands it back to the host as a sibling, which is the same loss the
-  // raise was applied to avoid.
-  //
-  // ONLY THE BLANK ABOVE A RECOGNIZED OPENER. A blank above ordinary payload
-  // text is a PARAGRAPH BREAK and carries its own meaning - dropping it merges
-  // two paragraphs of a `<dd>`, which is a loss of exactly the kind this
-  // function exists to prevent, and one that a list with two entries reaches
-  // whenever any single entry asks for the raise. So the question is asked per
-  // candidate line, and it is the SAME question the raise itself is gated on
-  // rather than a second spelling of it: `aBodyRebaseWouldMoveALine` over the
-  // line at its description-relative column, with the raise taken back off.
-  //
-  // A blank between two ENTRIES never reaches the test: its next line sits at
-  // the entry column, not past it.
-  const lines = raised.split('\n')
-  const kept: string[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!
-    if (line.trim() === '') {
-      let j = i + 1
-      while (j < lines.length && lines[j]!.trim() === '') j++
-      const next = lines[j]
-      if (
-        next !== undefined &&
-        leadingSpaces(next) > ENTRY_RAISE_COLUMN &&
-        aBodyRebaseWouldMoveALine(next.slice(ENTRY_RAISE_COLUMN))
-      ) {
-        i = j - 1
-        continue
-      }
-    }
-    kept.push(line)
-  }
-
-  return kept.join('\n')
-}
-
-/** The column a raised `::` line sits at - one past the body's minimum. */
-const ENTRY_RAISE_COLUMN = 1
-
-/** Leading spaces of a line, for comparing a payload against its entry column. */
-function leadingSpaces(line: string): number {
-  return line.length - line.replace(/^ +/, '').length
 }
 
 /**
@@ -1830,29 +1769,6 @@ export function trimHeadingText(text: string): string {
   return trimEndNonNbsp(text.replace(/^ +/, ''))
 }
 
-/**
- * `trimNonNbsp`, except it keeps leading whitespace that is load-bearing.
- *
- * `guardThematicBreakLines` re-indents a paragraph line that would otherwise
- * re-parse as a thematic break. That space is the whole protection, and
- * `normalize` trims BOTH its input and its joined output - so on the document's
- * FIRST line, the only line either trim can reach, the guard was undone and the
- * marker landed back at column 0. The next parse then read `<hr>` where the
- * source had a paragraph, breaking `to_html(fmt(x)) == to_html(x)` and
- * `fmt(fmt(x)) == fmt(x)` together (carve-js#566).
- *
- * A REAL thematic break is unaffected: the writer emits it at column 0 with no
- * guard space, so there is nothing here to preserve.
- */
-function trimNonNbspKeepingGuard(text: string): string {
-  // The guard is INDENTATION, so PART 7's four characters. `[^\S\u00a0]` was
-  // `\s` with one carve-out, and it read a leading vertical tab as indentation.
-  if (/^[ \t]+-{3,}[ \t]*(\n|$)/.test(text)) {
-    return trimEndNonNbsp(text)
-  }
-  return trimNonNbsp(text)
-}
-
 function cleanEscapedText(node: Text): string {
   return node.value
 }
@@ -2063,9 +1979,8 @@ function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>):
 /**
  * Protect a paragraph line that would re-parse as a thematic break.
  *
- * Source indentation is not in the AST, so an indented `---` - a paragraph
- * holding an em dash - is emitted at column 0, where it stops being a paragraph
- * and becomes a thematic break.
+ * Indentation does not escape it under rule A (carve#3885), so the line takes a
+ * backslash.
  *
  * Text nodes are already covered: the conservative form escapes the hyphens, so
  * the round-trip check sees the difference and picks that form. A
@@ -2083,7 +1998,8 @@ function guardThematicBreakLines(body: string, inLineBlock: boolean): string {
   if (inLineBlock || !body.includes('-')) return body
   return body
     .split('\n')
-    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? ` ${line}` : line))
+    // A backslash would read `\---` as `-–`; the glyphs the run renders as keep the line.
+    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? allocateDashes(line.trimEnd().length) : line))
     .join('\n')
 }
 
@@ -3358,7 +3274,7 @@ class CarveRenderSession {
     const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
     ctx.atAnAuthoredBodyColumn = false
     try {
-      return this.renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
+      return this.renderBlockBody(node, ctx)
     } finally {
       this.escapeUnit = previous
       this.descriptionParagraph = previousDescriptionParagraph
@@ -3368,11 +3284,7 @@ class CarveRenderSession {
     }
   }
 
-  private renderBlockBody(
-    node: BlockNode,
-    ctx: CarveContext,
-    atAnAuthoredBodyColumn = false,
-  ): string {
+  private renderBlockBody(node: BlockNode, ctx: CarveContext): string {
     const attrs = renderBlockAttrs(node.attrs)
     const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
     switch (node.type) {
@@ -3560,10 +3472,7 @@ class CarveRenderSession {
         // spelled, so raising the body alone would leave `{loose}` at the body
         // minimum with the `::` line a column past it - a shape no author writes
         // and one the rebase then has to reconcile a line at a time.
-        return atARaisedBase(
-          withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx), (body) => this.normalize(body)),
-          atAnAuthoredBodyColumn,
-        )
+        return withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx), (body) => this.normalize(body))
       case 'figure':
         return withAttrs(this.renderFigure(node, ctx))
       case 'figure_group': {
@@ -4023,23 +3932,6 @@ class CarveRenderSession {
           if (parts.length === 0) parts.push(rendered)
           else parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
           previousAtMarkerColumn = true
-          previousEmitted = b
-          return
-        }
-        // A LINE COMMENT WRITTEN AT THE ITEM'S CONTENT COLUMN IS READ AGAINST THE
-        // SUB-LIST ABOVE IT: that column is the sub-list's MARKER column, and a
-        // `%%` line there joins the sub-list's last item instead of opening a
-        // block of the hosting item. The comment comes back one level in, and the
-        // next writer pass spells it at the deeper column - so the source keeps
-        // moving right while the HTML never changes (carve-js#1676). The blank
-        // line closes the sub-list; it does not loosen the item, because a
-        // comment spells no paragraph for the blank line to part.
-        //
-        // ONLY BELOW A LIST, and only for the LINE form. A comment below a
-        // paragraph, quote, definition list or fence already opens its own block
-        // at that column, and a `%%%` fence opener closes the sub-list on its own.
-        if (b.type === 'comment' && !b.block && !separated && previousEmitted?.type === 'list') {
-          parts.push('', rendered)
           previousEmitted = b
           return
         }
@@ -5272,6 +5164,11 @@ class CarveRenderSession {
     if (hidesLineBlockCloser && (nodeType !== 'code' || !canPairFence)) {
       throw new SourceUnspellableError(nodeType, 'a prefixed or suffixed verbatim span cannot hide a line-block closer')
     }
+    // A bare colon run under a container paragraph opens or closes a container at
+    // every column (§10 I1), so the span has no spelling (CARVE-P11-046, carve#3922).
+    if (ctx !== undefined && ctx.lineBlockDepth === 0 && inContainer(ctx) && /\n[ \t]*:{3,}[ \t]*(?=\n|$)/.test(content)) {
+      throw new SourceUnspellableError(nodeType, 'a verbatim line holding only a colon run cannot stay inline in a container paragraph')
+    }
     // Description markers stay at the content column and need a fence run to remain inline.
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
     const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
@@ -5321,7 +5218,7 @@ class CarveRenderSession {
 
   private normalize(text: string): string {
     if (this.markerProbeNonces) collectSentinelNonces(text, this.markerProbeNonces)
-    const lines = trimNonNbspKeepingGuard(
+    const lines = trimNonNbsp(
       text.replace(new RegExp(`${this.sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(this.sentinels[3]!, 'g'), '\\ '),
     ).split('\n')
     const swept = lines.map((line) => {
@@ -5354,7 +5251,7 @@ class CarveRenderSession {
     //
     // ONE TAG PER LINE, always: every site that writes one puts it directly after
     // a newline, so the lazy prefix cannot run past a line it does not own.
-    const cleaned = trimNonNbspKeepingGuard(
+    const cleaned = trimNonNbsp(
       squeezed.replace(new RegExp(`^(.*?)${this.sentinels[4]}`, 'gm'), (_match, prefix: string) => {
         const blank = dropTrailingWs(prefix)
         return `${blank}\n${blank}\n${blank}\n${prefix}`

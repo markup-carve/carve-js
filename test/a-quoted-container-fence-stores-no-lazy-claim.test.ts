@@ -10,7 +10,7 @@ const cases = [
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-11",
     "> :  a\n>\n>    ```\n>    x\nflush\n",
-    "<blockquote>\n  <p>:  a</p>\n  <p><code>\nx\nflush</code></p>\n</blockquote>\n"
+    "<blockquote>\n  <p>:  a</p>\n  <pre><code>x\n</code></pre>\n</blockquote>\n<p>flush</p>\n"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-12",

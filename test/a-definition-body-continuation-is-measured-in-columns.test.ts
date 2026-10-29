@@ -64,7 +64,7 @@ describe("a definition body's continuation is measured in columns", () => {
       expect(carveToHtml(':: t\n:  body\n   > q\n')).toContain('<blockquote>')
     })
 
-    it('leaves one two columns in as lazy text', () => {
+    it('ends the description at one two columns in', () => {
       // The boundary. Folding every indented opener would satisfy both
       // assertions above.
       //
@@ -74,7 +74,7 @@ describe("a definition body's continuation is measured in columns", () => {
       // is only visible once something stands between the marker and the
       // opener. A continuation at the body's own column is that something, and
       // it leaves the columns being measured untouched.
-      expect(carveToHtml(':: t\n:  body\n   more\n  > q\n')).not.toContain('<blockquote>')
+      expect(carveToHtml(':: t\n:  body\n   more\n  > q\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>body\nmore</dd>\n</dl>\n<blockquote><p>q</p></blockquote>')
     })
   })
 

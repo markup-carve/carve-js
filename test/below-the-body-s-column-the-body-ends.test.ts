@@ -22,11 +22,8 @@ const dd = '<dl>\n  <dt>t</dt>\n  <dd>body\nmore</dd>\n</dl>\n'
 
 describe("BELOW the body's column the body ends", () => {
   it('the BELOW band gives one answer at every sub-column indent', () => {
-    // carve#3295 moved this half back: at the top level an indented opener
-    // opens nothing, so the body does not end and the quote marker folds into
-    // its paragraph as text, as under a list item.
     let input = body + ' '.repeat(1) + '> q\n'
-    const expected = '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n&gt; q</dd>\n</dl>'
+    const expected = dd + '<blockquote><p>q</p></blockquote>'
     expect(carveToHtml(input)).toBe(expected)
 
     input = body + ' '.repeat(2) + '> q\n'
@@ -76,9 +73,7 @@ describe("BELOW the body's column the body ends", () => {
   })
 
   it('every block-opener kind answers the band the same way', () => {
-    // The band is stated about the column, not about the construct. Since
-    // carve#3295 a heading, break, table row or quote marker folds into the
-    // body's paragraph; a colon fence still ends the body (carve#2486).
+    // The band is stated about the column, not about the construct.
     const band = (n: number, opener: string) => carveToHtml(body + ' '.repeat(n) + opener + '\n')
     for (const opener of ['> q', '# h', '| a |', '---', '::: note']) {
       expect(band(2, opener)).toBe(band(1, opener))
@@ -86,37 +81,24 @@ describe("BELOW the body's column the body ends", () => {
       expect(band(3, opener)).not.toBe(band(1, opener))
     }
     for (const opener of ['> q', '# h', '| a |', '---']) {
-      expect(band(1, opener).startsWith('<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n')).toBe(true)
-      expect(band(1, opener).endsWith('</dd>\n</dl>')).toBe(true)
+      expect(band(1, opener).startsWith(dd)).toBe(true)
+      expect(band(1, opener).endsWith('</dd>\n</dl>')).toBe(false)
     }
     expect(band(1, '::: note').startsWith(dd)).toBe(true)
   })
 
-  it('an INVISIBLE line is NOT an opener, so the band folds it', () => {
-    // THE BULLET IS ABOUT OPENERS (markup-carve/carve#1809 amended the clause to
-    // say so, corpus category 430). This row used to assert the opposite - that
-    // `{.x}` and `[a]: /u` left the `dd` like a quote does - and that reading is
-    // what §10 I5 now rules out: at a NONZERO column below the content column an
-    // invisible line is "lazy paragraph text of THAT container ... and does not
-    // register". Ending the body and re-emitting the characters one level out is
-    // not carrying that sentence out, whatever the bytes look like.
-    //
-    // A comment renders nothing and separates the paragraphs inside the body.
+  it('an INVISIBLE line below the column ends the body too', () => {
     const band = (n: number, opener: string) =>
       carveToHtml(body + ' '.repeat(n) + opener + '\npara\n')
     for (const opener of ['{.x}', '[a]: /u']) {
-      const folded = `<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n${opener}\npara</dd>\n</dl>`
+      const folded = dd + (opener === '{.x}' ? '<p class="x">para</p>' : '<p>para</p>')
       expect(band(1, opener)).toBe(folded)
       expect(band(2, opener)).toBe(folded)
     }
-    expect(band(1, '%% c')).toBe('<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body\nmore</p>\n    <p>para</p>\n  </dd>\n</dl>')
+    expect(band(1, '%% c')).toBe(dd + '<p>para</p>')
     expect(band(2, '%% c')).toBe(band(1, '%% c'))
-    // AND THE FOLD IS A FOLD, not a half one: the attribute attaches nothing and
-    // the definition registers nothing, so a later reference stays literal.
-    // Characters on the page plus an entry in a symbol table is the shape corpus
-    // 430 exists to catch.
     expect(carveToHtml(body + ' [a]: /u\npara\n\nSee [text][a].\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n[a]: /u\npara</dd>\n</dl>\n<p>See [text][a].</p>',
+      dd + '<p>para</p>\n<p>See <a href="/u">text</a>.</p>',
     )
     // CONTROL at column 0, the document's own opener column: there the attribute
     // really attaches and the definition really registers.

@@ -26,50 +26,56 @@ import { carveToHtml } from '../src/index.js'
  * So every row here asserts the CHARACTERS and, where the kind has one, the
  * absence of the registration.
  */
-describe("an invisible line below a description's column folds as text", () => {
+describe("an invisible line below a description's column", () => {
   const html = (src: string): string => carveToHtml(src)
   const folds = (line: string): string =>
     `<dl>\n  <dt>t</dt>\n  <dd>d\n${line}\ntail</dd>\n</dl>`
+  const ended = '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>'
 
-  it('folds every kind at both columns of the band', () => {
+  it('reads every kind the same at both columns of the band', () => {
     // The band is two columns wide here and the answer does not move inside it.
     for (const indent of [' ', '  ']) {
+      const read: Record<string, string> = {
+        '[r]: /u': `${ended}\n<p>tail</p>`,
+        '[^f]: n': ended,
+        '{.k}': `${ended}\n<p class="k">tail</p>`,
+        '*[A]: a': folds('*[A]: a'),
+        x: folds('x'),
+      }
       for (const line of ['[r]: /u', '[^f]: n', '{.k}', '*[A]: a', 'x']) {
-        expect(html(`:: t\n:  d\n${indent}${line}\ntail\n`)).toBe(folds(line))
+        expect(html(`:: t\n:  d\n${indent}${line}\ntail\n`)).toBe(read[line])
       }
     }
   })
 
-  it('registers nothing, so a reference below it stays literal', () => {
+  it('registers a link or footnote definition, and an abbreviation stays literal', () => {
     // The half-fold row: characters on the page AND an entry in the table is the
     // shape that passes a bytes-only assertion.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n\nSee [text][r].\n')).toBe(
-      `${folds('[r]: /u')}\n<p>See [text][r].</p>`,
+      `${ended}\n<p>tail</p>\n<p>See <a href="/u">text</a>.</p>`,
     )
     expect(html(':: t\n:  d\n  [^f]: n\ntail\n\nSee[^f]\n')).toBe(
-      `${folds('[^f]: n')}\n<p>See[^f]</p>`,
+      `${ended}\n<p>See<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>n\ntail<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>`,
     )
     expect(html(':: t\n:  d\n  *[A]: a\ntail\n\nA here\n')).toBe(
       `${folds('*[A]: a')}\n<p>A here</p>`,
     )
   })
 
-  it('attaches nothing, so the attribute reaches no block inside the dd', () => {
+  it('attaches the attribute to the paragraph after the dd, not to a block inside it', () => {
     // The attribute kind fails differently from the definitions: it used to pass
     // the plain-line test, fold in AS AN ATTRIBUTE, and then be discarded by §15
     // A4 - so the authored characters reached neither the page nor a block.
     const out = html(':: t\n:  d\n  {.k}\ntail\n')
-    expect(out).toBe(folds('{.k}'))
-    expect(out).not.toContain('class=')
+    expect(out).toBe(`${ended}\n<p class="k">tail</p>`)
+    expect(out).not.toMatch(/<dd[^>]*class=/)
   })
 
   it('CONTROL: a comment is column-exempt and still renders nothing', () => {
     // Corpus 430-5. Waiving the comment along with the rest would put its
     // characters on the page.
     expect(html(':: t\n:  d\n  %% c\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
-    expect(html(':: t\n:  d\n  %% c\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>tail</p>\n  </dd>\n</dl>',
-    )
+    expect(html(':: t\n:  d\n  %% c\ntail\n')).toBe(`${ended}\n<p>tail</p>`)
   })
 
   it('CONTROL: a colon fence below the column still ends the body', () => {
@@ -77,7 +83,7 @@ describe("an invisible line below a description's column folds as text", () => {
     // column into the paragraph; a colon fence still ends the body (carve#2486).
     for (const indent of [' ', '  ']) {
       for (const opener of ['> q', '# h', '| a |', '---']) {
-        expect(html(`:: t\n:  d\n${indent}${opener}\n`).startsWith('<dl>\n  <dt>t</dt>\n  <dd>d\n')).toBe(true)
+        expect(html(`:: t\n:  d\n${indent}${opener}\n`).startsWith(`${ended}\n`)).toBe(true)
       }
       expect(html(`:: t\n:  d\n${indent}::: note\n`).startsWith('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n')).toBe(true)
     }
@@ -107,6 +113,6 @@ describe("an invisible line below a description's column folds as text", () => {
   it('CONTROL: the list-item host it now agrees with', () => {
     // The host whose answer this is, in the same build - it was their
     // disagreement that was the defect, and one host cannot record it.
-    expect(html('- d\n [r]: /u\ntail\n')).toBe('<ul>\n  <li>d\n[r]: /u\ntail</li>\n</ul>')
+    expect(html('- d\n [r]: /u\ntail\n')).toBe('<ul>\n  <li>d</li>\n</ul>\n<p>tail</p>')
   })
 })

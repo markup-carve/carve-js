@@ -25,7 +25,7 @@ it('bounds repeated items that end in a nested note body', () => {
       layoutWork.on = true
       const ast = parse(source)
       expect(Object.keys(ast.footnoteDefs ?? {})).toHaveLength(count * 2)
-      expect(ast.children.filter(node => node.type === 'paragraph')).toHaveLength(count)
+      expect(ast.children.filter(node => node.type === 'paragraph')).toHaveLength(0)
       const total = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
       expect(total).toBeLessThanOrEqual(source.length * 64)
       return total

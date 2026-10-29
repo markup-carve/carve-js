@@ -140,9 +140,9 @@ describe('what does not collapse, inside a container', () => {
   // promotion stays column-gated on both paths - lifting the gate there would
   // build a figure the author did not write - and this pass cannot reach the
   // shape anyway, because a captioned paragraph holds three inlines.
-  it('keeps the wrapper on an indented image with a caption line', () => {
+  it('attaches a caption line to an indented image', () => {
     expect(carveToHtml('>   ![a](u)\n>   ^ cap\n')).toBe(
-      '<blockquote><p><img src="u" alt="a">\n^ cap</p></blockquote>',
+      '<blockquote>\n  <figure>\n    <img src="u" alt="a">\n    <figcaption>cap</figcaption>\n  </figure>\n</blockquote>',
     )
   })
 

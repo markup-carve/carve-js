@@ -21,7 +21,7 @@ describe('nested literal comments release payload to the enclosing item', () => 
     const container = document.children[0]!
     expect(container.type).toBe(source.startsWith('>') ? 'block_quote' : 'list')
     const siblings = container.type === 'block_quote' ? container.children : document.children
-    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph', 'comment', 'paragraph'])
+    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph', 'comment', 'div'])
     const list = container.type === 'block_quote' ? container.children[0]! : container
     expect(list.type).toBe('list')
     if (list.type !== 'list') throw new Error('expected outer list')

@@ -2,182 +2,182 @@
   {
     "id": "js-3-1",
     "source": "> :: t\n> : para\n ---\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>"
   },
   {
     "id": "js-3-2",
     "source": "> :: t\n> : para\n # H\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-3-3",
     "source": "> :: t\n> : para\n  # H\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-3-4",
     "source": "> :: t\n> : para\n  ---\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>"
   },
   {
     "id": "js-3-5",
     "source": "> :: t\n> : para\n   # H\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-3-6",
     "source": "> :: t\n> : para\n    ---\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>"
   },
   {
     "id": "js-3-7",
     "source": "> :: t\n> : para\n  | a |\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "js-3-8",
     "source": "> :: t\n> : para\n    # H\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-3-9",
     "source": "> :: t\n> : para\n     ---\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>"
   },
   {
     "id": "js-3-10",
     "source": "> :: t\n> : para\n        | a |\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "js-4-1",
     "source": "> :: t\n> : para\n     # H\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "js-4-2",
     "source": "> :: t\n> : para\n    | a |\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "js-4-3",
     "source": "> :: t\n> : para\n        ---\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "js-4-4",
     "source": "> :: t\n> : para\n        # H\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "js-4-5",
     "source": "> :: t\n> : para\n        | a |\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "js-5-1",
     "source": "1. :: t\n   : para\n # H\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-5-2",
     "source": "1. :: t\n   : para\n  # H\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n# H</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<section id=\"H\">\n  <h1>H</h1>\n</section>"
   },
   {
     "id": "js-5-3",
     "source": "1. :: t\n   : para\n | a |\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "js-5-4",
     "source": "1. :: t\n   : para\n  | a |\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "js-7-1",
     "source": "> :: t\n> : para\n  [r]: /u\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[r]: /u\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "js-7-2",
     "source": "> :: t\n> : para\n    [r]: /u\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[r]: /u\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "js-7-3",
     "source": "> :: t\n> : para\n    [^p]: n\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[^p]: n\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-7-4",
     "source": "> :: t\n> : para\n        [r]: /u\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[r]: /u\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "js-7-5",
     "source": "> :: t\n> : para\n        [^p]: n\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[^p]: n\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-8-1",
     "source": "1. > para\n [^p]: n\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\n[^p]: n</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-8-2",
     "source": "1. > para\n  [^p]: n\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\n[^p]: n</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-10-1",
     "source": "> :: t\n> : para\n  # H\nx\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n# H\nx</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "js-10-2",
     "source": "> :: t\n> : para\n  | a |\nx\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |\nx</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>x</p>"
   },
   {
     "id": "js-10-3",
     "source": "> :: t\n> : para\n    ---\nx\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—\nx</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>\n<p>x</p>"
   },
   {
     "id": "js-10-4",
     "source": "> :: t\n> : para\n   ---\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n—\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "js-10-5",
     "source": "> :: t\n> : para\n    | a |\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "js-16-1",
     "source": "> :: t\n> : para\n   {#x}\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-16-2",
     "source": "> :: t\n> : para\n    {#x}\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-16-3",
     "source": "> :: t\n> : para\n     {#x}\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-16-4",
     "source": "> :: t\n> : para\n        {#x}\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-20-1",
     "source": ":: t\n: > para\n [^p]: n\n    tail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<blockquote><p>para\n[^p]: n\ntail</p></blockquote>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>"
   },
   {
     "id": "js-20-2",
@@ -192,22 +192,22 @@
   {
     "id": "js-21-1",
     "source": ":: t\n: ::: note\n  more\n {#x}\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more\n{<span class=\"tag\"><strong>#x</strong></span>}</p>\n</aside>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-22-1",
     "source": ":: t\n: :: t\n    {#x}\ntail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<dl>\n<dt>t\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</dt>\n</dl>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </dd>\n</dl>\n<p>tail</p>"
   },
   {
     "id": "js-22-2",
     "source": ":: t\n: :: t\n        {#x}\nx\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<dl>\n<dt>t\n{<span class=\"tag\"><strong>#x</strong></span>}\nx</dt>\n</dl>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </dd>\n</dl>\n<p>x</p>"
   },
   {
     "id": "js-22-3",
     "source": ":: t\n: :: t\n        {#x}\ntail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<dl>\n<dt>t\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</dt>\n</dl>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </dd>\n</dl>\n<p>tail</p>"
   },
   {
     "id": "js-24-1",
@@ -227,7 +227,7 @@
   {
     "id": "js-27-1",
     "source": "- :: t\n  : para\n - li\n",
-    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n- li</dd>\n</dl>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n  <li>li</li>\n</ul>"
   },
   {
     "id": "js-27-2",
@@ -237,52 +237,52 @@
   {
     "id": "js-28-1",
     "source": "> :: t\n> : para\n  {#x}\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p id=\"x\">tail</p>"
   },
   {
     "id": "js-28-2",
     "source": "> :: t\n> : para\n        {#x}\n    tail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p id=\"x\">tail</p>"
   },
   {
     "id": "js-29-1",
     "source": "1. > para\n   > more\n [^p]: n\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\nmore\n[^p]: n</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para\nmore</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-29-2",
     "source": "1. > para\n   > more\n  [^p]: n\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\nmore\n[^p]: n</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para\nmore</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-33-1",
     "source": "- :: t\n  : para\n ---\n",
-    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n—</dd>\n</dl>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ul>\n<hr>"
   },
   {
     "id": "js-33-2",
     "source": "- :: t\n  : para\n | a |\n",
-    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n| a |</dd>\n</dl>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "js-36-1",
     "source": "> :: t\n> : para\n  {#x}\nx\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}\nx</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p id=\"x\">x</p>"
   },
   {
     "id": "js-36-2",
     "source": "> :: t\n> : para\n        {#x}\ntail\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}\ntail</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p id=\"x\">tail</p>"
   },
   {
     "id": "js-37-1",
     "source": "> :: t\n> : para\n  [^p]: n\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[^p]: n</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-37-2",
     "source": "> :: t\n> : para\n     [^p]: n\n",
-    "html": "<blockquote>\n<dl>\n<dt>t</dt>\n<dd>para\n[^p]: n</dd>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-38-1",
@@ -292,46 +292,46 @@
   {
     "id": "js-39-1",
     "source": ":: t\n: ::: note\n  more\n [^p]: n\n```\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more\n[^p]: n\n<code></code></p>\n</aside>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-39-2",
     "source": ":: t\n: ::: note\n  more\n [r]: /u\n```\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more\n[r]: /u\n<code></code></p>\n</aside>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code></code></pre>"
   },
   {
     "id": "js-47-1",
     "source": "1. - para\n  {#x}\n",
-    "html": "<ol>\n<li>\n<ul>\n<li>para\n{<span class=\"tag\"><strong>#x</strong></span>}</li>\n</ul>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>"
   },
   {
     "id": "js-58-1",
     "source": "- :: t\n  : para\n {#x}\n",
-    "html": "<ul>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "js-60-1",
     "source": "- > para\n [^p]: n\n",
-    "html": "<ul>\n<li>\n<blockquote><p>para\n[^p]: n</p></blockquote>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-62-1",
     "source": ":: t\n: ::: note\n  para\n [^p]: n\n```\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>para\n[^p]: n\n<code></code></p>\n</aside>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-64-1",
     "source": "1. :: t\n   : para\n {#x}\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n{<span class=\"tag\"><strong>#x</strong></span>}</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>"
   },
   {
     "id": "js-65-1",
     "source": "[r][] [^p] [^c]\n:: t\n: ::: note\n  more\n [r]: /u\n",
-    "html": "<p>[r][] [^p] [^c]</p>\n<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>more\n[r]: /u</p>\n</aside>\n</dd>\n</dl>"
+    "html": "<p><a href=\"/u\">r</a> [^p] [^c]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "js-68-1",
     "source": ":: t\n: ::: note\n  para\n {#x}\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>para\n{<span class=\"tag\"><strong>#x</strong></span>}</p>\n</aside>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>"
   }
 ]

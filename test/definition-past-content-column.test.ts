@@ -24,12 +24,12 @@ describe('a definition opens at or past its list content column', () => {
     expect(resolves('- a\n      [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 
-  it('below every column: text that defines nothing (carve-js#597)', () => {
-    expect(resolves('- - a\n [r]: /u\n\nsee [t][r]\n')).toBe(false)
+  it('below every column: defines (carve-js#597)', () => {
+    expect(resolves('- - a\n [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 
-  it('top level, indented under an open paragraph: defines nothing', () => {
-    expect(resolves('text\n  [r]: /u\n\nsee [t][r]\n')).toBe(false)
+  it('top level, indented under an open paragraph: defines', () => {
+    expect(resolves('text\n  [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 })
 

@@ -17,7 +17,7 @@ it('closes an unclosed span without padding its list continuation', () => {
 
 it('keeps a quote guard that the reader needs', () => {
   const source = '`a\n > x`\n'
-  expect(carveToCarve(source)).toBe(source)
+  expect(carveToCarve(source)).toBe('`a`\n\n> x``\n')
   expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
 })
 

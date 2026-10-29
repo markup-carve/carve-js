@@ -116,7 +116,7 @@ describe('a comment fence at column 0 below a description body opens a block (ca
 
   it('one column in, still below the body column', () => {
     expect(carveToHtml(':: t\n:  x\n %%%\ny\n %%%\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>x</p>\n    <p>z</p>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>',
     )
   })
 
@@ -134,13 +134,13 @@ describe('a comment fence at column 0 below a description body opens a block (ca
 
   it('an unterminated fence at column 0 is a line comment [control]', () => {
     expect(carveToHtml(':: t\n:  x\n%%%\ny\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>x</p>\n    <p>y\nz</p>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>y\nz</p>',
     )
   })
 
   it('the `%%` line form is invisible and opens nothing [control]', () => {
     expect(carveToHtml(':: t\n:  x\n%% c\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>x</p>\n    <p>z</p>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>',
     )
   })
 })

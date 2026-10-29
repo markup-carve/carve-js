@@ -4,34 +4,31 @@ import { carveToHtml } from '../src/index.js'
 it('keeps a below-column payload line before a closer in the description', () => {
   expect(carveToHtml(':: m\n: l\n     ```\ne\n     ```\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>
-    <p>l</p>
-    <pre><code>e
-</code></pre>
-  </dd>
+  <dd>l
+<code>
+e
+</code></dd>
 </dl>`)
 })
 
 it('keeps a below-column fence run as payload until an eligible closer', () => {
   expect(carveToHtml(':: m\n: l\n     ```\n```\n     ```\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>
-    <p>l</p>
-    <pre><code>\`\`\`
-</code></pre>
-  </dd>
+  <dd>l
+<code>
+</code>
+<code></code></dd>
 </dl>`)
 })
 
 it('keeps payload in a fence one column past the body', () => {
   expect(carveToHtml(':: t\n: a\n   ```\n   b\n y\n   ```\n')).toBe(`<dl>
   <dt>t</dt>
-  <dd>
-    <p>a</p>
-    <pre><code>b
+  <dd>a
+<code>
+b
 y
-</code></pre>
-  </dd>
+</code></dd>
 </dl>`)
 })
 
@@ -66,7 +63,7 @@ it('lets a below-column block opener end the description fence', () => {
 </dl>
 <section id="h">
   <h1>h</h1>
-  <p><code></code></p>
+  <pre><code></code></pre>
 </section>`)
 })
 
@@ -75,11 +72,10 @@ it('keeps the authored fence extent inside a list item', () => {
   <li>x
     <dl>
       <dt>m</dt>
-      <dd>
-        <p>l</p>
-        <pre><code>e
-</code></pre>
-      </dd>
+      <dd>l
+<code>
+e
+</code></dd>
     </dl>
   </li>
 </ul>`)

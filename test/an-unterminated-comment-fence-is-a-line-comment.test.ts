@@ -24,7 +24,6 @@ const item = (payload: string, col: number, ...tail: string[]): string =>
   ['- x', ' '.repeat(col) + payload, ...tail].join('\n') + '\n'
 
 const ITEM_ONLY = '<ul>\n  <li>x</li>\n</ul>'
-const FOLDED = '<ul>\n  <li>x\n    y\n  </li>\n</ul>'
 
 describe('an unterminated comment fence inside a list item', () => {
   it('ends the item on the reported document', () => {
@@ -32,22 +31,22 @@ describe('an unterminated comment fence inside a list item', () => {
   })
 
   // CORPUS 445, the ruling's own rows. At the container's column 0 the degraded
-  // fence keeps the follower in the item, the `%%` line form is the answer it
+  // fence ends the item, the `%%` line form is the answer it
   // has to equal, and a TERMINATED fence there is a comment BLOCK that still
   // ends it.
   it.each([
-    ['row 1: the degraded fence', '- x\n%%%\ny\n', FOLDED],
-    ['row 2: the line form [control]', '- x\n%% z\ny\n', FOLDED],
+    ['row 1: the degraded fence', '- x\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 2: the line form [control]', '- x\n%% z\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
     ['row 3: a terminated fence [control]', '- x\n%%%\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
-    ['row 4: an ordered host', '1. x\n%%%\ny\n', '<ol>\n  <li>x\n    y\n  </li>\n</ol>'],
-    ['row 5: a padded marker', '-   x\n%%%\ny\n', FOLDED],
+    ['row 4: an ordered host', '1. x\n%%%\ny\n', '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
+    ['row 5: a padded marker', '-   x\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
     [
       'row 6: a nested item at column 2',
       '- - x\n  %%%\n  y\n',
-      '<ul>\n  <li>\n    <ul>\n      <li>x\n        y\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n    y\n  </li>\n</ul>',
     ],
-    ['row 7: a wider unterminated run', '- x\n%%%%\ny\n', FOLDED],
-    ['row 8: a wider run is not a closer', '- x\n%%%\n%%%%\ny\n', FOLDED],
+    ['row 7: a wider unterminated run', '- x\n%%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 8: a wider run is not a closer', '- x\n%%%\n%%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
     [
       'row 9: the closer is looked for AHEAD [control]',
       '- x\n%%%\ny\n%%%\nz\n',
@@ -79,11 +78,11 @@ describe('an unterminated comment fence inside a list item', () => {
   )
 
   // THE BAND IS NOW THE WHOLE RANGE. `- x` hands its body out at column 2.
-  // Below it the degraded fence keeps the item open (carve#1903, ported here);
+  // Below it the degraded fence ends the item too;
   // from the content column up it answers as the line form does.
   it.each([
-    [0, FOLDED],
-    [1, FOLDED],
+    [0, ITEM_ONLY + '\n<p>y</p>'],
+    [1, ITEM_ONLY + '\n<p>y</p>'],
     [2, ITEM_ONLY + '\n<p>y</p>'],
     [3, ITEM_ONLY + '\n<p>y</p>'],
     [4, ITEM_ONLY + '\n<p>y</p>'],
@@ -95,9 +94,9 @@ describe('an unterminated comment fence inside a list item', () => {
   // THE BAND MOVES WITH THE CONTENT COLUMN, which is what makes it a column
   // rule rather than the constant 2.
   it.each([
-    ['1. x', 2, '<ol>\n  <li>x\n    y\n  </li>\n</ol>'],
+    ['1. x', 2, '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
     ['1. x', 3, '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
-    ['-   x', 3, '<ul>\n  <li>x\n    y\n  </li>\n</ul>'],
+    ['-   x', 3, '<ul>\n  <li>x</li>\n</ul>\n<p>y</p>'],
     ['-   x', 4, '<ul>\n  <li>x</li>\n</ul>\n<p>y</p>'],
   ])('answers %s at column %i', (lead, col, expected) => {
     expect(carveToHtml([lead, ' '.repeat(col) + '%%%', 'y'].join('\n') + '\n')).toBe(expected)

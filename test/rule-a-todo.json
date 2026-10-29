@@ -1,0 +1,552 @@
+{
+  "a-closed-colon-in-a-quoted-item-ends-its-continuation.test.ts": {
+    "closed colon fences in quoted items (carve#2925) > ends ownership after a lazy body and later marked colon boundaries": "#3922",
+    "closed colon fences in quoted items (carve#2925) > ends the quote at an unprefixed link definition": "#3922",
+    "closed colon fences in quoted items (carve#2925) > keeps a malformed note body from creating a quoted paragraph claim": "#3921",
+    "closed colon fences in quoted items (carve#2925) > releases an unmarked line from the inner quote into its outer item": "#3922"
+  },
+  "a-comment-below-a-sub-list-in-a-tight-item.test.ts": {
+    "a comment below a sub-list in a tight item > is written where a re-parse reads it back into the OUTER item": "#3921"
+  },
+  "a-definition-at-a-note-body-column-registers.test.ts": {
+    "a definition at a footnote body's column registers in the note: js-46-1": "#3922"
+  },
+  "a-definition-shaped-text-line-registers-nothing.test.ts": {
+    "a definition-shaped text line registers nothing: js-26-1": "#3922",
+    "a definition-shaped text line registers nothing: js-5-3": "#3922",
+    "a definition-shaped text line registers nothing: js-5-4": "#3922",
+    "a definition-shaped text line registers nothing: js-7-2": "#3922",
+    "a definition-shaped text line registers nothing: js-7-3": "#3922",
+    "a definition-shaped text line registers nothing: js-7-4": "#3922"
+  },
+  "a-description-marker-must-reach-its-term-owner.test.ts": {
+    "a definition marker below a nested term column > folds a later quote past the surviving body column into the term": "#3922",
+    "a definition marker below a nested term column > folds a past-column attribute into the open term": "#3922",
+    "a definition marker below a nested term column > folds a past-column code fence into the open term": "#3922",
+    "a definition marker below a nested term column > folds a past-column colon fence into the open term": "#3922",
+    "a definition marker below a nested term column > folds a past-column heading into the open term": "#3922",
+    "a definition marker below a nested term column > folds a past-column table row into the open term": "#3922",
+    "a definition marker below a nested term column > folds a past-column thematic break into the open term": "#3922",
+    "a definition marker below a nested term column > lets a list marker end a term even past the surviving body column": "#3921"
+  },
+  "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
+    "a fence after a footnote boundary closes without claiming the next line": "#3921"
+  },
+  "a-line-block-pairs-fence-runs-past-its-content-column.test.ts": {
+    "round-trips paired payload runs in a list line block": "#3921",
+    "round-trips paired payload runs in a quoted list line block": "#3921"
+  },
+  "a-line-leaving-a-nested-footnote-restores-the-item-paragraph.test.ts": {
+    "does not restore the item paragraph while its nested note stays open": "#3920"
+  },
+  "a-line-retained-after-a-comment-opens-the-deepest-paragraph.test.ts": {
+    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted ::: inner and a comment span": "#3918",
+    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted inner and a comment span": "#3918",
+    "preserves inline code continuation * tail in the writer": "#3918",
+    "preserves inline code continuation - tail in the writer": "#3918",
+    "preserves inline code continuation 1. tail in the writer": "#3918",
+    "preserves inline code continuation a) tail in the writer": "#3918",
+    "retains a marker after a comment without claiming document text": "#3922"
+  },
+  "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
+    "keeps the indentation latitude where only indentation precedes the list": "#3921"
+  },
+  "a-list-marker-in-a-continuation-note-stays-in-the-note.test.ts": {
+    "nested host, - [ ] c2, quoted false, code true": "#3919",
+    "nested host, - c2, quoted false, code true": "#3919",
+    "nested host, 1. c2, quoted false, code true": "#3919"
+  },
+  "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
+    "does not claim a quote marker inside an inline code span": "#3921"
+  },
+  "an-escalation-reaches-the-block-that-failed.test.ts": {
+    "an escalation reaches the block that failed, not the document > does not spread the escalation from the block that needed it": "#3921",
+    "an escalation reaches the block that failed, not the document > escalates a block whose minimal form opens a heading it does not have": "#3921",
+    "an escalation reaches the block that failed, not the document > escalates every block in a document where every block fails": "#3921",
+    "an escalation reaches the block that failed, not the document > widens to the block when escaping the run is not enough": "#3921"
+  },
+  "an-imported-source-is-a-writer-fixed-point.test.ts": {
+    "an imported source is a carve fmt fixed point > 507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-13: the imported source is what the writer emits": "#3921",
+    "an imported source is a carve fmt fixed point > 561-a-line-block-payload-span-pairs-past-the-content-column-2: the imported source is what the writer emits": "#3921",
+    "an imported source is a carve fmt fixed point > 561-a-line-block-payload-span-pairs-past-the-content-column: the imported source is what the writer emits": "#3921"
+  },
+  "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
+    "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
+  },
+  "an-unclosed-fence-below-a-closed-child-opens-a-code-block.test.ts": {
+    "'source 2 from carve#3046'": "#3920"
+  },
+  "attached-definition-boundaries.test.ts": {
+    "preserves attached definition ownership across render and format paths: '- +\\n:: term\\n: description\\n   [r]: …' [2]": "#3922",
+    "preserves attached definition ownership across render and format paths: '- +\\n:: term\\n: description\\n  [r]: /…' [2]": "#3922",
+    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [^n]: note\\n…'": "#3922",
+    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [r]: /url\\n …'": "#3922",
+    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [r]: /url\\n\\…'": "#3922",
+    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n[r]: /url\\n […'": "#3922"
+  },
+  "authoring-acceptance.test.ts": {
+    "authoring acceptance suite > errors/E10-sublist-one-space.crv": "#3921"
+  },
+  "caption-list-tightness.test.ts": {
+    "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
+  },
+  "closed-comment-fence-ownership.test.ts": {
+    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n        ``…' [2]": "#3921",
+    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n        ``…' [4]": "#3921",
+    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n      ```\\…' [2]": "#3921",
+    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n      ```\\…' [4]": "#3921"
+  },
+  "comment-closer-between-content-columns.test.ts": {
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 4, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 3, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 3, tail 5, bla…' (fence 4, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 0) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 0) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 1) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 1) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 2) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 2) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 4) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 3, extra indent 4) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 0) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 0) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 1) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 1) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 2) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 2) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 4) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 5, closer 4, tail 5, bla…' (fence 4, extra indent 4) [6]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 0) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 0) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 1) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 1) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 2) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 2) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 4) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 3, extra indent 4) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 0) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 0) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 1) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 1) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 2) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 2) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 4) [2]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 3, tail 4, bla…' (fence 4, extra indent 4) [4]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 3, extra indent 4) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 0) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 0) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 1) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 1) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 2) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 2) [3]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 4) [1]": "#3898",
+    "a comment closer between item content columns > 'child column 6, closer 5, tail 6, bla…' (fence 4, extra indent 4) [3]": "#3898"
+  },
+  "comment-payload-columns.test.ts": {
+    "comment payload columns (carve#2535) > 'below with deeper payload'": "#3921",
+    "comment payload columns (carve#2535) > 'deeper document'": "#3921",
+    "comment payload columns (carve#2535) > 'description deeper'": "#3921",
+    "comment payload columns (carve#2535) > 'description'": "#3921",
+    "comment payload columns (carve#2535) > 'document tabs'": "#3921",
+    "comment payload columns (carve#2535) > 'document'": "#3921",
+    "comment payload columns (carve#2535) > 'folded term'": "#3921",
+    "comment payload columns (carve#2535) > 'item'": "#3921",
+    "comment payload columns (carve#2535) > 'nested below ordered'": "#3921",
+    "comment payload columns (carve#2535) > 'nested below unordered'": "#3921",
+    "comment payload columns (carve#2535) > 'nested below-column blank payload'": "#3921",
+    "comment payload columns (carve#2535) > 'nested below-column interior blank pa…'": "#3921",
+    "comment payload columns (carve#2535) > 'nested item'": "#3921",
+    "comment payload columns (carve#2535) > 'note'": "#3921",
+    "comment payload columns (carve#2535) > 'partial tab'": "#3921",
+    "comment payload columns (carve#2535) > 'quoted'": "#3921",
+    "comment payload columns (carve#2535) > 'shallower document'": "#3921",
+    "comment payload columns (carve#2535) > 'two spans'": "#3921",
+    "comment payload columns (carve#2535) > 'whitespace payload'": "#3921"
+  },
+  "continued-marker-note-code.test.ts": {
+    "keeps continued marker-note and list CODE ownership: marker-note-199": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-200": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-201": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-202": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-317": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-318": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-319": "#3922",
+    "keeps continued marker-note and list CODE ownership: marker-note-320": "#3922",
+    "keeps continued marker-note and list CODE ownership: review-I-quote-lazy-first": "#3922",
+    "keeps continued marker-note and list CODE ownership: review-J-inner-note": "#3922",
+    "keeps continued marker-note and list CODE ownership: review-K-first:[^m]: x": "#3922"
+  },
+  "corpus-canonical-form.test.ts": {
+    "the pinned canonical form > is what fmt produces for 187-a-comment-fence-is-a-comment-at-any-column-too": "#3921",
+    "the pinned canonical form > is what fmt produces for 192-a-comment-fence-under-a-nested-item-does-not-close-it-either": "#3921",
+    "the pinned canonical form > is what fmt produces for 284-a-ragged-table-keeps-each-row-s-cell-count-2": "#3921",
+    "the pinned canonical form > is what fmt produces for 284-a-ragged-table-keeps-each-row-s-cell-count-3": "#3921",
+    "the pinned canonical form > is what fmt produces for 285-adjacent-block-openers-in-an-attached-run-stay-separate-2": "#3921",
+    "the pinned canonical form > is what fmt produces for 637-definition-body-note-and-fence-owner-boundaries-5": "#3921",
+    "the pinned canonical form > is what fmt produces for 99-table-cell-attributes": "#3921"
+  },
+  "corpus-render-fixtures.test.ts": {
+    "spec corpus non-HTML render fixtures > fmt: 187-a-comment-fence-is-a-comment-at-any-column-too": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 192-a-comment-fence-under-a-nested-item-does-not-close-it-either": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 284-a-ragged-table-keeps-each-row-s-cell-count-2": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 284-a-ragged-table-keeps-each-row-s-cell-count-3": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 285-adjacent-block-openers-in-an-attached-run-stay-separate-2": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 637-definition-body-note-and-fence-owner-boundaries-5": "#3921",
+    "spec corpus non-HTML render fixtures > fmt: 99-table-cell-attributes": "#3921",
+    "spec corpus non-HTML render fixtures > md: 103-heading-marker-column-zero": "#3921",
+    "spec corpus non-HTML render fixtures > md: 103-heading-marker-column-zero-2": "#3921",
+    "spec corpus non-HTML render fixtures > md: 159-indented-reference-and-footnote-definitions-stay-literal-2": "#3921",
+    "spec corpus non-HTML render fixtures > md: 184-a-definition-below-every-content-column-folds-as-text": "#3921",
+    "spec corpus non-HTML render fixtures > md: 422-a-recognized-opener-in-a-body-needs-no-blank-line-above-it-6": "#3921"
+  },
+  "corpus-render-ledger.test.ts": {
+    "the non-HTML render ledger > records every corpus document": "#3921",
+    "the non-HTML render ledger > records the output every renderer still produces": "#3921"
+  },
+  "corpus.test.ts": {
+    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph": "#3918",
+    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph-2": "#3918",
+    "spec corpus > 581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2": "#3920",
+    "spec corpus > 612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence-2": "#3922",
+    "spec corpus > 649-a-first-block-plus-refuses-a-follower-at-an-intervening-column-5": "#3922",
+    "spec corpus > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#3922",
+    "spec corpus > 760-a-heading-inside-the-intervening-band-stays-description-text": "#3922",
+    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
+  },
+  "deep-term-comment-code-tails.test.ts": {
+    "keeps the definition term column after its comment: comment-term-claude-1043": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-1059": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-1075": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-1107": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-1123": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-1139": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-275": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-291": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-307": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-339": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-355": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-371": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-659": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-675": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-691": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-723": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-739": "#3922",
+    "keeps the definition term column after its comment: comment-term-claude-755": "#3922"
+  },
+  "definition-description-code-ownership.test.ts": {
+    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [13]": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [37]": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [61]": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'review-282'": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'review-371'": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922",
+    "keeps description code and following blocks in their authored hosts: 'review-final-9'": "#3922"
+  },
+  "djot-definition-boundaries.test.ts": {
+    "empty Djot definition terms and descriptions preserve Native structure": "#3921"
+  },
+  "djot-empty-definitions.test.ts": {
+    "empty Djot definition terms and descriptions preserve Native structure": "#3921"
+  },
+  "djot-import-layout.test.ts": {
+    "keeps a definition term continuation literal: # heading": "#3921",
+    "keeps a definition term continuation literal: ::: div": "#3921",
+    "keeps a definition term continuation literal: > quote": "#3921",
+    "keeps a definition term continuation literal: | row |": "#3921"
+  },
+  "djot-task-bullet-separators.test.ts": {
+    "Only Native task prefixes become checkboxes": "#3921"
+  },
+  "empty-list-after-table-takes-flush-left-line.test.ts": {
+    "does not attach a flush-left heading as the first block": "#3920"
+  },
+  "fmt-adjacent-tight-lists-in-description.test.ts": {
+    "adjacent tight lists stay in a description body": "#3921"
+  },
+  "fmt-keeps-a-region-s-selection.test.ts": {
+    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- a\\n%% note\\n%% #endregion r\\n\" keeps its reading": "#3921",
+    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- x\\n  - y\\n%% #endregion r\\n\" keeps its reading": "#3921",
+    "fmt keeps a region marker on its line (CARVE-P11-073) > a-closer-after-a-list-stays-at-column-0: fmt writes the fixture bytes": "#3921",
+    "fmt keeps a region marker on its line (CARVE-P11-073) > a-closer-after-a-loose-list-stays-at-column-0: fmt writes the fixture bytes": "#3921",
+    "fmt keeps a region marker on its line (CARVE-P11-073) > nested-closers-after-a-list-stay-at-column-0: fmt writes the fixture bytes": "#3921",
+    "fmt keeps a region marker on its line (CARVE-P11-073) > normalization-outside-a-region-leaves-it-alone: fmt writes the fixture bytes": "#3921"
+  },
+  "formatter-parity-regressions.test.ts": {
+    "normalizes a constructed carriage return before guarding a quote line": "#3921",
+    "preserves rendered content when formatting \"~``` x\\n[d]: u ```\\n\"": "#3921"
+  },
+  "heading-between-rejected-and-admitted-fences.test.ts": {
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-1": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-11": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-14": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-18": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-21": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-4": "#3922",
+    "reads paragraph ownership and keeps source positions in range: heading-text-band-8": "#3922"
+  },
+  "hosted-colon-literal-ownership.test.ts": {
+    "review7-c07-open-fence-tail-owner-13": "#3922",
+    "review7-c07-open-fence-tail-owner-14": "#3922",
+    "review8-c01-authored-div-base-060": "#3920",
+    "review8-c01-authored-div-base-061": "#3920",
+    "review8-c02-below-column-comment-037": "#3922",
+    "review8-older-o01-overindented-verse-005": "#3922",
+    "review8-older-o01-overindented-verse-008": "#3922",
+    "review8-older-o01-overindented-verse-009": "#3922",
+    "review8-older-o05-mixed-hosted-ownership-019": "#3922"
+  },
+  "include-conformance.test.ts": {
+    "include-conformance vectors (spec §19) > i01b-region-host-renders-no-marker [I1b]": "#3921"
+  },
+  "inline-fence-paragraph-resume.test.ts": {
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-108": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-109": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-114": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-115": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-12": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-13": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-132": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-133": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-138": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-139": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-18": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-19": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-36": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-37": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-42": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-43": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-60": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-61": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-66": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-67": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-84": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-85": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-90": "#3917",
+    "reads paragraph ownership and keeps source positions in range: inline-following-code-91": "#3917",
+    "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
+    "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
+  },
+  "item-paragraph-em-dash-guard.test.ts": {
+    "guarded em dashes in item and description paragraphs > heading followed by a loose paragraph": "#3921"
+  },
+  "later-marker-note-continuation.test.ts": {
+    "keeps a later marker in the continued note paragraph: later-12": "#3922",
+    "keeps a later marker in the continued note paragraph: later-14": "#3922",
+    "keeps a later marker in the continued note paragraph: later-172": "#3922",
+    "keeps a later marker in the continued note paragraph: later-174": "#3922",
+    "keeps a later marker in the continued note paragraph: later-214": "#3922",
+    "keeps a later marker in the continued note paragraph: later-54": "#3922"
+  },
+  "lint-corpus-parity.test.ts": {
+    "lint corpus parity > reports the box a code fence swallows the closer of: 581": "#3921",
+    "lint corpus parity > reports the box a code fence swallows the closer of: 581-3": "#3921"
+  },
+  "lint-description-separator-below-content-column.test.ts": {
+    "description-separator-below-content-column > 'double-colon'": "#3921",
+    "description-separator-below-content-column > term marker marker range": "#3921"
+  },
+  "lint-list-marker-below-content-column.test.ts": {
+    "list-marker-below-content-column vectors > 'after-blank-continuing-number'": "#3921",
+    "list-marker-below-content-column vectors > alpha marker": "#3921",
+    "list-marker-below-content-column vectors > ignores an after-blank line that is no detached list [3]": "#3921"
+  },
+  "lint-reports-a-dead-block-attribute-and-counts-codepoints.test.ts": {
+    "lint reports a block attribute that reaches no block > leaves an indented attribute-shaped line to block-marker-as-text": "#3921"
+  },
+  "lint-reports-a-plus-no-container-takes.test.ts": {
+    "continuation-marker-refused for a plus no container takes > reports \"- a\\n  > > +\\n    > q\\n\"": "#3921",
+    "continuation-marker-refused for a plus no container takes > reports \"> +\\n  > q\\n\"": "#3921"
+  },
+  "list-item-block-indentation-lint.test.ts": {
+    "list item block indentation diagnostics > an astral character before the marker > opens the gate at the same indent on either side of the BMP": "#3921"
+  },
+  "list-span-placing-indentation.test.ts": {
+    "a list span holds the indentation that places its marker > starts a nested list at its parent's content column, not at its marker": "#3921",
+    "a list span holds the indentation that places its marker > starts an indented top-level list at column 1": "#3921"
+  },
+  "mixed-nested-marker-note-fence.test.ts": {
+    "keeps the tail outside the marker note after 'bullet-note-adjacent'": "#3922",
+    "keeps the tail outside the marker note after 'bullet-note-code'": "#3922",
+    "keeps the tail outside the marker note after 'bullet-note-raw'": "#3922",
+    "keeps the tail outside the marker note after 'ordered-note-adjacent'": "#3922",
+    "keeps the tail outside the marker note after 'ordered-note-code'": "#3922",
+    "keeps the tail outside the marker note after 'ordered-note-raw'": "#3922"
+  },
+  "multiline-inline-code.test.ts": {
+    "preserves a constructed Code value after line-ending normalization: \"\\n[r]: /url\"": "#3922"
+  },
+  "nested-list-source-boundaries.test.ts": {
+    "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
+  },
+  "nested-literal-comment-dedent.test.ts": {
+    "nested literal comments release payload to the enclosing item > 'dedent-0' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-1' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-10' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-11' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-16' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-17' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-18' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-19' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-2' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-24' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-25' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-26' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-27' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-3' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-36' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-37' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-44' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-45' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-8' retains the native ownership": "#3922",
+    "nested literal comments release payload to the enclosing item > 'dedent-9' retains the native ownership": "#3922"
+  },
+  "nested-marker-note-closer.test.ts": {
+    "preserves paragraph ownership after nested note CODE: after-closer-10": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-101": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-104": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-106": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-2": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-34": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-37": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-40": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-42": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-5": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-66": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-69": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-74": "#3922",
+    "preserves paragraph ownership after nested note CODE: after-closer-98": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-108": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-110": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-12": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-120": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-122": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-132": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-134": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-14": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-204": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-206": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-216": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-218": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-228": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-230": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-24": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-26": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-300": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-302": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-312": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-314": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-324": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-326": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-36": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-732": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-754": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-755": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
+    "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",
+    "preserves paragraph ownership after nested note CODE: nested-closer-764": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-789": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-804": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-819": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-836": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-851": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-866": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-883": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-898": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-913": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-930": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-945": "#3922",
+    "preserves paragraph ownership after nested note CODE: nested-closer-960": "#3922"
+  },
+  "quoted-colon-remaining-parity.test.ts": {
+    "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
+  },
+  "quoted-comment-host-columns.test.ts": {
+    "quoted comments retain stored host columns > '00-second-literal-depth1-width3-paired' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '01-second-literal-depth1-width3-unpai…' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '02-second-literal-depth1-width4-paired' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '03-second-literal-depth1-width4-unpai…' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '04-second-literal-depth2-width3-paired' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '05-second-literal-depth2-width3-unpai…' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '06-second-literal-depth2-width4-paired' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > 'nested-colon-depth1-code' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922",
+    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 1": "#3918",
+    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 2": "#3918"
+  },
+  "quoted-link-definition-in-footnote.test.ts": {
+    "quoted link definitions in footnote bodies > keeps a marker-line quote paragraph open across its first continuation": "#3922"
+  },
+  "relative-continuation-marker.test.ts": {
+    "relative continuation marker columns > attaches a table at its quote marker column": "#3920",
+    "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
+  },
+  "sibling-term-item-column.test.ts": {
+    "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",
+    "preserves source columns in '- - - :: t\\n   : a\\n       :: sibling…'": "#3922"
+  },
+  "span-opening-markup-and-containment.test.ts": {
+    "every span begins at the markup that opens it, and is contained by its parent > reports nothing over the whole corpus": "#3921"
+  },
+  "two-sibling-sub-lists-in-a-tight-item.test.ts": {
+    "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
+  },
+  "verbatim-continuation-guards.test.ts": {
+    "preserves display math around > continuation continuations": "#3921",
+    "preserves display math around [r]: /target continuations": "#3921"
+  }
+}

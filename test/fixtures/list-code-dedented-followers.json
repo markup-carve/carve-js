@@ -7,7 +7,7 @@
   {
     "id": "code-dedent-002",
     "source": "- para\n    ```\n    code\n# heading\n    ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-003",
@@ -22,7 +22,7 @@
   {
     "id": "code-dedent-005",
     "source": "> - para\n>     ```\n>     code\n> # heading\n>     ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"heading\">heading</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"heading\">heading</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-006",
@@ -37,7 +37,7 @@
   {
     "id": "code-dedent-008",
     "source": "> > - para\n> >     ```\n> >     code\n> > # heading\n> >     ```\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <p><code></code></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <pre><code></code></pre>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "code-dedent-009",
@@ -57,12 +57,12 @@
   {
     "id": "code-dedent-012",
     "source": "- para\n  ```\n  code\n# h\n  ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-013",
     "source": "> - para\n>   ```\n>   code\n> # h\n>   ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-014",
@@ -97,12 +97,12 @@
   {
     "id": "code-dedent-020",
     "source": "- para\n  ```\n  code\n%% c\n  ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-021",
     "source": "> - para\n>   ```\n>   code\n> %% c\n>   ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-022",
@@ -127,12 +127,12 @@
   {
     "id": "code-dedent-026",
     "source": "- para\n  ```\n  code\n\n# h\n  ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-027",
     "source": "> - para\n>   ```\n>   code\n> \n> # h\n>   ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-028",
@@ -167,12 +167,12 @@
   {
     "id": "code-dedent-034",
     "source": "- para\n  ```\n  code\n\n%% c\n  ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-035",
     "source": "> - para\n>   ```\n>   code\n> \n> %% c\n>   ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-036",
@@ -197,12 +197,12 @@
   {
     "id": "code-dedent-040",
     "source": "- para\n    ```\n    code\n# h\n    ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-041",
     "source": "> - para\n>     ```\n>     code\n> # h\n>     ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-042",
@@ -237,12 +237,12 @@
   {
     "id": "code-dedent-048",
     "source": "- para\n    ```\n    code\n%% c\n    ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-049",
     "source": "> - para\n>     ```\n>     code\n> %% c\n>     ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-050",
@@ -267,12 +267,12 @@
   {
     "id": "code-dedent-054",
     "source": "- para\n    ```\n    code\n\n# h\n    ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-055",
     "source": "> - para\n>     ```\n>     code\n> \n> # h\n>     ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-056",
@@ -307,12 +307,12 @@
   {
     "id": "code-dedent-062",
     "source": "- para\n    ```\n    code\n\n%% c\n    ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-063",
     "source": "> - para\n>     ```\n>     code\n> \n> %% c\n>     ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-064",
@@ -337,12 +337,12 @@
   {
     "id": "code-dedent-068",
     "source": "- para\n      ```\n      code\n# h\n      ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-069",
     "source": "> - para\n>       ```\n>       code\n> # h\n>       ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-070",
@@ -377,12 +377,12 @@
   {
     "id": "code-dedent-076",
     "source": "- para\n      ```\n      code\n%% c\n      ```\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-077",
     "source": "> - para\n>       ```\n>       code\n> %% c\n>       ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-078",
@@ -407,12 +407,12 @@
   {
     "id": "code-dedent-082",
     "source": "- para\n      ```\n      code\n\n# h\n      ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p><code></code></p>\n</section>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-083",
     "source": "> - para\n>       ```\n>       code\n> \n> # h\n>       ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-084",
@@ -447,12 +447,12 @@
   {
     "id": "code-dedent-090",
     "source": "- para\n      ```\n      code\n\n%% c\n      ```\n",
-    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>para\n<code>\ncode</code></li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-091",
     "source": "> - para\n>       ```\n>       code\n> \n> %% c\n>       ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n<code>\ncode</code></li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-092",
@@ -477,12 +477,12 @@
   {
     "id": "code-dedent-096",
     "source": "- para\n  ~~~~\n  code\n# h\n  ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-097",
     "source": "> - para\n>   ~~~~\n>   code\n> # h\n>   ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-098",
@@ -517,12 +517,12 @@
   {
     "id": "code-dedent-104",
     "source": "- para\n  ~~~~\n  code\n%% c\n  ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-105",
     "source": "> - para\n>   ~~~~\n>   code\n> %% c\n>   ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-106",
@@ -547,12 +547,12 @@
   {
     "id": "code-dedent-110",
     "source": "- para\n  ~~~~\n  code\n\n# h\n  ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-111",
     "source": "> - para\n>   ~~~~\n>   code\n> \n> # h\n>   ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-112",
@@ -587,12 +587,12 @@
   {
     "id": "code-dedent-118",
     "source": "- para\n  ~~~~\n  code\n\n%% c\n  ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-119",
     "source": "> - para\n>   ~~~~\n>   code\n> \n> %% c\n>   ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-120",
@@ -617,12 +617,12 @@
   {
     "id": "code-dedent-124",
     "source": "- para\n    ~~~~\n    code\n# h\n    ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-125",
     "source": "> - para\n>     ~~~~\n>     code\n> # h\n>     ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-126",
@@ -657,12 +657,12 @@
   {
     "id": "code-dedent-132",
     "source": "- para\n    ~~~~\n    code\n%% c\n    ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-133",
     "source": "> - para\n>     ~~~~\n>     code\n> %% c\n>     ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-134",
@@ -687,12 +687,12 @@
   {
     "id": "code-dedent-138",
     "source": "- para\n    ~~~~\n    code\n\n# h\n    ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-139",
     "source": "> - para\n>     ~~~~\n>     code\n> \n> # h\n>     ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-140",
@@ -727,12 +727,12 @@
   {
     "id": "code-dedent-146",
     "source": "- para\n    ~~~~\n    code\n\n%% c\n    ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-147",
     "source": "> - para\n>     ~~~~\n>     code\n> \n> %% c\n>     ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-148",
@@ -757,12 +757,12 @@
   {
     "id": "code-dedent-152",
     "source": "- para\n      ~~~~\n      code\n# h\n      ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-153",
     "source": "> - para\n>       ~~~~\n>       code\n> # h\n>       ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-154",
@@ -797,12 +797,12 @@
   {
     "id": "code-dedent-160",
     "source": "- para\n      ~~~~\n      code\n%% c\n      ~~~~\n",
-    "html": "<ul>\n  <li>para\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-161",
     "source": "> - para\n>       ~~~~\n>       code\n> %% c\n>       ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-162",
@@ -827,12 +827,12 @@
   {
     "id": "code-dedent-166",
     "source": "- para\n      ~~~~\n      code\n\n# h\n      ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>~~~~</p>\n</section>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <pre><code></code></pre>\n</section>"
   },
   {
     "id": "code-dedent-167",
     "source": "> - para\n>       ~~~~\n>       code\n> \n> # h\n>       ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-168",
@@ -867,12 +867,12 @@
   {
     "id": "code-dedent-174",
     "source": "- para\n      ~~~~\n      code\n\n%% c\n      ~~~~\n",
-    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<p>~~~~</p>"
+    "html": "<ul>\n  <li>para\n~~~~\ncode</li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "code-dedent-175",
     "source": "> - para\n>       ~~~~\n>       code\n> \n> %% c\n>       ~~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <p>~~~~</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>para\n~~~~\ncode</li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "code-dedent-176",
@@ -897,12 +897,12 @@
   {
     "id": "code-dedent-180",
     "source": "- outer\n  - para\n    ```\n    code\n  # h\n    ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-181",
     "source": "- outer\n  - outer\n    - para\n      ```\n      code\n    # h\n      ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-182",
@@ -937,12 +937,12 @@
   {
     "id": "code-dedent-188",
     "source": "- outer\n  - para\n    ```\n    code\n  %% c\n    ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-189",
     "source": "- outer\n  - outer\n    - para\n      ```\n      code\n    %% c\n      ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <code></code>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-190",
@@ -987,12 +987,12 @@
   {
     "id": "code-dedent-198",
     "source": "- outer\n  - para\n      ```\n      code\n  # h\n      ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-199",
     "source": "- outer\n  - outer\n    - para\n        ```\n        code\n    # h\n        ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-200",
@@ -1027,12 +1027,12 @@
   {
     "id": "code-dedent-206",
     "source": "- outer\n  - para\n      ```\n      code\n  %% c\n      ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-207",
     "source": "- outer\n  - outer\n    - para\n        ```\n        code\n    %% c\n        ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <code></code>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-208",
@@ -1077,12 +1077,12 @@
   {
     "id": "code-dedent-216",
     "source": "- outer\n  - para\n        ```\n        code\n  # h\n        ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-217",
     "source": "- outer\n  - outer\n    - para\n          ```\n          code\n    # h\n          ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-218",
@@ -1117,12 +1117,12 @@
   {
     "id": "code-dedent-224",
     "source": "- outer\n  - para\n        ```\n        code\n  %% c\n        ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n<code>\ncode</code></li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-225",
     "source": "- outer\n  - outer\n    - para\n          ```\n          code\n    %% c\n          ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <code></code>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n<code>\ncode</code></li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-226",
@@ -1167,12 +1167,12 @@
   {
     "id": "code-dedent-234",
     "source": "- outer\n  - para\n    ~~~~\n    code\n  # h\n    ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-235",
     "source": "- outer\n  - outer\n    - para\n      ~~~~\n      code\n    # h\n      ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-236",
@@ -1207,12 +1207,12 @@
   {
     "id": "code-dedent-242",
     "source": "- outer\n  - para\n    ~~~~\n    code\n  %% c\n    ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    ~~~~\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-243",
     "source": "- outer\n  - outer\n    - para\n      ~~~~\n      code\n    %% c\n      ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        ~~~~\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-244",
@@ -1257,12 +1257,12 @@
   {
     "id": "code-dedent-252",
     "source": "- outer\n  - para\n      ~~~~\n      code\n  # h\n      ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-253",
     "source": "- outer\n  - outer\n    - para\n        ~~~~\n        code\n    # h\n        ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-254",
@@ -1297,12 +1297,12 @@
   {
     "id": "code-dedent-260",
     "source": "- outer\n  - para\n      ~~~~\n      code\n  %% c\n      ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    ~~~~\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-261",
     "source": "- outer\n  - outer\n    - para\n        ~~~~\n        code\n    %% c\n        ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        ~~~~\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-262",
@@ -1347,12 +1347,12 @@
   {
     "id": "code-dedent-270",
     "source": "- outer\n  - para\n        ~~~~\n        code\n  # h\n        ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-271",
     "source": "- outer\n  - outer\n    - para\n          ~~~~\n          code\n    # h\n          ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-272",
@@ -1387,12 +1387,12 @@
   {
     "id": "code-dedent-278",
     "source": "- outer\n  - para\n        ~~~~\n        code\n  %% c\n        ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    ~~~~\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>para\n~~~~\ncode</li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-279",
     "source": "- outer\n  - outer\n    - para\n          ~~~~\n          code\n    %% c\n          ~~~~\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n            <pre><code>code\n</code></pre>\n          </li>\n        </ul>\n        ~~~~\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>outer\n        <ul>\n          <li>para\n~~~~\ncode</li>\n        </ul>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "code-dedent-280",

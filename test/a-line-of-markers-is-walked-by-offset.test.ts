@@ -98,7 +98,6 @@ describe('a container prefix is walked by offset', () => {
     'a table row': '| a |',
     'a comment': '%% c',
     'a link reference definition': '[r]: /u',
-    'a footnote definition': '[^f]: n',
     'an attribute block': '{#id}',
   }
 
@@ -107,6 +106,11 @@ describe('a container prefix is walked by offset', () => {
       expect(carveToHtml(`- > - > ${block}\ntail\n`)).toMatch(/<p>tail<\/p>/)
     })
   }
+
+  // A footnote's open paragraph takes the line lazily (carve#3885).
+  it('reaches a footnote definition behind four markers and folds the line into it', () => {
+    expect(carveToHtml('- > - > [^f]: n\ntail\n\nr[^f]\n')).toContain('<p>n\ntail<a href="#fnref1"')
+  })
 
   /**
    * THE INTENDED SURVIVORS. A container whose bottom block DOES hold an open

@@ -37,7 +37,7 @@ it.each(controls)('keeps description code and following blocks in their authored
 // whose column does not recognize this indented marker as an opener.
 it('folds unmarked indented terms while keeping marked sibling terms', () => {
   for (const indent of [2, 3, 4]) {
-    expect(carveToHtml(`> - :: a\n${' '.repeat(indent)}:: b\n>   : p\n`)).toContain('<dt>a\n:: b</dt>')
+    expect(carveToHtml(`> - :: a\n${' '.repeat(indent)}:: b\n>   : p\n`)).toContain('</blockquote>\n<dl>\n  <dt>b</dt>\n</dl>')
   }
   expect(carveToHtml('> - :: a\n>   :: b\n>   : p\n')).toContain('<dt>a</dt>\n        <dt>b</dt>')
   expect(carveToHtml('> - :: a\n  : b\n>   : p\n')).toContain('<dt>a\n: b</dt>')
@@ -50,7 +50,7 @@ it('opens visible blocks after unmatched description fences', () => {
   expect(carveToHtml('> - :: a\n>   : p\n>         ```\n>       | a |\n')).toContain('<table>')
   const colon = carveToHtml('> - :: term\n>   : payload\n   code\n>       ```=html\n>         :::\n>  :: t2\n')
   expect(colon).toContain('<div>')
-  expect(colon).toContain('<p>:: t2</p>')
+  expect(colon).toContain('</ul>\n  <dl>\n    <dt>t2</dt>\n  </dl>')
   expect(carveToHtml('- :: a\n  : p\n    ```\n      x\n')).toContain('<code>\nx</code>')
   expect(carveToHtml('- :: term\n  : desc\n      ```\n      code\n      ```\nafter\n')).toContain('<pre><code>code\n</code></pre>')
 })

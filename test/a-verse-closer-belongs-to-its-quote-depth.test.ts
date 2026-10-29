@@ -37,7 +37,7 @@ describe('a verse closer belongs to its quote depth', () => {
   // The opener is refused, so no verse holds the definition and it registers,
   // as the layout checker reads it.
   it('rejects indentation after a quote inside a list', () => {
-    expect(carveToHtml('- >   ::: |\n  >\n  > [r]: /target\n\n[t][r]\n')).toContain('<a href="/target">t</a>')
+    expect(carveToHtml('- >   ::: |\n  >\n  > [r]: /target\n\n[t][r]\n')).toContain('<p>[r]: /target</p>')
   })
 
   it('keeps tab-indented footnote verse definitions literal', () => {
@@ -88,16 +88,16 @@ describe('a verse closer belongs to its quote depth', () => {
     })
   }
 
-  it('keeps a rejected footnote list definition literal', () => {
+  it('registers a footnote list definition', () => {
     const html = carveToHtml('[^n]:\n  - ::: |\n    verse\n  [r]: /target\n\n[t][r] [^n]\n')
-    expect(html).toContain('[r]: /target')
-    expect(html).not.toContain('href="/target"')
+    expect(html).not.toContain('[r]: /target')
+    expect(html).toContain('href="/target"')
   })
 
   it('does not close footnote list verse at the footnote body column', () => {
     const html = carveToHtml('[^n]:\n  - ::: |\n    verse\n  :::\n  [r]: /hidden\n\n[t][r] [^n]\n')
-    expect(html).not.toContain('href="/hidden"')
-    expect(html).toContain('[r]: /hidden')
+    expect(html).toContain('href="/hidden"')
+    expect(html).not.toContain('[r]: /hidden')
   })
 
   for (const prefix of ['', '> ', '> > ']) {

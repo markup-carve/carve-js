@@ -17,11 +17,11 @@ describe('ordered-list-split-by-indent vectors', () => {
     })
   })
 
-  it('locates the second marker with CRLF', () => {
-    expect(findings(' 9. nine\r\n10. ten\r\n')).toMatchObject([{ line: 2, column: 1 }])
+  it('says nothing about the second marker with CRLF', () => {
+    expect(findings(' 9. nine\r\n10. ten\r\n')).toEqual([])
   })
 
-  it('locates the second marker inside a block quote', () => {
-    expect(findings('>  9. nine\n> 10. ten\n')).toMatchObject([{ line: 2, column: 3 }])
+  it('says nothing about the second marker inside a block quote', () => {
+    expect(findings('>  9. nine\n> 10. ten\n')).toEqual([])
   })
 })

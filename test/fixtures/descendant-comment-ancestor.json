@@ -2,32 +2,32 @@
   {
     "id": "comment-target-d2-false-# h",
     "source": "- a\n  - b\n    %% c\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "comment-target-d2-false-> q",
     "source": "- a\n  - b\n    %% c\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "comment-target-d2-false-:::",
     "source": "- a\n  - b\n    %% c\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "comment-target-d2-false-```",
     "source": "- a\n  - b\n    %% c\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "comment-target-d2-false-| a |",
     "source": "- a\n  - b\n    %% c\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "comment-target-d2-false-[^x]: note",
     "source": "- a\n  - b\n    %% c\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d2-false-payload",
@@ -37,32 +37,32 @@
   {
     "id": "comment-target-d2-true-# h",
     "source": "> - a\n>   - b\n>     %% c\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-> q",
     "source": "> - a\n>   - b\n>     %% c\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-:::",
     "source": "> - a\n>   - b\n>     %% c\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-```",
     "source": "> - a\n>   - b\n>     %% c\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-| a |",
     "source": "> - a\n>   - b\n>     %% c\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-[^x]: note",
     "source": "> - a\n>   - b\n>     %% c\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "comment-target-d2-true-payload",
@@ -72,32 +72,32 @@
   {
     "id": "comment-target-d3-false-# h",
     "source": "- a\n  - b\n    - c\n      %% c\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "comment-target-d3-false-> q",
     "source": "- a\n  - b\n    - c\n      %% c\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "comment-target-d3-false-:::",
     "source": "- a\n  - b\n    - c\n      %% c\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "comment-target-d3-false-```",
     "source": "- a\n  - b\n    - c\n      %% c\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "comment-target-d3-false-| a |",
     "source": "- a\n  - b\n    - c\n      %% c\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "comment-target-d3-false-[^x]: note",
     "source": "- a\n  - b\n    - c\n      %% c\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d3-false-payload",
@@ -107,32 +107,32 @@
   {
     "id": "comment-target-d3-true-# h",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-> q",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-:::",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-```",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-| a |",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-[^x]: note",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "comment-target-d3-true-payload",
@@ -142,32 +142,32 @@
   {
     "id": "comment-target-d4-false-# h",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n # h\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "comment-target-d4-false-> q",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n > q\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>&gt; q</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>"
   },
   {
     "id": "comment-target-d4-false-:::",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>:::</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>"
   },
   {
     "id": "comment-target-d4-false-```",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n ```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "comment-target-d4-false-| a |",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n | a |\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>| a |</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>"
   },
   {
     "id": "comment-target-d4-false-[^x]: note",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n [^x]: note\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>[^x]: note</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d4-false-payload",
@@ -177,32 +177,32 @@
   {
     "id": "comment-target-d4-true-# h",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-> q",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  > q\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>&gt; q</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <blockquote><p>q</p></blockquote>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-:::",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>:::</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <div>\n\n  </div>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-```",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p><code></code></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-| a |",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  | a |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>| a |</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-[^x]: note",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  [^x]: note\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>[^x]: note</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "comment-target-d4-true-payload",
@@ -222,7 +222,7 @@
   {
     "id": "comment-neighbor-d1-false-c1-# h",
     "source": "- a\n  %% c\n # h\n",
-    "html": "<ul>\n  <li>a</li>\n</ul>\n<p># h</p>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
   },
   {
     "id": "comment-neighbor-d1-false-c1-payload",
@@ -252,7 +252,7 @@
   {
     "id": "comment-neighbor-d1-true-c1-# h",
     "source": "> - a\n>   %% c\n>  # h\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <p># h</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
   },
   {
     "id": "comment-neighbor-d1-true-c1-payload",
@@ -402,12 +402,12 @@
   {
     "id": "followon-d2-qfalse-lfalse-# h-y",
     "source": "- a\n  - b\n    %% c\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d2-qfalse-lfalse-# h- %% d\n x",
     "source": "- a\n  - b\n    %% c\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-x-y",
@@ -422,12 +422,12 @@
   {
     "id": "followon-d2-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    ::: |\n    %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-# h- %% d\n x",
     "source": "- a\n  - b\n    ::: |\n    %%%\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d2-qtrue-lfalse-x-y",
@@ -442,12 +442,12 @@
   {
     "id": "followon-d2-qtrue-lfalse-# h-y",
     "source": "> - a\n>   - b\n>     %% c\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-lfalse-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     %% c\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-x-y",
@@ -462,12 +462,12 @@
   {
     "id": "followon-d2-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-x-y",
@@ -482,12 +482,12 @@
   {
     "id": "followon-d3-qfalse-lfalse-# h-y",
     "source": "- a\n  - b\n    - c\n      %% c\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-# h- %% d\n x",
     "source": "- a\n  - b\n    - c\n      %% c\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-x-y",
@@ -502,12 +502,12 @@
   {
     "id": "followon-d3-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-# h- %% d\n x",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p># h</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d3-qtrue-lfalse-x-y",
@@ -522,12 +522,12 @@
   {
     "id": "followon-d3-qtrue-lfalse-# h-y",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-lfalse-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-x-y",
@@ -542,12 +542,12 @@
   {
     "id": "followon-d3-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p># h</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-explicit-32",
@@ -617,7 +617,7 @@
   {
     "id": "staged-3-false-false-# h",
     "source": "- a\n  - b\n    - c\n      %% c\n   # h\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<section id=\"h-2\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "staged-3-false-false-%% d",
@@ -627,17 +627,17 @@
   {
     "id": "staged-3-false-true-x",
     "source": "1. a\n  1. b\n    1. c\n      %% c\n   x\n x\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n        x\nx\ny\n      </li>\n    </ol>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ol>\n<p>x\nx\ny</p>"
   },
   {
     "id": "staged-3-false-true-# h",
     "source": "1. a\n  1. b\n    1. c\n      %% c\n   # h\n # h\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c</li>\n    </ol>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ol>\n<p># h\ny</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ol>\n<section id=\"h\">\n  <h1>h</h1>\n</section>\n<section id=\"h-2\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "staged-3-false-true-%% d",
     "source": "1. a\n  1. b\n    1. c\n      %% c\n   %% d\n %% d\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c</li>\n    </ol>\n  </li>\n</ol>\n<p>y</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ol>\n<p>y</p>"
   },
   {
     "id": "staged-3-true-false-x",
@@ -647,7 +647,7 @@
   {
     "id": "staged-3-true-false-# h",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>    # h\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <h1 id=\"h-2\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "staged-3-true-false-%% d",
@@ -657,17 +657,17 @@
   {
     "id": "staged-3-true-true-x",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       %% c\n>    x\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n          x\nx\ny\n        </li>\n      </ol>\n    </li>\n  </ol>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n  </ol>\n  <p>x\nx\ny</p>\n</blockquote>"
   },
   {
     "id": "staged-3-true-true-# h",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       %% c\n>    # h\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c</li>\n      </ol>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ol>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n  </ol>\n  <h1 id=\"h\">h</h1>\n  <h1 id=\"h-2\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "staged-3-true-true-%% d",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       %% c\n>    %% d\n>  %% d\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c</li>\n      </ol>\n    </li>\n  </ol>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n  </ol>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "staged-4-false-false-x",
@@ -677,7 +677,7 @@
   {
     "id": "staged-4-false-false-# h",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n     # h\n   # h\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n      </li>\n    </ul>\n    <h1 id=\"h-2\">h</h1>\n  </li>\n</ul>\n<p># h\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n      </li>\n    </ul>\n    <h1 id=\"h-2\">h</h1>\n  </li>\n</ul>\n<section id=\"h-3\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "staged-4-false-false-%% d",
@@ -687,17 +687,17 @@
   {
     "id": "staged-4-false-true-x",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     x\n   x\n x\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n1. d</li>\n    </ol>\n    x\nx\nx\ny\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d</li>\n</ol>\n<p>x\nx\nx\ny</p>"
   },
   {
     "id": "staged-4-false-true-# h",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     # h\n   # h\n # h\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n1. d</li>\n    </ol>\n    <h1 id=\"h\">h</h1>\n    <h1 id=\"h-2\">h</h1>\n  </li>\n</ol>\n<p># h\ny</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d</li>\n</ol>\n<section id=\"h\">\n  <h1>h</h1>\n</section>\n<section id=\"h-2\">\n  <h1>h</h1>\n</section>\n<section id=\"h-3\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "staged-4-false-true-%% d",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     %% d\n   %% d\n %% d\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n1. d</li>\n    </ol>\n  </li>\n</ol>\n<p>y</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d</li>\n</ol>\n<p>y</p>"
   },
   {
     "id": "staged-4-true-false-x",
@@ -707,7 +707,7 @@
   {
     "id": "staged-4-true-false-# h",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>      # h\n>    # h\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n          <h1 id=\"h\">h</h1>\n        </li>\n      </ul>\n      <h1 id=\"h-2\">h</h1>\n    </li>\n  </ul>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n          <h1 id=\"h\">h</h1>\n        </li>\n      </ul>\n      <h1 id=\"h-2\">h</h1>\n    </li>\n  </ul>\n  <h1 id=\"h-3\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "staged-4-true-false-%% d",
@@ -717,17 +717,17 @@
   {
     "id": "staged-4-true-true-x",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       1. d\n>         %% c\n>      x\n>    x\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n1. d</li>\n      </ol>\n      x\nx\nx\ny\n    </li>\n  </ol>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n    <li>d</li>\n  </ol>\n  <p>x\nx\nx\ny</p>\n</blockquote>"
   },
   {
     "id": "staged-4-true-true-# h",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       1. d\n>         %% c\n>      # h\n>    # h\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n1. d</li>\n      </ol>\n      <h1 id=\"h\">h</h1>\n      <h1 id=\"h-2\">h</h1>\n    </li>\n  </ol>\n  <p># h\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n    <li>d</li>\n  </ol>\n  <h1 id=\"h\">h</h1>\n  <h1 id=\"h-2\">h</h1>\n  <h1 id=\"h-3\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "staged-4-true-true-%% d",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       1. d\n>         %% c\n>      %% d\n>    %% d\n>  %% d\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n1. d</li>\n      </ol>\n    </li>\n  </ol>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a</li>\n    <li>b</li>\n    <li>c</li>\n    <li>d</li>\n  </ol>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "review-0",

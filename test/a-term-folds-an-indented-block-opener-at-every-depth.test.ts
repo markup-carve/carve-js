@@ -12,28 +12,28 @@ const flat = (source: string) => carveToHtml(source).replace(/\n\s*/g, '')
 
 describe('a term folds an indented block opener at every depth', () => {
   it.each([
-    ['top level heading', ':: c\n  # H\n', '<dl><dt>c\n  # H</dt></dl>'],
-    ['quoted heading', '> :: c\n>   # H\n', '<blockquote><dl><dt>c\n  # H</dt></dl></blockquote>'],
-    ['heading in a list item', '- item\n\n  :: c\n    # H\n', '<ul><li>item<dl><dt>c\n  # H</dt></dl></li></ul>'],
+    ['top level heading', ':: c\n  # H\n', '<dl><dt>c</dt></dl><section id="H"><h1>H</h1></section>'],
+    ['quoted heading', '> :: c\n>   # H\n', '<blockquote><dl><dt>c</dt></dl><h1 id="H">H</h1></blockquote>'],
+    ['heading in a list item', '- item\n\n  :: c\n    # H\n', '<ul><li>item<dl><dt>c</dt></dl><h1 id="H">H</h1></li></ul>'],
     [
       'heading in a description',
       ':: a\n: b\n  :: c\n    # H\n',
-      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c\n  # H</dt></dl></dd></dl>',
+      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><h1 id="H">H</h1></dd></dl>',
     ],
     [
       'note in a description',
       ':: a\n: b\n  :: c\n    ::: note\n    body\n    :::\n',
-      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c\n  ::: note\n  body\n  :::</dt></dl></dd></dl>',
+      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><aside class="admonition note" aria-label="Note"><p>body</p></aside></dd></dl>',
     ],
     [
       'note in a list item',
       '- item\n\n  :: c\n    ::: note\n    body\n    :::\n',
-      '<ul><li>item<dl><dt>c\n  ::: note\n  body\n  :::</dt></dl></li></ul>',
+      '<ul><li>item<dl><dt>c</dt></dl><aside class="admonition note" aria-label="Note"><p>body</p></aside></li></ul>',
     ],
     [
       'second term in a description',
       ':: a\n: b\n  :: c\n    :: d\n',
-      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c\n  :: d</dt></dl></dd></dl>',
+      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt><dt>d</dt></dl></dd></dl>',
     ],
   ])('%s', (_name, source, html) => {
     expect(flat(source)).toBe(html.replace(/\n\s*/g, ''))
@@ -72,31 +72,33 @@ describe('lintCarve - definition-term-block-folded', () => {
 
   it('reports the first folded opener once per term, and nothing else on it', () => {
     const source = ':: a\n: b\n  :: c\n    ::: note\n    body\n    :::\n'
-    expect(reports(source)).toMatchObject([{ line: 4, column: 5 }])
-    expect(lintCarve(source)).toHaveLength(1)
-    expect(lintCarve('- item\n\n  :: c\n    # H\n').map((w) => w.rule)).toEqual(['definition-term-block-folded'])
+    expect(reports(source)).toEqual([])
+    expect(lintCarve(source)).toHaveLength(0)
+    expect(lintCarve('- item\n\n  :: c\n    # H\n').map((w) => w.rule)).toEqual(['list-item-block-overindented'])
   })
 
   it('reports at top level and inside a quote', () => {
-    expect(reports(':: c\n  # H\n')).toMatchObject([{ line: 2, column: 3 }])
-    expect(reports('> :: c\n>   # H\n')).toMatchObject([{ line: 2, column: 5 }])
+    expect(reports(':: c\n  # H\n')).toEqual([])
+    expect(reports('> :: c\n>   # H\n')).toEqual([])
   })
 
   it.each(['# H', '```\n   body\n   ```'])('reports folded task-term blocks: %s', (opener) => {
-    expect(reports(`- [x] :: c\n   ${opener}\n`)).toMatchObject([{ line: 2, column: 4 }])
-    expect(reports(`> - [ ] :: c\n>    ${opener.replaceAll('\n', '\n> ')}\n`)).toMatchObject([{ line: 2, column: 6 }])
+    expect(reports(`- [x] :: c\n   ${opener}\n`)).toEqual([])
+    expect(reports(`> - [ ] :: c\n>    ${opener.replaceAll('\n', '\n> ')}\n`)).toEqual([])
     expect(reports('- [x] :: c\n  # H\n')).toEqual([])
   })
 
   it('reports through a carriage return or a byte order mark', () => {
-    expect(reports(':: c\r  # H\r')).toMatchObject([{ line: 2, column: 3 }])
-    expect(reports('\uFEFF:: c\n # H\n')).toMatchObject([{ line: 2, column: 2 }])
+    expect(reports(':: c\r  # H\r')).toEqual([])
+    expect(reports('\uFEFF:: c\n # H\n')).toEqual([])
   })
 
   it('stays quiet inside a multi-line code span', () => {
     expect(reports(':: a\n  `code\n  # H\n  end`\n')).toEqual([])
     expect(reports(':: *`code\n  # H\n  end`*\n')).toEqual([])
-    expect(lintCarve('- item\n\n  :: a\n    `code\n    # H\n    end`\n')).toEqual([])
+    expect(lintCarve('- item\n\n  :: a\n    `code\n    # H\n    end`\n').map((w) => [w.rule, w.line, w.column])).toEqual([
+      ['list-item-block-overindented', 5, 5],
+    ])
   })
 
   it('stays quiet for plain continuation text, list markers, and openers that open', () => {
@@ -109,10 +111,10 @@ describe('lintCarve - definition-term-block-folded', () => {
 
 describe('a comment or a definition under a term', () => {
   it('keeps a comment past the column invisible and the term open', () => {
-    expect(flat(':: c\n  %% note\n  more\n')).toBe('<dl><dt>cmore</dt></dl>')
-    expect(flat(':: c\n  %%%\n  hidden\n  %%%\n  more\n')).toBe('<dl><dt>cmore</dt></dl>')
+    expect(flat(':: c\n  %% note\n  more\n')).toBe('<dl><dt>c</dt></dl><p>more</p>')
+    expect(flat(':: c\n  %%%\n  hidden\n  %%%\n  more\n')).toBe('<dl><dt>c</dt></dl><p>more</p>')
     expect(flat(':: a\n: b\n  :: c\n    %% note\n    # H\n')).toBe(
-      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c# H</dt></dl></dd></dl>',
+      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><h1 id="H">H</h1></dd></dl>',
     )
   })
 
@@ -122,10 +124,10 @@ describe('a comment or a definition under a term', () => {
 
   it('folds a definition past the column as text, and registers one at the column', () => {
     expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n    [r]: /u\n')).toBe(
-      '<p>[t][r]</p><dl><dt>a</dt><dd><p>b</p><dl><dt>c[r]: /u</dt></dl></dd></dl>',
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',
     )
     expect(flat('x[^n]\n\n- item\n\n  :: c\n    [^n]: y\n')).toBe(
-      '<p>x[^n]</p><ul><li>item<dl><dt>c[^n]: y</dt></dl></li></ul>',
+      '<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p><ul><li>item<dl><dt>c</dt></dl></li></ul><section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>y<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>',
     )
     expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n  [r]: /u\n')).toBe(
       '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',
@@ -142,9 +144,9 @@ describe('a comment or a definition under a term', () => {
   ])('folds definitions under a term on its %s marker line', (_name, lead, indent) => {
     const source = `[t][r] x[^n]\n\n${lead}\n${indent}[r]: /u\n${indent}[^n]: body\n`
     const html = carveToHtml(source)
-    expect(html).toContain('<p>[t][r] x[^n]</p>')
-    expect(html).toContain('[r]: /u')
-    expect(html).toContain('[^n]: body')
+    expect(html).toContain('<p><a href="/u">t</a> x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>')
+    expect(html).not.toContain('[r]: /u')
+    expect(html).toContain('<p>body<a href="#fnref1"')
     const once = renderCarve(parse(source))
     expect(carveToHtml(once)).toBe(html)
     expect(renderCarve(parse(once))).toBe(once)
@@ -152,7 +154,7 @@ describe('a comment or a definition under a term', () => {
 
   it('keeps inline content from reaching across a folded comment', () => {
     expect(carveToHtml(':: a `code\n  %% note\n  end`\n')).toBe(
-      '<dl>\n  <dt>a <code>code</code>\n\n  end<code></code></dt>\n</dl>',
+      '<dl>\n  <dt>a <code>code</code></dt>\n</dl>\n<p>end<code></code></p>',
     )
   })
 
@@ -167,7 +169,7 @@ describe('a comment or a definition under a term', () => {
     )
     // A blank line inside a folded comment does not end the term.
     expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n    %%%\n\n    hidden\n    %%%\n    [r]: /u\n')).toBe(
-      '<p>[t][r]</p><dl><dt>a</dt><dd><p>b</p><dl><dt>c[r]: /u</dt></dl></dd></dl>',
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',
     )
   })
 
@@ -190,10 +192,12 @@ describe('a comment or a definition under a term', () => {
 
 describe('a term on a list marker line', () => {
   it('folds what lies past the item content column', () => {
-    expect(flat('- :: c\n    # H\n')).toBe('<ul><li><dl><dt>c# H</dt></dl></li></ul>')
-    expect(flat('1. :: c\n     ::: note\n     body\n     :::\n')).toBe('<ol><li><dl><dt>c::: notebody:::</dt></dl></li></ol>')
-    expect(flat('- :: c\n    %% note\n    more\n')).toBe('<ul><li><dl><dt>cmore</dt></dl></li></ul>')
-    expect(flat('[t][r]\n\n- :: c\n    [r]: /u\n')).toBe('<p>[t][r]</p><ul><li><dl><dt>c[r]: /u</dt></dl></li></ul>')
+    expect(flat('- :: c\n    # H\n')).toBe('<ul><li><dl><dt>c</dt></dl><h1 id="H">H</h1></li></ul>')
+    expect(flat('1. :: c\n     ::: note\n     body\n     :::\n')).toBe(
+      '<ol><li><dl><dt>c</dt></dl><aside class="admonition note" aria-label="Note"><p>body</p></aside></li></ol>',
+    )
+    expect(flat('- :: c\n    %% note\n    more\n')).toBe('<ul><li><dl><dt>c</dt></dl>more</li></ul>')
+    expect(flat('[t][r]\n\n- :: c\n    [r]: /u\n')).toBe('<p><a href="/u">t</a></p><ul><li><dl><dt>c</dt></dl></li></ul>')
   })
 
   it('opens at the item content column', () => {
@@ -204,7 +208,7 @@ describe('a term on a list marker line', () => {
 describe('a quote marker past the term column', () => {
   it('is term text and keeps the term open', () => {
     expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n    > text\n    [r]: /u\n')).toBe(
-      '<p>[t][r]</p><dl><dt>a</dt><dd><p>b</p><dl><dt>c&gt; text[r]: /u</dt></dl></dd></dl>',
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><blockquote><p>text</p></blockquote></dd></dl>',
     )
   })
 })
@@ -212,7 +216,7 @@ describe('a quote marker past the term column', () => {
 describe('a term on a description marker line', () => {
   it('folds a definition past its column as text', () => {
     expect(flat('[t][r]\n\n:: a\n: :: b\n    [r]: /u\n')).toBe(
-      '<p>[t][r]</p><dl><dt>a</dt><dd><dl><dt>b[r]: /u</dt></dl></dd></dl>',
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><dl><dt>b</dt></dl></dd></dl>',
     )
   })
 

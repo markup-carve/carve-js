@@ -54,9 +54,12 @@ for (const lead of ['> :: t', '> - :: t', '> 1. :: t', '> > :: t']) {
         : '</blockquote>\n<p>: a\ntail</p>')
     })
     for (const indent of [1, 2, 4]) {
-      it(`folds ${marker} below ${lead} with ${indent} spaces`, () => {
+      it(`${marker.startsWith('::') ? 'ends' : 'folds'} ${marker} below ${lead} with ${indent} spaces`, () => {
         const html = renderHtml(parse(`${lead}\n${' '.repeat(indent)}${marker}\ntail\n`))
-        expect(normalized(html)).toContain(`<dt>t ${marker} tail</dt>`)
+        expect(normalized(html)).toContain(marker.startsWith('::')
+          ? '<dt>t</dt></dl>'
+          : `<dt>t ${marker} tail</dt>`)
+        if (marker.startsWith('::')) expect(html).toContain('</blockquote>\n<dl>\n  <dt>b\ntail</dt>')
         expect(html).not.toContain('<dd>')
       })
     }

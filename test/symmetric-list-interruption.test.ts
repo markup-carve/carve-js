@@ -67,8 +67,8 @@ describe('symmetric list interruption (§10)', () => {
     )
   })
 
-  it('folds a bullet that is below the content column (one space)', () => {
-    expect(h('- a\n - b')).toBe('<ul>\n  <li>a\n- b</li>\n</ul>')
+  it('opens a sibling on a bullet below the content column (one space)', () => {
+    expect(h('- a\n - b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
   })
 
   it('keeps abutting-attr sublist nesting at the content column', () => {
@@ -81,9 +81,9 @@ describe('symmetric list interruption (§10)', () => {
   // starts indented and a marker that dedents below its base column are at
   // DIFFERENT base columns and therefore form two sibling lists (not nesting,
   // and not lazy text).
-  it('a marker dedenting below an indented list base starts a sibling list', () => {
+  it('a marker dedenting below an indented list base continues the list', () => {
     expect(h('  - a\n  - b\n- c')).toBe(
-      '<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>\n<ul>\n  <li>c</li>\n</ul>',
+      '<ul>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ul>',
     )
   })
 })

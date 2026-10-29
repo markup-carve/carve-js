@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml, carveToMarkdown, markdownToCarve } from '../src/index.js'
 
 describe('literal definition markers in Markdown paragraphs', () => {
-  it('keeps a description below a nested term as text', () => {
+  it('keeps a description below a nested term as a description', () => {
     const source = ':: a\n: b\n\t:: t\n  : zq\n'
     const markdown = carveToMarkdown(source, { roundtrip: true })
-    expect(markdown).toContain('\n\\: zq\n')
+    expect(markdown).toContain('<!-- carve:2 : -->\nzq\n')
     expect(carveToHtml(markdownToCarve(markdown))).toBe(carveToHtml(source))
   })
 

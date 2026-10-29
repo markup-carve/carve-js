@@ -34,13 +34,13 @@ describe('a definition separator below its list column', () => {
       '<ul>\n  <li>item\n    <dl>\n      <dt>term\n:  def</dt>\n    </dl>\n  </li>\n</ul>',
     )
     expect(carveToHtml('- a\n  :: m\n :: n\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>m\n:: n</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <dl>\n      <dt>m</dt>\n    </dl>\n  </li>\n</ul>\n<dl>\n  <dt>n</dt>\n</dl>',
     )
   })
 
-  it('folds a separator below an authored term column into the term', () => {
+  it('attaches a separator below an authored term column to the term', () => {
     expect(carveToHtml('- a\n   :: m\n  : l\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>m\n: l</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <dl>\n      <dt>m</dt>\n      <dd>l</dd>\n    </dl>\n  </li>\n</ul>',
     )
   })
 

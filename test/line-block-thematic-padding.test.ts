@@ -58,9 +58,9 @@ describe("line-block thematic-looking text", () => {
     }
   }
 
-  it("still guards ordinary paragraphs and preserves actual thematic breaks", () => {
+  it("preserves actual thematic breaks, indented or not", () => {
     for (const source of [" ---\n", "---\n"]) {
-      expect(carveToCarve(source)).toBe(source);
+      expect(carveToCarve(source)).toBe("---\n");
     }
   });
 });

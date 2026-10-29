@@ -9,9 +9,12 @@ const cases = JSON.parse(readFileSync(new URL('./fixtures/descendant-comment-anc
 }>
 
 describe('descendant comments retain the enclosing item at a positive dedent', () => {
-  it.each(['x', '# h'])('an at-column comment releases %s text below the outer column', (text) => {
+  it.each([
+    ['x', ['list', 'paragraph']],
+    ['# h', ['list', 'heading', 'paragraph']],
+  ])('an at-column comment releases %s text below the outer column', (text, types) => {
     const document = parse(`- a\n  - b\n    %% c\n ${text}\ny\n`)
-    expect(document.children.map(({ type }) => type)).toEqual(['list', 'paragraph'])
+    expect(document.children.map(({ type }) => type)).toEqual(types)
     const list = document.children[0]!
     if (list.type !== 'list') throw new Error('expected outer list')
     expect(list.items[0]!.children.at(-1)?.type).toBe('list')
@@ -21,7 +24,7 @@ describe('descendant comments retain the enclosing item at a positive dedent', (
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it.each(cases.filter(({ id }) => id.startsWith('comment-target-') && id.endsWith('# h')))('$id releases heading-shaped text after an at-column comment', ({ id, source }) => {
+  it.each(cases.filter(({ id }) => id.startsWith('comment-target-') && id.endsWith('# h')))('$id releases a heading after an at-column comment', ({ id, source }) => {
     const document = parse(source)
     expect(document.children).toHaveLength(id.includes('-false-') ? 2 : 1)
     const container = document.children[0]!
@@ -31,7 +34,7 @@ describe('descendant comments retain the enclosing item at a positive dedent', (
     expect(list.items).toHaveLength(1)
     expect(list.items[0]!.children.at(-1)?.type).toBe('list')
     const siblings = container.type === 'block_quote' ? container.children : document.children
-    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph'])
-    expect(carveToHtml(source)).not.toContain('<h1>')
+    expect(siblings.map(({ type }) => type)).toEqual(['list', 'heading'])
+    expect(carveToHtml(source)).toContain('<h1')
   })
 })

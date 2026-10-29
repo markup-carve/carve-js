@@ -164,7 +164,7 @@ describe("the Markdown target's escaping narrows on the line", () => {
 
   describe('M1f: a hash from text is decided by where it stands', () => {
     it('escapes the hash a paragraph continuation line would open with', () => {
-      expect(md('a\n   # heading')).toBe('a\n\\# heading')
+      expect(md('a\n   # heading')).toBe('a\n\n# heading')
     })
 
     it('escapes a lone hash the line ends on', () => {
@@ -172,13 +172,13 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('escapes only the FIRST hash of the run', () => {
-      expect(md('a\n   ## b')).toBe('a\n\\## b')
+      expect(md('a\n   ## b')).toBe('a\n\n## b')
     })
 
     it('leaves a closed heading\'s trailing run bare', () => {
       // The trailing run stands nowhere near the content position, and the
       // line it would close is a paragraph once the opener is escaped.
-      expect(md('a\n   ### b ###')).toBe('a\n\\### b ###')
+      expect(md('a\n   ### b ###')).toBe('a\n\n### b \\###')
     })
 
     it('leaves a mid-line hash bare', () => {
@@ -190,7 +190,7 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('escapes a run of six, the longest a heading can open with', () => {
-      expect(md('a\n   ###### b')).toBe('a\n\\###### b')
+      expect(md('a\n   ###### b')).toBe('a\n\n###### b')
     })
 
     it('leaves a run of seven bare, since no flavour reads it as a heading', () => {
@@ -200,7 +200,7 @@ describe("the Markdown target's escaping narrows on the line", () => {
     it('measures the position past a container prefix', () => {
       // The quote marker stands in front of the content, so the hash is at the
       // line's content position even though it is not at column 0.
-      expect(md('> a\n>    # b')).toBe('> a\n> \\# b')
+      expect(md('> a\n>    # b')).toBe('> a\n>\n> # b')
     })
   })
 

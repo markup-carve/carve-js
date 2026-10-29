@@ -94,7 +94,7 @@ describe('the span a degraded comment fence publishes is the fence', () => {
 })
 
 describe('the clamp still applies where the line has indentation to reduce', () => {
-  it('an indented comment fence stays with the item [corpus 187]', () => {
+  it('an indented comment fence ends the item [corpus 187]', () => {
     const src = '- a\n %%% n\n x\n %%%\n tail\n'
     // THE CLAMP IS ABOUT THE PARSE, NOT THE SPAN. It still reduces the line to
     // one column - the HTML below is what says so, and it has not moved - but
@@ -103,14 +103,14 @@ describe('the clamp still applies where the line has indentation to reduce', () 
     // container keeps the latitude to begin inside the indentation that places
     // its child's marker. This row read `' %%% n...'`, one space early.
     expect(spans(src)).toEqual(['%%% n\n x\n %%%'])
-    expect(carveToHtml(src)).toBe('<ul>\n  <li>a\n    tail\n  </li>\n</ul>')
+    expect(carveToHtml(src)).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
   })
 
-  it('a below-column bullet still folds instead of nesting a sublist [carve#603]', () => {
+  it('a below-column bullet opens an outer item instead of nesting a sublist [carve#603]', () => {
     // The one column this branch exists to leave behind: strip it entirely and
     // `b` nests under `a` instead of folding.
     expect(carveToHtml('-   x\n    - a\n  - b\n')).toBe(
-      '<ul>\n  <li>x\n    <ul>\n      <li>a\n- b</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>x\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n  <li>b</li>\n</ul>',
     )
   })
 })
