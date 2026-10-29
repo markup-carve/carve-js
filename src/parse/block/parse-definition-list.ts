@@ -574,12 +574,19 @@ export function createDefinitionListParser(
           lazyState.lazyFoldable = false
         }
       }
+      let refusedFollowerLine = -1
       if (firstBlockOpenerContent(first) && !isContinuationMarker(first)) {
         const lastOpener = firstBlockLastOpenerOffset(first) ?? 0
         const sourceOffset = markerSource.lastIndexOf(first)
         const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
-        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
-          markerColumn, quotePrefixDepth(markerSource), true)
+        // The marker and body columns are the host's, so document column 0 takes no follower (CARVE-P9-067).
+        const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+        const followerColumn = follower === undefined || isBlankLine(follower) ? -1 : sourceColumn(follower, quotePrefixDepth(markerSource))
+        const attached = followerColumn === 0 && markerColumn > 0
+          ? { lines: [], lineNumbers: [] }
+          : parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true, markerColumn, quotePrefixDepth(markerSource), true)
+        // A line below the body that refuses the `+` leaves the description instead of folding into it.
+        if (attached.lines.length === 0 && followerColumn >= 0 && followerColumn < bodySourceColumn) refusedFollowerLine = lexer.lineNumber(lexer.pos)
         // An intervening line still reaches the description after this pull
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
@@ -1134,6 +1141,7 @@ export function createDefinitionListParser(
       //    CommonMark lazy rule list items and block quotes use, matching djot).
       runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
         const ln = admission.line
+        if (lexer.lineNumber(lexer.pos) === refusedFollowerLine) return 'stop'
         const early = admitPlusContinuation(ln) ?? admitBelowColumnCodePayload(ln)
         if (early !== undefined) return early
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
