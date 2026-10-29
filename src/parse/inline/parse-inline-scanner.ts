@@ -67,6 +67,7 @@ export interface InlineScannerSession {
     inFootnote?: boolean,
     noClose?: EmphasisMemo,
     end?: number,
+    inBracketRun?: boolean,
   ): EmphasisMatch | null
   pairView(offset: number): InlinePairView
   plainInlineWord(
@@ -1081,7 +1082,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanEmphasis(s: InlineScan): boolean {
     const { text, i } = s
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
-      s.emphasisNoClose ??= newEmphasisMemo(), s.bracketRuns.at(-1)?.close ?? text.length)
+      s.emphasisNoClose ??= newEmphasisMemo(), s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0)
     if (!em) return false
     flush(s)
     const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node

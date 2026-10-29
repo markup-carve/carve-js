@@ -501,7 +501,8 @@ export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOpti
         out += inlineText(n.content, typography)
         break
       case 'substitution':
-        out += inlineText(n.new, typography)
+        // CARVE-P2-004: a substitution carries both halves as literal text.
+        out += inlineText(n.old, typography) + inlineText(n.new, typography)
         break
       case 'abbreviation':
         out += n.abbr
