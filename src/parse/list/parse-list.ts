@@ -98,6 +98,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     prefixWalkBound,
     quoteBodyColumn,
     stackedOpenerColumns,
+    opensWrappedAttributeBlock,
     trackWrappedAttributeRun,
     stackedFollowerColumn,
     quoteIndentHasTab,
@@ -1497,8 +1498,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           wrappedAttributeFence = null
       }
       const physicalAttributeLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
+      // An opener indented below this item's content column, or one an enclosing item
+      // admitted as lazy, is paragraph text, so its closer ends no paragraph (PART 0 O2, O3).
+      const lazyAttributeOpener = wrappedAttribute.attrRun === null &&
+        opensWrappedAttributeBlock(stripLazyFrame(l).trimStart()) && (l.startsWith(LAZY_FRAME) ||
+          indentColumns(l) > 0 && (admission.kind === 'below' || admission.kind === 'outside' ||
+            lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
       if (quotePrefixDepth(physicalAttributeLine) < itemQuoteDepth) wrappedAttribute.attrRun = null
-      else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
+      else if (lazyAttributeOpener) {
+        // Not a run: the line reads as text.
+      } else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
           trackWrappedAttributeRun(wrappedAttribute, stripLazyFrame(l).trimStart())) deepAttributeClosed = true
       const currentSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
       const afterCurrent = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
@@ -2877,7 +2886,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, contentCol) < contentCol && !RE_COMMENT_LINE.test(l)) {
         lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       } else if (indentColumns(l, contentCol) < contentCol &&
-          (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()))) {
+          (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()) ||
+            opensWrappedAttributeBlock(l.trimStart()) && indentColumns(l) > 0)) {
         // A below-column opener stays text; comments keep their source column.
         const flushed = l.replace(/^[ \t]+/, '')
         // After a retaining comment the body owns the opener (carve#3285).

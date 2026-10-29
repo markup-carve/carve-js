@@ -97,6 +97,7 @@ import {
   trackBlockQuoteLazyState,
   walkContainerPrefix,
   walkMarkerOwnerPrefix,
+  opensWrappedAttributeBlock,
   trackWrappedAttributeRun,
 } from '../block/parse-quote-core.js'
 
@@ -1124,6 +1125,7 @@ export interface ItemLineFacts {
 }
 
 export const listHelpers = {
+  opensWrappedAttributeBlock,
   trackWrappedAttributeRun,
   FOOTNOTE_BODY_COLUMN,
   LAZY_FRAME,
