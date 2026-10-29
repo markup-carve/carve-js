@@ -249,8 +249,14 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     const form = classify(m.rest, owner, at, m.col)
+    // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
+    // A missed quote keeps the line as the quote's lazy text.
+    const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note') &&
+      !frames.slice(reached + 1).some((f) => f.kind === 'quote')
     if (missed && m.rest !== '' && top().para && !form.interrupts &&
-        !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes)) {
+        !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes) &&
+        !(missedNote && form.kind === 'item' &&
+          (owner.kind === 'item' || owner.kind === 'dd' || frames.slice(reached + 1).some((f) => f.kind === 'item')))) {
       // Step 4: a lazy line stays text where it stands, short of the frame it missed.
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1

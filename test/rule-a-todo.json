@@ -32,9 +32,6 @@
   "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
     "a fence after a footnote boundary closes without claiming the next line": "#3921"
   },
-  "a-line-leaving-a-nested-footnote-restores-the-item-paragraph.test.ts": {
-    "does not restore the item paragraph while its nested note stays open": "#3920"
-  },
   "a-line-retained-after-a-comment-opens-the-deepest-paragraph.test.ts": {
     "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted ::: inner and a comment span": "#3918",
     "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted inner and a comment span": "#3918",
@@ -478,8 +475,6 @@
     "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-732": "#3919",
     "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-754": "#3919",
-    "preserves paragraph ownership after nested note CODE: nested-closer-755": "#3919",
     "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-764": "#3919",
