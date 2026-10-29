@@ -13,12 +13,12 @@ const cases = [
     :: t
  - c
 tail
-`, '<ul><li>x<ul><li><h1>h</h1><dl><dt>t\n- c\ntail</dt></dl></li></ul></li></ul>'],
+`, '<ul><li>x<ul><li><h1>h</h1><dl><dt>t</dt></dl></li></ul></li><li>c\ntail</li></ul>'],
   ['heading', `- # h
   :: t
  - c
 tail
-`, '<ul><li><h1>h</h1><dl><dt>t\n- c\ntail</dt></dl></li></ul>'],
+`, '<ul><li><h1>h</h1><dl><dt>t</dt></dl></li><li>c\ntail</li></ul>'],
   ['paragraph', `- x
 
   :: t
@@ -30,11 +30,11 @@ tail
     :: t
    - c
 tail
-`, '<dl><dt>T</dt><dd><ul><li><h1>h</h1><dl><dt>t\n- c\ntail</dt></dl></li></ul></dd></dl>'],
+`, '<dl><dt>T</dt><dd><ul><li><h1>h</h1><dl><dt>t</dt></dl></li><li>c\ntail</li></ul></dd></dl>'],
   ['nested heading text', `- x
   - :: t
  # c
-`, '<ul><li>x<ul><li><dl><dt>t\n# c</dt></dl></li></ul></li></ul>'],
+`, '<ul><li>x<ul><li><dl><dt>t</dt></dl></li></ul></li></ul><section><h1>c</h1></section>'],
   ['ordered marker', `- # h
   :: t
  1. c
@@ -44,12 +44,12 @@ tail
   :: t
  - [x] c
 tail
-`, '<ul><li><h1>h</h1><dl><dt>t\n- [x] c\ntail</dt></dl></li></ul>'],
+`, '<ul><li><h1>h</h1><dl><dt>t</dt></dl></li></ul><ul class="task-list"><li data-task-state="x"><input type="checkbox" checked disabled aria-label="c tail"> c\ntail</li></ul>'],
   ['quoted marker', `> - # h
 >   :: t
 >  - c
 > tail
-`, '<blockquote><ul><li><h1>h</h1><dl><dt>t\n- c\ntail</dt></dl></li></ul></blockquote>'],
+`, '<blockquote><ul><li><h1>h</h1><dl><dt>t</dt></dl></li><li>c\ntail</li></ul></blockquote>'],
   ['star marker', `- # h
   :: t
  * c
@@ -59,7 +59,7 @@ tail
   :: t
  -{.x} c
 tail
-`, '<ul><li><h1>h</h1><dl><dt>t\n-{.x} c\ntail</dt></dl></li></ul>'],
+`, '<ul><li><h1>h</h1><dl><dt>t</dt></dl></li><li class="x">c\ntail</li></ul>'],
 ]
 
 describe('a band list marker under a term is term text', () => {

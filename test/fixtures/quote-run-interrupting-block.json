@@ -607,7 +607,7 @@
   {
     "id": "fixed-fnote-one-q3-f4-b-p0-7",
     "source": "- text\n   > quote\n\n    [^n]: note\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "fixed-fnote-one-q3-f4-b-p2-7",
@@ -617,7 +617,7 @@
   {
     "id": "fixed-fnote-two-q3-f4-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n    [^n]: note\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "fixed-fnote-two-q3-f4-b-p2-7",
@@ -627,7 +627,7 @@
   {
     "id": "fixed-fnote-nest-q3-f4-b-p0-7",
     "source": "- text\n   > > q\n\n    [^n]: note\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "fixed-fnote-nest-q3-f4-b-p2-7",
@@ -637,7 +637,7 @@
   {
     "id": "fixed-fnote-qlist-q3-f4-b-p0-7",
     "source": "- text\n   > - q\n\n    [^n]: note\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "fixed-fnote-qlist-q3-f4-b-p2-7",
