@@ -1341,7 +1341,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let nestedNoteParagraph = false
     // A definition body cannot preserve its enclosing item's paragraph claim (CARVE-P0-006).
     let blockedNoteClaimFloor: number | undefined
-    let quotedInvisibleBody = false
     let hostedNoteBodyColumn: number | undefined
     let acceptedPlusLine = -1
     const refusedPlus = (offset: number): boolean => {
@@ -2658,17 +2657,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // Its body may follow, but neither can keep this item's paragraph open.
       const quotedInvisible = lazyState.opaque === null && descendantOpaque === null
         ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
+      // A quoted footnote answers through the quote tracker (carve#3885); a link definition holds no paragraph.
       if (quotedInvisible !== undefined && quotedInvisible === quotedInvisible.trimStart() &&
-          (RE_FOOTNOTE_DEF.test(quotedInvisible) || isLinkDefLine(quotedInvisible))) {
-        quotedInvisibleBody = RE_FOOTNOTE_DEF.test(quotedInvisible)
+          isLinkDefLine(quotedInvisible) && !RE_FOOTNOTE_DEF.test(quotedInvisible))
         lazyState.lazyFoldable = false
-      } else if (quotedInvisibleBody) {
-        const quoteBody = lazyState.opaque === null && descendantOpaque === null
-          ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
-        if (quoteBody !== undefined && indentColumns(quoteBody, FOOTNOTE_BODY_COLUMN) >= FOOTNOTE_BODY_COLUMN)
-          lazyState.lazyFoldable = false
-        else quotedInvisibleBody = false
-      }
       if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
       if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
           RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol && !enclosingLazy)

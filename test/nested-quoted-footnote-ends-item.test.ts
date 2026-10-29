@@ -4,15 +4,16 @@ import { layoutWork } from '../src/parse.js'
 
 const normalized = (html: string): string => html.trim().split('\n').map(line => line.trim()).filter(Boolean).join('\n')
 
-it('ends both list levels after a nested quote and invisible footnote', () => {
+// The quoted note's open paragraph takes the line lazily (carve#3885).
+it('folds the line into a quoted footnote below both list levels', () => {
   expect(normalized(carveToHtml('- h0\n  1. h1\n    > quote\n    > [^n]: note\nq\n'))).toBe(
-    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote><p>quote</p></blockquote>\n</li>\n</ul>\n<p>q</p>',
+    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote><p>quote</p></blockquote>\n</li>\n</ul>',
   )
 })
 
-it('ends both list levels after a quoted footnote body', () => {
+it('folds the line into a quoted footnote body', () => {
   expect(normalized(carveToHtml('- h0\n  1. h1\n    > quote\n    > [^n]: note\n    >   more\nq\n'))).toBe(
-    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote><p>quote</p></blockquote>\n</li>\n</ul>\n<p>q</p>',
+    '<ul>\n<li>h0\n<ol>\n<li>h1</li>\n</ol>\n<blockquote><p>quote</p></blockquote>\n</li>\n</ul>',
   )
 })
 
@@ -35,7 +36,7 @@ it('bounds repeated nested quoted footnote exits', () => {
       const source = ('- h0\n  1. h1\n    > quote\n    > [^n]: note\nq\n\n').repeat(count)
       layoutWork.reset()
       layoutWork.on = true
-      expect(renderHtml(parse(source)).match(/<p>q<\/p>/g)?.length).toBe(count)
+      expect(renderHtml(parse(source)).match(/<p>q<\/p>/g)).toBeNull()
       return layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
     })
     expect(work[1]!).toBeLessThanOrEqual(work[0]! * 4.5)
