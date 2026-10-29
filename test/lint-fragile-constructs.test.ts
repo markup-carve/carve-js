@@ -73,6 +73,8 @@ describe('emphasis-marker-before-attributes', () => {
     '*a \\* b*{.x}\n',
     '*a /b/{.y} c*{.x}\n',
     '`a*{.x}`\n',
+    '*a `*` b*{.x}\n',
+    '*a $`*` b*{.x}\n',
     'a * {.x}\n',
     'a*{???}\n',
   ])('is quiet on %j', (source) => {

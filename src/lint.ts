@@ -288,11 +288,16 @@ function collectMarkerBeforeAttributes(
       if (cps[j] === marker && !escaped(j) && cps[j + 1] === '{') { closer = j; break }
     }
     if (closer < 0) return
-    let inner = -1
-    for (let j = pos.startOffset + 1; j < closer; j++) {
-      if (cps[j] === marker && !escaped(j)) { inner = j; break }
-    }
-    if (inner < 0) return
+    // Only a marker the span holds as literal text counts, not one in code or a nested construct.
+    let literal = false
+    walkDocument({ children } as unknown as Document, (inner) => {
+      const at = (inner as Positioned).pos
+      if (literal || inner.type !== 'text' || at?.startOffset === undefined || at.endOffset === undefined) return
+      for (let j = at.startOffset; j < Math.min(at.endOffset, closer); j++) {
+        if (cps[j] === marker && !escaped(j)) { literal = true; break }
+      }
+    })
+    if (!literal) return
     const opener = lineOf(pos.startOffset)
     report(closer, blockEnd(closer + 1) ?? closer + 1,
       `This ${marker} closes the ${SPAN_NAMES[marker]} span that opens at line ${opener + 1}, column ${pos.startOffset - lineStarts[opener]! + 1}, ` +
