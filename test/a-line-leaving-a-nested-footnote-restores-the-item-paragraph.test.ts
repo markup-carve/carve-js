@@ -21,7 +21,8 @@ it('returns that follower to the parent when its earlier note missed the parent 
   expect(carveToHtml(source)).toContain('<ul>\n      <li>a</li>\n    </ul>\n    q')
 })
 
-it('ends the item before a plus below a top-level note', () => {
+// The note's open paragraph takes both lines lazily (carve#3885).
+it('folds a plus below a note in an item into the note', () => {
   const source = '- a\n  [^n]: note\n +\ntext\n'
-  expect(carveToHtml(source)).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>+\ntext</p>')
+  expect(carveToHtml(source)).toBe('<ul>\n  <li>a</li>\n</ul>')
 })

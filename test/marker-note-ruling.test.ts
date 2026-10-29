@@ -39,13 +39,14 @@ it('leaves a line below a closed note fence outside the item', () => {
 })
 
 for (const prefix of ['', '> ']) for (const opener of [['> q'], [':: t', ': d']]) {
-  it(`opens ${opener[0]} at the marker-note body column in the note at quote depth ${prefix.length / 2}`, () => {
-    const source = ['- [^n]: text', ...opener.map(line => `    ${line}`), 'after [^n]']
-      .map(line => prefix + line).join('\n')
+  it(`opens ${opener[0]} at the marker-note body column and folds the next line at quote depth ${prefix.length / 2}`, () => {
+    const source = ['- [^n]: text', ...opener.map(line => `    ${line}`), 'after']
+      .map(line => prefix + line).join('\n') + '\n\nr[^n]\n'
     const html = carveToHtml(source)
     expect(html).toMatch(/<li id="fn1">\s*<p>text<\/p>\s*<(blockquote|dl)>/)
     expect(html).toMatch(/<ul>\s*<li><\/li>\s*<\/ul>/)
-    expect(html).toContain('<p>after <a id="fnref1"')
+    // The opened block's paragraph takes the line lazily (carve#3885).
+    expect(html).toMatch(/(q|d)\nafter/)
   })
 }
 

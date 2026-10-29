@@ -46,10 +46,9 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     )
   })
 
-  it('a footnote definition ends it, and still defines', () => {
-    expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain(
-      '<ul>\n  <li></li>\n</ul>\n<p>tail</p>',
-    )
+  // A footnote's open paragraph takes the line lazily instead (carve#3885).
+  it('a footnote definition takes the line, and still defines', () => {
+    expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain('<p>t\ntail<a href="#fnref1"')
     expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain('role="doc-endnotes"')
   })
 

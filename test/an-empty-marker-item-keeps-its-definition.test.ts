@@ -24,7 +24,8 @@ describe('a marker-line item emptied by definition collection', () => {
   // broke this - it attaches the outer item's next block to the empty inner one.
   it('writes the definition back on its own marker line', () => {
     expect(carveToCarve('* * [d]: u\n  :\n')).toBe('* * [d]: u\n  :\n')
-    expect(carveToCarve('* * [^f]: n\n  :\n')).toBe('* * [^f]: n\n  :\n')
+    // The `:` is the note's lazy text (carve#3885), written at the note's body column.
+    expect(carveToCarve('* * [^f]: n\n  :\n')).toBe('* * [^f]: n\n      :\n')
   })
 
   // And the definition is still a definition after the round trip - the half a

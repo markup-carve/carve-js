@@ -7,7 +7,6 @@ const endsAtCloser = '  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after
 
 it.each([
   ['a link definition', ['- para', '  [r]: /u']],
-  ['a footnote definition', ['- para', '  [^f]: n']],
   ['a definition at the outer item column', ['- a', '  - para', '  [r]: /u']],
   ['a table row', ['- para', '  | t |']],
   ['an ordered item table row', ['10. para', '    | t |']],
@@ -23,6 +22,11 @@ it.each([
   ['a table row under an attributed ordered marker', ['1.{#x} para', '   | t |']],
 ])('%s at the item content column closes the paragraph, so the fence ends at the closer', (_name, lines) => {
   expect(render(lines).trimEnd().endsWith(endsAtCloser)).toBe(true)
+})
+
+// A footnote's open paragraph takes the fence line and its payload lazily (carve#3885).
+it('a footnote definition at the item content column takes the fence lines as note text', () => {
+  expect(render(['- para', '  [^f]: n'])).toContain('</ul>\n  <div>\n\n  </div>\n</aside>\n<p>after <strong>b</strong></p>')
 })
 
 it.each([

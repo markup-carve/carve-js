@@ -200,9 +200,10 @@ describe('an empty unterminated container ends at a flush-left line', () => {
     )
   })
 
+  // The note's open paragraph takes the line lazily instead (carve#3885).
   it("footnote definition past the column", () => {
     expect(carveToHtml(":: term\n:  definition\n    [^f]: n\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>\n<p>tail</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>",
     )
   })
 })
