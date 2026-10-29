@@ -312,8 +312,7 @@
     "fmt keeps a region marker on its line (CARVE-P11-073) > normalization-outside-a-region-leaves-it-alone: fmt writes the fixture bytes": "#3921"
   },
   "formatter-parity-regressions.test.ts": {
-    "normalizes a constructed carriage return before guarding a quote line": "#3921",
-    "preserves rendered content when formatting \"~``` x\\n[d]: u ```\\n\"": "#3921"
+    "normalizes a constructed carriage return before guarding a quote line": "#3921"
   },
   "heading-between-rejected-and-admitted-fences.test.ts": {
     "reads paragraph ownership and keeps source positions in range: heading-text-band-1": "#3922",
@@ -408,9 +407,6 @@
     "keeps the tail outside the marker note after 'ordered-note-adjacent'": "#3922",
     "keeps the tail outside the marker note after 'ordered-note-code'": "#3922",
     "keeps the tail outside the marker note after 'ordered-note-raw'": "#3922"
-  },
-  "multiline-inline-code.test.ts": {
-    "preserves a constructed Code value after line-ending normalization: \"\\n[r]: /url\"": "#3922"
   },
   "nested-list-source-boundaries.test.ts": {
     "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
@@ -531,7 +527,6 @@
     "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
   },
   "verbatim-continuation-guards.test.ts": {
-    "preserves display math around > continuation continuations": "#3921",
-    "preserves display math around [r]: /target continuations": "#3921"
+    "preserves display math around > continuation continuations": "#3921"
   }
 }
