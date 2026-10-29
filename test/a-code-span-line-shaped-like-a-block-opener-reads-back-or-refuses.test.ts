@@ -91,3 +91,11 @@ it.each([
 ])('refuses a value no spelling keeps inside its span: %s %j', (host, value) => {
   expect(() => renderCarve(withCode(host, '', value))).toThrow(SourceUnspellableError)
 })
+
+it.each(['a\n- b', 'a\n- b\nc'])('writes a marker line in a quoted item lazily, without its quote marker: %j', value => {
+  const document = withCode('quotedItem', '', value)
+  const written = renderCarve(document)
+  expect(written).toMatch(/^- b/m)
+  expect(carveToHtml(written)).toBe(renderHtml(document))
+  expect(carveToCarve(written)).toBe(written)
+})
