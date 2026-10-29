@@ -168,7 +168,7 @@ import {
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
-import { parseDirective } from '../include-directive.js'
+import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines } from './block/block-ownership.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
@@ -2398,7 +2398,11 @@ export class ParseSession extends InlineParseSession {
     // A code include at block start owns exactly its source line. This is
     // decided before resolution, including when the resolver later refuses it.
     const firstLine = lexer.peek()!
-    const codeInclude = !flattened && firstLine.includes('{{') && parseDirective(firstLine.trim())?.code !== undefined
+    const trimmedFirst = firstLine.trim()
+    const shape = !flattened && trimmedFirst.startsWith('{{') ? scanDirectiveShape(trimmedFirst) : null
+    const codeInclude = shape?.end === trimmedFirst.length && shape.options.some(([key]) => key === 'code')
+    // Unexpanded, it is literal text only at document level; nested, its source is inline content.
+    const codeIncludeLiteral = codeInclude && !shape!.quoted && lexer.rootLines === undefined
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
@@ -2494,7 +2498,7 @@ export class ParseSession extends InlineParseSession {
         : undefined
     const paragraphNode: Paragraph = {
       type: 'paragraph',
-      children: (codeInclude && !/^\{\{ +["“]/.test(text) || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      children: (codeIncludeLiteral || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),
@@ -2502,7 +2506,7 @@ export class ParseSession extends InlineParseSession {
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
-    if (codeInclude && !/^\{\{ +["“]/.test(text)) {
+    if (codeIncludeLiteral) {
       const startOffset = lexer.lineOffset(startLineIndex) + firstLead
       const startColumn = lexer.lineStartColumn(startLineIndex) + firstLead
       paragraphNode.children = [{ type: 'text', value: text,

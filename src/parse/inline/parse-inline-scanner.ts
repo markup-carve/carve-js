@@ -37,7 +37,7 @@ import type {
   Tag,
   Text,
 } from '../../ast.js'
-import { DIRECTIVE_SCAN_RE, parseDirective } from '../../include-directive.js'
+import { isLiteralInlineDirective, scanDirectiveShape } from '../../include-directive.js'
 
 const ordinaryAscii = new Uint8Array(128)
 for (let code = 48; code <= 57; code++) ordinaryAscii[code] = 1
@@ -293,7 +293,6 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   } = helpers
   const RE_MENTION_AT = new RegExp(RE_MENTION.source.slice(1), 'y')
   const RE_TAG_AT = new RegExp(RE_TAG.source.slice(1), 'y')
-  const DIRECTIVE_AT = new RegExp(DIRECTIVE_SCAN_RE.source, 'y')
 
   // A trailing `{...}` on a link or image tail. An invalid payload (`{2=v}`)
   // is literal (§14), and an empty-attr `{…}` is literal too -- neither is
@@ -1126,12 +1125,11 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanInvalidLineRangeDirective(s: InlineScan): boolean {
     const { text, i } = s
     if (text.slice(i, i + 2) !== '{{') return false
-    DIRECTIVE_AT.lastIndex = i
-    const found = DIRECTIVE_AT.exec(text)
-    if (!found || found.index !== i || !parseDirective(found[0])?.invalidLines) return false
+    const shape = scanDirectiveShape(text, i)
+    if (!shape || !isLiteralInlineDirective(shape)) return false
     flush(s)
-    emit(s, { type: 'text', value: found[0] }, i, i + found[0].length)
-    s.i += found[0].length
+    emit(s, { type: 'text', value: text.slice(i, shape.end) }, i, shape.end)
+    s.i = shape.end
     return true
   }
 
