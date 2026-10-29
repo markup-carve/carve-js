@@ -6,7 +6,6 @@
       "cause": "all three engines agree against the spec model",
       "cases": [
         "combined-ad5cfc8e81bf",
-        "fences-56d1f5344d97",
         "notes-b468d41965eb",
         "ownership-34529d739732",
         "ownership-bd5caf2c0c4d",
@@ -49,14 +48,11 @@
         "lazy-10bd0503f93b",
         "lazy-408e39e5714b",
         "lazy-478d76f7299c",
-        "lazy-4f5eaac61ed4",
         "lazy-541f9f3b620e",
         "lazy-593582276fea",
         "lazy-7eae4bb5a252",
         "lazy-7f31fa259b62",
         "lazy-7f8806c2a9ca",
-        "lazy-828973d41d13",
-        "lazy-a38a85984127",
         "lazy-ce9301a4ca56",
         "lazy-fef11cbd6ca1"
       ]
@@ -79,7 +75,6 @@
         "notes-a97b2cad213a",
         "notes-ae1372f30051",
         "notes-c3cbc4fb599c",
-        "notes-d2500c45a956",
         "notes-dd130b0b59c1",
         "notes-de959a3190f7",
         "notes-eb2cca00af0d",
@@ -152,6 +147,24 @@
         "notes-9429cd878645",
         "notes-ac7d6a615617",
         "ownership-35dce7b7ed21"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4048",
+      "cause": "a + attached fence below the item's content column takes the blank after its block",
+      "cases": [
+        "fences-12ba255d2b80",
+        "fences-4e8b129ee1fb",
+        "fences-8ed246bfdc05"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4094",
+      "cause": "a description separator past an indented term folds into the previous description",
+      "cases": [
+        "lazy-e5f10323832e",
+        "ownership-20db0db56577",
+        "roundtrip-1a6a5531cfa5"
       ]
     }
   ]
