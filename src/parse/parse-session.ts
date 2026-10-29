@@ -140,6 +140,7 @@ import {
   quotedFenceHasCloser,
   quotedLineText,
   readCaptionText,
+  recordPromotedImageBlockRun,
   replaceLoneSurrogates,
   setDelimitedPayloadLines,
   sliceColumns,
@@ -708,6 +709,7 @@ export class ParseSession extends InlineParseSession {
           // Leading attrs are earlier in source; the block's own trailing
           // attrs win on conflict (id/key last), classes accumulate (§15).
           node.attrs = mergeAttrs(pending, node.attrs ?? {})
+          if (node.type === 'image') recordPromotedImageBlockRun(node, pending)
         }
         const candidate = node.type === 'code_block' ? node
           : node.type === 'figure' && node.target.type === 'code_block' ? node.target : undefined
@@ -1928,6 +1930,7 @@ export class ParseSession extends InlineParseSession {
     const title = m[3] ?? m[4]
     if (title !== undefined) img.title = unescapeAttrValue(title)
     if (m[5]) img.attrs = parseAttrs(m[5])
+    recordPromotedImageBlockRun(img, {})
     // Optional caption
     let lookahead = 0
     while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
