@@ -1205,10 +1205,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
 const behindSpec = new Map<string, string>([
-  // carve-js#3892: a literal bracket run bounds emphasis (carve#3906).
-  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one', '<p><strong>[*g*] x</strong></p>'],
-  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one-2', '<p><u>[_g_] x</u> and <em>[/g/] x</em></p>'],
-  ['767-a-literal-bracket-run-bounds-emphasis-like-a-resolved-one-3', '<p><strong>a [*g*] x</strong></p>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
