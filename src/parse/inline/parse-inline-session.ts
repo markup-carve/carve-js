@@ -386,6 +386,18 @@ export class InlineParseSession {
       }
       return bracedOpens
     }
+    // A span of another kind open at a bare opener and closing inside its pair
+    // demotes the opener (E2), so the pair's block is content.
+    const crossedPair = (open: number, close: number, marker: string): boolean => {
+      for (const d of '/*_~=') {
+        if (d === text[open] || d === marker) continue
+        const outer = openerTable(d)[open]!
+        if (outer === -1 || outer <= bracedOpenBefore()[open]! || bareOpener(text, outer) !== 'open' && !openerMarks.has(outer - 1)) continue
+        const outerClose = closerTable(d)[outer + 1]!
+        if (outerClose > open && outerClose < close) return true
+      }
+      return false
+    }
     // `limit`: the `X}` the span would close at with the run opaque; a guard
     // closer past it is outside the span (E2a).
     const bareRunIsContent = (at: number, marker: string, limit: number): boolean => {
@@ -396,6 +408,7 @@ export class InlineParseSession {
       // No opener on this side of a braced opener, or one an earlier closer
       // takes: the pair cannot form.
       if (open === -1 || bracedOpenBefore()[at - 1]! > open || closerTable(owner)[open + 1]! < at - 1) return true
+      if (crossedPair(open, at - 1, marker)) return true
       // A guarded opener forms only if every guard before it does.
       for (let at = open; at > 0 && bareOpener(text, at) === 'guarded' && !openerMarks.has(at - 1); at--) {
         const guard = text[at - 1]!
@@ -488,7 +501,7 @@ export class InlineParseSession {
           stop = table[after(ends[j]!)]!
         } else {
           stop = table[j + 1]!
-          if (!editorial && bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
+          if (!editorial && bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose) && !crossedPair(j, bareClose, PAIR_MARKERS[m]!)) stop = table[bareTail]!
         }
         table[j] = stop
       }
@@ -1259,6 +1272,7 @@ export class InlineParseSession {
     visited: number[] | undefined,
     end: number,
     waiver: Waiver,
+    ownGuardOpens?: boolean,
   ): number {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
@@ -1267,12 +1281,16 @@ export class InlineParseSession {
     // Closers of attached children, which open nothing. A child whose opener
     // an earlier glued marker's pair demotes (E2) spends none.
     let spent: Set<number> | undefined
+    // The last opener of each other kind the walk has passed.
+    let lastOpener: Map<string, number> | undefined
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
       const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? this.pairBareAttributes(text, j) : undefined
-      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver))) {
+      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver)) &&
+        !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, memo, end, lastOpener, () =>
+          ownGuardOpens ??= this.findEmphasisCloseIn(text, from, delim, memo, undefined, undefined, end, { ...waiver }, false) !== -1))) {
         attached?.set(child.close + 1, child.end)
         if (!this.crossedByGluedOpener(text, j, child.close, delim, memo, end)) (spent ??= new Set()).add(child.close)
       }
@@ -1391,6 +1409,7 @@ export class InlineParseSession {
           continue
         }
       }
+      if (ch !== delim && '/*_~='.includes(ch) && !this.openKinds.has(ch) && bareOpener(text, j) !== 'none') (lastOpener ??= new Map()).set(ch, j)
       if (ch === delim) {
         if (text[j - 1] === '{' && text[j + 1] === '}' && !splitBracedOpener(text, j - 1)) {
           let slash = j - 2
@@ -1454,6 +1473,23 @@ export class InlineParseSession {
     if (d === undefined || !'/*_~='.includes(d) || d === delim || this.openKinds.has(d) || bareOpener(text, at - 1) === 'none') return false
     const outer = this.cachedFindEmphasisClose(text, at, d, memo, end)
     return outer !== -1 && outer < close
+  }
+
+  // A span of another kind open at the child's opener that closes before the
+  // child's closer demotes that opener (E2), so the child's block is content.
+  // An opener the walk's own delimiter guards stays open only if the walk
+  // closes without this demotion; otherwise pairing blocks it.
+  private crossedByOpenSpan(text: string, at: number, close: number, from: number, memo: EmphasisMemo, end: number, lastOpener: Map<string, number>, ownGuardOpens: () => boolean): boolean {
+    for (const [d, open] of lastOpener) {
+      if (d === text[at]) continue
+      const opener = bareOpener(text, open)
+      if (opener !== 'open' && open !== from) continue
+      const key = `${d}${open + 1}:${end}`
+      let outer = memo.closes?.get(key)
+      if (outer === undefined) (memo.closes ??= new Map()).set(key, outer = this.cachedFindEmphasisClose(text, open + 1, d, memo, end))
+      if (outer > at && outer < close && (opener === 'open' || open !== from || ownGuardOpens())) return true
+    }
+    return false
   }
 
   private guardOpens(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
