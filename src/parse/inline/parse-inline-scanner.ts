@@ -68,7 +68,9 @@ export interface InlineScannerSession {
     noClose?: EmphasisMemo,
     end?: number,
     inBracketRun?: boolean,
+    guardOpen?: boolean,
   ): EmphasisMatch | null
+  bareOpenerStands(text: string, i: number, guardOpen: boolean): boolean
   pairView(offset: number): InlinePairView
   plainInlineWord(
     text: string,
@@ -156,6 +158,11 @@ interface InlineScan {
   // Caption number placeholder: only the first bare `#` in a caption becomes one.
   captionNumberEmitted: boolean
   emphasisNoClose: EmphasisMemo | undefined
+  // The delimiter stack's unpaired open entries at this level: the last one's
+  // position, and the kinds held (E3), so a `_` or `/` guard counts only
+  // where it stands as one (carve#3973 X1).
+  openEntryAt: number
+  openEntryKinds: string
   crossrefMemo: CrossrefMemo | undefined
   commentLineEnd: number
   bracketRuns: Array<{ start: number; close: number }>
@@ -360,6 +367,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       quoteContext: '',
       captionNumberEmitted: false,
       emphasisNoClose: undefined,
+      openEntryAt: -1,
+      openEntryKinds: '',
       crossrefMemo: undefined,
       commentLineEnd: -1,
       bracketRuns: [],
@@ -1081,9 +1090,17 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
   function scanEmphasis(s: InlineScan): boolean {
     const { text, i } = s
+    const guardOpen = s.openEntryAt === i - 1
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
-      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0)
-    if (!em) return false
+      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0, guardOpen)
+    if (!em) {
+      const ch = text[i]!
+      if (!s.openEntryKinds.includes(ch) && s.session.bareOpenerStands(text, i, guardOpen)) {
+        s.openEntryAt = i
+        s.openEntryKinds += ch
+      }
+      return false
+    }
     flush(s)
     const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node
     emit(s, node, i, em.end)

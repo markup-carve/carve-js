@@ -15,13 +15,13 @@ const html = (source: string) => {
 
 describe('a bracket after a backtick an earlier construct used up', () => {
   it.each([
-    ['a forced strong', 'Run {*`make*}[the docs](u).', '<p>Run <strong><code>make</code></strong><a href="u">the docs</a>.</p>'],
-    ['a forced emphasis', 'x{/`a/}[n](u)', '<p>x<em><code>a</code></em><a href="u">n</a></p>'],
-    ['a forced strike', 'x{~`a~}[n](u)', '<p>x<s><code>a</code></s><a href="u">n</a></p>'],
-    ['an empty run in a forced strong', 'x{*``*}[n](u)', '<p>x<strong><code></code></strong><a href="u">n</a></p>'],
-    ['an image after it', 'x{*`a*}![n](u)', '<p>x<strong><code>a</code></strong><img src="u" alt="n"></p>'],
-    ['a span after it', 'x{*`a*}[n]{.k}', '<p>x<strong><code>a</code></strong><span class="k">n</span></p>'],
-    ['an insertion', '{+`a+} [n](u)', '<p><ins><code>a</code></ins> <a href="u">n</a></p>'],
+    ['a forced strong', 'Run {*`make*}[the docs](u).', '<p>Run {*<code>make*}[the docs](u).</code></p>'],
+    ['a forced emphasis', 'x{/`a/}[n](u)', '<p>x{/<code>a/}[n](u)</code></p>'],
+    ['a forced strike', 'x{~`a~}[n](u)', '<p>x{~<code>a~}[n](u)</code></p>'],
+    ['an empty run in a forced strong', 'x{*``*}[n](u)', '<p>x{*<code>*}[n](u)</code></p>'],
+    ['an image after it', 'x{*`a*}![n](u)', '<p>x{*<code>a*}![n](u)</code></p>'],
+    ['a span after it', 'x{*`a*}[n]{.k}', '<p>x{*<code>a*}[n]{.k}</code></p>'],
+    ['an insertion', '{+`a+} [n](u)', '<p>{+<code>a+} [n](u)</code></p>'],
     ['an attribute value', '[a]{title="`"} [n](u)', '<p><span title="`">a</span> <a href="u">n</a></p>'],
     ['a code span attribute value', '`a`{title="`"} [n](u)', '<p><code title="`">a</code> <a href="u">n</a></p>'],
     ['a destination, with a later pair of runs', '[m](u`) and [m](`v) and [n](w)', '<p><a href="u`">m</a> and <a href="`v">m</a> and <a href="w">n</a></p>'],

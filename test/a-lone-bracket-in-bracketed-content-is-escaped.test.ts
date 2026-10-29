@@ -138,7 +138,8 @@ describe('PART 11 §5 a run holding an empty code span', () => {
 
   it('leaves the destination paren before the span to the search', () => {
     roundTrips('<p>x [a](b) y <code></code></p>', 'x \\[a](b) y ``')
-    roundTrips('<p>x [a](b) y <em>z <code></code></em></p>', 'x \\[a](b) y {/z ``/}')
+    // The run cannot end inside the emphasis (carve#3973 X5), so the span is dropped.
+    roundTrips('<p>x [a](b) y <em>z <code></code></em></p>', 'x [a]\\(b) y {/z /}')
   })
 
   it('keeps both halves in a nested construct, a run of its own', () => {

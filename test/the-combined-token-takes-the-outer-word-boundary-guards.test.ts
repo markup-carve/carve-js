@@ -19,7 +19,7 @@ describe('the combined token takes the outer word-boundary guards', () => {
     ['Run src/*test*/fixtures now', '<p>Run src/<strong>test</strong>/fixtures now</p>'],
     ['see lib/*.js and src/*foo*/bar', '<p>see lib/<strong>.js and src/*foo</strong>/bar</p>'],
     ['@me/*y*/ x', '<p><span class="mention"><strong>@me</strong></span>/<strong>y</strong>/ x</p>'],
-    ['_/*y*/', '<p>_/<strong>y</strong>/</p>'],
+    ['_/*y*/', '<p>_<strong><em>y</em></strong></p>'],
     ['//*y*/', '<p>//<strong>y</strong>/</p>'],
   ])('reads %j as text around a bold span', (src, expected) => {
     expect(html(src)).toBe(expected)

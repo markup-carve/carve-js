@@ -31,7 +31,7 @@ describe('explicit same-kind emphasis', () => {
     ['{*a {% *} %} b*}', '<p><strong>a  b</strong></p>'],
     ['{*a {# *} #} b*}', '<p><strong>a <span class="critic-comment"> *} </span> b</strong></p>'],
     ['a {*b %% c*}', '<p>a <strong>b</strong></p>'],
-    ['{*a `{*}', '<p><strong>a <code>{</code></strong></p>'],
+    ['{*a `{*}', '<p>{*a <code>{*}</code></p>'],
   ])('keeps comment and unclosed-code boundaries in %s', (source, html) => {
     const document = parse(source)
     expect(renderHtml(document)).toBe(html)

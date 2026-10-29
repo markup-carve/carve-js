@@ -1959,8 +1959,8 @@ function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
 
 /**
  * The empty code spans whose open run does not end where the span does. The
- * run ends at the end of a block or at a braced closer (PART 3, UNCLOSED RUN);
- * anything else behind it is read into the span, and a label never closes.
+ * run ends only at the end of a block (PART 3, UNCLOSED RUN, carve#3973 X5);
+ * anything behind it, an enclosing span's closer included, is read into it.
  */
 export function emptyCodeSpansWhoseRunDoesNotEnd(root: object, isNothing: (item: object) => boolean = isEmptyText, needsOpenRun: (value: unknown) => boolean = value => value === ''): object[] {
   const found: object[] = []
@@ -2003,22 +2003,17 @@ type Parent = [object, unknown[], boolean]
 
 function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>): boolean {
   let current: object = code
-  let closed = false
   for (let link = parents.get(current); link !== undefined; current = link[0], link = parents.get(current)) {
     const [parent, , followed] = link
-    if (!closed && followed) return false
+    if (followed) return false
     const type = (parent as { type?: string }).type ?? ''
     if (type === 'table_cell') {
       // Cells are split after the run is read, so only the last cell's run
-      // ends with its line, braced closer or not.
+      // ends with its line.
       const row = parents.get(parent)
       return row === undefined || row[1][row[1].length - 1] === parent
     }
-    if (BRACED_INLINE_TYPES.has(type)) {
-      closed = true
-      continue
-    }
-    if (LABEL_INLINE_TYPES.has(type)) return false
+    if (BRACED_INLINE_TYPES.has(type) || LABEL_INLINE_TYPES.has(type)) return false
     if (type !== 'abbreviation') return true
   }
   return true
@@ -4903,10 +4898,7 @@ class CarveRenderSession {
     }
     const emphasisOf = (delim: string, children: InlineNode[]): string => {
       const content = spelledContent(children)
-      // An empty code span is written as an unclosed run, which swallows a bare
-      // closer; only the braced one ends it.
-      const last = children[children.length - 1]
-      return content.endsWith(renderSession.sentinels[3]!) || (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
+      return content.endsWith(renderSession.sentinels[3]!) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
         ? renderForcedEmphasis(delim, content)
         : renderEmphasis(delim, content, prevChar, nextChar)
     }
