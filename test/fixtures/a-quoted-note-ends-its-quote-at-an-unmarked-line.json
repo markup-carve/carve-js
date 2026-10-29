@@ -12,12 +12,12 @@
   {
     "id": "js-25-1",
     "source": "> [^c]: para\n>   - li\ntail\n",
-    "html": "<blockquote>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n\n</blockquote>"
   },
   {
     "id": "js-25-2",
     "source": "> [^c]: para\n>       - li\nx\n",
-    "html": "<blockquote>\n</blockquote>\n<p>x</p>"
+    "html": "<blockquote>\n\n</blockquote>"
   },
   {
     "id": "js-70-1",

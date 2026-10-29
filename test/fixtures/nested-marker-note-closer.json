@@ -192,7 +192,7 @@
   {
     "id": "nested-49",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      - c2\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-51",
@@ -202,7 +202,7 @@
   {
     "id": "nested-53",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      - c2\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-55",
@@ -212,7 +212,7 @@
   {
     "id": "nested-57",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      - c2\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-58",
@@ -232,7 +232,7 @@
   {
     "id": "nested-61",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      more\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-62",
@@ -242,27 +242,27 @@
   {
     "id": "nested-63",
     "source": "- [^a]: text\n    - child\n    [^b]: \n\n      more\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-65",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      more\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-67",
     "source": "- [^a]: text\n    - child\n    [^b]: \n\n      more\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-69",
     "source": "- [^a]: text\n    - child\n    [^b]: \n      more\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-71",
     "source": "- [^a]: text\n    - child\n    [^b]: \n\n      more\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-97",
@@ -402,7 +402,7 @@
   {
     "id": "nested-145",
     "source": "- [^a]: text\n    more\n    [^b]: \n      - c2\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-147",
@@ -412,7 +412,7 @@
   {
     "id": "nested-149",
     "source": "- [^a]: text\n    more\n    [^b]: \n      - c2\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-151",
@@ -422,7 +422,7 @@
   {
     "id": "nested-153",
     "source": "- [^a]: text\n    more\n    [^b]: \n      - c2\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-155",
@@ -437,7 +437,7 @@
   {
     "id": "nested-157",
     "source": "- [^a]: text\n    more\n    [^b]: \n      more\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-158",
@@ -447,47 +447,47 @@
   {
     "id": "nested-159",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      more\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-161",
     "source": "- [^a]: text\n    more\n    [^b]: \n      more\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-163",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      more\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-165",
     "source": "- [^a]: text\n    more\n    [^b]: \n      more\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-167",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      more\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-169",
     "source": "- [^a]: text\n    more\n    [^b]: \n      > q\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-171",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      > q\n    ~~~\n    code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-173",
     "source": "- [^a]: text\n    more\n    [^b]: \n      > q\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-175",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      > q\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-176",
@@ -497,7 +497,7 @@
   {
     "id": "nested-177",
     "source": "- [^a]: text\n    more\n    [^b]: \n      > q\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-178",
@@ -507,17 +507,17 @@
   {
     "id": "nested-179",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      > q\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-185",
     "source": "- [^a]: text\n    more\n    [^b]: \n      :: t\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-187",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      :: t\n      ~~~\n      code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-188",
@@ -527,7 +527,7 @@
   {
     "id": "nested-189",
     "source": "- [^a]: text\n    more\n    [^b]: \n      :: t\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-190",
@@ -537,7 +537,7 @@
   {
     "id": "nested-191",
     "source": "- [^a]: text\n    more\n    [^b]: \n\n      :: t\n        ~~~\n        code\nafter [^a] [^b]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "nested-193",
@@ -732,7 +732,7 @@
   {
     "id": "nested-241",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       - c2\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-243",
@@ -742,7 +742,7 @@
   {
     "id": "nested-245",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       - c2\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-247",
@@ -752,7 +752,7 @@
   {
     "id": "nested-249",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       - c2\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-250",
@@ -772,7 +772,7 @@
   {
     "id": "nested-253",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       more\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-254",
@@ -782,27 +782,27 @@
   {
     "id": "nested-255",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n> \n>       more\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-257",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       more\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-259",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n> \n>       more\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-261",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n>       more\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-263",
     "source": "> - [^a]: text\n>     - child\n>     [^b]: \n> \n>       more\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-289",
@@ -942,7 +942,7 @@
   {
     "id": "nested-337",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       - c2\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-339",
@@ -952,7 +952,7 @@
   {
     "id": "nested-341",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       - c2\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-343",
@@ -962,7 +962,7 @@
   {
     "id": "nested-345",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       - c2\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\n- c2\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-347",
@@ -977,7 +977,7 @@
   {
     "id": "nested-349",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       more\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-350",
@@ -987,47 +987,47 @@
   {
     "id": "nested-351",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       more\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-353",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       more\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-355",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       more\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-357",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       more\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:\nmore\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-359",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       more\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <p>more\n~~~\ncode<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-361",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       > q\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-363",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       > q\n>     ~~~\n>     code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-365",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       > q\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-367",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       > q\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-368",
@@ -1037,7 +1037,7 @@
   {
     "id": "nested-369",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       > q\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-370",
@@ -1047,17 +1047,17 @@
   {
     "id": "nested-371",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       > q\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <blockquote><p>q\n~~~\ncode</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-377",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       :: t\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-379",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       :: t\n>       ~~~\n>       code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-380",
@@ -1067,7 +1067,7 @@
   {
     "id": "nested-381",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n>       :: t\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-382",
@@ -1077,7 +1077,7 @@
   {
     "id": "nested-383",
     "source": "> - [^a]: text\n>     more\n>     [^b]: \n> \n>       :: t\n>         ~~~\n>         code\n> after [^a] [^b]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^b]</p>\n</blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore\n[^b]:</p>\n      <dl>\n        <dt>t\n  ~~~\n  code</dt>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "generic-3",

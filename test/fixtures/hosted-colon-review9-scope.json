@@ -7,7 +7,7 @@
   {
     "id": "review9-g1-1",
     "source": "- a\n  ```\n  [^a]: n\nTAILX\n",
-    "html": "<ul>\n  <li>a\n<code></code></li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n<code></code></li>\n</ul>"
   },
   {
     "id": "review9-g1-2",
@@ -47,7 +47,7 @@
   {
     "id": "review9-g2-10",
     "source": "- a\n   :::\n  [^a]: n\nx\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review9-g3",

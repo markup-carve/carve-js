@@ -2,26 +2,26 @@
   {
     "id": "js-69-1",
     "source": "- > - para\n  >   [^f]: n\n   >     more\ntail[^f]\n",
-    "html": "<ul>\n<li>\n<blockquote>\n<ul>\n<li>para</li>\n</ul>\n</blockquote>\n</li>\n</ul>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<p>n\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n</li>\n</ol>\n</section>"
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-69-2",
     "source": "- > - para\n  >   [^f]: n\ntail[^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-69-3",
     "source": "1. > - para\n   >   [^f]: n\n    >     more\ntail[^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ol>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ol>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-69-4",
     "source": "- > - para\n  >   [^f]: n\n  >     more\ntail[^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>para</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-69-5",
     "source": "- > 1. para\n  >    [^f]: n\n   >      more\ntail[^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote>\n      <ol>\n        <li>para</li>\n      </ol>\n    </blockquote>\n  </li>\n</ul>\n<p>tail<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <ol>\n        <li>para</li>\n      </ol>\n    </blockquote>\n  </li>\n</ul>"
   }
 ]

@@ -87,7 +87,7 @@
   {
     "id": "q-105",
     "source": ":: t\n: > para\n  >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\ntail<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-106",
@@ -127,7 +127,7 @@
   {
     "id": "q-113",
     "source": "> > para\n> >  [^f]: n\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>tail</p>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>[r][] <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\ntail<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "q-114",
@@ -177,7 +177,7 @@
   {
     "id": "qd-123",
     "source": "> :: t\n> : d\n>   [^f]: n\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "qd-124",

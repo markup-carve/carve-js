@@ -77,12 +77,12 @@
   {
     "id": "js-23-1",
     "source": "- ::: note\n   [^p]: n\n  tail\n",
-    "html": "<ul>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>"
   },
   {
     "id": "js-23-2",
     "source": "- ::: note\n      [^p]: n\n  tail\n",
-    "html": "<ul>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>"
   },
   {
     "id": "js-24-1",
@@ -107,7 +107,7 @@
   {
     "id": "js-36-1",
     "source": "1. ::: note\n       [^p]: n\n   tail\n",
-    "html": "<ol>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ol>"
   },
   {
     "id": "js-37-1",

@@ -232,7 +232,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-16",
     "source": "- [^n]: note\n      ```\n      code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-17",
@@ -252,7 +252,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-20",
     "source": "- [^n]: note\n        ```\n        code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li></li>\n</ul>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-21",
@@ -352,7 +352,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-40",
     "source": "> - [^n]: note\n>       ```\n>       code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-41",
@@ -372,7 +372,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-44",
     "source": "> - [^n]: note\n>         ```\n>         code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-45",
@@ -472,7 +472,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-64",
     "source": "> > - [^n]: note\n> >       ```\n> >       code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li></li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-65",
@@ -492,7 +492,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-68",
     "source": "> > - [^n]: note\n> >         ```\n> >         code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li></li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-69",

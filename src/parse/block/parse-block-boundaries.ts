@@ -156,6 +156,8 @@ export interface ItemLazyState {
    */
   inFootnoteBody: boolean
   footnoteBodyColumn?: number
+  /** The note body's own tracker: its last block answers the lazy question (carve#3885). */
+  noteFrame?: ItemLazyState
   /**
    * The tracker for the quote this item currently ends on, or null.
    *

@@ -34,13 +34,12 @@ interface FootnoteHooks {
 }
 
 function canTakePlainLazyLine(
-  lexer: Lexer, defLineIndex: number, line: string,
+  line: string,
   state: ReturnType<typeof verbatimOnlyLazyState>,
 ): boolean {
   const content = line.trimStart()
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
     state.deepest?.opaque == null && !state.deepest?.divDepth &&
-    !(defLineIndex === 0 && lexer.hostBody === 'list') &&
     !RE_CAPTION.test(content)
 }
 
@@ -107,16 +106,6 @@ function refusedNoteMarkerAtBoundary(
 ): boolean {
   return pending.count === 0 && state.opaque === null && !canContinueLazily &&
     marker?.owner?.kind === 'footnote' && marker.reason !== undefined
-}
-
-function quoteReleasesBelowLine(
-  lexer: Lexer, admission: ContainerAdmission, authoredBodyColumn: number | undefined,
-  bodyColumn: number, markerLineQuoteOpen: boolean,
-  quoteOpen: boolean,
-): boolean {
-  return markerLineQuoteOpen && quoteOpen && admission.kind === 'below' &&
-    admission.sourceColumn < (authoredBodyColumn ?? bodyColumn) &&
-    !isRetainableLineComment(lexer, admission.line) && matchedCommentFenceEnd(lexer) === undefined
 }
 
 function reachesAuthoredNoteBody(
@@ -234,7 +223,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (nestedBody !== undefined) trackItemLazyState(nestedBody, lazyState, () => false)
     if (/^\+[ \t]*$/.test(m[2]!) && firstBlockRefusesList(lexer)) lazyState.lazyFoldable = false
   }
-  const markerLineQuoteOpen = lazyState.quoteInner !== null
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   let termTextContinuation = false
   let hasContainedItem = false
@@ -253,10 +241,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       lexer.consume()
       return 'continue'
     }
-    // A quote on the note's marker line cannot lazily claim an unmarked line
-    // below the note body floor. Ownership is chosen before the quote parses it.
-    if (quoteReleasesBelowLine(lexer, admission, authoredBodyColumn, bodyColumn,
-      markerLineQuoteOpen, lazyState.quoteInner !== null)) return 'stop'
     // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
     // with no indentation (the same continuation marker lists and block quotes
     // use); the attached block ends at a blank line, another `+`, or the next
@@ -264,7 +248,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // which case all three are body text (corpus category 279).
     const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
     const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
-    const noteCanLazy = canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState)
+    const noteCanLazy = canTakePlainLazyLine(ln, lazyState)
     if (refusedNoteMarkerAtBoundary(pendingBlankRun, lazyState, noteCanLazy, noteMarker)) {
       // The note still owns this marker even when the next block misses its
       // marker column. The body collector leaves the + as text below.
@@ -384,7 +368,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
-      (canTakePlainLazyLine(lexer, defLineIndex, ln, lazyState) ||
+      (canTakePlainLazyLine(ln, lazyState) ||
         markerLineCommentContinuesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, ln) ||
         ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
