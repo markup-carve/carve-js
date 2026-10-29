@@ -1238,6 +1238,8 @@ export function walkContainerPrefix(content: string, memo?: Map<number, number>)
  * a quote owns the lines below it by its marker, not by a column (PART 1 S4).
  * Memoized under negative keys beside `walkContainerPrefix`'s.
  */
+const RE_TASK_BOX_TAIL = /\[[ xX\-_>\/!?]\] +[ \t]*$/
+
 export function walkMarkerOwnerPrefix(content: string, memo?: Map<number, number>): number {
   const bound = prefixWalkBound(content)
   const offsets: number[] = []
@@ -1248,6 +1250,9 @@ export function walkMarkerOwnerPrefix(content: string, memo?: Map<number, number
     if (memo) offsets.push(at)
     const marker = markerPrefixLength(content, at, bound)
     if (marker === 0) break
+    // A task box is content (CARVE-P0-008): the task item owns from the box on.
+    const box = RE_TASK_BOX_TAIL.exec(content.slice(at, at + marker))
+    if (box) { at += box.index; break }
     at += marker
   }
   for (const offset of offsets) memo!.set(-1 - (content.length - offset), at - offset)
