@@ -3777,7 +3777,7 @@
   {
     "id": "review-following-code-list-23",
     "source": "- outer\n  - 10. :: t\n        : p\n          ```\n          x\n     \t```\n  after\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <ol start=\"10\">\n          <li>\n            <dl>\n              <dt>t</dt>\n              <dd>p\n<code>\nx\n</code>\nafter</dd>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <ol start=\"10\">\n          <li>\n            <dl>\n              <dt>t</dt>\n              <dd>\n                <p>p</p>\n                <pre><code>x\n</code></pre>\n              </dd>\n            </dl>\n            <pre><code>after\n</code></pre>\n          </li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-24",
@@ -3812,7 +3812,7 @@
   {
     "id": "review-following-code-root-30",
     "source": "- - 10. :: t\n        : p\n    \t    ```\n    \t```\nafter\n",
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ol start=\"10\">\n          <li>\n            <dl>\n              <dt>t</dt>\n              <dd>p\n<code>\n</code>\nafter</dd>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ol start=\"10\">\n          <li>\n            <dl>\n              <dt>t</dt>\n              <dd>\n                <p>p</p>\n                <pre><code></code></pre>\n              </dd>\n            </dl>\n            <pre><code></code></pre>\n          </li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "review-following-code-quote-31",
@@ -3822,6 +3822,6 @@
   {
     "id": "review-following-code-list-32",
     "source": "- outer\n  - - 10. :: t\n          : p\n      \t    ```\n      \t```\n  after\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ol start=\"10\">\n              <li>\n                <dl>\n                  <dt>t</dt>\n                  <dd>p\n<code>\n</code>\nafter</dd>\n                </dl>\n              </li>\n            </ol>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ol start=\"10\">\n              <li>\n                <dl>\n                  <dt>t</dt>\n                  <dd>p\n<code></code></dd>\n                </dl>\n              </li>\n            </ol>\n            <pre><code>after\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   }
 ]

@@ -439,6 +439,20 @@
     "relative continuation marker columns > attaches a table at its quote marker column": "#3920",
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
   },
+  "render-carve.test.ts": {
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: semantic": "#3976"
+  },
   "sibling-term-item-column.test.ts": {
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",
     "preserves source columns in '- - - :: t\\n   : a\\n       :: sibling…'": "#3922"

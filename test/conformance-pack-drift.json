@@ -5,8 +5,6 @@
       "ticket": "markup-carve/carve#3972",
       "cause": "all three engines agree against the spec model",
       "cases": [
-        "combined-3448da01d1a5",
-        "combined-9558bcc180ca",
         "combined-ad5cfc8e81bf",
         "fences-56d1f5344d97",
         "notes-b468d41965eb",
@@ -27,13 +25,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the combined family",
       "cases": [
-        "combined-0ce08bf78ffe",
-        "combined-0fca5f817c2f",
-        "combined-6254f930f23b",
-        "combined-91898a3f2450",
-        "combined-c9f4ceb31baf",
-        "combined-ca6dd161d141",
-        "combined-cb097d2fe4e2"
+        "combined-91898a3f2450"
       ]
     },
     {
@@ -43,7 +35,6 @@
         "fences-088d930244e3",
         "fences-6bb4b2c08642",
         "fences-7ee69af861a0",
-        "fences-9e5276462e70",
         "fences-a6ede733e700",
         "fences-be8043b3def8",
         "fences-beb7a2645809",
@@ -105,7 +96,6 @@
         "ownership-45bdb0dd8da8",
         "ownership-498f1450c332",
         "ownership-4b546e287bf8",
-        "ownership-7268daebe735",
         "ownership-75f9e63b2e3f",
         "ownership-ae57ff05e447",
         "ownership-bab956633134",
@@ -135,14 +125,33 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4018",
-      "cause": "fence opener interruption: a 1-3 space indented opener under a paragraph reached through a + attachment stays inline, and the 763 note-claimed line reads tight here",
+      "ticket": "markup-carve/carve-js#3989",
+      "cause": "a lone + after a blank does not attach a following fence to the list item",
       "cases": [
         "fences-06ce61cd4497",
-        "fences-870d77f6402c",
-        "notes-bf51f2cb46b8",
         "ownership-028a847df024",
         "ownership-94b0c7c5deba"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4033",
+      "cause": "an unclosed fence in a description or footnote body drops its trailing blank run",
+      "cases": [
+        "fences-1003c5a0c605",
+        "fences-78bb999cca42",
+        "fences-9caa332a8a41",
+        "fences-e0c82ffb018d",
+        "fences-e4b9e8e7d607",
+        "fences-ee4a1e36de97",
+        "notes-04e6ac52d99b",
+        "notes-3534a9739250",
+        "notes-37e54703513f",
+        "notes-499cdee61630",
+        "notes-50dee4b44d0d",
+        "notes-8a58290254d3",
+        "notes-9429cd878645",
+        "notes-ac7d6a615617",
+        "ownership-35dce7b7ed21"
       ]
     }
   ]

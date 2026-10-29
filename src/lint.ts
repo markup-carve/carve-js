@@ -1078,22 +1078,7 @@ export function lintCarve(
   }
   const sourceOffset = (line: number, column: number): number =>
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
-  const seenFence = new Set<string>()
-  for (const fence of unclosedCodeFences) {
-    const column = fenceSourceColumn(sourceLines[fence.line - 1], fence.marker, fence.column)
-    const key = `${fence.line}:${column}`
-    if (seenFence.has(key)) continue
-    seenFence.add(key)
-    // A tab makes the visual column differ from the character index, so take the offset from the marker itself.
-    const start = column === fence.column
-      ? sourceOffset(fence.line, column)
-      : lineOffsets[fence.line - 1]! + sourceLines[fence.line - 1]!.indexOf(fence.marker)
-    const ending = fence.reason === 'document' ? 'it runs to the end of the document'
-      : fence.reason === 'continuation' ? `a continuation marker on line ${fence.endLine} ends it`
-        : `it ends at the end of its container on line ${fence.endLine}`
-    out.push({ line: fence.line, column, start, end: start + fence.marker.length,
-      rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
-  }
+  pushUnclosedCodeFences(unclosedCodeFences, sourceLines, lineOffsets, sourceOffset, out)
   const seenMarker = new Set<string>()
   // A wrong-column `+` inside a code or comment payload is payload, not a marker (`> ``` ` / `>   +`).
   const payloadLines = new Set([...collectVerbatimLines(doc), ...collectCommentLines(doc)])
@@ -2507,6 +2492,32 @@ function collectVerbatimLines(doc: Document): Set<number> {
     }
   })
   return verbatim
+}
+
+/** One `unclosed-code-fence` finding per opener, at the opener's source column. */
+function pushUnclosedCodeFences(
+  unclosedCodeFences: readonly UnclosedCodeFence[],
+  sourceLines: readonly string[],
+  lineOffsets: readonly number[],
+  sourceOffset: (line: number, column: number) => number,
+  out: LintWarning[],
+): void {
+  const seenFence = new Set<string>()
+  for (const fence of unclosedCodeFences) {
+    const column = fenceSourceColumn(sourceLines[fence.line - 1], fence.marker, fence.column)
+    const key = `${fence.line}:${column}`
+    if (seenFence.has(key)) continue
+    seenFence.add(key)
+    // A tab makes the visual column differ from the character index, so take the offset from the marker itself.
+    const start = column === fence.column
+      ? sourceOffset(fence.line, column)
+      : lineOffsets[fence.line - 1]! + sourceLines[fence.line - 1]!.indexOf(fence.marker)
+    const ending = fence.reason === 'document' ? 'it runs to the end of the document'
+      : fence.reason === 'continuation' ? `a continuation marker on line ${fence.endLine} ends it`
+        : `it ends at the end of its container on line ${fence.endLine}`
+    out.push({ line: fence.line, column, start, end: start + fence.marker.length,
+      rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
+  }
 }
 
 type SilentFailurePush = (lineNo: number, col: number, len: number, rule: string, message: string) => void

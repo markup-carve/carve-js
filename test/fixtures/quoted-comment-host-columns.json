@@ -124,7 +124,7 @@
     {
       "name": "overindented-next-depth1-commentcol0-code",
       "source": "> - ::: box\n>   body\n> %%%\n> hidden\n> %%%\n>   prose\n>     ```\n>     code\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <p>prose\n<code>\ncode\n- tail</code></p>\n</blockquote>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>body</p>\n      </div>\n    </li>\n  </ul>\n  <p>prose</p>\n  <pre><code>code\n</code></pre>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "overindented-next-depth1-commentcol4-code",
@@ -144,7 +144,7 @@
     {
       "name": "overindented-next-depth2-commentcol0-code",
       "source": "> > - ::: box\n> >   body\n> > %%%\n> > hidden\n> > %%%\n> >   prose\n> >     ```\n> >     code\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <p>prose\n<code>\ncode\n- tail</code></p>\n  </blockquote>\n</blockquote>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>body</p>\n        </div>\n      </li>\n    </ul>\n    <p>prose</p>\n    <pre><code>code\n</code></pre>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "overindented-next-depth2-commentcol4-code",
