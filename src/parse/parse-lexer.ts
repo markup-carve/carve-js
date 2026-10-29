@@ -4,7 +4,7 @@ import type { ParseOptions, UnclosedContainer, RefusedContinuationMarker, Stripp
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
-import type { OwnershipCut } from './block/block-ownership.js'
+import type { OverindentedOpener, OwnershipCut } from './block/block-ownership.js'
 
 export const TRAILING_WS = '[ \\t]*$'
 
@@ -158,7 +158,12 @@ export class Lexer {
   private ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, refusedPlus }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number> }): void {
+  applyOwnership({ lines, cuts, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number>; overindented?: OverindentedOpener[] }): void {
+    for (const o of overindented ?? []) {
+      this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
+        column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
+        kind: o.kind, owner: o.owner, contentColumn: o.contentColumn, authoredColumn: o.column })
+    }
     for (const index of refusedPlus ?? []) this.refusedQuotePlus.add(index)
     if (!cuts.size) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()

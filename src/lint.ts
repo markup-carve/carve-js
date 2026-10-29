@@ -46,8 +46,10 @@ import {
   type UnclosedContainer,
   type UnclosedCodeFence,
   type RefusedContinuationMarker,
+  type OverindentedOpenerReport,
 } from './parse.js'
 import { destinationSlotEnds } from './link-destination.js'
+import { isValidAttrPayload } from './extension/attribute-parser.js'
 import { normalizeRefLabel } from './label-key.js'
 import {
   slugify,
@@ -196,6 +198,107 @@ function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) 
   }
   visit(doc.children)
   if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
+}
+
+const OPENER_OWNERS: Record<string, string> = { doc: 'the document', quote: 'its block quote', note: 'its footnote body',
+  dd: 'its description', colon: 'its fenced container' }
+
+// PART 0 S3: an opener past its owner's content column still opens there.
+function overindentedOpenerWarning(opener: OverindentedOpenerReport, start: number): LintWarning {
+  const past = opener.authoredColumn - opener.contentColumn
+  return { line: opener.line, column: opener.column, start, end: start + 1,
+    rule: 'block-opener-overindented',
+    message: `This ${opener.kind} is indented ${past} column${past === 1 ? '' : 's'} past the content column of ${OPENER_OWNERS[opener.owner] ?? 'its container'}, and it still opens a ${opener.kind}, measured from its own line. Remove the indentation to make the structure explicit, or escape the opener to keep the line as text.` }
+}
+
+const BARE_MARKERS = new Set(['*', '/', '_', '~', '='])
+const SPAN_NAMES: Record<string, string> = { '*': 'strong', '/': 'emphasis', '_': 'underline', '~': 'strikethrough', '=': 'highlight' }
+
+/**
+ * A bare closer glued to an attribute block reads two ways: the block attaches
+ * to the span the marker closes, or both stay text. Report the text reading,
+ * and the attaching one when the span also holds a literal same marker, so the
+ * pairing is not the visible one. Plain `*a*{.x}` is the canonical spelling.
+ */
+function collectMarkerBeforeAttributes(
+  source: string,
+  doc: Document,
+  out: LintWarning[],
+  toUtf16: (offset: number) => number,
+): void {
+  // AST offsets count codepoints of the source as given.
+  const cps = Array.from(source)
+  const lineStarts = [0]
+  cps.forEach((ch, i) => { if (ch === '\n' || (ch === '\r' && cps[i + 1] !== '\n')) lineStarts.push(i + 1) })
+  const lineOf = (offset: number): number => {
+    let lo = 0
+    let hi = lineStarts.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (lineStarts[mid]! <= offset) lo = mid
+      else hi = mid - 1
+    }
+    return lo
+  }
+  const escaped = (i: number): boolean => {
+    let n = 0
+    while (i - 1 - n >= 0 && cps[i - 1 - n] === '\\') n++
+    return n % 2 === 1
+  }
+  // End index (exclusive) of a valid attribute block opening at `i`.
+  const blockEnd = (i: number): number | undefined => {
+    if (cps[i] !== '{') return undefined
+    let quote: string | undefined
+    for (let j = i + 1; j < cps.length; j++) {
+      const ch = cps[j]!
+      if (ch === '\\') { j++; continue }
+      if (quote) { if (ch === quote) quote = undefined; continue }
+      if (ch === '"' || ch === "'") quote = ch
+      else if (ch === '{') return undefined
+      else if (ch === '}') return isValidAttrPayload(cps.slice(i + 1, j).join('')) ? j + 1 : undefined
+    }
+    return undefined
+  }
+  const report = (at: number, end: number, message: string): void => {
+    const line = lineOf(at)
+    out.push({ line: line + 1, column: at - lineStarts[line]! + 1, start: toUtf16(at), end: toUtf16(end),
+      rule: 'emphasis-marker-before-attributes', message })
+  }
+  walkDocument(doc, (node) => {
+    const pos = (node as Positioned).pos
+    if (pos?.startOffset === undefined || pos.endOffset === undefined) return
+    if (node.type === 'text') {
+      for (let i = pos.startOffset; i < pos.endOffset - 1; i++) {
+        const ch = cps[i]!
+        if (!BARE_MARKERS.has(ch) || escaped(i)) continue
+        const end = blockEnd(i + 1)
+        if (end === undefined || end > pos.endOffset) continue
+        report(i, end, `This ${ch} closes no span, so it and the attribute block after it stay text. ` +
+          `Brace the span you mean ({${ch}text${ch}}{…}) to attach the block, or escape the ${ch} to keep both as text.`)
+      }
+      return
+    }
+    const marker = cps[pos.startOffset]!
+    if (!(node as { attrs?: unknown }).attrs || !BARE_MARKERS.has(marker) || escaped(pos.startOffset)) return
+    const children = (node.children as Positioned[] | undefined) ?? []
+    let from = pos.startOffset + 1
+    for (const child of children) from = Math.max(from, child.pos?.endOffset ?? from)
+    let closer = -1
+    for (let j = from; j < pos.endOffset; j++) {
+      if (cps[j] === marker && !escaped(j) && cps[j + 1] === '{') { closer = j; break }
+    }
+    if (closer < 0) return
+    let inner = -1
+    for (let j = pos.startOffset + 1; j < closer; j++) {
+      if (cps[j] === marker && !escaped(j)) { inner = j; break }
+    }
+    if (inner < 0) return
+    const opener = lineOf(pos.startOffset)
+    report(closer, blockEnd(closer + 1) ?? closer + 1,
+      `This ${marker} closes the ${SPAN_NAMES[marker]} span that opens at line ${opener + 1}, column ${pos.startOffset - lineStarts[opener]! + 1}, ` +
+      `so the attribute block after it attaches to that whole span, which also holds a literal ${marker}. ` +
+      `Brace the span you mean ({${marker}text${marker}}{…}) or escape the inner ${marker} to make the pairing explicit.`)
+  })
 }
 
 const genericLinkText = new Set(['here', 'click here', 'read more'])
@@ -846,6 +949,7 @@ export function lintCarve(
   const unclosedContainers: UnclosedContainer[] = []
   const unclosedCodeFences: UnclosedCodeFence[] = []
   const refusedContinuationMarkers: RefusedContinuationMarker[] = []
+  const overindentedOpeners: OverindentedOpenerReport[] = []
   const invalidContainerMetadata: UnclosedContainer[] = []
   const danglingBlockAttributes: DanglingBlockAttributes[] = []
   const doc = parse(source, {
@@ -853,6 +957,7 @@ export function lintCarve(
     onUnclosedContainer: (container) => unclosedContainers.push(container),
     onUnclosedCodeFence: (fence) => unclosedCodeFences.push(fence),
     onRefusedContinuationMarker: (marker) => refusedContinuationMarkers.push(marker),
+    onOverindentedOpener: (opener) => overindentedOpeners.push(opener),
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
@@ -1004,6 +1109,8 @@ export function lintCarve(
       rule: 'continuation-marker-refused',
       message: `This + attaches nothing because ${reasons[marker.reason]}. ${refusedMarkerEffect(marker)}` })
   }
+
+  out.push(...overindentedOpeners.map((opener) => overindentedOpenerWarning(opener, sourceOffset(opener.line, opener.column))))
 
   // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause
   // landed and carve-js emitted it nowhere, so a floating attribute that reached
@@ -1462,6 +1569,7 @@ export function lintCarve(
       message: `This + attaches nothing because ${reason}. It remains text in the block quote.` })
   }
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
+  collectMarkerBeforeAttributes(source, doc, out, toUtf16)
   const termFoldLines = collectTermFoldWarnings(source, doc, out)
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
   collectOrderedListSplitWarnings(source, doc, out)

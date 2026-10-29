@@ -579,6 +579,7 @@ export type {
   DanglingBlockAttributes,
   ParseOptions,
   RefusedContinuationMarker,
+  OverindentedOpenerReport,
   StrippedLineOrigin,
   UnclosedCodeFence,
   UnclosedContainer,

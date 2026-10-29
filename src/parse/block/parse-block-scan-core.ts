@@ -88,6 +88,8 @@ export interface ParseOptions {
   onUnclosedContainer?: (container: UnclosedContainer) => void
   onUnclosedCodeFence?: (fence: UnclosedCodeFence) => void
   onRefusedContinuationMarker?: (marker: RefusedContinuationMarker) => void
+  /** Reports a block opener PART 0 S3 opened past its owner's content column. */
+  onOverindentedOpener?: (opener: OverindentedOpenerReport) => void
   /** Reports a recognized container whose malformed metadata was dropped. */
   onInvalidContainerMetadata?: (container: UnclosedContainer) => void
   /**
@@ -128,6 +130,15 @@ export interface UnclosedCodeFence {
   marker: string
   endLine: number
   reason: 'document' | 'container' | 'continuation'
+}
+
+export interface OverindentedOpenerReport {
+  line: number
+  column: number
+  kind: string
+  owner: string
+  contentColumn: number
+  authoredColumn: number
 }
 
 export interface RefusedContinuationMarker {
