@@ -2457,7 +2457,7 @@ export class ParseSession extends InlineParseSession {
           (sourceColumn(physical) === lexer.hostMarkerColumn ||
             lexer.hostBody === 'list' && markerDecision(lexer, lexer.pos).reason === 'wrong-column') &&
           isContinuationMarker(ln) &&
-          (isPhysicalContinuationMarker(physical) || isContinuationMarker(physical.trimStart()))) {
+          (isPhysicalContinuationMarker(physical) || isContinuationMarker(sourceQuoteBody(physical)))) {
         lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
           lexer.hostBody === 'list' ? 'list item' : 'document', 'wrong-column')
       }
