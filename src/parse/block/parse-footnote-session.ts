@@ -382,7 +382,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       trackItemLazyState(tracked, lazyState, (marker, extra = 0) => itemFenceHasCloser(lexer, marker, lexer.pos,
         footnoteFenceColumn(content, bodyColumn, hasContainedItem) + extra,
         new Map(), (line, blank, index) => blank && indentColumns(line, bodyColumn) < bodyColumn ||
-          lexer.quoteLazyLines.has(lexer.lineNumber(index))), true, undefined,
+          lexer.quoteLazyLines.has(lexer.lineNumber(index))), true, (run) => commentBlockHasCloser(lexer, run),
         framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false })
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)

@@ -270,9 +270,6 @@
     "keeps the definition term column after its comment: comment-term-claude-755": "#3922"
   },
   "definition-description-code-ownership.test.ts": {
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [13]": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [37]": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'authored-code-host-controls.json:auth…' [61]": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-282'": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-371'": "#3922",
     "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922",
@@ -469,6 +466,7 @@
     "preserves paragraph ownership after nested note CODE: nested-36": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-732": "#3919",
+    "preserves paragraph ownership after nested note CODE: nested-closer-733": "#3917",
     "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",

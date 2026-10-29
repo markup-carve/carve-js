@@ -573,6 +573,49 @@ export function codeCloserPossible(index: CloserIndex, marker: string, after: nu
   return index.scopedCode ? index.scopedCode(marker, after) : codeCloserPossibleIn(index.code, marker, after)
 }
 
+/**
+ * A code closer query that also honors columns: a run indented past its opener is
+ * payload (CARVE-P2-006), and one below the owner's content column has left the
+ * owner. Per fence character and indentation, the closer lines ascend with a
+ * suffix maximum of their run lengths.
+ */
+export function columnCodeCloserIndex(lines: readonly string[]): (marker: string, after: number, low: number, high: number) => boolean {
+  const byChar = new Map<string, Map<number, { at: number[]; longest: number[] }>>()
+  for (let i = 0; i < lines.length; i++) {
+    const f = RE_ANY_FENCE_CLOSER.exec(lines[i]!)
+    if (!f) continue
+    const run = f[1]!
+    let byIndent = byChar.get(run[0]!)
+    if (byIndent === undefined) byChar.set(run[0]!, byIndent = new Map())
+    const indent = indentColumns(lines[i]!)
+    let entry = byIndent.get(indent)
+    if (entry === undefined) byIndent.set(indent, entry = { at: [], longest: [] })
+    entry.at.push(i)
+    entry.longest.push(run.length)
+  }
+  for (const byIndent of byChar.values()) {
+    for (const entry of byIndent.values()) {
+      for (let k = entry.longest.length - 2; k >= 0; k--) entry.longest[k] = Math.max(entry.longest[k]!, entry.longest[k + 1]!)
+    }
+  }
+  return (marker, after, low, high) => {
+    const byIndent = byChar.get(marker[0]!)
+    if (byIndent === undefined) return false
+    for (const [indent, entry] of byIndent) {
+      if (indent < low || indent > high) continue
+      let lo = 0
+      let hi = entry.at.length
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (entry.at[mid]! <= after) lo = mid + 1
+        else hi = mid
+      }
+      if (lo < entry.at.length && entry.longest[lo]! >= marker.length) return true
+    }
+    return false
+  }
+}
+
 /** `codeCloserPossible` against a code index built over any closer pattern. */
 export function codeCloserPossibleIn(code: CloserIndex['code'], marker: string, after: number): boolean {
   const entry = code.get(marker[0]!)

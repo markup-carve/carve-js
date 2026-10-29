@@ -4,6 +4,7 @@ import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
 import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
+import { columnCodeCloserIndex } from '../block/parse-block-scan-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
@@ -46,8 +47,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     blockQuoteParagraphOpen,
     bodyHoldsOpenCommentSpan,
     bottomBlockLeavesParagraphOpen,
-    buildCloserIndex,
-    codeCloserPossible,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
@@ -1907,12 +1906,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A comment the note covered closed its paragraph.
       if (pendingNoteComments.size > 0) return true
       const claim = verbatimOnlyLazyState()
-      const claimClosers = buildCloserIndex(nested)
-      trackItemLazyState(content, claim, marker => codeCloserPossible(claimClosers, marker, -1), true, () => false,
+      const claimCloser = columnCodeCloserIndex(nested)
+      trackItemLazyState(content, claim, (marker, extra = 0) => claimCloser(marker, -1, extra, extra), true, () => false,
         { whitespace: 0, descendantFrames: true, terminatorFree: true })
       for (let index = 0; index < nested.length; index++) {
         const text = nested[index]!
-        trackItemLazyState(text, claim, marker => codeCloserPossible(claimClosers, marker, index), true, () => false,
+        trackItemLazyState(text, claim, (marker, extra = 0) => claimCloser(marker, index, extra, Math.max(extra, indentColumns(text))), true, () => false,
           { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
       }
       return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
@@ -3021,9 +3020,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A task item's marker-line note rebases the lines reaching its body at its own source column.
     const taskNoteShift = isTask && markerNoteItem ? markerNoteFloor - FOOTNOTE_BODY_COLUMN - contentCol : 0
     if (taskNoteShift > 0) {
+      // A line below the body has left the note, and so has every line after it.
       for (let k = 0; k < nested.length; k++) {
         const text = nested[k]!
-        if (!isBlankLine(text) && indentColumns(text) >= taskNoteShift + FOOTNOTE_BODY_COLUMN) nested[k] = sliceColumns(text, taskNoteShift, true)
+        if (isBlankLine(text)) continue
+        if (indentColumns(text) < taskNoteShift + FOOTNOTE_BODY_COLUMN) break
+        nested[k] = sliceColumns(text, taskNoteShift, true)
       }
     }
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
