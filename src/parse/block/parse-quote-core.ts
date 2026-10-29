@@ -408,6 +408,13 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
       at += 1 + description[1]!.length
       inner = description[2]!
       blockStart = true
+      // A note opening the description body is its own host.
+      const bodyNote = RE_FOOTNOTE_DEF.exec(inner)
+      if (bodyNote) {
+        host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note'); host.terms.push(false)
+        at += 2
+        inner = bodyNote[2]!
+      }
     }
     break
   }
@@ -420,14 +427,9 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
 
 // Track definition terms and lists opened by the line's body.
 function trackHostDefinitions(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
-  const { host, state, column } = q
+  const { host, column } = q
   const { inner, at, blockStart } = b
   if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
-  if (blockStart && host.kinds.at(-1) === 'item' && host.kinds.includes('note') &&
-      !opensCodeFence(inner) && colonFenceOpenerLen(inner) === null && !RE_DEFLIST_TERM.test(inner)) {
-    closeBlockQuoteParagraph(state)
-    return true
-  }
   if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
   else if (host.definitionList !== undefined && column <= host.definitionList &&
     host.kinds.at(-1) !== 'description') host.definitionList = undefined
@@ -472,8 +474,7 @@ function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdi
     return false
   }
   const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
-  if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
-      !(blockStart && host.kinds.at(-1) === 'note'))) {
+  if (absorbedBare || (width === null && /^:{3,}/.test(inner))) {
     state.mode = { kind: 'paragraph', absorbingFence: true }
     return true
   }

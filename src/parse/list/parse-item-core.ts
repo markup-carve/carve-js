@@ -118,6 +118,12 @@ export function isStackedFirstBlockQuoteMarker(line: string): boolean {
   return /^[ \t]*(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )+|: +|\[\^[^\]]+\]: +)(?:> )+\+[ \t]*$/.test(line.replace(/^(?:> )+/, ''))
 }
 
+/** A quoted line whose innermost new container is a note opened with `+` (CARVE-P9-067). */
+export function quotedNoteFirstBlockMarker(line: string): boolean {
+  return /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )*\[\^[^\]]+\]: +\+[ \t]*$/
+    .test(sourceQuoteBody(line).trimStart())
+}
+
 export function firstBlockOpenerContent(line: string): boolean {
   return firstBlockLastOpenerOffset(line) !== undefined
 }
@@ -1176,6 +1182,7 @@ export const listHelpers = {
   isPhysicalContinuationMarker,
   isRetainableLineComment,
   isStackedFirstBlockQuoteMarker,
+  quotedNoteFirstBlockMarker,
   isTableRow,
   itemFenceHasCloser,
   lazyContinuationEndsList,

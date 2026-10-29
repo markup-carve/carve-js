@@ -72,6 +72,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     isPhysicalContinuationMarker,
     isRetainableLineComment,
     isStackedFirstBlockQuoteMarker,
+    quotedNoteFirstBlockMarker,
     isTableRow,
     itemFenceHasCloser,
     lazyContinuationEndsList,
@@ -1501,6 +1502,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sourceColumn(precedingSource) > itemMarkerColumn &&
           sourceColumn(physicalFollower, itemQuoteDepth) > itemMarkerColumn &&
           sourceColumn(physicalFollower, itemQuoteDepth) < itemMarkerColumn + contentCol - baseIndent) return 'stop'
+      // A note's `+` also takes a non-list block at document column zero (CARVE-P9-067).
+      if (pendingBlankRun.count === 0 && precedingSource !== undefined && physicalFollower !== undefined &&
+          quotedNoteFirstBlockMarker(precedingBody) && sourceColumn(precedingSource) > itemMarkerColumn &&
+          indentColumns(physicalFollower) === 0 && (itemQuoteDepth === 0 || quotePrefixDepth(physicalFollower) === 0) &&
+          !isListMarkerLine(l.trimStart()) && !isBlankLine(l)) {
+        const pulled = session.collectAttachedListBlock(lexer, isItemAttachBoundary, 0, false, 0, 0)
+        nested.push(...pulled.lines)
+        nestedSourceLines.push(...pulled.lines)
+        nestedLineNumbers.push(...pulled.lineNumbers)
+        return 'continue'
+      }
       if (pendingBlankRun.count === 0 && precedingSource !== undefined && precedingContent !== undefined &&
           firstBlockOpenerContent(precedingContent) && sourceColumn(precedingSource) > itemMarkerColumn &&
           physicalFollower !== undefined && sourceColumn(physicalFollower, itemQuoteDepth) ===
@@ -2337,7 +2349,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
         isListMarkerLine(dedented.trimStart())
       if (noteParagraphOpen && !followsBlank && (markerNoteFirstText || continuedMarkerNoteText) && isListMarkerLine(dedented.trimStart())) noteParagraphMarkers.add(nested.length - 1)
-      trackedContent = markerNoteFirstText || continuedMarkerNoteText ? 'text' : dedented
+      // An absorbed colon run keeps its spelling so the run below it stays text (CARVE-P9-016).
+      trackedContent = (markerNoteFirstText || continuedMarkerNoteText) && !RE_COLON_RUN.test(dedented.trimStart())
+        ? 'text' : dedented
       markerNoteFirstText = false
       if (isMarker && lazyState.opaque === null) {
         const markerContent = markerFreeContent(dedented)
