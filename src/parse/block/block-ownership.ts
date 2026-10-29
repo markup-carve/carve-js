@@ -13,6 +13,9 @@ import {
 /** Where a rewritten line lost or gained source characters: `at` is the edited column. */
 export interface OwnershipCut { at: number; removed: number }
 
+/** An opener S3 read past its owner's content column; `char` indexes the input line. */
+export interface OverindentedOpener { index: number; char: number; kind: string; owner: string; contentColumn: number; column: number }
+
 interface Frame {
   kind: 'doc' | 'quote' | 'item' | 'note' | 'dd' | 'fence' | 'colon'
   col: number
@@ -35,6 +38,8 @@ interface Frame {
   termCut?: number
   lineBlock?: boolean | undefined
   span?: string | null
+  // Lint grouping: the line of the last table row read in this frame.
+  tableLine?: number
 }
 
 interface Form {
@@ -162,7 +167,7 @@ const quotedRest = (line: string): string => quotedMeasure(line).rest
  * the owner's content column, so the block readers only meet openers at a
  * content column. Indentation is only ever removed.
  */
-export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number> } {
+export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number>; overindented: OverindentedOpener[] } {
   const result = lines.slice(0, start)
   const cuts = new Map<number, OwnershipCut[]>()
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
@@ -173,6 +178,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   let afterPlus = false
   // Quote first-block `+` lines whose follower stands at an ineligible raw column.
   const refusedPlus = new Set<number>()
+  const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
     let src = lines[at]!
@@ -307,6 +313,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       owner.para = true
       if (!term) owner.last = 'para'
     } else {
+      if (!plusFollower) noteOpener(owner, form, owner.col)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
     }
@@ -345,6 +352,19 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       }
     }
 
+    // An opener past a non-item owner's content column. List items and markers have their own lint rules.
+    function noteOpener(owner: Frame, form: Form, contentColumn: number): void {
+      const kind = openerKind(form, m.rest)
+      if (kind === 'table row') {
+        const continuing = owner.tableLine === at - 1
+        owner.tableLine = at
+        if (continuing) return
+      }
+      if (!kind || owner.kind === 'item' || owner.kind === 'fence' || m.col <= contentColumn) return
+      overindented.push({ index: at, char: lines[at]!.length - m.rest.length, kind,
+        owner: owner.kind, contentColumn, column: m.col })
+    }
+
     // The rest of a marker line. Only a quote starts new coordinates, so only there can its content move.
     function content(frame: Frame, start: number, canon: number): void {
       if (m.rest === '' || frames.length > MAX_FRAMES) return
@@ -359,6 +379,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       }
       if (frame.kind === 'quote') {
         const col = m.col
+        noteOpener(frame, form, 0)
         lead(0)
         apply(frame, col, form, 0)
         return
@@ -368,7 +389,19 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
       apply(frame, col, form, canon + m.col)
     }
   }
-  return { lines: result, cuts, refusedPlus }
+  return { lines: result, cuts, refusedPlus, overindented }
+
+  function openerKind(form: Form, rest: string): string | undefined {
+    switch (form.kind) {
+      case 'quote': return 'block quote'
+      case 'colon': return 'colon fence'
+      case 'fence': return form.lineBlock ? 'line block' : COMMENT_FENCE.test(rest) ? undefined : 'code fence'
+      case 'term': return 'definition term'
+      case 'leaf': return HEADING.test(rest) ? 'heading' : RE_HR.test(rest) ? 'thematic break'
+        : isTableRow(rest) ? 'table row' : undefined
+      default: return undefined
+    }
+  }
 
   // The document column where `rest`, a suffix of `line`, starts.
   function docColumn(line: string, rest: string): number {
