@@ -868,7 +868,8 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
       const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''
-      io.writeErr(`${file}${at} ${loss.code} - ${loss.message}\n`)
+      const chain = loss.includedBy?.map(site => `${site.file}:${site.line}:${site.column}`).join(' > ')
+      io.writeErr(`${loss.file ?? file}${at} ${loss.code} - ${loss.message}${chain ? ` (included from ${chain})` : ''}\n`)
     }
     if (result.truncated) {
       io.writeErr(`${file}: ${effectiveTotal - effectiveLosses.length} additional render losses omitted from the bounded report\n`)
@@ -1191,6 +1192,16 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       throw e
     }
     if (!writeIncludeReport(values['report-includes'], expanded.dependencies, io)) return 2
+    const root = realpathSync(absoluteRoot(includeRoot!))
+    const display = (id: string): string => {
+      const path = relative(root, id)
+      return path === '..' || path.startsWith(`..${sep}`) ? id : path.split(sep).join('/')
+    }
+    for (const loss of result.losses) {
+      if (!loss.file || !loss.includedBy) continue
+      loss.file = display(loss.file)
+      loss.includedBy = loss.includedBy.map((site, index) => ({ ...site, file: index === 0 ? positionals[0] ?? '<stdin>' : display(site.file) }))
+    }
     return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
   }
 
