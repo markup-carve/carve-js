@@ -312,6 +312,53 @@ function collectEscapeUnits(ast: Document): object[] {
  * unparseable source must not throw out of the renderer, and the conservative
  * form is what the writer emitted before minimal escaping existed.
  */
+/**
+ * The writer's spellings of a multi-line verbatim span, in the order it tries
+ * them: the guard as the marker list places it, the guard on every continuation
+ * line, no guard, and each of the three padded.
+ */
+const VERBATIM_SPELLINGS = 6
+
+function verbatimPayloadKey(nodeType: string, content: string): string {
+  return `${nodeType}\u0000${content.replace(/\r\n?/g, '\n')}`
+}
+
+function verbatimPayloadCounts(root: unknown): Map<string, number> {
+  const counts = new Map<string, number>()
+  const stack: unknown[] = [root]
+  const seen = new Set<object>()
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (value === null || typeof value !== 'object' || seen.has(value)) continue
+    seen.add(value)
+    if (Array.isArray(value)) {
+      stack.push(...value)
+      continue
+    }
+    const record = value as Record<string, unknown>
+    const type = record['type']
+    const payload = type === 'code' ? record['value'] : type === 'raw_inline' || type === 'literal_inline' || type === 'math' ? record['content'] : undefined
+    if (typeof type === 'string' && typeof payload === 'string') {
+      const key = verbatimPayloadKey(type, payload)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    for (const [key, child] of Object.entries(record)) if (key !== 'pos' && typeof child === 'object') stack.push(child)
+  }
+  return counts
+}
+
+/** The multi-line verbatim payloads `out` does not read back as often as `ast` holds them. */
+function missingVerbatimPayloads(ast: Document, out: string, written: ReadonlyMap<string, InlineNode>): string[] {
+  let reread: Map<string, number>
+  try {
+    reread = verbatimPayloadCounts(parse(out))
+  } catch {
+    return [...written.keys()]
+  }
+  const held = verbatimPayloadCounts(ast)
+  return [...written.keys()].filter(key => (reread.get(key) ?? 0) < (held.get(key) ?? 0))
+}
+
 function treeOf(src: string): string | null {
   try {
     return stableJson(parse(src))
@@ -2646,6 +2693,35 @@ class CarveRenderSession {
   }
 
   renderCarve(ast: Document, opts: CarveRenderOptions = {}, parsedSource?: string): string {
+    // A multi-line verbatim span is checked against the parser, which is the only
+    // authority on whether a continuation line opens a block in its host; the
+    // spans that do not read back take their next spelling (carve-js#3939).
+    this.verbatimSpellings = new Map()
+    for (;;) {
+      this.multiLineVerbatim = new Map()
+      const out = this.renderCarveOnce(ast, opts, parsedSource)
+      if (this.multiLineVerbatim.size === 0) return out
+      const missing = missingVerbatimPayloads(ast, out, this.multiLineVerbatim)
+      if (missing.length === 0) return out
+      for (const key of missing) {
+        const next = (this.verbatimSpellings.get(key) ?? 0) + 1
+        if (next >= VERBATIM_SPELLINGS) {
+          const node = this.multiLineVerbatim.get(key)!
+          throw new SourceUnspellableError(node.type, 'a continuation line of the value opens a block in its host, and no spelling keeps it inside the span', node)
+        }
+        this.verbatimSpellings.set(key, next)
+      }
+    }
+  }
+
+  private verbatimSpellings = new Map<string, number>()
+  private multiLineVerbatim = new Map<string, InlineNode>()
+
+  private verbatimSpelling(nodeType: string, content: string): number {
+    return this.verbatimSpellings.get(verbatimPayloadKey(nodeType, content)) ?? 0
+  }
+
+  private renderCarveOnce(ast: Document, opts: CarveRenderOptions, parsedSource?: string): string {
     this.alignTables = opts.alignTables === true
     this.preserveTableSeparators = opts.preserveTableSeparators === true
     this.repeatedScopes = new WeakMap()
@@ -5137,11 +5213,16 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
-    if (this.termKeepsLineIndent && marker.test(written)) {
+    const payload = node.type === 'code' ? node.value : 'content' in node && typeof node.content === 'string' ? node.content : undefined
+    const guards = payload === undefined ? 0 : this.verbatimSpelling(nodeType, payload) % 3
+    // A blank value line has no spelling at all and stays the known carve-out it was.
+    if (payload !== undefined && ctx.lineBlockDepth === 0 && payload.includes('\n') && !/\n[ \t]*(?:\n|$)/.test(payload)) this.multiLineVerbatim.set(verbatimPayloadKey(nodeType, payload), node)
+    const listed = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
+    const marker = guards === 1 ? /\n(?=[^\n])/g : listed
+    if (this.termKeepsLineIndent && listed.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
-    if (ctx.lineBlockDepth > 0 || !written.includes('\n') || !marker.test(written)) return written
+    if (ctx.lineBlockDepth > 0 || guards === 2 || !written.includes('\n') || !marker.test(written)) return written
     marker.lastIndex = 0
     const ownsDescriptionColumn = this.descriptionParagraph && nodeType === 'code' && /^`{3,}\n/.test(written)
     const guard = `${this.sentinels[6]}${ownsDescriptionColumn ? 'd' : 'g'}${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
@@ -5166,13 +5247,14 @@ class CarveRenderSession {
     }
     // A bare colon run under a container paragraph opens or closes a container at
     // every column (§10 I1), so the span has no spelling (CARVE-P11-046, carve#3922).
-    if (ctx !== undefined && ctx.lineBlockDepth === 0 && inContainer(ctx) && /\n[ \t]*:{3,}[ \t]*(?=\n|$)/.test(content)) {
+    if (ctx !== undefined && ctx.lineBlockDepth === 0 && inContainer(ctx) && /\n[ \t]*:{3,}[ \t]*(?=\n)/.test(content)) {
       throw new SourceUnspellableError(nodeType, 'a verbatim line holding only a colon run cannot stay inline in a container paragraph')
     }
     // Description markers stay at the content column and need a fence run to remain inline.
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
     const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad = codeSpanNeedsPad(content)
+      || (this.verbatimSpelling(nodeType, content) >= 3 && !/^[\r\n]|[\r\n]$/.test(content))
     // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
     // writer refuses it instead of emitting the nearest form (carve-js#1344).
     // Same throw path as the empty `raw_inline`, and the same sentence: the
@@ -5303,7 +5385,7 @@ class CarveRenderSession {
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}d[0-9]+${this.sentinels[6]}`, 'gm'), '$1')
-        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[\\-*0-9a-zA-Z\\x60])`, 'gm'), (_match, prefix: string, marker: string) =>
+        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([^\\n])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replace(new RegExp(this.verbatimLineGuardPattern(), 'g'), '')
