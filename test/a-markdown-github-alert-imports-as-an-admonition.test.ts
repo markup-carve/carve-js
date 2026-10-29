@@ -95,6 +95,31 @@ describe('the migration report for a GitHub alert', () => {
     expect(report.diagnostics.some(row => row.code === 'markdown-block-quote')).toBe(false)
   })
 
+  it.each([
+    ['only a lazy continuation line', '> [!NOTE]\nlazy\n', '::: note\nlazy\n:::\n'],
+    ['two spaces after the marker', '>  [!NOTE]\n> x\n', '::: note\nx\n:::\n'],
+  ])('records the conversion for a body of %s', (_, markdown, carve) => {
+    const { value, report } = migrateMarkdown(markdown)
+    expect(value).toBe(carve)
+    expect(report.diagnostics.map(row => [row.code, row.fidelity, row.path])).toEqual([
+      ['markdown-github-alert', 'normalized', 'line:1'],
+      ['markdown-paragraph', 'preserved', 'line:2'],
+    ])
+  })
+
+  it.each([
+    ['opening the document', '>\n> [!NOTE]\n> x\n', '> [!NOTE]\n> x\n', 1],
+    ['after a heading', '# T\n\n>\n> [!NOTE]\n> x\n', '# T\n\n> [!NOTE]\n> x\n', 3],
+  ])('keeps a quote with an empty line above the label %s', (_, markdown, carve, line) => {
+    const { value, report } = migrateMarkdown(markdown)
+    expect(value).toBe(carve)
+    expect(report.diagnostics.filter(row => row.code !== 'markdown-atx-heading').map(row => [row.code, row.fidelity, row.path])).toEqual([
+      ['markdown-block-quote', 'preserved', `line:${line}`],
+      ['markdown-paragraph', 'preserved', `line:${line + 1}`],
+      ['markdown-soft-break', 'preserved', `line:${line + 1}`],
+    ])
+  })
+
   it('reports a quote that stays a quote as a block quote', () => {
     const { report } = migrateMarkdown('> [!note]\n> x\n')
     expect(report.diagnostics.some(row => row.code === 'markdown-github-alert')).toBe(false)
