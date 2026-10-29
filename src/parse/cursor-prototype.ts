@@ -46,6 +46,7 @@ interface ContainerOwner {
   readonly allowUnclosedFence?: boolean
   readonly fenceBoundary?: SourceLine
   readonly listRootPrefix?: number
+  readonly colonCloser?: number
   readonly parent?: ContainerOwner
 }
 const ROOT_OWNER: ContainerOwner = { kind: 'root', inList: false }
@@ -4281,7 +4282,8 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   const after = cursor.peek(2)
   if (line.plusAfterPara && body.length === 1 && body[0]!.number === line.number - 1 &&
       quotedLiteralListMarker(body[0]!.text) &&
-      follower && isBlockStart(follower.text) && !/^:{3,}[ \t]*$/.test(follower.text)) return true
+      follower && isBlockStart(follower.text) &&
+      quotePlusFollowerBlockOwned(cursor.owner, follower.text, after)) return true
   const plain = plainQuoteText(follower?.text ?? '')
   const firstBody = body[0]
   const nestedQuote = body.length === 1 && firstBody !== undefined &&
@@ -4305,6 +4307,15 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
       attachedMarker?.indent === 0 && quotedAfter !== undefined &&
         (!resumedMarker || boundedResumedList) ||
       plain && isBlockStart(after.text) && !RE_BLOCKQUOTE.test(after.text))
+}
+
+function quotePlusFollowerBlockOwned(owner: ContainerOwner, text: string,
+  after: SourceLine | undefined): boolean {
+  const colon = /^(:{3,})[ \t]*$/.exec(text)
+  if (!colon) return true
+  return (owner.kind === 'root' || (owner.kind === 'colon' &&
+    owner.colonCloser !== undefined && owner.colonCloser !== colon[1]!.length)) &&
+    (!after || isBlankLine(after.text))
 }
 
 function takeQuoteLazyBoundaryTail(cursor: Cursor, body: SourceLine[],
@@ -4371,7 +4382,10 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
   if (!line) return undefined
   if (line.claimedQuoteLazy) return cursor.take()
   const previous = body.at(-1)
-  if (cursor.owner.kind === 'root' && body.length === 1 && line.plusAfterPara &&
+  const physicalFollower = cursor.physicalLines[line.number]
+  if ((cursor.owner.kind === 'root' || (cursor.owner.kind === 'colon' &&
+      (!physicalFollower || isBlankLine(physicalFollower.text)))) &&
+      body.length === 1 && line.plusAfterPara &&
       line.text === '+' && previous?.number === line.number - 1 &&
       quotedLiteralListMarker(previous.text) &&
       (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))) {
@@ -4423,6 +4437,20 @@ function quotedLiteralListMarker(text: string): boolean {
   return text[0] === '>' && listMarker(text.slice(1))?.indent === 0
 }
 
+function skipQuotePlusAtColonCloser(cursor: Cursor, body: SourceLine[], line: SourceLine): boolean {
+  const width = cursor.owner.colonCloser
+  const follower = cursor.physicalLines[line.number]?.text
+  if (cursor.owner.kind !== 'colon' || width === undefined || cursor.peek(1) ||
+      !line.plusAfterPara || line.text !== '+' || body.length !== 1 ||
+      body[0]!.number !== line.number - 1 ||
+      !quotedLiteralListMarker(body[0]!.text) || !follower?.startsWith(':'.repeat(width)) ||
+      !/^[ \t]*$/.test(follower.slice(width))) {
+    return false
+  }
+  cursor.take()
+  return true
+}
+
 function quoteLazyBodyLine(line: SourceLine): SourceLine {
   return listMarker(line.text) || (line.quoteParaLazy && /^>>(?:[ \t]|$)/.test(line.text)) ?
     { ...line, lazyText: true } : line
@@ -4444,6 +4472,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
   let attachedListReturn = false
   while (cursor.peek()) {
     const line = cursor.peek()!
+    if (skipQuotePlusAtColonCloser(cursor, body, line)) continue
     const leadingPlusFollower = takeLeadingPlusQuoteFollower(cursor, body)
     if (leadingPlusFollower) {
       last = leadingPlusFollower
@@ -5593,7 +5622,8 @@ function parseColonAtCursor(cursor: Cursor, inline: CursorInline,
     } })
   }
   const close = cursor.peek() ? cursor.take() : body.at(-1) ?? first
-  const owner = childOwner(cursor.owner, 'colon', false, boundary !== undefined, boundary)
+  const owner: ContainerOwner = { ...childOwner(cursor.owner, 'colon', false,
+    boundary !== undefined, boundary), colonCloser: opener[1]!.length }
   const children = parseBlocks(new Cursor(body, undefined,
     figureGroupOwner(owner, figureGroup), cursor.physicalLines),
   inline, definitionNodes, depth + 1, false,

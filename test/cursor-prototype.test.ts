@@ -2615,6 +2615,14 @@ describe('experimental block cursor', () => {
     '> >- q\n+\ntext\n',
     '::: note\n> >- q\n+\n# H\n:::\n',
     '>\t- q\n+\n# H\n',
+    '> >- q\n+\n:::\n',
+    '::: note\n> >- q\n+\n\n:::\n',
+    '::: note\n> >- q\n+\n',
+    '::: note\n> >- q\n+\n:::\n',
+    ':::: note\n> >- q\n+\n:::\n',
+    ':::: note\n> >- q\n+\n::::\n',
+    '::: figure\n> >- q\n+\n:::\n',
+    '> >- q\n+\n:::\n\ntext\n',
   ])('resolves a quoted paragraph plus by its following block: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
