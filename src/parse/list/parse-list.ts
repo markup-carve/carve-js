@@ -1479,9 +1479,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const physicalAttributeLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
       // An opener indented below this item's content column, or one an enclosing item
       // admitted as lazy, is paragraph text, so its closer ends no paragraph (PART 0 O2, O3).
-      const lazyAttributeOpener = wrappedAttribute.attrRun === null && (l.startsWith(LAZY_FRAME) ||
-        indentColumns(l) > 0 && (admission.kind === 'below' || admission.kind === 'outside' ||
-          lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
+      const lazyAttributeOpener = wrappedAttribute.attrRun === null &&
+        opensWrappedAttributeBlock(stripLazyFrame(l).trimStart()) && (l.startsWith(LAZY_FRAME) ||
+          indentColumns(l) > 0 && (admission.kind === 'below' || admission.kind === 'outside' ||
+            lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
       if (quotePrefixDepth(physicalAttributeLine) < itemQuoteDepth) wrappedAttribute.attrRun = null
       else if (lazyAttributeOpener) {
         // Not a run: the line reads as text.
@@ -2865,7 +2866,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
       } else if (indentColumns(l, contentCol) < contentCol &&
           (lineOpensBlock(l.replace(/^[ \t]+/, '')) || isBlockAttributeLine(l.trimStart()) ||
-            indentColumns(l) > 0 && opensWrappedAttributeBlock(l.trimStart()))) {
+            opensWrappedAttributeBlock(l.trimStart()) && indentColumns(l) > 0)) {
         // A below-column opener stays text; comments keep their source column.
         const flushed = l.replace(/^[ \t]+/, '')
         // After a retaining comment the body owns the opener (carve#3285).
