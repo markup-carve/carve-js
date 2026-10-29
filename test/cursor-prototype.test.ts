@@ -2594,8 +2594,18 @@ describe('experimental block cursor', () => {
     '  - c\n    b\n>> - z\n>> 1. y\n',
     '[^f]: note\n>> - z\n',
     '  [^g]: more\n>> 1. y\n',
+    '::: note\n- a\n>> - z\n',
+    ':::: o\n::: i\n- a\n>> - z\n',
+    '::: note\n- a\n\n>> - z\n',
   ])('keeps an unspaced quote-shaped line with its open owner: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> ::: note\n> - a\n>> - z\n',
+    '- x\n  ::: note\n  - a\n>> - z\n',
+  ])('declines an ambiguous nested colon owner: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
   it.each(['> :  d\n   :  b\n', '> :  d\n      :  b\n'])

@@ -3329,8 +3329,10 @@ function foldedListOwnerLine(cursor: Cursor, frame: ListCursorFrame,
     return foldedNestedParagraphLine(frame.body, line)
   }
   const event = line.event
-  if (depth === 0 && stack.length === 1 && reachedPrefix === undefined &&
-      event?.lazy && event.reached === 'doc' && event.missed.length === 1 &&
+  if (stack.length === 1 && reachedPrefix === undefined && event?.lazy &&
+      (cursor.owner.kind === 'root' && depth === 0 && event.reached === 'doc' ||
+        cursor.owner.kind === 'colon' && event.reached === 'colon') &&
+      event.missed.length === 1 &&
       event.missed[0] === 'item' && event.kind === 'text' && line.text[0] !== '{' &&
       frame.body.at(-1)?.number === line.number - 1 &&
       frame.body.every((part) => plainQuoteText(part.text))) {
