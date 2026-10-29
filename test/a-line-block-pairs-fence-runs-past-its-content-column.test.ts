@@ -129,8 +129,8 @@ for (const prefix of ['', '> ']) {
     expect(formatted).toContain(prefix + '    ```\n' + prefix + '  :::\n')
     expect(carveToHtml(formatted)).toBe(carveToHtml(source))
     expect(carveToCarve(formatted)).toBe(formatted)
-    const imported = htmlToCarve(carveToHtml(source)).value
-    expect(carveToCarve(imported)).toBe(imported)
+    // A `:::`-only code line in a container paragraph has no spelling (CARVE-P11-046, carve#3922).
+    expect(() => htmlToCarve(carveToHtml(source))).toThrow(SourceUnspellableError)
   })
 }
 

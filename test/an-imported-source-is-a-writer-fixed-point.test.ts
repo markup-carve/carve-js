@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { htmlToCarve, carveToCarve, HtmlImportLimitError } from '../src/index.js'
+import { htmlToCarve, carveToCarve, HtmlImportLimitError, SourceUnspellableError } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -70,6 +70,13 @@ const NOT_A_FIXED_POINT = new Map<string, string>([
  */
 const REFUSED = new Set<string>(['182-openers-past-the-nesting-cap-are-one-paragraph'])
 
+// A `:::`-only code line in a container paragraph has no spelling, so the
+// writer refuses it (CARVE-P11-046, ruled on markup-carve/carve#3922).
+const UNSPELLABLE = new Set<string>([
+  '561-a-line-block-payload-span-pairs-past-the-content-column',
+  '561-a-line-block-payload-span-pairs-past-the-content-column-2',
+])
+
 describe('an imported source is a carve fmt fixed point', () => {
   for (const name of cases) {
     const html = readFileSync(resolve(corpusDir, `${name}.html`), 'utf8')
@@ -78,6 +85,12 @@ describe('an imported source is a carve fmt fixed point', () => {
     if (REFUSED.has(name)) {
       it(`${name}: the importer refuses it, so there is no source to check`, () => {
         expect(() => htmlToCarve(html)).toThrow(HtmlImportLimitError)
+      })
+      continue
+    }
+    if (UNSPELLABLE.has(name)) {
+      it(`${name}: the writer refuses its value, so there is no source to check`, () => {
+        expect(() => htmlToCarve(html)).toThrow(SourceUnspellableError)
       })
       continue
     }
@@ -97,7 +110,7 @@ describe('the carve-out list', () => {
     // number, which shifts whenever a section is inserted upstream, so an entry
     // goes stale without anything in the diff saying so (#1363).
     const known = new Set(cases)
-    const orphaned = [...NOT_A_FIXED_POINT.keys(), ...REFUSED].filter((n) => !known.has(n)).sort()
+    const orphaned = [...NOT_A_FIXED_POINT.keys(), ...REFUSED, ...UNSPELLABLE].filter((n) => !known.has(n)).sort()
     expect(orphaned, 'entries naming no corpus document').toEqual([])
   })
 
