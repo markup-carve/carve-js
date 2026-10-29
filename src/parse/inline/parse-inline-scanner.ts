@@ -329,7 +329,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     const sharedSlots: { first: number; ends?: Map<number, number> } | undefined =
       firstLinkTail === -1 ? undefined : { first: firstLinkTail + 1 }
     const bracketClose: BracketClose = text.includes('[') ?
-      (sharedSlots ? buildBracketMap(text, false, undefined, sharedSlots) : buildBracketMap(text)) :
+      buildBracketMap(text, false, undefined, sharedSlots, !inFootnote) :
       () => undefined
     // Suffix tables so a tail regex is only run when its mandatory close
     // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
@@ -654,7 +654,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   // a nested bracket (e.g. `![a [b] c](/u)`). Alt is scalar text with punctuation escapes.
   function scanImage(s: InlineScan): boolean {
     const { text, i } = s
-    if (text[i + 1] !== '[') return false
+    if (text[i + 1] !== '[' || s.bracketClose.footnotes?.has(i + 1)) return false
     const closeAbs = s.bracketClose(i + 1)
     const close = closeAbs === undefined ? -1 : closeAbs - i
     if (close <= 1) return false
@@ -713,7 +713,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   // parsed with footnote recognition disabled.
   function scanInlineFootnote(s: InlineScan): boolean {
     const { text, i, session } = s
-    if (s.inFootnote || text[i + 1] !== '[') return false
+    if (s.inFootnote || text[i + 1] !== '[' || s.bracketClose.footnotes?.has(i + 1)) return false
     const close = s.bracketClose(i + 1)
     if (close === undefined || trimStructural(text.slice(i + 2, close)) === '') return false
     flush(s)
@@ -1082,7 +1082,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanEmphasis(s: InlineScan): boolean {
     const { text, i } = s
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
-      s.emphasisNoClose ??= newEmphasisMemo(), s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0)
+      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0)
     if (!em) return false
     flush(s)
     const node = helpers.inlineDepth >= MAX_NESTING_DEPTH ? { type: 'text', value: text.slice(i, em.end) } as Text : em.node

@@ -1035,6 +1035,12 @@ export function classifyQuotedLine(
  * line falls through to a paragraph and the `{…}` renders literally, matching
  * the inline trailing-attribute rule (and carve-php).
  */
+function imageAltCloses(line: string, altLength: number): boolean {
+  const open = line.indexOf('[')
+  const close = buildBracketMap(line)
+  return close(open) === open + 1 + altLength && !close.footnotes?.has(open)
+}
+
 export function isBlockImageLine(line: string): boolean {
   const m = RE_BARE_IMAGE.exec(line)
   // A trailing attr block must be a valid, non-empty payload; a digit-first /
@@ -1053,7 +1059,7 @@ export function isBlockImageLine(line: string): boolean {
     (m[2] === '' || m[3] !== undefined || m[4] !== undefined ||
       line[line.indexOf('](') + 2 + m[2]!.length] === ')') &&
     // Check the whole line because opaque spans can extend beyond the label.
-    buildBracketMap(line)(line.indexOf('[')) === line.indexOf('[') + 1 + m[1]!.length &&
+    imageAltCloses(line, m[1]!.length) &&
     (m[2] === '' || linkDestinationValue(m[2]!) !== null) &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )

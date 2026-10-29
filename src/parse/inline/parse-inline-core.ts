@@ -451,6 +451,8 @@ export interface EmphasisMatch {
 }
 
 export interface EmphasisMemo {
+  // Inside an inline note: a `[^` there is no footnote reference.
+  noteBody?: boolean
   // Per delimiter, scan positions known to reach no closer. Not a single bound:
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
@@ -561,7 +563,7 @@ export function newEmphasisMemo(): EmphasisMemo {
 
 /** `buildBracketMap` over one inline text, built at most once per scan. */
 export function emphasisBrackets(text: string, memo: EmphasisMemo): BracketClose {
-  memo.brackets ??= text.includes('[') ? buildBracketMap(text) : () => undefined
+  memo.brackets ??= text.includes('[') ? buildBracketMap(text, false, undefined, undefined, memo.noteBody !== true) : () => undefined
 
   return memo.brackets
 }

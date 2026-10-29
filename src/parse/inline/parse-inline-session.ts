@@ -193,8 +193,11 @@ export class InlineParseSession {
       for (const [at, end] of atomicLinkRegions(text)) if (!hosts.has(at)) hosts.set(at, end)
       for (let at = 0; at < text.length; at++) {
         const marker = text[at + 1]
-        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitBracedOpener(text, at)) continue
-        const close = this.bracedPairEnd(text, at, `${marker}}`)
+        if (text[at] !== '{' || marker === undefined || splitBracedOpener(text, at)) continue
+        // Matched `{+ +}` and `{- -}` frames are E2a boundaries too (section 22).
+        const critic = marker === '+' || marker === '-'
+        if (!critic && FORCED_TYPE[marker] === undefined) continue
+        const close = critic ? this.criticPairEnd(text, at, `${marker}}` as '+}' | '-}') : this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
       }
       labels.sort((a, b) => a[0] - b[0])

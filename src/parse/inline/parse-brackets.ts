@@ -41,8 +41,9 @@ export function rawBracketRunCloses(text: string): boolean {
 /** Image alt keeps delimited comments literal and editorial comments opaque. */
 export function rawImageBracketRunCloses(text: string): boolean {
   const structural = new Set<number>()
-  const closes = buildBracketMap(`![${text}]`, false, structural)(1)
-  return closes === text.length + 2 && !structural.has(-1)
+  // The destination lets a `[^` alt read as the image it is written in.
+  const close = buildBracketMap(`![${text}](u)`, false, structural)
+  return close(1) === text.length + 2 && !close.footnotes?.has(1) && !structural.has(-1)
 }
 
 /** The start of the last maximal backtick run of each length. */
@@ -58,8 +59,11 @@ function lastBacktickRunStarts(s: string): Map<number, number> {
   return last
 }
 
-/** The balancing `]` of the `[` at an offset, or undefined. */
-export type BracketClose = (open: number) => number | undefined
+/**
+ * The balancing `]` of the `[` at an offset, or undefined. `footnotes` holds
+ * each `[` after a `^` or `!` that closes as a footnote reference instead.
+ */
+export type BracketClose = ((open: number) => number | undefined) & { footnotes?: ReadonlySet<number> }
 
 /**
  * How many characters the per-bracket scans below may walk in one text, as a
@@ -82,6 +86,8 @@ export function buildBracketMap(
   outsideOnly = false,
   structural?: Set<number>,
   sharedSlots?: { first: number; ends?: Map<number, number> },
+  // False inside an inline note, where no `[^` is a reference (PART 9 §16).
+  footnoteRefs = true,
 ): BracketClose {
   const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
   const closedRunEnd = (j: number, openLen: number): number | undefined =>
@@ -117,69 +123,137 @@ export function buildBracketMap(
     if (sharedSlots) return (sharedSlots.ends ??= destinationSlotEnds(s, sharedSlots.first)).get(j + 1)
     return (slotEnds ??= destinationSlotEnds(s)).get(j + 1)
   }
-  const map = new Map<number, number>()
-  // Closed verbatim spans the pass skipped, as [content start, end].
-  const spans: Array<[number, number]> = []
-  const stack: number[] = []
-  // Most inline runs have no image label. Avoid tracking its nesting there.
-  const imageAlt: boolean[] | undefined = s.includes('![') ? [] : undefined
-  let lastBang = -1
-  for (let j = 0; j < s.length; j++) {
-    const ch = s[j]
-    if (ch !== '\\' && ch !== '`' && ch !== '{' && ch !== '<' &&
-        ch !== '!' && ch !== '[' && ch !== ']') continue
-    if (ch === '\\') {
-      j++
-      continue
+  // The first `]` at or after each offset, or -1 where a newline comes first.
+  let labelStops: Int32Array | undefined
+  const stops = (): Int32Array => {
+    if (labelStops !== undefined) return labelStops
+    labelStops = new Int32Array(s.length + 1)
+    labelStops[s.length] = -1
+    for (let k = s.length - 1; k >= 0; k--) {
+      const c = s[k]
+      labelStops[k] = c === ']' ? k : c === '\n' || c === '\r' ? -1 : labelStops[k + 1]!
     }
-    // A `[` or `]` inside a verbatim span is literal text. An unclosed run
-    // swallows every later `]` for a label opened before it.
-    if (ch === '`') {
-      let openLen = 1
-      while (s[j + openLen] === '`') openLen++
-      const spanEnd = closedRunEnd(j, openLen)
-      if (spanEnd !== undefined) {
-        spans.push([j + openLen, spanEnd])
-        j = spanEnd - 1
-      } else {
-        structural?.add(-1)
-        stack.length = 0
-        if (imageAlt) imageAlt.length = 0
-        j += openLen - 1
-      }
-      continue
-    }
-    // A delimited or editorial comment is opaque: its content is discarded or
-    // literal, so a `]` inside cannot close a label (carve#403). An unclosed
-    // opener is not a comment and is left alone.
-    const inImageAlt = imageAlt ? (imageAlt[imageAlt.length - 1] ?? false) : false
-    const commentEnd = ch === '{' ? opaqueEnd(j, inImageAlt) : undefined
-    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
-    if (commentEnd !== undefined) {
-      j = commentEnd - 1
-      continue
-    }
-    const linkEnd = ch === '<' ? autolinkEnd(j) : undefined
-    if (linkEnd !== undefined) {
-      j = linkEnd - 1
-      continue
-    }
-    if (imageAlt && ch === '!') lastBang = j
-    if (ch === '[') {
-      structural?.add(j)
-      stack.push(j)
-      imageAlt?.push(inImageAlt || (j > 0 && lastBang === j - 1))
-    } else if (ch === ']') {
-      structural?.add(j)
-      const open = stack.pop()
-      imageAlt?.pop()
-      if (open !== undefined) {
-        map.set(open, j)
-        const slotEnd = stack.length > 0 ? nestedSlotEnd(j) : undefined
-        if (slotEnd !== undefined) j = slotEnd - 1
-      }
-    }
+    return labelStops
   }
+  const footnoteLabelEnd = (j: number): number => {
+    if (s[j + 1] !== '^') return -1
+    const end = stops()[j + 2]!
+    return end > j + 2 ? end : -1
+  }
+  // An inline note's content starts with `^`, so a closed one always forms. An
+  // image needs a destination or a reference label after its alt.
+  const ownerForms = (open: number, close: number): boolean => {
+    if (s[open - 1] === '^') return true
+    if (s[close + 1] === '(') return (slotEnds ??= destinationSlotEnds(s)).has(close + 1)
+    return s[close + 1] === '[' && stops()[close + 2]! >= close + 2
+  }
+  let map = new Map<number, number>()
+  // Closed verbatim spans the pass skipped, as [content start, end].
+  let spans: Array<[number, number]> = []
+  const hasFootnote = footnoteRefs && s.includes('[^')
+  // `literal`: openers a first pass left unclosed. They are text, so a `[^`
+  // after one is read at the top level, as the grammar does after it fails.
+  // `demoted`: a note or image opener whose construct does not form.
+  const owners: number[] = []
+  const footnotes = new Set<number>()
+  const walk = (structural: Set<number> | undefined, literal?: Set<number>, demoted?: Set<number>): number[] => {
+    const unclosed: number[] = []
+    const stack: number[] = []
+    // Most inline runs have no image label. Avoid tracking its nesting there.
+    const imageAlt: boolean[] | undefined = s.includes('![') ? [] : undefined
+    let lastBang = -1
+    let lastEscaped = -1
+    for (let j = 0; j < s.length; j++) {
+      const ch = s[j]
+      if (ch !== '\\' && ch !== '`' && ch !== '{' && ch !== '<' &&
+          ch !== '!' && ch !== '[' && ch !== ']') continue
+      if (ch === '\\') {
+        lastEscaped = ++j
+        continue
+      }
+      // A `[` or `]` inside a verbatim span is literal text. An unclosed run
+      // swallows every later `]` for a label opened before it.
+      if (ch === '`') {
+        let openLen = 1
+        while (s[j + openLen] === '`') openLen++
+        const spanEnd = closedRunEnd(j, openLen)
+        if (spanEnd !== undefined) {
+          spans.push([j + openLen, spanEnd])
+          j = spanEnd - 1
+        } else {
+          structural?.add(-1)
+          for (const open of stack) unclosed.push(open)
+          stack.length = 0
+          if (imageAlt) imageAlt.length = 0
+          j += openLen - 1
+        }
+        continue
+      }
+      // A delimited or editorial comment is opaque: its content is discarded or
+      // literal, so a `]` inside cannot close a label (carve#403). An unclosed
+      // opener is not a comment and is left alone.
+      const inImageAlt = imageAlt ? (imageAlt[imageAlt.length - 1] ?? false) : false
+      const commentEnd = ch === '{' ? opaqueEnd(j, inImageAlt) : undefined
+      if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
+      if (commentEnd !== undefined) {
+        j = commentEnd - 1
+        continue
+      }
+      const linkEnd = ch === '<' ? autolinkEnd(j) : undefined
+      if (linkEnd !== undefined) {
+        j = linkEnd - 1
+        continue
+      }
+      if (imageAlt && ch === '!') lastBang = j
+      // A `[^` run is a footnote reference before bracket scanning (PART 8), and
+      // its label ends at the first `]`, so a `[` inside the label opens no run.
+      // Inside an open run the grammar's `nested` reads it as brackets instead,
+      // and after a bare `^` or `!` the `[` opens an inline note or an image.
+      const owner = ch === '[' && hasFootnote && (s[j - 1] === '^' || s[j - 1] === '!') && lastEscaped !== j - 1
+      const owned = owner && !literal?.has(j) && !demoted?.has(j)
+      const labelEnd = ch === '[' && hasFootnote && stack.length === 0 && !owned ? footnoteLabelEnd(j) : -1
+      if (owner && !literal && footnoteLabelEnd(j) !== -1) owners.push(j)
+      if (labelEnd !== -1) {
+        if (owner) footnotes.add(j)
+        structural?.add(j)
+        structural?.add(labelEnd)
+        map.set(j, labelEnd)
+        j = labelEnd
+        continue
+      }
+      if (ch === '[') {
+        if (literal?.has(j)) continue
+        structural?.add(j)
+        stack.push(j)
+        imageAlt?.push(inImageAlt || (j > 0 && lastBang === j - 1))
+      } else if (ch === ']') {
+        structural?.add(j)
+        const open = stack.pop()
+        imageAlt?.pop()
+        if (open !== undefined) {
+          map.set(open, j)
+          const slotEnd = stack.length > 0 ? nestedSlotEnd(j) : undefined
+          if (slotEnd !== undefined) j = slotEnd - 1
+        }
+      }
+    }
+    for (const open of stack) unclosed.push(open)
+    return unclosed
+  }
+  const first = hasFootnote && structural ? new Set<number>() : structural
+  const unclosed = walk(first)
+  let lowest = s.length
+  for (const open of unclosed) if (open < lowest) lowest = open
+  const demoted = new Set<number>()
+  for (const open of owners) {
+    const close = map.get(open)
+    if (close !== undefined && !ownerForms(open, close)) demoted.add(open)
+  }
+  if (hasFootnote && (demoted.size > 0 || s.indexOf('[^', lowest) !== -1)) {
+    map = new Map()
+    spans = []
+    walk(structural, new Set(unclosed), demoted)
+  } else if (first !== structural) for (const at of first!) structural!.add(at)
   let budget = BRACKET_RESCAN_BUDGET * s.length + 64
   const scanFrom = (open: number): number | undefined => {
     let bangEscapes = 0
@@ -246,12 +320,14 @@ export function buildBracketMap(
     }
     return false
   }
-  return (open) => {
+  const close: BracketClose = (open) => {
     if (s[open] !== '[') return undefined
     const direct = map.get(open)
     if (direct !== undefined) return direct
     return !outsideOnly && insideSpan(open) ? scanFrom(open) : undefined
   }
+  if (footnotes.size > 0) close.footnotes = footnotes
+  return close
 }
 
 export interface CrossrefMemo {
