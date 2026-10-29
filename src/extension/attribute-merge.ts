@@ -69,3 +69,18 @@ export function accumulateAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   }
   return out
 }
+
+// carve#3975: only the block run merged into a promoted image is a dropped
+// block attribute in Markdown; the image's glued attributes follow the inline rule.
+// The run applies only while the image's attributes are the parsed ones, so a
+// caller's tree or a later edit keeps the whole-set check.
+const promotedImageBlockRuns = new WeakMap<{ attrs?: Attrs }, { run: Attrs; parsed: string }>()
+
+export function recordPromotedImageBlockRun(image: { attrs?: Attrs }, run: Attrs): void {
+  promotedImageBlockRuns.set(image, { run, parsed: JSON.stringify(image.attrs ?? {}) })
+}
+
+export function promotedImageBlockRun(image: { attrs?: Attrs }): Attrs | undefined {
+  const record = promotedImageBlockRuns.get(image)
+  return record && record.parsed === JSON.stringify(image.attrs ?? {}) ? record.run : undefined
+}

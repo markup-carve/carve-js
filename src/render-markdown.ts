@@ -4,6 +4,7 @@ import { normalizeRefLabel } from './label-key.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './extension/smart-typography-mode.js'
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { renderCellContent } from './render/render-cell-content.js'
+import { promotedImageBlockRun } from './extension/attribute-merge.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 import type {
   Admonition,
@@ -431,7 +432,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
 
 function reportBlockAttributes(node: BlockNode, ctx: MarkdownContext): void {
   if (!ctx.roundtrip && node.attrs && node.type !== 'section') {
-    let attrs = node.attrs
+    let attrs = node.type === 'image' ? promotedImageBlockRun(node) ?? node.attrs : node.attrs
     if (node.type === 'heading' && !attrs.order?.includes('#id')) {
       const { id: _generated, ...authored } = attrs
       attrs = authored
