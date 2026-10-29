@@ -44,7 +44,6 @@ interface Form {
   lineBlock?: boolean
 }
 
-const QUOTE_LINE = /^>(?: ([^\r\n]*)|[ \t]*$)/
 const CONT_MARKER = /^\+[ \t]*$/
 const COLON_FENCE = /^(:{3,})(.*)$/
 const COLON_CLOSER = /^(:{3,})[ \t]*$/
@@ -58,8 +57,8 @@ const DD = /^:( +)(?=[ \t]*[^ \t])/
 const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r\f])(.*)$/
 const CAPTION = /^\^ +(?=.*[^ \t\n\r\f])(.*?)[ \t]*$/
 const ATTR_BLOCK = `\\{(?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")*\\}`
-const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(.+)$`)
-const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})?( +)(.+)$`)
+const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(?=.)`)
+const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})?( +)(?=.)`)
 const MAX_FRAMES = 200
 // A line that cannot start any opener: no leading punctuation an opener uses and no ordered marker.
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
@@ -77,7 +76,14 @@ function indentCols(line: string): { col: number; rest: string } {
   return { col, rest: i === 0 ? line : line.slice(i) }
 }
 
-const quoteRest = (rest: string): string => QUOTE_LINE.exec(rest)?.[1] ?? ''
+// Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
+function isQuoteLine(rest: string): boolean {
+  if (rest[0] !== '>') return false
+  if (rest[1] === ' ') return true
+  for (let i = 1; i < rest.length; i++) if (rest[i] !== ' ' && rest[i] !== '\t') return false
+  return true
+}
+const quoteRest = (rest: string): string => rest[1] === ' ' ? rest.slice(2) : ''
 
 const gluedAttrsValid = (attrs: string | undefined): boolean =>
   attrs === undefined || attrs.replace(/[{} ]/g, '') === '' || isValidAttrPayload(attrs.slice(1, -1))
@@ -94,11 +100,11 @@ function matchMarker(rest: string): { width: number; head: number; axes: string 
   const line = rest.replace(/[ \t]+$/, '')
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
-    return { width: 1 + (m[4] !== undefined ? 1 : m[3]!.length), head: line.length - m[5]!.length, axes: m[1]! }
+    return { width: 1 + (m[4] !== undefined ? 1 : m[3]!.length), head: m[0].length, axes: m[1]! }
   }
   m = ORDERED.exec(line)
   if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3])) {
-    return { width: m[1]!.length + 1 + m[4]!.length, head: line.length - m[5]!.length, axes: m[2]! }
+    return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]! }
   }
   return null
 }
@@ -134,7 +140,7 @@ function isAttrLine(text: string): boolean {
 
 function quotedMeasure(line: string): { col: number; rest: string } {
   let m = indentCols(line)
-  while (QUOTE_LINE.test(m.rest)) m = indentCols(quoteRest(m.rest))
+  while (isQuoteLine(m.rest)) m = indentCols(quoteRest(m.rest))
   return m
 }
 
@@ -193,7 +199,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
         break
       }
       if (f.kind === 'quote') {
-        if (!QUOTE_LINE.test(m.rest)) break
+        if (!isQuoteLine(m.rest)) break
         lead(frames[k - 1]!.canon)
         take(src.length - quoteRest(src).length)
         m = indentCols(src)
@@ -338,7 +344,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     rest = rest.replace(/[ \t]+$/, '')
     if (rest === '') return { kind: 'blank', interrupts: true }
     if (!OPENER_LEAD.test(rest)) return TEXT
-    if (QUOTE_LINE.test(rest)) return { kind: 'quote', interrupts: true }
+    if (isQuoteLine(rest)) return { kind: 'quote', interrupts: true }
     const colon = COLON_FENCE.exec(rest)
     if (colon && COLON_CLOSER.test(rest)) {
       // A closer is read in its owner: only a colon body at the reached depth, or holding it directly, can take it.

@@ -9,6 +9,12 @@ import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, ty
 import { dropPositions } from '../../source/source-positions.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
 
+/** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
+function noteFenceOpen(state: ItemLazyState): boolean {
+  for (let frame = state.noteFrame; frame !== undefined; frame = frame.noteFrame) if (frame.opaque !== null) return true
+  return false
+}
+
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {
   const {
     FOOTNOTE_BODY_COLUMN,
@@ -2379,6 +2385,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const opener = opensCodeFence(bottom) ? bottom : trimmed
         const indented = opener !== dedented
         const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
+          !noteFenceOpen(lazyState) &&
           (lazyState.quoteInner === null || !blockQuoteParagraphOpen(lazyState.quoteInner)) &&
           (lazyState.unclosedFenceBase === undefined || indentColumns(l) - contentCol === lazyState.unclosedFenceBase) &&
           opensCodeFence(opener)
@@ -3201,7 +3208,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       if (blankBeforeNestedContinuation) loose = true
       for (const child of children) {
-        if (child.type === 'comment' || child.type === 'abbreviation_def') continue
+        if (child.type === 'comment' || child.type === 'abbreviation_def') {
+          // A comment below the nested list's column has ended that list.
+          const commentSpan = session.blockLineSpan(child)
+          const commentLine = commentSpan && (lexer.rootLines ?? lexer.lines)[commentSpan.start - 1]
+          if (nestedListContentColumn !== undefined && commentLine !== undefined && commentLine !== '' &&
+              sourceColumn(commentLine) < nestedListContentColumn) nestedListContentColumn = undefined
+          continue
+        }
         const span = session.blockLineSpan(child)
         if (span === undefined) continue
         if (previousVisibleSpan === undefined && child.type === 'paragraph' &&

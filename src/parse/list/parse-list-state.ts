@@ -168,8 +168,16 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const frame = state.noteFrame
     if (frame === undefined) return endsOnBlock(state)
     const bodyColumn = state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN
-    trackItemLazyState(isBlankLine(content) ? '' : sliceColumns(content, bodyColumn, true), frame,
-      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn), true, () => false)
+    let noteLine = isBlankLine(content) ? '' : sliceColumns(content, bodyColumn, true)
+    // A description in the note reads its body from its own column.
+    let descriptionShift = 0
+    if (frame.inDefList === 'description' && frame.descriptionColumn !== undefined && noteLine !== '' &&
+        !RE_DEFLIST_DEF.test(noteLine) && indentColumns(noteLine, frame.descriptionColumn) >= frame.descriptionColumn) {
+      descriptionShift = frame.descriptionColumn
+      noteLine = sliceColumns(noteLine, descriptionShift, true)
+    }
+    trackItemLazyState(noteLine, frame,
+      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn + descriptionShift), true, () => false)
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
     return true
