@@ -2130,7 +2130,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
         nestedTermOwnsSeparator = true
-      if (sourceDescription !== null && lw === contentCol && sourceMarkerColumn >= leadNestedMarkerColumn &&
+      if (sourceDescription !== null && lw === contentCol && sourceMarkerColumn === leadNestedMarkerColumn &&
           leadNestedTerm && !leadHasDeeperItem &&
           lazyState.inDefList === false && lazyState.deepest?.inDefList !== 'term' &&
           pendingBlankRun.count === 0)
