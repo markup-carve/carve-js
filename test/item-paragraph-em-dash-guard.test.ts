@@ -44,7 +44,8 @@ describe('guarded em dashes in item and description paragraphs', () => {
       expect(carveToHtml(formatted)).toBe(carveToHtml(source))
       expect(withoutPos(parse(formatted))).toEqual(withoutPos(parse(source)))
       if (name === 'heading followed by a loose paragraph') {
-        expect(formatted).toBe('1. ## Foo\n\n   Foo\n ---\n')
+        // Under rule A (carve#3885) the `---` at column 3 is a thematic break after the list.
+        expect(formatted).toBe('1. ## Foo\n\n   Foo\n\n---\n')
       }
     })
   }
