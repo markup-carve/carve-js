@@ -4410,6 +4410,11 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
     { ...cursor.take(), lazyText: true } : undefined
 }
 
+function quoteLazyBodyLine(line: SourceLine): SourceLine {
+  return listMarker(line.text) || (line.quoteParaLazy && line.text.startsWith('>> ')) ?
+    { ...line, lazyText: true } : line
+}
+
 function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[], depth: number): BlockQuote {
   const first = cursor.peek()!
   rejectOverindentedQuotedColon(cursor, first)
@@ -4570,7 +4575,7 @@ function parseQuote(cursor: Cursor, inline: CursorInline, definitionNodes: Block
             (listMarker(line.text) || RE_HEADING.test(line.text) || RE_BLOCKQUOTE.test(line.text)) ||
             continueQuoteLazily(cursor, body, line))) {
         const lazyLine = cursor.take()
-        body.push(listMarker(lazyLine.text) ? { ...lazyLine, lazyText: true } : lazyLine)
+        body.push(quoteLazyBodyLine(lazyLine))
         directParagraph = false
         last = line
         continue

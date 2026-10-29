@@ -2591,6 +2591,15 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> text\n>> 1. y\n>> - z\n',
+    '> q\n>> - z\ntail\n',
+    '> text\n>> plain\n>> more\n',
+    '>> text\n>>> - z\n>>> - w\n',
+  ])('keeps a typed quote lazy run in one paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '  - c\n    b\n>> - z\n>> 1. y\n',
     '[^f]: note\n>> - z\n',
     '  [^g]: more\n>> 1. y\n',
