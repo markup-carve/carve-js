@@ -285,6 +285,20 @@ describe('experimental block cursor', () => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
 
+  it.each([
+    'x\n  [^g]: m\n    b\n~~~\n[r]: /u\n~~~\n',
+    'q\n~~~\nz\n~~~\n\nx\n  [^g]: m\n    b\n~~~\n[r]: /u\n',
+  ])('tracks the footnote run across several fences in one pass: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    'q\n~~~\nz\n~~~\n\nx\n  [^g]: m\n    b\n\ny\n~~~\n[r]: /u\n',
+    'b\n~~~\n+\n[r]: /u\n```\n',
+  ])('declines when a blank line ends the footnote run or a mismatched fence cannot close: %s', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
   it('declines a flush-left line comment after a footnote paragraph', () => {
     expect(() => parseCursorPrototype('[^f]: note\n%% c\n')).toThrow(UnsupportedCursorSyntax)
   })

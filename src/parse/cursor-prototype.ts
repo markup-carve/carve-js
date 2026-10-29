@@ -4948,14 +4948,6 @@ function reportDanglingAtCursor(cursor: Cursor, inline: CursorInline,
     ...(wholeBodyOf ? { wholeBodyOf } : {}) } })
 }
 
-// An indented `[^x]:` line in the text run above a fence keeps the later link definition exact.
-function indentedFootnoteInRun(lines: SourceLine[], index: number): boolean {
-  for (let i = index; i >= 0 && lines[i]!.text !== ''; i--) {
-    if (/^[ \t]+\[\^[^\]]+\]:/.test(lines[i]!.text)) return true
-  }
-  return false
-}
-
 function parseBlocks(cursor: Cursor, inline: CursorInline, definitionNodes: BlockNode[],
   depth = 0, atDocumentLevel = true, footnoteDefs?: Record<string, BlockNode[]>,
   footnoteDefPos?: Record<string, Position>, commentOpeners?: Set<number>,
@@ -5411,6 +5403,8 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
   let openFence: string | undefined
   let fenceAfterText = false
   let fenceLineIndex = 0
+  // An indented `[^x]:` line in the blank-free run above a fence keeps the later link definition exact.
+  let indentedFootnoteInRun = false
   let openComment: number | undefined
   let simpleRootListPrefix: string | undefined
   let simpleRootListNested = false
@@ -5422,6 +5416,9 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     new Map<number, NonNullable<ReturnType<typeof rootLinkDef>>>() : undefined
   if (hasDefinitionMarker) {
     for (const line of cursor.lines) {
+      const footnoteInRunAbove = indentedFootnoteInRun
+      indentedFootnoteInRun = line.text !== '' &&
+        (indentedFootnoteInRun || /^[ \t]+\[\^[^\]]+\]:/.test(line.text))
       if (mayHaveNestedListDefinition && !openFence && openComment === undefined) {
         const marker = listMarker(line.text)
         if (marker?.indent === 0) {
@@ -5470,7 +5467,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
         const prev = cursor.lines[line.number - 2]?.text
         fenceLineIndex = line.number
         fenceAfterText = prev !== undefined && prev !== '' && plainQuoteText(prev.trimStart()) &&
-          !indentedFootnoteInRun(cursor.lines, line.number - 2)
+          !footnoteInRunAbove
         continue
       }
       const comment = RE_COMMENT_BLOCK_ANY.exec(line.text)
@@ -5508,7 +5505,7 @@ export function parseCursorPrototype(source: string, opts: ParseOptions = {}): D
     }
   }
   cursor.unclosedFenceAfterText = openFence !== undefined && fenceAfterText &&
-    !cursor.lines.slice(fenceLineIndex).some((l) => fenceOpen(l.text.trimStart()))
+    !cursor.lines.slice(fenceLineIndex).some((l) => closesFence(l.text.trimStart(), openFence!))
   if (simpleRootListDefinitions) cursor.simpleRootListDefinitions = simpleRootListDefinitions
   const inline = new CursorInline(linkDefinitions, abbreviations, opts.positions === false,
     opts.onDanglingBlockAttributes !== undefined, opts.onUnclosedCodeFence !== undefined,
