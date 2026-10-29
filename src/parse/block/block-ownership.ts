@@ -26,7 +26,7 @@ interface Frame {
   markerCanon?: number
   axes?: string | undefined
   run?: number | undefined
-  closes?: ((rest: string) => boolean) | undefined
+  closes?: ((rest: string, col: number) => boolean) | undefined
   termCut?: number
   lineBlock?: boolean | undefined
   span?: string | null
@@ -37,12 +37,16 @@ interface Form {
   interrupts: boolean
   frame?: number
   run?: number
-  closes?: (rest: string) => boolean
+  closes?: (rest: string, col: number) => boolean
   width?: number
   head?: number
   axes?: string
   lineBlock?: boolean
 }
+
+interface AheadColumn { lengths: number[]; suffix: number[]; from: number }
+interface AheadTree { size: number; columns: AheadColumn[]; max: number[] }
+interface AheadIndex { next: number; at: [('`' | '~'), number][][]; '`': AheadTree; '~': AheadTree }
 
 const CONT_MARKER = /^\+[ \t]*$/
 const COLON_FENCE = /^(:{3,})(.*)$/
@@ -159,7 +163,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
-  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; byColumn: Map<string, number[]> } | null = null
+  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; ahead?: AheadIndex } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
 
@@ -229,7 +233,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
         if (c && c[1]![0] === inner.span[0] &&
             (inner.span[0] === '%' ? c[1]!.length === inner.span.length : c[1]!.length >= inner.span.length)) inner.span = null
-      } else if (m.rest !== '' && inner.closes!(m.rest)) {
+      } else if (m.rest !== '' && inner.closes!(m.rest, m.col)) {
         frames.pop()
         top().last = 'block'
       } else if (inner.lineBlock) {
@@ -244,7 +248,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     }
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
-    const form = classify(m.rest, owner, at)
+    const form = classify(m.rest, owner, at, m.col)
     if (missed && m.rest !== '' && top().para && !form.interrupts &&
         !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes)) {
       // Step 4: a lazy line stays text where it stands, short of the frame it missed.
@@ -314,7 +318,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     // The rest of a marker line. Only a quote starts new coordinates, so only there can its content move.
     function content(frame: Frame, start: number, canon: number): void {
       if (m.rest === '' || frames.length > MAX_FRAMES) return
-      const form = classify(m.rest, frame, at)
+      const form = classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
       if (form.kind === 'text') {
         lead(m.col)
         frame.absorbs = absorbsColon(m.rest)
@@ -340,7 +344,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     return COLON_FENCE.test(trimmed) && !isColonFenceOpener(trimmed)
   }
 
-  function classify(rest: string, owner: Frame, at: number): Form {
+  function classify(rest: string, owner: Frame, at: number, col: number): Form {
     rest = rest.replace(/[ \t]+$/, '')
     if (rest === '') return { kind: 'blank', interrupts: true }
     if (!OPENER_LEAD.test(rest)) return TEXT
@@ -364,12 +368,13 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     }
     if (RE_FENCE.test(rest) || RE_RAW_FENCE.test(rest)) {
       const run = /^(`{3,}|~{3,})/.exec(rest)![1]!
-      const closes = (r: string): boolean => {
-        const c = PURE_FENCE.exec(r)
+      // A run indented past its opener is code content (CARVE-P2-006).
+      const closes = (r: string, closerCol: number): boolean => {
+        const c = closerCol <= col && PURE_FENCE.exec(r)
         return !!(c && c[1]![0] === run[0] && c[1]!.length >= run.length)
       }
       // A closer below the owner's column never matches (CARVE-P0-014).
-      const reachable = (widestFrom(run[0] as '`' | '~', owner.col)[at + 1] ?? 0) >= run.length
+      const reachable = closerAhead(run, at, owner.col, col)
       if (owner.para && !reachable) return { kind: 'text', interrupts: false }
       return { kind: 'fence', interrupts: reachable, closes }
     }
@@ -404,7 +409,7 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
   function closerRuns(): NonNullable<typeof runs> {
     if (runs) return runs
     const widest = { '`': new Array<number>(lines.length + 1).fill(0), '~': new Array<number>(lines.length + 1).fill(0) }
-    runs = { widest, lastComment: new Map(), byColumn: new Map() }
+    runs = { widest, lastComment: new Map() }
     for (let j = lines.length - 1; j >= 0; j--) {
       const rest = quotedRest(lines[j]!)
       widest['`'][j] = widest['`'][j + 1]!
@@ -420,21 +425,56 @@ export function ownLines(lines: string[], start = 0): { lines: string[]; cuts: M
     return runs
   }
 
-  // The widest closer run of `char` at or after every line, counting only closers at `col` or deeper.
-  function widestFrom(char: '`' | '~', col: number): number[] {
-    const key = `${char}${col}`
+  // Whether a closer for `run` lies after line `at`, written from column `lo` to `hi`. The walk asks
+  // in line order, so each line leaves the index once: per character, a max segment tree over columns.
+  function closerAhead(run: string, at: number, lo: number, hi: number): boolean {
     const all = closerRuns()
-    const cached = all.byColumn.get(key)
-    if (cached) return cached
-    const widest = new Array<number>(lines.length + 1).fill(0)
-    for (let j = lines.length - 1; j >= 0; j--) {
-      widest[j] = widest[j + 1]!
-      const m = quotedMeasure(lines[j]!)
-      if (m.col < col) continue
-      const c = PURE_FENCE.exec(m.rest)
-      if (c && c[1]![0] === char) widest[j] = Math.max(widest[j]!, c[1]!.length)
+    const index = all.ahead ??= aheadIndex()
+    const char = index[run[0] as '`' | '~']
+    while (index.next <= at) {
+      for (const [ch, column] of index.at[index.next] ?? []) {
+        const tree = index[ch]
+        const entry = tree.columns[column]!
+        entry.from++
+        let k = tree.size + column
+        tree.max[k] = entry.suffix[entry.from] ?? 0
+        for (k >>= 1; k > 0; k >>= 1) tree.max[k] = Math.max(tree.max[2 * k]!, tree.max[2 * k + 1]!)
+      }
+      index.next++
     }
-    all.byColumn.set(key, widest)
-    return widest
+    let widest = 0
+    for (let l = char.size + lo, r = char.size + Math.min(hi, char.size - 1) + 1; l < r; l >>= 1, r >>= 1) {
+      if (l & 1) widest = Math.max(widest, char.max[l++]!)
+      if (r & 1) widest = Math.max(widest, char.max[--r]!)
+    }
+    return widest >= run.length
+  }
+
+  function aheadIndex(): AheadIndex {
+    const found: Record<'`' | '~', [number, number][]> = { '`': [], '~': [] }
+    const at: [('`' | '~'), number][][] = []
+    for (let j = 0; j < lines.length; j++) {
+      const m = quotedMeasure(lines[j]!)
+      const c = PURE_FENCE.exec(m.rest)
+      if (!c) continue
+      const ch = c[1]![0] as '`' | '~'
+      found[ch].push([m.col, c[1]!.length])
+      ;(at[j] ??= []).push([ch, m.col])
+    }
+    const tree = (ch: '`' | '~'): AheadTree => {
+      let size = 1
+      for (const [column] of found[ch]) while (size <= column) size *= 2
+      const columns: AheadColumn[] = []
+      for (const [column, length] of found[ch]) (columns[column] ??= { lengths: [], suffix: [], from: 0 }).lengths.push(length)
+      const max = new Array<number>(2 * size).fill(0)
+      columns.forEach((entry, column) => {
+        entry.suffix = new Array<number>(entry.lengths.length)
+        for (let k = entry.lengths.length - 1; k >= 0; k--) entry.suffix[k] = Math.max(entry.lengths[k]!, entry.suffix[k + 1] ?? 0)
+        max[size + column] = entry.suffix[0]!
+      })
+      for (let k = size - 1; k > 0; k--) max[k] = Math.max(max[2 * k]!, max[2 * k + 1]!)
+      return { size, columns, max }
+    }
+    return { next: 0, at, '`': tree('`'), '~': tree('~') }
   }
 }

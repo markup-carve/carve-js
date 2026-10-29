@@ -871,6 +871,8 @@ export function itemFenceHasCloser(
   quoteDepth?: number,
   quoteColumn = 0,
   alternateCloserColumn?: number,
+  // Past a below-column line the walk left a closer where it was written (CARVE-P2-006).
+  pastBelowColumn = false,
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
@@ -878,6 +880,7 @@ export function itemFenceHasCloser(
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
   let afterBlank = false
+  let seenBelow = false
   for (let i = start; i < lexer.lineCount; i++) {
     if (columnAt && layoutWork.on) layoutWork.closerLines++
     const line = lexer.lineAt(i)!
@@ -888,6 +891,13 @@ export function itemFenceHasCloser(
     }
     afterBlank = false
     const column = columnAt ? columnAt(i) : alternateCloserColumn === undefined ? indentColumns(line, contentCol) : indentColumns(line)
+    if (pastBelowColumn && column !== undefined) {
+      // A run indented past its opener is code content, so compare document columns.
+      if (seenBelow && column >= contentCol && closeRe.test(line.replace(/^[ \t]+/, '')) &&
+          lexer.sourceBoundary(i, lexer.lineLeadingWhitespace(i)).column <=
+            lexer.sourceBoundary(fromIndex, Math.max(0, lexer.lineAt(fromIndex)!.indexOf(marker))).column) return true
+      if (column < contentCol) seenBelow = true
+    }
     if (column === undefined || column < contentCol || (columnAt && column !== contentCol)) continue
     if (alternateCloserColumn !== undefined && column !== contentCol && column !== alternateCloserColumn) continue
     let dedented = literalPayload ? line.replace(/^[ \t]+/, '') : columnAt ? line.slice(lexer.lineLeadingWhitespace(i)) : sliceColumns(line, contentCol, true)

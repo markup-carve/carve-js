@@ -1188,6 +1188,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (candidate, afterBlank) =>
           (isListMarkerLine(candidate) && indentColumns(candidate) < sourceBase) ||
           (afterBlank && !isBlankLine(candidate) && indentColumns(candidate, sourceBase) < sourceBase),
+        undefined, false, undefined, 0, undefined, true,
       )
       // HAND THE CLOSER ANSWER DOWN, and only a YES. The item may end at a run
       // this fence's own parse will never see, so the descendant cannot answer
@@ -1431,6 +1432,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         itemEndsAt,
         undefined,
         extraColumns < 0,
+        undefined, 0, undefined, extraColumns >= 0 && !lazyState.inDefList,
       )
       if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
         lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)

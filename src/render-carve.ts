@@ -144,6 +144,10 @@ function trimStartNonNbsp(text: string): string {
   return start === 0 ? text : text.slice(start)
 }
 
+function inContainer(ctx: CarveContext): boolean {
+  return ctx.listDepth > 0 || ctx.quoteDepth > 0 || ctx.colonFenceDepth > 0 || ctx.atAnAuthoredBodyColumn
+}
+
 interface CarveContext {
   blockDepth: number
   inlineDepth: number
@@ -5159,6 +5163,11 @@ class CarveRenderSession {
     const hidesLineBlockCloser = ctx !== undefined && this.hidesLineBlockCloser(content, ctx)
     if (hidesLineBlockCloser && (nodeType !== 'code' || !canPairFence)) {
       throw new SourceUnspellableError(nodeType, 'a prefixed or suffixed verbatim span cannot hide a line-block closer')
+    }
+    // A bare colon run under a container paragraph opens or closes a container at
+    // every column (§10 I1), so the span has no spelling (CARVE-P11-046, carve#3922).
+    if (ctx !== undefined && ctx.lineBlockDepth === 0 && inContainer(ctx) && /\n[ \t]*:{3,}[ \t]*(?=\n|$)/.test(content)) {
+      throw new SourceUnspellableError(nodeType, 'a verbatim line holding only a colon run cannot stay inline in a container paragraph')
     }
     // Description markers stay at the content column and need a fence run to remain inline.
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
