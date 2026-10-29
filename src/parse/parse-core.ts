@@ -218,7 +218,7 @@ export function appendLinkReferenceDefinitions(
     if (def.attrs) node.attrs = def.attrs
     node.pos = definitionLinePosition(
       lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
-      lexer.lineStartColumn(def.line),
+      lexer.sourceStartColumn(def.line),
     )
     authored.push(node)
   }

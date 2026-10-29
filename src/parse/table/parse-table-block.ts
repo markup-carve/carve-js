@@ -49,7 +49,7 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         // Recording where it now ends is what makes that possible.
         rowEnds[rawRows.length - 1] = {
           line: lexer.lineNumber(lineIndex),
-          column: lexer.lineStartColumn(lineIndex) + line.length,
+          column: lexer.sourceStartColumn(lineIndex) + line.length,
           offset: lexer.lineOffset(lineIndex) + line.length,
         }
         const contOffset = lexer.lineOffset(lineIndex)

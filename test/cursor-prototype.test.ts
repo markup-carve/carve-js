@@ -8,6 +8,17 @@ import { createEditorSession } from '../src/editor-session.js'
 import { parse, renderHtml, resolve } from '../src/index.js'
 import { parseCursorPrototype, UnsupportedCursorSyntax } from '../src/parse/cursor-prototype.js'
 
+function expectExactOrDeclined(source: string): void {
+  let actual: ReturnType<typeof parseCursorPrototype>
+  try {
+    actual = parseCursorPrototype(source)
+  } catch (error) {
+    if (error instanceof UnsupportedCursorSyntax) return
+    throw error
+  }
+  expect(actual, source).toStrictEqual(parse(source))
+}
+
 describe('experimental block cursor', () => {
   it.each([
     '::: note\n- a\n  - c\n',
@@ -140,7 +151,7 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
-  it('declines shallow child markers after nested quote ownership changes', () => {
+  it('keeps exact or declines shallow child markers after nested quote ownership changes', () => {
     for (const source of [
       '- a\n  > a\n- s\n> next\n - child\nplain\n',
       '- a\n  > a\n- s\n> next\n * child\nplain\n',
@@ -148,7 +159,7 @@ describe('experimental block cursor', () => {
       '- a\n  > - child\n- s\nplain\n  more\n - child\n',
       '- a\n  > a\n- s\nplain\nplain\n  more\n - child\n',
     ]) {
-      expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+      expectExactOrDeclined(source)
     }
   })
 
@@ -210,9 +221,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an overindented quoted colon opener with a lazy follower', () => {
-    expect(() => parseCursorPrototype('>  ::: |\nx\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines an overindented quoted colon opener with a lazy follower', () => {
+    expectExactOrDeclined('>  ::: |\nx\n')
   })
 
   it.each([
@@ -381,9 +391,8 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
-  it('declines a list fence when the closer has a blank gap', () => {
-    expect(() => parseCursorPrototype('- a\n  ```\n  b\n y\n\n  ```\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines a list fence when the closer has a blank gap', () => {
+    expectExactOrDeclined('- a\n  ```\n  b\n y\n\n  ```\n')
   })
 
   it.each([
@@ -401,8 +410,10 @@ describe('experimental block cursor', () => {
   it.each([
     ':: t\n:  x\n%% c\n- item\n',
     ':: t\n:  x\n%% c\n# H\n',
-  ])('declines an unresolved description comment follower: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ])('ends the description at a comment before a block follower: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(renderHtml(actual)).toBe(renderHtml(parse(source)))
   })
 
   it.each([
@@ -700,6 +711,17 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- a\n    - child\n    ```\n    code\n    ```\nafter\n',
+    '- a\n    - child\n    ```\n    code\nafter\n',
+    '> - a\n>     - child\n>       ```\n>       x\n>       ```\n>   ~~~\nafter\n',
+    '> - outer\n>   - head\n>     ```\n>     a\n>    ```\n>\n>   tail\n',
+  ])('lets the ownership walk decide whether a fence line below a nested column joins its paragraph: %s', (source) => {
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(renderHtml(actual)).toBe(renderHtml(parse(source)))
+  })
+
   it('matches the physical-line ownership fixtures', () => {
     for (const name of ['container-ownership.json', 'container-ownership-boundaries.json']) {
       const path = new URL(`../spec/tests/fixtures/${name}`, import.meta.url)
@@ -827,9 +849,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a shifted nested block-fence closer', () => {
+  it('keeps exact or declines a shifted nested block-fence closer', () => {
     const source = '- outer\n  - head\n     ```\n     a\n    ```\n\n  tail\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expectExactOrDeclined(source)
   })
 
   it('stops a child paragraph fence search at a sibling list item', () => {
@@ -926,7 +948,7 @@ describe('experimental block cursor', () => {
       expect(parseCursorPrototype(source), source).toStrictEqual(parse(source))
     }
     const separated = '> - outer\n>   - head\n> \n>      ```\n>      body\n>   ~~~\n> \n'
-    expect(() => parseCursorPrototype(separated)).toThrow(UnsupportedCursorSyntax)
+    expectExactOrDeclined(separated)
   })
 
   it('folds a fence-shaped line into a nested quoted paragraph', () => {
@@ -1080,8 +1102,8 @@ describe('experimental block cursor', () => {
   it.each([
     '- a\n  ```\ntail\n  ```\n',
     '- a\n  ```\n\n   ```\n',
-  ])('declines an ambiguous list fence with a later candidate closer: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ])('keeps exact or declines an ambiguous list fence with a later candidate closer: %s', (source) => {
+    expectExactOrDeclined(source)
   })
 
   it.each([
@@ -1542,9 +1564,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines the shifted comment after a blank until the owner is explicit', () => {
-    expect(() => parseCursorPrototype('- - a\n\n   %%%\n   x\n   %%%\n  t'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines the shifted comment after a blank until the owner is explicit', () => {
+    expectExactOrDeclined('- - a\n\n   %%%\n   x\n   %%%\n  t')
   })
 
   it('ends a list-owned quote fence before a raised literal line', () => {
@@ -1757,6 +1778,21 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each([
+    '- a\n*[HTML]: HyperText\n\nHTML here.\n',
+    '- a\n*[HTML]: HyperText\n',
+    '1. a\n*[HTML]: HyperText\n\nHTML here.\n',
+    '- a\n  - b\n*[HTML]: HyperText\n\nHTML here.\n',
+    '- a\n\n*[HTML]: HyperText\n\nHTML here.\n',
+  ])('keeps a root abbreviation line lazy text under an open list paragraph: %j', (source) => {
+    expectExactOrDeclined(source)
+  })
+
+  it('does not register an abbreviation from a lazy list paragraph line', () => {
+    const source = '- a\n*[HTML]: HyperText\n\nHTML here.\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('resolves root abbreviations and retains line comments', () => {
     const source = 'HTML is short.\n\n*[HTML]: Hyper Text\n\n%% editorial note\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -1961,9 +1997,15 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a definition quote with an unbounded lazy follower', () => {
-    expect(() => parseCursorPrototype(':: term\n:  definition\n    > q\ntail\nnext\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it.each([':: term\n:  definition\n    > q\ntail\n', '- a\n\t- b\n\tc\n', '- a\n  - b\n  c\n'])
+  ('joins an owner-marked lazy line into its paragraph with source positions: %s', (source) => {
+    const cursor = parseCursorPrototype(source)
+    expect(cursor).toStrictEqual(parse(source))
+    expect(JSON.stringify(cursor)).toContain('"type":"soft_break"')
+  })
+
+  it('keeps exact or declines a definition quote with an unbounded lazy follower', () => {
+    expectExactOrDeclined(':: term\n:  definition\n    > q\ntail\nnext\n')
   })
 
   it('reads adjacent quote and heading blocks in a definition body', () => {
@@ -2632,9 +2674,9 @@ describe('experimental block cursor', () => {
       expect(renderHtml(actual)).toBe(renderHtml(expected))
     })
 
-  it('declines a closer that reaches the child column by one space', () => {
+  it('keeps exact or declines a closer that reaches the child column by one space', () => {
     const source = '- outer\n  - head\n     ```\n     a\n    ```\n\n  tail\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expectExactOrDeclined(source)
   })
 
   it('keeps an out-of-column tilde run in the nested list paragraph', () => {
@@ -2682,8 +2724,8 @@ describe('experimental block cursor', () => {
 
   it.each(['- outer\n  - head\n\n    ```\n    a\n   ```\n\n  tail\n',
     '- a\n  - b\n    - c\n\n      ```\n      x\n   ```\n'])
-  ('declines a fence closer still owned by an intermediate list: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ('keeps exact or declines a fence closer still owned by an intermediate list: %s', (source) => {
+    expectExactOrDeclined(source)
   })
 
   it.each([':::\nOuter\n\n::::\nInner\n::::\n:::\n',
@@ -2776,15 +2818,13 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a nested first-block continuation marker until column ownership is migrated', () => {
-    expect(() => parseCursorPrototype('- foo\n  1. +\n    > b\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines a nested first-block continuation marker until column ownership is migrated', () => {
+    expectExactOrDeclined('- foo\n  1. +\n    > b\n')
     expect(parseCursorPrototype('- a\n  - +\f\n\nb\n')).toStrictEqual(parse('- a\n  - +\f\n\nb\n'))
   })
 
-  it('declines a raised colon container whose list ownership is unresolved', () => {
-    expect(() => parseCursorPrototype('- head\n\n      ::: note\n      a\n- second\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines a raised colon container whose list ownership is unresolved', () => {
+    expectExactOrDeclined('- head\n\n      ::: note\n      a\n- second\n')
   })
 
   it.each(['- item\n  %%%\n  [r]: /url\n  %%%\n\n[r][]\n',
@@ -2796,8 +2836,8 @@ describe('experimental block cursor', () => {
   it.each(['- a\n  %%%\n  x\n  %%%\n - s\n',
     '- x\n  %%%\n  a\n\n  b\n  %%%\n',
     '- intro\n\n   %%%\n   hidden\n   %%%\n'])
-  ('declines list comments with unresolved line ownership: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ('keeps exact or declines list comments with unresolved line ownership: %s', (source) => {
+    expectExactOrDeclined(source)
   })
 
   it.each(['![a][nope]\n^ cap\n', '![a][nope]\n\n^ cap\n',
@@ -2978,9 +3018,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an unresolved block after the stacked quote first block', () => {
-    expect(() => parseCursorPrototype('- > > +\n> q\n\n  ```\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines an unresolved block after the stacked quote first block', () => {
+    expectExactOrDeclined('- > > +\n> q\n\n  ```\n')
   })
 
   it.each(['. d\n   [^n]: e\n     - a\n',
@@ -3004,9 +3043,9 @@ describe('experimental block cursor', () => {
       .toThrow(UnsupportedCursorSyntax)
   })
 
-  it('declines a nested fence whose dedented marker changes physical owner', () => {
+  it('keeps exact or declines a nested fence whose dedented marker changes physical owner', () => {
     const source = '- outer\n  - head\n\n        ```\n        a\n   ```\n\n  tail\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expectExactOrDeclined(source)
   })
 
   it.each([':: c\n%% note\nmore\n',
@@ -3134,9 +3173,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a reference-shaped line after a lazy item quote', () => {
+  it('keeps exact or declines a reference-shaped line after a lazy item quote', () => {
     const source = '- > a\n  b\n [r]: /u\n'
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+    expectExactOrDeclined(source)
   })
 
   it.each(['- > intro\n # tail\n', '- > intro\n > tail\n',
@@ -3179,9 +3218,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a shifted raw fence immediately after a nested quote', () => {
-    expect(() => parseCursorPrototype('- a\n  > q\n   ```=html\n   <b>r</b>\n   ```\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps exact or declines a shifted raw fence immediately after a nested quote', () => {
+    expectExactOrDeclined('- a\n  > q\n   ```=html\n   <b>r</b>\n   ```\n')
   })
 
   it.each(['- intro\n    - tail\n', '- intro\n%% c\n    - tail\n',
@@ -3665,5 +3703,104 @@ describe('experimental block cursor', () => {
     expect(actual.changedPaths).toStrictEqual(expected.changedPaths)
     expect(actual.reusedPreviousTree).toBe(expected.reusedPreviousTree)
     expect(actual.parsedSourceBytes).toBe(expected.parsedSourceBytes)
+  })
+
+  it.each([
+    '- a\n %% c\nb\n',
+    '- a\n  b\n c\n',
+    '- a\n\n   - b\n',
+    '- a\n  - b\n\n    c\n',
+    '1. a\n   - b\n  c\n',
+    '- a\n\t- b\n',
+    '- foo\n  1. +\n    > b\n',
+    '- outer\n  - head\n     ```\n     a\n    ```\n\n  tail\n',
+    '- a\n  ```\n  b\n y\n\n  ```\n',
+    '>  ::: |\nx\n',
+  ])('reads rule A ownership through the established walk: %j', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '>   | a |\n>   | b |\n',
+    ' ![Apollo](a.jpg)\n^ cap\n',
+  ])('maps a cut after a container marker or before a block back to source positions: %j', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> - x\n x\n',
+    '> > - x\nx\n',
+    '> - x\n * b\n',
+  ])('declines a lazy line the walk keeps under a quoted list item: %j', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    ' ::: |\n Roses,\n Violets.\n :::\n',
+    '\ufeff ::: |\n Roses,\n :::\n',
+  ])('reads an indented line block through the owned lines: %j', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '| a |\n|---|\n|= b |\n',
+    '| a | b |\n|---|---|\n|= c |= d |\n| e | f |\n',
+  ])('reads a native header row under a GFM separator: %j', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- [^n]: text\n    > q\nafter [^n]\n',
+  ])('declines a lazy line owned by an indented footnote: %j', (source) => {
+    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+})
+
+describe('experimental block cursor source geometry after an ownership cut', () => {
+  it('keeps the spaces a whitespace-only code line holds past the cut', () => {
+    const source = 'x[^1]\n\n[^1]: note\n\n      ```\n      a\n        \n      b\n      ```\n'
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(renderHtml(actual)).toBe(renderHtml(parse(source)))
+    expect(JSON.stringify(actual)).toContain('"content":"a\\n  \\nb\\n"')
+  })
+
+  it('positions a table row after a leading cut like the production reader', () => {
+    const source = '|a|\n|---|\n|b|\n |c|\n'
+    const actual = parseCursorPrototype(source) as any
+    expect(actual).toStrictEqual(parse(source))
+    expect(renderHtml(actual)).toBe(renderHtml(parse(source)))
+    const row = actual.children[0].rows[2]
+    expect([row.pos.startColumn, row.cells[0].children[0].pos.startColumn, row.cells[0].children[0].pos.startOffset])
+      .toEqual([1, 2, 16])
+  })
+})
+
+describe('experimental block cursor description body owners', () => {
+  it.each([
+    ':: t\n: - +\n',
+    ':: t\n: - +\n  x\n',
+    ':: t\n: - a\n  - +\n  x\n',
+    ':: t\n:  - a\n    *[HTML]: HyperText\n\nHTML here.\n',
+  ])('keeps a description list body and its positions like the production reader: %j', (source) => {
+    const actual = parseCursorPrototype(source)
+    expect(actual).toStrictEqual(parse(source))
+    expect(renderHtml(actual)).toBe(renderHtml(parse(source)))
+  })
+
+  it('returns a below-column line to the description body behind an empty item', () => {
+    const actual = parseCursorPrototype(':: t\n: - +\n  x\n') as any
+    const [list, paragraph] = actual.children[0].items[0].definitions[0]
+    expect(list.items[0].children).toEqual([])
+    expect([list.pos.startColumn, list.pos.endColumn, paragraph.pos.startColumn, paragraph.pos.endColumn])
+      .toEqual([3, 5, 3, 4])
+  })
+
+  it('ends a quoted link definition at the owned line after an ownership cut', () => {
+    const source = '> - x\n\n>   [r]: /u\n'
+    const actual = parseCursorPrototype(source) as any
+    expect(actual).toStrictEqual(parse(source))
+    const pos = actual.children.find((node: any) => node.type === 'link_reference_definition').pos
+    expect([pos.startColumn, pos.endColumn, pos.endOffset]).toEqual([1, 10, 16])
   })
 })

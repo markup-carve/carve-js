@@ -1170,7 +1170,7 @@ export function unclosedContainerFromOpener(lexer: Lexer, opener: ColonFenceOpen
   return {
     kind: opener.kind,
     line: lexer.lineNumber(opener.lineIndex),
-    column: lexer.lineStartColumn(opener.lineIndex),
+    column: lexer.sourceStartColumn(opener.lineIndex),
     startOffset,
     endOffset: startOffset + opener.fenceWidth,
     fenceWidth: opener.fenceWidth,
