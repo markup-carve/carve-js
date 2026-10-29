@@ -4411,7 +4411,7 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
 }
 
 function quoteLazyBodyLine(line: SourceLine): SourceLine {
-  return listMarker(line.text) || (line.quoteParaLazy && line.text.startsWith('>> ')) ?
+  return listMarker(line.text) || (line.quoteParaLazy && /^>>(?:[ \t]|$)/.test(line.text)) ?
     { ...line, lazyText: true } : line
 }
 
