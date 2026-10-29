@@ -4279,6 +4279,9 @@ function canAttachQuoteContinuation(cursor: Cursor, body: SourceLine[], line: So
   if (cursor.owner.inList || line.text !== '+' || body.length === 0) return false
   const follower = cursor.peek(1)
   const after = cursor.peek(2)
+  if (line.plusAfterPara && body.length === 1 && body[0]!.number === line.number - 1 &&
+      quotedLiteralListMarker(body[0]!.text) &&
+      follower && isBlockStart(follower.text) && !/^:{3,}[ \t]*$/.test(follower.text)) return true
   const plain = plainQuoteText(follower?.text ?? '')
   const firstBody = body[0]
   const nestedQuote = body.length === 1 && firstBody !== undefined &&
@@ -4368,6 +4371,12 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
   if (!line) return undefined
   if (line.claimedQuoteLazy) return cursor.take()
   const previous = body.at(-1)
+  if (cursor.owner.kind === 'root' && body.length === 1 && line.plusAfterPara &&
+      line.text === '+' && previous?.number === line.number - 1 &&
+      quotedLiteralListMarker(previous.text) &&
+      (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text))) {
+    return { ...cursor.take(), lazyText: true }
+  }
   const previousMarker = listMarker(previous?.text ?? '')
   const firstMarker = listMarker(body[0]?.text ?? '')
   if (cursor.owner.kind === 'quote' && cursor.owner.parent?.kind === 'root' &&
@@ -4408,6 +4417,10 @@ function takeCursorQuoteLazyFollower(cursor: Cursor, body: SourceLine[]): Source
   return (listQuote || bracedParagraph) &&
     (!cursor.peek(1) || isBlankLine(cursor.peek(1)!.text)) ?
     { ...cursor.take(), lazyText: true } : undefined
+}
+
+function quotedLiteralListMarker(text: string): boolean {
+  return text[0] === '>' && listMarker(text.slice(1))?.indent === 0
 }
 
 function quoteLazyBodyLine(line: SourceLine): SourceLine {

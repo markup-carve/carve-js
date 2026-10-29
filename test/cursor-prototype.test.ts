@@ -2604,6 +2604,22 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
+    '> >- q\n+\n',
+    '> >- q\n+\n# Heading\n',
+    '> >- q\n+\n::: note\n',
+    '> >- q\n+\n\n',
+    '> >* q\n+\n# H\n',
+    '> >1. q\n+\n# H\n',
+    '> >- q\n+\n- x\n',
+    '> >- q\n+\n> x\n',
+    '> >- q\n+\ntext\n',
+    '::: note\n> >- q\n+\n# H\n:::\n',
+    '>\t- q\n+\n# H\n',
+  ])('resolves a quoted paragraph plus by its following block: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
     '  - c\n    b\n>> - z\n>> 1. y\n',
     '[^f]: note\n>> - z\n',
     '  [^g]: more\n>> 1. y\n',
