@@ -54,9 +54,9 @@ describe('unmarked description-shaped lines fold into the quoted term', () => {
 })
 
 describe('marked descriptions and container exits', () => {
-  it('a description that CARRIES its `>` is the quote content it looks like, and keeps its column', () => {
+  it('a description that CARRIES its `>` describes the quoted term', () => {
     expect(carveToHtml('> - :: t\n>     :  a\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n  :  a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>a</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 
@@ -84,9 +84,9 @@ describe('marked descriptions and container exits', () => {
     )
   })
 
-  it('an unquoted item reads the same columns exactly as before', () => {
+  it('an unquoted item reads the same columns', () => {
     expect(carveToHtml('- :: t\n    :  a\ntail\n')).toBe(
-      '<ul>\n  <li>\n    <dl>\n      <dt>t\n  :  a\ntail</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>a\ntail</dd>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
@@ -104,9 +104,9 @@ describe('a non-description payload at the same column', () => {
     )
   })
 
-  it('a heading folds into the term', () => {
+  it('a heading leaves the quote', () => {
     expect(carveToHtml('> - :: t\n    # h\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n# h</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<section id="h">\n  <h1>h</h1>\n</section>',
     )
   })
 
@@ -116,9 +116,9 @@ describe('a non-description payload at the same column', () => {
     )
   })
 
-  it('an unmarked second term folds into the open term', () => {
+  it('an unmarked second term leaves the quote', () => {
     expect(carveToHtml('> - :: t\n    :: t2\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:: t2</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>t2</dt>\n</dl>",
     )
   })
 

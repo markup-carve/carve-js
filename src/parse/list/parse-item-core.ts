@@ -515,13 +515,6 @@ export function isRetainableLineComment(lexer: Lexer, content: string): boolean 
   return run === undefined || !commentBlockHasCloser(lexer, run)
 }
 
-export function retainCommentBoundary(state: ItemLazyState): void {
-  state.lazyFoldable = false
-  state.commentAtColumn = true
-  state.ownedColumn = -1
-  state.deepest = null
-}
-
 /**
  * The index past the closer of a matched `%%%` fence opening at `at`, or
  * undefined. The first bare run of the same width closes it at any column.
@@ -542,13 +535,6 @@ export function matchedCommentFenceEnd(
     if (commentFenceRun(line.replace(/^[ \t]+/, '')) === run) return j + 1
     if (endsContainer(line)) return undefined
   }
-}
-
-export function retainBelowColumnComment(content: string, state: ItemLazyState, atColumn: boolean): boolean {
-  if (atColumn || state.opaque !== null || state.literalColon !== undefined ||
-      !RE_COMMENT_LINE.test(content.trimStart())) return false
-  retainCommentBoundary(state)
-  return true
 }
 
 /**
@@ -1226,7 +1212,6 @@ export const listHelpers = {
   quotePrefixLength,
   quotedLineText,
   restoreVerbatimBlanks,
-  retainCommentBoundary,
   sourceColumn,
   sourceQuoteBody,
   sourceQuoteLocalColumn,

@@ -12,13 +12,13 @@ describe('empty list item after a table', () => {
 
   it('leaves an indented line outside the item', () => {
     expect(carveToHtml('| a | b |\n  - +\n  line two\n')).toBe(
-      `${table}\n<ul>\n  <li>line two</li>\n</ul>`,
+      `${table}\n<ul>\n  <li></li>\n</ul>\n<p>line two</p>`,
     )
   })
 })
 
 it('does not attach a flush-left list marker as the first block', () => {
-  expect(carveToHtml(' - a\n +\n- b\n')).toBe('<ul>\n  <li>a\n+</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>')
+  expect(carveToHtml(' - a\n +\n- b\n')).toBe('<ul>\n  <li>a\n+</li>\n  <li>b</li>\n</ul>')
 })
 
 it('does not attach a flush-left heading as the first block', () => {

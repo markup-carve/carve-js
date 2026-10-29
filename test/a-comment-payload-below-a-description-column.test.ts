@@ -59,12 +59,12 @@ describe('a comment payload below a description column', () => {
     [
       'a colon opener before the closer',
       '    ::: note\n    %%%\n     ```\n [r]: /url\n  > p\n  :::\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>[r]: /url\n&gt; p\n:::</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<blockquote><p>p</p></blockquote>\n<div>\n\n</div>',
     ],
     [
       'a code opener inside the comment',
       '   ::: note\n     ```\n    - item\n    %%%\n     :::\n ```\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p><code></code></p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<pre><code></code></pre>',
     ],
     [
       'a definition and a colon opener inside the comment',

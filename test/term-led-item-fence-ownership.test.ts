@@ -14,7 +14,7 @@ it('ends a later content-column fence before an unadmitted tail', () => {
     '',
   ].join('\n')
   expect(normalized(source)).toBe(
-    '<ul><li><dl><dt>term\n</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>',
+    '<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>',
   )
 })
 

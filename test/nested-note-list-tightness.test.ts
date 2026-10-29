@@ -5,11 +5,8 @@ describe('nested note continuation determines host list spacing', () => {
   it.each(['    prose', '    > quote', '     > quote', '    # heading'])('keeps %s inside the note', body => {
     const html = carveToHtml(`- r[^n]\n\n  [^n]: note\n${body}\n`)
     const [list] = html.split('<section role="doc-endnotes"')
-    if (body === '    prose') expect(list).toContain('<li><p>r')
-    else {
-      expect(list).toContain('<li>r')
-      expect(list).not.toContain('<li><p>')
-    }
+    expect(list).toContain('<li>r')
+    expect(list).not.toContain('<li><p>')
   })
 
   it('still loosens for a later paragraph outside the note', () => {

@@ -5,8 +5,9 @@ it.each([
   '10. a. :: t\n   : a\n   :: sibling\n   tail\n',
   '100. a. :: t\n    : a\n    :: sibling\n    tail\n',
   '> 10. a. :: t\n>    : a\n>    :: sibling\n>    tail\n',
-])('keeps a lazily admitted marker in its open term: %j', (source) => {
+])('closes the open term at a sibling marker: %j', (source) => {
   const html = carveToHtml(source)
-  expect(html.match(/<dt>/g)).toHaveLength(1)
-  expect(html).toContain('<dt>t\n: a\n:: sibling\ntail</dt>')
+  expect(html.match(/<dt>/g)).toHaveLength(2)
+  expect(html).toContain('<dt>t\n: a</dt>')
+  expect(html).toContain('<dt>sibling\ntail</dt>')
 })

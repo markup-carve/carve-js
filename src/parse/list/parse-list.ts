@@ -1,15 +1,21 @@
 import type { createListStateTracker } from './parse-list-state.js'
 import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
-import type { createRebasePass } from '../parse-rebase.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
+import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, QuotedFenceCloserMemo, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
 
-export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>, rebaseOverindentedBlocks: ReturnType<typeof createRebasePass>) {
+/** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
+function noteFenceOpen(state: ItemLazyState): boolean {
+  for (let frame = state.noteFrame; frame !== undefined; frame = frame.noteFrame) if (frame.opaque !== null) return true
+  return false
+}
+
+export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {
   const {
     FOOTNOTE_BODY_COLUMN,
     LAZY_FRAME,
@@ -80,7 +86,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     markerLineState,
     markerNoteCommentFenceOpeners,
     markerNoteFenceReach,
-    markerNoteOpenerReach,
     markerPrefixLength,
     matchListMarker,
     matchedCommentFenceEnd,
@@ -99,7 +104,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     quotePrefixLength,
     quotedLineText,
     restoreVerbatimBlanks,
-    retainCommentBoundary,
     sourceColumn,
     sourceQuoteBody,
     sourceQuoteLocalColumn,
@@ -354,13 +358,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { content, line, startLineIndex: itemStartLineIndex } = head
     const { itemSource, itemMarkerColumn, itemQuoteDepth } = placement
     const firstBlockMarker = RE_FIRST_BLOCK_MARKER.test(content)
+
     const firstBlockSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
     const firstBlockColumn = firstBlockSource === undefined ? Infinity : sourceColumn(firstBlockSource, itemQuoteDepth)
     const firstBlockEligible = lexer.peek() !== undefined && firstBlockSource !== undefined && !isBlankLine(firstBlockSource) &&
-      (firstBlockColumn === itemMarkerColumn || firstBlockMarker &&
+      // In a description body the marker and body columns are the host's, so only the content column reaches (corpus 750).
+      (firstBlockColumn === itemMarkerColumn && lexer.hostBodyRoot !== 'description' || firstBlockMarker &&
         firstBlockColumn === placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent ||
         firstBlockColumn === quoteBodyColumn(itemSource, itemQuoteDepth) ||
-        lexer.hostBody === 'description' && firstBlockColumn === 0 ||
         isStackedFirstBlockQuoteMarker(itemSource) &&
           stackedOpenerColumns(itemSource, itemQuoteDepth).includes(stackedFollowerColumn(firstBlockSource, itemSource, itemQuoteDepth)) ||
         isStackedFirstBlockQuoteMarker(itemSource) && itemQuoteDepth > 0 && quotePrefixDepth(firstBlockSource) === 0 &&
@@ -984,7 +989,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // lines: an opener whose closer fell OUTSIDE the item opened a real span,
     // whose payload was then republished, and a block is not the line form.
     const degradedOpeners = new Set<number>()
-    let hasOverindentedBlockCandidate = false
     let authoredFenceBase = 0
     // A verbatim fence a DESCENDANT opened, while it is open.
     //
@@ -1184,6 +1188,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (candidate, afterBlank) =>
           (isListMarkerLine(candidate) && indentColumns(candidate) < sourceBase) ||
           (afterBlank && !isBlankLine(candidate) && indentColumns(candidate, sourceBase) < sourceBase),
+        undefined, false, undefined, 0, undefined, true,
       )
       // HAND THE CLOSER ANSWER DOWN, and only a YES. The item may end at a run
       // this fence's own parse will never see, so the descendant cannot answer
@@ -1325,7 +1330,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A note is an invisible definition: a below-column line after its text
     // or code finds no open paragraph (CARVE-P0-009). A container the note
     // opens is read by its own leaf instead, as before.
-    const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
+    // After a task box the note reads its body from its own source column.
+    const markerNoteFloor = (isTask ? baseIndent + head.markerLine.length - leadingWhitespace(head.markerLine) - content.length
+      : contentCol) + FOOTNOTE_BODY_COLUMN
+    // The note's own frame answers the lazy question for the lines below it (carve#3885).
+    if (markerNoteItem) {
+      trackItemLazyState(content, lazyState)
+      lazyState.footnoteBodyColumn = markerNoteFloor - contentCol
+    }
     const noteParagraphMarkers = new Set<number>()
     const markerNoteFenceMemos = new Map<number, QuotedFenceCloserMemo>()
     const itemParagraphFences = new Set<number>()
@@ -1333,14 +1345,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
     let markerNoteClaimChecked = false
     let markerNoteLeft = false
-    let noteBodyLast = false
-    let markerNoteItemParagraphOpen = false
-    let noteInlineFenceOpen = false
     let nestedNoteParagraph = false
-    let nestedNoteContainer = false
     // A definition body cannot preserve its enclosing item's paragraph claim (CARVE-P0-006).
     let blockedNoteClaimFloor: number | undefined
-    let quotedInvisibleBody = false
     let hostedNoteBodyColumn: number | undefined
     let acceptedPlusLine = -1
     const refusedPlus = (offset: number): boolean => {
@@ -1362,7 +1369,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // any later phase reads it, so none carries over from the previous line.
     let enclosingLazy = false
     let noteReach: ReturnType<typeof markerNoteFenceReach> | null = null
-    let afterNoteBody = false
     let fenceBoundaryTail = false
     let commentFenceTail = false
     let noteParagraphOpen = false
@@ -1426,6 +1432,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         itemEndsAt,
         undefined,
         extraColumns < 0,
+        undefined, 0, undefined, extraColumns >= 0 && !lazyState.inDefList,
       )
       if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
         lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)
@@ -1530,7 +1537,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
           Object.assign(lazyState, before)
           trackItemLazyState('%%', lazyState, () => true, false)
-          if (lazyState.inDefList === 'description') retainCommentBoundary(lazyState)
           return 'continue'
         }
       }
@@ -1576,26 +1582,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       noteReach = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol
         ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) : null
-      let lastNoteLine = ''
-      for (let index = nested.length - 1; index >= 0; index--) {
-        if (!isBlankLine(nested[index]!) && !noteCommentLines.has(index)) { lastNoteLine = nested[index]!.trimStart(); break }
-      }
-      afterNoteBody = noteBodyLast || noteReach === 'unclosed' ||
-        (markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-          markerNoteOpenerReach(nested, noteParagraphMarkers, noteCommentLines) === 'open') ||
-        (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
-          !RE_COMMENT_LINE.test(lastNoteLine))
       fenceBoundaryTail = noteReach === 'boundary'
       commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
         markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true).length > 0
       noteParagraphOpen = markerNoteParagraph
       if (!isBlankLine(l)) {
-        noteBodyLast = false
         markerNoteParagraph = false
       }
       if (nestedNoteBodyColumn !== undefined && !isBlankLine(l) && indentColumns(l, nestedNoteBodyColumn) < nestedNoteBodyColumn) {
         nestedNoteBodyColumn = undefined
-        nestedNoteContainer = false
         noteBodyHeldCode = false
       }
       leftBlockedNote = blockedNoteClaimFloor !== undefined && !isBlankLine(l) && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor
@@ -1610,7 +1605,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
     }
     const admitBlank = (l: string): Decision => {
-      markerNoteItemParagraphOpen = false
       if (lazyState.opaque?.kind === 'comment')
         opaqueBlankLines.add(lexer.lineNumber(lexer.pos))
       const { offset: afterBlanks } = nextContainerContent(lexer, refusedPlus)
@@ -1890,37 +1884,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return undefined
     }
     // Check the rebased leaf once; collection-only note text stores no continuation claim.
+    // At the first line past a marker-line note, the note's last block answers (carve#3885).
     const noteClaimEnds = (): boolean => {
       markerNoteClaimChecked = true
-      const claimLines = nested.slice()
-      rebaseOverindentedBlocks(claimLines, authoredBaseEligible, -1, false, false,
-        undefined, undefined, takenBelowColumn, false, undefined, undefined,
-        { markers: noteParagraphMarkers })
+      // A comment the note covered closed its paragraph.
+      if (pendingNoteComments.size > 0) return true
       const claim = verbatimOnlyLazyState()
-      const claimClosers = buildCloserIndex(claimLines)
-      let definitionClaim = true
-      let blank = false
-      for (let index = 0; index < claimLines.length; index++) {
-        const text = claimLines[index]!
-        if (isBlankLine(text)) blank = true
-        else {
-          if (blank && isListMarkerLine(text.trimStart())) { claim.inFootnoteBody = false; definitionClaim = false }
-          blank = false
-        }
-        const definition = RE_FOOTNOTE_DEF.exec(text.trimStart())
-        if (definition) definitionClaim = true
-        else if ((index > 0 && noteParagraphMarkers.has(index) &&
-            indentColumns(nested[index]!) === FOOTNOTE_BODY_COLUMN) || RE_DEFLIST_DEF.test(text.trimStart())) definitionClaim = false
-        if (!definition && leadingWhitespace(text) === 0 && !lineOpensItemBlock(text) && !isBlankLine(text) &&
-            !claim.inFootnoteBody && claim.opaque === null) definitionClaim = false
-        if (definitionClaim && opensCodeFence(text)) claim.lazyFoldable = false
+      const claimClosers = buildCloserIndex(nested)
+      trackItemLazyState(content, claim, marker => codeCloserPossible(claimClosers, marker, -1), true, () => false,
+        { whitespace: 0, descendantFrames: true, terminatorFree: true })
+      for (let index = 0; index < nested.length; index++) {
+        const text = nested[index]!
         trackItemLazyState(text, claim, marker => codeCloserPossible(claimClosers, marker, index), true, () => false,
           { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
-        if (leadingWhitespace(text) === 0 && claim.lazyFoldable && !claim.inFootnoteBody &&
-            !opensCodeFence(text) && !isListMarkerLine(text) && !definition) definitionClaim = false
       }
-      return (definitionClaim && !markerNoteItemParagraphOpen && !commentFenceTail && !fenceBoundaryTail && (!claim.lazyFoldable || claimLines.every(text => isBlankLine(text) ||
-          (leadingWhitespace(text) > 0 && !lineOpensItemBlock(text.trimStart())))))
+      return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
     }
     const stopsBeforeBody = (l: string): Decision | undefined => {
       // Content-column model (carve#295): a continuation belongs to the item
@@ -2034,9 +2012,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       belowItemComment = lw < contentCol && RE_COMMENT_LINE.test(l.trimStart())
       const heldCommentSpan = belowItemComment && commentFenceRun(l.trimStart()) !== undefined &&
         bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
-      if (belowItemComment && !heldCommentSpan &&
-          !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
-          !lazyState.commentAtColumn && lazyState.inDefList !== 'description') return 'stop'
+      if (belowItemComment && !heldCommentSpan) return 'stop'
       return undefined
     }
     const readDefinitionSource = (l: string): Decision | undefined => {
@@ -2170,7 +2146,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // A line at the content column, in the order the item reads it.
     const placeContentLine = (l: string): void => {
-      markerNoteItemParagraphOpen = false
       strippedPrefix = undefined
       placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
@@ -2178,7 +2153,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null && RE_FOOTNOTE_DEF.test(placed.trimStart())) {
         lexer.hostedFootnoteLines.add(lexer.lineNumber(lexer.pos))
         blockedNoteClaimFloor = indentColumns(l) + FOOTNOTE_BODY_COLUMN
-        lazyState.lazyFoldable = false
       }
       followsBlank = pendingBlankRun.count > 0
       const commentRun = commentFenceRun(placed.trimStart())
@@ -2205,6 +2179,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
         !insideOpenFence(lazyState) &&
         !insideOpenQuoteParagraph(lazyState) &&
+        // A marker at an open description's body column is the description's block.
+        !(lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined &&
+          indentColumns(placed, lazyState.descriptionColumn) >= lazyState.descriptionColumn) &&
         (RE_ORDERED.test(l) ||
           RE_UNORDERED.test(l) ||
           RE_TASK.test(l) ||
@@ -2219,9 +2196,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         markerDecision(lexer, lexer.pos - 1).owner?.kind === 'footnote' &&
         markerDecision(lexer, lexer.pos - 1).reason === undefined
       if (isMarker && !followsOwnedNoteMarker) subListMarkers.add(nested.length)
-      if (isMarker && leftBlockedNote && markerNoteItem &&
-          bottomBlockLeavesParagraphOpen(markerFreeContent(l.trimStart())))
-        markerNoteItemParagraphOpen = true
     }
     const dedentContentLine = (l: string): void => {
       // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
@@ -2299,7 +2273,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !(nestedTermOwnsSeparator && indentColumns(l) >= leadNestedContentColumn &&
             RE_DEFLIST_TERM.test(dedented.trimStart()))) {
         authoredBaseEligible.add(nested.length)
-        if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
         if (firstBodyMarkerColumn === undefined) {
           firstBodyMarkerColumn = markerContentColumn(nested.find((line) => !isBlankLine(line)) ?? dedented)
         }
@@ -2345,7 +2318,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               line => !isBlankLine(line) && indentColumns(line, markerNoteFloor) < markerNoteFloor)
           }
           unclosedNoteFence = !closesAt(indentColumns(l)) && !closesAt(markerNoteFloor)
-          if (unclosedNoteFence && nestedNoteBodyColumn === undefined) noteInlineFenceOpen = true
         }
         markerNoteParagraph = noteParagraphOpen && !followsBlank && !bodyComment &&
           indentColumns(l, markerNoteFloor) >= markerNoteFloor &&
@@ -2353,11 +2325,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (nestedNoteBodyColumn !== undefined && indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) {
           const marker = isListMarkerLine(bodyText)
           const folds: boolean = marker && nestedNoteParagraph && !followsBlank
-          if (!folds && (marker || bodyText.startsWith('>'))) nestedNoteContainer = true
           nestedNoteParagraph = folds || (!bodyComment && !marker && !lineOpensItemBlock(bodyText))
-          if (!nestedNoteContainer && !bodyComment) noteBodyLast = true
         }
-        if (markerNoteParagraph && !bodyComment) noteBodyLast = true
       }
       const continuedMarkerNoteText = markerNoteItem && !followsBlank && lazyState.lazyFoldable &&
         lazyState.opaque === null && lazyState.quoteInner === null && lazyState.literalColon === undefined &&
@@ -2423,6 +2392,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const opener = opensCodeFence(bottom) ? bottom : trimmed
         const indented = opener !== dedented
         const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
+          !noteFenceOpen(lazyState) &&
           (lazyState.quoteInner === null || !blockQuoteParagraphOpen(lazyState.quoteInner)) &&
           (lazyState.unclosedFenceBase === undefined || indentColumns(l) - contentCol === lazyState.unclosedFenceBase) &&
           opensCodeFence(opener)
@@ -2598,7 +2568,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
         authoredQuoteParagraphOpen,
       )
-      if (blockedNoteClaimFloor !== undefined) lazyState.lazyFoldable = false
       if (captionAtItemColumn) {
         captionParagraphClaim = hadQuoteParagraph
         lazyState.quoteInner = null
@@ -2643,7 +2612,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           RE_CAPTION.test(trackedContent.trimStart()) && lazyState.opaque === null) {
         lazyState.inFootnoteBody = false
         lazyState.lazyFoldable = true
-        markerNoteItemParagraphOpen = true
       }
       if (isMarker && lazyState.literalColon === undefined &&
           colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
@@ -2660,13 +2628,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         markerDescriptionInlineFence = true
         lazyState.inlineFenceParagraph = true
       } else if (!lazyState.inlineFenceParagraph) markerDescriptionInlineFence = false
-      if (noteInlineFenceOpen) noteBodyLast = true
       if (continuesItemParagraph && !skipConsumedCloser && lazyState.opaque === null &&
           lazyState.inlineFenceParagraph) itemParagraphFences.add(nested.length - 1)
       if (lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
         nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
         nestedNoteParagraph = true
-        nestedNoteContainer = false
       }
       if (belowDescendantComment && commentFenceRun(l.trimStart()) === belowDescendantComment.run) {
         Object.assign(lazyState, belowDescendantComment.state)
@@ -2705,17 +2671,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // Its body may follow, but neither can keep this item's paragraph open.
       const quotedInvisible = lazyState.opaque === null && descendantOpaque === null
         ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
+      // A quoted footnote answers through the quote tracker (carve#3885); a link definition holds no paragraph.
       if (quotedInvisible !== undefined && quotedInvisible === quotedInvisible.trimStart() &&
-          (RE_FOOTNOTE_DEF.test(quotedInvisible) || isLinkDefLine(quotedInvisible))) {
-        quotedInvisibleBody = RE_FOOTNOTE_DEF.test(quotedInvisible)
+          isLinkDefLine(quotedInvisible) && !RE_FOOTNOTE_DEF.test(quotedInvisible))
         lazyState.lazyFoldable = false
-      } else if (quotedInvisibleBody) {
-        const quoteBody = lazyState.opaque === null && descendantOpaque === null
-          ? RE_BLOCKQUOTE.exec(unindented)?.[1] : undefined
-        if (quoteBody !== undefined && indentColumns(quoteBody, FOOTNOTE_BODY_COLUMN) >= FOOTNOTE_BODY_COLUMN)
-          lazyState.lazyFoldable = false
-        else quotedInvisibleBody = false
-      }
       if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
       if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
           RE_FOOTNOTE_DEF.test(l.trimStart()) && indentColumns(l) < contentCol && !enclosingLazy)
@@ -2744,7 +2703,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         commentFenceTail || fenceBoundaryTail ||
         // An ancestor already admitted this follower after the invisible comment.
         (lazyState.invisibleAtColumn && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-          RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()))) && (!afterNoteBody || markerNoteItemParagraphOpen || (commentFenceTail && noteReach !== null) || fenceBoundaryTail)) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
+          RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart())))) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
         (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
         // Only a consumed below-column comment retains a follower (X1).
         (lazyState.commentAtColumn &&
@@ -2809,7 +2768,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (indentColumns(l, contentCol) < contentCol && RE_CAPTION.test(l.replace(/^[ \t]+/, '')) &&
           lazyState.opaque === null && !quoteLazyFramed) {
         lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
-        if (markerNoteItem) markerNoteItemParagraphOpen = true
       } else if (indentColumns(l, contentCol) < contentCol && lazyState.opaque === null &&
           opensCodeFence(l.replace(/^[ \t]+/, '')) && followsBelowColumnComment()) {
         // R3285: a comment below the column retains the item, and a valid
@@ -2898,9 +2856,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     const admitLazyLine = (l: string): void => {
       const commentState = belowItemComment && lazyState.literalColon === undefined && (lazyState.deepest != null || lazyState.authoredColon?.column === 0) && lazyState.opaque === null ? {...lazyState} : undefined
-      const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
-        lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
-      const termComment = lazyState.inDefList === 'term' && isRetainableLineComment(lexer, l)
       const lazyLine = lazyLineFor(l)
       if (leadNestedTerm && sourceDescription !== null && lazyState.inDefList === false &&
           pendingBlankRun.count === 0) nestedTermOwnsSeparator = true
@@ -2943,9 +2898,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (belowDescendantComment && commentFenceRun(l.trimStart()) === belowDescendantComment.run && !commentState) {
         Object.assign(lazyState, belowDescendantComment.state)
         belowDescendantComment = undefined
-      }
-      if (retainedComment || termComment || (lazyState.inDefList === 'description' && isRetainableLineComment(lexer, l))) {
-        retainCommentBoundary(lazyState)
       }
       if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
       if (lazyState.opaque === null && !lazyState.inlineFenceParagraph && descendantOpaque === null &&
@@ -3035,65 +2987,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // recognized block group now, before tightness and block parsing inspect
     // it.  This is #1705's authored `block_base`: only structural indentation
     // is removed, while indentation beyond the opener's base remains payload.
-    const rebaseAuthoredBlocks = (leadIsMarker: boolean): boolean => {
-      const markerNoteFenceOwnsExtent = markerNoteItem && (markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) !== null ||
-        markerNoteOpenerReach(nested, noteParagraphMarkers, noteCommentLines) !== null)
-      // Include marker-line containers whose continuation keeps its own extent.
-      const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || markerLineTerm || markerNoteFenceOwnsExtent ||
-        (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
-          blockQuoteParagraphOpen(markerLineQuoteState(content)!))
-      const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
-      const commentFenceOpeners = markerNoteItem ? markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines) : []
-      frameNoteCommentFences(nested, commentFenceOpeners, noteParagraphMarkers)
-      const rebaseEligible = leadOwnsExtent
-        ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
-        : authoredBaseEligible
-      const rebaseTakenBelowColumn = leadOwnsExtent
-        ? new Set(Array.from(takenBelowColumn, (index) => index + 1))
-        : takenBelowColumn
-      let authoredCodeFenceOpen = false
-      let tabRebaseColumns: Map<number, number> | undefined
-      if (tabLineFacts !== undefined) {
-        for (const [index, entry] of tabLineFacts) {
-          if (nested[index] !== entry.text) continue
-          const columns = tabRebaseColumns ??= new Map()
-          columns.set(leadOwnsExtent ? index + 1 : index, entry.columns)
-        }
-      }
-      if (hasOverindentedBlockCandidate) {
-        rebaseOverindentedBlocks(
-          rebaseLines,
-          rebaseEligible,
-          leadIsMarker ? markerContentColumn(content, terminatorFree) : -1,
-          false,
-          false,
-          (index) => subListMarkers.delete(leadOwnsExtent ? index - 1 : index),
-          () => { authoredCodeFenceOpen = true },
-          rebaseTakenBelowColumn,
-          leadColon !== null,
-          leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
-          tabRebaseColumns,
-          { markers: noteParagraphMarkers },
-          leadOwnsExtent ? undefined : itemParagraphFences,
-          undefined,
-          markerLineTerm,
-          false,
-          false,
-          undefined,
-          new Set([
-            ...Array.from(continuationFenceBreaks, (index) => index + (leadOwnsExtent ? 2 : 1)),
-            ...Array.from(subListMarkers, (index) => index + (leadOwnsExtent ? 1 : 0)),
-          ]),
-          undefined,
-          contentCol,
-          leadIsMarker && RE_DEFLIST_TERM.test(descendantLead),
-        )
-      }
-      if (leadOwnsExtent) {
-        for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
-      }
-      return authoredCodeFenceOpen
-    }
     const leadIsMarker =
       unorderedMatch(content, terminatorFree) !== null ||
       orderedMatch(content, terminatorFree) !== null ||
@@ -3102,9 +2995,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Tightness uses the columns at which the collector admitted the lines.
     // Rebasing a block can move its continuation below a sublist's column.
     let hasBlank = nested.some(isBlankLine)
-    const authoredCodeFenceOpen = rebaseAuthoredBlocks(leadIsMarker)
+    const commentFenceOpeners = markerNoteItem ? markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines) : []
+    frameNoteCommentFences(nested, commentFenceOpeners, noteParagraphMarkers)
     // Rebasing can reveal a fence opened past the item's content column.
     // Its payload markers must not split the collected stream (#2212).
+    // A task item's marker-line note rebases the lines reaching its body at its own source column.
+    const taskNoteShift = isTask && markerNoteItem ? markerNoteFloor - FOOTNOTE_BODY_COLUMN - contentCol : 0
+    if (taskNoteShift > 0) {
+      for (let k = 0; k < nested.length; k++) {
+        const text = nested[k]!
+        if (!isBlankLine(text) && indentColumns(text) >= taskNoteShift + FOOTNOTE_BODY_COLUMN) nested[k] = sliceColumns(text, taskNoteShift, true)
+      }
+    }
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
@@ -3165,7 +3067,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A descendant's body-line fence keeps its trailing payload blanks.
     // Parent separators do not belong to fences on child marker lines.
     if (pendingBlankRun.count > 0 && (
-      lazyState.opaque !== null || authoredCodeFenceOpen || (descendantOpaque !== null && !descendantOpaque.markerLine) ||
+      lazyState.opaque !== null || (descendantOpaque !== null && !descendantOpaque.markerLine) ||
       (trailingDescendantFence && (firstBlockIdx >= 0 || leadIsMarker || RE_DEFLIST_TERM.test(content)))
     )) {
       hasBlank = true
@@ -3300,12 +3202,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
-      // A note whose body continues after an authored blank is another block
-      // in this item even though the note itself renders in the endnotes.
-      let loose = hasBlank && !RE_FOOTNOTE_DEF.test(content) && nested.some((line, index) =>
-        RE_FOOTNOTE_DEF.test(line.trimStart()) &&
-        nested[index + 1] !== undefined && !isBlankLine(nested[index + 1]!) &&
-        !lineOpensItemBlock(nested[index + 1]!.trimStart()))
+      // A note's body is the note's paragraph, never the item's own (L1).
+      let loose = false
       let previousVisibleSpan: { start: number; end: number; startColumn: number } | undefined
       let previousVisibleType: BlockNode['type'] | undefined
       let previousVisibleBlock: BlockNode | undefined
@@ -3317,7 +3215,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       if (blankBeforeNestedContinuation) loose = true
       for (const child of children) {
-        if (child.type === 'comment' || child.type === 'abbreviation_def') continue
+        if (child.type === 'comment' || child.type === 'abbreviation_def') {
+          // A comment below the nested list's column has ended that list.
+          const commentSpan = session.blockLineSpan(child)
+          const commentLine = commentSpan && (lexer.rootLines ?? lexer.lines)[commentSpan.start - 1]
+          if (nestedListContentColumn !== undefined && commentLine !== undefined && commentLine !== '' &&
+              sourceColumn(commentLine) < nestedListContentColumn) nestedListContentColumn = undefined
+          continue
+        }
         const span = session.blockLineSpan(child)
         if (span === undefined) continue
         if (previousVisibleSpan === undefined && child.type === 'paragraph' &&
@@ -3414,6 +3319,56 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     return item
   }
 
+  // A description body rebases only its marker line, so a refused `+` follower
+  // below the item's source content column is the body's, not the item's (corpus 750).
+  function refusedFollowerLeavesItem(lexer: Lexer, shape: ListShape, placement: ItemPlacement): boolean {
+    if (lexer.hostBodyRoot !== 'description' || placement.itemMarkerColumn === placement.physicalItemMarkerColumn) return false
+    const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+    if (source === undefined || isBlankLine(source) || isListMarkerLine(stripLazyFrame(lexer.peek() ?? '').trimStart())) return false
+    return sourceColumn(source, placement.itemQuoteDepth) < placement.physicalItemMarkerColumn + placement.contentCol - shape.baseIndent
+  }
+
+  // Siblings group by their container and a comment is invisible, so a comment
+  // that closed the item above does not end the list (carve#3885).
+  function commentsBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
+    const line = lexer.peek()
+    if (line === undefined || !RE_COMMENT_LINE.test(line)) return
+    // Three consecutive blanks end the list; a comment line breaks the run.
+    let run = 0
+    for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) run++
+    let blanks = run
+    let longest = run
+    let k = lexer.pos
+    for (let at = lexer.peek(k - lexer.pos); at !== undefined && (isBlankLine(at) || RE_COMMENT_LINE.test(at)); at = lexer.peek(k - lexer.pos)) {
+      if (isBlankLine(at)) {
+        blanks++
+        longest = Math.max(longest, ++run)
+        k++
+        continue
+      }
+      run = 0
+      const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
+      let end = k
+      if (fence) {
+        for (let j = k + 1; lexer.peek(j - lexer.pos) !== undefined; j++) {
+          if (RE_COMMENT_BLOCK.exec(lexer.peek(j - lexer.pos)!.trimStart())?.[1] === fence) {
+            end = j
+            break
+          }
+        }
+      }
+      k = end + 1
+    }
+    if (k >= lexer.lineCount || longest >= 3) return
+    const start = lexer.pos
+    lexer.pos = k
+    const sibling = readItemHead(lexer, shape) !== null
+    lexer.pos = start
+    if (!sibling) return
+    if (blanks > 0) flags.loose = true
+    last.children.push(...session.parseInvisibleRun(lexer, k))
+  }
+
   return function parseList(lexer: Lexer, session: ParseSession): List {
     const shape = classifyList(lexer, helpers)
     const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = shape
@@ -3451,6 +3406,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !isBlankLine(a) && !isContinuationMarker(a))
 
     while (!lexer.eof()) {
+      if (items.length) commentsBeforeSibling(lexer, session, shape, items.at(-1)!, flags)
       const head = readItemHead(lexer, shape)
       if (!head) break
       const oneLine = oneLineItem(lexer, session, shape, head)
@@ -3472,6 +3428,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (firstBlock.next === 'end') break
         if (firstBlock.next === 'loose') flags.loose = true
         continue
+      }
+      if (firstBlock.kind === 'refused' && refusedFollowerLeavesItem(lexer, shape, placement)) {
+        const item: ListItem = { type: 'list_item', children: [] }
+        if (session.recordPositions) attachBlockPos(lexer, item, head.startLineIndex, lexer.pos)
+        items.push(markItem(item, head))
+        break
       }
       items.push(collectItem(lexer, session, shape, head, placement,
         firstBlock.kind === 'refused' ? '' : head.content, isItemAttachBoundary, flags))

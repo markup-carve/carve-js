@@ -20,10 +20,10 @@ describe('a definition list is a first-class block opener that interrupts (carve
     )
   })
 
-  it('an INDENTED `:: ` (below the content column) still folds as lazy text', () => {
+  it('an INDENTED `:: ` (below the content column) interrupts too', () => {
     // `RE_DEFLIST_TERM` is `^`-anchored, so an indented term does not interrupt,
     // matching how heading/quote behave below the content column.
-    expect(html('para\n :: t\n :  d')).toBe('<p>para\n:: t\n:  d</p>')
+    expect(html('para\n :: t\n :  d')).toBe('<p>para</p>\n<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
   })
 
   it('a standalone definition list still parses', () => {

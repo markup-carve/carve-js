@@ -1,5 +1,6 @@
 import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../parse.js'
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
+import { isListMarkerLine } from '../parse-prepass-core.js'
 import type { listStateHelpers } from '../../parse.js'
 import { createRunPhases, endsOnBlock, type CommentCloser, type FenceCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
@@ -33,6 +34,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     isBlockAttributeLine,
     isLinkDefLine,
     isTableRow,
+    lineOpensBlock,
     leadingWhitespace,
     markerLineState,
     markerPrefixLength,
@@ -146,12 +148,63 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (state.inFootnoteBody && !isBlankLine(content)) {
       const bodyColumn = Math.max(state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN,
         line.atContentColumn ? (state.authoredColon?.column ?? 0) + FOOTNOTE_BODY_COLUMN : 0)
-      if (indentColumns(content, bodyColumn) < bodyColumn) state.inFootnoteBody = false
+      if (indentColumns(content, bodyColumn) < bodyColumn) {
+        state.inFootnoteBody = false
+        // A line that leaves the body but does not interrupt is the note paragraph's lazy line.
+        if (state.noteFrame !== undefined && noteFrameParagraphOpen(state.noteFrame) && noteLazyLine(line)) {
+          trackItemLazyState(content.trimStart(), state.noteFrame, line.hasFenceCloser, false, () => false)
+          state.inFootnoteBody = true
+          state.lazyFoldable = noteFrameParagraphOpen(state.noteFrame)
+          state.inDefList = false
+          return true
+        }
+      }
     }
-    if (!state.inFootnoteBody) return false
+    if (!state.inFootnoteBody) {
+      delete state.noteFrame
+      return false
+    }
     state.invisibleAtColumn = line.wasInvisibleAtColumn
     state.commentAtColumn = line.wasCommentAtColumn
-    return endsOnBlock(state)
+    const frame = state.noteFrame
+    if (frame === undefined) return endsOnBlock(state)
+    const bodyColumn = state.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN
+    let noteLine = isBlankLine(content) ? '' : sliceColumns(content, bodyColumn, true)
+    // A description in the note reads its body from its own column.
+    let descriptionShift = 0
+    if (frame.inDefList === 'description' && frame.descriptionColumn !== undefined && noteLine !== '' &&
+        !RE_DEFLIST_DEF.test(noteLine) && indentColumns(noteLine, frame.descriptionColumn) >= frame.descriptionColumn) {
+      descriptionShift = frame.descriptionColumn
+      noteLine = sliceColumns(noteLine, descriptionShift, true)
+    }
+    // A caller that reads descendant frames reads a list item's in the note's body too.
+    trackItemLazyState(noteLine, frame,
+      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn + descriptionShift), true, () => false,
+      line.facts?.descendantFrames === true && (noteFrameOwnsItem(frame) || isListMarkerLine(noteLine.trimStart()))
+        ? { terminatorFree: line.facts.terminatorFree, whitespace: leadingWhitespace(noteLine), descendantFrames: true }
+        : undefined)
+    state.lazyFoldable = noteFrameParagraphOpen(frame)
+    state.inDefList = false
+    return true
+  }
+
+  function noteFrameOwnsItem(frame: ItemLazyState): boolean {
+    for (let at: ItemLazyState | undefined = frame; at !== undefined; at = at.noteFrame) if (at.ownedColumn >= 0) return true
+    return false
+  }
+
+  function noteLazyLine(line: LazyLine): boolean {
+    const text = line.content.trimStart()
+    // A comment below the body is a block of the host, never note text.
+    if (RE_COMMENT_LINE.test(line.content.replace(/^[ \t]+/, ''))) return false
+    const fence = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
+    if (fence !== undefined) return !line.hasFenceCloser(fence)
+    return bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
+  }
+
+  function noteFrameParagraphOpen(frame: ItemLazyState): boolean {
+    return frame.lazyFoldable && frame.opaque === null && frame.divDepth === 0 &&
+      frame.deepest?.lazyFoldable !== false && frame.deepest?.opaque == null
   }
 
   /** A below-column comment span held by an open colon container closes on its run. */
@@ -385,7 +438,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.deepest = null
     const base = state.opaque.column ?? 0
     const column = indentColumns(content, base + 1)
-    if (column <= base && state.opaque.close.test(content.trimStart())) state.opaque = null
+    if (column <= base && state.opaque.close.test(content.replace(/^[ \t]+/, ''))) state.opaque = null
     return endsOnBlock(state)
   }
 
@@ -549,12 +602,22 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
-    state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
+    const note = RE_FOOTNOTE_DEF.exec(content.trimStart())
+    state.inFootnoteBody = note !== null
+    delete state.noteFrame
     if (state.inFootnoteBody) state.footnoteBodyColumn = indentColumns(content) + FOOTNOTE_BODY_COLUMN
     else delete state.footnoteBodyColumn
     state.invisibleAtColumn = true
     state.commentAtColumn = false
-    return endsOnBlock(state)
+    if (note === null) return endsOnBlock(state)
+    // A note's first block answers like any container's (carve#3885).
+    const frame = verbatimOnlyLazyState()
+    const bodyColumn = state.footnoteBodyColumn!
+    trackItemLazyState(note[2]!, frame, (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn), true, () => false)
+    state.noteFrame = frame
+    state.lazyFoldable = noteFrameParagraphOpen(frame)
+    state.inDefList = false
+    return true
   }
 
   // A blockquote line keeps the fold open: the quote's trailing paragraph

@@ -362,9 +362,9 @@
   {
     "id": "blank-tail-boundary-45",
     "source": "- :: term\n  ```\n  a\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -474,9 +474,9 @@
   {
     "id": "blank-tail-boundary-59",
     "source": "- :: term\n  ```\n  a\n\n  b\n    ```\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n  ```\n%% note\n"
+      "a\n\nb\n  ```\n"
     ]
   },
   {
@@ -530,9 +530,9 @@
   {
     "id": "blank-tail-boundary-66",
     "source": "- :: term\n  ```\n  a\n\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -642,9 +642,9 @@
   {
     "id": "blank-tail-boundary-80",
     "source": "- :: term\n  ```\n  a\n\n\n  b\n    ```\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n  ```\n%% note\n"
+      "a\n\n\nb\n  ```\n"
     ]
   },
   {
@@ -698,9 +698,9 @@
   {
     "id": "blank-tail-boundary-87",
     "source": "- :: term\n  ```\n  a\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -810,9 +810,9 @@
   {
     "id": "blank-tail-boundary-101",
     "source": "- :: term\n  ```\n  a\n\n    b\n    ```\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n  ```\n%% note\n"
+      "a\n\n  b\n  ```\n"
     ]
   },
   {
@@ -866,9 +866,9 @@
   {
     "id": "blank-tail-boundary-108",
     "source": "- :: term\n  ```\n  a\n\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -978,9 +978,9 @@
   {
     "id": "blank-tail-boundary-122",
     "source": "- :: term\n  ```\n  a\n\n\n    b\n    ```\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n  ```\n%% note\n"
+      "a\n\n\n  b\n  ```\n"
     ]
   },
   {
@@ -1370,9 +1370,9 @@
   {
     "id": "blank-tail-boundary-171",
     "source": "- :: term\n  ~~~\n  a\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -1482,9 +1482,9 @@
   {
     "id": "blank-tail-boundary-185",
     "source": "- :: term\n  ~~~\n  a\n\n  b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -1538,9 +1538,9 @@
   {
     "id": "blank-tail-boundary-192",
     "source": "- :: term\n  ~~~\n  a\n\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -1650,9 +1650,9 @@
   {
     "id": "blank-tail-boundary-206",
     "source": "- :: term\n  ~~~\n  a\n\n\n  b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -1706,9 +1706,9 @@
   {
     "id": "blank-tail-boundary-213",
     "source": "- :: term\n  ~~~\n  a\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -1818,9 +1818,9 @@
   {
     "id": "blank-tail-boundary-227",
     "source": "- :: term\n  ~~~\n  a\n\n    b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -1874,9 +1874,9 @@
   {
     "id": "blank-tail-boundary-234",
     "source": "- :: term\n  ~~~\n  a\n\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -1986,9 +1986,9 @@
   {
     "id": "blank-tail-boundary-248",
     "source": "- :: term\n  ~~~\n  a\n\n\n    b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -2378,9 +2378,9 @@
   {
     "id": "blank-tail-boundary-297",
     "source": "- :: term\n  ~~~ raw\n  a\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -2490,9 +2490,9 @@
   {
     "id": "blank-tail-boundary-311",
     "source": "- :: term\n  ~~~ raw\n  a\n\n  b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -2546,9 +2546,9 @@
   {
     "id": "blank-tail-boundary-318",
     "source": "- :: term\n  ~~~ raw\n  a\n\n\n  b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -2658,9 +2658,9 @@
   {
     "id": "blank-tail-boundary-332",
     "source": "- :: term\n  ~~~ raw\n  a\n\n\n  b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -2714,9 +2714,9 @@
   {
     "id": "blank-tail-boundary-339",
     "source": "- :: term\n  ~~~ raw\n  a\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -2826,9 +2826,9 @@
   {
     "id": "blank-tail-boundary-353",
     "source": "- :: term\n  ~~~ raw\n  a\n\n    b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -2882,9 +2882,9 @@
   {
     "id": "blank-tail-boundary-360",
     "source": "- :: term\n  ~~~ raw\n  a\n\n\n    b\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -2994,9 +2994,9 @@
   {
     "id": "blank-tail-boundary-374",
     "source": "- :: term\n  ~~~ raw\n  a\n\n\n    b\n    ~~~\n%% note\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul>",
+    "html": "<ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n</code></pre></li></ul>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -3386,9 +3386,9 @@
   {
     "id": "blank-tail-boundary-423",
     "source": "> - :: term\n>   ```\n>   a\n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -3498,9 +3498,9 @@
   {
     "id": "blank-tail-boundary-437",
     "source": "> - :: term\n>   ```\n>   a\n> \n>   b\n>     ```\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ```\n%% note\n"
+      "a\n\nb\n  ```\n"
     ]
   },
   {
@@ -3554,9 +3554,9 @@
   {
     "id": "blank-tail-boundary-444",
     "source": "> - :: term\n>   ```\n>   a\n> \n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -3666,9 +3666,9 @@
   {
     "id": "blank-tail-boundary-458",
     "source": "> - :: term\n>   ```\n>   a\n> \n> \n>   b\n>     ```\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ```\n%% note\n"
+      "a\n\n\nb\n  ```\n"
     ]
   },
   {
@@ -3722,9 +3722,9 @@
   {
     "id": "blank-tail-boundary-465",
     "source": "> - :: term\n>   ```\n>   a\n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -3834,9 +3834,9 @@
   {
     "id": "blank-tail-boundary-479",
     "source": "> - :: term\n>   ```\n>   a\n> \n>     b\n>     ```\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ```\n%% note\n"
+      "a\n\n  b\n  ```\n"
     ]
   },
   {
@@ -3890,9 +3890,9 @@
   {
     "id": "blank-tail-boundary-486",
     "source": "> - :: term\n>   ```\n>   a\n> \n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -4002,9 +4002,9 @@
   {
     "id": "blank-tail-boundary-500",
     "source": "> - :: term\n>   ```\n>   a\n> \n> \n>     b\n>     ```\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ```\n%% note\n"
+      "a\n\n\n  b\n  ```\n"
     ]
   },
   {
@@ -4394,9 +4394,9 @@
   {
     "id": "blank-tail-boundary-549",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -4506,9 +4506,9 @@
   {
     "id": "blank-tail-boundary-563",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n>   b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -4562,9 +4562,9 @@
   {
     "id": "blank-tail-boundary-570",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -4674,9 +4674,9 @@
   {
     "id": "blank-tail-boundary-584",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n> \n>   b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -4730,9 +4730,9 @@
   {
     "id": "blank-tail-boundary-591",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -4842,9 +4842,9 @@
   {
     "id": "blank-tail-boundary-605",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n>     b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -4898,9 +4898,9 @@
   {
     "id": "blank-tail-boundary-612",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -5010,9 +5010,9 @@
   {
     "id": "blank-tail-boundary-626",
     "source": "> - :: term\n>   ~~~\n>   a\n> \n> \n>     b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -5402,9 +5402,9 @@
   {
     "id": "blank-tail-boundary-675",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -5514,9 +5514,9 @@
   {
     "id": "blank-tail-boundary-689",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n>   b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -5570,9 +5570,9 @@
   {
     "id": "blank-tail-boundary-696",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n> \n>   b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -5682,9 +5682,9 @@
   {
     "id": "blank-tail-boundary-710",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n> \n>   b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -5738,9 +5738,9 @@
   {
     "id": "blank-tail-boundary-717",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -5850,9 +5850,9 @@
   {
     "id": "blank-tail-boundary-731",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n>     b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -5906,9 +5906,9 @@
   {
     "id": "blank-tail-boundary-738",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n> \n>     b\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -6018,9 +6018,9 @@
   {
     "id": "blank-tail-boundary-752",
     "source": "> - :: term\n>   ~~~ raw\n>   a\n> \n> \n>     b\n>     ~~~\n> %% note\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote>",
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -6410,9 +6410,9 @@
   {
     "id": "blank-tail-boundary-801",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -6522,9 +6522,9 @@
   {
     "id": "blank-tail-boundary-815",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> >   b\n> >     ```\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ```\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ```\n%% note\n"
+      "a\n\nb\n  ```\n"
     ]
   },
   {
@@ -6578,9 +6578,9 @@
   {
     "id": "blank-tail-boundary-822",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -6690,9 +6690,9 @@
   {
     "id": "blank-tail-boundary-836",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> > \n> >   b\n> >     ```\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ```\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ```\n%% note\n"
+      "a\n\n\nb\n  ```\n"
     ]
   },
   {
@@ -6746,9 +6746,9 @@
   {
     "id": "blank-tail-boundary-843",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -6858,9 +6858,9 @@
   {
     "id": "blank-tail-boundary-857",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> >     b\n> >     ```\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ```\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ```\n%% note\n"
+      "a\n\n  b\n  ```\n"
     ]
   },
   {
@@ -6914,9 +6914,9 @@
   {
     "id": "blank-tail-boundary-864",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -7026,9 +7026,9 @@
   {
     "id": "blank-tail-boundary-878",
     "source": "> > - :: term\n> >   ```\n> >   a\n> > \n> > \n> >     b\n> >     ```\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ```\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ```\n%% note\n"
+      "a\n\n\n  b\n  ```\n"
     ]
   },
   {
@@ -7418,9 +7418,9 @@
   {
     "id": "blank-tail-boundary-927",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -7530,9 +7530,9 @@
   {
     "id": "blank-tail-boundary-941",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> >   b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\nb\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -7586,9 +7586,9 @@
   {
     "id": "blank-tail-boundary-948",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -7698,9 +7698,9 @@
   {
     "id": "blank-tail-boundary-962",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> > \n> >   b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\nb\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -7754,9 +7754,9 @@
   {
     "id": "blank-tail-boundary-969",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -7866,9 +7866,9 @@
   {
     "id": "blank-tail-boundary-983",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> >     b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -7922,9 +7922,9 @@
   {
     "id": "blank-tail-boundary-990",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -8034,9 +8034,9 @@
   {
     "id": "blank-tail-boundary-1004",
     "source": "> > - :: term\n> >   ~~~\n> >   a\n> > \n> > \n> >     b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>a\n\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -8426,9 +8426,9 @@
   {
     "id": "blank-tail-boundary-1053",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n%% note\n"
+      "a\n\nb\n"
     ]
   },
   {
@@ -8538,9 +8538,9 @@
   {
     "id": "blank-tail-boundary-1067",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> >   b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\nb\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\nb\n  ~~~\n%% note\n"
+      "a\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -8594,9 +8594,9 @@
   {
     "id": "blank-tail-boundary-1074",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> > \n> >   b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n%% note\n"
+      "a\n\n\nb\n"
     ]
   },
   {
@@ -8706,9 +8706,9 @@
   {
     "id": "blank-tail-boundary-1088",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> > \n> >   b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\nb\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\nb\n  ~~~\n%% note\n"
+      "a\n\n\nb\n  ~~~\n"
     ]
   },
   {
@@ -8762,9 +8762,9 @@
   {
     "id": "blank-tail-boundary-1095",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n%% note\n"
+      "a\n\n  b\n"
     ]
   },
   {
@@ -8874,9 +8874,9 @@
   {
     "id": "blank-tail-boundary-1109",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> >     b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -8930,9 +8930,9 @@
   {
     "id": "blank-tail-boundary-1116",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> > \n> >     b\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n%% note\n"
+      "a\n\n\n  b\n"
     ]
   },
   {
@@ -9042,9 +9042,9 @@
   {
     "id": "blank-tail-boundary-1130",
     "source": "> > - :: term\n> >   ~~~ raw\n> >   a\n> > \n> > \n> >     b\n> >     ~~~\n> > %% note\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n%% note\n</code></pre></li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code class=\"language-raw\">a\n\n\n  b\n  ~~~\n</code></pre></li></ul></blockquote></blockquote>",
     "codePayloads": [
-      "a\n\n\n  b\n  ~~~\n%% note\n"
+      "a\n\n\n  b\n  ~~~\n"
     ]
   },
   {
@@ -10802,50 +10802,38 @@
   {
     "id": "host-code-payload-blanks-54",
     "source": "- [^n]: note\n  ```\n  a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-55",
     "source": "- [^n]: note\n  ```\n  a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-56",
     "source": "- [^n]: note\n  ~~~\n  a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-57",
     "source": "- [^n]: note\n  ~~~\n  a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-58",
     "source": "- [^n]: note\n  ~~~ raw\n  a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-59",
     "source": "- [^n]: note\n  ~~~ raw\n  a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-60",
@@ -11474,50 +11462,38 @@
   {
     "id": "host-code-payload-blanks-180",
     "source": "> - [^n]: note\n>   ```\n>   a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-181",
     "source": "> - [^n]: note\n>   ```\n>   a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-182",
     "source": "> - [^n]: note\n>   ~~~\n>   a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-183",
     "source": "> - [^n]: note\n>   ~~~\n>   a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-184",
     "source": "> - [^n]: note\n>   ~~~ raw\n>   a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-185",
     "source": "> - [^n]: note\n>   ~~~ raw\n>   a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-186",
@@ -12146,50 +12122,38 @@
   {
     "id": "host-code-payload-blanks-306",
     "source": "> > - [^n]: note\n> >   ```\n> >   a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-307",
     "source": "> > - [^n]: note\n> >   ```\n> >   a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-308",
     "source": "> > - [^n]: note\n> >   ~~~\n> >   a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-309",
     "source": "> > - [^n]: note\n> >   ~~~\n> >   a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-310",
     "source": "> > - [^n]: note\n> >   ~~~ raw\n> >   a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-311",
     "source": "> > - [^n]: note\n> >   ~~~ raw\n> >   a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-312",

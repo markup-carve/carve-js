@@ -39,9 +39,9 @@ describe('parser ownership across nested marker bodies', () => {
     expect(carveToHtml(':: t\n: - +\n> b\n')).toContain('<li>\n        <blockquote><p>b</p></blockquote>')
   })
 
-  it('keeps a below-column list marker in an open footnote paragraph', () => {
+  it('ends an open footnote paragraph at a below-column list marker', () => {
     const html = carveToHtml('- - a\n    [^n]: x\n    q\n   - li\n\nsee[^n]\n')
-    expect(html).toContain('<p>x\nq\n- li<a href="#fnref1"')
+    expect(html).toContain('<p>x\nq<a href="#fnref1"')
     expect(html).toContain('<li>a</li>')
   })
 

@@ -12,22 +12,22 @@
   {
     "id": "row-3",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n  more\n | a |\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore\n| a |\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore</p>\n    </aside>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-4",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n ---\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n—\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<hr>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-5",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n  more\n {#x}\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore\n{<span class=\"tag\"><strong>#x</strong></span>}\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore</p>\n    </aside>\n  </dd>\n</dl>\n<pre id=\"x\"><code>x\n</code></pre>"
   },
   {
     "id": "row-6",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n  more\n ---\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore\n—\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore</p>\n    </aside>\n  </dd>\n</dl>\n<hr>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-7",
@@ -37,7 +37,7 @@
   {
     "id": "row-8",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n {#x}\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n{<span class=\"tag\"><strong>#x</strong></span>}\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<pre id=\"x\"><code>x\n</code></pre>"
   },
   {
     "id": "row-9",

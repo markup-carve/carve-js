@@ -162,7 +162,7 @@
   {
     "id": "nested-bare-bare-shift1",
     "source": "- :::: box\n  :::\n   :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>:::\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-named-shift1",
@@ -247,7 +247,7 @@
   {
     "id": "nested-bare-bare-shift2",
     "source": "- :::: box\n  :::\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>:::\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-named-shift2",
@@ -332,7 +332,7 @@
   {
     "id": "nested-bare-bare-shift4",
     "source": "- :::: box\n  :::\n      :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>:::\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-named-shift4",

@@ -22,15 +22,15 @@ import { carveToHtml } from '../src/index.js'
 describe('a definition one column in folds as text', () => {
   const nested = (line: string) => carveToHtml(`- - a\n${line}\n`)
 
-  it('folds a footnote definition into the open paragraph', () => {
+  it('ends the list at a footnote definition', () => {
     expect(nested(' [^f]: x')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a\n[^f]: x</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
-  it('folds a link reference definition the same way', () => {
+  it('ends the list at a link reference definition the same way', () => {
     expect(nested(' [r]: /u')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a\n[r]: /u</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
@@ -40,26 +40,32 @@ describe('a definition one column in folds as text', () => {
     )
   })
 
-  it('folds exactly as the visible openers in that position already did', () => {
+  it('ends the list exactly as the visible openers in that position do', () => {
     // The controls this rule is derived from: nothing distinguishes a
     // definition from these.
+    const list = '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n'
+    const opened: Record<string, string> = {
+      ' # H': '<section id="H">\n  <h1>H</h1>\n</section>',
+      ' > q': '<blockquote><p>q</p></blockquote>',
+      ' :: t': '<dl>\n  <dt>t</dt>\n</dl>',
+      ' | c |': '<table>\n  <tbody>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
+    }
     for (const lead of [' # H', ' > q', ' :: t', ' | c |']) {
-      expect(nested(lead)).toContain('<li>a\n')
-      expect(nested(lead)).not.toContain('</ul>\n<p>')
+      expect(nested(lead)).toBe(list + opened[lead])
     }
   })
 })
 
 describe('a definition that folded as text defines nothing', () => {
-  it('does not resolve a reference', () => {
+  it('resolves a reference', () => {
     // The half that made this two bugs: the line folded as text AND was
     // collected, so a reference elsewhere resolved against a line the renderer
     // prints verbatim.
-    expect(carveToHtml('- - a\n [r]: /u\n\nsee [x][r]\n')).toContain('<p>see [x][r]</p>')
+    expect(carveToHtml('- - a\n [r]: /u\n\nsee [x][r]\n')).toContain('<p>see <a href="/u">x</a></p>')
   })
 
-  it('does not define a footnote', () => {
-    expect(carveToHtml('- - a\n [^f]: x\n\nsee[^f]\n')).toContain('<p>see[^f]</p>')
+  it('defines a footnote', () => {
+    expect(carveToHtml('- - a\n [^f]: x\n\nsee[^f]\n')).toContain('<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>')
   })
 
   it('does not expand an abbreviation', () => {

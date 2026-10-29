@@ -21,8 +21,8 @@ it('keeps a blank in an unterminated fence one list level deep', () => {
   expect(carveToHtml('- ```\n  x\n\ny')).toContain('<pre><code>x\n\n</code></pre>')
 })
 
-it('ends an outer quote after a nested marker-line fence', () => {
-  expect(carveToHtml('> - > ~~~\n  > y')).toBe('<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <pre><code></code></pre>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>&gt; y</p>')
+it('keeps the outer quote open after a nested marker-line fence', () => {
+  expect(carveToHtml('> - > ~~~\n  > y')).toBe('<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <pre><code></code></pre>\n      </blockquote>\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>')
 })
 
 it('keeps a marked line in the outer quote after a nested marker-line fence', () => {

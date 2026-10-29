@@ -16,12 +16,13 @@ it('does not restore the item paragraph while its nested note stays open', () =>
   expect(carveToHtml(source)).toBe('<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled aria-label="done"> done</li>\n</ul>')
 })
 
-it('returns that follower to the parent when its earlier note missed the parent content column', () => {
+it('keeps that follower in the note when its earlier note missed the parent content column', () => {
   const source = '- a\n [^n]: note\n    - a\n      [^n]: note\n     q  \n* [x] done\n'
-  expect(carveToHtml(source)).toContain('<ul>\n      <li>a</li>\n    </ul>\n    q')
+  expect(carveToHtml(source)).toBe('<ul>\n  <li>a</li>\n</ul>')
 })
 
-it('ends the item before a plus below a top-level note', () => {
+// The note's open paragraph takes both lines lazily (carve#3885).
+it('folds a plus below a note in an item into the note', () => {
   const source = '- a\n  [^n]: note\n +\ntext\n'
-  expect(carveToHtml(source)).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>+\ntext</p>')
+  expect(carveToHtml(source)).toBe('<ul>\n  <li>a</li>\n</ul>')
 })

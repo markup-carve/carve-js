@@ -2,342 +2,342 @@
   {
     "id": "row-1",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n # H\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n# H\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-2",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n # H\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n# H</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-3",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n # H\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n# H\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <pre><code>x\n</code></pre>\n</section>"
   },
   {
     "id": "row-4",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n # H\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n# H</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <div>\n    <p>tail</p>\n  </div>\n</section>"
   },
   {
     "id": "row-5",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n # H\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n# H\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-6",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n| a |\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-7",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n| a |</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-8",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n | a |\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n| a |\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-9",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n| a |</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-10",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n | a |\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n| a |\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-11",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n ---\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n—\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-12",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n ---\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n—</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-13",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n ---\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n—\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-14",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n ---\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n—</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-15",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n ---\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\n—\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-16",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n # H\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n# H\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-17",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n # H\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n# H</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-18",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n # H\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n# H\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <pre><code>x\n</code></pre>\n</section>"
   },
   {
     "id": "row-19",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n # H\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n# H</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <div>\n    <p>tail</p>\n  </div>\n</section>"
   },
   {
     "id": "row-20",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n # H\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n# H\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-21",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n| a |\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-22",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n| a |</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-23",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n | a |\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n| a |\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-24",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n| a |</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-25",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n | a |\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n| a |\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-26",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n ---\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n—\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-27",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n ---\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n—</dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-28",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n ---\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n—\n<code>\nx</code></dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<hr>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-29",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n ---\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n—</dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<hr>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-30",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: para\n  more\n ---\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore\n—\ntail</dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>para\nmore</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-31",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: 1. para\n     more\n # H\n     tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\nmore\n# H\ntail</li>\n    </ol>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\nmore</li>\n    </ol>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-32",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n | a |\n    tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n| a |\ntail</p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-33",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n  > more\n # H\n  > tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n# H\ntail</p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <blockquote><p>tail</p></blockquote>\n</section>"
   },
   {
     "id": "row-34",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: :: t\n  : para\n    more\n # H\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore\n# H</dd>\n    </dl>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore</dd>\n    </dl>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <div>\n    <p>tail</p>\n  </div>\n</section>"
   },
   {
     "id": "row-35",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: 1. para\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\n| a |</li>\n    </ol>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-36",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n| a |</p></blockquote>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-37",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n| a |</p>\n    </aside>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-38",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n  > more\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |</p></blockquote>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-39",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n    more\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-40",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: - para\n    more\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\nmore\n| a |</li>\n    </ul>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\nmore</li>\n    </ul>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-41",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: 1. para\n ---\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\n—\ntail</li>\n    </ol>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-42",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: 1. para\n     more\n # H\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\nmore\n# H</li>\n    </ol>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para\nmore</li>\n    </ol>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <div>\n    <p>tail</p>\n  </div>\n</section>"
   },
   {
     "id": "row-43",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n ---\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n—\n<code>\nx</code></p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<hr>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-44",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: - para\n ---\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\n—</li>\n    </ul>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<hr>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-45",
     "source": "[r][] [^p] [^c] [^d]\n\n> :: t\n> : para\n>  | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\n| a |</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "row-46",
     "source": "[r][] [^p] [^c] [^d]\n\n> :: t\n> : para\n>  | a |\n>   tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\n| a |\ntail</dd>\n  </dl>\n</blockquote>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n  <p>tail</p>\n</blockquote>"
   },
   {
     "id": "row-47",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n| a |\ntail</p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-48",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n  > more\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-49",
     "source": "[r][] [^p] [^c] [^d]\n\n::: note\n:: t\n: para\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para\n| a |\ntail</dd>\n  </dl>\n</aside>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n  <p>tail</p>\n</aside>"
   },
   {
     "id": "row-50",
     "source": "[r][] [^p] [^c] [^d]\n\n::: note\n:: t\n: para\n # H\n  tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para\n# H\ntail</dd>\n  </dl>\n</aside>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <h1 id=\"H\">H</h1>\n  <p>tail</p>\n</aside>"
   },
   {
     "id": "row-51",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n  more\n ---\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore\n—</p>\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\nmore</p>\n    </aside>\n  </dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-52",
     "source": "[r][] [^p] [^c] [^d]\n\n::: note\n:: t\n: para\n # H\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para\n# H\n<code>\nx</code></dd>\n  </dl>\n</aside>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <h1 id=\"H\">H</h1>\n  <pre><code>x\n</code></pre>\n</aside>"
   },
   {
     "id": "row-53",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n  > more\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |\ntail</p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-54",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n ---\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n—</p>\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-55",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n | a |\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\n| a |</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-56",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: :: t\n  : para\n ---\n    tail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para\n—\ntail</dd>\n    </dl>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-57",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: :: t\n  : para\n    more\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore\n| a |\ntail</dd>\n    </dl>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <dl>\n      <dt>t</dt>\n      <dd>para\nmore</dd>\n    </dl>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-58",
     "source": "[r][] [^p] [^c] [^d]\n\n> :: t\n> : para\n>  # H\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\n# H\ntail</dd>\n  </dl>\n</blockquote>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n  <h1 id=\"H\">H</h1>\n</blockquote>\n<p>tail</p>"
   },
   {
     "id": "row-59",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n    more\n | a |\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |\n<code>\nx</code></p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-60",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: - para\n | a |\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\n| a |</li>\n    </ul>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<div>\n  <p>tail</p>\n</div>"
   },
   {
     "id": "row-61",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: - para\n # H\n\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\n# H</li>\n    </ul>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-62",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: > para\n    more\n | a |\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore\n| a |\ntail</p></blockquote>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\nmore</p></blockquote>\n  </dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-63",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: - para\n    more\n # H\n::::\ntail\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\nmore\n# H</li>\n    </ul>\n  </dd>\n</dl>\n<div>\n  <p>tail</p>\n</div>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>para\nmore</li>\n    </ul>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <div>\n    <p>tail</p>\n  </div>\n</section>"
   },
   {
     "id": "row-64",
     "source": ":: t\n:  para\n  # H\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>para\n# H\ntail</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n  <p>tail</p>\n</section>"
   },
   {
     "id": "row-65",
     "source": ":: t\n:  para\n  ---\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>para\n—\ntail</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<hr>\n<p>tail</p>"
   },
   {
     "id": "row-66",
     "source": ":: t\n:  para\n  | a |\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>para\n| a |\ntail</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>"
   },
   {
     "id": "row-67",
     "source": ":: t\n:  para\n > q\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>para\n&gt; q\ntail</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<blockquote><p>q\ntail</p></blockquote>"
   },
   {
     "id": "row-68",
     "source": ":: t\n: para\n > q\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>para\n&gt; q\ntail</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>para</dd>\n</dl>\n<blockquote><p>q\ntail</p></blockquote>"
   },
   {
     "id": "row-69",

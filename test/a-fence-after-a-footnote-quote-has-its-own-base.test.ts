@@ -31,7 +31,7 @@ describe('CARVE-P0-004: a fence after a footnote quote has its own base', () => 
     it(`keeps the no-blank quote boundary at column ${indent}`, () => {
       const html = carveToHtml(source('> q', indent, '```js').replace('> q\n\n', '> q\n'))
       if (indent === 2) expect(html).toContain('<pre><code class="language-js">c\n</code></pre>')
-      else expect(html).toContain('<blockquote><p>q\n<code>js\nc\n</code></p></blockquote>')
+      else expect(html).toContain('<blockquote><p>q</p></blockquote>\n      <pre><code class="language-js">c\n</code></pre>')
     })
   }
 

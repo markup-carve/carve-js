@@ -2,21 +2,21 @@
   {
     "id": "row-1",
     "source": "1. :: t\n  %% c\n```\n",
-    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t\n</dt>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ol>\n<pre><code></code></pre>"
   },
   {
     "id": "row-2",
     "source": "1. :: t\n  %%%\n  c\n  %%%\n```\n",
-    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t\n</dt>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ol>\n<pre><code></code></pre>"
   },
   {
     "id": "row-3",
     "source": "- :: t\n %% c\n```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t\n</dt>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<pre><code></code></pre>"
   },
   {
     "id": "row-4",
     "source": "1. :: t\n  %% c\n```\n  x\n",
-    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t\n</dt>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ol>\n<p>x</p>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ol>\n<pre><code>  x\n</code></pre>"
   }
 ]

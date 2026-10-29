@@ -7,6 +7,7 @@ import type {
   EmphasisMemo,
   InlineMatch,
   InlineNode,
+  BarePair,
   InlinePairView,
   InlineScannerSession,
   InlineSource,
@@ -59,6 +60,8 @@ import {
   verbatimSpanEnd,
 } from '../parse-core.js'
 
+const EDITORIAL_INSERT = PAIR_MARKERS.indexOf('+')
+const EDITORIAL_DELETE = PAIR_MARKERS.indexOf('-')
 const smartTokensByFirst = new Map<string, typeof SMART_TOKENS>()
 for (const token of SMART_TOKENS) {
   const first = token[0][0]!
@@ -79,6 +82,40 @@ function canCloseBarePair(text: string, at: number, marker: string, openerMarks:
   const next = text[at + 1]
   return text[at] === marker && !(next === '}' && openerMarks.has(at)) && before !== undefined
     && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, at + 1)
+}
+
+// Each closed editorial comment body `{#...#}` mapped to its end, as `edScan`
+// steps over it whole (PART 9 E2a, ruled 2026-10-15).
+// How a closer walk reads a guarded child (see `bareOpener`): decided per
+// child, all opened, or none. `atStart`: the walk's own opener guards one.
+interface Waiver { mode: 'decide' | 'all' | 'none'; atStart: boolean }
+
+function editorialCommentEnds(text: string): Map<number, number> {
+  const ends = new Map<number, number>()
+  if (!text.includes('{#')) return ends
+  // The first `#}` after `at` and the one after that: the body's closer starts
+  // at `at + 2` or later, and the body is not empty.
+  let first = -1
+  let second = -1
+  for (let at = text.length - 2; at >= 0; at--) {
+    const close = first === at + 1 ? second : first
+    if (text[at] === '{' && text[at + 1] === '#' && close > at + 2 && !extendsGrapheme(text, at + 2)) ends.set(at, close + 2)
+    if (text[at] === '#' && text[at + 1] === '}') { second = first; first = at }
+  }
+  return ends
+}
+
+// Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
+// `guarded`: the look-behind holds only when that character is text, which
+// the closer walk decides (the PART 3 note under the bare templates).
+function bareOpener(text: string, at: number): 'open' | 'guarded' | 'none' {
+  const ch = text[at]!
+  const next = text[at + 1]
+  const before = text[at - 1]
+  if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && next === '>') || extendsGrapheme(text, at + 1)) return 'none'
+  if (before === undefined) return 'open'
+  if (before === '_' || before === '/') return before === '_' || ch === '/' || ch === '_' ? 'guarded' : 'open'
+  return /[A-Za-z0-9]/.test(before) ? 'none' : 'open'
 }
 
 function editorialCloserInsideAttribute(text: string, start: number, marker: string, closer: number, attributeEnd: number): boolean {
@@ -127,7 +164,8 @@ export class InlineParseSession {
     return null
   }
 
-  private substitutionScans: SubstitutionScanner | undefined
+  // `labels`: the destinations only the `nested` reading has, by start.
+  private substitutionScans: { scanner: SubstitutionScanner; labels: Array<[number, number]> } | undefined
 
   /**
    * A substitution's pair end and top-level arrow, or null for a forced strike.
@@ -135,9 +173,11 @@ export class InlineParseSession {
    */
   private substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
     if (text[open + 1] !== '~' || splitBracedOpener(text, open)) return null
-    const end = this.bracedPairEnd(text, open, '~}')
+    let end = this.bracedPairEnd(text, open, '~}')
     if (end === -1) return null
     if (this.substitutionScans === undefined) {
+      const paired = linkDestinations(text, newEmphasisMemo())
+      const labels: Array<[number, number]> = []
       const hosts = new Map<number, number>()
       const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
       for (let at = 0; at < text.length; at++) {
@@ -145,19 +185,43 @@ export class InlineParseSession {
         const close = brackets?.(at)
         if (close !== undefined) hosts.set(at, close + 1)
       }
-      for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
+      for (const [at, close] of linkDestinations(text, newEmphasisMemo(), true)) {
+        hosts.set(at, close + 1)
+        if (!paired.has(at)) labels.push([at, close])
+      }
       // An autolink or a cross-reference is atomic (PART 9 E2a): a `~>` ending one is no arrow.
       for (const [at, end] of atomicLinkRegions(text)) if (!hosts.has(at)) hosts.set(at, end)
       for (let at = 0; at < text.length; at++) {
         const marker = text[at + 1]
-        if (text[at] !== '{' || marker === undefined || FORCED_TYPE[marker] === undefined || splitBracedOpener(text, at)) continue
-        const close = this.bracedPairEnd(text, at, `${marker}}`)
+        if (text[at] !== '{' || marker === undefined || splitBracedOpener(text, at)) continue
+        // Matched `{+ +}` and `{- -}` frames are E2a boundaries too (section 22).
+        const critic = marker === '+' || marker === '-'
+        if (!critic && FORCED_TYPE[marker] === undefined) continue
+        const close = critic ? this.criticPairEnd(text, at, `${marker}}` as '+}' | '-}') : this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
       }
-      this.substitutionScans = new SubstitutionScanner(text, hosts)
+      labels.sort((a, b) => a[0] - b[0])
+      this.substitutionScans = { scanner: new SubstitutionScanner(text, hosts), labels }
     }
-    const arrow = this.substitutionScans.findArrow(open + 2, end - 2)
-    return arrow === -1 ? null : { end, arrow }
+    // The substitution reads a reference label's parentheses as a destination
+    // (`nested`), so a `~}` inside one does not close it.
+    const labels = this.substitutionScans.labels
+    let lo = 0
+    for (let hi = labels.length; lo < hi;) {
+      const mid = (lo + hi) >> 1
+      if (labels[mid]![0] <= open + 1) lo = mid + 1
+      else hi = mid
+    }
+    for (let i = lo; i < labels.length && labels[i]![0] < end - 2; i++) {
+      const close = labels[i]![1]
+      if (close < end - 2) continue
+      const next = this.pairCloser(text, close + 1, '~')
+      if (next === -1) return null
+      end = next + 2
+    }
+    const arrow = this.substitutionScans.scanner.findArrow(open + 2, end - 2)
+    if (arrow === -1) return null
+    return { end, arrow }
   }
 
   private commentCloserPositions: Map<string, number> | undefined
@@ -178,14 +242,14 @@ export class InlineParseSession {
   private pairEndOffset = 0
 
   private pairAttributeTails = new Map<number, number>()
-  private bareAttributePairs = new Map<number, { close: number; end: number }>()
+  private bareAttributePairs = new Map<number, BarePair>()
 
-  private pairEndCache = new Map<string, { tables: Array<Int32Array | undefined>; bytes: number; attributeTails: Map<number, number>; barePairs: Map<number, { close: number; end: number }> }>()
+  private pairEndCache = new Map<string, { tables: Array<Int32Array | undefined>; bytes: number; attributeTails: Map<number, number>; barePairs: Map<number, BarePair> }>()
   private pairEndCacheBytes = 0
   private pairEndCacheBudget = 0
   private inlinePairFrameDepth = 0
 
-  private rememberPairTables(text: string, tables: Array<Int32Array | undefined>, attributeTails = new Map<number, number>(), barePairs = new Map<number, { close: number; end: number }>()): void {
+  private rememberPairTables(text: string, tables: Array<Int32Array | undefined>, attributeTails = new Map<number, number>(), barePairs = new Map<number, BarePair>()): void {
     const bytes = 128 + text.length * 2 + attributeTails.size * 16 + barePairs.size * 24 + tables.reduce((sum, table) => sum + (table?.byteLength ?? 0), 0)
     while (this.pairEndCacheBytes + bytes > this.pairEndCacheBudget && this.pairEndCache.size > 0) {
       const oldest = this.pairEndCache.keys().next().value!
@@ -240,10 +304,12 @@ export class InlineParseSession {
     const ends = new Int32Array(n + 2).fill(-1)
     const codeEnds = backtickRunEnds(text)
     const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
-    const destinations = linkDestinations(text, newEmphasisMemo())
+    const destinationMemo = newEmphasisMemo()
+    const destinations = linkDestinations(text, destinationMemo)
+    const editorialDestinations = text.includes('{+') || text.includes('{-') ? linkDestinations(text, destinationMemo, true) : destinations
     const lineComments = new Map<number, number>()
     const attributeTails = new Map<number, number>()
-    const barePairs = new Map<number, { close: number; end: number }>()
+    const barePairs = new Map<number, BarePair>()
     const attributes = inlineOpaqueEnds(text, codeEnds, destinations, lineComments, attributeTails, brackets)
     for (const [start, end] of [...attributeTails].reverse()) attributeTails.set(start, attributeTails.get(end) ?? end)
     const bareMarkers = new Set<number>()
@@ -254,6 +320,15 @@ export class InlineParseSession {
     const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
     for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
     const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
+    // The editorial scan (`edScan`) reads no attribute run and no glued pair.
+    const editorialMarker = PAIR_MARKERS.split('').map((_, m) => m === EDITORIAL_INSERT || m === EDITORIAL_DELETE)
+    const sameEnd = (end: number): number => end
+    const afterFor = editorialMarker.map(editorial => editorial ? sameEnd : afterAttributes)
+    const destinationsFor = editorialMarker.map(editorial => editorial ? editorialDestinations : destinations)
+    // `edScan` steps over a closed editorial comment body whole (PART 9 E2a,
+    // ruled 2026-10-15): the `+}` or `-}` inside one is its content.
+    const editorialComments = tables[EDITORIAL_INSERT] !== undefined || tables[EDITORIAL_DELETE] !== undefined
+      ? editorialCommentEnds(text) : new Map<number, number>()
     const bracketEnds = new Set<number>()
     const openerMarks = new Set<number>()
     for (let at = 0; at < n; at++) {
@@ -263,6 +338,68 @@ export class InlineParseSession {
         if (close !== undefined) bracketEnds.add(close)
       }
       if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && !splitBracedOpener(text, at)) openerMarks.add(++at)
+    }
+    // Inside a `{X` span the run after a bare closer attaches only if that pair
+    // forms: a bare X is literal there (E3), and so is an opener whose guard
+    // is an X or has no closer. Otherwise the run is text and its `X}` is
+    // reachable, as the model's re-read of an unattached block finds.
+    const lastOpener = new Map<string, Int32Array>()
+    const nextCloser = new Map<string, Int32Array>()
+    const openerTable = (d: string): Int32Array => {
+      let table = lastOpener.get(d)
+      if (!table) {
+        table = new Int32Array(n + 1).fill(-1)
+        for (let i = 0; i < n; i++) table[i + 1] = text[i] === d && bareOpener(text, i) !== 'none' ? i : table[i]!
+        lastOpener.set(d, table)
+      }
+      return table
+    }
+    const attributeRunAt = (at: number): boolean => {
+      const end = attributes.get(at)
+      return end !== undefined && text[at] === '{' && (text[at + 1] !== '#' && text[at + 1] !== '%' || attributeTails.get(at) === end)
+    }
+    // The first bare closer of `d` the scan can reach from each position.
+    const closerTable = (d: string): Int32Array => {
+      let table = nextCloser.get(d)
+      if (!table) {
+        table = new Int32Array(n + 2).fill(-1)
+        for (let i = n - 1; i >= 0; i--) {
+          const opaqueEnd = attributes.get(i)
+          const codeEnd = text[i] === '`' ? codeEnds?.[i] : undefined
+          const bracketEnd = text[i] === '[' ? brackets?.(i) : undefined
+          if (text[i] === '\\') table[i] = table[i + 2]!
+          else if (lineComments.has(i)) table[i] = table[lineComments.get(i)!]!
+          else if (codeEnd !== undefined) table[i] = codeEnd === -1 ? -1 : table[codeEnd]!
+          else if (opaqueEnd !== undefined && !(attributeRunAt(i) && '/*_~='.includes(text[i - 1] ?? ''))) table[i] = table[opaqueEnd]!
+          else if (bracketEnd !== undefined) table[i] = table[(destinations.get(bracketEnd + 1) ?? bracketEnd) + 1]!
+          else table[i] = canCloseBarePair(text, i, d, openerMarks) ? i : table[i + 1]!
+        }
+        nextCloser.set(d, table)
+      }
+      return table
+    }
+    let bracedOpens: Int32Array | undefined
+    const bracedOpenBefore = (): Int32Array => {
+      if (!bracedOpens) {
+        bracedOpens = new Int32Array(n + 1).fill(-1)
+        for (let i = 0; i < n; i++) bracedOpens[i + 1] = openerMarks.has(i) ? i : bracedOpens[i]!
+      }
+      return bracedOpens
+    }
+    // `limit`: the `X}` the span would close at with the run opaque; a guard
+    // closer past it is outside the span (E2a).
+    const bareRunIsContent = (at: number, marker: string, limit: number): boolean => {
+      const owner = text[at - 1]
+      if (owner === undefined || !'/*_~='.includes(owner) || text[at - 2] === '\\') return false
+      if (owner === marker) return true
+      const open = openerTable(owner)[at - 1]!
+      // No opener on this side of a braced opener, or one an earlier closer
+      // takes: the pair cannot form.
+      if (open === -1 || bracedOpenBefore()[at - 1]! > open || closerTable(owner)[open + 1]! < at - 1) return true
+      if (open === 0 || bareOpener(text, open) !== 'guarded') return false
+      const guard = text[open - 1]!
+      const guardClose = closerTable(guard)[open + 1]!
+      return guard === marker || bareOpener(text, open - 1) === 'none' || guardClose === -1 || (limit !== -1 && guardClose > limit)
     }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
@@ -277,6 +414,8 @@ export class InlineParseSession {
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
       const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
+      // A `{#` or `{%` that closes as a comment stays opaque whatever precedes it.
+      const isAttributeRun = attributeRunAt(j)
       let bareId = -1
       let bareClose = -1
       let bareTail: number | undefined
@@ -298,14 +437,12 @@ export class InlineParseSession {
           table[j] = stop
         }
         bareId = PAIR_MARKERS.indexOf(ch)
-        const before = text[j - 1]
-        const canOpenBare = bareTables[bareId] !== undefined && next !== undefined && !isCarveWhitespace(next)
-          && next !== ch && before !== ch && (!before || !/[A-Za-z0-9_]/.test(before))
-          && (ch !== '=' || next !== '>') && ((ch !== '/' && ch !== '_') || before !== '/')
-          && !extendsGrapheme(text, j + 1)
-        bareClose = canOpenBare ? bareTables[bareId]![j + 1]! : -1
+        const opener = bareTables[bareId] === undefined ? 'none' : bareOpener(text, j)
+        const guarded = opener === 'guarded'
+        bareClose = opener !== 'none' ? bareTables[bareId]![j + 1]! : -1
         bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
-        if (bareTail !== undefined) barePairs.set(j, { close: bareClose, end: bareTail })
+        if (bareTail !== undefined) barePairs.set(j, guarded ? { close: bareClose, end: bareTail, guarded } : { close: bareClose, end: bareTail })
+        if (guarded) bareTail = undefined
       }
       for (const m of markers) {
         const table = tables[m]!
@@ -325,25 +462,30 @@ export class InlineParseSession {
         const isCloser = next === '}' && ch === PAIR_MARKERS[m] && (!openerMarks.has(j) || ch === '+' || ch === '-')
         raw[j] = next === '}' && ch === PAIR_MARKERS[m] ? j : raw[j + 1]!
         let stop: number
+        const editorial = editorialMarker[m]!
+        const pairDestinationEnd = destinationsFor[m]!.get(j)
+        const after = afterFor[m]!
         const commentEnd = lineComments.get(j)
+        const editorialCommentEnd = editorial ? editorialComments.get(j) : undefined
         if (bracketEnds.has(j)) stop = -1
+        else if (editorialCommentEnd !== undefined) stop = table[editorialCommentEnd]!
         else if (commentEnd !== undefined) stop = raw[j] !== -1 && raw[j]! < commentEnd ? raw[j]! : table[commentEnd]!
         else if (codeEnd !== undefined) {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
-          stop = codeEnd !== -1 ? table[afterAttributes(codeEnd)]! : raw[j]!
-        } else if (attributeEnd !== undefined) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
-          ? raw[j]! : table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
-        else if (bracketEnd !== undefined) stop = table[afterAttributes(bracketEnd + 1)]!
-        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
+          stop = codeEnd !== -1 ? table[after(codeEnd)]! : raw[j]!
+        } else if (attributeEnd !== undefined && !(isAttributeRun && bareRunIsContent(j, PAIR_MARKERS[m]!, table[attributeEnd]!))) stop = editorialCloserInsideAttribute(text, j, PAIR_MARKERS[m]!, raw[j]!, attributeEnd)
+          ? raw[j]! : table[ch === '<' ? after(attributeEnd) : attributeEnd]!
+        else if (bracketEnd !== undefined) stop = table[after(bracketEnd + 1)]!
+        else if (pairDestinationEnd !== undefined) stop = table[after(pairDestinationEnd + 1)]!
         else if (isCloser) stop = j
         else if (ch === '{' && nextId !== -1 && (nextId !== m || FORCED_TYPE[next!] !== undefined) && ends[j] !== -1) {
           // A matched child owns its closer, including a child of this kind.
           // Unmatched openers leave the following closer visible.
-          stop = table[afterAttributes(ends[j]!)]!
+          stop = table[after(ends[j]!)]!
         } else {
           stop = table[j + 1]!
-          if (bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
+          if (!editorial && bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
         }
         table[j] = stop
       }
@@ -395,10 +537,10 @@ export class InlineParseSession {
     return tail === undefined || tail > this.pairEndOffset + text.length ? end : tail - this.pairEndOffset
   }
 
-  private pairBareAttributes(text: string, open: number): { close: number; end: number } | undefined {
+  private pairBareAttributes(text: string, open: number): BarePair | undefined {
     const pair = this.bareAttributePairs.get(open + this.pairEndOffset)
     return pair === undefined || pair.end > this.pairEndOffset + text.length ? undefined
-      : { close: pair.close - this.pairEndOffset, end: pair.end - this.pairEndOffset }
+      : { close: pair.close - this.pairEndOffset, end: pair.end - this.pairEndOffset, guarded: pair.guarded === true }
   }
 
   private pairView(offset: number): InlinePairView {
@@ -709,6 +851,27 @@ export class InlineParseSession {
     inFootnote = false,
     noClose: EmphasisMemo = newEmphasisMemo(),
     end = text.length,
+    inBracketRun = false,
+  ): EmphasisMatch | null {
+    // E2b (markup-carve/carve#3897): a literal bracket run bounds emphasis like
+    // a resolved one, so no span opened outside it is reachable inside it.
+    if (!inBracketRun || this.openKinds === NO_OPEN_KINDS) return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+    const outer = this.openKinds
+    this.openKinds = NO_OPEN_KINDS
+    try {
+      return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+    } finally {
+      this.openKinds = outer
+    }
+  }
+
+  private matchEmphasisIn(
+    text: string,
+    i: number,
+    source: InlineSource,
+    inFootnote: boolean,
+    noClose: EmphasisMemo,
+    end: number,
   ): EmphasisMatch | null {
     const c = text[i]!
 
@@ -724,7 +887,7 @@ export class InlineParseSession {
       // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
       // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
       if (start < text.length && !isCarveWhitespace(text[start]) && !extendsGrapheme(text, start)) {
-        const close = combinedSpanCloser(text, start, noClose)
+        const close = combinedSpanCloser(text, start, noClose, (open) => this.bracedFrameEnd(text, open))
         if (close !== undefined && close + 2 <= end) {
           const inner = text.slice(start, close)
           const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
@@ -1080,6 +1243,30 @@ export class InlineParseSession {
     visited?: number[],
     end = text.length,
   ): number {
+    const waiver: Waiver = { mode: 'decide', atStart: false }
+    const close = this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
+    if (!waiver.atStart) return close
+    // As `pairGuarded` does: with every guarded child open, an opener that
+    // closes nowhere is no span, so it blocks the child it guards and that
+    // child's attribute block is content.
+    waiver.mode = 'all'
+    if (close !== -1 && this.closesWithGuardsOpen(text, from, delim, memo, end, waiver)) return close
+    waiver.mode = 'none'
+    const blockedClose = this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver)
+    if (blockedClose !== -1) (memo.startBlocked ??= new Set()).add(`${delim}${from}:${end}`)
+    return blockedClose
+  }
+
+  private findEmphasisCloseIn(
+    text: string,
+    from: number,
+    delim: string,
+    memo: EmphasisMemo,
+    failed: Uint8Array | undefined,
+    visited: number[] | undefined,
+    end: number,
+    waiver: Waiver,
+  ): number {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
     this.pairEndTables(text)
@@ -1089,7 +1276,7 @@ export class InlineParseSession {
       visited?.push(j)
       const ch = text[j]!
       const child = ch !== delim && !this.openKinds.has(ch) ? this.pairBareAttributes(text, j) : undefined
-      if (child) attached?.set(child.close + 1, child.end)
+      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver))) attached?.set(child.close + 1, child.end)
       const attachedEnd = attached?.get(j)
       if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
       // Skip escapes
@@ -1133,6 +1320,14 @@ export class InlineParseSession {
         const m = RE_RAW_INLINE_STICKY.exec(text)
         if (m) {
           j = this.pairAttributeEnd(text, j + m[0].length) - 1
+          continue
+        }
+      }
+      // An attached attribute run is opaque, such as one after a `:name:` shortcode.
+      if (ch === '{' && text[j - 1] === ':') {
+        const tail = this.pairAttributeEnd(text, j)
+        if (tail > j) {
+          j = tail - 1
           continue
         }
       }
@@ -1205,6 +1400,51 @@ export class InlineParseSession {
       }
     }
     return -1
+  }
+
+  // The exclusive end of the forced span or insertion/deletion opening at `open`, or -1.
+  private bracedFrameEnd(text: string, open: number): number {
+    const marker = text[open + 1]
+    if (marker === undefined || (FORCED_TYPE[marker] === undefined && marker !== '+' && marker !== '-') || splitBracedOpener(text, open)) return -1
+    this.pairEndTables(text)
+    const stop = this.pairCloser(text, open + 2, marker)
+    return stop === -1 || stop === open + 2 ? -1 : stop + 2
+  }
+
+  // A walk with every guarded child open reads the same from any start, so
+  // its failures are kept per delimiter like the main walk's.
+  private closesWithGuardsOpen(text: string, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
+    const failed = (memo.failedGuardsOpen ??= new Map()).get(delim)
+    if (failed !== undefined && failed[from] === 1) return false
+    const visited: number[] = []
+    if (this.findEmphasisCloseIn(text, from, delim, memo, failed, visited, end, waiver) !== -1) return true
+    const marks = failed ?? new Uint8Array(text.length + 1)
+    for (const j of visited) marks[j] = 1
+    memo.failedGuardsOpen.set(delim, marks)
+    return false
+  }
+
+  private guardOpens(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
+    if (at === from) waiver.atStart = true
+    if (waiver.mode !== 'decide') return waiver.mode === 'all'
+    // A guard that closes only with this child blocked leaves its attribute
+    // block content, so an outer closer inside it stays reachable (PART 9 E2).
+    return this.opensBefore(text, at, from, delim, memo, end) && (at === from || memo.startBlocked?.has(`${text[at - 1]}${at}:${end}`) !== true)
+  }
+
+  // Whether the `_` or `/` before `at` opens a span that closes, so `at`
+  // starts that span's run. At `from` it is the opener being walked.
+  private opensBefore(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number): boolean {
+    if (at === from) return true
+    const d = text[at - 1]!
+    const before = text[at - 2]
+    if (d === delim || this.openKinds.has(d) || before === d) return false
+    if (before !== undefined && /[A-Za-z0-9]/.test(before)) return false
+    if ((before === '_' || before === '/') && !this.opensBefore(text, at - 1, from, delim, memo, end)) return false
+    const key = `${d}${at}:${end}`
+    let close = memo.closes?.get(key)
+    if (close === undefined) (memo.closes ??= new Map()).set(key, close = this.cachedFindEmphasisClose(text, at, d, memo, end))
+    return close !== -1
   }
 
   // The last index of the braced inline opening at `open`, or -1.

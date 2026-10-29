@@ -1,37 +1,40 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it('keeps an unmarked quote marker in the quoted description paragraph', () => {
+it('ends the quoted description at an unmarked quote marker', () => {
   expect(carveToHtml('>\n> :: m\n> : l\n  >\n')).toBe(`<blockquote>
   <dl>
     <dt>m</dt>
-    <dd>l
-&gt;</dd>
+    <dd>l</dd>
   </dl>
 </blockquote>`)
 })
 
-it('keeps an unmarked table row in the quoted description paragraph', () => {
+it('ends the quoted description at an unmarked table row', () => {
   expect(carveToHtml('>\n> :: m\n> : l\n  ||\n')).toBe(`<blockquote>
   <dl>
     <dt>m</dt>
-    <dd>l
-||</dd>
+    <dd>l</dd>
   </dl>
-</blockquote>`)
+</blockquote>
+<table>
+  <tbody>
+    <tr><td></td></tr>
+  </tbody>
+</table>`)
 })
 
-it('folds a quote opener below the quoted description column', () => {
+it('opens a quote below the quoted description column', () => {
   expect(carveToHtml('- a\n  > quote\n  > :: term\n  > :  detail\n  >   > quote\n\tq\n\n- item\n')).toBe(`<ul>
   <li><p>a</p>
     <blockquote>
       <p>quote</p>
       <dl>
         <dt>term</dt>
-        <dd>detail
-&gt; quote
-q</dd>
+        <dd>detail</dd>
       </dl>
+      <blockquote><p>quote
+q</p></blockquote>
     </blockquote>
   </li>
   <li><p>item</p></li>
@@ -58,8 +61,7 @@ it('leaves a marked fence at its host column', () => {
     <dt>m</dt>
     <dd>l</dd>
   </dl>
-  <p><code>
-</code></p>
+  <pre><code></code></pre>
 </blockquote>`)
 })
 

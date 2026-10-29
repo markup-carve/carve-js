@@ -92,9 +92,9 @@ describe('a tab and its four-space spelling in a footnote body', () => {
       '<ul><li>intro <dl><dt>t</dt><dd><p>d</p><blockquote><p>q</p></blockquote></dd></dl></li></ul>',
     ],
     [
-      'the top level reads an indented opener as text',
+      'the top level opens an indented description too',
       (p) => PAYLOADS[0]![1].map((l) => (l === '' ? '' : p + l)).join('\n') + `\n`,
-      '<p>:: t : d</p><p>&gt; q</p>',
+      '<dl><dt>t</dt><dd><p>d</p><blockquote><p>q</p></blockquote></dd></dl>',
     ],
   ]
 

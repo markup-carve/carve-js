@@ -639,14 +639,7 @@ export const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => 
   return level.mode.kind === 'paragraph'
 }
 
-export const blockQuoteParagraphClaimOpen = (state: BlockQuoteLazyState): boolean => {
-  let level = state
-  while (level.mode.kind === 'quote') {
-    if (level.hosts?.kinds.includes('note')) return false
-    level = level.mode.inner
-  }
-  return level.mode.kind === 'paragraph' && !level.hosts?.kinds.includes('note')
-}
+export const blockQuoteParagraphClaimOpen = blockQuoteParagraphOpen
 
 /** How many quotes are open below the one `state` tracks. */
 export const openQuoteDepth = (state: BlockQuoteLazyState): number => {
@@ -889,10 +882,14 @@ export function classifyQuotedLine(
   }
   // Invisible definitions leave no leaf that can accept a following lazy line.
   // Abbreviation definitions are recognized only at document level.
-  if (
-    RE_FOOTNOTE_DEF.test(content) ||
-    (leadingWhitespace(content) === 0 && isLinkDefLine(content))
-  ) {
+  // A footnote body's first block answers, as for every container (carve#3885).
+  const note = RE_FOOTNOTE_DEF.exec(content)
+  if (note) {
+    closeBlockQuoteParagraph(state)
+    return classifyQuotedLine(note[2]!, state, hasCommentCloser, hasFenceCloser, () => false, terminatorFree, descent,
+      prefixMemo, false, hasLiteralCommentCloser)
+  }
+  if (leadingWhitespace(content) === 0 && isLinkDefLine(content)) {
     closeBlockQuoteParagraph(state)
     return null
   }
@@ -1016,11 +1013,6 @@ export function classifyQuotedLine(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
-  // A footnote's extent takes no lazy line (CARVE-P0-012): its text opens no paragraph here.
-  if (atColumn && state.hosts?.kinds.at(-1) === 'note') {
-    closeBlockQuoteParagraph(state)
-    return null
-  }
   state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing,
     ...(wasTerm ? { term: true } : {}),
     ...((wasItemParagraph || (isListMarkerLine(content) && !blockQuoteParagraphOpen(state))) ? { itemParagraph: true } : {}) }
@@ -1035,6 +1027,12 @@ export function classifyQuotedLine(
  * line falls through to a paragraph and the `{…}` renders literally, matching
  * the inline trailing-attribute rule (and carve-php).
  */
+function imageAltCloses(line: string, altLength: number): boolean {
+  const open = line.indexOf('[')
+  const close = buildBracketMap(line)
+  return close(open) === open + 1 + altLength && !close.footnotes?.has(open)
+}
+
 export function isBlockImageLine(line: string): boolean {
   const m = RE_BARE_IMAGE.exec(line)
   // A trailing attr block must be a valid, non-empty payload; a digit-first /
@@ -1053,7 +1051,7 @@ export function isBlockImageLine(line: string): boolean {
     (m[2] === '' || m[3] !== undefined || m[4] !== undefined ||
       line[line.indexOf('](') + 2 + m[2]!.length] === ')') &&
     // Check the whole line because opaque spans can extend beyond the label.
-    buildBracketMap(line)(line.indexOf('[')) === line.indexOf('[') + 1 + m[1]!.length &&
+    imageAltCloses(line, m[1]!.length) &&
     (m[2] === '' || linkDestinationValue(m[2]!) !== null) &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
@@ -1272,6 +1270,9 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
   quote: BlockQuoteLazyState | null
 } {
   const bottom = markerLineBottomBlock(content, memo)
+  // A footnote body's first block answers, as for every container (carve#3885).
+  const note = RE_FOOTNOTE_DEF.exec(bottom)
+  if (note) return markerLineState(note[2]!)
   const quote = markerLineQuoteState(content, memo)
   const fenceShaped = RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) ||
     colonFenceShapeEndsLazyContinuation(bottom)
@@ -1322,7 +1323,9 @@ export function bottomBlockLeavesParagraphOpen(rest: string): boolean {
   // body is taken from the content column and nowhere else, so neither leaves a
   // paragraph for a column-0 line.
   if (RE_COMMENT_LINE.test(rest)) return false
-  if (RE_FOOTNOTE_DEF.test(rest) || isLinkDefLine(rest)) return false
+  const note = RE_FOOTNOTE_DEF.exec(rest)
+  if (note) return bottomBlockLeavesParagraphOpen(note[2]!)
+  if (isLinkDefLine(rest)) return false
   if (isBlockAttributeLine(rest)) return false
 
   return true

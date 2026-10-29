@@ -23,11 +23,10 @@ import { carveToHtml } from '../src/index.js'
  */
 
 describe('a column-0 line after a description-hosted note is a top-level sibling', () => {
-  // The FIX: the opener reaches the note floor, the note drops, and the
-  // flush-left trailing line falls out of the `dd` to the document.
-  it('drops a column-0 trailing line to a top-level paragraph', () => {
+  // The note's open paragraph takes a flush-left line lazily too (carve#3885).
+  it('folds a column-0 trailing line into the open note', () => {
     expect(carveToHtml(':: t\n:  [^f]: note\n     - nested\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>tail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>',
     )
   })
 

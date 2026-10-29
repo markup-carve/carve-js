@@ -122,11 +122,12 @@ describe('the definition prepass', () => {
 
   it('does not keep a continuation marker open across a mark line', () => {
     // `plusColumn`. The `+` marker holds an item's content column open across a
-    // blank; a mark line is not one, so the column closes with it.
+    // blank; a mark line is not one, so the column closes with it and the
+    // definition below it is read outside the item.
     const html = carveToHtml('- item\n+\n﻿\n  [r]: /u\n\n[link][r] text\n')
 
-    expect(html).toContain('[r]: /u')
-    expect(html).not.toContain('href="/u"')
+    expect(html).not.toContain('[r]: /u')
+    expect(html).toContain('<p><a href="/u">link</a> text</p>')
   })
 
   it('leaves the same three shapes alone when the line really is blank', () => {

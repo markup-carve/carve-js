@@ -159,12 +159,12 @@ describe('the entry points that read positions force them back on', () => {
     expect(carveToHtml(SOURCE, { positions: false })).toBe(carveToHtml(SOURCE))
   })
 
-  it('carveToHtml keeps the strict column-0 figure rule under positions: false', () => {
+  it('carveToHtml reads an indented figure the same under positions: false', () => {
     // The rule reads the image's own `startColumn` and promotes when there is
     // no position - correct for an ingested tree, wrong for one just parsed.
     // Suppressing positions turned this paragraph into a figure.
     const indented = ' ![a](p.png)\n ^ cap\n'
-    expect(carveToHtml(indented, { positions: false })).toBe('<p><img src="p.png" alt="a">\n^ cap</p>')
+    expect(carveToHtml(indented, { positions: false })).toBe('<figure>\n  <img src="p.png" alt="a">\n  <figcaption>cap</figcaption>\n</figure>')
   })
 
   it('a hand-composed pipeline reaches the same answer as the entry point', () => {
@@ -180,8 +180,8 @@ describe('the entry points that read positions force them back on', () => {
     // indentation still exists, so the answer no longer depends on an option
     // about spans - and the two pipelines agree.
     const indented = ' ![a](p.png)\n ^ cap\n'
-    expect(renderHtml(resolve(parse(indented, { positions: false })))).not.toContain('<figure>')
-    expect(carveToHtml(indented)).not.toContain('<figure>')
+    expect(renderHtml(resolve(parse(indented, { positions: false })))).toContain('<figure>')
+    expect(carveToHtml(indented)).toContain('<figure>')
   })
 
   it('carveToHtml still stamps source lines when handed false with sourceLine', () => {

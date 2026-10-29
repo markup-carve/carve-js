@@ -13,13 +13,13 @@ describe('a below-column descendant comment needs an open paragraph', () => {
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it.each(cases.filter(({ id }) => id.startsWith('d3-') && id.endsWith('# h')))('$id leaves heading-shaped text after the outer list', ({ source }) => {
+  it.each(cases.filter(({ id }) => id.startsWith('d3-') && id.endsWith('# h')))('$id leaves a heading after the outer list', ({ source }) => {
     const document = parse(source)
     const container = document.children[0]!
     const blocks = container.type === 'block_quote' ? container.children : document.children
     expect(blocks).toHaveLength(2)
     expect(blocks[0]!.type).toBe('list')
-    expect(blocks[1]!.type).toBe('paragraph')
-    expect(carveToHtml(source)).not.toContain('<h1>')
+    expect(blocks[1]!.type).toBe('heading')
+    expect(carveToHtml(source)).toContain('<h1')
   })
 })

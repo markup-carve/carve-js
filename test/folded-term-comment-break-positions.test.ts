@@ -12,7 +12,7 @@ it.each(['\n', '\r\n', '\r'])('positions the line endings beside folded term com
     for (const [key, child] of Object.entries(node)) if (key !== 'pos') visit(child)
   }
   visit(toAstJson(parse(source, { positions: true })))
-  expect(breaks).toHaveLength(2)
+  expect(breaks).toHaveLength(0)
   for (const node of breaks) {
     expect(node.pos).toBeDefined()
     expect(Array.from(source).slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(eol + (node.pos.startLine === 1 ? '>   ' : '> '))

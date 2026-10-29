@@ -230,35 +230,26 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
   })
 })
 
-describe('block openers below the content column fold as lazy text under a list item', () => {
+describe('block openers below the content column end a list item', () => {
   const h = (s: string) => carveToHtml(s).trim()
 
-  // Content-column model (carve#295): a block opener is recognized only AT the
-  // item's content column - the item body's column 0 - exactly as a block
-  // opener is recognized only at column 0 at the top level. Below the content
-  // column the marker carries residual indent, so it is not a block opener; it
-  // folds into the item's lead paragraph as lazy text (like ` # h` at the top
-  // level). This is an intentional divergence from djot / the old carve-php
-  // reading, which nested it.
-
-  it('folds a block quote indented below an ordered item content column', () => {
-    // `> q` at column 2 is below the `1. ` content column (3), so it folds.
-    expect(h('1. a\n  > q')).toBe('<ol>\n  <li>a\n&gt; q</li>\n</ol>')
+  it('ends the item at a block quote indented below an ordered item content column', () => {
+    expect(h('1. a\n  > q')).toBe('<ol>\n  <li>a</li>\n</ol>\n<blockquote><p>q</p></blockquote>')
   })
 
-  it('folds a one-space-indented block quote under an ordered item', () => {
-    expect(h('1. a\n > q')).toBe('<ol>\n  <li>a\n&gt; q</li>\n</ol>')
+  it('ends the item at a one-space-indented block quote under an ordered item', () => {
+    expect(h('1. a\n > q')).toBe('<ol>\n  <li>a</li>\n</ol>\n<blockquote><p>q</p></blockquote>')
   })
 
-  it('folds a heading below the content column', () => {
-    expect(h('1. a\n  # H')).toBe('<ol>\n  <li>a\n# H</li>\n</ol>')
+  it('ends the item at a heading below the content column', () => {
+    expect(h('1. a\n  # H')).toBe('<ol>\n  <li>a</li>\n</ol>\n<section id="H">\n  <h1>H</h1>\n</section>')
   })
 
-  it('folds a multi-line block quote below the content column', () => {
-    expect(h('1. a\n  > q1\n  > q2')).toBe('<ol>\n  <li>a\n&gt; q1\n&gt; q2</li>\n</ol>')
+  it('ends the item at a multi-line block quote below the content column', () => {
+    expect(h('1. a\n  > q1\n  > q2')).toBe('<ol>\n  <li>a</li>\n</ol>\n<blockquote><p>q1\nq2</p></blockquote>')
   })
 
-  it('still folds an ordered marker below the content column (no interrupt)', () => {
-    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  it('makes an ordered marker below the content column a sibling item', () => {
+    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a</li>\n  <li>b</li>\n</ol>')
   })
 })

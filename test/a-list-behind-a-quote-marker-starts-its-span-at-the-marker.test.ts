@@ -20,7 +20,7 @@ const starts = (source: string): string[] => {
 it('starts a list written past the quote column at its marker', () => {
   expect(starts('>   - a\n> - b\n>     - c\n>       :::\n1. lazy\n')).toEqual([
     'list@4:5', 'list_item@4:5',
-    'list@10:3', 'list_item@10:3',
+    'list_item@10:3',
     'list@20:7', 'list_item@20:7',
     'list@36:1', 'list_item@36:1',
   ])

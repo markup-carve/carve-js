@@ -1,83 +1,75 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// A block-level construct opener fires ONLY when it begins at its container's
-// content column (column 0 at the top level). Any leading indentation above that
-// column means the opener does NOT fire -- the line(s) render as literal
-// paragraph text. Heading / thematic-break / block-quote / fenced-code / `:::`
-// openers were already strict (`^`-anchored regexes); these cases pin the
-// constructs that used to be recognized while indented: a block-attribute line,
-// an image+caption figure, and reference / footnote definitions. Cross-checked
-// byte-for-byte against carve-php, which already implements the strict rule.
-describe('strict column-0: indented block-attribute lines do NOT attach', () => {
-  it('indented {.note} before a paragraph is literal', () => {
-    expect(carveToHtml(' {.note}\n This paragraph.\n')).toBe('<p>{.note}\nThis paragraph.</p>')
+describe('indented top-level block-attribute lines attach', () => {
+  it('indented {.note} before a paragraph attaches', () => {
+    expect(carveToHtml(' {.note}\n This paragraph.\n')).toBe('<p class="note">This paragraph.</p>')
   })
 
-  it('indented {.todo} before a list is literal (no list opens)', () => {
-    expect(carveToHtml(' {.todo}\n - one\n - two\n')).toBe('<p>{.todo}\n- one\n- two</p>')
+  it('indented {.todo} before a list attaches (the list opens)', () => {
+    expect(carveToHtml(' {.todo}\n - one\n - two\n')).toBe('<ul class="todo">\n  <li>one</li>\n  <li>two</li>\n</ul>')
   })
 
-  it('indented {.large #intro} before a heading does NOT attach', () => {
+  it('indented {.large #intro} before a heading attaches', () => {
     const out = carveToHtml(' {.large #intro}\n # Title\n')
-    expect(out).not.toContain('<section')
-    expect(out).not.toContain('<h1')
-    expect(out.startsWith('<p>{.large ')).toBe(true)
-    expect(out).toContain('# Title')
+    expect(out).toContain('<section id="intro">')
+    expect(out).toContain('<h1 class="large">')
+    expect(out.startsWith('<p>{.large ')).toBe(false)
+    expect(out).not.toContain('# Title')
   })
 
-  it('indented {.fancy #x} before a fence does NOT attach (no <pre>)', () => {
+  it('indented {.fancy #x} before a fence attaches', () => {
     const out = carveToHtml(' {.fancy #x}\n ```php\n code\n ```\n')
-    expect(out).not.toContain('<pre')
-    expect(out).not.toContain('class="fancy"')
-    expect(out.startsWith('<p>{.fancy ')).toBe(true)
+    expect(out).toContain('<pre')
+    expect(out).toContain('class="fancy"')
+    expect(out.startsWith('<p>{.fancy ')).toBe(false)
   })
 
-  it('indented {#s .side} before a div does NOT open a div', () => {
+  it('indented {#s .side} before a div opens the div', () => {
     const out = carveToHtml(' {#s .side}\n :::\n A div.\n :::\n')
-    expect(out).not.toContain('<div')
-    expect(out).toContain(':::')
-    expect(out.startsWith('<p>{')).toBe(true)
+    expect(out).toContain('<div id="s" class="side">')
+    expect(out).not.toContain(':::')
+    expect(out.startsWith('<p>{')).toBe(false)
   })
 
-  it('indented {title="t"} before an admonition does NOT open an aside', () => {
+  it('indented {title="t"} before an admonition opens the aside', () => {
     const out = carveToHtml(' {title="t"}\n ::: note "o"\n Body.\n :::\n')
-    expect(out).not.toContain('<aside')
-    expect(out).toContain('::: note')
-    expect(out.startsWith('<p>{title=')).toBe(true)
+    expect(out).toContain('<aside')
+    expect(out).not.toContain('::: note')
+    expect(out.startsWith('<p>{title=')).toBe(false)
   })
 })
 
-describe('strict column-0: indented image+caption does NOT form a figure', () => {
-  it('indented image + ^ caption stays a literal paragraph', () => {
+describe('indented top-level image+caption forms a figure', () => {
+  it('indented image + ^ caption forms a figure', () => {
     expect(carveToHtml(' ![Apollo](a.jpg)\n ^ Figure 1: moon\n')).toBe(
-      '<p><img src="a.jpg" alt="Apollo">\n^ Figure 1: moon</p>',
+      '<figure>\n  <img src="a.jpg" alt="Apollo">\n  <figcaption>Figure 1: moon</figcaption>\n</figure>',
     )
   })
 
-  it('indented {attr} + image + caption stays literal (no figure, no attach)', () => {
+  it('indented {attr} + image + caption forms an attributed figure', () => {
     expect(carveToHtml(' {.gallery}\n ![Apollo](a.jpg)\n ^ Figure 1: moon\n')).toBe(
-      '<p>{.gallery}\n<img src="a.jpg" alt="Apollo">\n^ Figure 1: moon</p>',
+      '<figure class="gallery">\n  <img src="a.jpg" alt="Apollo">\n  <figcaption>Figure 1: moon</figcaption>\n</figure>',
     )
   })
 })
 
-describe('strict column-0: indented reference / footnote defs are literal', () => {
-  it('indented reference-link def is not collected; the ref stays unresolved', () => {
+describe('indented top-level reference / footnote defs register', () => {
+  it('indented reference-link def is collected; the ref resolves', () => {
     expect(carveToHtml(' Read [intro][x].\n\n [x]: /intro "T"\n')).toBe(
-      '<p>Read [intro][x].</p>\n<p>[x]: /intro “T”</p>',
+      '<p>Read <a href="/intro" title="T">intro</a>.</p>',
     )
   })
 
-  it('indented collapsed reference does not resolve', () => {
+  it('indented collapsed reference resolves', () => {
     expect(carveToHtml(' See [Other][].\n\n [Other]: /other\n')).toBe(
-      '<p>See [Other][].</p>\n<p>[Other]: /other</p>',
+      '<p>See <a href="/other">Other</a>.</p>',
     )
   })
 
-  it('indented footnote def is literal (not swallowed by the link-def path)', () => {
+  it('indented footnote def registers (not swallowed by the link-def path)', () => {
     expect(carveToHtml(' Note[^fn].\n\n [^fn]: body.\n')).toBe(
-      '<p>Note[^fn].</p>\n<p>[^fn]: body.</p>',
+      '<p>Note<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>.</p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>body.<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>',
     )
   })
 })

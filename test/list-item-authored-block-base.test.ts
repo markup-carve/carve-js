@@ -24,7 +24,7 @@ describe('list-item authored block bases (carve#1705)', () => {
   }
 
   it('does not promote an opener below an ordered item content column', () => {
-    expect(html('1. x\n > q\n')).not.toContain('<blockquote>')
+    expect(html('1. x\n > q\n')).toBe('<ol>\n  <li>x</li>\n</ol>\n<blockquote><p>q</p></blockquote>')
   })
 
   it('collects over-indented link and footnote definitions', () => {
@@ -65,8 +65,8 @@ describe('list-item authored block bases (carve#1705)', () => {
     expect(exact).toContain('<li><p>x</p>')
   })
 
-  it('keeps an indented opener in the marker-line quote until a blank ends it', () => {
-    expect(html('- > q\n   # h\n')).toBe('<ul>\n  <li>\n    <blockquote><p>q\n# h</p></blockquote>\n  </li>\n</ul>')
+  it('ends the marker-line quote at an indented opener', () => {
+    expect(html('- > q\n   # h\n')).toBe('<ul>\n  <li>\n    <blockquote><p>q</p></blockquote>\n    <h1 id="h">h</h1>\n  </li>\n</ul>')
     const exact = html('- > q\n\n  # h\n')
     const over = html('- > q\n\n   # h\n')
     expect(over).toBe(exact)

@@ -35,6 +35,6 @@ it.each(['- tail', '* tail', '1. tail', 'a) tail'])('preserves inline code conti
 
 it('preserves a marker follower already owned by an ancestor', () => {
   const source = ['- a', '  - b', '    - inner', '      %% c', '     - x', 'tail'].join('\n')
-  expect(carveToHtml(source)).toContain('<li>inner</li>\n        </ul>\n        <ul>\n          <li>x\ntail')
+  expect(carveToHtml(source)).toContain('<li>inner</li>\n          <li>x\ntail')
   expect(carveToHtml(source)).not.toContain('<p>tail</p>')
 })

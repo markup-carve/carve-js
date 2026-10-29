@@ -72,12 +72,12 @@
   {
     "id": "floor-code-6-4-0",
     "source": "- term\n  : payload\n      ```\n      code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n</ul>"
+    "html": "<ul>\n  <li>term\n: payload\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "floor-code-6-4-1",
     "source": "> - term\n>   : payload\n>       ```\n>       code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "floor-0-6-6-6",
@@ -122,22 +122,22 @@
   {
     "id": "floor-code-8-4-0",
     "source": "- term\n  : payload\n        ```\n        code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n</ul>"
+    "html": "<ul>\n  <li>term\n: payload\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "floor-code-8-4-1",
     "source": "> - term\n>   : payload\n>         ```\n>         code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "floor-code-8-6-0",
     "source": "- term\n  : payload\n        ```\n        code\n      ```\nafter\n",
-    "html": "<ul>\n  <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n</ul>"
+    "html": "<ul>\n  <li>term\n: payload\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "floor-code-8-6-1",
     "source": "> - term\n>   : payload\n>         ```\n>         code\n>       ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n<code>\ncode\n</code>\nafter</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>term\n: payload\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "floor-0-8-8-8",
@@ -422,17 +422,17 @@
   {
     "id": "review-neighbor-0-quote-0",
     "source": "- a\n  > q\n  : b\n      ```\n      code\n  ```\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>q\n: b\n<code>\ncode\n</code></p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <blockquote><p>q\n: b</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "review-neighbor-0-quote-1",
     "source": "> - a\n>   > q\n>   : b\n>       ```\n>       code\n>   ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <blockquote><p>q\n: b\n<code>\ncode\n</code></p></blockquote>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <blockquote><p>q\n: b</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-neighbor-0-quote-2",
     "source": "> > - a\n> >   > q\n> >   : b\n> >       ```\n> >       code\n> >   ```\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <blockquote><p>q\n: b\n<code>\ncode\n</code></p></blockquote>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <blockquote><p>q\n: b</p></blockquote>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "review-neighbor-1-quote-0",
@@ -467,17 +467,17 @@
   {
     "id": "review-owner-1-quote-0",
     "source": "- :: t\n  : d1\n  > q\n  : d2\n      ```\n      code\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d1</dd>\n    </dl>\n    <blockquote><p>q\n: d2\n<code>\ncode\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d1</dd>\n    </dl>\n    <blockquote><p>q\n: d2</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "review-owner-1-quote-1",
     "source": "> - :: t\n>   : d1\n>   > q\n>   : d2\n>       ```\n>       code\n>   ```\n> tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>d1</dd>\n      </dl>\n      <blockquote><p>q\n: d2\n<code>\ncode\n</code>\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>d1</dd>\n      </dl>\n      <blockquote><p>q\n: d2</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>tail</p>\n</blockquote>"
   },
   {
     "id": "review-owner-1-quote-2",
     "source": "> > - :: t\n> >   : d1\n> >   > q\n> >   : d2\n> >       ```\n> >       code\n> >   ```\n> > tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>d1</dd>\n        </dl>\n        <blockquote><p>q\n: d2\n<code>\ncode\n</code>\ntail</p></blockquote>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>d1</dd>\n        </dl>\n        <blockquote><p>q\n: d2</p></blockquote>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "review-owner-2-quote-0",
@@ -512,61 +512,61 @@
   {
     "id": "quote-absorbing-preservation-1564",
     "source": "- > quote\n  :::note\n  : payload\n    ```\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1568",
     "source": "- > quote\n  :::note\n  : payload\n    ```\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1572",
     "source": "- > quote\n  :::note\n  : payload\n      ```\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1576",
     "source": "- > quote\n  :::note\n  : payload\n      ```\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1584",
     "source": "- > quote\n  :::note\n  : payload\n    ~~~\n    body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n~~~\nbody\n~~~\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1588",
     "source": "- > quote\n  :::note\n  : payload\n    ~~~\n    body\n    ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n~~~\nbody\n~~~\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1592",
     "source": "- > quote\n  :::note\n  : payload\n      ~~~\n      body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n~~~\nbody\n~~~\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1596",
     "source": "- > quote\n  :::note\n  : payload\n      ~~~\n      body\n      ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n~~~\nbody\n~~~\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1604",
     "source": "- > quote\n  :::note\n  : payload\n    ```=html\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>=html\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    body\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1608",
     "source": "- > quote\n  :::note\n  : payload\n    ```=html\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>=html\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    body\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1612",
     "source": "- > quote\n  :::note\n  : payload\n      ```=html\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>=html\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    body\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "quote-absorbing-preservation-1616",
     "source": "- > quote\n  :::note\n  : payload\n      ```=html\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload\n<code>=html\nbody\n</code>\ntail</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>quote\n:::note\n: payload</p></blockquote>\n    body\n  </li>\n</ul>\n<p>tail</p>"
   }
 ]

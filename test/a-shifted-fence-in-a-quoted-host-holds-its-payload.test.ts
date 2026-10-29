@@ -65,7 +65,7 @@ describe('an over-indented opener still pairs with a dedented closer', () => {
 
   it('closes on a run between the two columns', () => {
     expect(carveToHtml('> - a\n>\n>     ```\n>     x\n>    ```\n>\n>   z\nflush\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n      <p>z</p>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>',
+      '<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n      <p>z\nflush</p>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 })

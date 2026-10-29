@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it('keeps a second term marker past the list content column in the open term', () => {
+it('opens a second term on a marker past the list content column', () => {
   expect(carveToHtml('* k\n\n   :: m\n  l\n    :: m\n')).toBe(
-    '<ul>\n  <li>k\n    <dl>\n      <dt>m\nl\n :: m</dt>\n    </dl>\n  </li>\n</ul>',
+    '<ul>\n  <li>k\n    <dl>\n      <dt>m\nl</dt>\n      <dt>m</dt>\n    </dl>\n  </li>\n</ul>',
   )
 })
 

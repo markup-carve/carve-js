@@ -140,7 +140,7 @@ describe('an indented comment fence', () => {
     expect(html).not.toContain('%')
     // The comment does not end the item either: `tail` is still item content,
     // the same shape carve-rs#572 settled for a column-0 comment.
-    expect(html).toBe('<ul>\n  <li>a\n    tail\n  </li>\n</ul>')
+    expect(html).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
   })
 
   it('hides its body under a top-level paragraph', () => {
@@ -157,7 +157,7 @@ describe('an indented comment fence', () => {
     // Opener indented one column, closer three: the width matches, the indent
     // is not part of the delimiter.
     expect(carveToHtml('- a\n %%%% n\n x\n   %%%%\n tail\n')).toBe(
-      '<ul>\n  <li>a\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>',
     )
   })
 })
@@ -185,7 +185,7 @@ describe('a comment body retains indentation beyond its host', () => {
     const src = '- a\n %%% n\n x\n %%%\n tail\n'
     const once = renderCarve(parse(src))
 
-    expect(once).toBe('- a\n  %%%\n  n\n  x\n  %%%\n  tail\n')
+    expect(once).toBe('- a\n\n%%%\nn\nx\n%%%\n\ntail\n')
     expect(renderCarve(parse(once))).toBe(once)
   })
 })

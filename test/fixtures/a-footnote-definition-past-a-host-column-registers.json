@@ -2,7 +2,7 @@
   {
     "id": "js-2-1",
     "source": ":: t\n: > para\n [r]: /u\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<blockquote><p>para\n[r]: /u</p></blockquote>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>"
   },
   {
     "id": "js-2-2",
@@ -22,12 +22,12 @@
   {
     "id": "js-3-1",
     "source": "1. > para\n [r]: /u\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\n[r]: /u</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-3-2",
     "source": "1. > para\n  [r]: /u\n",
-    "html": "<ol>\n<li>\n<blockquote><p>para\n[r]: /u</p></blockquote>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-3-3",
@@ -47,7 +47,7 @@
   {
     "id": "js-9-1",
     "source": "- > para\n [r]: /u\n",
-    "html": "<ul>\n<li>\n<blockquote><p>para\n[r]: /u</p></blockquote>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-9-2",
@@ -77,12 +77,12 @@
   {
     "id": "js-23-1",
     "source": "- ::: note\n   [^p]: n\n  tail\n",
-    "html": "<ul>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>"
   },
   {
     "id": "js-23-2",
     "source": "- ::: note\n      [^p]: n\n  tail\n",
-    "html": "<ul>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>"
   },
   {
     "id": "js-24-1",
@@ -92,7 +92,7 @@
   {
     "id": "js-27-1",
     "source": "1. - para\n    [^p]: n\n     tail\n",
-    "html": "<ol>\n<li>\n<ul>\n<li>para</li>\n</ul>\ntail\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ol>"
   },
   {
     "id": "js-33-1",
@@ -107,12 +107,12 @@
   {
     "id": "js-36-1",
     "source": "1. ::: note\n       [^p]: n\n   tail\n",
-    "html": "<ol>\n<li>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>tail</p>\n</aside>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ol>"
   },
   {
     "id": "js-37-1",
     "source": ":: t\n: 1. para\n    [^p]: n\n     tail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<ol>\n<li>para</li>\n</ol>\n<p>tail</p>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>"
   },
   {
     "id": "js-39-1",

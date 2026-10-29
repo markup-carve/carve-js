@@ -26,19 +26,19 @@
   {
     "id": "space-backtick-lead-heading-tilde-code-flush-nn",
     "source": "- a\n    ```\n  # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-heading-raw-code-flush-nn",
     "source": "- a\n    ```\n  # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-heading-deep-code-flush-nn",
     "source": "- a\n    ```\n  # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -74,55 +74,55 @@
   {
     "id": "space-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n    ```\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-no-code-flush-nn",
     "source": "- a\n    ```\n    # h\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-tilde-code-flush-nn",
     "source": "- a\n    ```\n    # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-raw-code-flush-nn",
     "source": "- a\n    ```\n    # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-deep-code-flush-nn",
     "source": "- a\n    ```\n    # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -188,19 +188,19 @@
   {
     "id": "tab-backtick-lead-heading-tilde-code-flush-nn",
     "source": "- a\n  \t```\n  # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-heading-raw-code-flush-nn",
     "source": "- a\n  \t```\n  # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-heading-deep-code-flush-nn",
     "source": "- a\n  \t```\n  # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -236,55 +236,55 @@
   {
     "id": "tab-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n  \t```\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-no-code-flush-nn",
     "source": "- a\n  \t```\n    # h\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-tilde-code-flush-nn",
     "source": "- a\n  \t```\n    # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-raw-code-flush-nn",
     "source": "- a\n  \t```\n    # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-deep-code-flush-nn",
     "source": "- a\n  \t```\n    # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -338,7 +338,7 @@
   {
     "id": "tilde-lead-heading-back-code-flush-nn",
     "source": "- a\n    ~~~\n  # h\n  ````\n  code\n  ````\nafter\n",
-    "html": "<ul>\n  <li>a\n~~~\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n~~~\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -362,13 +362,13 @@
   {
     "id": "tilde-lead-deepheading-no-code-flush-nn",
     "source": "- a\n    ~~~\n    # h\nafter\n",
-    "html": "<ul>\n  <li>a\n~~~\n    <h1>h</h1>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n~~~\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tilde-lead-deepheading-back-code-flush-nn",
     "source": "- a\n    ~~~\n    # h\n  ````\n  code\n  ````\nafter\n",
-    "html": "<ul>\n  <li>a\n~~~\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n~~~\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -404,25 +404,25 @@
   {
     "id": "column-backtick-lead-heading-tilde-code-flush-nn",
     "source": "- a\n  ```\n  # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-heading-raw-code-flush-nn",
     "source": "- a\n  ```\n  # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-hr-deep-code-flush-nn",
     "source": "- a\n  ```\n  ---\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <hr>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-table-deep-code-flush-nn",
     "source": "- a\n  ```\n  | a |\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -440,19 +440,19 @@
   {
     "id": "column-backtick-lead-attrs-deep-code-flush-nn",
     "source": "- a\n  ```\n  {.k}\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <p class=\"k\">~~~\ncode\n~~~\nafter</p>\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre class=\"k\"><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-div-deep-code-flush-nn",
     "source": "- a\n  ```\n  ::: box\n  x\n  :::\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-emptydiv-deep-code-flush-nn",
     "source": "- a\n  ```\n  :::\n  :::\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <div>\n\n    </div>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <div>\n\n    </div>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -500,13 +500,13 @@
   {
     "id": "column-backtick-lead-deepheading-tilde-code-flush-nn",
     "source": "- a\n  ```\n    # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n# h</code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-raw-code-flush-nn",
     "source": "- a\n  ```\n    # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code>\n# h</code>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -542,31 +542,31 @@
   {
     "id": "column-backtick-lead-comment-deep-code-flush-bn",
     "source": "- a\n  ```\n\n  %% c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-no-code-flush-bn",
     "source": "- a\n  ```\n\n    # h\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-deep-code-flush-bn",
     "source": "- a\n  ```\n\n    # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    # h\n~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-quote-deep-code-flush-bb",
     "source": "- a\n  ```\n\n  > q\n\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <blockquote><p>q</p></blockquote>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-quotehr-deep-code-flush-bb",
     "source": "- a\n  ```\n\n  > ---\n\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code></code>\n    <blockquote>\n      <hr>\n    </blockquote>\n    ~~~\ncode\n~~~\nafter\n  </li>\n</ul>",
+    "html": "<ul>\n  <li>a\n<code></code>\n    <blockquote>\n      <hr>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -590,19 +590,19 @@
   {
     "id": "labeled-backtick-lead-heading-tilde-code-flush-nn",
     "source": "- a\n    ``` x\n  # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-heading-raw-code-flush-nn",
     "source": "- a\n    ``` x\n  # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-heading-deep-code-flush-nn",
     "source": "- a\n    ``` x\n  # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -638,55 +638,55 @@
   {
     "id": "labeled-backtick-lead-sublist-deep-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-no-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-tilde-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-raw-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n      </li>\n    </ul>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-deep-code-flush-nn",
     "source": "- a\n    ``` x\n  - c\n    ~~~\n    y\n    ~~~\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c</li>\n    </ul>\n    <pre><code>y\n</code></pre>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <ul>\n      <li>c\n        <pre><code>y\n</code></pre>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-no-code-flush-nn",
     "source": "- a\n    ``` x\n    # h\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-tilde-code-flush-nn",
     "source": "- a\n    ``` x\n    # h\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-raw-code-flush-nn",
     "source": "- a\n    ``` x\n    # h\n  ~~~ =html\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    code\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-deep-code-flush-nn",
     "source": "- a\n    ``` x\n    # h\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1>h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul>\n  <li>a\n<code> x</code>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -770,19 +770,19 @@
   {
     "id": "space-backtick-lead-heading-tilde-code-quoted-nn",
     "source": "> - a\n>     ```\n>   # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-heading-raw-code-quoted-nn",
     "source": "> - a\n>     ```\n>   # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-heading-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>   # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -818,55 +818,55 @@
   {
     "id": "space-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-no-code-quoted-nn",
     "source": "> - a\n>     ```\n>     # h\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-tilde-code-quoted-nn",
     "source": "> - a\n>     ```\n>     # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-raw-code-quoted-nn",
     "source": "> - a\n>     ```\n>     # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "space-backtick-lead-deepheading-deep-code-quoted-nn",
     "source": "> - a\n>     ```\n>     # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -932,19 +932,19 @@
   {
     "id": "tab-backtick-lead-heading-tilde-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-heading-raw-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-heading-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -980,55 +980,55 @@
   {
     "id": "tab-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-no-code-quoted-nn",
     "source": "> - a\n>   \t```\n>     # h\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-tilde-code-quoted-nn",
     "source": "> - a\n>   \t```\n>     # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-raw-code-quoted-nn",
     "source": "> - a\n>   \t```\n>     # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tab-backtick-lead-deepheading-deep-code-quoted-nn",
     "source": "> - a\n>   \t```\n>     # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1082,7 +1082,7 @@
   {
     "id": "tilde-lead-heading-back-code-quoted-nn",
     "source": "> - a\n>     ~~~\n>   # h\n>   ````\n>   code\n>   ````\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1106,13 +1106,13 @@
   {
     "id": "tilde-lead-deepheading-no-code-quoted-nn",
     "source": "> - a\n>     ~~~\n>     # h\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1>h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "tilde-lead-deepheading-back-code-quoted-nn",
     "source": "> - a\n>     ~~~\n>     # h\n>   ````\n>   code\n>   ````\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1148,25 +1148,25 @@
   {
     "id": "column-backtick-lead-heading-tilde-code-quoted-nn",
     "source": "> - a\n>   ```\n>   # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-heading-raw-code-quoted-nn",
     "source": "> - a\n>   ```\n>   # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-hr-deep-code-quoted-nn",
     "source": "> - a\n>   ```\n>   ---\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <hr>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-table-deep-code-quoted-nn",
     "source": "> - a\n>   ```\n>   | a |\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <table>\n        <tbody>\n          <tr><td>a</td></tr>\n        </tbody>\n      </table>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <table>\n        <tbody>\n          <tr><td>a</td></tr>\n        </tbody>\n      </table>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1184,19 +1184,19 @@
   {
     "id": "column-backtick-lead-attrs-deep-code-quoted-nn",
     "source": "> - a\n>   ```\n>   {.k}\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <p class=\"k\">~~~\ncode\n~~~\nafter</p>\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre class=\"k\"><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-div-deep-code-quoted-nn",
     "source": "> - a\n>   ```\n>   ::: box\n>   x\n>   :::\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <div class=\"box\">\n        <p>x</p>\n      </div>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <div class=\"box\">\n        <p>x</p>\n      </div>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-emptydiv-deep-code-quoted-nn",
     "source": "> - a\n>   ```\n>   :::\n>   :::\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <div>\n\n      </div>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <div>\n\n      </div>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1244,13 +1244,13 @@
   {
     "id": "column-backtick-lead-deepheading-tilde-code-quoted-nn",
     "source": "> - a\n>   ```\n>     # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n# h</code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-raw-code-quoted-nn",
     "source": "> - a\n>   ```\n>     # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n# h</code>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1286,31 +1286,31 @@
   {
     "id": "column-backtick-lead-comment-deep-code-quoted-bn",
     "source": "> - a\n>   ```\n>\n>   %% c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-no-code-quoted-bn",
     "source": "> - a\n>   ```\n>\n>     # h\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      # h\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-deepheading-deep-code-quoted-bn",
     "source": "> - a\n>   ```\n>\n>     # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      # h\n~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-quote-deep-code-quoted-bb",
     "source": "> - a\n>   ```\n>\n>   > q\n>\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <blockquote><p>q</p></blockquote>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <blockquote><p>q</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "column-backtick-lead-quotehr-deep-code-quoted-bb",
     "source": "> - a\n>   ```\n>\n>   > ---\n>\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <blockquote>\n        <hr>\n      </blockquote>\n      ~~~\ncode\n~~~\nafter\n    </li>\n  </ul>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code></code>\n      <blockquote>\n        <hr>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1334,19 +1334,19 @@
   {
     "id": "labeled-backtick-lead-heading-tilde-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-heading-raw-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-heading-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
@@ -1382,55 +1382,55 @@
   {
     "id": "labeled-backtick-lead-sublist-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-no-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-tilde-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-raw-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n        </li>\n      </ul>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-sublistcode-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>   - c\n>     ~~~\n>     y\n>     ~~~\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c</li>\n      </ul>\n      <pre><code>y\n</code></pre>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <ul>\n        <li>c\n          <pre><code>y\n</code></pre>\n          <pre><code>code\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-no-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>     # h\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-tilde-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>     # h\n>   ~~~\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-raw-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>     # h\n>   ~~~ =html\n>   code\n>   ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {
     "id": "labeled-backtick-lead-deepheading-deep-code-quoted-nn",
     "source": "> - a\n>     ``` x\n>     # h\n>     ~~~\n>     code\n>     ~~~\n>  after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1>h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code> x</code>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
     "basis": "spec checker at carve 320c589a"
   },
   {

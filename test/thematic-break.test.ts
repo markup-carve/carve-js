@@ -46,10 +46,10 @@ describe('thematic break', () => {
     expect(html('_ _ _')).toBe('<p>_ _ _</p>')
   })
 
-  it('rejects a leading indent — a break is col-0 only', () => {
-    expect(html(' ***')).toBe('<p>***</p>')
-    expect(html('  ---')).toBe('<p>—</p>')
-    expect(html('\t***')).toBe('<p>***</p>')
+  it('accepts a leading indent', () => {
+    expect(html(' ***')).toBe('<hr>')
+    expect(html('  ---')).toBe('<hr>')
+    expect(html('\t***')).toBe('<hr>')
   })
 
   it('does not match a mixed run or fewer than three', () => {

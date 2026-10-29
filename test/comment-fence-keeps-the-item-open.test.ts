@@ -14,10 +14,10 @@ describe('a closed comment fence in a list item', () => {
   })
 
   it('releases a below-column block opener after an at-column closer', () => {
-    // `# h` is below the content column, so §24 C3 keeps it as item text rather
-    // than nesting a heading. The comment must not change that either.
+    // `# h` is below the content column, so it opens a heading at the top level
+    // rather than nesting one. The comment must not change that either.
     expect(squash(carveToHtml('- a\n  %%% x\n  y\n  %%%\n # h\n\n- b\n'))).toBe(
-      "<ul><li>a</li></ul><p># h</p><ul><li>b</li></ul>",
+      '<ul><li>a</li></ul><section id="h"><h1>h</h1><ul><li>b</li></ul></section>',
     )
   })
 
@@ -125,13 +125,11 @@ describe('a comment does not change a fold state that was already closed', () =>
       expect(out).toContain('<p>lazy</p>')
     })
 
-    it(`still folds after ${what} when the comment sits BELOW the content column`, () => {
-      // The other side of the control, so this is not just asserting that
-      // everything ends the item: a paragraph after the block does re-open the
-      // fold, and a comment that is not at the column does not close it again.
+    it(`ends the fold after ${what} when the comment sits BELOW the content column too`, () => {
+      // A below-column comment line ends the item as well.
       const out = squash(carveToHtml(`- a\n${block}  para\n %%% c\n %%%\nlazy\n`))
 
-      expect(out).not.toContain('<p>lazy</p>')
+      expect(out).toContain('<p>lazy</p>')
     })
   }
 })

@@ -170,10 +170,13 @@ export function splitBracedOpener(text: string, open: number): boolean {
   return marker !== undefined && BRACED_OPENER_MARKERS.includes(marker) && extendsGrapheme(text, open + 2)
 }
 
+// `guarded`: the opener follows a `_` or `/` and opens only if that one does.
+export interface BarePair { close: number; end: number; guarded?: boolean }
+
 export interface InlinePairView {
   tables: Array<Int32Array | undefined>
   attributeTails: Map<number, number>
-  barePairs: Map<number, { close: number; end: number }>
+  barePairs: Map<number, BarePair>
   offset: number
 }
 
@@ -449,21 +452,35 @@ export interface EmphasisMatch {
 }
 
 export interface EmphasisMemo {
+  // Inside an inline note: a `[^` there is no footnote reference.
+  noteBody?: boolean
   // Per delimiter, scan positions known to reach no closer. Not a single bound:
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
   lastBrace: number
   lastCritic?: number
   boldItalic?: { closers: number[]; minimumOwners: number[]; width: number }
+  // Closer walks run for a guarded opener's look-behind, by delimiter, start and end.
+  closes?: Map<string, number>
+  // `failed` for the walk that opens every guarded child.
+  failedGuardsOpen?: Map<string, Uint8Array>
+  // Walks, keyed as `closes`, that close only with their start's guarded child
+  // blocked, so that child's attribute block is content.
+  startBlocked?: Set<string>
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
+  // The same, with every glued bracket taking a destination (`nested` in the
+  // core grammar), as the editorial insert, delete and substitution scans read.
+  nestedDestinations?: Map<number, number>
   // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
   // resolves a label with, so the scan hides exactly the run the parser builds.
   brackets?: BracketClose
   crossref?: CrossrefMemo
 }
 
-export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): number | undefined {
+// `bracedEnd` gives the exclusive end of a forced span or editorial frame
+// opening at a `{`, or -1, as the parser pairs it.
+export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo, bracedEnd?: (open: number) => number): number | undefined {
   if (!memo.boldItalic) {
     const closers: number[] = []
     const owners: number[] = []
@@ -472,7 +489,7 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
     const destinations = linkDestinations(text, memo)
     const atoms = atomicLinkRegions(text)
     const attributes = new Map<number, number>()
-    if (text.includes('{')) inlineOpaqueEnds(text, codeEnds, destinations, new Map(), attributes, brackets)
+    const opaqueEnds = text.includes('{') ? inlineOpaqueEnds(text, codeEnds, destinations, new Map(), attributes, brackets) : attributes
     let atom = 0
     const boundaries: Array<{ open: number; end: number; opaque: boolean }> = []
     for (let close = 0; close < text.length - 1; close++) {
@@ -501,8 +518,11 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
         if (end !== undefined) boundaries.push({ open: close, end: end + 1, opaque: true })
       }
       if (!opaque && text[close] === '{') {
-        const end = attributes.get(close)
-        if (end !== undefined) boundaries.push({ open: close, end, opaque: true })
+        // A braced inline is a child boundary too (PART 9 E2a, section 22).
+        const braced = bracedEnd?.(close) ?? -1
+        const end = braced === -1 ? opaqueEnds.get(close) ?? attributes.get(close) : undefined
+        if (braced !== -1) boundaries.push({ open: close, end: braced, opaque: false })
+        else if (end !== undefined) boundaries.push({ open: close, end, opaque: true })
       }
       if (text[close] !== '*' || text[close + 1] !== '/') continue
       // bare_closer('/'): the outer `/` does not close before a letter or digit
@@ -547,7 +567,7 @@ export function newEmphasisMemo(): EmphasisMemo {
 
 /** `buildBracketMap` over one inline text, built at most once per scan. */
 export function emphasisBrackets(text: string, memo: EmphasisMemo): BracketClose {
-  memo.brackets ??= text.includes('[') ? buildBracketMap(text) : () => undefined
+  memo.brackets ??= text.includes('[') ? buildBracketMap(text, false, undefined, undefined, memo.noteBody !== true) : () => undefined
 
   return memo.brackets
 }
@@ -599,10 +619,11 @@ export function atomicLinkRegions(text: string): Array<[number, number]> {
 // Only a bracket pair the parser can build a link or image from has a
 // destination: not a footnote reference `[^n]` nor an inline note `^[...]`. The
 // attribute block after the `)` is not part of what E2a hides.
-export function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number> {
-  if (memo.destinations) return memo.destinations
+export function linkDestinations(text: string, memo: EmphasisMemo, nested = false): Map<number, number> {
+  if (nested ? memo.nestedDestinations : memo.destinations) return (nested ? memo.nestedDestinations : memo.destinations)!
   const found = new Map<number, number>()
-  memo.destinations = found
+  if (nested) memo.nestedDestinations = found
+  else memo.destinations = found
   const firstLinkTail = text.indexOf('](')
   if (firstLinkTail === -1) return found
   const sharedSlots: { first: number; ends?: Map<number, number> } = { first: firstLinkTail + 1 }
@@ -614,13 +635,21 @@ export function linkDestinations(text: string, memo: EmphasisMemo): Map<number, 
   const destinationOpeners = new Set((sharedSlots.ends ??= destinationSlotEnds(text, sharedSlots.first)).keys())
   const atoms = atomicLinkRegions(text)
   let atom = 0
+  // Glued brackets pair up left to right: a run glued to a text half is the
+  // label of a reference pair and takes no destination (`[b][a](u)`). A
+  // footnote or note bracket does not start a pair.
+  const textHalves = new Set<number>()
   for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
     while (atom < atoms.length && atoms[atom]![1] <= open) atom++
     if (atom < atoms.length && atoms[atom]![0] < open) continue
     const close = brackets(open)
     if (close === undefined) continue
+    if (!nested && textHalves.has(open - 1)) continue
+    // A `{^` opener owns its `^`, so the bracket after it is no inline note.
+    const note = !nested && (text[open + 1] === '^' || text[open - 1] === '^' && text[open - 2] !== '{')
+    if (!note) textHalves.add(close)
     if (close + 1 <= covered) continue
-    if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
+    if (text[close + 1] !== '(' || note) continue
     if (!destinationOpeners.has(close + 1)) continue
     const scanned = scanDestination(text, close + 1)
     if (scanned === null) continue

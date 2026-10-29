@@ -25,11 +25,11 @@ describe('a definition inside a quoted list item', () => {
     expect(carveToHtml('> - - a\n>   [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
   })
 
-  it('folds as text one column short of it', () => {
+  it('registers one column short of it as well', () => {
     const html = carveToHtml('> - a\n>  [r]: /u\n\nsee [t][r]\n')
 
-    expect(html).toContain('[r]: /u')
-    expect(html).toContain('<p>see [t][r]</p>')
+    expect(html).not.toContain('[r]: /u')
+    expect(html).toContain('<p>see <a href="/u">t</a></p>')
   })
 
   it('agrees with the footnote form at the same column', () => {

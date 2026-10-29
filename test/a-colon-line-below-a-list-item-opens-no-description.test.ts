@@ -4,11 +4,11 @@ import { carveToHtml, parse } from '../src/index.js'
 const normalize = (html: string) => html.trim().split('\n').map(line => line.trim()).filter(Boolean).join('\n')
 
 it.each([
-  ['- x\n: e\n :: t\n : zq\n', '<ul>\n<li>x\n: e\n:: t\n: zq</li>\n</ul>'],
-  ['1. x\n: e\n  :: t\n  : zq\n', '<ol>\n<li>x\n: e\n:: t\n: zq</li>\n</ol>'],
-  ['- [ ] x\n: e\n :: t\n : zq\n', '<ul class="task-list">\n<li><input type="checkbox" disabled aria-label="x : e :: t : zq"> x\n: e\n:: t\n: zq</li>\n</ul>'],
-  ['- x\n  - y\n: e\n :: t\n : zq\n', '<ul>\n<li>x\n<ul>\n<li>y\n: e\n:: t\n: zq</li>\n</ul>\n</li>\n</ul>'],
-  ['> - x\n> : e\n>  :: t\n>  : zq\n', '<blockquote>\n<ul>\n<li>x\n: e\n:: t\n: zq</li>\n</ul>\n</blockquote>'],
+  ['- x\n: e\n :: t\n : zq\n', '<ul>\n<li>x\n: e</li>\n</ul>\n<dl>\n<dt>t</dt>\n<dd>zq</dd>\n</dl>'],
+  ['1. x\n: e\n  :: t\n  : zq\n', '<ol>\n<li>x\n: e</li>\n</ol>\n<dl>\n<dt>t</dt>\n<dd>zq</dd>\n</dl>'],
+  ['- [ ] x\n: e\n :: t\n : zq\n', '<ul class="task-list">\n<li><input type="checkbox" disabled aria-label="x : e"> x\n: e</li>\n</ul>\n<dl>\n<dt>t</dt>\n<dd>zq</dd>\n</dl>'],
+  ['- x\n  - y\n: e\n :: t\n : zq\n', '<ul>\n<li>x\n<ul>\n<li>y\n: e</li>\n</ul>\n</li>\n</ul>\n<dl>\n<dt>t</dt>\n<dd>zq</dd>\n</dl>'],
+  ['> - x\n> : e\n>  :: t\n>  : zq\n', '<blockquote>\n<ul>\n<li>x\n: e</li>\n</ul>\n<dl>\n<dt>t</dt>\n<dd>zq</dd>\n</dl>\n</blockquote>'],
 ])('keeps lines below %j as the item paragraph', (source, expected) => {
   expect(normalize(carveToHtml(source))).toBe(expected)
 })

@@ -10,9 +10,9 @@ import { parse } from '../src/parse.js'
  */
 describe('a code span folded into a term formats', () => {
   it.each([
-    [':: c\n  ```\n  code\n  ```\n', ':: c\n  `\n  code\n  `\n'],
-    [':: a\n: b\n  :: c\n    ```\n    code\n    ```\n', ':: a\n: b\n\n  :: c\n    `\n    code\n    `\n'],
-    ['- item\n\n  :: c\n    ```\n    code\n    ```\n', '- item\n  :: c\n    `\n    code\n    `\n'],
+    [':: c\n  ```\n  code\n  ```\n', ':: c\n\n```\ncode\n```\n'],
+    [':: a\n: b\n  :: c\n    ```\n    code\n    ```\n', ':: a\n: b\n\n  :: c\n\n  ```\n  code\n  ```\n'],
+    ['- item\n\n  :: c\n    ```\n    code\n    ```\n', '- item\n  :: c\n  ```\n  code\n  ```\n'],
   ])('%j', (source, formatted) => {
     const once = renderCarve(parse(source))
     expect(once).toBe(formatted)

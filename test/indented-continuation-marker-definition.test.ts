@@ -41,11 +41,11 @@ describe('a definition attached by a continuation marker', () => {
     expect(resolves('- - a\n+\n[r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 
-  it('is NOT collected below the marker column', () => {
+  it('is collected below the marker column too', () => {
     // The column is the rule, not "anything after a `+`". A line below it folds
     // as the item's visible text and registers nothing (§24 C3), which is what
     // keeps this from being a blanket exemption.
-    expect(resolves('- a\n  +\n [r]: /u\n\nsee [t][r]\n')).toBe(false)
+    expect(resolves('- a\n  +\n [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 
   it('leaves no trace of the line it collected', () => {

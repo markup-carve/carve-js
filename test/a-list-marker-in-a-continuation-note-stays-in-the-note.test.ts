@@ -16,7 +16,9 @@ for (const [name, host, column] of [
           const source = [...body.map(line => quoted ? '> ' + line : line), 'below', '', '[^b]'].join('\n')
           const html = carveToHtml(source)
           const [document, note] = html.split('<section role="doc-endnotes"')
-          if (name !== 'nested host' || code) expect(document).toContain('<p>below</p>')
+          // A note takes the lazy line while its paragraph is open (carve#3885).
+          if (code) expect(document).toContain('<p>below</p>')
+          else expect(note).toContain('\nbelow')
           expect(document).not.toContain('c2')
           expect(document).not.toContain('<pre>')
           expect(note).toContain('<p>inner\n' + marker)

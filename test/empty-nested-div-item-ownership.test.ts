@@ -5,7 +5,7 @@ const first = '<ul>\n  <li>a\n    <ul>\n      <li>\n        <div class="box">\n\
 
 it('ends a list after an empty nested marker-line div', () => {
   expect(carveToHtml('- a\n  - ::: box\nlazy')).toBe(first + '\n<p>lazy</p>')
-  expect(carveToHtml('- a\n  - ::: box\n - next')).toBe(first + '\n<ul>\n  <li>next</li>\n</ul>')
+  expect(carveToHtml('- a\n  - ::: box\n - next')).toBe('<ul>\n  <li>a\n    <ul>\n      <li>\n        <div class="box">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n  <li>next</li>\n</ul>')
 })
 
 it('keeps an open div paragraph in its item', () => {

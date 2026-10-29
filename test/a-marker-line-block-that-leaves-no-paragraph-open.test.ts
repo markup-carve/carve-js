@@ -46,10 +46,9 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     )
   })
 
-  it('a footnote definition ends it, and still defines', () => {
-    expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain(
-      '<ul>\n  <li></li>\n</ul>\n<p>tail</p>',
-    )
+  // A footnote's open paragraph takes the line lazily instead (carve#3885).
+  it('a footnote definition takes the line, and still defines', () => {
+    expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain('<p>t\ntail<a href="#fnref1"')
     expect(carveToHtml('- [^f]: t\ntail\n\nsee[^f]\n')).toContain('role="doc-endnotes"')
   })
 
@@ -137,7 +136,7 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     // otherwise answer for a construct the block parser never builds, ending an
     // item that does hold an open paragraph.
     expect(carveToHtml('- >  [r]: /u\ntail\n')).toBe(
-      '<ul>\n  <li>\n    <blockquote><p>[r]: /u\ntail</p></blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>',
     )
     // The flush spelling is the definition, and it does end the item.
     expect(carveToHtml('- > [r]: /u\ntail\n')).toBe(

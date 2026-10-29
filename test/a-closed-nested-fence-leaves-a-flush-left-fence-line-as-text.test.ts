@@ -27,7 +27,7 @@ const cases: [string, string, string][] = [
   ["ctrl-comment-line-below", ":: t\n: - ```\n    ```\n%% c\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>"],
   ["ctrl-quote-list-fence-flush", "> - ```\n```\n", "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code></code></pre>"],
   ["ctrl-quote-list-fence", "> - ```\n> ```\n", "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"],
-  ["ctrl-indented-fence-below", ":: t\n: - ```\n    ```\n ```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<p><code></code></p>"],
+  ["ctrl-indented-fence-below", ":: t\n: - ```\n    ```\n ```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<pre><code></code></pre>"],
   ["ctrl-plain-text-below", ":: t\n: - ```\n    ```\nx\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>"],
   ["ctrl-line-block-lead", ":: t\n: - |\n| x\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>|\n| x</li>\n    </ul>\n  </dd>\n  <dt>u</dt>\n</dl>"],
 ]

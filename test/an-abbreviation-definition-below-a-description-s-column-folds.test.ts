@@ -54,7 +54,7 @@ describe("an abbreviation definition below a description's column folds", () => 
     )
   })
 
-  it('the link and footnote spellings fold here too', () => {
+  it('the link and footnote spellings do not fold here', () => {
     // These rows asserted the OPPOSITE when this file landed - that the two
     // definition spellings ended the body - which was the whole band's answer at
     // the time and is what markup-carve/carve#1809 overturned: §10 I5 makes an
@@ -67,10 +67,10 @@ describe("an abbreviation definition below a description's column folds", () => 
     // never recognized it in a container, the other two fold because of the
     // column. Two reasons, one answer.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d\n[r]: /u\ntail</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
     )
     expect(html(':: t\n:  d\n  [^f]: n\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d\n[^f]: n\ntail</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
     )
   })
 

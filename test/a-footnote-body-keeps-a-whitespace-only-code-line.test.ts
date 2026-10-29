@@ -44,8 +44,8 @@ describe('a footnote body keeps a whitespace-only code line', () => {
     expect(code(note('    ~~~\n    a\n      \n    b\n    ~~~'))).toBe('a\n  \nb\n')
   })
 
-  it('keeps a tab as the residue', () => {
-    expect(code(note('    ```\n    a\n    \t\n    b\n    ```'))).toBe('a\n\t\nb\n')
+  it('keeps a tab residue as spaces', () => {
+    expect(code(note('    ```\n    a\n    \t\n    b\n    ```'))).toBe('a\n    \nb\n')
   })
 
   it('keeps one residue per line across a run of them', () => {

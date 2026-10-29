@@ -51,7 +51,7 @@ describe('a definition marker below a nested term column', () => {
   it.each([
     ['document', ':: t\n: para\n ```js\n code\n ```\n'],
     ['list item', '- a\n  :: t\n  :  para\n    ```js\n    code\n    ```\n'],
-  ])('folds a matched fence in an open %s description', (_name, source) => {
-    expect(normalize(carveToHtml(source))).toContain('<dd>para\n<code>js\ncode\n</code></dd>')
+  ])('ends an open %s description before a matched fence', (_name, source) => {
+    expect(normalize(carveToHtml(source))).toContain('<dd>para</dd>\n</dl>\n<pre><code class="language-js">code\n</code></pre>')
   })
 })

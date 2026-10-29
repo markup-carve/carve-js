@@ -44,16 +44,16 @@ describe("a line below a description item's content column opens nothing", () =>
     )
   })
 
-  for (const [label, payload, folded] of [
-    ['a heading', '# H', '# H'],
-    ['a break', '---', '—'],
-    ['a table row', '| a |', '| a |'],
-    ['a quote marker', '> q', '&gt; q'],
-    ['an attribute block', '{.k}', '{.k}'],
+  for (const [label, payload, opened] of [
+    ['a heading', '# H', ['    <h1 id="H">H</h1>']],
+    ['a break', '---', ['    <hr>']],
+    ['a table row', '| a |', ['    <table>', '      <tbody>', '        <tr><td>a</td></tr>', '      </tbody>', '    </table>']],
+    ['a quote marker', '> q', ['    <blockquote><p>q</p></blockquote>']],
+    ['an attribute block', '{.k}', []],
   ] as const) {
-    it('folds ' + label + " one column short of the item", () => {
+    it('opens ' + label + " one column short of the item in the body", () => {
       expect(html(':: t\n: 1. p\n    ' + payload + '\n')).toBe(
-        ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ol>', '      <li>p', folded + '</li>', '    </ol>', '  </dd>', '</dl>'].join('\n'),
+        ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ol>', '      <li>p</li>', '    </ol>', ...opened, '  </dd>', '</dl>'].join('\n'),
       )
     })
   }

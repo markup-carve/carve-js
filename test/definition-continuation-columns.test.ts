@@ -18,6 +18,11 @@ describe('definition continuations obey the enclosing item and definition column
       for (const definition of ['[^f]: t', '[r]: /u']) {
         for (let column = 1; column < contentColumn; column++) {
           const html = carveToHtml(source(head, contentColumn, definition, column))
+          // A footnote takes both lines lazily (carve#3885); unreferenced, it renders nothing.
+          if (definition.startsWith('[^')) {
+            expect(html, `${definition} at continuation column ${column}`).not.toContain('tail')
+            continue
+          }
           expect(tailIsInside(html), `${definition} at continuation column ${column}`).toBe(false)
           expect(html).toContain('<p>more\ntail</p>')
         }
@@ -40,8 +45,7 @@ describe('definition continuations obey the enclosing item and definition column
       const src = `${source(head, contentColumn, '[^f]: t', contentColumn + 2)}\nx[^f]\n`
       const html = carveToHtml(src)
       expect(tailIsInside(html)).toBe(false)
-      expect(html).toContain('t\nmore')
-      expect(html).toMatch(/<\/[uo]l>\n<p>tail<\/p>/)
+      expect(html).toContain('t\nmore\ntail')
     })
   }
 

@@ -43,10 +43,10 @@ describe('a quote-marked blank keeps the item column open', () => {
    * registered. Before the blank was fixed a second bug hid this one: the
    * quote-marked blank popped the phantom column again.
    */
-  it('does not register against a single-colon line, which is prose', () => {
+  it('registers below a single-colon line, which is prose', () => {
     const html = carveToHtml('> : term\n>   def\n>\n>   [r]: /url\n>\n> [r][]\n')
-    expect(html).toContain('<p>[r]: /url</p>')
-    expect(html).not.toContain('href="/url"')
+    expect(html).not.toContain('<p>[r]: /url</p>')
+    expect(html).toContain('<p><a href="/url">r</a></p>')
   })
 
   it('leaves a real `::` definition list reading as one', () => {

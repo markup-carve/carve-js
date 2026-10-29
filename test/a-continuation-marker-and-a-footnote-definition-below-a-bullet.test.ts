@@ -78,20 +78,20 @@ describe('a bare continuation marker at document level', () => {
 })
 
 describe('a definition below a bullet whose item holds a def list', () => {
-  it('folds a footnote definition into the paragraph the marker line opened', () => {
-    expect(carveToHtml('* : |\n [^f]: t\n')).toBe('<ul>\n  <li>: |\n[^f]: t</li>\n</ul>')
+  it('reads a footnote definition, not paragraph text, below the marker line', () => {
+    expect(carveToHtml('* : |\n [^f]: t\n')).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
-  it('folds one under a dash bullet the same way', () => {
-    expect(carveToHtml('- : |\n [^f]: t\n')).toBe('<ul>\n  <li>: |\n[^f]: t</li>\n</ul>')
+  it('reads one under a dash bullet the same way', () => {
+    expect(carveToHtml('- : |\n [^f]: t\n')).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
   it('folds one under a description marker with ordinary content', () => {
-    expect(carveToHtml('* : x\n [^f]: t\n')).toBe('<ul>\n  <li>: x\n[^f]: t</li>\n</ul>')
+    expect(carveToHtml('* : x\n [^f]: t\n')).toBe('<ul>\n  <li>: x</li>\n</ul>')
   })
 
   it('folds the link spelling too, which #2306 reached by another route', () => {
-    expect(carveToHtml('* : |\n [d]: u\n')).toBe('<ul>\n  <li>: |\n[d]: u</li>\n</ul>')
+    expect(carveToHtml('* : |\n [d]: u\n')).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
   // AT the item's content column the definition is real and renders nothing.

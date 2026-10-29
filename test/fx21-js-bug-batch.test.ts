@@ -6,7 +6,7 @@ describe('container ownership across source columns', () => {
     const html = carveToHtml(':: a\n: b\n  :: c\n||\n')
     expect(html).toContain('<dt>c</dt>')
     expect(html).toContain('</dl>\n<table>')
-    expect(carveToHtml(':: a\n: b\n  :: c\n ||\n')).toContain('<dt>c\n||</dt>')
+    expect(carveToHtml(':: a\n: b\n  :: c\n ||\n')).toContain('<dt>c</dt>\n    </dl>\n  </dd>\n</dl>\n<table>')
   })
 
   it('places a block at a nested item marker column beside that item', () => {

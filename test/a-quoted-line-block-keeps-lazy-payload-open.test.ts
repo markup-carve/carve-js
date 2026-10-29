@@ -52,7 +52,7 @@ more</p>
 for (const first of ['verse', '  indented verse']) {
   for (const run of [' ```', '  ```', '  ~~~']) {
     for (const lazyAfter of [0, 1, 2]) {
-      it(`keeps lazy quoted list payload after ${JSON.stringify(run)} at position ${lazyAfter} following ${JSON.stringify(first)}`, () => {
+      it(`ends quoted list payload at a lazy line after ${JSON.stringify(run)} at position ${lazyAfter} following ${JSON.stringify(first)}`, () => {
         const payload = ['inside', 'more']
         payload.splice(lazyAfter, 0, 'lazy')
         const source = [
@@ -67,11 +67,13 @@ for (const first of ['verse', '  indented verse']) {
         ].join('\n')
         const firstHtml = first.startsWith('  ') ? '&nbsp;&nbsp;indented verse' : first
         const indent = '&nbsp;'.repeat(run.length - run.trimStart().length)
-        const lines = [...payload, '[r]: /hidden']
+        const lines = payload.slice(0, lazyAfter + 1)
+        const rest = payload.slice(lazyAfter + 1)
         const body = run.trimStart() === '```'
           ? `${indent}<code>${lines.join('\n')}</code>`
           : `${indent}~~~<br>${lines.join('<br>')}`
-        const expected = `<ul><li><blockquote><div class="line-block"><p>${firstHtml}<br>${body}</p></div></blockquote></li></ul><p>[t][r]</p>`
+        const quote = `<blockquote>${rest.length ? `<p>${rest.join('\n')}</p>` : ''}<div></div></blockquote>`
+        const expected = `<ul><li><blockquote><div class="line-block"><p>${firstHtml}<br>${body}</p></div></blockquote></li></ul>${quote}<p><a href="/hidden">t</a></p>`
         const normalize = (html: string) => html.replace(/\s+</g, '<').replace(/>\s+/g, '>').trim()
         expect(normalize(carveToHtml(source))).toBe(normalize(expected))
       })

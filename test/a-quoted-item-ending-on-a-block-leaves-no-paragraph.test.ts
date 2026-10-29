@@ -7,8 +7,6 @@ describe('a quoted item ending on a block leaves no paragraph', () => {
     expect(carveToHtml(source)).toBe(`<blockquote>
   <ul>
     <li>a</li>
-  </ul>
-  <ul>
     <li>b
       <ul>
         <li>c</li>
@@ -77,17 +75,29 @@ ${lastBlock}
 <p>tail</p>`)
   })
 
-  it.each([[[]], [['>     # h']]])('preserves the marker-line definition term (%j)', lines => {
-    const source = ['> - :: t', ...lines, 'tail'].join('\n')
-    const term = lines.length ? 't\n  # h\ntail' : 't\ntail'
-    expect(carveToHtml(source)).toBe(`<blockquote>
+  it.each([
+    [[], `<blockquote>
   <ul>
     <li>
       <dl>
-        <dt>${term}</dt>
+        <dt>t\ntail</dt>
       </dl>
     </li>
   </ul>
-</blockquote>`)
+</blockquote>`],
+    [['>     # h'], `<blockquote>
+  <ul>
+    <li>
+      <dl>
+        <dt>t</dt>
+      </dl>
+      <h1 id="h">h</h1>
+    </li>
+  </ul>
+</blockquote>
+<p>tail</p>`],
+  ])('preserves the marker-line definition term (%j)', (lines, expected) => {
+    const source = ['> - :: t', ...lines, 'tail'].join('\n')
+    expect(carveToHtml(source)).toBe(expected)
   })
 })

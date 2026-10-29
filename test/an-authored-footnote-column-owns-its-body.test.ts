@@ -26,15 +26,15 @@ describe('an authored footnote column owns its body', () => {
     )
   })
 
-  it('returns an attached quote to the outer item', () => {
+  it('keeps an attached quote out of the outer item', () => {
     expect(carveToHtml('- a\n  1. ordered\n    [^n]: note\n  +\n  > quote\n')).toBe(
-      '<ul>\n  <li>a\n    <ol>\n      <li>ordered</li>\n    </ol>\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ol>\n      <li>ordered</li>\n    </ol>\n  </li>\n</ul>',
     )
   })
 
-  it('keeps every line of an attached fenced block', () => {
+  it('keeps an attached fenced block out of the outer item', () => {
     expect(carveToHtml('- a\n  1. o\n    [^n]: note\n  +\n  ```\n  code\n  ```\n  tail\n')).toBe(
-      '<ul>\n  <li>a\n    <ol>\n      <li>o</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ol>\n      <li>o</li>\n    </ol>\n    tail\n  </li>\n</ul>',
     )
   })
 })

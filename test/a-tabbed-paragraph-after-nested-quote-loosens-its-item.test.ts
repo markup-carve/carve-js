@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 it.each([
   ['- 1. ordered\n  >        q\n\n  \ttext\n', 'ordered'],
-  ['- 1. ordered\n    1. ordered\n      [^n]: note\n        1. ordered\n  >        q\n\n  \ttext\n', 'ordered\n1. ordered'],
+  ['- 1. ordered\n    1. ordered\n      [^n]: note\n        1. ordered\n  >        q\n\n  \ttext\n', 'ordered</li>\n      <li>ordered'],
 ])('keeps the blank before the outer item paragraph', (source, innerText) => {
   expect(carveToHtml(source)).toBe(
     '<ul>\n' +

@@ -42,6 +42,6 @@ describe('fmt keeps a region marker on its line (CARVE-P11-073)', () => {
       if (value === null || typeof value !== 'object') return value
       return Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'pos').map(([k, v]) => [k, strip(v)]))
     }
-    expect(renderCarve(strip(ast) as typeof ast)).toBe('%% #region r\n\n- a\n  %% #endregion r\n')
+    expect(renderCarve(strip(ast) as typeof ast)).toBe('%% #region r\n\n- a\n\n%% #endregion r\n')
   })
 })

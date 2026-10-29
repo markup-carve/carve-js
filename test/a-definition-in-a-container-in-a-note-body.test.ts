@@ -62,16 +62,10 @@ describe('a definition in a container in a note body', () => {
       expect(consumedAndResolves(src), html(src)).toBe(true)
     })
 
-    /*
-     * THE QUOTE IS NOT REBASED. This is the control that separates the two
-     * containers: a fix reading "a note body absorbs indentation" rather than
-     * "a REBASED block absorbs it" makes these resolve, and the oracle leaves
-     * them literal and inert.
-     */
     for (const extra of [1, 2, 3]) {
-      it(`is literal text ${extra} column(s) past the quote marker`, () => {
+      it(`is a definition ${extra} column(s) past the quote marker`, () => {
         const src = note(['  > ' + pad(extra) + '[r]: /url'])
-        expect(textAndInert(src), html(src)).toBe(true)
+        expect(consumedAndResolves(src), html(src)).toBe(true)
       })
     }
   })
@@ -82,9 +76,9 @@ describe('a definition in a container in a note body', () => {
     })
 
     for (const col of [1, 2, 3]) {
-      it(`is literal text at column ${col} of a top-level container`, () => {
+      it(`is a definition at column ${col} of a top-level container`, () => {
         const src = top(['::: note', pad(col) + '[r]: /url', ':::'])
-        expect(textAndInert(src), html(src)).toBe(true)
+        expect(consumedAndResolves(src), html(src)).toBe(true)
       })
     }
 
