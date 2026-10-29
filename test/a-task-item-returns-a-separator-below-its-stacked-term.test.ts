@@ -6,13 +6,13 @@ it('returns a separator at the parent content column from a stacked task item', 
     '<ul class="task-list">\n' +
     '  <li><input type="checkbox" disabled> \n' +
     '    <ul>\n' +
-    '      <li>a\n' +
-    '        <dl>\n' +
-    '          <dt>m</dt>\n' +
-    '        </dl>\n' +
-    '      </li>\n' +
+    '      <li>a</li>\n' +
     '    </ul>\n' +
-    '    : l\n: l\n' +
+    '    <dl>\n' +
+    '      <dt>m</dt>\n' +
+    '      <dd>l</dd>\n' +
+    '      <dd>l</dd>\n' +
+    '    </dl>\n' +
     '  </li>\n' +
     '</ul>',
   )

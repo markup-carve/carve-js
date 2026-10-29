@@ -13,10 +13,10 @@ describe('fenced code: strict opener, lenient closer', () => {
   })
 
   for (const indent of [1, 2, 3, 4]) {
-    it(`does NOT open at document level indented ${indent}`, () => {
+    it(`opens at document level indented ${indent}`, () => {
       const pad = ' '.repeat(indent)
       const out = carveToHtml(`${pad}\`\`\`\n${pad}c\n${pad}\`\`\`\n`)
-      expect(out).not.toContain('<pre>')
+      expect(out).toBe('<pre><code>c\n</code></pre>')
     })
   }
 
@@ -55,8 +55,8 @@ describe('fenced code: strict opener, lenient closer', () => {
 // later definitions must still be collected (regression -- they were silently
 // swallowed to the end of the document).
 describe('fenced code: definition prepass uses the same column rule', () => {
-  it('collects a definition after an indented fence-looking line', () => {
-    expect(carveToHtml(' ```\n[r]: /u\n\n[r][]\n')).toContain('<a href="/u">')
+  it('keeps a definition after an indented fence opener as fence content', () => {
+    expect(carveToHtml(' ```\n[r]: /u\n\n[r][]\n')).toBe('<pre><code>[r]: /u\n\n[r][]\n</code></pre>')
   })
 
   it('still treats a definition inside a real fence as a literal sample', () => {

@@ -67,10 +67,10 @@ describe('ordered list indentation (Model A: content column)', () => {
     )
   })
 
-  it('folds an ordered child BELOW the content column (no blank, §10)', () => {
-    // `  1. b` is at column 2, below `1. `'s content column (3); ordered does
-    // not interrupt a paragraph, so it is lazy continuation, not a sub-list.
-    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  it('opens a sibling on an ordered marker BELOW the content column (no blank, §10)', () => {
+    // `  1. b` is at column 2, below `1. `'s content column (3), so it is a
+    // sibling item, not a sub-list.
+    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a</li>\n  <li>b</li>\n</ol>')
   })
 
   it('nests an ordered child AT the content column', () => {
@@ -103,10 +103,9 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
   const nestedOl =
     '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ol>'
 
-  it('folds an unordered child below the content column (one space, no interrupt)', () => {
-    // `- b` at column 1 is below `- `'s content column (2); a bullet no longer
-    // interrupts, so it folds into the lead text as lazy continuation.
-    expect(h('- a\n - b')).toBe('<ul>\n  <li>a\n- b</li>\n</ul>')
+  it('opens a sibling on a bullet below the content column (one space)', () => {
+    // `- b` at column 1 is below `- `'s content column (2), so it is a sibling item.
+    expect(h('- a\n - b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
   })
 
   it('still nests an unordered child at the content column (two spaces)', () => {
@@ -121,12 +120,12 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
     expect(h('- a\n\t- b')).toBe(nestedUl)
   })
 
-  it('still folds an ordered child below the content column (two spaces, no §10 interrupt)', () => {
-    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  it('opens a sibling on an ordered marker below the content column (two spaces)', () => {
+    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a</li>\n  <li>b</li>\n</ol>')
   })
 
-  it('keeps the spec tight two-space ordered marker fold unchanged', () => {
-    expect(h('1. outer\n  1. inner\n')).toBe('<ol>\n  <li>outer\n1. inner</li>\n</ol>')
+  it('keeps the spec tight two-space ordered marker a sibling', () => {
+    expect(h('1. outer\n  1. inner\n')).toBe('<ol>\n  <li>outer</li>\n  <li>inner</li>\n</ol>')
   })
 
   it('detaches below a wide ordered marker content column after a blank (col 2 < 4)', () => {

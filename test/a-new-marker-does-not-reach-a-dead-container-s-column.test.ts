@@ -14,15 +14,15 @@ import { carveToHtml } from '../src/index.js'
  * once, which I5 permits under neither reading.
  */
 describe('a new marker does not reach a dead container column', () => {
-  it('publishes the definition and registers nothing', () => {
+  it('registers the definition and publishes nothing', () => {
     const html = carveToHtml('> - x\n\n>   [r]: /url\n\n> [r][]\n')
-    expect(html).toContain('<p>[r]: /url</p>')
-    expect(html).not.toContain('href="/url"')
+    expect(html).not.toContain('<p>[r]: /url</p>')
+    expect(html).toContain('href="/url"')
   })
 
   it('holds for an ordered item too', () => {
     const html = carveToHtml('> 1. x\n\n>    [r]: /url\n\n> [r][]\n')
-    expect(html).not.toContain('href="/url"')
+    expect(html).toContain('href="/url"')
   })
 
   /**

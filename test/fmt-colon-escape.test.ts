@@ -60,9 +60,9 @@ const roundTrips = (src: string): void => {
 }
 
 describe('a mid-line colon needs no escape', () => {
-  it('leaves the caption-shaped colon alone once the caret is escaped', () => {
+  it('leaves the colon in a caption alone', () => {
     expect(carveToCarve(' ![Apollo](a.jpg)\n ^ Figure 1: moon\n')).toBe(
-      '![Apollo](a.jpg)\n\\^ Figure 1: moon\n',
+      '![Apollo](a.jpg)\n^ Figure 1: moon\n',
     )
     roundTrips(' ![Apollo](a.jpg)\n ^ Figure 1: moon\n')
   })

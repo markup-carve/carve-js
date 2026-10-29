@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('definition body fence lookahead at its source column', () => {
-  it('keeps a fence-shaped inline run inside the description', () => {
+  it('opens a fence after the description at a fence-shaped run', () => {
     const html = carveToHtml(':: t\n: d\n ```\nx\n```')
-    expect(html).toBe('<dl>\n  <dt>t</dt>\n  <dd>d\n<code>\nx\n</code></dd>\n</dl>')
+    expect(html).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<pre><code>x\n</code></pre>')
   })
 
   it.each(['```', '~~~~'])('does not take a left-of-base closer for %s', run => {

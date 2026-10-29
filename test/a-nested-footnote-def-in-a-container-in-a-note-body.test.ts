@@ -62,12 +62,11 @@ describe('a nested footnote def in a container in a note body', () => {
       expect(registers(src), html(src)).toBe(true)
     })
 
-    // The host-keyed boundary: a top-level container gets no such leniency, so a
-    // footnote def indented PAST its column stays text, exactly as a link def
-    // does. A fix that read "any container registers an over-indent" breaks this.
-    it('a footnote def one past a TOP-LEVEL container dangles', () => {
+    // A top-level container registers a footnote def indented PAST its column
+    // too, exactly as a link def does.
+    it('a footnote def one past a TOP-LEVEL container registers', () => {
       const src = '::: note\n [^g]: inner\n:::\n\nSee [^g].\n'
-      expect(dangles(src), html(src)).toBe(true)
+      expect(dangles(src), html(src)).toBe(false)
     })
   })
 })

@@ -5,7 +5,7 @@ const normalized = (html: string): string => html.trim().split('\n').map(line =>
 
 it('keeps an unmarked table row and tail in a quote-led item', () => {
   expect(normalized(carveToHtml('- > para\n    more\n    | a |\ntail\n'))).toBe(normalized(
-    '<ul>\n<li>\n<blockquote><p>para\nmore\n| a |\ntail</p></blockquote>\n</li>\n</ul>',
+    '<ul>\n<li>\n<blockquote><p>para\nmore</p></blockquote>\n<table>\n<tbody>\n<tr><td>a</td></tr>\n</tbody>\n</table>\n</li>\n</ul>\n<p>tail</p>',
   ))
 })
 

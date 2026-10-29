@@ -21,7 +21,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a comment run that begins a definition term is a comment', () => {
   it.each([
     ['the closer at column 0', ':: %%%\n   hidden\n%%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
-    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>\n   hidden\n\ntail</dt>\n</dl>'],
+    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
     ['no closer at all', ':: %%%\n   hidden\ntail\n', '<dl>\n  <dt>\n   hidden\ntail</dt>\n</dl>'],
     ['width 4', ':: %%%%\n   hidden\n%%%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
     ['the line form', ':: %% x\n   hidden\ntail\n', '<dl>\n  <dt>\n   hidden\ntail</dt>\n</dl>'],
@@ -46,13 +46,13 @@ describe('a comment run that begins a definition term is a comment', () => {
   it.each([
     ['a run later on the term line', ':: a %% b\n', '<dl>\n  <dt>a</dt>\n</dl>'],
     ['a run after emphasis', ':: /x/ %% b\n', '<dl>\n  <dt><em>x</em></dt>\n</dl>'],
-    ['a run on a continuation line', ':: a\n   %% b\n', '<dl>\n  <dt>a\n</dt>\n</dl>'],
-    ['a fence on a continuation line', ':: a\n   %%% b\n   %%%\n', '<dl>\n  <dt>a\n</dt>\n</dl>'],
+    ['a run on a continuation line', ':: a\n   %% b\n', '<dl>\n  <dt>a</dt>\n</dl>'],
+    ['a fence on a continuation line', ':: a\n   %%% b\n   %%%\n', '<dl>\n  <dt>a</dt>\n</dl>'],
     ['a run at column 0 below the term', ':: a\n%% b\n', '<dl>\n  <dt>a</dt>\n</dl>'],
     ['a run on a description marker line', ':: a\n: %% b\n', '<dl>\n  <dt>a</dt>\n  <dd></dd>\n</dl>'],
     ['an escaped run', ':: \\%% b\n', '<dl>\n  <dt>%% b</dt>\n</dl>'],
     ['a braced comment on the term line', ':: a {% c %} b\n', '<dl>\n  <dt>a  b</dt>\n</dl>'],
-    ['a fence written below an ordinary term', ':: t\n   %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>t\n\ntail</dt>\n</dl>'],
+    ['a fence written below an ordinary term', ':: t\n   %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>t</dt>\n</dl>\n<p>tail</p>'],
     ['an ordinary term with a folded line', ':: t\n   hidden\ntail\n', '<dl>\n  <dt>t\n   hidden\ntail</dt>\n</dl>'],
   ])('leaves %s where it was', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)

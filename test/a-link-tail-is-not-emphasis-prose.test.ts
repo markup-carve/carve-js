@@ -31,9 +31,9 @@ describe('a link destination or title is not emphasis prose', () => {
   })
 })
 
-it('reports a hosted footnote heading once, as a duplicate id only', () => {
+it('reports a hosted footnote heading as a duplicate id and the item heading below it as overindented', () => {
   const source = '- a\n  [^n]: +\n  # h\n    # h\n\nsee[^n]\n'
   const warnings = lintCarve(source).map(w => [w.rule, w.line, w.column])
-  expect(warnings.filter(([rule]) => rule === 'duplicate-heading-id')).toEqual([['duplicate-heading-id', 4, 5]])
-  expect(warnings.filter(([rule]) => rule === 'list-item-block-overindented')).toEqual([])
+  expect(warnings.filter(([rule]) => rule === 'duplicate-heading-id')).toEqual([['duplicate-heading-id', 3, 3]])
+  expect(warnings.filter(([rule]) => rule === 'list-item-block-overindented')).toEqual([['list-item-block-overindented', 4, 5]])
 })

@@ -19,29 +19,29 @@ describe('a quote-lazy line reaches no content column inside a quoted item', () 
     expect(carveToHtml('> - :: t\n    - m\ntail\n')).toBe(TERM_FOLD('- m'))
   })
 
-  it('folds a heading instead of opening one', () => {
-    expect(carveToHtml('> - :: t\n    # h\ntail\n')).toBe(TERM_FOLD('# h'))
+  it('opens a heading after the quote instead of folding it', () => {
+    expect(carveToHtml('> - :: t\n    # h\ntail\n')).toBe('<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<section id="h">\n  <h1>h</h1>\n  <p>tail</p>\n</section>')
   })
 
-  it('folds a thematic break', () => {
-    expect(carveToHtml('> - :: t\n    ---\ntail\n')).toBe(TERM_FOLD('—'))
+  it('does not fold a thematic break', () => {
+    expect(carveToHtml('> - :: t\n    ---\ntail\n')).toBe('<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<hr>\n<p>tail</p>')
   })
 
-  it('folds a table row', () => {
-    expect(carveToHtml('> - :: t\n    | a |\ntail\n')).toBe(TERM_FOLD('| a |'))
+  it('does not fold a table row', () => {
+    expect(carveToHtml('> - :: t\n    | a |\ntail\n')).toBe('<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>tail</p>')
   })
 
-  it('folds an attribute block', () => {
-    expect(carveToHtml('> - :: t\n    {.k}\ntail\n')).toBe(TERM_FOLD('{.k}'))
+  it('does not fold an attribute block', () => {
+    expect(carveToHtml('> - :: t\n    {.k}\ntail\n')).toBe('<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p class="k">tail</p>')
   })
 
-  it('folds a colon fence', () => {
-    expect(carveToHtml('> - :: t\n    ::: note\ntail\n')).toBe(TERM_FOLD('::: note'))
+  it('does not fold a colon fence', () => {
+    expect(carveToHtml('> - :: t\n    ::: note\ntail\n')).toBe('<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<aside class="admonition note" aria-label="Note">\n  <p>tail</p>\n</aside>')
   })
 
   it('folds into an item that holds no definition list at all', () => {
     expect(carveToHtml('> - x\n    # h\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>x\n# h\ntail</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>x</li>\n  </ul>\n</blockquote>\n<section id="h">\n  <h1>h</h1>\n  <p>tail</p>\n</section>',
     )
   })
 })
@@ -68,7 +68,7 @@ describe('unmarked entry-shaped lines remain term text', () => {
 
   it('folds a second term marker', () => {
     expect(carveToHtml('> - :: t\n    :: t2\ntail\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:: t2\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>t2\ntail</dt>\n</dl>",
     )
   })
 
@@ -81,7 +81,7 @@ describe('unmarked entry-shaped lines remain term text', () => {
 
 describe('a quoted fence needs marked body lines', () => {
   it('leaves an unmarked line outside the quote', () => {
-    expect(carveToHtml("> - ```\n  # h\n\npara\n" )).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p># h</p>\n<p>para</p>")
+    expect(carveToHtml("> - ```\n  # h\n\npara\n" )).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>para</p>\n</section>")
   })
 })
 
@@ -120,16 +120,15 @@ describe('the frame never leaks into rendered text', () => {
 })
 
 describe('marked and unquoted term continuations follow their column', () => {
-  it('folds a marked heading past the term column', () => {
+  it('opens a marked heading past the term column in the item', () => {
     expect(carveToHtml('> - :: t\n>     # h\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n  # h\ntail</dt>\n' +
-        '      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <h1 id="h">h</h1>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('folds the same heading in an unquoted item', () => {
     expect(carveToHtml('- :: t\n    # h\ntail\n')).toBe(
-      '<ul>\n  <li>\n    <dl>\n      <dt>t\n  # h\ntail</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <h1 id="h">h</h1>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 

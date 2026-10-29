@@ -67,15 +67,13 @@ describe('a recognized opener in a body needs no blank line above it', () => {
       expect(inNote(carveToHtml(note))).toBe(norm(carveToHtml(top)))
     })
 
-    // The band is not constant, so the equality above is not vacuous: at column
-    // 0 the fence ENDS the quote and opens a sibling, and above it the fence is
-    // a lazy continuation of the quoted paragraph.
-    it('the two ends of the band say different things', () => {
+    // At column 0 and above it the fence ENDS the quote and opens a sibling.
+    it('the two ends of the band open a sibling quote', () => {
       expect(norm(carveToHtml('> q\n::: >\nb\n:::\n'))).toBe(
         '<blockquote><p>q</p></blockquote> <blockquote><p>b</p></blockquote>',
       )
       expect(norm(carveToHtml('> q\n ::: >\n b\n :::\n'))).toBe(
-        '<blockquote><p>q ::: &gt; b :::</p></blockquote>',
+        '<blockquote><p>q</p></blockquote> <blockquote><p>b</p></blockquote>',
       )
     })
   })
@@ -159,9 +157,9 @@ describe('a recognized opener in a body needs no blank line above it', () => {
     })
 
     it('the same floor applies after a continuation', () => {
-      // Below the column the marker opens nothing and folds (carve#3295).
+      // Below the column the marker closes the description and opens at the top level.
       expect(carveToHtml(':: t\n:  body\n   more\n > q\n')).toBe(
-        '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n&gt; q</dd>\n</dl>',
+        '<dl>\n  <dt>t</dt>\n  <dd>body\nmore</dd>\n</dl>\n<blockquote><p>q</p></blockquote>',
       )
     })
   })

@@ -33,6 +33,11 @@ it.each([
   ['a definition below the column', ['- para', ' [r]: /u']],
   ['a definition below the column of an item with trailing spaces', ['- para  ', ' [r]: /u']],
   ['a table row below the column', ['10. para', '   | t |']],
+])('%s closes the paragraph too, so the fence ends at the closer', (_name, lines) => {
+  expect(render(lines).trimEnd().endsWith(endsAtCloser)).toBe(true)
+})
+
+it.each([
   ['item prose after a table row', ['- para', '  | t |', '  more']],
 ])('control: %s leaves a paragraph open, so the fence is paragraph text', (_name, lines) => {
   expect(render(lines)).toContain('<p>after <strong>b</strong></p>\n    </div>')

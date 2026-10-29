@@ -71,12 +71,9 @@ describe('a marker at an item content column opens a sublist', () => {
     )
   })
 
-  it('leaves a marker BELOW the content column folding', () => {
-    // §24 C3's other band, and the reason the test is on the dispatch column
-    // rather than on a whitespace-tolerant marker pattern: "BELOW
-    // content_column ... a list marker folds as lazy item text".
+  it('makes a marker BELOW the content column a sibling item', () => {
     expect(flat(carveToHtml('1. outer\n  1. inner\n'))).toBe(
-      '<ol> <li>outer 1. inner</li> </ol>',
+      '<ol> <li>outer</li> <li>inner</li> </ol>',
     )
   })
 

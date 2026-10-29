@@ -27,7 +27,7 @@
   {
     "id": "js-51-1",
     "source": "1. :: t\n   : para\n%% c\n```\n",
-    "html": "<ol><li><dl><dt>t</dt><dd>para</dd></dl></li></ol><pre><code></code></pre>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<pre><code></code></pre>"
   },
   {
     "id": "js-55-1",
@@ -42,6 +42,6 @@
   {
     "id": "js-59-1",
     "source": "- :: t\n  : para\n %% c\n```\n",
-    "html": "<ul><li><dl><dt>t</dt><dd>para</dd></dl></li></ul><pre><code></code></pre>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ul>\n<pre><code></code></pre>"
   }
 ]

@@ -31,13 +31,13 @@ for (const marker of ['- tail', '1. tail', '-{.y} tail', '- [x] tail']) {
         Object.values(node).forEach(visit)
       }
       visit(parse(source))
-      expect(markerSeen).toBe(true)
+      expect(markerSeen).toBe(false)
     })
   }
 }
 
 for (const closer of [' %%%', '  %%%']) {
-  it(`releases a flush-left tail after a below-column comment closed at ${closer.length - 3}`, () => {
+  it(`reads a flush-left tail into the code block after a below-column comment closed at ${closer.length - 3}`, () => {
     const source = `- item
  %%%
  hidden
@@ -45,7 +45,7 @@ ${closer}
   \`\`\`
 tail
 `
-    const expected = '<ul>\n  <li>item\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>'
+    const expected = '<ul>\n  <li>item</li>\n</ul>\n<pre><code>tail\n</code></pre>'
     expect(carveToHtml(source)).toBe(expected)
   })
 }

@@ -157,7 +157,7 @@ describe('two sibling sub-lists in a tight item', () => {
     // splice between two blocks to the head of the second one, and at document
     // level nothing may move with it.
     expect(carveToCarve('- apples\n\n\n\n- oranges\n')).toBe('- apples\n\n\n\n- oranges\n')
-    expect(carveToCarve('1. a\n\n  1. b\n')).toBe('1. a\n\n\n\n1. b\n')
+    expect(carveToCarve('1. a\n\n  1. b\n')).toBe('1. a\n\n2. b\n')
   })
 })
 
@@ -167,7 +167,7 @@ describe('a sub-list in a tight item gets the separator its neighbour needs', ()
     // item's content column below it is INDENTED under an open paragraph, so it
     // reads as that paragraph's lazy continuation and never opens.
     const source = '- x\n+\np2\n\n  - b\n'
-    expect(carveToCarve(source)).toBe('- x\n+\np2\n\n  - b\n')
+    expect(carveToCarve(source)).toBe('- x\n\n  p2\n\n- b\n')
     roundTrips(source)
   })
 

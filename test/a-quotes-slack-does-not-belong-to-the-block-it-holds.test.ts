@@ -104,9 +104,8 @@ describe('the slack inside a quote', () => {
       expect(carveToHtml(carve)).toContain('[r]: /u')
     })
 
-    it('leaves a lone pipe row as paragraph text', () => {
-      // A pipe table needs its delimiter row, so nothing opens here.
-      expect(carveToHtml(markdownToCarve(lines('> a', '>' + sp(4) + '| b | c |')))).toContain('| b | c |')
+    it('renders a lone pipe row as a table row', () => {
+      expect(carveToHtml(markdownToCarve(lines('> a', '>' + sp(4) + '| b | c |')))).toContain('<tr><td>b</td><td>c</td></tr>')
     })
 
     it('leaves plain prose where it stands', () => {

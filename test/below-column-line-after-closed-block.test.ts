@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { parse, renderHtml } from '../src/index.js'
+import { parse, renderHtml, resolve } from '../src/index.js'
 import fixtures from './fixtures/below-column-line-after-closed-block.json'
 
 const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
@@ -9,7 +9,7 @@ const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
 // expected output was compared with.
 for (const row of fixtures) {
   it(`reads the below-column line by the open paragraph: ${row.id}`, () => {
-    expect(normalized(renderHtml(parse(row.source)))).toBe(normalized(row.html))
-    expect(normalized(renderHtml(parse(row.source, { positions: true })))).toBe(normalized(row.html))
+    expect(normalized(renderHtml(resolve(parse(row.source))))).toBe(normalized(row.html))
+    expect(normalized(renderHtml(resolve(parse(row.source, { positions: true }))))).toBe(normalized(row.html))
   })
 }

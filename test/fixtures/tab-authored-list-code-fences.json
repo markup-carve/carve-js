@@ -712,13 +712,13 @@
   {
     "id": "extended-tab-24",
     "source": "- a\n  \t```=html\n\t\tcode\n\t```\nafter\n",
-    "html": "<ul>\n  <li>a\n        code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul><li>a\n        code\n  </li></ul><p>after</p>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-25",
     "source": "- a\n  \t```=html\n\t\t\n\tcode\n\t```\nafter\n",
-    "html": "<ul>\n  <li>a\n        \ncode\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul><li>a\n        \ncode\n  </li></ul><p>after</p>",
     "codePayloads": []
   },
   {
@@ -736,13 +736,13 @@
   {
     "id": "extended-tab-28",
     "source": "- a\n  \t```=html\n\t\tcode\n  ```\nafter\n",
-    "html": "<ul>\n  <li>a\n        code\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul><li>a\n        code\n  </li></ul><p>after</p>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-29",
     "source": "- a\n  \t```=html\n\t\t\n\tcode\n  ```\nafter\n",
-    "html": "<ul>\n  <li>a\n        \ncode\n  </li>\n</ul>\n<p>after</p>",
+    "html": "<ul><li>a\n        \ncode\n  </li></ul><p>after</p>",
     "codePayloads": []
   },
   {
@@ -952,13 +952,13 @@
   {
     "id": "extended-tab-56",
     "source": "> - a\n>   \t```=html\n> \t\tcode\n> \t```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n          code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote><ul><li>a\n          code\n    </li></ul><p>after</p></blockquote>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-57",
     "source": "> - a\n>   \t```=html\n> \t\t\n> \tcode\n> \t```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n          \ncode\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote><ul><li>a\n          \ncode\n    </li></ul><p>after</p></blockquote>",
     "codePayloads": []
   },
   {
@@ -976,13 +976,13 @@
   {
     "id": "extended-tab-60",
     "source": "> - a\n>   \t```=html\n> \t\tcode\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n          code\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote><ul><li>a\n          code\n    </li></ul><p>after</p></blockquote>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-61",
     "source": "> - a\n>   \t```=html\n> \t\t\n> \tcode\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n          \ncode\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>",
+    "html": "<blockquote><ul><li>a\n          \ncode\n    </li></ul><p>after</p></blockquote>",
     "codePayloads": []
   },
   {
@@ -1192,13 +1192,13 @@
   {
     "id": "extended-tab-88",
     "source": "> > - a\n> >   \t```=html\n> > \t\tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n            code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n            code\n      </li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-89",
     "source": "> > - a\n> >   \t```=html\n> > \t\t\n> > \tcode\n> > \t```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n            \ncode\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n            \ncode\n      </li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": []
   },
   {
@@ -1216,13 +1216,13 @@
   {
     "id": "extended-tab-92",
     "source": "> > - a\n> >   \t```=html\n> > \t\tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n            code\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n            code\n      </li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": []
   },
   {
     "id": "extended-tab-93",
     "source": "> > - a\n> >   \t```=html\n> > \t\t\n> > \tcode\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n            \ncode\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n            \ncode\n      </li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": []
   },
   {

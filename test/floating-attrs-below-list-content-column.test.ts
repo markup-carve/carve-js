@@ -3,12 +3,12 @@ import { carveToHtml } from '../src/index.js'
 
 describe('floating attributes at list content columns', () => {
   it.each([
-    ['bullet', '-{#k} {#h}\n # h\n', '<ul>\n  <li id="k"></li>\n</ul>\n<p># h</p>'],
-    ['ordered', '1.{#k} {#h}\n  # h\n', '<ol>\n  <li id="k"></li>\n</ol>\n<p># h</p>'],
+    ['bullet', '-{#k} {#h}\n # h\n', '<ul>\n  <li id="k"></li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>'],
+    ['ordered', '1.{#k} {#h}\n  # h\n', '<ol>\n  <li id="k"></li>\n</ol>\n<section id="h">\n  <h1>h</h1>\n</section>'],
     [
       'task',
       '-{#k} [x] {#h}\n # h\n',
-      '<ul class="task-list">\n  <li data-task-state="x" id="k"><input type="checkbox" checked disabled> </li>\n</ul>\n<p># h</p>',
+      '<ul class="task-list">\n  <li data-task-state="x" id="k"><input type="checkbox" checked disabled> </li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>',
     ],
   ])('closes an attribute-only %s item before a below-column heading', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
@@ -20,7 +20,7 @@ describe('floating attributes at list content columns', () => {
     )
   })
 
-  it('keeps lazy folding when marker-line text opened a paragraph', () => {
-    expect(carveToHtml('-{#k} text\n # h\n')).toBe('<ul>\n  <li id="k">text\n# h</li>\n</ul>')
+  it('ends the item at a below-column heading when marker-line text opened a paragraph', () => {
+    expect(carveToHtml('-{#k} text\n # h\n')).toBe('<ul>\n  <li id="k">text</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>')
   })
 })

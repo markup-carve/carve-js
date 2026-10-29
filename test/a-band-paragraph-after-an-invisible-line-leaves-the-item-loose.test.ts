@@ -32,9 +32,9 @@ describe('a band paragraph after an invisible line leaves the item loose', () =>
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it('a band marker after an at-column comment starts a separate list', () => {
+  it('a band marker after an at-column comment continues the loose list', () => {
     expect(carveToHtml('- t\n\n  %% c\n - b\n- s\n')).toBe(
-      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>",
+      "<ul>\n  <li><p>t</p></li>\n  <li><p>b</p></li>\n  <li><p>s</p></li>\n</ul>",
     )
   })
 

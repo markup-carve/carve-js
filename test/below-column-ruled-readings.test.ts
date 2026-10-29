@@ -8,7 +8,7 @@ const lines = (...source: string[]) => source.join('\n') + '\n'
 // no paragraph, so the unmarked line closes the list and no surviving frame
 // adopts it. The spec checker folds it into item `b` instead.
 const rootList =
-  '<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c\n          <div></div></li></ul></li></ul></blockquote>' +
+  '<blockquote><ul><li>a</li><li>b\n      <ul><li>c\n          <div></div></li></ul></li></ul></blockquote>' +
   '<ol><li>lazy</li></ol>'
 
 for (const indent of [6, 8]) {

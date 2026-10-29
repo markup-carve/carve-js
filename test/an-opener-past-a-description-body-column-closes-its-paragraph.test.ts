@@ -136,13 +136,13 @@ describe('corpus 444: an opener at or past a description body column', () => {
 
   it("row 14: the line BELOW the ended body, one column in", () => {
     expect(carveToHtml(":: term\n:  definition\n    # H\n [r]: /url\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>[r]: /url</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>",
     )
   })
 
   it("row 15: row 14's AT-column control [control]", () => {
     expect(carveToHtml(":: term\n:  definition\n   # H\n [r]: /url\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>[r]: /url</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>",
     )
   })
 })
@@ -216,7 +216,7 @@ describe('a quote above it means the body no longer owns the open paragraph', ()
     // close - tail continues the QUOTE. Without this gate the
     // quoted-container sweep lost 114 documents.
     expect(carveToHtml(":: term\n: definition\n  > q\n   # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q\n# H\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
@@ -227,7 +227,7 @@ describe('a quote above it means the body no longer owns the open paragraph', ()
     // close - tail continues the QUOTE. Without this gate the
     // quoted-container sweep lost 114 documents.
     expect(carveToHtml(":: term\n: definition\n   > q\n    # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q\n# H\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
@@ -238,7 +238,7 @@ describe('a quote above it means the body no longer owns the open paragraph', ()
     // close - tail continues the QUOTE. Without this gate the
     // quoted-container sweep lost 114 documents.
     expect(carveToHtml(":: term\n: definition\n  > q\n   | c |\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q\n| c |\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <table>\n      <tbody>\n        <tr><td>c</td></tr>\n      </tbody>\n    </table>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
@@ -249,7 +249,7 @@ describe('a quote above it means the body no longer owns the open paragraph', ()
     // close - tail continues the QUOTE. Without this gate the
     // quoted-container sweep lost 114 documents.
     expect(carveToHtml(":: term\n: definition\n  > q\n   {.k}\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q\n{.k}\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 })
@@ -262,7 +262,7 @@ describe('a quote on the description MARKER line is already open', () => {
     // first shape of the fix and is the reason the gate asks the tracker's
     // CURRENT quote state as well.
     expect(carveToHtml(":: term\n: > q\n   # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <blockquote><p>q\n# H\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
@@ -273,16 +273,15 @@ describe('a quote on the description MARKER line is already open', () => {
     // first shape of the fix and is the reason the gate asks the tracker's
     // CURRENT quote state as well.
     expect(carveToHtml(":: term\n:  > q\n    # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <blockquote><p>q\n# H\ntail</p></blockquote>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
-  it('a line below a heading past an ended quote stays in the body [PRE-EXISTING divergence]', () => {
+  it('a line below a heading past an ended quote leaves the body', () => {
     // The oracle ends the body after the heading and puts `tail` outside the
-    // definition list; carve-js opens the heading and keeps `tail` in the body.
-    // Pinned so the remaining gap is visible rather than silent.
+    // definition list.
     expect(carveToHtml(":: term\n:  definition\n   > q\n\n   more\n    # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <p>more</p>\n    <h1 id=\"H\">H</h1>\n    <p>tail</p>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <p>more</p>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 })

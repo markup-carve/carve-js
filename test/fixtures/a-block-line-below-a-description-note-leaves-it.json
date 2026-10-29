@@ -57,7 +57,7 @@
   {
     "id": "js-28-1",
     "source": ":: t\n: ::: note\n  para\n%% c\n```\nx\n",
-    "html": "<dl><dt>t</dt><dd><aside class=\"admonition note\" aria-label=\"Note\"><p>para</p></aside></dd></dl><pre><code>x\n</code></pre>"
+    "html": "<dl>\n<dt>t</dt>\n<dd>\n<aside class=\"admonition note\" aria-label=\"Note\">\n<p>para</p>\n</aside>\n</dd>\n</dl>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "js-29-1",

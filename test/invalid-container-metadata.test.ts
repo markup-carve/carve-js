@@ -72,10 +72,10 @@ it('preserves rejected Djot opener text during migration', () => {
   expect(html).toBe('<p>::: tip Custom Title\nbody\n:::</p>')
 })
 
-it('does not block a formatting patch for a prose opener', () => {
+it('requires review before formatting drops the metadata of an indented opener', () => {
   const patch = carveToCarvePatch('  ::: widget Bad\nx\n:::\n')
-  expect(patch.edits.length).toBeGreaterThan(0)
-  expect(patch.unresolved).toEqual([])
+  expect(patch.edits).toEqual([])
+  expect(patch.unresolved[0]?.code).toBe('invalid-container-metadata')
 })
 
 it('migrates authored malformed metadata rather than its masked tokens', () => {

@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('nested term source columns', () => {
-  it('keeps the authored offset of a quote past a description column', () => {
+  it('ends the term at a quote past a description column', () => {
     const source = ':: outer\n:  detail\n     :: inner\n    > quote\n'
-    expect(carveToHtml(source)).toContain('<dt>inner\n &gt; quote</dt>')
+    expect(carveToHtml(source)).toContain('<dt>inner</dt>\n    </dl>\n    <blockquote><p>quote</p></blockquote>')
   })
 
   it.each(['[r]: /url', '[^n]: note'])(
-    'keeps a past-column %s as term text with its source offset', (line) => {
+    'reads a past-column %s as a definition, not term text', (line) => {
       const source = `:: outer\n:  detail\n     :: inner\n    ${line}\n`
-      expect(carveToHtml(source)).toContain(`<dt>inner\n ${line}</dt>`)
+      expect(carveToHtml(source)).toBe('<dl>\n  <dt>outer</dt>\n  <dd>\n    <p>detail</p>\n    <dl>\n      <dt>inner</dt>\n    </dl>\n  </dd>\n</dl>')
     },
   )
 

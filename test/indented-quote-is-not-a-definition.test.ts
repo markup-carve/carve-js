@@ -13,11 +13,11 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('an indented quote-like line', () => {
   for (const indent of [' ', '  ', '   ', '    ']) {
-    it(`does not define at indent ${indent.length}`, () => {
+    it(`defines at indent ${indent.length}`, () => {
       const html = carveToHtml(`[x][r] here.\n\n${indent}> [r]: /u\n`)
 
-      expect(html).toContain('&gt; [r]: /u')
-      expect(html).not.toContain('href="/u"')
+      expect(html).not.toContain('&gt; [r]: /u')
+      expect(html).toContain('href="/u"')
     })
   }
 

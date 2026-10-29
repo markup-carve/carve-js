@@ -32,22 +32,24 @@ import { carveToHtml } from '../src/index.js'
 const flat = (html: string): string => html.replace(/\n\s*/g, ' ').trim()
 
 describe('a definition reaches its column by composing the strips', () => {
-  it('does not register from an indented quote marker inside a quote', () => {
+  it('registers from an indented quote marker inside a quote', () => {
     expect(flat(carveToHtml('> a\n>   > [r]: /url\n\nSee [r][].\n'))).toBe(
-      '<blockquote><p>a &gt; [r]: /url</p></blockquote> <p>See [r][].</p>',
+      '<blockquote> <p>a</p> <blockquote> </blockquote> </blockquote> <p>See <a href="/url">r</a>.</p>',
     )
   })
 
   it('reads the footnote kind the same way, as it always did', () => {
     expect(flat(carveToHtml('> a\n>   > [^f]: note\n\nSee[^f]\n'))).toBe(
-      '<blockquote><p>a &gt; [^f]: note</p></blockquote> <p>See[^f]</p>',
+      '<blockquote> <p>a</p> <blockquote> </blockquote> </blockquote> <p>See<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>' +
+        ' <section role="doc-endnotes" aria-label="Footnotes"> <hr> <ol> <li id="fn1">' +
+        ' <p>note<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p> </li> </ol> </section>',
     )
   })
 
-  it("does not register from a quote marker past a nested quote's own column", () => {
+  it("registers from a quote marker past a nested quote's own column", () => {
     expect(flat(carveToHtml('> > x\n>   > [r]: /url\n\nSee [r][].\n'))).toBe(
-      '<blockquote> <blockquote><p>x &gt; [r]: /url</p></blockquote> </blockquote>' +
-        ' <p>See [r][].</p>',
+      '<blockquote> <blockquote><p>x</p></blockquote> </blockquote>' +
+        ' <p>See <a href="/url">r</a>.</p>',
     )
   })
 

@@ -16,8 +16,8 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  *
  * PINNED AT THE BYTE LEVEL, because for two of the three spellings both forms
  * render the same and a rendered assertion could not see the difference. The
- * third one can be seen: a bare three-hyphen run reaches smart typography and
- * renders as an em dash, so the source's three hyphens are not what a reader
+ * third one can be seen: a bare three-hyphen run reads as a thematic break,
+ * so the source's three hyphens are not what a reader
  * gets. That row carries a render assertion as well.
  *
  * The escape is the thematic run and nothing else, measured one spelling at a
@@ -52,10 +52,10 @@ describe('a thematic run on a continuation line keeps its escape', () => {
   })
 
   it('renders three hyphens rather than an em dash', () => {
-    // The render-visible half. Bare, the run reached smart typography.
+    // The render-visible half. Bare, the run reads as a thematic break.
     expect(carveToHtml(markdownToCarve(continued('---')))).toContain('---')
     expect(carveToHtml(markdownToCarve(continued('---')))).not.toContain('—')
-    expect(carveToHtml('foo\n    ---\n')).toContain('—')
+    expect(carveToHtml('foo\n    ---\n')).toBe('<p>foo</p>\n<hr>')
   })
 
   it('leaves a lone pipe bare, which is no table without a delimiter row', () => {

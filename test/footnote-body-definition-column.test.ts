@@ -42,13 +42,12 @@ describe('a definition in a footnote body', () => {
     expect(resolves(html)).toBe(true)
   })
 
-  it('is text below the body column, and inert', () => {
+  it('defines below the body column too', () => {
     // One space: too little for a continuation, so the line is the document's
-    // next block - a paragraph, and no definition (the production allows no
-    // leading indent).
+    // next block - a document-level definition.
     const html = carveToHtml(document(1))
-    expect(renders(html)).toBe(true)
-    expect(resolves(html)).toBe(false)
+    expect(renders(html)).toBe(false)
+    expect(resolves(html)).toBe(true)
   })
 
   it('defines at an authored base past the minimum', () => {

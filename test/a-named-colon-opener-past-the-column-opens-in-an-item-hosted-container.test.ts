@@ -86,21 +86,21 @@ tail
  :::
 :::
 tail
-`, '<div class="box"><p>::: note x :::</p></div>' + tail],
+`, box + tail],
     ['H attributes', `- ::: box
    ::: {.k}
    x
    :::
   :::
 tail
-`, '<ul><li><div class="box"><p>::: {.k} x :::</p></div></li></ul>' + tail],
+`, '<ul><li><div class="box"><p>::: {.k} x</p></div><div></div></li></ul>' + tail],
     ['H bare', `- ::: box
    :::
    x
    :::
   :::
 tail
-`, '<ul><li><div class="box"><p>::: x :::</p></div></li></ul>' + tail],
+`, '<ul><li><div class="box"></div> x<div></div></li></ul>' + tail],
   ])('%s', (_name, source, expected) => {
     expect(normalize(renderHtml(parse(source)))).toBe(expected)
     expect(normalize(renderHtml(parse(source, { positions: true })))).toBe(expected)

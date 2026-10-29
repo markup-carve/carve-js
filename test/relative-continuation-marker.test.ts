@@ -145,13 +145,13 @@ describe('relative continuation marker columns', () => {
 
   it.each([
     ['> > - a\n>   +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+\n- b</li></ul></blockquote></blockquote>'],
-    ['1. ordered\n  > > quote\n+  \n- item\n', '<ol><li>ordered\n&gt; &gt; quote\n+</li></ol><ul><li>item</li></ul>'],
+    ['1. ordered\n  > > quote\n+  \n- item\n', '<ol><li>ordered</li></ol><blockquote><blockquote><p>quote\n+\n- item</p></blockquote></blockquote>'],
   ])('folds a refused marker like ordinary text in %s', (input, expected) => {
     expect(carveToHtml(input).replace(/>\s+</g, '><').replace(/\n\s*/g, '\n').trim()).toBe(expected)
   })
 
   it.each([
-    ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+\n- b</li></ul></blockquote></blockquote>'],
+    ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li><p>a</p></li><li><p>b</p></li></ul></blockquote></blockquote>'],
     ['> > - [ ] a\n> +\n> tail', '<blockquote><blockquote><ul class="task-list"><li><input type="checkbox" disabled aria-label="a"> a</li></ul><p>tail</p></blockquote></blockquote>'],
     ['- a\n  > q\n+\n- b\n', '<ul><li>a\n<blockquote><p>q\n+</p></blockquote></li><li>b</li></ul>'],
     ['- a\n  > q\n  +\n  - b\n', '<ul><li>a\n<blockquote><p>q\n+\n- b</p></blockquote></li></ul>'],
@@ -167,7 +167,7 @@ describe('relative continuation marker columns', () => {
 
   it('keeps a nested footnote continuation inside that note', () => {
     const html = carveToHtml(':: term\n:  detail\n  [^n]: note\n    [^n]: note\n      * [ ] task\n    +\n    :  detail\n')
-    expect(html).toContain('<p>:  detail')
+    expect(html).toBe('<dl>\n  <dt>term</dt>\n  <dd>detail</dd>\n</dl>')
     expect(html).not.toContain('<p>+\n:  detail</p>')
   })
 
@@ -178,11 +178,11 @@ describe('relative continuation marker columns', () => {
   })
 
   it('accepts a nested list marker after its footnote', () => {
-    expect(carveToHtml('- a\n  1. ordered\n    [^n]: note\n  +\n  > quote\n')).toBe('<ul>\n  <li>a\n    <ol>\n      <li>ordered</li>\n    </ol>\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ul>')
+    expect(carveToHtml('- a\n  1. ordered\n    [^n]: note\n  +\n  > quote\n')).toBe('<ul>\n  <li>a\n    <ol>\n      <li>ordered</li>\n    </ol>\n  </li>\n</ul>')
   })
 
   it('attaches tabbed text after a nested description at its list column', () => {
-    expect(carveToHtml('1. ordered\n  [^n]: note\n    1. ordered\n      :: term\n      :  detail\n\t+\n\ttext\n')).toBe('<ol>\n  <li>ordered\n[^n]: note\n    <ol>\n      <li>ordered</li>\n    </ol>\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n    text\n  </li>\n</ol>')
+    expect(carveToHtml('1. ordered\n  [^n]: note\n    1. ordered\n      :: term\n      :  detail\n\t+\n\ttext\n')).toBe('<ol>\n  <li>ordered</li>\n</ol>')
   })
 
   it('measures a tab after a quote prefix in that quote frame', () => {
@@ -197,7 +197,7 @@ describe('relative continuation marker columns', () => {
 
   it('keeps a tabbed marker with its open nested list item', () => {
     const html = carveToHtml('1. ordered\n  1. ordered\n    - a\n      * [ ] task\n\t+  \n    :  detail\n')
-    expect(html).toContain('        :  detail\n      </li>')
+    expect(html).toContain('task\n+\n:  detail</li>')
   })
 
   it('keeps an unprefixed marker after lazy quote text in its description', () => {

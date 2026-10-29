@@ -66,7 +66,7 @@ describe('a definition with a trailing attribute block is a definition at every 
     // The review's repro itself, pinned so the claim cannot be re-litigated
     // from the same starting point.
     expect(carveToHtml('- text\n[a]: /u \n  [b]: /v\n\n[b][]\n')).toBe(
-      '<ul>\n  <li>text</li>\n</ul>\n<p>[b]: /v</p>\n<p>[b][]</p>',
+      '<ul>\n  <li>text</li>\n</ul>\n<p><a href="/v">b</a></p>',
     )
   })
 
@@ -87,9 +87,9 @@ describe('a definition with a trailing attribute block is a definition at every 
   // nothing (PART 9 §24 C3) and folds as lazy item text. A definition is one of
   // the shapes that predicate names, and under the bare `.test` the line
   // stopped being one, so it was dropped instead of folding.
-  it('folds as lazy text below a sub-list content column rather than vanishing', () => {
+  it('is collected below a sub-list content column', () => {
     expect(carveToHtml('-   x\n    - a\n  [a]: /u {.c}\n\n[a][]\n')).toBe(
-      '<ul>\n  <li>x\n    <ul>\n      <li>a\n[a]: /u {.c}</li>\n    </ul>\n  </li>\n</ul>\n<p>[a][]</p>',
+      '<ul>\n  <li>x\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p><a href="/u" class="c">a</a></p>',
     )
   })
 })

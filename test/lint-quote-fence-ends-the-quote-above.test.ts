@@ -42,7 +42,7 @@ describe('lintCarve - a quote fence below a quote', () => {
     expect(reports('[^a]: > q\n  ::: >\n  b\n  :::\n\nsee[^a]\n')).toHaveLength(1)
   })
 
-  it('says nothing when the fence is INDENTED past the quote it follows', () => {
+  it('reports when the fence is INDENTED past the quote it follows', () => {
     // NOT A HOLE IN THE LINT - there is no second quote to report. Past the
     // body's own column the fence is a lazy continuation of the quoted
     // paragraph, exactly as it is at the top level (carve#1781, carve-js#1535;
@@ -52,9 +52,9 @@ describe('lintCarve - a quote fence below a quote', () => {
     // This document USED to report, because the body answered every authored
     // column the same way and produced two sibling quotes at all of them. The
     // report was a true statement about a parse that was itself wrong.
-    expect(reports('[^a]: > q\n      ::: >\n      b\n      :::\n\nsee[^a]\n')).toEqual([])
+    expect(reports('[^a]: > q\n      ::: >\n      b\n      :::\n\nsee[^a]\n')).toMatchObject([{ line: 2, column: 7 }])
     expect(carveToHtml('> q\n    ::: >\n    b\n    :::\n').replace(/\s+/g, ' ').trim()).toBe(
-      '<blockquote><p>q ::: &gt; b :::</p></blockquote>',
+      '<blockquote><p>q</p></blockquote> <blockquote><p>b</p></blockquote>',
     )
   })
 

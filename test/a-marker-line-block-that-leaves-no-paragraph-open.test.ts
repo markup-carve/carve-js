@@ -136,7 +136,7 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     // otherwise answer for a construct the block parser never builds, ending an
     // item that does hold an open paragraph.
     expect(carveToHtml('- >  [r]: /u\ntail\n')).toBe(
-      '<ul>\n  <li>\n    <blockquote><p>[r]: /u\ntail</p></blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>',
     )
     // The flush spelling is the definition, and it does end the item.
     expect(carveToHtml('- > [r]: /u\ntail\n')).toBe(

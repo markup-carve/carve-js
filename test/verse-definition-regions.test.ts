@@ -7,10 +7,10 @@ describe('definition collection follows verse ownership', () => {
     expect(html).toContain('href="/target"')
   })
 
-  it('keeps definitions literal after a lazy list continuation', () => {
+  it('registers a definition after a lazy list continuation', () => {
     const html = carveToHtml('- ::: |\n  verse\nlazy\n  [r]: /hidden\n  :::\n\n[t][r]\n')
-    expect(html).toContain('[r]: /hidden')
-    expect(html).not.toContain('href="/hidden"')
+    expect(html).not.toContain('[r]: /hidden')
+    expect(html).toContain('<p><a href="/hidden">t</a></p>')
   })
 
   it('keeps a colon closer inside a closed comment span literal', () => {

@@ -24,7 +24,7 @@ tail
   :: t
  - c
 tail
-`, '<ul><li>x<dl><dt>t\n- c\ntail</dt></dl></li></ul>'],
+`, '<ul><li>x<dl><dt>t</dt></dl></li><li>c\ntail</li></ul>'],
   ['description', `:: T
 : - # h
     :: t

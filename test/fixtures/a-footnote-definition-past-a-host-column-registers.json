@@ -2,7 +2,7 @@
   {
     "id": "js-2-1",
     "source": ":: t\n: > para\n [r]: /u\n",
-    "html": "<dl><dt>t</dt><dd><blockquote><p>para</p></blockquote></dd></dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>"
   },
   {
     "id": "js-2-2",
@@ -22,12 +22,12 @@
   {
     "id": "js-3-1",
     "source": "1. > para\n [r]: /u\n",
-    "html": "<ol><li><blockquote><p>para</p></blockquote></li></ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-3-2",
     "source": "1. > para\n  [r]: /u\n",
-    "html": "<ol><li><blockquote><p>para</p></blockquote></li></ol>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>"
   },
   {
     "id": "js-3-3",
@@ -47,7 +47,7 @@
   {
     "id": "js-9-1",
     "source": "- > para\n [r]: /u\n",
-    "html": "<ul><li><blockquote><p>para</p></blockquote></li></ul>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "js-9-2",

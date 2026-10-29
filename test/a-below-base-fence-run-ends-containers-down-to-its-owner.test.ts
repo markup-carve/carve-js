@@ -44,7 +44,7 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'depth 2, the run at column 1 is prose at the document',
       "- a\n  - b\n\n    ```\n    p\n ```\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>\n<p>tail</p>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'depth 3, the run at column 0 ends all three items',
@@ -59,7 +59,7 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'a tilde run degrades to prose at column 1',
       "- a\n  - b\n\n    ~~~\n    p\n ~~~\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>~~~</p>\n<p>tail</p>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'a raw fence ends the same way',

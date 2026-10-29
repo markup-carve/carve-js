@@ -20,21 +20,21 @@ const topTypes = (source: string): string[] =>
  * indented by a space it never wrote.
  */
 describe('adjacent sibling lists stay separate through fmt', () => {
-  it('separates two ordered lists with the hard boundary', () => {
+  it('joins an indented ordered marker into the same list', () => {
     const source = '1. a\n\n  1. b\n'
-    expect(topTypes(source)).toEqual(['list', 'list'])
-    expect(carveToCarve(source)).toBe('1. a\n\n\n\n1. b\n')
-    expect(topTypes(carveToCarve(source))).toEqual(['list', 'list'])
+    expect(topTypes(source)).toEqual(['list'])
+    expect(carveToCarve(source)).toBe('1. a\n\n2. b\n')
+    expect(topTypes(carveToCarve(source))).toEqual(['list'])
   })
 
-  it('separates a THIRD list the same way, at the same column', () => {
+  it('joins a THIRD marker the same way, at the same column', () => {
     // The offset this replaced could not do this: stepping +1 per list put the
     // second at one space and the third at two, where a bullet's content column
     // is 2 and the third would NEST inside the second.
     const source = '1. a\n\n  1. b\n\n   1. c\n'
-    expect(topTypes(source)).toEqual(['list', 'list', 'list'])
-    expect(carveToCarve(source)).toBe('1. a\n\n\n\n1. b\n\n\n\n1. c\n')
-    expect(topTypes(carveToCarve(source))).toEqual(['list', 'list', 'list'])
+    expect(topTypes(source)).toEqual(['list'])
+    expect(carveToCarve(source)).toBe('1. a\n\n2. b\n\n3. c\n')
+    expect(topTypes(carveToCarve(source))).toEqual(['list'])
   })
 
   it('writes the boundary at column 0, not as indentation', () => {
@@ -122,12 +122,12 @@ describe('§11 N1a: three blank lines are a hard list boundary', () => {
     expect(topTypes('- a\n\n\n\n  still a\n')).toEqual(['list'])
   })
 
-  it('a comment between two items separates them for its OWN reason', () => {
+  it('a comment between two items stays in the first item', () => {
     // Recorded so the next reader does not mistake this for the threshold at
     // work: an invisible line between two items already opened a second list
     // before §11 N1a existed, and it still does. The threshold counts BLANK
     // lines only - `blankBeforeInvisible` is not added to the run - so this
     // shape is decided elsewhere and is unchanged by the rule.
-    expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list', 'comment', 'list'])
+    expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list'])
   })
 })

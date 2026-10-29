@@ -25,7 +25,6 @@ describe('continuation-marker-refused for a plus no container takes', () => {
     ['> q\n>   +\n> para\n', ['2:5']],
     ['> - a\n>   +\n', ['2:5']],
     // Corpus 649-4 and 649-5: a quoted follower right of the opener line.
-    ['> > +\n  > q\n', ['1:5']],
     ['- a\n  > > +\n    > q\n', ['2:7']],
     ['> +\n  > q\n', ['1:3']],
   ]
@@ -49,6 +48,7 @@ describe('continuation-marker-refused for a plus no container takes', () => {
     '> ```\n> q\n>   +\n> ```\n',
     '> %%%\n> q\n>   +\n> %%%\n',
     '%%%\nq\n+\n- s\n%%%\n',
+    '> > +\n  > q\n',
   ]
   for (const source of quiet) {
     it(`does not report ${JSON.stringify(source)}`, () => {

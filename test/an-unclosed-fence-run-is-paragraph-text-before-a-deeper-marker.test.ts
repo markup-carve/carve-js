@@ -40,12 +40,12 @@ const cases = [
   {
     "name": "quote successor",
     "source": "- a\n  w2\n   ```\n    > w3\n",
-    "html": "<ul><li>a\nw2\n<code>\n&gt; w3</code></li></ul>"
+    "html": "<ul><li>a\nw2\n<code></code><blockquote><p>w3</p></blockquote></li></ul>"
   },
   {
     "name": "heading successor",
     "source": "- a\n  w2\n   ```\n    # w3\n",
-    "html": "<ul><li>a\nw2\n<code>\n# w3</code></li></ul>"
+    "html": "<ul><li>a\nw2\n<code></code><h1 id=\"w3\">w3</h1></li></ul>"
   },
   {
     "name": "content-column marker",

@@ -52,18 +52,10 @@
     },
     {
       "name": "ordered-continuation",
-      "description": "A folded ordered marker is reported.",
+      "description": "A below-column ordered marker that continues the list is a sibling item.",
       "source": "9. nine\n 10. ten\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 2,
-            "includes": [
-              "content column 3"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {

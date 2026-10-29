@@ -6,9 +6,9 @@ it('opens a second term after the prior description body ends', () => {
   expect(carveToHtml(source)).toBe('<ul>\n  <li>\n    <ol>\n      <li>ordered</li>\n    </ol>\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n  </li>\n</ul>')
 })
 
-it('folds a term-shaped line while the first term is still open', () => {
+it('opens a second term while the first term is still open', () => {
   const source = '- 1. ordered\n    :: term\n      :: next\n'
-  expect(carveToHtml(source)).toContain('<dt>term\n  :: next</dt>')
+  expect(carveToHtml(source)).toContain('<dt>term</dt>\n      <dt>next</dt>')
 })
 
 it('keeps a term at the description body column inside that description', () => {

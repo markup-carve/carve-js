@@ -32,9 +32,9 @@ it('measures the note body from an ordered item content column', () => {
   expect(html).toMatch(/<li id="fn1">\s*<p>text<\/p>\s*<pre><code>x\n<\/code><\/pre>/)
 })
 
-it('leaves a line below a closed note fence outside the item', () => {
+it('folds a line below a closed note fence into the note', () => {
   const html = carveToHtml('- [^n]: text\n     ```\n     code\n     ```\n     more\nafter [^n]')
-  expect(html).toContain('<p>after <a id="fnref1"')
+  expect(html).toBe('<ul>\n  <li></li>\n</ul>')
   expect(html).not.toContain('<li>after')
 })
 
@@ -68,8 +68,14 @@ it('keeps a fence below the note body column in the item after a note comment', 
   expect(html).toContain('<p>after <a id="fnref1"')
 })
 
-for (const tail of ['> q', '- li']) it(`leaves the following paragraph after a note fence and ${tail}`, () => {
+for (const tail of ['> q']) it(`folds the following paragraph into the note after a note fence and ${tail}`, () => {
   const html = carveToHtml(`- [^n]: text\n    \`\`\`\n    code\n    \`\`\`\n    ${tail}\nafter [^n]`)
-  expect(html).toContain('<p>after <a id="fnref1"')
+  expect(html).toBe('<ul>\n  <li></li>\n</ul>')
+  expect(html).not.toContain('<li>after')
+})
+
+it('folds the following paragraph into the note after a note fence and - li', () => {
+  const html = carveToHtml('- [^n]: text\n    ```\n    code\n    ```\n    - li\nafter [^n]')
+  expect(html).toBe('<ul>\n  <li></li>\n</ul>')
   expect(html).not.toContain('<li>after')
 })

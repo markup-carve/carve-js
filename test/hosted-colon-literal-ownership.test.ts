@@ -35,10 +35,10 @@ for (const quote of ['', '> ', '> > ']) for (const type of ['in', '|']) {
 
 for (const quote of ['', '> ', '> > ']) {
   for (const tail of ['TAILX', '- tail']) {
-    it(`keeps a first shifted bare run in its div paragraph, quote ${quote}, tail ${tail}`, () => {
+    it(`closes the div at a first shifted bare run, quote ${quote}, tail ${tail}`, () => {
       const source = `${quote}- ::: box\n${quote}    :::\n${tail}\n`
-      expect(parse(source).children).toHaveLength(1)
-      expect(carveToHtml(source)).toContain(tail === '- tail' && !quote ? '<li>tail</li>' : `:::\n${tail}</p>`)
+      expect(parse(source).children).toHaveLength(tail === '- tail' && !quote ? 1 : 2)
+      expect(carveToHtml(source)).toContain(tail === '- tail' ? '<li>tail</li>' : `<p>${tail}</p>`)
     })
   }
   for (const body of [':::', '# h']) {
@@ -107,12 +107,13 @@ for (const depth of [1, 2]) for (const payload of ['x', '%%%', '```', '- marker'
 
 for (const depth of [1, 2]) {
   const quote = '> '.repeat(depth)
-  it(`retains an overindented bare colon run inside its hosted div at depth ${depth}`, () => {
+  it(`closes its hosted div at an overindented bare colon run at depth ${depth}`, () => {
     const source = `${quote}- ::: box\n${quote}  a\n${quote}    :::\n- tail\n`
-    expect(parse(source).children).toHaveLength(1)
+    expect(parse(source).children).toHaveLength(2)
     const list = quotedList(source, depth)
     expect(list.items).toHaveLength(1)
-    expect(carveToHtml(source)).toContain('a\n:::\n- tail')
+    expect(carveToHtml(source)).toContain('<p>a</p>\n')
+    expect(carveToHtml(source)).toContain('<ul>\n  <li>tail</li>\n</ul>')
   })
   it(`retains an overindented bare colon run as line-block payload at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  a\n${quote}    :::\n${quote}  b\n- tail\n`
@@ -129,7 +130,7 @@ for (const depth of [1, 2]) {
 }
 
 it('keeps root colon closer behavior unchanged', () => {
-  expect(carveToHtml('::: box\na\n  :::\n- tail\n')).toBe('<div class="box">\n  <p>a\n:::\n- tail</p>\n</div>')
+  expect(carveToHtml('::: box\na\n  :::\n- tail\n')).toBe('<div class="box">\n  <p>a</p>\n</div>\n<ul>\n  <li>tail</li>\n</ul>')
 })
 
 
@@ -148,7 +149,7 @@ for (const [name, source, html] of [
   ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::</p>\n    </div>\n  </li>\n</ul>\n<p>tail</p>'],
   ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code></code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>'],
   ['below-column line after an empty container', '1. ::: box\n  %% c\n  - tail\n', "<ol>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ol>\n<ul>\n  <li>tail</li>\n</ul>"],
-  ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n          <p>:::\n:::</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],
+  ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n\n        </div>\n        <div>\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],
 ] as const) it(`preserves reader behavior for ${name}`, () => {
   expect(carveToHtml(source)).toBe(html)
 })

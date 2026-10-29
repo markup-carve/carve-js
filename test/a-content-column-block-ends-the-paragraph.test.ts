@@ -80,7 +80,7 @@ describe('a block at a container content column ends the paragraph', () => {
   it('adds no block for a comment written BELOW the content column', () => {
     // One column in, the comment is a lazy continuation and adds no block at
     // all, so the paragraph it folded into is still open behind it.
-    expect(html('- a\n %% c\ntail\n')).toBe('<ul>\n  <li>a\n    tail\n  </li>\n</ul>')
+    expect(html('- a\n %% c\ntail\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
   })
 
   const invisible: Record<string, string> = {
@@ -110,8 +110,8 @@ describe('a block at a container content column ends the paragraph', () => {
     expect(html('- a\n  %%% c\n  %%%\ntail\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
   })
 
-  it('does give it back when the fence sat below the column', () => {
-    expect(html('- a\n %%% c\n %%%\ntail\n')).not.toContain('<p>tail</p>')
+  it('does not give it back when the fence sat below the column either', () => {
+    expect(html('- a\n %%% c\n %%%\ntail\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
   })
 
   it('releases a below-column follower after a content-column closer', () => {
@@ -120,7 +120,7 @@ describe('a block at a container content column ends the paragraph', () => {
     // level's. Without it the item ends at the closer and `# h` becomes a
     // document heading (corpus 277-3).
     expect(html('- a\n  %%%\n  x\n  %%%\n # h\n')).toBe(
-      "<ul>\n  <li>a</li>\n</ul>\n<p># h</p>",
+      "<ul>\n  <li>a</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>",
     )
   })
 

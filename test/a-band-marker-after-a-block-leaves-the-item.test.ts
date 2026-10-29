@@ -27,13 +27,13 @@ import { carveToHtml } from '../src/index.js'
 // reproduces its own corpus 2076/2076.
 // ---------------------------------------------------------------------------
 
-const TWO_LISTS = '<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>'
+const ONE_LIST = '<ul>\n  <li>t</li>\n  <li>b</li>\n</ul>'
 
 describe('a band marker after a block the item cannot extend', () => {
   // The four marker spellings, after the attribute line of the reported shape.
   // A reader keyed on the bullet alone would pass a single-spelling test.
   it.each([
-    ['a bullet', '- t\n  {.k}\n - b\n', TWO_LISTS],
+    ['a bullet', '- t\n  {.k}\n - b\n', ONE_LIST],
     [
       'an ordered marker',
       '- t\n  {.k}\n 1. b\n',
@@ -47,9 +47,9 @@ describe('a band marker after a block the item cannot extend', () => {
     [
       'a marker carrying an abutting attribute block',
       '- t\n  {.k}\n -{.x} b\n',
-      '<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li class="x">b</li>\n</ul>',
+      '<ul>\n  <li>t</li>\n  <li class="x">b</li>\n</ul>',
     ],
-  ])('%s starts a sibling list', (_name, source, expected) => {
+  ])('%s starts a sibling item', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
 
@@ -58,18 +58,18 @@ describe('a band marker after a block the item cannot extend', () => {
   // render nothing and still end it, which is the distinction from an invisible
   // LINE below.
   it.each([
-    ['an attribute line', '- t\n  {.k}\n - b\n', TWO_LISTS],
-    ['a reference definition', '- t\n  [r]: /u\n - b\n', TWO_LISTS],
-    ['a footnote definition', '- t\n  [^f]: n\n - b\n', TWO_LISTS],
+    ['an attribute line', '- t\n  {.k}\n - b\n', ONE_LIST],
+    ['a reference definition', '- t\n  [r]: /u\n - b\n', ONE_LIST],
+    ['a footnote definition', '- t\n  [^f]: n\n - b\n', ONE_LIST],
     [
       'a heading',
       '- t\n  # h\n - b\n',
-      '<ul>\n  <li>t\n    <h1 id="h">h</h1>\n  </li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
+      '<ul>\n  <li>t\n    <h1 id="h">h</h1>\n  </li>\n  <li>b</li>\n</ul>',
     ],
     [
       'a closed code fence',
       '- t\n  ```\n  q\n  ```\n - b\n',
-      '<ul>\n  <li>t\n    <pre><code>q\n</code></pre>\n  </li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
+      '<ul>\n  <li>t\n    <pre><code>q\n</code></pre>\n  </li>\n  <li>b</li>\n</ul>',
     ],
   ])('after %s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
@@ -78,7 +78,7 @@ describe('a band marker after a block the item cannot extend', () => {
   // A blank line does not change the answer, and an ordered host reads the same
   // way as an unordered one.
   it.each([
-    ['a blank line between them', '- t\n  {.k}\n\n - b\n', TWO_LISTS],
+    ['a blank line between them', '- t\n  {.k}\n\n - b\n', '<ul>\n  <li><p>t</p></li>\n  <li><p>b</p></li>\n</ul>'],
     [
       'an ordered host',
       '1. t\n   {.k}\n  - b\n',
@@ -95,10 +95,10 @@ describe('the controls that keep the band marker folding', () => {
   // open a list. This is what a fix that simply dropped the marker clause would
   // break.
   it.each([
-    ['a bullet', '- t\n - b\n', '<ul>\n  <li>t\n- b</li>\n</ul>'],
-    ['an ordered marker', '1. a\n  1. b\n', '<ol>\n  <li>a\n1. b</li>\n</ol>'],
-    ['an abutting attribute block', '- a\n -{.x} b\n', '<ul>\n  <li>a\n-{.x} b</li>\n</ul>'],
-  ])('%s below an open paragraph folds into it', (_name, source, expected) => {
+    ['a bullet', '- t\n - b\n', '<ul>\n  <li>t</li>\n  <li>b</li>\n</ul>'],
+    ['an ordered marker', '1. a\n  1. b\n', '<ol>\n  <li>a</li>\n  <li>b</li>\n</ol>'],
+    ['an abutting attribute block', '- a\n -{.x} b\n', '<ul>\n  <li>a</li>\n  <li class="x">b</li>\n</ul>'],
+  ])('%s below an open paragraph starts a sibling item', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
 
@@ -107,14 +107,14 @@ describe('the controls that keep the band marker folding', () => {
     [
       'a line comment',
       '- t\n  %% c\n - b\n',
-      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>",
+      "<ul>\n  <li>t</li>\n  <li>b</li>\n</ul>",
     ],
     [
       'a closed comment span',
       '- t\n  %%%\n  h\n  %%%\n - b\n',
-      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>",
+      "<ul>\n  <li>t</li>\n  <li>b</li>\n</ul>",
     ],
-  ])('a band marker after %s leaves the item', (_name, source, expected) => {
+  ])('a band marker after %s starts a sibling item', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
 

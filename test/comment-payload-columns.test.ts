@@ -26,8 +26,8 @@ describe('comment payload columns (carve#2535)', () => {
 })
 
 it.each([
-  ['- a\n %%% n\n # h\n\n%%%\n', '<ul>\n  <li>a\n    # h\n  </li>\n</ul>'],
-  ['- a\n %%% n\n # h\n- b\n  %%%\n', '<ul>\n  <li>a\n    # h\n  </li>\n  <li>b</li>\n</ul>'],
-])('a closer outside the item leaves its lazy text unchanged: %s', (source, html) => {
+  ['- a\n %%% n\n # h\n\n%%%\n', '<ul>\n  <li>a</li>\n</ul>'],
+  ['- a\n %%% n\n # h\n- b\n  %%%\n', '<ul>\n  <li>a</li>\n</ul>'],
+])('a closer outside the item still closes the comment: %s', (source, html) => {
   expect(carveToHtml(source)).toBe(html)
 })

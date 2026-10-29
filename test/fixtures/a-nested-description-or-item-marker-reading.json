@@ -32,6 +32,6 @@
   {
     "id": "js-34-1",
     "source": "1. > para\n     ---\ntail\n",
-    "html": "<ol><li><blockquote><p>para</p></blockquote><hr></li></ol><p>tail</p>"
+    "html": "<ol>\n<li>\n<blockquote><p>para</p></blockquote>\n<hr>\n</li>\n</ol>\n<p>tail</p>"
   }
 ]

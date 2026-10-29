@@ -19,17 +19,14 @@ import { carveToHtml } from '../src/index.js'
 const h = (s: string) => carveToHtml(s).trim()
 
 describe('post-blank continuation: bullet (content column 2)', () => {
-  it('BELOW the content column (1 space) detaches, and the leading space keeps it a paragraph', () => {
-    // The detached `> q` retains its one leading space, so - consistent with
-    // the column-0 rule - it is a paragraph, not a blockquote, exactly as ` > q`
-    // is at the top level.
+  it('BELOW the content column (1 space) detaches as a blockquote', () => {
     expect(h('- one\n\n > q')).toBe(
-      '<ul>\n  <li>one</li>\n</ul>\n<p>&gt; q</p>',
+      '<ul>\n  <li>one</li>\n</ul>\n<blockquote><p>q</p></blockquote>',
     )
   })
 
-  it('a below-column heading detaches, and keeps its own leading space (still not a heading)', () => {
-    expect(h('- one\n\n # h')).toBe('<ul>\n  <li>one</li>\n</ul>\n<p># h</p>')
+  it('a below-column heading detaches as a heading', () => {
+    expect(h('- one\n\n # h')).toBe('<ul>\n  <li>one</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>')
   })
 
   it('AT the content column (2 spaces) attaches as a block and stays tight', () => {
@@ -48,7 +45,7 @@ describe('post-blank continuation: bullet (content column 2)', () => {
 describe('post-blank continuation: ordered (content column 3)', () => {
   it('BELOW the content column (2 spaces) detaches', () => {
     expect(h('1. one\n\n  > q')).toBe(
-      '<ol>\n  <li>one</li>\n</ol>\n<p>&gt; q</p>',
+      '<ol>\n  <li>one</li>\n</ol>\n<blockquote><p>q</p></blockquote>',
     )
   })
 

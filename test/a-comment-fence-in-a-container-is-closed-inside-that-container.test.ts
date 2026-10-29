@@ -176,7 +176,7 @@ describe('a comment fence in a container is closed inside that container', () =>
       '<ul>\n  <li></li>\n</ul>\n<p><a href="/u">r</a></p>',
     )
     expect(carveToHtml('  - x\n  %%%\n\n   %%%\n    [r]: /u\n\n[r][]\n')).toBe(
-      '<ul>\n  <li>x</li>\n</ul>\n<p>[r]: /u</p>\n<p>[r][]</p>',
+      '<ul>\n  <li>x</li>\n</ul>\n<p><a href="/u">r</a></p>',
     )
   })
 

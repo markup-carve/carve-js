@@ -46,20 +46,20 @@ describe('a blank line inside a lead sub-list does not loosen the outer list', (
 describe('a blank line inside a sibling sub-list does not loosen the outer list', () => {
   it('a blank inside a fence in the second sub-list', () => {
     expect(carveToHtml('- e\n  1. x\n  * ```\n\n    ```\n')).toBe(
-      '<ul>\n  <li>e\n    <ol>\n      <li>x</li>\n    </ol>\n    <ul>\n      <li>\n        <pre><code>\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>e\n    <ol>\n      <li>x</li>\n    </ol>\n    <ul>\n      <li>\n        <pre><code>\n</code></pre>\n      </li>\n    </ul>\n    <pre><code></code></pre>\n  </li>\n</ul>',
     )
   })
 
   it.each([
-    ['a tilde fence', '- e\n  1. x\n  * ~~~\n\n    ~~~\n'],
-    ['a fence with body lines', '- e\n  1. x\n  * ```\n    a\n\n    b\n    ```\n'],
-    ['an unclosed fence', '- e\n  1. x\n  * ```\n\n    code\n'],
-    ['a fence in a quote', '- e\n  1. x\n  * > ```\n    >\n    > c\n    > ```\n'],
-    ['a third sub-list', '- e\n  1. x\n  * y\n  1. ```\n\n     ```\n'],
-    ['a second paragraph of the sibling sub-item', '- e\n  1. x\n  * y\n\n    z\n'],
-    ['a folded marker below the sub-item column', '- e\n  1. x\n    * y\n\n     z\n'],
-  ])('%s keeps the outer item tight', (_name, src) => {
-    expect(carveToHtml(src)).toMatch(/^<ul>\n {2}<li>e\n/)
+    ['a tilde fence', '- e\n  1. x\n  * ~~~\n\n    ~~~\n', 'tight'],
+    ['a fence with body lines', '- e\n  1. x\n  * ```\n    a\n\n    b\n    ```\n', 'loose'],
+    ['an unclosed fence', '- e\n  1. x\n  * ```\n\n    code\n', 'loose'],
+    ['a fence in a quote', '- e\n  1. x\n  * > ```\n    >\n    > c\n    > ```\n', 'tight'],
+    ['a third sub-list', '- e\n  1. x\n  * y\n  1. ```\n\n     ```\n', 'tight'],
+    ['a second paragraph of the sibling sub-item', '- e\n  1. x\n  * y\n\n    z\n', 'loose'],
+    ['a folded marker below the sub-item column', '- e\n  1. x\n    * y\n\n     z\n', 'tight'],
+  ])('%s leaves the outer item %s', (_name, src, outer) => {
+    expect(carveToHtml(src)).toMatch(outer === 'tight' ? /^<ul>\n {2}<li>e\n/ : /^<ul>\n {2}<li><p>e<\/p>\n/)
   })
 
   it('three levels deep keeps the middle item tight', () => {
@@ -70,8 +70,8 @@ describe('a blank line inside a sibling sub-list does not loosen the outer list'
     expect(carveToHtml('- 1. x\n  * ```\n\n    ```\n- g\n')).toContain('<li>g</li>')
   })
 
-  it('the sibling sub-item still reads its own second paragraph loose', () => {
-    expect(carveToHtml('- e\n  1. x\n  * y\n\n    z\n')).toContain('<li><p>y</p>\n        <p>z</p>')
+  it('a second paragraph below the sibling sub-item goes to the outer item', () => {
+    expect(carveToHtml('- e\n  1. x\n  * y\n\n    z\n')).toContain('<li>y</li>\n    </ul>\n    <p>z</p>')
   })
 
   it("the outer item's own second paragraph still loosens it", () => {

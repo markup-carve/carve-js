@@ -67,18 +67,22 @@ describe('a quoted list on a description lead dies with its quote', () => {
     )
   })
 
-  it('keeps an unquoted line as the quote\'s lazy text while its paragraph is open', () => {
+  it('closes the quote before a table at the description body column', () => {
     expect(html(':: t\n: > q\n    | - |\n    | b |\nx\n')).toBe(
       [
         '<dl>',
         '  <dt>t</dt>',
         '  <dd>',
-        '    <blockquote><p>q',
-        '| - |',
-        '| b |',
-        'x</p></blockquote>',
+        '    <blockquote><p>q</p></blockquote>',
+        '    <table>',
+        '      <tbody>',
+        '        <tr><td>-</td></tr>',
+        '        <tr><td>b</td></tr>',
+        '      </tbody>',
+        '    </table>',
         '  </dd>',
         '</dl>',
+        '<p>x</p>',
       ].join('\n'),
     )
   })

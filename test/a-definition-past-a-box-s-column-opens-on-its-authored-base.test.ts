@@ -16,9 +16,9 @@ const cases = [
     html: '<ul>\n  <li>\n    <div class="box">\n      <p class="k">para</p>\n    </div>\n  </li>\n</ul>',
   },
   {
-    name: 'control: outside a list item the line stays text',
+    name: 'outside a list item the link definition registers too',
     source: '::: box\n  [r]: /u\n:::\n\nsee [x][r]\n',
-    html: '<div class="box">\n  <p>[r]: /u</p>\n</div>\n<p>see [x][r]</p>',
+    html: '<div class="box">\n\n</div>\n<p>see <a href="/u">x</a></p>',
   },
 ]
 

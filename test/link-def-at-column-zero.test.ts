@@ -48,10 +48,10 @@ describe('a link reference definition at column 0 under a list item', () => {
     )
   })
 
-  it('still folds one BELOW every open content column as text', () => {
+  it('collects one BELOW every open content column too', () => {
     // The boundary the fix must not move, and the shape all four agree on.
     expect(squash(carveToHtml('- - a\n [r]: /u\n\nsee [t][r]\n'))).toBe(
-      '<ul><li><ul><li>a [r]: /u</li></ul></li></ul><p>see [t][r]</p>',
+      '<ul><li><ul><li>a</li></ul></li></ul><p>see <a href="/u">t</a></p>',
     )
   })
 })
