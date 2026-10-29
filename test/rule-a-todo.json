@@ -282,9 +282,6 @@
   "djot-task-bullet-separators.test.ts": {
     "Only Native task prefixes become checkboxes": "#3921"
   },
-  "empty-list-after-table-takes-flush-left-line.test.ts": {
-    "does not attach a flush-left heading as the first block": "#3920"
-  },
   "fmt-adjacent-tight-lists-in-description.test.ts": {
     "adjacent tight lists stay in a description body": "#3921"
   },
