@@ -146,6 +146,7 @@ import {
   sourceColumnAt,
   sourceQuoteBody,
   sourceQuoteLocalColumn,
+  sourceQuotePrefixEnd,
   sourceQuoteRest,
   stackedOpenerColumns,
   stackedFollowerColumn,
@@ -246,6 +247,16 @@ function refusedFirstBlockReason(follower: string | undefined, marker: string): 
   return leadingWhitespace(follower) > 0 ? 'right' : isListMarkerLine(follower) ? 'list' : null
 }
 
+
+/** A description marker line with its separator blanked, so opener columns read as on any line; null otherwise. */
+function blankDescriptionSeparator(line: string): string | null {
+  let offset = 0
+  for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
+  const separator = /^[ \t]*:(?= )/.exec(line.slice(offset))
+  if (separator === null) return null
+  const at = offset + separator[0].length - 1
+  return line.slice(0, at) + ' ' + line.slice(at + 1)
+}
 
 export class ParseSession extends InlineParseSession {
   /**
@@ -2129,6 +2140,13 @@ export class ParseSession extends InlineParseSession {
     const levels = chain.get(content.length)
     if (levels === undefined) return false
     if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
+    // On a description marker line the host owns column 0: only the line's own opener columns reach (CARVE-P9-067).
+    const descriptionLine = quotePrefixDepth(nextSource) === quotePrefixDepth(sourceLine) ? blankDescriptionSeparator(sourceLine) : null
+    if (descriptionLine !== null) {
+      const columns = stackedOpenerColumns(descriptionLine, quotePrefixDepth(sourceLine))
+      return (isStackedFirstBlockQuoteMarker(descriptionLine) ? columns : columns.slice(0, 1))
+        .includes(sourceColumn(nextSource, quotePrefixDepth(sourceLine)))
+    }
     if (isStackedFirstBlockQuoteMarker(sourceLine)) {
       // A stacked opener line also takes a follower at one of its own opener columns (CARVE-P9-067).
       const depth = quotePrefixDepth(sourceLine)
