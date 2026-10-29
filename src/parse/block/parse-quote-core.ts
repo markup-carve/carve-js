@@ -197,6 +197,8 @@ export interface QuoteFenceHosts {
   commentBoundary?: boolean
   rejectedItemComment?: boolean
   commentBoundaryBelow?: boolean
+  /** The quote a host holds as a block at its content column, tracked across its lines. */
+  quote?: { depth: number; opener: string; state?: BlockQuoteLazyState }
 }
 
 // One line of trackQuoteHostFence. Every phase below returns the function's
@@ -518,11 +520,25 @@ function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
   if (!blockStart && at === floor && host.terms.length > 0 &&
       (!paragraph || lineOpensBlock(inner) || RE_DEFLIST_DEF.test(inner) || isBlockAttributeLine(inner)))
     host.terms[host.terms.length - 1] = false
-  if (floor <= 0 || at < floor || blockStart || host.terms.at(-1)) return false
-  if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
+  const hosted = floor > 0 && at >= floor && !host.terms.at(-1) ? RE_BLOCKQUOTE.exec(inner) : null
+  if (hosted === null || host.quote?.depth !== host.columns.length) delete host.quote
+  if (floor <= 0 || at < floor || host.terms.at(-1)) return false
+  // A quote at a host's column is that host's block: only a tracker carried
+  // across its lines knows what it ends on (a heading in an item it holds).
+  // Its opener line is only replayed once a later line continues it.
+  if (hosted !== null) {
+    if (host.quote === undefined) {
+      host.quote = { depth: host.columns.length, opener: hosted[1] ?? '' }
+      if (blockStart || markerLineState(inner).leavesParagraphOpen) return false
+    } else {
+      const quote = host.quote.state ??= replayHostedQuote(host.quote.opener)
+      trackBlockQuoteLazyState(hosted[1] ?? '', quote, () => true, () => true)
+      if (blockQuoteParagraphOpen(quote)) return false
+    }
     closeBlockQuoteParagraph(state)
     return true
   }
+  if (blockStart) return false
   const row = isTableRow(inner) || (q.wasInTable && RE_TABLE_CONT.test(inner))
   if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
       (host.kinds.at(-1) === 'item' && RE_DEFLIST_TERM.test(inner)) ||
@@ -532,6 +548,12 @@ function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
     return true
   }
   return false
+}
+
+function replayHostedQuote(opener: string): BlockQuoteLazyState {
+  const state: BlockQuoteLazyState = { mode: { kind: 'closed' }, inTable: false, colonWidths: [], attrRun: null }
+  trackBlockQuoteLazyState(opener, state, () => true, () => true)
+  return state
 }
 
 // A line block at the quote's own column holds its payload as inline text.
@@ -1212,6 +1234,27 @@ export function walkContainerPrefix(content: string, memo?: Map<number, number>)
 }
 
 /**
+ * How much of `content` is a run of list markers, stopping at the first quote:
+ * a quote owns the lines below it by its marker, not by a column (PART 1 S4).
+ * Memoized under negative keys beside `walkContainerPrefix`'s.
+ */
+export function walkMarkerOwnerPrefix(content: string, memo?: Map<number, number>): number {
+  const bound = prefixWalkBound(content)
+  const offsets: number[] = []
+  let at = 0
+  for (;;) {
+    const suffix = memo?.get(-1 - (content.length - at))
+    if (suffix !== undefined) { at += suffix; break }
+    if (memo) offsets.push(at)
+    const marker = markerPrefixLength(content, at, bound)
+    if (marker === 0) break
+    at += marker
+  }
+  for (const offset of offsets) memo!.set(-1 - (content.length - offset), at - offset)
+  return at
+}
+
+/**
  * The quote a marker line ends on, tracked, or null when it ends on none.
  *
  * The marker line never goes through the running tracker, so a quote opened
@@ -1273,8 +1316,9 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
   const bottom = markerLineBottomBlock(content, memo)
   // A footnote body's first block answers, as for every container (carve#3885).
   const note = RE_FOOTNOTE_DEF.exec(bottom)
-  if (note) return markerLineState(note[2]!)
   const quote = markerLineQuoteState(content, memo)
+  // A quote holding the note still carries the lines below it.
+  if (note) return { ...markerLineState(note[2]!), quote }
   const fenceShaped = RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) ||
     colonFenceShapeEndsLazyContinuation(bottom)
   let hasNestedQuote = false

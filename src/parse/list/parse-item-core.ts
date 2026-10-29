@@ -96,6 +96,7 @@ import {
   startsInterruptingBlock,
   trackBlockQuoteLazyState,
   walkContainerPrefix,
+  walkMarkerOwnerPrefix,
   trackWrappedAttributeRun,
 } from '../block/parse-quote-core.js'
 
@@ -1230,5 +1231,6 @@ export const listHelpers = {
   unorderedMarkerChar,
   unorderedMatch,
   verbatimOnlyLazyState,
-  walkContainerPrefix
+  walkContainerPrefix,
+  walkMarkerOwnerPrefix,
 }

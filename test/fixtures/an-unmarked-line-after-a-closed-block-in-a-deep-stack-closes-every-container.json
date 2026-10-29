@@ -1,0 +1,92 @@
+[
+  {
+    "id": "issue-heading",
+    "source": "- 1. > para\n     > # H\ntail\n",
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>\n        <blockquote>\n          <p>para</p>\n          <h1 id=\"H\">H</h1>\n        </blockquote>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "break",
+    "source": "- 1. > para\n     > ---\ntail\n",
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>\n        <blockquote>\n          <p>para</p>\n          <hr>\n        </blockquote>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "closed-fence",
+    "source": "- - > para\n    > ```\n    > x\n    > ```\ntail\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <p>para</p>\n          <pre><code>x\n</code></pre>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "link-definition",
+    "source": "1. - > para\n     > [r]: /u\ntail\n",
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>\n        <blockquote><p>para</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ol>\n<p>tail</p>"
+  },
+  {
+    "id": "attribute-line",
+    "source": "- 1. > para\n     > {.c}\ntail\n",
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>\n        <blockquote><p>para</p></blockquote>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "table-row",
+    "source": "- - > para\n    > | a |\ntail\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <p>para</p>\n          <table>\n            <tbody>\n              <tr><td>a</td></tr>\n            </tbody>\n          </table>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "closed-div",
+    "source": "1. 1. > para\n      > ::: d\n      > x\n      > :::\ntail\n",
+    "html": "<ol>\n  <li>\n    <ol>\n      <li>\n        <blockquote>\n          <p>para</p>\n          <div class=\"d\">\n            <p>x</p>\n          </div>\n        </blockquote>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>tail</p>"
+  },
+  {
+    "id": "depth-3-quote-stack",
+    "source": "1. 1. > > para\n      > > # H\ntail\n",
+    "html": "<ol>\n  <li>\n    <ol>\n      <li>\n        <blockquote>\n          <blockquote>\n            <p>para</p>\n            <h1 id=\"H\">H</h1>\n          </blockquote>\n        </blockquote>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>tail</p>"
+  },
+  {
+    "id": "depth-4",
+    "source": "- - 1. > para\n       > # H\ntail\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ol>\n          <li>\n            <blockquote>\n              <p>para</p>\n              <h1 id=\"H\">H</h1>\n            </blockquote>\n          </li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "item-quote-item",
+    "source": "- - > - para\n    >   ---\ntail\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <ul>\n            <li>para\n              <hr>\n            </li>\n          </ul>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "item-quote-item-sibling-marker",
+    "source": "- 1. > 1. para\n     >    [r]: /u\n- tail\n",
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>\n        <blockquote>\n          <ol>\n            <li>para</li>\n          </ol>\n        </blockquote>\n      </li>\n    </ol>\n  </li>\n  <li>tail</li>\n</ul>"
+  },
+  {
+    "id": "quote-item-quote-item",
+    "source": "> - > - para\n>   >   # H\ntail\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <ul>\n          <li>para\n            <h1 id=\"H\">H</h1>\n          </li>\n        </ul>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>"
+  },
+  {
+    "id": "quote-item-quote-item-marker",
+    "source": "> 1. > - para\n>    >   # H\n- tail\n",
+    "html": "<blockquote>\n  <ol>\n    <li>\n      <blockquote>\n        <ul>\n          <li>para\n            <h1 id=\"H\">H</h1>\n          </li>\n        </ul>\n      </blockquote>\n    </li>\n  </ol>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+  },
+  {
+    "id": "quote-item-quote-item-div",
+    "source": "> - > 1. para\n>   >    ::: d\n>   >    x\n>   >    :::\ntail\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <ol>\n          <li>para\n            <div class=\"d\">\n              <p>x</p>\n            </div>\n          </li>\n        </ol>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>"
+  },
+  {
+    "id": "item-quote-quote-fence",
+    "source": "- > > para\n  > > ```\n  > > x\n  > > ```\ntail\n",
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <blockquote>\n        <p>para</p>\n        <pre><code>x\n</code></pre>\n      </blockquote>\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "note-in-quoted-item",
+    "source": "- > - [^n]: note\n  >   # H\ntail\n",
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>\n          <h1 id=\"H\">H</h1>\n        </li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "id": "open-paragraph-still-folds",
+    "source": "- 1. > para\n     > more\ntail\n",
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>\n        <blockquote><p>para\nmore\ntail</p></blockquote>\n      </li>\n    </ol>\n  </li>\n</ul>"
+  },
+  {
+    "id": "quote-paragraph-still-folds",
+    "source": "> - > - para\n>   >   more\ntail\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <ul>\n          <li>para\nmore\ntail</li>\n        </ul>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>"
+  }
+]

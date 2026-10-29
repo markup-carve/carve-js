@@ -244,6 +244,8 @@ export interface ItemLazyState {
    * AT the base is more of the same block.
    */
   ownedAuthored: boolean
+  /** The quote a marker line opens at `ownedColumn`, which the descendant frame continues. */
+  ownedQuote?: () => BlockQuoteLazyState | null
   /**
    * Q1 FOR THE DESCENDANT `ownedColumn` NAMES, while that frame is open.
    *
