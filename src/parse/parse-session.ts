@@ -101,6 +101,7 @@ import {
   isLiteralColonFenceLine,
   isPhysicalContinuationMarker,
   isStackedFirstBlockQuoteMarker,
+  quotedNoteFirstBlockMarker,
   isTableRow,
   layoutWork,
   lazyProbeCost,
@@ -1709,6 +1710,7 @@ export class ParseSession extends InlineParseSession {
     return true
   }
 
+  // A note opener interrupts any paragraph, so its `+` always starts a block.
   // A stacked `> - > +` takes a non-list block at document column 0 into its
   // innermost quote (CARVE-P9-067), though the line writes no `>`.
   private attachesStackedFollower(q: QuoteCollect): boolean {
@@ -1733,8 +1735,8 @@ export class ParseSession extends InlineParseSession {
         stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
         quotePrefixDepth(stackedFollower) === 0 && !isBlankLine(stackedFollower) &&
         !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower) &&
-        isStackedFirstBlockQuoteMarker(stackedOpener) && quotePrefixDepth(stackedOpener) > 0 &&
-        openerStartsBlock(stackedOpener))) return false
+        (isStackedFirstBlockQuoteMarker(stackedOpener) && openerStartsBlock(stackedOpener) ||
+          quotedNoteFirstBlockMarker(stackedOpener)) && quotePrefixDepth(stackedOpener) > 0)) return false
     const opensBody = /^[ \t]*(?:`{3,}|~{3,}|:{3,}|%%%)/.test(stackedFollower)
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       // A host-quoted line ends a follower that opens no fence; stopping there keeps the scan short.

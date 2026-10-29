@@ -648,6 +648,7 @@ export {
   isStackedFirstBlockQuoteMarker,
   lazyContinuationEndsList,
   listHelpers,
+  quotedNoteFirstBlockMarker,
   markerClassifiers,
   markerDecision,
   markerRunListIsQuoteHeld,
