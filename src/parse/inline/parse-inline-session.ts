@@ -745,6 +745,27 @@ export class InlineParseSession {
     inFootnote = false,
     noClose: EmphasisMemo = newEmphasisMemo(),
     end = text.length,
+    inBracketRun = false,
+  ): EmphasisMatch | null {
+    // E2b (markup-carve/carve#3897): a literal bracket run bounds emphasis like
+    // a resolved one, so no span opened outside it is reachable inside it.
+    if (!inBracketRun || this.openKinds === NO_OPEN_KINDS) return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+    const outer = this.openKinds
+    this.openKinds = NO_OPEN_KINDS
+    try {
+      return this.matchEmphasisIn(text, i, source, inFootnote, noClose, end)
+    } finally {
+      this.openKinds = outer
+    }
+  }
+
+  private matchEmphasisIn(
+    text: string,
+    i: number,
+    source: InlineSource,
+    inFootnote: boolean,
+    noClose: EmphasisMemo,
+    end: number,
   ): EmphasisMatch | null {
     const c = text[i]!
 
