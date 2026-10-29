@@ -253,7 +253,8 @@ describe('a verbatim value no Carve source can carry is refused', () => {
     })
 
     it('keeps the bare-opener form carve-js#1341 introduced', () => {
-      survives('\n```')
+      // A bare fence run on the last line needs a padded span, whose leading pad cannot follow the opener (carve#4018).
+      expect(() => renderCarve(code('\n```'))).toThrow(SourceUnspellableError)
       survives('\n`')
       survives('\na`')
     })

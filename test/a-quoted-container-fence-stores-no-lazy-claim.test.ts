@@ -93,9 +93,9 @@ const cases = [
     "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>\n</code></pre>\n      a\nflush\n    </li>\n  </ul>\n</blockquote>"
   ],
   [
-    "a fence without a closer stays inline",
+    "a fence without a closer opens a code block",
     "> - a\n>   ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n<code>\nx\nflush</code></li>\n  </ul>\n</blockquote>"
+    "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ]
 ]
 

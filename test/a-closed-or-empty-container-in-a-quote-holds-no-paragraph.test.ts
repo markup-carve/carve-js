@@ -86,11 +86,10 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
-  it('CONTROL an UNTERMINATED code fence mid-paragraph is inline verbatim, so the line still folds', () => {
-    // §10 CLOSER LOOKAHEAD: with no closer ahead the fence does not interrupt,
-    // the quoted paragraph stays open, and the flush-left line folds into it.
+  it('CONTROL an UNTERMINATED code fence mid-paragraph interrupts it, so the line does not fold', () => {
+    // carve#4018: the fence interrupts with no closer ahead, and a fenced body takes no lazy line.
     expect(html('> quote\n> ```\ntail\n')).toBe(
-      '<blockquote><p>quote\n<code>\ntail</code></p></blockquote>',
+      '<blockquote>\n  <p>quote</p>\n  <pre><code></code></pre>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -115,9 +114,9 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
-  it('CONTROL a flush-left `:::` under an absorbed fence still ends the quote and opens a div', () => {
+  it('CONTROL a flush-left `:::` under an unclosed fence still ends the quote and opens a div', () => {
     expect(html('> quote\n> ```\n:::\n')).toBe(
-      '<blockquote><p>quote\n<code></code></p></blockquote>\n<div>\n\n</div>',
+      '<blockquote>\n  <p>quote</p>\n  <pre><code></code></pre>\n</blockquote>\n<div>\n\n</div>',
     )
   })
 
@@ -195,11 +194,9 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   })
 
   it('does not count a fence closer that sits OUTSIDE the quote', () => {
-    // `quotedFenceHasCloser` stops at the first unquoted line. The lazy lines
-    // join the paragraph as text, so the last one closes no fence either
-    // (markup-carve/carve-js#2272).
+    // The unquoted line ends the quote and its fence, so the last line opens a new one.
     expect(html('> quote\n> ```\ntail\n```\n')).toBe(
-      '<blockquote><p>quote\n<code>\ntail\n</code></p></blockquote>',
+      '<blockquote>\n  <p>quote</p>\n  <pre><code></code></pre>\n</blockquote>\n<p>tail</p>\n<pre><code></code></pre>',
     )
   })
 

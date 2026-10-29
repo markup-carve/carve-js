@@ -66,11 +66,11 @@ it('opens closed authored CODE inside a marker-note paragraph after folded list 
   expect(ast.children[1]).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: 'after ' }, { type: 'footnote_ref', label: 'n' }] })
 })
 
-it('keeps unclosed authored fences as marker-note paragraph text', () => {
+it('opens an unclosed authored fence in the marker note after its paragraph', () => {
   const ast = parse('- [^n]: text\n    - child\n      ```\n      code\nafter [^n]\n')
-  expect(ast.footnoteDefs?.n).toHaveLength(1)
+  expect(ast.footnoteDefs?.n).toHaveLength(2)
   expect(ast.footnoteDefs?.n?.[0]?.type).toBe('paragraph')
-  expect(ast.footnoteDefs?.n?.some(block => block.type === 'code_block')).toBe(false)
+  expect(ast.footnoteDefs?.n?.[1]).toMatchObject({ type: 'code_block', content: 'code\n' })
 })
 
 it('keeps closed CODE in a child item after a comment-led marker note', () => {

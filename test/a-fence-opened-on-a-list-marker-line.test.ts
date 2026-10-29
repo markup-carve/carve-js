@@ -32,7 +32,7 @@ import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 describe('a fence opened on a list marker line', () => {
   it('leaves an EMPTY code block and re-parses the residue at document level', () => {
     expect(carveToHtml('- ```\nx\n```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -40,7 +40,7 @@ describe('a fence opened on a list marker line', () => {
     // A separate row because the broken readings differed here, one keeping the
     // leading space in the code text and one stripping it.
     expect(carveToHtml('- ```\n x\n ```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -55,15 +55,13 @@ describe('a fence opened on a list marker line', () => {
     // Unanimous across engines and unenforced until now. It is the answer the
     // item spelling had drifted away from.
     expect(carveToHtml('> ```\nx\n```\n')).toBe(
-      '<blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>x\n<code></code></p>',
+      '<blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>x</p>\n<pre><code></code></pre>',
     )
   })
 
-  it('holds for a tilde fence, where the residue is plain text', () => {
-    // Shows the empty inline code in the first row is a property of the
-    // backtick run and not of this rule.
+  it('holds for a tilde fence', () => {
     expect(carveToHtml('- ~~~\nx\n~~~\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n~~~</p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -71,7 +69,7 @@ describe('a fence opened on a list marker line', () => {
     // THE ROW A MARKER-LINE-ONLY FIX FAILS. `x` reopens the item's paragraph
     // for any reader tracking that instead of the open fence.
     expect(carveToHtml('- ```\n  x\n y\n  ```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>y</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -79,17 +77,14 @@ describe('a fence opened on a list marker line', () => {
     // §10 I4 searches past the below-column line, so the opener remains a block
     // when the item is parsed from its collected lines.
     expect(carveToHtml('- a\n  ```\n  b\n y\n  ```\n')).toBe(
-      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y</p>\n<pre><code></code></pre>',
     )
   })
 
-  it('CONTROL an UNTERMINATED fence mid-item is inline verbatim, so the line still folds', () => {
-    // §10's CLOSER LOOKAHEAD, the same rule the quote's tracker applies. With
-    // no closer anywhere the fence never opens, the item's paragraph stays
-    // open, and the below-column line folds into it. A fix that broke on ANY
-    // fence opener rather than on an OPEN fence takes this row with it.
+  it('CONTROL an UNTERMINATED fence mid-item interrupts the paragraph, so the line below ends the item', () => {
+    // carve#4018: no closer lookahead, so the opener interrupts the item's paragraph.
     expect(carveToHtml('- q\n  ```\n  x\ntail\n')).toBe(
-      '<ul>\n  <li>q\n<code>\nx\ntail</code></li>\n</ul>',
+      '<ul>\n  <li>q\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 
@@ -107,15 +102,13 @@ describe('a fence opened on a list marker line', () => {
     )
   })
 
-  it('CONTROL the line directly under an unterminated mid-item fence still folds', () => {
-    // With no line collected in between, so an implementation that closed the
-    // paragraph at the opener and reopened it on the next ordinary line cannot
-    // pass by accident. The quote answers identically.
+  it('CONTROL the line directly under an unterminated mid-item fence ends the item', () => {
+    // With no line collected in between. The quote answers identically.
     expect(carveToHtml('- q\n  ```\ntail\n')).toBe(
-      '<ul>\n  <li>q\n<code>\ntail</code></li>\n</ul>',
+      '<ul>\n  <li>q\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>',
     )
     expect(carveToHtml('> q\n> ```\ntail\n')).toBe(
-      '<blockquote><p>q\n<code>\ntail</code></p></blockquote>',
+      '<blockquote>\n  <p>q</p>\n  <pre><code></code></pre>\n</blockquote>\n<p>tail</p>',
     )
   })
 

@@ -207,7 +207,10 @@ interface QuoteHostLine {
   content: string
   state: BlockQuoteLazyState
   host: QuoteFenceHosts
-  hasCloser: (marker: string, column?: number) => boolean
+  /** False on a quote's lazy line: a fence there is paragraph text. */
+  fenceOpens: boolean
+  /** Whether a line-block payload fence run pairs with a later run (carve-php#3137). */
+  payloadCloser: ((marker: string) => boolean) | undefined
   terminatorFree: boolean
   hasCommentCloser: (width: number, floor: number) => boolean
   wasInTable: boolean
@@ -295,8 +298,7 @@ function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
   }
   const group = opaqueGroupCloser(text)
   if (group && (group.belowBaseCloses ? q.hasCommentCloser(group.run, literal.floor) :
-    column >= literal.floor &&
-    q.hasCloser(group.char.repeat(group.run), literal.floor === 0 ? -2 : -1))) literal.opaque = group
+    column >= literal.floor && q.fenceOpens && (q.payloadCloser?.(group.char.repeat(group.run)) ?? true))) literal.opaque = group
   const close = /^(:{3,})[ \t]*$/.exec(text)
   if (close && close[1]!.length === literal.width && (column === literal.floor || column === literal.column)) {
     host.colons!.pop()
@@ -490,7 +492,7 @@ function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdi
 }
 
 function trackHostCodeFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
-  const { host, state, hasCloser } = q
+  const { host, state } = q
   const { inner, at, blockStart, paragraph, colons, floor } = b
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
@@ -503,9 +505,8 @@ function trackHostCodeFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdic
   // one - and a flush-left line then reaches no open paragraph. Read as a
   // continuation instead, it put a document-level line inside the fence
   // (carve-js#2350). Its closer may sit at its own column or at the host's.
-  const overIndented = at !== floor
   if (blockStart || !paragraph || (b.pendingColonBody && colon && (at === colon.floor || at === colon.column)) ||
-    hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
+    q.fenceOpens) {
     host.fence = { marker, column: at, floor }
     closeBlockQuoteParagraph(state)
     return true
@@ -532,7 +533,7 @@ function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
       if (blockStart || markerLineState(inner).leavesParagraphOpen) return false
     } else {
       const quote = host.quote.state ??= replayHostedQuote(host.quote.opener)
-      trackBlockQuoteLazyState(hosted[1] ?? '', quote, () => true, () => true)
+      trackBlockQuoteLazyState(hosted[1] ?? '', quote, () => true)
       if (blockQuoteParagraphOpen(quote)) return false
     }
     closeBlockQuoteParagraph(state)
@@ -552,7 +553,7 @@ function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
 
 function replayHostedQuote(opener: string): BlockQuoteLazyState {
   const state: BlockQuoteLazyState = { mode: { kind: 'closed' }, inTable: false, colonWidths: [], attrRun: null }
-  trackBlockQuoteLazyState(opener, state, () => true, () => true)
+  trackBlockQuoteLazyState(opener, state, () => true)
   return state
 }
 
@@ -565,10 +566,11 @@ function openRootLineBlock(b: QuoteHostBody): void {
 
 export function trackQuoteHostFence(
   content: string, state: BlockQuoteLazyState,
-  hasCloser: (marker: string, column?: number) => boolean,
+  fenceOpens: boolean,
   terminatorFree: boolean,
   hasCommentCloser: (width: number, floor: number) => boolean,
   wasInTable: boolean,
+  payloadCloser?: (marker: string) => boolean,
 ): boolean {
   const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
   const rejectedItemComment = host.rejectedItemComment === true
@@ -578,7 +580,7 @@ export function trackQuoteHostFence(
   delete host.commentBoundary
   delete host.commentBoundaryBelow
   const q: QuoteHostLine = {
-    content, state, host, hasCloser, terminatorFree, hasCommentCloser, wasInTable,
+    content, state, host, fenceOpens, payloadCloser, terminatorFree, hasCommentCloser, wasInTable,
     rejectedItemComment, afterComment, afterCommentBelow,
     column: indentColumns(content),
     text: content.replace(/^[ \t]*/, ''),
@@ -696,18 +698,19 @@ export function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string, depth?: number, column?: number) => boolean,
+  // False on a quote's lazy line: a fence there is paragraph text.
+  fenceOpens = true,
   descent?: QuoteDescent,
   prefixMemo?: Map<number, number>,
   atColumn = true,
   hasLiteralCommentCloser?: (fence: number, depth: number, floor: number) => boolean,
+  payloadCloser?: (marker: string) => boolean,
 ): void {
   if (!atColumn) demoteQuotedColonCandidates(state)
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
   let commentCloser = hasCommentCloser
-  let fenceCloser = (marker: string, column?: number) => hasFenceCloser(marker, 0, column)
   if (descent) {
     descent.levels = 0
     descent.preserved = false
@@ -718,11 +721,12 @@ export function trackBlockQuoteLazyState(
   for (;;) {
     level.hostAttrTracked = false
     const descend = classifyQuotedLine(
-      text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo, atColumn,
+      text, level, commentCloser, fenceOpens, continuesParagraph, terminatorFree, descent, prefixMemo, atColumn,
       hasLiteralCommentCloser === undefined ? commentCloser : (width, floor) => {
         if (descent && literalDepth > 0) descent.askedBelowTop = true
         return hasLiteralCommentCloser(width, literalDepth, floor)
       },
+      payloadCloser,
     )
     if (descend === null) return
     text = descend.text
@@ -736,10 +740,6 @@ export function trackBlockQuoteLazyState(
       commentCloser = (fence) => {
         descent.askedBelowTop = true
         return hasCommentCloser(fence)
-      }
-      fenceCloser = (marker, column) => {
-        descent.askedBelowTop = true
-        return hasFenceCloser(marker, descent.levels, column)
       }
     }
   }
@@ -798,13 +798,14 @@ export function classifyQuotedLine(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string, column?: number) => boolean,
+  fenceOpens: boolean,
   continuesParagraph: () => boolean,
   terminatorFree = false,
   descent?: QuoteDescent,
   prefixMemo?: Map<number, number>,
   atColumn = true,
   hasLiteralCommentCloser: (width: number, floor: number) => boolean = hasCommentCloser,
+  payloadCloser?: (marker: string) => boolean,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
@@ -827,7 +828,7 @@ export function classifyQuotedLine(
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return null
   }
-  if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree, hasLiteralCommentCloser, wasInTable)) return null
+  if (atColumn && trackQuoteHostFence(content, state, fenceOpens, terminatorFree, hasLiteralCommentCloser, wasInTable, payloadCloser)) return null
   const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
   const wasItemParagraph = state.mode.kind === 'paragraph' && state.mode.itemParagraph === true
@@ -909,8 +910,8 @@ export function classifyQuotedLine(
   const note = RE_FOOTNOTE_DEF.exec(content)
   if (note) {
     closeBlockQuoteParagraph(state)
-    return classifyQuotedLine(note[2]!, state, hasCommentCloser, hasFenceCloser, () => false, terminatorFree, descent,
-      prefixMemo, false, hasLiteralCommentCloser)
+    return classifyQuotedLine(note[2]!, state, hasCommentCloser, fenceOpens, () => false, terminatorFree, descent,
+      prefixMemo, false, hasLiteralCommentCloser, payloadCloser)
   }
   if (leadingWhitespace(content) === 0 && isLinkDefLine(content)) {
     closeBlockQuoteParagraph(state)
@@ -972,16 +973,12 @@ export function classifyQuotedLine(
     state.mode = { kind: 'paragraph', absorbingFence: true }
     return null
   }
-  // A code or raw fence interrupts an OPEN paragraph only when a matching
-  // closer follows in this quote (§10 CLOSER LOOKAHEAD, as
-  // `startsInterruptingBlock` applies it); with no paragraph open it dispatches
-  // unconditionally and an unterminated one runs to the end of the quote. A
-  // mid-paragraph fence with no closer is inline verbatim, so it falls through
-  // and the paragraph stays open.
+  // A code or raw fence opener interrupts an open paragraph whether or not it
+  // closes, and an unterminated one runs to the end of the quote.
   const fence = RE_FENCE.exec(content)
   const raw = fence ? null : RE_RAW_FENCE.exec(content)
   const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
-  if (fenceMarker !== null && (!blockQuoteParagraphOpen(state) || hasFenceCloser(fenceMarker))) {
+  if (fenceMarker !== null && (fenceOpens || !blockQuoteParagraphOpen(state))) {
     state.mode = { kind: 'code_fence', close: fenceCloseRe(fenceMarker) }
     return null
   }
@@ -1280,7 +1277,7 @@ export function markerLineQuoteState(content: string, memo?: Map<number, number>
     quoted[1] ?? '',
     inner,
     () => true,
-    () => true,
+    true,
     undefined,
     memo,
   )
@@ -1454,41 +1451,25 @@ export function trackWrappedAttributeRun(
 }
 
 /**
- * From a fence opener (` ``` ` / `~~~` / raw) at peek(0), is there a matching
- * closing fence ahead? Used by startsInterruptingBlock so an UNTERMINATED
- * fence does NOT interrupt a paragraph (§10 CLOSER LOOKAHEAD): a stray ``` in
- * prose stays paragraph text instead of swallowing the rest of the block. The
- * negative cache (noFenceCloserFrom) keeps "many unclosed fences" input linear.
+ * Whether a fence-shaped run in a line-block payload at peek(0) pairs with a
+ * later run: the payload is inline content, so its indentation is not a column
+ * (carve-php#3137). Not a block question; a code opener needs no closer.
  */
-export function fenceHasCloser(lexer: Lexer, marker: string, literalPayload = false): boolean {
-  if (!literalPayload && lexer.usesContainerFenceLookahead) {
-    const key = `${lexer.lineNumber(lexer.pos)}:${marker}`
-    // A container above answered for a fence it could see the closer of and this
-    // scope cannot, so that answer outranks the one keyed the same way here.
-    const handed = lexer.descendantFenceAnswers.get(key)
-    if (handed !== undefined) return handed
-    const inherited = lexer.fenceLookaheadAnswers.get(key)
-    if (inherited !== undefined) return inherited
-  }
+export function payloadFenceHasCloser(lexer: Lexer, marker: string): boolean {
   const char = marker[0]!
-  const memoKey = literalPayload ? `payload:${char}` : char
+  const memoKey = `payload:${char}`
   const start = lexer.pos + 1
   if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, memoKey, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
   for (let i = start; i < lexer.lineCount; i++) {
-    const source = lexer.lineAt(i)!
-    const l = literalPayload ? source.replace(/^[ \t]+/, '') : source
-    // A quote's lazy line is paragraph text wherever it was spliced, so it
-    // closes no fence it lands inside (markup-carve/carve-js#2272).
+    const l = lexer.lineAt(i)!.replace(/^[ \t]+/, '')
     if (lexer.quoteLazyLines.has(lexer.lineNumber(i))) continue
     if (closeRe.test(l)) return true
     const closer = RE_FENCE_CLOSER.exec(l)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  // No closer for this marker ahead. Record how long the longest same-character
-  // run from here was, so a later opener (pos only advances, so it scans a
-  // suffix whose runs can only be shorter) is O(1) whenever it is longer.
+  // Openers only advance, so a later, longer marker is refuted in O(1).
   lexer.fenceCloserMemo.set(memoKey, { from: start, maxRun })
   return false
 }
@@ -1497,11 +1478,11 @@ export function fenceHasCloser(lexer: Lexer, marker: string, literalPayload = fa
  * Does the line at peek(0) begin a block that INTERRUPTS an open paragraph
  * (grammar PART 9 §10, Markdown-like)? Mirrors parseBlock's detection battery
  * with the §10 carve-outs: a bare image does NOT interrupt; an ordered marker
- * interrupts only as `1.`/`1)`; a fence/`:::` interrupts only with a closer
- * ahead; a `|` line interrupts only when it is a valid table row.
+ * interrupts only as `1.`/`1)`; a valid fence opener always interrupts; a `|`
+ * line interrupts only when it is a valid table row.
  *
  * `content` overrides WHICH TEXT is classified while keeping the lexer for the
- * lookaheads that need it (a fence's closer, `atDocumentLevel`). One caller
+ * lookaheads that need it (`atDocumentLevel`). One caller
  * needs it: a container's BELOW band, where the line's remaining indentation is
  * a sub-column residue rather than part of what the line says
  * (markup-carve/carve#932). Every `^`-anchored pattern here fails on an indented
@@ -1539,10 +1520,8 @@ export function startsInterruptingBlock(
     case '~':
       // A line already admitted as quote continuation remains paragraph text.
       if (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) return false
-      // Raw passthrough / fenced code: interrupt only with a matching closer.
-      if (RE_RAW_FENCE.test(ln)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(ln)![1]!)
-      if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
-      return false
+      // Raw passthrough / fenced code interrupts whether or not it closes.
+      return RE_RAW_FENCE.test(ln) || RE_FENCE.test(ln)
     case '-':
       // A thematic break, or - in a list item's own body - a bullet or task at
       // the body's column 0, which §24 C3 opens a sublist with. Everywhere else

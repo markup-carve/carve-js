@@ -33,9 +33,9 @@ describe('compact list blocks (A1)', () => {
     expect(html).toContain('<li><p>c</p></li>')
   })
 
-  it('a blank ends an unclosed inline fence span and loosens the list', () => {
+  it('a blank inside an unclosed fence is payload and keeps the list tight', () => {
     expect(carveToHtml('- a\n  ```\n\n  b\n- c')).toBe(
-      '<ul>\n  <li><p>a\n<code></code></p>\n    <p>b</p>\n  </li>\n  <li><p>c</p></li>\n</ul>',
+      '<ul>\n  <li>a\n    <pre><code>\nb\n</code></pre>\n  </li>\n  <li>c</li>\n</ul>',
     )
   })
 

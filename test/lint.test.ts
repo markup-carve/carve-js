@@ -334,7 +334,7 @@ describe('lintCarve — trailing heading attribute', () => {
 describe('lintCarve — legacy raw fence', () => {
   it('flags ```raw FORMAT and suggests ```=FORMAT', () => {
     const w = lintCarve('```raw html\n<b>x</b>\n```')
-    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax'])
+    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax', 'unclosed-code-fence'])
     expect(w[0]!.message).toContain('```=html')
     expect(w[0]!.line).toBe(1)
   })
@@ -718,8 +718,9 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
   const RULE = 'fence-opener-fallback'
 
   it('flags a trailing attribute block and suggests the line above', () => {
+    // carve#4018: the bare ``` after a fallback opener opens a fence of its own.
     const w = lintCarve('```js {.diff}\n const a = 1\n-let b = 2\n```\n')
-    expect(w.map((x) => x.rule)).toEqual([RULE])
+    expect(w.map((x) => x.rule)).toEqual([RULE, 'unclosed-code-fence'])
     expect(w[0].line).toBe(1)
     expect(w[0].column).toBe(1)
     expect(w[0].message).toContain('(use: "{.diff}" on its own line directly above the fence, then "```js")')
@@ -727,10 +728,10 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
   })
 
   it('flags a tilde opener, an unquoted title and a key="value" pair', () => {
-    expect(rulesOf('~~~js {.diff}\nx\n~~~\n')).toEqual([RULE])
-    expect(rulesOf('```js main.js\nx\n```\n')).toEqual([RULE])
-    expect(rulesOf('```js title="x"\nx\n```\n')).toEqual([RULE])
-    expect(rulesOf('```php [l] "h"\nx\n```\n')).toEqual([RULE])
+    expect(rulesOf('~~~js {.diff}\nx\n~~~\n')).toEqual([RULE, 'unclosed-code-fence'])
+    expect(rulesOf('```js main.js\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
+    expect(rulesOf('```js title="x"\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
+    expect(rulesOf('```php [l] "h"\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
   })
 
   it('does not suggest moving anything when there is no trailing attribute block', () => {
@@ -749,18 +750,18 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
 
   it('flags an opener that interrupts a paragraph', () => {
     const w = lintCarve('para\n```js {.x}\ny\n```\n')
-    expect(w.map((x) => [x.rule, x.line])).toEqual([[RULE, 2]])
+    expect(w.map((x) => [x.rule, x.line])).toEqual([[RULE, 2], ['unclosed-code-fence', 4]])
   })
 
   it('flags an opener inside a block quote and a list item', () => {
     const q = lintCarve('> ```js {.x}\n> y\n> ```\n')
-    expect(q.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 1, 3]])
+    expect(q.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 1, 3], ['unclosed-code-fence', 3, 3]])
     const l = lintCarve('- item\n\n  ```js {.x}\n  y\n  ```\n')
-    expect(l.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 3, 3]])
+    expect(l.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 3, 3], ['unclosed-code-fence', 5, 3]])
   })
 
   it('handles CRLF line endings', () => {
-    expect(rulesOf('```js {.x}\r\ny\r\n```\r\n')).toEqual([RULE])
+    expect(rulesOf('```js {.x}\r\ny\r\n```\r\n')).toEqual([RULE, 'unclosed-code-fence'])
     expect(rulesOf('```js\r\ny\r\n```\r\n')).toEqual([])
   })
 

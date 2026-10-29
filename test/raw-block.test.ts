@@ -21,13 +21,13 @@ describe('raw block (```=FORMAT djot syntax)', () => {
   it('treats = with a space before the format as NOT raw', () => {
     // ```= html is not a raw block; the line opens an inline code span instead.
     expect(h('```= html\n<b>x</b>\n```')).toBe(
-      '<p><code>= html\n&lt;b&gt;x&lt;/b&gt;\n</code></p>',
+      '<p><code>= html\n&lt;b&gt;x&lt;/b&gt;</code></p>\n<pre><code></code></pre>',
     )
   })
 
   it('no longer recognizes the removed ```raw FORMAT keyword form', () => {
     expect(h('```raw html\n<b>x</b>\n```')).toBe(
-      '<p><code>raw html\n&lt;b&gt;x&lt;/b&gt;\n</code></p>',
+      '<p><code>raw html\n&lt;b&gt;x&lt;/b&gt;</code></p>\n<pre><code></code></pre>',
     )
   })
 })

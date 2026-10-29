@@ -174,14 +174,14 @@ describe('colon fences with exact-length closers', () => {
     )
   })
 
-  it('does not treat an unterminated paragraph-interrupting code-fence shape as opaque', () => {
+  it('treats an unterminated paragraph-interrupting code fence as opaque', () => {
     expect(h('::: note\npara\n```text\n:::\nafter')).toBe(
       [
         '<aside class="admonition note" aria-label="Note">',
-        '  <p>para',
-        '<code>text</code></p>',
+        '  <p>para</p>',
+        '  <pre><code class="language-text">:::',
+        'after</code></pre>',
         '</aside>',
-        '<p>after</p>',
       ].join('\n'),
     )
   })

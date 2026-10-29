@@ -3783,20 +3783,20 @@ class CarveRenderSession {
       }
     }
     // A footnote definition lives in a root map rather than in `children`, so it
-    // is tracked by label - the same split the description write-back has.
-    for (const [line, label] of this.footnoteDefsByLine) {
-      if (line > from && line < to && !this.footnotesWrittenInPlace.has(label)) {
-        // A following paragraph can be claimed by this note's open body.
-        // Hoist the global definition unless a region marker fixes its place.
-        if (after.type === 'paragraph' && !this.staysAboveAMarker(line)) continue
-        const blocks = ownValue(this.documentFootnoteDefs, label)
-        if (blocks === undefined) continue
-        const written = this.renderOneFootnoteDef(label, blocks, ctx)
-        this.footnotesWrittenInPlace.add(label)
-        return written
-      }
-    }
-    return undefined
+    // is tracked by label. Every note in the gap goes back in source order, so
+    // `[^c]: [^d]: x` keeps both notes and their order.
+    const at = (label: string) => ownValue(this.documentFootnoteDefPos, label)
+    const labels = Object.keys(this.documentFootnoteDefs ?? {}).filter(label => {
+      const line = at(label)?.startLine
+      if (line === undefined || line <= from || line >= to || this.footnotesWrittenInPlace.has(label)) return false
+      // A following paragraph can be claimed by this note's open body.
+      // Hoist the global definition unless a region marker fixes its place.
+      return !(after.type === 'paragraph' && !this.staysAboveAMarker(line))
+    }).sort((a, b) => (at(a)!.startLine! - at(b)!.startLine!) || ((at(a)?.startColumn ?? 0) - (at(b)?.startColumn ?? 0)))
+    if (labels.length === 0) return undefined
+    const written = labels.map(label => this.renderOneFootnoteDef(label, ownValue(this.documentFootnoteDefs, label)!, ctx))
+    for (const label of labels) this.footnotesWrittenInPlace.add(label)
+    return written.join('\n')
   }
 
   private listFootnoteAfter(before: BlockNode, after: BlockNode, ctx: CarveContext): string | undefined {

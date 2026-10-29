@@ -24,7 +24,6 @@ function lastOfType(source: string, type: string): Placed | undefined {
 }
 
 const corpusCases: Array<[string, string, number]> = [
-  ['291-a-fence-keeps-the-blank-line-at-the-end-of-its-content-3', 'code_block', 16],
   ['291-a-fence-keeps-the-blank-line-at-the-end-of-its-content-5', 'code_block', 9],
   ['291-a-fence-keeps-the-blank-line-at-the-end-of-its-content-6', 'code_block', 11],
   ['365-a-blank-line-before-a-sibling-marker-separates-the-items-whatever-consumed-it-2', 'code_block', 11],
@@ -53,6 +52,7 @@ describe('interior literal payload LF spans', () => {
     ['unclosed raw without final LF', '```=html\nx', 'raw_block', 10],
     ['terminal code blank at EOF', '```\nx\n\n', 'code_block', 6],
     ['terminal raw blank at EOF', '```=html\nx\n\n', 'raw_block', 11],
+    ['unclosed code in a div at EOF', '::: note\n```\nx\n\n:::\n', 'code_block', 19],
     ['container blank with trailing space', '> ```\n> \n\noutside\n', 'code_block', 8],
   ] as const)('%s retains its existing bound', (_name, source, type, end) => {
     expect(lastOfType(source, type)?.pos?.endOffset).toBe(end)

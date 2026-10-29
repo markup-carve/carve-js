@@ -48,9 +48,10 @@ it('does not use an outer description closer for a nested item fence', () => {
     '  <dd>',
     '    <ul>',
     '      <li>b',
-    '<code>',
-    '</code></li>',
+    '        <pre><code></code></pre>',
+    '      </li>',
     '    </ul>',
+    '    <pre><code></code></pre>',
     '  </dd>',
     '</dl>',
   ].join('\n'))

@@ -2,31 +2,31 @@
   {
     "name": "description fence closed past a below-column item",
     "source": ":: t\n: > q\n  ```\n  p\n- c\n  ```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<ul>\n  <li>c\n<code></code></li>\n</ul>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<ul>\n  <li>c\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "name": "description fence closed past a below-column line",
     "source": ":: t\n: para\n  ```\n  p\nc\n  ```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>para</p>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<p>c\n<code></code></p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>para</p>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<p>c</p>\n<pre><code></code></pre>"
   },
   {
     "name": "description fence after a blank and a short line stays text",
     "source": ":: t\n: > q\n  ```\n  p\n\nc\n  ```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q\n<code>\np</code></p></blockquote>\n  </dd>\n</dl>\n<p>c\n<code></code></p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<p>c</p>\n<pre><code></code></pre>"
   },
   {
     "name": "description fence with an over-indented closer stays text",
     "source": ":: t\n: > q\n  ```\n  p\nc\n   ```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q\n<code>\np\nc\n</code></p></blockquote>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>p\n</code></pre>\n  </dd>\n</dl>\n<p>c</p>\n<pre><code></code></pre>"
   },
   {
     "name": "footnote fence after a blank and a short line stays text",
     "source": "x[^1]\n\n[^1]: > q\n  ```\n  p\n\nc\n  ```\n",
-    "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<p>c\n<code></code></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote><p>q\n<code>\np</code></p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<p>c</p>\n<pre><code></code></pre>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote><p>q</p></blockquote>\n      <pre><code>p\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "name": "footnote fence with an over-indented closer stays text",
     "source": "x[^1]\n\n[^1]: > q\n  ```\n  p\nc\n   ```\n",
-    "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote><p>q\n<code>\np\nc\n</code></p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<p>c</p>\n<pre><code></code></pre>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote><p>q</p></blockquote>\n      <pre><code>p\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   }
 ]

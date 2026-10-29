@@ -98,9 +98,9 @@ describe('a raised fence keeps a below-column run as payload', () => {
       '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
     ],
     [
-      'with no blank the run is still the paragraph inline verbatim',
+      'with no blank the fence still interrupts the paragraph',
       '- outer\n  - head\n    ```\n    a\n```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n  tail\n</code></pre>',
     ],
     [
       'a band closer at no over-indent is payload already',
@@ -188,9 +188,9 @@ describe('a raised fence keeps a below-column run as payload', () => {
       '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <p>b</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
     ],
     [
-      'a degraded tilde fence leaves it as text too',
+      'an unclosed tilde fence leaves it as text too',
       '- item\n\n   :::\n   a\n   ~~~\n   b\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a\n~~~\nb</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
     ],
     [
       'a terminated comment fence still leaves it as text',
@@ -203,12 +203,12 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a folded code run is not a closer at column zero',
       '- item\n\n   :::\n   a\n   ```\n   b\n```\n   :::\n\n  tail\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a\n<code>\nb\n</code></p>\n    </div>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>   :::\n\n  tail\n</code></pre>',
     ],
     [
       'nor in the band',
       '- item\n\n   :::\n   a\n   ```\n   b\n ```\n   :::\n\n  tail\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a\n<code>\nb\n</code></p>\n    </div>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>  :::\n\n tail\n</code></pre>',
     ],
     // A closer that REACHED the container's column is not folded, and it still
     // closes from there. The lookahead accepts the group's own base and the
@@ -234,66 +234,67 @@ describe('a raised fence keeps a below-column run as payload', () => {
   // column or the fence's own base, and every other column folds.
   // markup-carve/carve#3403: a folded closer leaves the child open, so a trailing
   // paragraph at the child column makes its list loose.
+  // Since carve#4018 the opener interrupts the paragraph, so every row opens a block.
   it.each([
     [
       'a closer at column zero, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n  tail\n</code></pre>',
     ],
     [
       'a closer at column zero, trailing line at the child column',
       '- outer\n  - head\n     ```\n     a\n```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>',
     ],
     [
       'a closer at column zero, trailing line past the child column',
       '- outer\n  - head\n     ```\n     a\n```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n      tail\n</code></pre>',
     ],
     [
       'a closer at column one, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n ```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n tail\n</code></pre>',
     ],
     [
       'a closer at column one, trailing line at the child column',
       '- outer\n  - head\n     ```\n     a\n ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>',
     ],
     [
       'a closer at column one, trailing line past the child column',
       '- outer\n  - head\n     ```\n     a\n ```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n     tail\n</code></pre>',
     ],
     [
       'a closer at the outer column, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n  ```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>',
     ],
     [
       'a closer at the outer column, trailing line at the child column',
       '- outer\n  - head\n     ```\n     a\n  ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n  tail\n</code></pre>\n  </li>\n</ul>',
     ],
     [
       'a closer at the outer column, trailing line past the child column',
       '- outer\n  - head\n     ```\n     a\n  ```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n    tail\n</code></pre>\n  </li>\n</ul>',
     ],
     [
       'a closer one column above the outer, trailing line at the outer column',
       '- outer\n  - head\n     ```\n     a\n   ```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>',
     ],
     [
       'a closer one column above the outer, trailing line at the child column',
       '- outer\n  - head\n     ```\n     a\n   ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n tail\n</code></pre>\n  </li>\n</ul>',
     ],
     [
       'a closer one column above the outer, trailing line past the child column',
       '- outer\n  - head\n     ```\n     a\n   ```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n   tail\n</code></pre>\n  </li>\n</ul>',
     ],
   ])('family 1 with no blank: %s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
@@ -313,19 +314,19 @@ describe('a raised fence keeps a below-column run as payload', () => {
       '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
     ],
     [
-      'a closer past the fence base folded already',
+      'a run past the fence base is payload',
       '- outer\n  - head\n     ```\n     a\n      ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n ```\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
     ],
     [
-      'the fence at the child column with a flush closer folded',
+      'the fence at the child column with a flush run opens a block',
       '- outer\n  - head\n    ```\n    a\n```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n<code>\na\n</code></p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>',
     ],
     [
-      'a tilde fence over-indented by one folds the same way',
+      'a tilde fence over-indented by one opens a block the same way',
       '- outer\n  - head\n     ~~~\n     a\n ~~~\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\n~~~\na\n~~~</p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>',
     ],
     [
       'a blank before the opener keeps the block',

@@ -1,7 +1,6 @@
 import { Lexer, indentColumns, isBlankLine } from './parse-lexer.js'
 import type { LinkDef } from './inline/inline-resolution.js'
 import type {
-  CloserIndex,
   CommentScopeMemo,
   OpenContainer,
   PrepassScope,
@@ -32,8 +31,6 @@ type PrepassFence = {
   contentCol: number
   quoted: boolean
   scope: PrepassScope
-  divWidth: number | null
-  hasCloser: boolean
 }
 
 type PrepassDiv = {
@@ -72,7 +69,6 @@ type LinkDefScan = {
   attributeState: { attrRun: string | null }
   hasBlockMatchers: boolean
   lazyProbeBudget: number
-  prepassClosers: CloserIndex['code'] | null
   term: { col: number; quotes: number } | null
 }
 
@@ -106,7 +102,6 @@ export function createLinkDefinitionCollector(
   const {
     FOOTNOTE_BODY_COLUMN,
     RE_ABBR_DEF,
-    RE_ADMONITION_CLOSE,
     RE_AFTER_TERM,
     RE_BLOCKQUOTE,
     RE_COMMENT_BLOCK_ANY,
@@ -116,11 +111,8 @@ export function createLinkDefinitionCollector(
     RE_FENCE,
     RE_FENCE_CLOSER,
     RE_FOOTNOTE_DEF,
-    RE_PREPASS_ANY_FENCE_CLOSER,
     RE_RAW_FENCE,
     RE_TASK,
-    buildCodeCloserIndex,
-    codeCloserPossibleIn,
     commentBlockHasCloser,
     commentCloserInScope,
     commentFenceRun,
@@ -146,13 +138,6 @@ export function createLinkDefinitionCollector(
     unescapeAttrValue,
     utf8ByteLength,
   } = helpers
-
-  // `codeCloserPossible` over the prepass's own view of a closer, built once per
-  // document and only when a paragraph is actually open under a fence-shaped
-  // line. A scan per opener is the quadratic shape this index exists to close.
-  function closers(s: LinkDefScan): CloserIndex['code'] {
-    return s.prepassClosers ??= buildCodeCloserIndex(s.lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)
-  }
 
   function readLine(s: LinkDefScan, idx: number): LineRead {
     const raw = s.lexer.lineAt(idx)!
@@ -265,32 +250,8 @@ export function createLinkDefinitionCollector(
     // inside the quote (carve#658). Reading the raw indent there would
     // compare a column against a line that still carries its `> ` prefix.
     //
-    // THE DIV IS THE CONTAINER `scope` CANNOT SEE, because a div adds no
-    // per-line prefix and no column - so a fence inside one is held by every
-    // test above and outlived the div too. Its closer is the enclosing div's
-    // own: a BARE colon run of exactly the width that was open when the fence
-    // opened (carve#455's exact-length rule, which is what the depth stack
-    // records). A different width, or a run with trailing text, is fence
-    // content, and the block parser reads all three the same way.
-    //
-    // AND ONLY FOR A FENCE THAT NEVER CLOSES. A fence with a closer ahead is
-    // opaque all the way to it, so a same-width `:::` written inside such a
-    // sample is CODE and the block parser renders it - only an unterminated
-    // fence degrades at its container's boundary. Ending the fence there
-    // anyway collected the definitions below it out of a visible `<pre>`,
-    // which is the worst outcome this pass has.
-    //
-    // Matched with the block parser's OWN colon closer, on `d` - the same
-    // re-based view the fence's closer above reads. That settles three things
-    // at once that a hand-rolled test got wrong: the pattern is anchored, so
-    // an INDENTED `:::` inside the body is content rather than the div's
-    // closer; it carries the structural trailing-whitespace class, where
-    // `trim()` also ate a no-break space the parser keeps as content; and it
-    // compares RUN LENGTHS rather than building a `:::` string per body line,
-    // which was quadratic in the div's width times the sample's length.
-    const divCloser =
-      fence.divWidth !== null && !fence.hasCloser ? RE_ADMONITION_CLOSE.exec(d) : null
-    const enclosingDivCloses = divCloser !== null && divCloser[1]!.length === fence.divWidth
+    // A div adds no per-line prefix, so `scope` cannot see it; the fence's
+    // payload is opaque and no `:::` line inside it closes the div.
     // THE INDENT IS MEASURED ON `unquoted`, NOT ON `k`, because the recorded
     // column was. The quote-prefix pattern `k` uses admits a LEADING
     // INDENTATION RUN before the marker, so `k` loses the item's indentation
@@ -302,8 +263,7 @@ export function createLinkDefinitionCollector(
     // is never the SHALLOWER of the two, since `k` removes a superset of what
     // `unquoted` does wherever the fence is quoted at all.
     if (
-      scopeHoldsLine(fence.scope, v.raw, v.rawQuoteDepth, v.unquoted) &&
-      !enclosingDivCloses
+      scopeHoldsLine(fence.scope, v.raw, v.rawQuoteDepth, v.unquoted)
     ) {
       return true // definitions inside fenced code are literal samples
     }
@@ -360,13 +320,10 @@ export function createLinkDefinitionCollector(
     const codeOpener = RE_FENCE.exec(rawTrimmed)
     const rawCodeOpener = codeOpener ? null : RE_RAW_FENCE.exec(rawTrimmed)
     const codeRun = codeOpener?.[2] ?? rawCodeOpener?.[1]
-    const inlineFence = codeRun !== undefined && leadingWhitespace(raw) === 0 && listCols.length > 0 &&
-      s.paraState !== 'no' && (s.paragraphFoldedAbove || !prepassOpensBlock(s.paraLine, s.paraLinePlusOpens)) &&
-      !codeCloserPossibleIn(closers(s), codeRun, v.idx)
     const startsBlock =
       /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
       RE_BLOCKQUOTE.test(rawTrimmed) ||
-      (codeRun !== undefined && !inlineFence) ||
+      codeRun !== undefined ||
       // A COLON FENCE ENDS THE ITEM TOO, and was the one block opener missing
       // from this list. A flush `:::` under an unblanked item opens a SIBLING
       // container - the parser renders the div next to the list, not inside it
@@ -784,16 +741,6 @@ export function createLinkDefinitionCollector(
       !s.inlineBodyList && !before?.some((entry) => entry.kind === 'list')
   }
 
-  // The innermost depth entry the block parser really opened - a phantom
-  // one from a malformed `:::note` decides nothing here. Written as a loop
-  // rather than `findLast`, which the compile target does not carry.
-  function innermostOpenDiv(divs: PrepassDiv[]): PrepassDiv | undefined {
-    for (let i = divs.length - 1; i >= 0; i--) {
-      if (divs[i]!.opens) return divs[i]
-    }
-    return undefined
-  }
-
   function fenceOpenerTakesLine(
     s: LinkDefScan, v: LineRead, view: OpenerView, lists: ListRead, para: ParagraphVerdict,
   ): boolean {
@@ -811,35 +758,12 @@ export function createLinkDefinitionCollector(
     const rawOpen = open ? null : RE_RAW_FENCE.exec(view.deIndented)
     const run = open ? open[2]! : rawOpen?.[1]
     if (!run || markerFenceIsParagraphText(s, v, lists, para)) return false
-    const enclosingDiv = innermostOpenDiv(s.divs)
-    if (para.collectsNothing && !codeCloserPossibleIn(closers(s), run, v.idx)) {
-      // Not a fence: the line is the paragraph's own text and the paragraph is
-      // still open below it. Known outright, so the line below never has to ask.
-      s.paraState = 'yes'
-      return false
-    }
     s.fence = {
       ch: run[0]!,
       len: run.length,
       contentCol: view.openerCol,
       quoted: v.rawIsQuoted,
       scope: { quoteDepth: v.rawQuoteDepth, contentCol: view.scopeCol },
-      divWidth: enclosingDiv ? enclosingDiv.width : null,
-      // Asked only for a fence INSIDE a div, which is the one place the
-      // answer is read - so an ordinary document never builds the index.
-      //
-      // THE INDEX IS PERMISSIVE, and that is deliberate here. A merely
-      // closer-SHAPED line - indented, or inside another container - counts
-      // as "a closer may be ahead", so the div boundary declines to end the
-      // fence and a definition after it stays uncollected. That direction
-      // is a definition this pass does not reach, which is what it did
-      // before this change; the other direction ends a live fence early and
-      // publishes a definition out of a visible code sample. An exact
-      // answer wants a container-bounded scan per opener, which is the
-      // quadratic shape this index exists to avoid.
-      hasCloser:
-        enclosingDiv !== undefined &&
-        codeCloserPossibleIn(closers(s), run, v.idx),
     }
     s.paraState = 'no'
     return true
@@ -1079,12 +1003,6 @@ export function createLinkDefinitionCollector(
     const s: LinkDefScan = {
       session,
       lexer,
-      // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
-      // opened, or null when there was none. A fence inside a div ends at that div's
-      // closer, exactly as it ends at the end of a quote or a list item - and the
-      // block parser agrees: `:::` / ``` ``` `` / `x` / `:::` renders the code and
-      // then leaves the div, while a run of a different width, or one with trailing
-      // text, is ordinary fence content.
       fence: null,
       // A LINE BLOCK is verse: a definition written inside one is text the author
       // laid out, not a definition (PART 9 §23). Ownership is supplied by the
@@ -1170,7 +1088,6 @@ export function createLinkDefinitionCollector(
       // parses in UTF-8 bytes and fail toward collecting when the allowance is
       // exhausted (PART 9R R1a).
       lazyProbeBudget: utf8ByteLength(lexer.lines.join('\n')) * 4 + 4096,
-      prepassClosers: null,
       // The definition term whose column later lines are measured against (carve#2411).
       term: null,
     }

@@ -166,8 +166,9 @@ describe('a tab-padded code fence closer still closes', () => {
     // same internal contradiction and is the engine that has to move.
     //
     // What the ruling changed is therefore the CLOSER, and the closer alone.
+    // Since carve#4018 the opener interrupts with no closer ahead and swallows the rest.
     const src = `p\n${F}${T}\n\n[d]: u\n\nsee [x][d]\n`
-    expect(carveToHtml(src)).toBe('<p>p\n<code></code></p>\n<p>see <a href="u">x</a></p>')
+    expect(carveToHtml(src)).toBe('<p>p</p>\n<pre><code>\n[d]: u\n\nsee [x][d]\n</code></pre>')
     // CONTROL: the same document with no tab renders identically, which is what
     // "the widened opener is invisible here" means.
     expect(carveToHtml(`p\n${F}\n\n[d]: u\n\nsee [x][d]\n`)).toBe(carveToHtml(src))
@@ -196,9 +197,10 @@ describe('a tab-padded code fence closer still closes', () => {
   it('CONTROL the OPENER with a tab before info still refuses', () => {
     // The separator half of the ruling, which stands and is not this change's
     // to move. `` ```<TAB>php `` is prose.
+    // The bare run below it is then a valid opener of its own (carve#4018).
     const src = `${F}${T}php\nx\n${F}\n`
-    expect(codeContent(src)).toBe(null)
-    expect(carveToHtml(src)).not.toContain('<pre>')
+    expect(codeContent(src)).toBe('')
+    expect(carveToHtml(src)).toBe('<p><code>\tphp\nx</code></p>\n<pre><code></code></pre>')
   })
 
   it('an opener with a tab and NOTHING after it OPENS, the third row of the table', () => {

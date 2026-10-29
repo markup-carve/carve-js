@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// The note's open paragraph takes the line lazily, references included (carve#3885).
-it("folds the line below an unclosed note fence into the marker-line note", () => {
+// The fence interrupts the note's paragraph, so the line below it leaves the list (carve#4018).
+it("ends an unclosed note fence at the line below it", () => {
   const source = `- [^n]: text
     more
     \`\`\`
@@ -11,7 +11,20 @@ after [^n]
 `
   expect(carveToHtml(source)).toBe(`<ul>
   <li></li>
-</ul>`)
+</ul>
+<p>after <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <p>text
+more</p>
+      <pre><code>code
+</code></pre>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>`)
 })
 
 it("keeps the line in the nested note list after a closed fence", () => {

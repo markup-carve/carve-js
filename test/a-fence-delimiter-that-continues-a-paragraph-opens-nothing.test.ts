@@ -23,6 +23,10 @@ import type { CarveExtension } from '../src/extension.js'
  *
  * The assertions are POSITIVE - a real `href`, a real `<abbr>` - so a prepass
  * that collected nothing at all could not pass them.
+ *
+ * markup-carve/carve#4018 removed the closer lookahead: the delimiter now always
+ * interrupts and the unclosed fence swallows the rest of its container, so the
+ * first block below asserts the prepass agrees by collecting nothing.
  */
 
 const B = '```'
@@ -30,33 +34,31 @@ const T = '~~~'
 const R = '```=html'
 const html = (source: string) => carveToHtml(source).replace(/\s+/g, ' ').trim()
 
-describe('a fence delimiter continuing a paragraph opens no fence in the prepass', () => {
-  it('collects the link reference below it', () => {
+describe('a fence delimiter continuing a paragraph opens a fence in the prepass too', () => {
+  it('swallows the link reference below it', () => {
     const source = `text\n${B}\n\n[r]: /url\n\n[r][]\n`
 
-    expect(html(source)).toBe('<p>text <code></code></p> <p><a href="/url">r</a></p>')
+    expect(html(source)).toBe('<p>text</p> <pre><code> [r]: /url [r][] </code></pre>')
   })
 
-  it('collects the abbreviation below it', () => {
+  it('swallows the abbreviation below it', () => {
     // The reported shape. An abbreviation is the definition kind with no marker
     // at the use site pointing back, so a dropped one is invisible twice over.
     const source = `text\n${B}\n\n*[A]: expansion\n\nA here\n`
 
-    expect(html(source)).toBe(
-      '<p>text <code></code></p> <p><abbr title="expansion">A</abbr> here</p>',
-    )
+    expect(html(source)).toBe('<p>text</p> <pre><code> *[A]: expansion A here </code></pre>')
   })
 
   it('reads the tilde and the =FORMAT spellings the same way', () => {
     // Found by widening the probe past the reported backtick form. The prepass
     // opens a region on all three openers, so all three drop the definition.
     for (const fence of [T, R]) {
-      expect(html(`text\n${fence}\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
+      expect(html(`text\n${fence}\n\n[r]: /url\n\n[r][]\n`)).not.toContain('href="/url"')
     }
   })
 
   it('holds when the paragraph runs over several lines', () => {
-    expect(html(`text\nmore\n${B}\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
+    expect(html(`text\nmore\n${B}\n\n[r]: /url\n\n[r][]\n`)).not.toContain('href="/url"')
   })
 
   it('holds for a SECOND delimiter on the line after the first', () => {
@@ -66,11 +68,11 @@ describe('a fence delimiter continuing a paragraph opens no fence in the prepass
     // repeated one closes its own predecessor.
     const source = `text\n${B}\n${T}\n\n[r]: /url\n\n[r][]\n`
 
-    expect(html(source)).toBe('<p>text <code> ~~~</code></p> <p><a href="/url">r</a></p>')
+    expect(html(source)).toBe('<p>text</p> <pre><code>~~~ [r]: /url [r][] </code></pre>')
   })
 
   it('holds when the paragraph continues past the delimiter', () => {
-    expect(html(`text\n${B}\ntail\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
+    expect(html(`text\n${B}\ntail\n\n[r]: /url\n\n[r][]\n`)).not.toContain('href="/url"')
   })
 
   it('holds inside a quote and inside a list item', () => {
@@ -87,10 +89,10 @@ describe('a fence delimiter continuing a paragraph opens no fence in the prepass
     // the item and in the quote - and the prepass opened a document-level fence
     // on the very same line.
     expect(html(`- a\n${B}\n\n[r]: /url\n\n[r][]\n`)).toBe(
-      '<ul> <li>a <code></code></li> </ul> <p><a href="/url">r</a></p>',
+      '<ul> <li>a</li> </ul> <pre><code> [r]: /url [r][] </code></pre>',
     )
     expect(html(`> q\n${B}\n\n[r]: /url\n\n[r][]\n`)).toBe(
-      '<blockquote><p>q <code></code></p></blockquote> <p><a href="/url">r</a></p>',
+      '<blockquote><p>q</p></blockquote> <pre><code> [r]: /url [r][] </code></pre>',
     )
   })
 })
@@ -243,8 +245,7 @@ describe('the boundaries the fix must not move', () => {
     const source = `[r][]\n\n^^^ x\n${B}\n[r]: /url\n`
 
     expect(carveToHtml(source, { extensions: [banner] })).not.toContain('href="/url"')
-    // CONTROL: with no extension registered the same line is ordinary prose, a
-    // paragraph really is open, and the fix applies as everywhere else.
-    expect(html(source)).toContain('href="/url"')
+    // CONTROL: with no extension registered the fence interrupts the paragraph.
+    expect(html(source)).not.toContain('href="/url"')
   })
 })

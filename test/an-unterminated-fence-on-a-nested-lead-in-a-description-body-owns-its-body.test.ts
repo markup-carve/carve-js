@@ -8,7 +8,7 @@ const bodyOf = (s: string): string => {
 }
 
 describe('an unterminated fence on a nested lead in a description body owns its body', () => {
-  it('the reported document: the fence owns code and the flush-left closer', () => {
+  it('the reported document: the flush-left closer opens a fence of its own', () => {
     expect(html(':: t\n: - ``` x\ncode\n```\n')).toBe(
       [
         '<dl>',
@@ -21,8 +21,8 @@ describe('an unterminated fence on a nested lead in a description body owns its 
         '    </ul>',
         '  </dd>',
         '</dl>',
-        '<p>code',
-        '<code></code></p>',
+        '<p>code</p>',
+        '<pre><code></code></pre>',
       ].join('\n'),
     )
   })

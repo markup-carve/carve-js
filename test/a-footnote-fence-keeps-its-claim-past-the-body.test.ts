@@ -12,7 +12,8 @@ it.each(['> q', 'para', '- c'])('opens the fence after %j when the closer stands
   }
 })
 
-it('leaves a fence closed only below the body column as inline text', () => {
+it('ends a fence closed only below the body column at the first line below it', () => {
   const html = carveToHtml(fence('> q', 'c', ''))
-  expect(html).not.toContain('<pre>')
+  expect(html).toContain('<pre><code>p\n</code></pre>')
+  expect(html).toContain('<p>c</p>\n<pre><code></code></pre>')
 })

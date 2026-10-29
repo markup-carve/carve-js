@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 describe('nested marker-line footnote paragraphs', () => {
   it.each([
-    ['~~~', '~~~'], ['+', '+'], ['- x', '- x'],
+    ['+', '+'], ['- x', '- x'],
   ])('keeps a below-column %s line in the deepest open paragraph', (line, rendered) => {
       const source = `[^c]: [^d]: para\n        more\n ${line}\n\nSee[^c][^d]\n`
       const html = carveToHtml(source)
@@ -19,6 +19,11 @@ describe('nested marker-line footnote paragraphs', () => {
       expect(html).toContain(rendered)
       expect(html).toContain('<p>para\nmore<a href="#fnref2"')
     })
+
+  it('releases a below-column ~~~ line, whose fence takes the rest of the document', () => {
+    const source = '[^c]: [^d]: para\n        more\n ~~~\n\nSee[^c][^d]\n'
+    expect(carveToHtml(source)).toBe('<pre><code>\nSee[^c][^d]\n</code></pre>')
+  })
 
   it('releases a heading recognized at document column zero', () => {
     const source = '[^c]: [^d]: para\n        more\n# H\n\nSee[^c][^d]\n'

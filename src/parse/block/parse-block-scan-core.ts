@@ -3,18 +3,14 @@ import { type CarveExtension } from '../../extension.js'
 import { type AsciiHeadingIdMode } from '../../heading/heading-ids.js'
 import { visitInlineChildren } from '../inline/inline-children.js'
 import { LiteralCommentClosers } from './literal-comment-closers.js'
-import { indentColumns, isBlankLine, layoutWork, Lexer, sliceColumns } from '../parse-lexer.js'
+import { indentColumns, isBlankLine, layoutWork, Lexer } from '../parse-lexer.js'
 import {
   containerQuoteDepth,
   extractItemAttr,
   FENCE_TRAILING_WS,
-  isBlockAttributeLine,
   isContinuationMarker,
   isListMarkerLine,
-  isLinkDefLine,
-  isTableRow,
   leadingWhitespace,
-  lineOpensBlock,
   type PrepassScope,
   RE_ADMONITION_CLOSE,
   RE_ADMONITION_OPEN,
@@ -22,8 +18,6 @@ import {
   RE_COMMENT_LINE,
   RE_FENCE,
   RE_HARDBREAKS_OPEN,
-  RE_HEADING,
-  RE_HR,
   RE_LINE_BLOCK_OPEN,
   RE_ORDERED,
   RE_QUOTE_BLOCK_OPEN,
@@ -37,13 +31,10 @@ import {
   colonFenceOpenerLen,
   commentFenceRun,
   fenceCloseRe,
-  fenceCloserMemoRefutes,
-  fenceHasCloser,
-  type QuotedFenceCloserMemo,
+  payloadFenceHasCloser,
   quotePrefixLength,
   RE_COMMENT_BLOCK_ANY,
   RE_FENCE_CLOSER,
-  startsInterruptingBlock,
 } from './parse-quote-core.js'
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
 import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
@@ -212,7 +203,6 @@ export function nestedSubLexer(
   )
   sub.columnParent = parent
   sub.columnOrigins = origins
-  sub.usesContainerFenceLookahead = true
   sub.nested = true
   sub.documentLineCount = parent.documentLineCount
   sub.documentRoot = parent.documentRoot ?? parent
@@ -584,49 +574,6 @@ export function codeCloserPossible(index: CloserIndex, marker: string, after: nu
   return index.scopedCode ? index.scopedCode(marker, after) : codeCloserPossibleIn(index.code, marker, after)
 }
 
-/**
- * A code closer query that also honors columns: a run indented past its opener is
- * payload (CARVE-P2-006), and one below the owner's content column has left the
- * owner. Per fence character and indentation, the closer lines ascend with a
- * suffix maximum of their run lengths.
- */
-export function columnCodeCloserIndex(lines: readonly string[]): (marker: string, after: number, low: number, high: number) => boolean {
-  const byChar = new Map<string, Map<number, { at: number[]; longest: number[] }>>()
-  for (let i = 0; i < lines.length; i++) {
-    const f = RE_ANY_FENCE_CLOSER.exec(lines[i]!)
-    if (!f) continue
-    const run = f[1]!
-    let byIndent = byChar.get(run[0]!)
-    if (byIndent === undefined) byChar.set(run[0]!, byIndent = new Map())
-    const indent = indentColumns(lines[i]!)
-    let entry = byIndent.get(indent)
-    if (entry === undefined) byIndent.set(indent, entry = { at: [], longest: [] })
-    entry.at.push(i)
-    entry.longest.push(run.length)
-  }
-  for (const byIndent of byChar.values()) {
-    for (const entry of byIndent.values()) {
-      for (let k = entry.longest.length - 2; k >= 0; k--) entry.longest[k] = Math.max(entry.longest[k]!, entry.longest[k + 1]!)
-    }
-  }
-  return (marker, after, low, high) => {
-    const byIndent = byChar.get(marker[0]!)
-    if (byIndent === undefined) return false
-    for (const [indent, entry] of byIndent) {
-      if (indent < low || indent > high) continue
-      let lo = 0
-      let hi = entry.at.length
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1
-        if (entry.at[mid]! <= after) lo = mid + 1
-        else hi = mid
-      }
-      if (lo < entry.at.length && entry.longest[lo]! >= marker.length) return true
-    }
-    return false
-  }
-}
-
 /** `codeCloserPossible` against a code index built over any closer pattern. */
 export function codeCloserPossibleIn(code: CloserIndex['code'], marker: string, after: number): boolean {
   const entry = code.get(marker[0]!)
@@ -906,80 +853,6 @@ export function literalCommentHasCloser(lexer: Lexer, width: number, from: numbe
 }
 
 /**
- * Find a code or raw fence closer within this list item. The memo uses only
- * the fence character as its key. A column key diverged from the
- * executable spec; re-measure before changing it.
- */
-export function itemFenceHasCloser(
-  lexer: Lexer,
-  marker: string,
-  fromIndex: number,
-  contentCol: number,
-  memo: QuotedFenceCloserMemo,
-  // Where the container has ended, so nothing further is this fence's to
-  // close. The memo stays sound because that line does not depend on which
-  // opener asked.
-  endsContainer: (line: string, afterBlank: boolean, index: number) => boolean,
-  columnAt?: (index: number) => number | undefined,
-  literalPayload = false,
-  quoteDepth?: number,
-  quoteColumn = 0,
-  alternateCloserColumn?: number,
-  // Past a below-column line the walk left a closer where it was written (CARVE-P2-006).
-  pastBelowColumn = false,
-): boolean {
-  const char = marker[0]!
-  const start = fromIndex + 1
-  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
-  const closeRe = fenceCloseRe(marker)
-  let maxRun = 0
-  let afterBlank = false
-  let seenBelow = false
-  for (let i = start; i < lexer.lineCount; i++) {
-    if (columnAt && layoutWork.on) layoutWork.closerLines++
-    const line = lexer.lineAt(i)!
-    if (endsContainer(line, afterBlank, i)) break
-    if (isBlankLine(line)) {
-      afterBlank = true
-      continue
-    }
-    afterBlank = false
-    const column = columnAt ? columnAt(i) : alternateCloserColumn === undefined ? indentColumns(line, contentCol) : indentColumns(line)
-    if (pastBelowColumn && column !== undefined) {
-      // A run indented past its opener is code content, so compare document columns.
-      if (seenBelow && column >= contentCol && closeRe.test(line.replace(/^[ \t]+/, '')) &&
-          lexer.sourceBoundary(i, lexer.lineLeadingWhitespace(i)).column <=
-            lexer.sourceBoundary(fromIndex, Math.max(0, lexer.lineAt(fromIndex)!.indexOf(marker))).column) return true
-      if (column < contentCol) seenBelow = true
-    }
-    if (column === undefined || column < contentCol || (columnAt && column !== contentCol)) continue
-    if (alternateCloserColumn !== undefined && column !== contentCol && column !== alternateCloserColumn) continue
-    let dedented = literalPayload ? line.replace(/^[ \t]+/, '') : columnAt ? line.slice(lexer.lineLeadingWhitespace(i)) : sliceColumns(line, contentCol, true)
-    if (column === alternateCloserColumn) dedented = dedented.trimStart()
-    if (quoteDepth !== undefined) {
-      dedented = sliceColumns(line, contentCol, true)
-      let missing = false
-      for (let depth = 0; depth <= quoteDepth; depth++) {
-        const width = quotePrefixLength(dedented, 0, dedented.length)
-        if (width === 0) { missing = true; break }
-        dedented = dedented.slice(width)
-      }
-      if (missing) continue
-      const indent = indentColumns(dedented)
-      if (quoteColumn >= 0 && indent !== quoteColumn) continue
-      if (quoteColumn === -2 && indent === 0) continue
-      dedented = dedented.replace(/^[ \t]+/, '')
-    }
-    if (closeRe.test(dedented)) return true
-    const closer = RE_FENCE_CLOSER.exec(dedented)
-    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
-  }
-  memo.set(char, { from: start, maxRun })
-
-  return false
-}
-
-/**
  * A line's content with every leading list marker walked off.
  *
  * AN OPENER MAY BE WRITTEN ON A MARKER LINE, and only where a block may begin:
@@ -1088,47 +961,6 @@ export function bodyHoldsOpenCommentSpan(
   }
 
   return scan.opaque?.comment === true
-}
-
-/** Search within one quote depth; cache misses only through its next boundary. */
-export function quotedFenceHasCloser(
-  lexer: Lexer,
-  marker: string,
-  fromIndex: number,
-  memo: QuotedFenceCloserMemo,
-  depth = 0,
-  column = 0,
-): boolean {
-  const char = marker[0]!
-  const key = `${depth}:${column}:${char}`
-  const start = fromIndex + 1
-  if (fenceCloserMemoRefutes(memo, key, marker.length, start)) return false
-  const closeRe = fenceCloseRe(marker)
-  let maxRun = 0
-  let end = start
-  for (; end < lexer.lineCount; end++) {
-    const line = lexer.lineAt(end)!
-    let at = 0
-    for (let level = 0; level <= depth; level++) {
-      const width = quotePrefixLength(line, at, line.length)
-      if (width === 0) {
-        at = -1
-        break
-      }
-      at += width
-    }
-    if (at < 0) break
-    const residual = line.slice(at)
-    if (column >= 0 && indentColumns(residual) !== column) continue
-    if (column === -2 && indentColumns(residual) === 0) continue
-    const content = column < 0 ? residual.replace(/^[ \t]+/, '') : sliceColumns(residual, column, true)
-    if (closeRe.test(content)) return true
-    const closer = RE_FENCE_CLOSER.exec(content)
-    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
-  }
-  memo.set(key, { from: start, end, maxRun })
-
-  return false
 }
 
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
@@ -1246,18 +1078,16 @@ export function consumeOpaqueColonFenceBodySpan(
   lineIndex: number,
   text: string,
   literalOwnerLine?: number,
-  canOpenUnclosed = false,
-  hostCloserAt?: (lineIndex: number) => boolean,
 ): boolean {
   const fenceText = literalOwnerLine === undefined ? text : text.replace(/^[ \t]+/, '')
   const rawOpen = RE_RAW_FENCE.exec(fenceText)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(fenceText) : null
   const marker = rawOpen?.[1] ?? codeOpen?.[2]
   if (marker !== undefined) {
-    // A fence that interrupts a paragraph needs a closer. After a closed child
-    // leaves no paragraph, an unclosed fence opens and runs to this host's edge.
-    const closes = fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)
-    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || (!closes && !canOpenUnclosed)) return false
+    // A code opener opens whether or not it closes; its payload is opaque, so
+    // no host closer ends it. A line-block payload run pairs only with a closer.
+    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex))) return false
+    if (literalOwnerLine !== undefined && !payloadFenceHasCloser(lexer, marker)) return false
     const closeRe = fenceCloseRe(marker)
     const openerColumn = indentColumns(text)
     const authoredRunColumn = (at: number, line: string): number => {
@@ -1285,8 +1115,7 @@ export function consumeOpaqueColonFenceBodySpan(
       const bandPayload = literalOwnerLine === undefined &&
         authoredRunColumn(innerLineIndex, innerText) <= authoredColumn
       const bandCloser = bandPayload && closeRe.test(content)
-      if (!closes && hostCloserAt?.(innerLineIndex)) break
-      if (!closes && !bandCloser && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
+      if (literalOwnerLine === undefined && !bandCloser && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
       lexer.consume()
       lines.push({ text: bandPayload ? content : innerText, lineIndex: innerLineIndex })
       if (bandCloser) break
@@ -1351,41 +1180,11 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
   }
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
-  let paragraphOpen: boolean = false
-  let paragraphPrefix: string | false = false
-  let markerLineLiteral: { width: number; column: number } | undefined
-  const authoredColonColumn = (at: number, width: number): number | undefined => {
-    const source = lexer.rootLines?.[lexer.lineNumber(at) - 1]
-    const markerAt = source?.indexOf(':'.repeat(width)) ?? -1
-    if (source === undefined || markerAt < 0) return undefined
-    let column = 0
-    for (const char of source.slice(0, markerAt)) column += char === '\t' ? 4 - (column % 4) : 1
-    return column
-  }
-  // Only the innermost container's own closer ends an unclosed fence. An
-  // ancestor's width closes nothing there, so stopping on it ran the body to EOF.
-  const hostCloserAt = (at: number): boolean => {
-    const candidate = lexer.lineAt(at) ?? ''
-    const width = RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length
-    const owner = stack[stack.length - 1]
-    if (width === undefined || owner === undefined || owner.fenceWidth !== width) return false
-    const ownerColumn = authoredColonColumn(owner.lineIndex, width)
-    const column = authoredColonColumn(at, width)
-    return ownerColumn === undefined || column === undefined
-      ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
-      : column === ownerColumn
-  }
-
   while (!lexer.eof()) {
     if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, undefined, !paragraphOpen && markerLineLiteral === undefined, hostCloserAt)) {
-      paragraphOpen = false
-      paragraphPrefix = false
-      continue
-    }
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
     const close = RE_ADMONITION_CLOSE.exec(text)
 
     if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
@@ -1394,24 +1193,11 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
       index.set(base + closed.lineIndex, base + lineIndex)
       if (stack.length === 0) break
       lines.push({ text, lineIndex })
-      paragraphOpen = false
-      paragraphPrefix = false
       continue
     }
 
     lexer.consume()
     lines.push({ text, lineIndex })
-    const markerColumn = text.includes('|') ? markerContentColumn(text) : -1
-    const markerBody = markerColumn >= 0 ? markerFreeContent(text) : ''
-    if (markerColumn >= 0 && RE_LINE_BLOCK_OPEN.test(markerBody)) {
-      markerLineLiteral = { width: colonFenceOpenerLen(markerBody)!, column: markerColumn }
-    } else if (markerLineLiteral && indentColumns(text) === markerLineLiteral.column &&
-        RE_ADMONITION_CLOSE.exec(text.trimStart())?.[1]?.length === markerLineLiteral.width) {
-      markerLineLiteral = undefined
-      paragraphOpen = false
-      paragraphPrefix = false
-      continue
-    }
     if (stack.at(-1)!.kind === 'line block') continue
     const openerLen = colonFenceOpenerLen(text)
     if (openerLen !== null) {
@@ -1420,40 +1206,7 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
         lineIndex,
         fenceWidth: openerLen,
       })
-      paragraphOpen = false
-      paragraphPrefix = false
-      continue
     }
-    // A quote or item line that carries paragraph text leaves a paragraph open
-    // even where it interrupts the one above (`> para` then `> more`). An item
-    // prefix is `-<content column>;`: a line reaching that column is read
-    // there, so a block at it closes the item's paragraph (CARVE-P0-011).
-    const leavesParagraphOpen = (line: string, wasOpen: string | false, interrupted: boolean, inItem = false): string | false => {
-      const block = inItem ? line.trimStart() : line
-      if (isBlankLine(line) || leavesNoParagraph(block) || RE_HEADING.test(block) || RE_HR.test(block) ||
-        (block === line.trimStart() && isLinkDefLine(block)) || isTableRow(block)) return false
-      const quote = RE_BLOCKQUOTE.exec(block)
-      if (quote) {
-        const inner = quote[1] !== undefined &&
-          leavesParagraphOpen(quote[1], wasOpen && wasOpen[0] === '>' ? wasOpen.slice(1) : false, false)
-        return inner && `>${inner}`
-      }
-      const open = wasOpen ? RE_ITEM_PREFIX.exec(wasOpen) : null
-      if (open && /^ */.exec(line)![0].length >= Number(open[1])) {
-        const inner = leavesParagraphOpen(line.slice(Number(open[1])), wasOpen && wasOpen.slice(open[0].length), interrupted, true)
-        return inner && open[0] + inner
-      }
-      const marked = extractItemAttr(line)?.stripped ?? line
-      const item = RE_TASK.exec(marked)?.[3] ?? RE_UNORDERED.exec(marked)?.[2] ?? RE_ORDERED.exec(marked)?.[4]
-      if (wasOpen && !interrupted && (item === undefined || !(open || inItem))) return wasOpen
-      if (item !== undefined) {
-        const inner = leavesParagraphOpen(item, false, false)
-        return inner && `-${markerContentColumn(line)};${inner}`
-      }
-      return ((!interrupted && (wasOpen || !lineOpensBlock(line))) || opensParagraphInBlock(line)) ? 'p' : false
-    }
-    paragraphPrefix = leavesParagraphOpen(text, paragraphPrefix, interruptsParagraph)
-    paragraphOpen = paragraphPrefix !== false
   }
 
   for (const unclosed of stack) index.set(base + unclosed.lineIndex, base + lexer.pos)
@@ -1461,28 +1214,6 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
     lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, unclosed))
   }
   return lines
-}
-
-// An item's prefix in the colon-body scan's paragraph state: `-<content column>;`.
-export const RE_ITEM_PREFIX = /^-(\d+);/
-
-// A comment line and a block-attribute line are not paragraph text.
-export function leavesNoParagraph(text: string): boolean {
-  return RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text.trimEnd())
-}
-
-// A quote or list line whose content is paragraph text leaves that paragraph
-// open, so an unclosed fence on the next line cannot interrupt it (§10 I4).
-export function opensParagraphInBlock(text: string): boolean {
-  const quote = RE_BLOCKQUOTE.exec(text)
-  if (quote) {
-    const content = quote[1]
-    return content !== undefined && !isBlankLine(content) && !leavesNoParagraph(content) &&
-      (!lineOpensBlock(content) || opensParagraphInBlock(content))
-  }
-  const content = (RE_TASK.exec(text)?.[3] ?? RE_UNORDERED.exec(text)?.[2] ?? RE_ORDERED.exec(text)?.[4])
-  return content !== undefined && !leavesNoParagraph(content) &&
-    (!lineOpensBlock(content) || opensParagraphInBlock(content))
 }
 
 export function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {

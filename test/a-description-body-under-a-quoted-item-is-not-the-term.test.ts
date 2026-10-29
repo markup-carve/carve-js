@@ -110,9 +110,9 @@ describe('a non-description payload at the same column', () => {
     )
   })
 
-  it('an unterminated fence stays the inline verbatim run that swallows the tail', () => {
+  it('an unterminated fence leaves the quote and swallows the tail', () => {
     expect(carveToHtml('> - :: t\n    ```\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n<code>\ntail</code></dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<pre><code>tail\n</code></pre>',
     )
   })
 

@@ -400,9 +400,9 @@ const cases = [
     '<ul>\n  <li><p>a</p>\n    <p>more</p>\n  </li>\n</ul>',
   ],
   [
-    'unclosed fence in open paragraph stays inline',
+    'unclosed fence in open paragraph interrupts it',
     '- head\n  ```\n  a\n',
-    '<ul>\n  <li>head\n<code>\na</code></li>\n</ul>',
+    '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>',
   ],
   [
     'fence after heading opens without closer',

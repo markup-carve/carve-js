@@ -20,7 +20,7 @@ it('bounds repeated authored fences before dedented followers', () => {
       layoutWork.reset()
       layoutWork.on = true
       const html = renderHtml(parse(source))
-      expect(html.match(/<pre>/g)?.length).toBe(count - 1)
+      expect(html.match(/<pre>/g)?.length).toBe(count + 1)
       const total = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
       expect(total).toBeLessThanOrEqual(source.length * 64)
       return total

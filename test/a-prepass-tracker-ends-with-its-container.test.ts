@@ -104,13 +104,10 @@ describe('a fence ends with the container that holds it', () => {
     }
   })
 
-  it('a DIV closer ends it, which no quote depth and no column can see', () => {
-    // A div adds no per-line prefix and no content column, so a fence inside
-    // one is held by every other test and outlived the div too. Its closer is
-    // the div's own: a bare colon run of the width that was open when the fence
-    // opened.
-    expect(html(`:::\n${B}\n:::\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
-    expect(html(`::::\n${B}\n::::\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
+  it('a DIV closer does not end it: an unclosed fence in a colon body is opaque', () => {
+    // carve#4018: the `:::` line is payload, so the fence and the div run to the end.
+    expect(html(`:::\n${B}\n:::\n\n[r]: /url\n\n[r][]\n`)).not.toContain('href="/url"')
+    expect(html(`::::\n${B}\n::::\n\n[r]: /url\n\n[r][]\n`)).not.toContain('href="/url"')
   })
 
   it('CONTROL: a colon run that is not the enclosing div closer stays fence content', () => {
@@ -127,9 +124,8 @@ describe('a fence ends with the container that holds it', () => {
     expect(html(`[r][]\n\n:::\n${B}\n::: note\n\n[r]: /url\n`)).not.toContain('href="/url"')
     // And with no div open at all, a `:::` is just a line of code.
     expect(html(`[r][]\n\n${B}\n:::\n\n[r]: /url\n`)).not.toContain('href="/url"')
-    // The positive half of the same rule, in the same arrangement: an EXACT
-    // match is the enclosing div's closer, and the fence ends there.
-    expect(html(`[r][]\n\n:::\n${B}\n:::\n\n[r]: /url\n`)).toContain('href="/url"')
+    // An EXACT match is payload too (carve#4018).
+    expect(html(`[r][]\n\n:::\n${B}\n:::\n\n[r]: /url\n`)).not.toContain('href="/url"')
   })
 
   it('CONTROL: a line the container DOES hold is still verbatim', () => {
@@ -145,8 +141,7 @@ describe('a fence ends with the container that holds it', () => {
   })
 
   it('CONTROL: a fence that DOES close is opaque past the div closer', () => {
-    // Only an unterminated fence degrades at its container's boundary. With a
-    // closer ahead the fence is opaque all the way to it, so a same-width
+    // With a closer ahead the fence is opaque all the way to it, so a same-width
     // `:::` written inside the sample is CODE - the block parser renders it -
     // and ending the fence there collected the definitions below it out of a
     // visible `<pre>` (raised by codex review).
@@ -154,26 +149,22 @@ describe('a fence ends with the container that holds it', () => {
 
     expect(html(source)).not.toContain('href="/url"')
     expect(html(source)).toContain('<pre><code>::: [r]: /url </code></pre>')
-    // The same document with NO closer really does degrade, which is the row
-    // this one is the boundary of.
-    expect(html(`[r][]\n\n:::\n${T}\n:::\n[r]: /url\n:::\n`)).toContain('href="/url"')
+    // With NO closer the fence is opaque as well (carve#4018).
+    expect(html(`[r][]\n\n:::\n${T}\n:::\n[r]: /url\n:::\n`)).not.toContain('href="/url"')
   })
 
   it('CONTROL: the div closer follows the parser whitespace rule, not `trim`', () => {
     // A no-break space is CONTENT, not trailing whitespace (PART 7), so
     // `:::` + U+00A0 is an ordinary line the parser keeps inside the sample.
     // `trim()` ate it and read the line as the div's closer (raised by codex
-    // review); the parser's own colon-closer pattern does not.
-    // NO CLOSER AHEAD, which is what makes the row discriminating: with one,
-    // the fence is opaque either way and the whitespace class never gets asked.
+    // review). Since carve#4018 no colon line inside the fence closes the div.
     const source = `[r][]\n\n:::\n${T}\n:::\u00a0\n[r]: /url\n:::\n`
 
     expect(html(source)).not.toContain('href="/url"')
-    expect(html(source)).toContain('<pre><code>:::&nbsp; [r]: /url </code></pre>')
-    // A trailing SPACE and a trailing TAB are trailing whitespace, and those
-    // lines ARE the closer.
+    expect(html(source)).toContain('<pre><code>:::&nbsp; [r]: /url ::: </code></pre>')
+    // A trailing SPACE or TAB does not make the line a closer either (carve#4018).
     for (const pad of [' ', '\t']) {
-      expect(html(`[r][]\n\n:::\n${T}\n:::${pad}\n[r]: /url\n:::\n`)).toContain('href="/url"')
+      expect(html(`[r][]\n\n:::\n${T}\n:::${pad}\n[r]: /url\n:::\n`)).not.toContain('href="/url"')
     }
   })
 
@@ -188,7 +179,7 @@ describe('a fence ends with the container that holds it', () => {
     expect(html(source)).not.toContain('href="/url"')
     // And the whole sample really is code, which is what makes the row a defect
     // rather than a preference.
-    expect(html(source)).toContain('<pre><code> ::: [r]: /url </code></pre>')
+    expect(html(source)).toContain('<pre><code> ::: [r]: /url ::: </code></pre>')
   })
 
   it('CONTROL: a fence behind BOTH a marker and a quote still holds its body', () => {

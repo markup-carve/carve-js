@@ -8,17 +8,17 @@ const cases = [
   ['quoted item', '> - o\n>   - h\n>   ```\n>\n>   t\n'],
 ] as const
 
-describe('a folded child fence run leaves the parent second paragraph loose', () => {
+describe('a fence after a child list opens in the parent and runs to its end (carve#4018)', () => {
   for (const [name, source] of cases) {
     it(name, () => {
       const document = parse(source)
       const outer = name === 'quoted item' ? document.children[0]?.type === 'block_quote' ? document.children[0].children[0] : undefined : document.children[0]
       expect(outer?.type).toBe('list')
       if (outer?.type !== 'list') return
-      expect(outer.tight).toBe(false)
+      expect(outer.tight).toBe(true)
       const html = carveToHtml(source)
-      expect(html).toContain('<p>o</p>')
-      expect(html).toContain('<p>t</p>')
+      expect(html).not.toContain('<p>o</p>')
+      expect(html).toContain('<pre><code>\nt\n</code></pre>')
     })
   }
 

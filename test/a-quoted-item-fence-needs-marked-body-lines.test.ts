@@ -5,23 +5,23 @@ import { carveToHtml } from '../src/index.js'
 const cases = [
   [
     "> - ``` x\n    code\n    ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code</p>\n<pre><code></code></pre>"
   ],
   [
     "> - ``` x\n      code\n    tail\n    ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\ntail\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\ntail</p>\n<pre><code></code></pre>"
   ],
   [
     "> - ``` x\n    code\n      ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code</p>\n<pre><code></code></pre>"
   ],
   [
     "> - ```=html\n    <b>hi</b>\n    ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      \n    </li>\n  </ul>\n</blockquote>\n<p>&lt;b&gt;hi&lt;/b&gt;\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      \n    </li>\n  </ul>\n</blockquote>\n<p>&lt;b&gt;hi&lt;/b&gt;</p>\n<pre><code></code></pre>"
   ],
   [
     "> - - ``` x\n      code\n      ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <pre><code class=\"language-x\"></code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <pre><code class=\"language-x\"></code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>code</p>\n<pre><code></code></pre>"
   ],
   [
     "> - ``` x\n>     code\n>     ```\n",

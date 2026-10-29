@@ -12,6 +12,7 @@ import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis, recordMarkdownProtectedDepth } from './import/markdown/markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markdown-gfm-autolinks.js'
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
+import { opensCodeFence } from './parse/block/parse-quote-core.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
 import { GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
@@ -8653,13 +8654,11 @@ function writeParagraphLine(st: MarkdownConversion, ln: MarkdownLine, i: number)
       // read as one and went out bare. `fmt` then wrote the escape itself, so
       // the import was not a fixed point of this engine's own formatter.
       //
-      // The thematic run and nothing else. A tilde fence interrupts no
-      // paragraph in Carve, a lone pipe is no table without its delimiter row
-      // and an equals line opens nothing at all, so an escape on any of those
-      // would guard nothing (carve#2244). Measured one spelling at a time
-      // rather than widened to "whatever opens a block at column 0", which
-      // reads the fence at any indent and would have taken `~~~` with it.
-      const structural = opens || RE_MD_THEMATIC.test(trimmedNext)
+      // The thematic run and a valid fence opener, which interrupts a Carve
+      // paragraph (carve#4018). A lone pipe is no table without its delimiter
+      // row and an equals line opens nothing at all, so an escape on those
+      // would guard nothing (carve#2244).
+      const structural = opens || RE_MD_THEMATIC.test(trimmedNext) || opensCodeFence(trimmedNext)
       run.push(structural ? emitParagraph(st, next.slice(0, next.length - trimmedNext.length)) + escapeBlockOpener(trimmedNext) : emitParagraph(st, next))
       bare.push(next)
       end++

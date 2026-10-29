@@ -3,7 +3,8 @@ import { carveToHtml } from '../src/index.js'
 
 it('removes the whole available prefix left of an authored-base fence', () => {
   const source = '- ::: box\n     ```\n    x\n     y\n  :::\nafter\n'
-  expect(carveToHtml(source)).toContain('<pre><code>x\ny\n</code></pre>')
+  // The unclosed fence's payload is opaque, so `:::` is payload (carve#4018).
+  expect(carveToHtml(source)).toContain('<pre><code>x\ny\n:::\n</code></pre>')
 })
 
 it('ends the list after a child with a closed code fence', () => {

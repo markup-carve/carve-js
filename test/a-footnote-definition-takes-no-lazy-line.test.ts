@@ -11,7 +11,8 @@ it.each([
   ['> - para\n>   [^f]: n\ntail\n', quotedList],
   ['> 1. para\n>    [^f]: n\ntail\n', '<blockquote><ol><li>para</li></ol></blockquote>'],
   ['> > - para\n> >   [^f]: n\ntail\n', '<blockquote><blockquote><ul><li>para</li></ul></blockquote></blockquote>'],
-  ['> - para\n>   [^f]: n\n```\ncode\n', quotedList],
+  // A fence interrupts the note paragraph (carve#4018), so this row folds nothing.
+  ['> - para\n>   [^f]: n\n```\ncode\n', `${quotedList}<pre><code>code </code></pre>`],
   ['> - para\n>   [^f]: n\n>     more\ntail\n', quotedList],
   ['> :: t\n> : d\n>   [^f]: n\ntail\n', '<blockquote><dl><dt>t</dt><dd>d</dd></dl></blockquote>'],
   ['> - a\n>   - para\n>     [^f]: n\ntail\n', '<blockquote><ul><li>a <ul><li>para</li></ul></li></ul></blockquote>'],

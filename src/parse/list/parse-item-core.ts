@@ -25,7 +25,6 @@ import {
   codeCloserPossible,
   commentBlockHasCloser,
   exactCloserPossible,
-  itemFenceHasCloser,
   literalCommentHasCloser,
   markerContentColumn,
   markerFreeContent,
@@ -81,7 +80,6 @@ import {
   commentFenceRun,
   endsInPlus,
   fenceCloseRe,
-  fenceHasCloser,
   markerLineBottomBlock,
   markerLineQuoteState,
   markerLineState,
@@ -444,24 +442,16 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
   if (lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) return false
   if (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
       lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) return false
-  // A VERBATIM fence ends the fold only WITH a closer ahead (§10 I4): an
-  // unterminated ``` is not a code block, it is an inline verbatim run that
-  // belongs to the item's paragraph. Without this the item was closed and the
-  // fence became a top-level code block, which the top-level path already got
-  // right (corpus 81-paragraph-interruption-18) and carve-rs got right
-  // everywhere (carve-js#540).
+  // A verbatim fence opener ends the fold whether or not it closes.
   //
-  // The `:::` arms below stay lexer-free deliberately - I4 does not guard a
-  // colon fence (markup-carve/carve#514), and the comment there gives the
-  // separate reason.
-  if (RE_RAW_FENCE.test(line)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(line)![1]!)
-  if (RE_FENCE.test(line)) return fenceHasCloser(lexer, RE_FENCE.exec(line)![2]!)
+  // The `:::` arms below stay lexer-free deliberately; the comment there gives
+  // the reason.
+  if (RE_RAW_FENCE.test(line) || RE_FENCE.test(line)) return true
   // A DEGRADED COMMENT FENCE ENDS NOTHING (§28, markup-carve/carve#1903, ported
   // at carve-js#1607). With no exact-width closer ahead the opener is one
   // `comment_line` for every question the layout asks, container OWNERSHIP
   // included - and a `%%` line leaves the item open in every reader, so this
-  // must too. The lookahead is the one §10 I4 already makes for a verbatim
-  // fence, two lines up.
+  // must too.
   //
   // A TERMINATED `%%%` here is untouched: a comment BLOCK written at the
   // document's own opener column still ends the item (corpus 214). The closer
@@ -573,11 +563,11 @@ export function restoreVerbatimBlanks(
       if (source !== undefined && column >= 0 && insideOpenFence(state)) {
         lines[i] = sliceColumns(source, column, true)
       }
-      trackItemLazyState(lines[i]!, state, undefined, true, undefined, factsAt?.(i))
+      trackItemLazyState(lines[i]!, state, true, undefined, factsAt?.(i))
       continue
     }
     const wasOpen = insideOpenFence(state)
-    trackItemLazyState(lines[i]!, state, undefined, true, undefined, factsAt?.(i))
+    trackItemLazyState(lines[i]!, state, true, undefined, factsAt?.(i))
     if (!wasOpen && insideOpenFence(state)) column = openerColumn(i)
   }
 }
@@ -1037,7 +1027,7 @@ export function markerRunListIsQuoteHeld(content: string): boolean {
  */
 export function descriptionLeadFenceScans(lead: string): {
   code: AppendOnlyCloser
-  paragraphOpen: (lines: readonly string[], fallback: boolean, hasCloser: (marker: string, extraColumns?: number) => boolean, atContentColumn: boolean) => boolean
+  paragraphOpen: (lines: readonly string[], fallback: boolean, atContentColumn: boolean) => boolean
 } {
   const bottom = markerLineBottomBlock(lead)
   const nested = bottom !== lead
@@ -1061,7 +1051,7 @@ export function descriptionLeadFenceScans(lead: string): {
 
   return {
     code: new AppendOnlyCloser(close ? line => close.test(line.replace(/^[ \t]+/, '')) : undefined),
-    paragraphOpen: (lines, fallback, hasCloser, atContentColumn) => {
+    paragraphOpen: (lines, fallback, atContentColumn) => {
       if (ownClose === undefined) return fallback
       if (!ownsBody) return false
       for (; next < lines.length; next++) {
@@ -1075,7 +1065,7 @@ export function descriptionLeadFenceScans(lead: string): {
           if (indent === column && ownClose.test(line.trimStart())) closed = true
           continue
         }
-        trackItemLazyState(sliceColumns(line, column), trailing, hasCloser)
+        trackItemLazyState(sliceColumns(line, column), trailing)
       }
 
       return closed ? trailing.lazyFoldable : false
@@ -1107,7 +1097,8 @@ export function nestedItemHoldsOpenParagraph(content: string, memo?: Map<number,
 }
 
 export interface ItemLineFacts {
-  quoteFenceCloser?: (marker: string, depth?: number, column?: number) => boolean
+  /** Whether a line-block payload fence run pairs with a later run (carve-php#3137). */
+  payloadFenceCloser?: (marker: string) => boolean
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
@@ -1187,7 +1178,6 @@ export const listHelpers = {
   isStackedFirstBlockQuoteMarker,
   quotedNoteFirstBlockMarker,
   isTableRow,
-  itemFenceHasCloser,
   lazyContinuationEndsList,
   leadingWhitespace,
   lineOpensBlock,
