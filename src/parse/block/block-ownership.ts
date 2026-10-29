@@ -190,6 +190,21 @@ const quotedRest = (line: string): string => quotedMeasure(line).rest
  * content column. Indentation is only ever removed. `trace` collects one
  * record per line at the step that decided it (S1, S2, S4, S5).
  */
+/** Consecutive lone item `+` lines at one raw column; a quote marker starts none. */
+interface PlusRun { column: number; length: number }
+
+function extendPlusRun(run: PlusRun, afterPlus: boolean, quote: boolean, column: number): PlusRun {
+  if (quote) return { column: -1, length: 1 }
+  return { column, length: afterPlus && column === run.column ? run.length + 1 : 1 }
+}
+
+// A follower left of a lone item `+`'s raw column refuses it, which the canonical lead hides (§17 L3).
+// A run of markers that reached only each other is refused with its last one.
+function refuseLeftFollower(refused: Set<number>, at: number, run: PlusRun, column: number, rest: string): void {
+  if (run.column < 0 || rest === '' || CONT_MARKER.test(rest) || column >= run.column) return
+  for (let k = 1; k <= run.length; k++) refused.add(at - k)
+}
+
 export function ownLines(
   lines: string[],
   start = 0,
@@ -204,6 +219,7 @@ export function ownLines(
   let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; ahead?: AheadIndex } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
+  let plusRun: PlusRun = { column: -1, length: 0 }
   // Quote first-block `+` lines whose follower stands at an ineligible raw column.
   const refusedPlus = new Set<number>()
   const overindented: OverindentedOpener[] = []
@@ -269,12 +285,14 @@ export function ownLines(
       plus.para = false
       lead(plus.markerCanon!)
       finish()
+      plusRun = extendPlusRun(plusRun, afterPlus, plus.kind === 'quote', m.col)
       afterPlus = true
       if (trace) emit(at, 'S2', ownerPath(), 'CARVE-P9-067', 'plus', { cell: 'B-plus-start' })
       continue
     }
     const plusFollower = afterPlus
     afterPlus = false
+    if (plusFollower) refuseLeftFollower(refusedPlus, at, plusRun, m.col, m.rest)
     const missed = reached < frames.length - 1
     // A follower at an ineligible raw column refuses the `+` whatever block it starts (CARVE-P9-067, carve#3421).
     const stacked = typeof stackCol === 'number' && stackCol >= 0

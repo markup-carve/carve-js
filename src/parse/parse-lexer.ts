@@ -386,7 +386,7 @@ export class Lexer {
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
   /** Attachment lookahead results, keyed by the view's content column. */
-  attachmentScans?: Map<number, AttachedViewScan>
+  attachmentScans?: Map<number | string, AttachedViewScan>
   attachmentFenceClosers?: AttachmentFenceClosers
   scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
