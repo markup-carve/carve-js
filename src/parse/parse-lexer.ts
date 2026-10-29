@@ -150,13 +150,16 @@ export class Lexer {
     return this.lineView ? this.lineView.lexer.lineAt(this.lineView.start + index) : this.storedLines[index]
   }
 
+  /** Root lines whose quote first-block `+` the walk refused by its follower's raw column. */
+  refusedQuotePlus: Set<number>
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; the offset map already holds it, the column does not. */
   private ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts }: { lines: string[]; cuts: Map<number, OwnershipCut[]> }): void {
+  applyOwnership({ lines, cuts, refusedPlus }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number> }): void {
+    for (const index of refusedPlus ?? []) this.refusedQuotePlus.add(index)
     if (!cuts.size) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
     for (const [index, lineCuts] of cuts) {
@@ -469,6 +472,7 @@ export class Lexer {
     this.consumedContinuationLines = inherited?.consumedContinuationLines ?? new Set()
     this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
     this.firstBlockQuoteColumns = inherited?.firstBlockQuoteColumns ?? new Map()
+    this.refusedQuotePlus = inherited?.refusedQuotePlus ?? new Set()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()

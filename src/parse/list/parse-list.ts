@@ -381,8 +381,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const stackedOwnedFollower = nestedContentOffset >= 0 && !isStackedFirstBlockQuoteMarker(itemSource) &&
       firstBlockSource !== undefined &&
       indentColumns(firstBlockSource) === sourceColumnAt(itemSource, nestedContentOffset)
+    // The walk refused this line's quote `+` by its follower's raw column (CARVE-P9-067).
+    const refusedQuotePlus = lexer.refusedQuotePlus.has(lexer.lineNumber(itemStartLineIndex) - 1)
     if (lexer.peek() !== undefined && (firstBlockEligible || stackedOwnedFollower) && (stackedMarker ||
-        isStackedFirstBlockQuoteMarker(itemSource)) &&
+        isStackedFirstBlockQuoteMarker(itemSource) && !refusedQuotePlus) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, firstBlockColumn, itemQuoteDepth, isItemAttachBoundary)
     }
