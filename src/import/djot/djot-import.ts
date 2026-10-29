@@ -1949,10 +1949,18 @@ function normalizeDjotAttributeLines(source: string): string {
   return parts.join('')
 }
 
+// A run after nothing but markers opens a Djot code block unless its line continues a paragraph.
+function opensDjotCodeBlock(source: string, at: number): boolean {
+  const lineStart = source.lastIndexOf('\n', at - 1) + 1
+  if (!/^(?:[ \t]*(?:>|[-*+](?: \[[ xX]\])?|[0-9]+[.)])(?:[ \t]+|$))*[ \t]*$/.test(source.slice(lineStart, at))) return false
+  const previous = lineStart === 0 ? '' : source.slice(source.lastIndexOf('\n', lineStart - 2) + 1, lineStart - 1).replace(/^(?:[ \t]*>)*/, '').trim()
+  return previous === '' || previous.endsWith('|')
+}
+
 function normalizeDjotParagraphFences(source: string): string {
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
   const mask = maskDjotOpaque(maskDjotFences(source, undefined, rows, true), false, { code: false })
-  if (!mask.includes('```')) return source
+  if (!mask.includes('```') && !mask.includes('~~~')) return source
   const runs = new Map<number, { width: number; end: number }>()
   const next = new Map<number, number>()
   const matches = [...mask.matchAll(/`+/g)]
@@ -1999,16 +2007,30 @@ function normalizeDjotParagraphFences(source: string): string {
       const closed = run.end < (breaks[boundary] ?? source.length)
       const rawPayload = source.slice(i + run.width, end)
       const payload = !closed && end === source.length ? rawPayload.replace(/\n[ \t]*(?:>[ \t]*)*$/, '') : rawPayload
-      if (run.width >= 3 && lineHeads.has(i)) {
+      const depth = djotPrefixQuoteDepth(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))
+      const valueLines = payload.split('\n').map((value, n) => (n === 0 ? value : trimStartNonNbsp(stripDjotQuotePrefixes(value, depth))))
+      // A value line that is a fence run opens a fence in Carve (carve#4018), so the span goes out as raw HTML on one line.
+      if (closed && valueLines.slice(1).some(value => /^(?:`{3,}|~{3,})/.test(value)) && !(run.width >= 3 && opensDjotCodeBlock(source, i))) {
+        output.push(
+          source.slice(copied, i),
+          '`<code>' + valueLines.join('\n').replace(/[!-\/:-@\[-`{-~]|\n/g, (ch) => `&#${ch.charCodeAt(0)};`) + '</code>`{=html}',
+        )
+        copied = end + run.width
+      // A closer of three or more that starts its line would open a fence (carve#4018); an empty comment after it keeps it a closer.
+      } else if (run.width >= 3 && lineHeads.has(i)) {
         let width = 1
         const widths = new Set([...payload.matchAll(/`+/g)].map((match) => match[0].length))
         while (widths.has(width)) width++
         const ticks = '`'.repeat(width)
+        const closerGuard = width >= 3 && /\n[ \t]*(?:>[ \t]*)*$/.test(payload) ? '{%%}' : ''
         output.push(
           source.slice(copied, i),
-          payload === '' ? '`<code></code>`{=html}' : (width >= 3 ? '{%%}' : '') + ticks + payload + ticks,
+          payload === '' ? '`<code></code>`{=html}' : (width >= 3 ? '{%%}' : '') + ticks + payload + ticks + closerGuard,
         )
         copied = end + (closed ? run.width : 0)
+      } else if (run.width >= 3 && closed && /\n[ \t]*(?:>[ \t]*)*$/.test(payload) && !opensDjotCodeBlock(source, i)) {
+        output.push(source.slice(copied, end + run.width), '{%%}')
+        copied = end + run.width
       }
       i = end + (closed ? run.width : 0)
       continue
@@ -3146,7 +3168,11 @@ function emitDjotTableCodeSpan(state: DjotTableCodeState, current: DjotTableCode
     state.cursor = escape
   }
   const pad = payload.startsWith('`') || payload.endsWith('`') ? ' ' : ''
-  output.push(source.slice(state.cursor, i), fence + pad + payload + pad + fence + (rawCode ? '{=html}' : ''))
+  // A run of three or more that starts its line opens a fence (carve#4018); an empty comment keeps it inline.
+  const wide = fenceWidth >= 3 && !rawCode
+  const openGuard = wide && i === state.offset + at ? '{%%}' : ''
+  const closeGuard = wide && /\n[ \t]*$/.test(pad + payload) ? '{%%}' : ''
+  output.push(source.slice(state.cursor, i), openGuard + fence + pad + payload + pad + fence + closeGuard + (rawCode ? '{=html}' : ''))
   state.cursor = codeEnd
   state.consumed = state.cursor
   if (separate && !closed) output.push('\n' + '> '.repeat(separateDepth).trimEnd())

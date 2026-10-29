@@ -1,35 +1,41 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it('keeps a below-column payload line before a closer in the description', () => {
+it('ends a description fence at a below-column payload line', () => {
   expect(carveToHtml(':: m\n: l\n     ```\ne\n     ```\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>l
-<code>
-e
-</code></dd>
-</dl>`)
+  <dd>
+    <p>l</p>
+    <pre><code></code></pre>
+  </dd>
+</dl>
+<p>e</p>
+<pre><code></code></pre>`)
 })
 
-it('keeps a below-column fence run as payload until an eligible closer', () => {
+it('ends a description fence at a below-column fence run, which opens its own fence', () => {
   expect(carveToHtml(':: m\n: l\n     ```\n```\n     ```\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>l
-<code>
-</code>
-<code></code></dd>
-</dl>`)
+  <dd>
+    <p>l</p>
+    <pre><code></code></pre>
+  </dd>
+</dl>
+<pre><code>     \`\`\`
+</code></pre>`)
 })
 
-it('keeps payload in a fence one column past the body', () => {
+it('ends a fence one column past the body at a below-column line', () => {
   expect(carveToHtml(':: t\n: a\n   ```\n   b\n y\n   ```\n')).toBe(`<dl>
   <dt>t</dt>
-  <dd>a
-<code>
-b
-y
-</code></dd>
-</dl>`)
+  <dd>
+    <p>a</p>
+    <pre><code>b
+</code></pre>
+  </dd>
+</dl>
+<p>y</p>
+<pre><code></code></pre>`)
 })
 
 it('leaves a below-column line outside an unclosed authored fence', () => {
@@ -51,15 +57,17 @@ it('leaves a below-column line outside a fence opened after a blank', () => {
     <pre><code></code></pre>
   </dd>
 </dl>
-<p>e
-<code></code></p>`)
+<p>e</p>
+<pre><code></code></pre>`)
 })
 
 it('lets a below-column block opener end the description fence', () => {
   expect(carveToHtml(':: m\n: l\n     ```\n# h\n     ```\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>l
-<code></code></dd>
+  <dd>
+    <p>l</p>
+    <pre><code></code></pre>
+  </dd>
 </dl>
 <section id="h">
   <h1>h</h1>
@@ -67,18 +75,20 @@ it('lets a below-column block opener end the description fence', () => {
 </section>`)
 })
 
-it('keeps the authored fence extent inside a list item', () => {
+it('ends a description fence inside a list item at a below-column line', () => {
   expect(carveToHtml('- x\n  :: m\n  : l\n     ```\ne\n     ```\n')).toBe(`<ul>
   <li>x
     <dl>
       <dt>m</dt>
-      <dd>l
-<code>
-e
-</code></dd>
+      <dd>
+        <p>l</p>
+        <pre><code></code></pre>
+      </dd>
     </dl>
   </li>
-</ul>`)
+</ul>
+<p>e</p>
+<pre><code></code></pre>`)
 })
 
 it('ends a fence at the description body column before a below-column line', () => {
@@ -90,8 +100,8 @@ it('ends a fence at the description body column before a below-column line', () 
 </code></pre>
   </dd>
 </dl>
-<p>y
-<code></code></p>`)
+<p>y</p>
+<pre><code></code></pre>`)
 })
 
 it('ends an over-indented item fence at a below-column line', () => {
@@ -101,6 +111,6 @@ it('ends an over-indented item fence at a below-column line', () => {
 </code></pre>
   </li>
 </ul>
-<p>y
-<code></code></p>`)
+<p>y</p>
+<pre><code></code></pre>`)
 })

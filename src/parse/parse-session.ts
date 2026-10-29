@@ -27,7 +27,6 @@ import type {
   PendingAttrCarry,
   QuoteDescent,
   QuoteLazyHint,
-  QuotedFenceCloserMemo,
   StrippedLineOrigin,
   Table,
   TableBlockHost,
@@ -137,7 +136,6 @@ import {
   quoteBodyColumn,
   quotePrefixDepth,
   quotedCommentHasCloser,
-  quotedFenceHasCloser,
   quotedLineText,
   readCaptionText,
   recordPromotedImageBlockRun,
@@ -165,6 +163,7 @@ import {
   unescapeAttrValue,
   unorderedMatch,
   utf8ByteLength,
+  opensCodeFence,
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
@@ -183,7 +182,6 @@ interface QuoteCollect {
   origins: Map<number, StrippedLineOrigin>
   innerLineNumbers: number[]
   state: BlockQuoteLazyState
-  fenceCloserMemo: QuotedFenceCloserMemo | undefined
   // Quoted lines not yet fed to the tracker. `state` is read only when an
   // unmarked line asks whether the paragraph is still open (or a `+` closes
   // it), so tracking waits until then. The tracker descends every nested
@@ -192,6 +190,7 @@ interface QuoteCollect {
   untracked: Array<[content: string, lineIndex: number]>
   given: QuoteLazyHint | null
   descent: QuoteDescent
+  payloadMisses?: Map<string, { from: number; maxRun: number }>
   // The state this quote hands its own nested quote; see `QuoteLazyHint`.
   handDown: QuoteLazyHint | null
   trackedBefore: boolean
@@ -1405,7 +1404,6 @@ export class ParseSession extends InlineParseSession {
         colonWidths: [],
         attrRun: null,
       },
-      fenceCloserMemo: undefined,
       untracked: [],
       given,
       descent: { levels: 0, askedBelowTop: false },
@@ -1425,6 +1423,27 @@ export class ParseSession extends InlineParseSession {
     }
   }
 
+  // A line-block payload run pairs with a later quoted run at any indent;
+  // a failed search refutes every later opener of that character and width.
+  private quotePayloadCloser(q: QuoteCollect, marker: string, lineIndex: number): boolean {
+    const { lexer } = q
+    const char = marker[0]!
+    const miss = (q.payloadMisses ??= new Map()).get(char)
+    if (miss !== undefined && lineIndex >= miss.from && marker.length > miss.maxRun) return false
+    const close = fenceCloseRe(marker)
+    let maxRun = 0
+    for (let i = lineIndex + 1; i < lexer.lineCount; i++) {
+      const line = lexer.lineAt(i)!
+      if (!/^[ \t]*>/.test(line)) break
+      const text = line.replace(/^(?:[ \t]*>)+/, '').replace(/^[ \t]+/, '')
+      if (close.test(text)) return true
+      const run = /^(`{3,}|~{3,})[ \t]*$/.exec(text)?.[1]
+      if (run !== undefined && run[0] === char) maxRun = Math.max(maxRun, run.length)
+    }
+    q.payloadMisses.set(char, { from: lineIndex, maxRun })
+    return false
+  }
+
   private trackQuoteLine(q: QuoteCollect, content: string, lineIndex: number): void {
     const { lexer, state, descent } = q
     q.paragraphOpen = undefined
@@ -1432,13 +1451,12 @@ export class ParseSession extends InlineParseSession {
       content,
       state,
       (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-      (marker, depth, column) =>
-        !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
-        quotedFenceHasCloser(lexer, marker, lineIndex, q.fenceCloserMemo ??= new Map(), depth, column),
+      !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
       descent,
       this.markerPrefixMemo(lexer, lineIndex),
       !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
       (fence, depth, floor) => literalCommentHasCloser(lexer, fence, lineIndex, depth, floor),
+      marker => this.quotePayloadCloser(q, marker, lineIndex),
     )
     // Reuse the handed-down state only while lazy text leaves it unchanged.
     if (!descent.preserved && q.handDown && state.mode.kind === 'quote' && state.mode.inner === q.handDown.state) q.handDown = null
@@ -1489,14 +1507,8 @@ export class ParseSession extends InlineParseSession {
         if (run && run[1]![0] === q.innerOpenFence && /^(`{3,}|~{3,})[ \t]*$/.test(line)) q.innerOpenFence = null
         continue
       }
-      // A fence interrupts an open paragraph only with a closer ahead; otherwise it is text.
-      const closes = (k: number): boolean => {
-        const closer = /^(`{3,}|~{3,})[ \t]*$/.exec(inner[k]!.trimStart())
-        return closer !== null && closer[1]![0] === run![1]![0] && closer[1]!.length >= run![1]!.length
-      }
-      let closed = false
-      if (run && q.innerParagraphOpen) for (let k = q.paragraphScan + 1; k < until && !closed; k++) closed = closes(k)
-      if (run && (!q.innerParagraphOpen || closed)) {
+      // A valid fence opener interrupts an open paragraph whether or not it closes.
+      if (run && (!q.innerParagraphOpen || opensCodeFence(line))) {
         q.innerOpenFence = run[1]![0]!
         q.innerParagraphOpen = false
         continue
@@ -2436,8 +2448,8 @@ export class ParseSession extends InlineParseSession {
       // an open paragraph with no blank line before it, at the top level AND
       // nested — the Markdown-like rule. Invisible constructs (reference
       // definitions, comments) interrupt too. A bare image does not interrupt,
-      // an ordered marker interrupts only as `1.`/`1)`, and a fence/`:::` only
-      // when it has a matching closer ahead. See startsInterruptingBlock.
+      // and an ordered marker interrupts only as `1.`/`1)`. See
+      // startsInterruptingBlock.
       //
       // Only a paragraph that already holds a line can be interrupted: the FIRST
       // line is always consumed. In normal dispatch the first line reaching

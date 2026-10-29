@@ -13,11 +13,11 @@ describe('a closed child fence before an outer fence', () => {
     expect(html).toContain('<li>next</li>')
   })
 
-  it('preserves the folded child run with a dedented closer', () => {
+  it('ends the child fence at a dedented run, which opens a document fence', () => {
     const source = '- outer\n  - head\n    ```\n    a\n```\n\n  tail\n'
     const html = renderHtml(parse(source))
-    expect(html).toContain('<li><p>outer</p>')
-    expect(html).toContain('<code>\na\n</code>')
-    expect(html).toContain('<p>tail</p>')
+    expect(html).toContain('<li>outer')
+    expect(html).toContain('<pre><code>a\n</code></pre>')
+    expect(html).toContain('</ul>\n<pre><code>\n  tail\n</code></pre>')
   })
 })

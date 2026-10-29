@@ -2,14 +2,13 @@ import type { ItemLazyState, ItemLineFacts, BlockQuoteLazyState } from '../../pa
 import { isBlankLine, sliceColumns } from '../parse-lexer.js'
 import type { listStateHelpers } from '../../parse.js'
 
-export type FenceCloser = (marker: string, extraColumns?: number) => boolean
 export type CommentCloser = (fence: number) => boolean
 export type LiteralCommentCloser = (width: number, extraColumns?: number) => boolean
 
 /**
  * One line on its way through the tracker's phases.
  *
- * `content`, `facts` and `hasFenceCloser` are rebased in place by the phases
+ * `content` and `facts` are rebased in place by the phases
  * that move the line into an authored container's coordinates; every later
  * phase reads the rebased values. The `was*` fields are what the previous line
  * left behind, captured before this line resets them.
@@ -17,7 +16,6 @@ export type LiteralCommentCloser = (width: number, extraColumns?: number) => boo
 export interface LazyLine {
   content: string
   readonly state: ItemLazyState
-  hasFenceCloser: FenceCloser
   readonly atContentColumn: boolean
   readonly hasCommentCloser: CommentCloser
   facts: ItemLineFacts | undefined
@@ -27,8 +25,6 @@ export interface LazyLine {
   readonly authoredQuoteParagraphOpen: boolean
   readonly wasDescendantColumn: boolean
   readonly wasAbsorbing: boolean
-  readonly wasInlineFence: boolean
-  readonly wasInlineFenceBlock: boolean
   readonly wasClosedColon: boolean
   readonly wasClosedLiteralComment: boolean
   readonly wasInTable: boolean
@@ -49,7 +45,6 @@ export type LazyPhase = (line: LazyLine) => boolean
 export type TrackItemLazyState = (
   content: string,
   state: ItemLazyState,
-  hasFenceCloser?: FenceCloser,
   atContentColumn?: boolean,
   hasCommentCloser?: CommentCloser,
   facts?: ItemLineFacts,
@@ -144,6 +139,14 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       state.inTable = isTableRow(content.slice(run))
       return true
     }
+    // A fence opener at the description's column opens there, whether or not it closes.
+    const opener = run === undefined ? null : RE_FENCE.exec(content.slice(run)) ?? RE_RAW_FENCE.exec(content.slice(run))
+    if (opener && state.descriptionColumn !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
+      const marker = RE_FENCE.test(content.slice(run!)) ? opener[2]! : opener[1]!
+      state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: runColumns }
+      state.deepest = null
+      return endsOnBlock(state)
+    }
     if (!state.descriptionHasTerm || state.descriptionColumn === undefined ||
         run === undefined || runColumns === undefined || runColumns < state.descriptionColumn) return false
     const text = content.slice(run)
@@ -174,8 +177,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
           colonFenceOpenerLen(content.slice(run)) !== null))) line.readFlush = true
       else if (!state.ownedAuthored && (facts?.descendantFrames === true || line.authoredFenceColumns !== undefined)) line.readDescendant = true
     }
-    if (state.ownedColumn < 0 && line.atContentColumn && run > 0 &&
-        (state.unclosedFenceBase === undefined || runColumns === state.unclosedFenceBase)) {
+    if (state.ownedColumn < 0 && line.atContentColumn && run > 0) {
       state.ownedColumn = runColumns
       state.ownedAuthored = true
       line.readFlush = true
@@ -230,25 +232,21 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
   // are read there exactly as they are here, rather than enumerated. An
   // enumeration of block kinds is how the three engines drifted apart.
   function descendantFrame(line: LazyLine): boolean {
-    const { content, state, facts, hasFenceCloser } = line
+    const { content, state, facts } = line
     if (!line.readDescendant || state.inDefList !== false) return false
     const run = line.run!
     // A footnote body is measured from the note's column, so its continuation keeps that offset.
     const dedented = state.deepest?.inFootnoteBody === true
       ? sliceColumns(content, state.ownedColumn, true)
       : content.slice(run)
-    const inlineFence = RE_FENCE.exec(dedented)
-    const inlineMarker = inlineFence?.[2] ?? RE_RAW_FENCE.exec(dedented)?.[1]
     const inner = (state.deepest ??= {
       ...verbatimOnlyLazyState(),
-      lazyFoldable: state.lazyFoldable && inlineMarker !== undefined && !hasFenceCloser(inlineMarker, run),
       // The marker line's quote is the sub-item's first block, so its next line continues it.
       quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
     })
     trackItemLazyState(
       dedented,
       inner,
-      (marker, extra = 0) => hasFenceCloser(marker, extra + run),
       true,
       // NO COMMENT SPAN OPENS IN THE FRAME. The callers that can look ahead ask
       // at THIS container's column, and a `%%%` run at the descendant's is a
@@ -287,7 +285,6 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       (state.authoredColon !== undefined && runColumns > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run)))
     if (!containerHolds || state.inDefList !== false || state.unrebasedColonBody) return false
     return wasQuote === null || !blockQuoteParagraphOpen(wasQuote) ||
-      (state.unclosedFenceBase !== undefined && runColumns === state.unclosedFenceBase) ||
       (state.descriptionHasTerm === true && state.ownedAuthored && runColumns === state.ownedColumn)
   }
 
@@ -298,7 +295,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const overIndented = line.content.slice(line.run!)
     if (authoredFlushFence(line, overIndented)) return true
     const colon = colonFenceOpenerLen(overIndented)
-    if (colon !== null && !line.wasInlineFence && !line.wasAbsorbing && !line.wasClosedColon) {
+    if (colon !== null && !line.wasAbsorbing && !line.wasClosedColon) {
       state.divDepth++
       if (RE_LINE_BLOCK_OPEN.test(overIndented)) state.literalColon = { width: colon, column: line.run! }
       else state.authoredColon = { width: colon, column: line.run!, depth: state.divDepth }
@@ -329,7 +326,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
   }
 
   function authoredFlushFence(line: LazyLine, overIndented: string): boolean {
-    const { state, hasFenceCloser } = line
+    const { state } = line
     const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
     if (!inlineCode) return false
     const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
@@ -340,12 +337,6 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       return endsOnBlock(state)
     }
     if (!state.lazyFoldable) return false
-    if (!hasFenceCloser(marker, column) && !hasFenceCloser(marker, 0)) {
-      state.inlineFenceParagraph = true
-      state.unclosedFenceBase ??= line.runColumns!
-      state.inDefList = false
-      return true
-    }
     if ((line.facts?.descendantFrames === true || line.authoredFenceColumns !== undefined) && !line.wasDescendantColumn) {
       state.opaque = { kind: 'code', close: fenceCloseRe(marker), column }
       return endsOnBlock(state)

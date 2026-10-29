@@ -47,8 +47,8 @@ describe('a block at a container content column ends the paragraph', () => {
       .toMatch(/<\/blockquote>\n<p>after<\/p>$/)
   })
 
-  it('keeps an unclosed fence below the sublist column inline', () => {
-    expect(html('- a\n    - child\n    ```\n    code\nafter\n')).not.toContain('<p>after</p>')
+  it('ends an unclosed fence below the sublist column at a flush-left line', () => {
+    expect(html('- a\n    - child\n    ```\n    code\nafter\n')).toMatch(/<pre><code>code\n<\/code><\/pre>\n  <\/li>\n<\/ul>\n<p>after<\/p>$/)
   })
 
   it('continues the outer item after a paragraph follows the closed fence', () => {

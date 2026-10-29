@@ -2,7 +2,7 @@
   {
     "id": "row-1",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n   - li\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n- li\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n- li</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-2",
@@ -32,7 +32,7 @@
   {
     "id": "row-7",
     "source": "[r][] [^p] [^c] [^d]\n\n:: t\n: ::: note\n  para\n- li\n```\nx\n",
-    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n- li\n<code>\nx</code></p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<p>[r][] [^p] [^c] [^d]</p>\n<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n- li</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "row-8",
@@ -47,7 +47,7 @@
   {
     "id": "row-10",
     "source": ":: t\n: ::: note\n  para\n~~~\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n~~~</p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code></code></pre>"
   },
   {
     "id": "row-11",
@@ -57,6 +57,6 @@
   {
     "id": "row-12",
     "source": ":: t\n: ::: note\n  para\n```\n:::\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n<code></code></p>\n    </aside>\n  </dd>\n</dl>\n<div>\n\n</div>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code>:::\n</code></pre>"
   }
 ]

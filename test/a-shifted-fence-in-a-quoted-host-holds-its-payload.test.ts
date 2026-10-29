@@ -26,7 +26,7 @@ describe('corpus 519: a shifted fence in a quoted item stores no continuation cl
 
   it('a flush line between two payload lines ends the quote there', () => {
     expect(carveToHtml('> - a\n>\n>     ~~~\n>     x\nz\n>     b\n>     ~~~\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>z</p>\n<blockquote><p>b\n~~~</p></blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>z</p>\n<blockquote>\n  <p>b</p>\n  <pre><code></code></pre>\n</blockquote>',
     )
   })
 
@@ -36,13 +36,11 @@ describe('corpus 519: a shifted fence in a quoted item stores no continuation cl
     )
   })
 
-  // The fourth document of the family, and the control: with no blank line the
-  // fence is mid-paragraph with no closer, so it is inline verbatim and the flush
-  // line continues that paragraph. This one always agreed, and the fix must not
-  // move it.
-  it('leaves a mid-paragraph shifted fence as inline verbatim', () => {
+  // The fourth document of the family: with no blank line the fence interrupts the
+  // paragraph (carve#4018), so the flush line is the document's here too.
+  it('lets a mid-paragraph shifted fence interrupt the paragraph', () => {
     expect(carveToHtml('> - a\n>     ```\n>     x\nflush\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n<code>\nx\nflush</code></li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>',
     )
   })
 })

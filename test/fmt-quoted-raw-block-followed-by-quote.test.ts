@@ -2,8 +2,8 @@ import { expect, it } from 'vitest'
 import { carveToCarve, carveToHtml } from '../src/index.js'
 
 it.each([
-  ['open fence, normal quote', '\n  > y\n  > ```\n', '\n> y\n> ``\n'],
-  ['open fence, indented quote', '\n    > y\n  > ```\n', '\n> y\n> ``\n'],
+  ['open fence, normal quote', '\n  > y\n  > ```\n', '\n> y\n>\n> ```\n> ```\n'],
+  ['open fence, indented quote', '\n    > y\n  > ```\n', '\n> y\n>\n> ```\n> ```\n'],
   ['closed fence, normal quote', '  > ```\n\n  > y\n', '\n> y\n'],
   ['closed fence, indented quote', '  > ```\n\n    > y\n', '\n> y\n'],
 ])('writes the second quote behind a continuation marker after a raw fence: %s', (_case, sourceTail, expectedTail) => {

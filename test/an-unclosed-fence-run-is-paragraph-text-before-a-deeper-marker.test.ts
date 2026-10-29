@@ -5,27 +5,27 @@ const cases = [
   {
     "name": "bullet item",
     "source": "- a\n  w2\n   ```\n    - w3\n",
-    "html": "<ul><li>a\nw2\n<code></code><ul><li>w3</li></ul></li></ul>"
+    "html": "<ul><li>a\nw2\n    <pre><code> - w3\n</code></pre></li></ul>"
   },
   {
     "name": "ordered item",
     "source": "1. a\n   w2\n    ```\n     1. w3\n",
-    "html": "<ol><li>a\nw2\n<code></code><ol><li>w3</li></ol></li></ol>"
+    "html": "<ol><li>a\nw2\n    <pre><code> 1. w3\n</code></pre></li></ol>"
   },
   {
     "name": "tilde run",
     "source": "- a\n  w2\n   ~~~\n    - w3\n",
-    "html": "<ul><li>a\nw2\n~~~\n    <ul><li>w3</li></ul></li></ul>"
+    "html": "<ul><li>a\nw2\n    <pre><code> - w3\n</code></pre></li></ul>"
   },
   {
     "name": "quoted item",
     "source": "> - a\n>   w2\n>    ```\n>     - w3\n",
-    "html": "<blockquote><ul><li>a\nw2\n<code></code><ul><li>w3</li></ul></li></ul></blockquote>"
+    "html": "<blockquote><ul><li>a\nw2\n      <pre><code> - w3\n</code></pre></li></ul></blockquote>"
   },
   {
     "name": "same-column marker",
     "source": "- a\n   ```\n   - w3\n",
-    "html": "<ul><li>a\n<code></code><ul><li>w3</li></ul></li></ul>"
+    "html": "<ul><li>a\n    <pre><code>- w3\n</code></pre></li></ul>"
   },
   {
     "name": "plain text",
@@ -40,22 +40,22 @@ const cases = [
   {
     "name": "quote successor",
     "source": "- a\n  w2\n   ```\n    > w3\n",
-    "html": "<ul><li>a\nw2\n<code></code><blockquote><p>w3</p></blockquote></li></ul>"
+    "html": "<ul><li>a\nw2\n    <pre><code> &gt; w3\n</code></pre></li></ul>"
   },
   {
     "name": "heading successor",
     "source": "- a\n  w2\n   ```\n    # w3\n",
-    "html": "<ul><li>a\nw2\n<code></code><h1 id=\"w3\">w3</h1></li></ul>"
+    "html": "<ul><li>a\nw2\n    <pre><code> # w3\n</code></pre></li></ul>"
   },
   {
     "name": "content-column marker",
     "source": "- a\n  w2\n   ```\n  - w3\n",
-    "html": "<ul><li>a\nw2\n<code></code><ul><li>w3</li></ul></li></ul>"
+    "html": "<ul><li>a\nw2\n    <pre><code>- w3\n</code></pre></li></ul>"
   },
   {
-    "name": "definition description keeps its inline code (review-47)",
+    "name": "definition description ends at the fence opener (review-47)",
     "source": "  - :: term\n    : payload\n      ```\n     :  p2\n       ~~~\n      - sub\n",
-    "html": "<ul><li><dl><dt>term</dt><dd>payload\n<code>\n:  p2\n~~~\n- sub</code></dd></dl></li></ul>"
+    "html": "<ul><li><dl><dt>term</dt><dd><p>payload</p><pre><code></code></pre></dd><dd>p2</dd></dl><pre><code>- sub\n</code></pre></li></ul>"
   }
 ]
 

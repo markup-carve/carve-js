@@ -64,9 +64,9 @@ describe('an attached fence keeps its caption', () => {
 })
 
 describe('a lazily folded fence line leaves the outer list loose', () => {
-  it.each(['```', '~~~'])('%s', fence => {
+  it.each(['```', '~~~'])('%s opens a fence, so its blank leaves the list tight', fence => {
     const src = `- - text\n  ${fence}\n  x\n\n  cap\n- c\n`
-    expect(carveToHtml(src)).toContain('    <p>cap</p>\n  </li>\n  <li><p>c</p></li>')
+    expect(carveToHtml(src)).toContain('<pre><code>x\n\ncap\n</code></pre>\n  </li>\n  <li>c</li>')
   })
 
   it('a block image control remains loose', () => {

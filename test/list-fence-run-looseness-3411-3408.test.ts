@@ -3,12 +3,12 @@ import { parse, carveToHtml } from '../src/index.js'
 
 const cases = [
   ['3411 outer closer', '- o\n  - h\n  ```\n  ```\n  ~~~\n\n  t\n', true],
-  ['3408 lazy text', '- o\n  ```\nx\n\n  t\n', false],
-  ['3408 column zero', '- o\n```\nx\n\n  t\n', false],
-  ['641 lazy line', '- o\n  ```\nx\n\n  t\n', false],
-  ['641 outer closer', '- h\n  ```\n\n  b\n```\n', false],
-  ['ordered marker', '1. o\n   - h\n   ```\n\n   t\n', false],
-  ['quote wrapper', '> - o\n>   - h\n>   ```\n>\n>   t\n', false],
+  ['3408 lazy text', '- o\n  ```\nx\n\n  t\n', true],
+  ['3408 column zero', '- o\n```\nx\n\n  t\n', true],
+  ['641 lazy line', '- o\n  ```\nx\n\n  t\n', true],
+  ['641 outer closer', '- h\n  ```\n\n  b\n```\n', true],
+  ['ordered marker', '1. o\n   - h\n   ```\n\n   t\n', true],
+  ['quote wrapper', '> - o\n>   - h\n>   ```\n>\n>   t\n', true],
   ['longer outer closer', '- o\n  - h\n  ```\n  ````\n  ~~~\n\n  t\n', true],
   ['head1 child and outer', '- o\n  - head1\n    ````\n  ```\n  ````\n\n  t\n', false],
   ['payload between runs', '- o\n  - h\n  ```\n  payload\n  ```\n  ~~~\n\n  t\n', true],
@@ -16,7 +16,7 @@ const cases = [
   ['outer sibling', '- o\n  - h\n  ```\n  ```\n  ~~~\n\n  t\n- next\n', true],
   ['backtick after tilde', '- o\n  - h\n  ~~~\n  ~~~\n  ```\n\n  t\n', true],
   ['info string', '- o\n  - h\n  ```js\n  ```\n  ~~~\n\n  t\n', true],
-  ['more lazy text', '- o\n  ```\nx\ny\n\n  t\n', false],
+  ['more lazy text', '- o\n  ```\nx\ny\n\n  t\n', true],
   ['intervening same-character pair', '- o\n  - h\n  ```\n  ```\n  ```\n  ```\n\n  t\n', false],
 ] as const
 
@@ -36,7 +36,7 @@ describe('list fence run looseness', () => {
         expect(html).toContain('<pre><code></code></pre>')
         expect(html).toContain('<pre><code>\nt\n</code></pre>')
       } else if (name === '3408 lazy text') {
-        expect(html).toContain('<code>\nx</code>')
+        expect(html).toContain('<p>x</p>')
         expect(html).toContain('<p>t</p>')
       }
     })

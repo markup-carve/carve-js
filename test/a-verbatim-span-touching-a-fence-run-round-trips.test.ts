@@ -43,7 +43,7 @@ describe('a verbatim span touching a fence run round-trips', () => {
   describe('a code fence whose payload holds a wider run', () => {
     it('round-trips with a three-backtick fence over a four-backtick run', () => {
       const out = invariant('```\n````\nx\n````\n```\n')
-      expect(out.endsWith('x\n`\n```\n')).toBe(true)
+      expect(out.endsWith('x\n\n````\n```\n````\n')).toBe(true)
       expect(out).not.toContain('``` ````')
     })
 
@@ -73,11 +73,11 @@ describe('a verbatim span touching a fence run round-trips', () => {
       return inlines.find((node) => node.type === 'code')?.value
     }
 
-    it('is a code span opening with a newline and ending in a backtick run', () => {
-      expect(lastCode('x\n````\n```\n')).toBe('\n```')
+    it('is no code span once the run line opens a fence (carve#4018)', () => {
+      expect(lastCode('x\n````\n```\n')).toBeUndefined()
     })
 
-    it('is written back as itself for runs of three, four and five', () => {
+    it('is refused for runs of three, four and five, since every spelling opens a fence', () => {
       for (const run of ['```', '````', '`````']) {
         const value = `\n${run}`
         const doc = {
@@ -93,8 +93,7 @@ describe('a verbatim span touching a fence run round-trips', () => {
             },
           ],
         }
-        const src = renderCarve(doc)
-        expect(lastCode(src)).toBe(value)
+        expect(() => renderCarve(doc)).toThrow(/cannot spell code/)
       }
     })
   })
@@ -104,13 +103,11 @@ describe('a verbatim span touching a fence run round-trips', () => {
      * The form is offered only where it cannot mean something else. These pin
      * the guards, so a later widening has to move a test rather than a comment.
      */
-    it('uses a short opener at the start of a block to avoid a block fence', () => {
-      const out = renderCarve({
+    it('refuses the value at the start of a block, where every spelling opens a fence', () => {
+      expect(() => renderCarve({
         type: 'document',
         children: [{ type: 'paragraph', children: [{ type: 'code', value: '\n```' }] }],
-      })
-      expect(out).toBe('`\n```\n')
-      expect(requireParagraph(parse(out).children[0]).children).toMatchObject([{ type: 'code', value: '\n```' }])
+      })).toThrow(/cannot spell code/)
     })
 
     it('refuses a span whose attributes need a closing fence', () => {

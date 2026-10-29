@@ -19,12 +19,13 @@ describe('fenced code language tags with punctuation', () => {
   })
 
   it('still rejects a multiword info string (stays an inline code span)', () => {
+    // The bare closer line below is a valid opener of its own (carve#4018).
     const out = html('```js title="x"\ny\n```')
-    expect(out).not.toContain('<pre')
+    expect(out).toBe('<p><code>js title="x"\ny</code></p>\n<pre><code></code></pre>')
   })
 
   it('rejects an inline `{...}` after the language (use a preceding line)', () => {
-    expect(html('```php {.fancy}\ny\n```')).not.toContain('<pre')
+    expect(html('```php {.fancy}\ny\n```')).toBe('<p><code>php {.fancy}\ny</code></p>\n<pre><code></code></pre>')
   })
 
   it('accepts a bracketed [label] after the language; label is not in the class', () => {

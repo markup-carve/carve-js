@@ -22,7 +22,7 @@ describe('a refused continuation marker below an open verbatim fence', () => {
   })
 
   it('keeps the indented plus as text at depth two', () => {
-    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toContain('<p>+\n~~~\ny</p>')
+    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toContain('    <p>+</p>\n  </li>\n</ul>\n<pre><code>y\n</code></pre>')
   })
 
   const rows = [

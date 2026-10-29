@@ -183,7 +183,10 @@ describe('a fence holds only the lines its container still reaches', () => {
     // and `A` never expands.
     const source = '::: note\n> ```\n:::\ntext\n```\n\n*[A]: expansion\n\nA here\n'
 
-    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+    // Since carve#4018 the fence after `text` interrupts and swallows the rest.
+    expect(html(source)).toBe(
+      '<aside class="admonition note" aria-label="Note"> <blockquote> <pre><code></code></pre> </blockquote> </aside> <p>text</p> <pre><code> *[A]: expansion A here </code></pre>',
+    )
   })
 
   it('CONTROL: a delimiter dedented out of its own item, unchanged here', () => {
@@ -215,7 +218,9 @@ describe('a fence holds only the lines its container still reaches', () => {
     // the closer reads.
     const source = '> ::: note\n> - ```\n> :::\ntext\n```\n\n*[A]: expansion\n\nA here\n'
 
-    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+    expect(html(source)).toBe(
+      '<blockquote> <aside class="admonition note" aria-label="Note"> <ul> <li> <pre><code></code></pre> </li> </ul> </aside> </blockquote> <p>text</p> <pre><code> *[A]: expansion A here </code></pre>',
+    )
   })
 
   it('the quote is held by DEPTH, not by "is quoted at all"', () => {

@@ -30,23 +30,23 @@ describe('code-fence header and grouping label', () => {
 
   it('falls back to an inline span for a key="value" pair', () => {
     expect(carveToHtml('```js title="x"\ncode\n```')).toBe(
-      '<p><code>js title="x"\ncode\n</code></p>',
+      '<p><code>js title="x"\ncode</code></p>\n<pre><code></code></pre>',
     )
   })
 
   it('falls back when the header and label are in the wrong order', () => {
     expect(carveToHtml('```php [Composer] "x"\ncode\n```')).toBe(
-      '<p><code>php [Composer] "x"\ncode\n</code></p>',
+      '<p><code>php [Composer] "x"\ncode</code></p>\n<pre><code></code></pre>',
     )
   })
 
   it('falls back when metadata is glued to the language (no space)', () => {
-    expect(carveToHtml('```php"x"\ncode\n```')).toBe('<p><code>php"x"\ncode\n</code></p>')
+    expect(carveToHtml('```php"x"\ncode\n```')).toBe('<p><code>php"x"\ncode</code></p>\n<pre><code></code></pre>')
   })
 
   it('falls back when a label is glued to the header (no space)', () => {
     expect(carveToHtml('```php "x"[Install]\ncode\n```')).toBe(
-      '<p><code>php "x"[Install]\ncode\n</code></p>',
+      '<p><code>php "x"[Install]\ncode</code></p>\n<pre><code></code></pre>',
     )
   })
 

@@ -35,11 +35,10 @@ describe('a fence run that dedents out of a child keeps the outer item tight', (
     )
   })
 
-  // PART 9 §17 L1 / L1a (#3267): the folded run leaves tail as the outer
-  // item's blank-separated second paragraph, even with a sub-list between.
-  it('a run absorbed into the child paragraph leaves tail as a second paragraph, so the outer item is loose', () => {
+  // carve#4018: with no blank the fence still interrupts the child paragraph.
+  it('a run after a fence that interrupts the child paragraph keeps the outer item tight', () => {
     expect(carveToHtml('- outer\n  - head\n    ```\n    a\n   ```\n\n  tail\n')).toBe(
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>',
     )
   })
 

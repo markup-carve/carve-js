@@ -120,13 +120,10 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     )
   })
 
-  it('keeps a fence-looking line mid-paragraph as paragraph text and folds the lazy line', () => {
-    // The fence has no matching closer, so it does not interrupt the paragraph
-    // (§10 closer lookahead) and the lazy line still folds. The mid-paragraph
-    // ``` is then an unclosed inline verbatim run, rendering as a <code> span to
-    // the end of the block (matches djot upstream + carve-php).
+  it('lets a fence opener interrupt the paragraph, so the lazy line does not fold', () => {
+    // carve#4018: the unclosed fence ends with the quote; a fenced body takes no lazy line.
     expect(html('> text\n> ```\nlazy')).toBe(
-      '<blockquote><p>text\n<code>\nlazy</code></p></blockquote>',
+      '<blockquote>\n  <p>text</p>\n  <pre><code></code></pre>\n</blockquote>\n<p>lazy</p>',
     )
   })
 
@@ -176,10 +173,9 @@ describe('blockquote lazy list marker only folds into an OPEN paragraph', () => 
   })
 
   it('a lazy line spliced into a nested quote closes no fence', () => {
-    // `> ```` has no inner marker, so the inner fence has no closer and stays
-    // inline text; the lazy line and `y` continue its paragraph.
+    // `> ```` misses the inner marker, so it ends the inner fence and opens one in the outer quote.
     expect(html('> > a\n> > ```\n> ```\ny\n')).toBe(
-      '<blockquote>\n  <blockquote><p>a\n<code>\n</code>\ny</p></blockquote>\n</blockquote>',
+      '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code></code></pre>\n  </blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>y</p>',
     )
   })
 })

@@ -218,15 +218,19 @@
   {
     "id": "barrier-floor-27",
     "source": "> - a\n>     ```\n> - sibling\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n<code></code></li><li>sibling\n<code>\nafter</code></li></ul></blockquote>",
-    "codePayloads": []
+    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li><li>sibling\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>",
+    "codePayloads": [
+      "",
+      ""
+    ]
   },
   {
     "id": "barrier-floor-28",
     "source": "> - a\n>     ```\n> outside\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>outside\n<code>\nafter</code></p></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>outside</p><pre><code>after\n</code></pre></blockquote>",
     "codePayloads": [
-      ""
+      "",
+      "after\n"
     ]
   },
   {
@@ -1266,7 +1270,7 @@
     "source": "- a\n\t\t```\n\t ```\n\tcode\n\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1314,7 +1318,7 @@
     "source": "- a\n\t\t\t```\n\t ```\n\tcode\n\t\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1362,7 +1366,7 @@
     "source": "- a\n  \t\t\t```\n\t ```\n\tcode\n  \t\t\t```\nafter\n",
     "html": "<ul><li>a\n    <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1410,7 +1414,7 @@
     "source": "> - a\n> \t\t```\n> \t ```\n> \tcode\n> \t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1458,7 +1462,7 @@
     "source": "> - a\n> \t\t\t```\n> \t ```\n> \tcode\n> \t\t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1506,7 +1510,7 @@
     "source": "> - a\n>   \t\t\t```\n> \t ```\n> \tcode\n>   \t\t\t```\n> after\n",
     "html": "<blockquote><ul><li>a\n      <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1554,7 +1558,7 @@
     "source": "> > - a\n> > \t\t```\n> > \t ```\n> > \tcode\n> > \t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1602,7 +1606,7 @@
     "source": "> > - a\n> > \t\t\t```\n> > \t ```\n> > \tcode\n> > \t\t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -1650,7 +1654,7 @@
     "source": "> > - a\n> >   \t\t\t```\n> > \t ```\n> > \tcode\n> >   \t\t\t```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>&nbsp;```\ncode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
-      " ```\ncode\n"
+      "&nbsp;```\ncode\n"
     ]
   },
   {
@@ -2320,109 +2324,115 @@
   {
     "id": "tab-state-boundaries-0",
     "source": "- a\n  \t```\n  \tone\n      ```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n    <pre><code></code></pre></li></ul><p>after</p>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-1",
     "source": "- a\n  \t```\n  \tone\n  \t```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ul>",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    two\n    <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ul><p>after</p>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {
     "id": "tab-state-boundaries-2",
     "source": "1. a\n  \t```\n  \tone\n      ```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ol><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ol>",
+    "html": "<ol><li>a\n    <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n    four\n    <pre><code></code></pre></li></ol><p>after</p>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-3",
     "source": "1. a\n  \t```\n  \tone\n  \t```\n  \ttwo\n\t```\n        ~~~\n        three\n  \t~~~\n        four\n        ~~~\nafter\n",
-    "html": "<ol><li>a\n    <pre><code>one\n</code></pre>\n    two\n<code></code><pre><code>three\n</code></pre>\n    four\n~~~\nafter\n  </li></ol>",
+    "html": "<ol><li>a\n    <pre><code>one\n</code></pre>\n    two\n    <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ol><p>after</p>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {
     "id": "tab-state-boundaries-4",
     "source": "> - a\n>   \t```\n>   \tone\n>       ```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-5",
     "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ul></blockquote>",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      two\n      <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ul><p>after</p></blockquote>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {
     "id": "tab-state-boundaries-6",
     "source": "> 1. a\n>   \t```\n>   \tone\n>       ```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ol></blockquote>",
+    "html": "<blockquote><ol><li>a\n      <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n      four\n      <pre><code></code></pre></li></ol><p>after</p></blockquote>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-7",
     "source": "> 1. a\n>   \t```\n>   \tone\n>   \t```\n>   \ttwo\n> \t```\n>         ~~~\n>         three\n>   \t~~~\n>         four\n>         ~~~\n> after\n",
-    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre>\n      two\n<code></code><pre><code>three\n</code></pre>\n      four\n~~~\nafter\n    </li></ol></blockquote>",
+    "html": "<blockquote><ol><li>a\n      <pre><code>one\n</code></pre>\n      two\n      <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ol><p>after</p></blockquote>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {
     "id": "tab-state-boundaries-8",
     "source": "> > - a\n> >   \t```\n> >   \tone\n> >       ```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-9",
     "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ul></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        two\n        <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ul><p>after</p></blockquote></blockquote>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {
     "id": "tab-state-boundaries-10",
     "source": "> > 1. a\n> >   \t```\n> >   \tone\n> >       ```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ol></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n  ```\ntwo\n</code></pre><pre><code>three\n</code></pre>\n        four\n        <pre><code></code></pre></li></ol><p>after</p></blockquote></blockquote>",
     "codePayloads": [
       "one\n  ```\ntwo\n",
-      "three\n"
+      "three\n",
+      ""
     ]
   },
   {
     "id": "tab-state-boundaries-11",
     "source": "> > 1. a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   \ttwo\n> > \t```\n> >         ~~~\n> >         three\n> >   \t~~~\n> >         four\n> >         ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre>\n        two\n<code></code><pre><code>three\n</code></pre>\n        four\n~~~\nafter\n      </li></ol></blockquote></blockquote>",
+    "html": "<blockquote><blockquote><ol><li>a\n        <pre><code>one\n</code></pre>\n        two\n        <pre><code>    ~~~\n    three\n~~~\n    four\n    ~~~\n</code></pre></li></ol><p>after</p></blockquote></blockquote>",
     "codePayloads": [
       "one\n",
-      "three\n"
+      "    ~~~\n    three\n~~~\n    four\n    ~~~\n"
     ]
   },
   {

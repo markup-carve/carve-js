@@ -18,7 +18,7 @@ const cases: [string, string, string][] = [
   // (markup-carve/carve#2884). This is the executable spec's output.
   ["ctrl-list-item-host", "- - ```\n    ```\n```\n", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"],
   ["ctrl-plain-description-body", ":: t\n: ```\n```\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<pre><code>\n:: u\n</code></pre>"],
-  ["ctrl-raw-block-lead-body", ":: t\n: - =html\n```\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>=html\n<code></code></li>\n    </ul>\n  </dd>\n  <dt>u</dt>\n</dl>"],
+  ["ctrl-raw-block-lead-body", ":: t\n: - =html\n```\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>=html</li>\n    </ul>\n  </dd>\n</dl>\n<pre><code>\n:: u\n</code></pre>"],
   ["ctrl-term-bare-fence", ":: t\n```\n", "<dl>\n  <dt>t</dt>\n</dl>\n<pre><code></code></pre>"],
   ["ctrl-heading-below", ":: t\n: - ```\n    ```\n# h\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"],
   ["ctrl-quote-below", ":: t\n: - ```\n    ```\n> q\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<blockquote><p>q</p></blockquote>"],

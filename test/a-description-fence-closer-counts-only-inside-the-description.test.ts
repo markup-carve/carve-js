@@ -13,14 +13,16 @@ after
   <li>
     <dl>
       <dt>term</dt>
-      <dd>payload
-<code>
-code
-</code>
-after</dd>
+      <dd>
+        <p>payload</p>
+        <pre><code>code
+</code></pre>
+      </dd>
     </dl>
+    <pre><code></code></pre>
   </li>
-</ul>`)
+</ul>
+<p>after</p>`)
 })
 
 it("closes an overindented opener at the description column", () => {
@@ -81,14 +83,16 @@ after
   <li>
     <dl>
       <dt>term</dt>
-      <dd>payload
-<code>
-code
-</code></dd>
+      <dd>
+        <p>payload</p>
+        <pre><code>code
+</code></pre>
+      </dd>
     </dl>
   </li>
 </ol>
-<p>after</p>`)
+<pre><code>after
+</code></pre>`)
 })
 
 it("uses the description column in a quoted item", () => {
@@ -116,7 +120,7 @@ it("uses the description column in a quoted item", () => {
 </blockquote>`)
 })
 
-it("keeps an unmatched opener inline in a quoted item", () => {
+it("opens an unmatched opener as a code block in a quoted item", () => {
   const source = `> - :: term
 >   : payload
 >     \`\`\`
@@ -129,14 +133,16 @@ it("keeps an unmatched opener inline in a quoted item", () => {
     <li>
       <dl>
         <dt>term</dt>
-        <dd>payload
-<code>
-code
-</code>
-after</dd>
+        <dd>
+          <p>payload</p>
+          <pre><code>code
+</code></pre>
+        </dd>
       </dl>
+      <pre><code></code></pre>
     </li>
   </ul>
+  <p>after</p>
 </blockquote>`)
 })
 
@@ -152,12 +158,14 @@ it("retains marker text after unmatched description fences", () => {
   <li>
     <dl>
       <dt>term</dt>
-      <dd>payload
-<code>
-</code>
-<code>
-- nested</code></dd>
+      <dd>
+        <p>payload</p>
+        <pre><code></code></pre>
+      </dd>
     </dl>
+    <pre><code>   \`\`\`
+- nested
+</code></pre>
   </li>
 </ul>`)
 })

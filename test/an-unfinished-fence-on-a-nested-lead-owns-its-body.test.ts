@@ -4,29 +4,29 @@ import { carveToHtml } from '../src/index.js'
 describe('an unfinished fence on a nested item lead owns its body', () => {
   it("a flush-left body and closer", () => {
     expect(carveToHtml("- - ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
   it("a body indented below the content column", () => {
     expect(carveToHtml("- - ``` x\n code\n ```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
   it("three levels deep", () => {
     expect(carveToHtml("- - - ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code class=\"language-x\"></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code class=\"language-x\"></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
   it('a quoted fence leaves unmarked lines outside', () => {
-    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>")
+    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code</p>\n<pre><code></code></pre>")
   })
 
   it("ordered markers", () => {
     expect(carveToHtml("1. 1. ``` x\ncode\n```\n")).toBe(
-      "<ol>\n  <li>\n    <ol>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>code\n<code></code></p>",
+      "<ol>\n  <li>\n    <ol>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
@@ -44,26 +44,26 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
 
   it("a tilde fence", () => {
     expect(carveToHtml("- - ~~~ x\ncode\n~~~\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n~~~</p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
   it("no info string", () => {
     expect(carveToHtml("- - ```\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
   it("a trailing sibling marker", () => {
     expect(carveToHtml("- - ``` x\ncode\n```\n- lazy\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code>\n- lazy</code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code>- lazy\n</code></pre>",
     )
   })
 
   // Controls - these agreed with the spec already and must stay agreeing.
   it("the OUTERMOST spelling still leaks the body to the document", () => {
     expect(carveToHtml("- ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <pre><code class=\"language-x\"></code></pre>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <pre><code class=\"language-x\"></code></pre>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 
@@ -75,7 +75,7 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
 
   it("a blank before an outside body stays in the nested fence", () => {
     expect(carveToHtml("- - ``` x\n\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>\n<pre><code></code></pre>",
     )
   })
 

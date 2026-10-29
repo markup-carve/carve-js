@@ -92,12 +92,12 @@ describe('over-indented fence boundary controls', () => {
   })
   it('nested paragraph continuation', () => {
     expect(carveToHtml('- outer\n  - head\n    a\n     ~~~\n\n  - next\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\na\n~~~</p></li>\n      <li><p>next</p></li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head\na</p>\n        <pre><code>\n</code></pre>\n      </li>\n      <li><p>next</p></li>\n    </ul>\n  </li>\n</ul>',
     )
   })
   it('quoted paragraph continuation', () => {
     expect(carveToHtml('- head\n\n  > q\n    ```\n\n  - next\n')).toBe(
-      '<ul>\n  <li>head\n    <blockquote><p>q\n<code></code></p></blockquote>\n    <ul>\n      <li>next</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>head\n    <blockquote><p>q</p></blockquote>\n    <pre><code>\n- next\n</code></pre>\n  </li>\n</ul>',
     )
   })
   it('a heading before the fence', () => {

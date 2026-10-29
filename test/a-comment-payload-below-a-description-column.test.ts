@@ -75,9 +75,13 @@ describe('a comment payload below a description column', () => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n' + body)).toBe(expected)
   })
 
-  it.each(['```', '~~~', '``` =html'])('keeps an unclosed %s after payload prose inline', (fence) => {
+  it.each([
+    ['```', '<pre><code></code></pre>'],
+    ['~~~', '<pre><code></code></pre>'],
+    ['``` =html', ''],
+  ])('lets an unclosed %s interrupt the payload prose', (fence, block) => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n   p\n   ' + fence + '\nz\n   %%%\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>p</p>\n    ' + block + '\n  </dd>\n</dl>\n<p>z</p>',
     )
   })
 

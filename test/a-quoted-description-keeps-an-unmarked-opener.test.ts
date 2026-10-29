@@ -65,15 +65,17 @@ it('leaves a marked fence at its host column', () => {
 </blockquote>`)
 })
 
-it('lets an open inline code run finish before classifying a quote opener', () => {
+it('ends the description at a fence opener before classifying a quote opener', () => {
   expect(carveToHtml('> - :: a\n>   :: b\n>   : p\n>     ```\n>    > ```\n')).toBe(`<blockquote>
   <ul>
     <li>
       <dl>
         <dt>a</dt>
         <dt>b</dt>
-        <dd>p
-<code></code></dd>
+        <dd>
+          <p>p</p>
+          <pre><code></code></pre>
+        </dd>
       </dl>
       <blockquote>
         <pre><code></code></pre>

@@ -178,12 +178,9 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
 })
 
 describe('paragraph interruption carve-outs and nested coverage', () => {
-  it('an unterminated fence does not interrupt (stays in the paragraph)', () => {
-    // No matching closer ahead, so the fence does not interrupt (§10 closer
-    // lookahead); the unclosed run is then an inline verbatim span to end of
-    // block (the inline-verbatim rule), not a code block.
+  it('an unterminated fence interrupts too (carve#4018)', () => {
     expect(carveToHtml('text\n```\nno closer')).toBe(
-      '<p>text\n<code>\nno closer</code></p>',
+      '<p>text</p>\n<pre><code>no closer</code></pre>',
     )
   })
 

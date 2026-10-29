@@ -38,11 +38,6 @@
   "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
     "keeps the indentation latitude where only indentation precedes the list": "#3921"
   },
-  "a-list-marker-in-a-continuation-note-stays-in-the-note.test.ts": {
-    "nested host, - [ ] c2, quoted false, code true": "#3919",
-    "nested host, - c2, quoted false, code true": "#3919",
-    "nested host, 1. c2, quoted false, code true": "#3919"
-  },
   "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
     "does not claim a quote marker inside an inline code span": "#3921"
   },
@@ -51,9 +46,6 @@
   },
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
-  },
-  "an-unclosed-fence-below-a-closed-child-opens-a-code-block.test.ts": {
-    "'source 2 from carve#3046'": "#3920"
   },
   "attached-definition-boundaries.test.ts": {
     "preserves attached definition ownership across render and format paths: '- +\\n:: term\\n: description\\n   [r]: …' [2]": "#3922",
@@ -68,12 +60,6 @@
   },
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
-  },
-  "closed-comment-fence-ownership.test.ts": {
-    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n        ``…' [2]": "#3921",
-    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n        ``…' [4]": "#3921",
-    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n      ```\\…' [2]": "#3921",
-    "keeps closed comment payload out of fence ownership across all render paths: '- - a\\n    ```\\n    %%% x\\n      ```\\…' [4]": "#3921"
   },
   "comment-closer-between-content-columns.test.ts": {
     "a comment closer between item content columns > 'child column 4, closer 3, tail 4, bla…' (fence 3, extra indent 0) [1]": "#3898",
@@ -235,8 +221,8 @@
     "the non-HTML render ledger > records the output every renderer still produces": "#3921"
   },
   "corpus.test.ts": {
-    "spec corpus > 581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2": "#3920",
-    "spec corpus > 612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence-2": "#3922",
+    "spec corpus > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#3922",
+    "spec corpus > 760-a-heading-inside-the-intervening-band-stays-description-text": "#3922",
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },
   "deep-term-comment-code-tails.test.ts": {
@@ -261,9 +247,7 @@
   },
   "definition-description-code-ownership.test.ts": {
     "keeps description code and following blocks in their authored hosts: 'review-282'": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'review-371'": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'review-final-9'": "#3922"
+    "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922"
   },
   "djot-definition-boundaries.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
@@ -294,54 +278,19 @@
   "formatter-parity-regressions.test.ts": {
     "normalizes a constructed carriage return before guarding a quote line": "#3921"
   },
-  "heading-between-rejected-and-admitted-fences.test.ts": {
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-1": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-11": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-14": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-18": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-21": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-4": "#3922",
-    "reads paragraph ownership and keeps source positions in range: heading-text-band-8": "#3922"
-  },
   "hosted-colon-literal-ownership.test.ts": {
     "review7-c07-open-fence-tail-owner-13": "#3922",
     "review7-c07-open-fence-tail-owner-14": "#3922",
     "review8-c01-authored-div-base-060": "#3920",
     "review8-c01-authored-div-base-061": "#3920",
-    "review8-c02-below-column-comment-037": "#3922",
     "review8-older-o01-overindented-verse-005": "#3922",
     "review8-older-o01-overindented-verse-008": "#3922",
-    "review8-older-o01-overindented-verse-009": "#3922",
-    "review8-older-o05-mixed-hosted-ownership-019": "#3922"
+    "review8-older-o01-overindented-verse-009": "#3922"
   },
   "include-conformance.test.ts": {
     "include-conformance vectors (spec §19) > i01b-region-host-renders-no-marker [I1b]": "#3921"
   },
   "inline-fence-paragraph-resume.test.ts": {
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-108": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-109": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-114": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-115": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-12": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-13": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-132": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-133": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-138": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-139": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-18": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-19": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-36": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-37": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-42": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-43": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-60": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-61": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-66": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-67": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-84": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-85": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-90": "#3917",
-    "reads paragraph ownership and keeps source positions in range: inline-following-code-91": "#3917",
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
     "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
   },
@@ -452,12 +401,9 @@
     "preserves paragraph ownership after nested note CODE: nested-326": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-36": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-732": "#3919",
-    "preserves paragraph ownership after nested note CODE: nested-closer-733": "#3917",
     "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
     "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",
-    "preserves paragraph ownership after nested note CODE: nested-closer-764": "#3919",
     "preserves paragraph ownership after nested note CODE: nested-closer-789": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-804": "#3922",
     "preserves paragraph ownership after nested note CODE: nested-closer-819": "#3922",
@@ -492,6 +438,20 @@
   "relative-continuation-marker.test.ts": {
     "relative continuation marker columns > attaches a table at its quote marker column": "#3920",
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
+  },
+  "render-carve.test.ts": {
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-2: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-4: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row-5: semantic": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: idempotent": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: parses to the same tree": "#3976",
+    "renderCarve corpus > 783-a-verbatim-run-a-continuation-row-opens-stays-open-into-the-next-continuation-row: semantic": "#3976"
   },
   "sibling-term-item-column.test.ts": {
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",

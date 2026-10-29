@@ -50,7 +50,7 @@ describe('the renderer half (#2342)', () => {
     // rewrote its goldens to the rows below.
     expect(carveToHtml('```\n')).toBe('<pre><code></code></pre>')
     expect(carveToHtml('- ```\nx\n```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>\n<pre><code></code></pre>',
     )
     // Its one-blank-line partner keeps the line whether the fence closes or not,
     // which is what keeps the two shapes two documents.

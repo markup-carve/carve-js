@@ -3,7 +3,8 @@ import { carveToHtml } from '../src/index.js'
 
 const render = (lines: string[]): string =>
   carveToHtml(['::: note', ...lines, '```', 'code', '::::', ':::', 'after *b*', ''].join('\n'))
-const endsAtCloser = '  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>'
+// An unclosed fence interrupts the item and its payload is opaque, so `:::` cannot close the div (carve#4018).
+const runsToEnd = '  <pre><code>code\n::::\n:::\nafter *b*\n</code></pre>\n</aside>'
 
 it.each([
   ['a link definition', ['- para', '  [r]: /u']],
@@ -20,25 +21,24 @@ it.each([
   ['a thematic break', ['- para', '  ---']],
   ['a table row under an attributed marker', ['-{#x} para', '  | t |']],
   ['a table row under an attributed ordered marker', ['1.{#x} para', '   | t |']],
-])('%s at the item content column closes the paragraph, so the fence ends at the closer', (_name, lines) => {
-  expect(render(lines).trimEnd().endsWith(endsAtCloser)).toBe(true)
+])('%s at the item content column closes the paragraph, and the unclosed fence runs to the end', (_name, lines) => {
+  expect(render(lines).trimEnd().endsWith(runsToEnd)).toBe(true)
 })
 
-// A footnote's open paragraph takes the fence line and its payload lazily (carve#3885).
-it('a footnote definition at the item content column takes the fence lines as note text', () => {
-  expect(render(['- para', '  [^f]: n'])).toContain('</ul>\n  <div>\n\n  </div>\n</aside>\n<p>after <strong>b</strong></p>')
+it('a footnote definition at the item content column does not take the fence lines as note text', () => {
+  expect(render(['- para', '  [^f]: n']).trimEnd().endsWith(runsToEnd)).toBe(true)
 })
 
 it.each([
   ['a definition below the column', ['- para', ' [r]: /u']],
   ['a definition below the column of an item with trailing spaces', ['- para  ', ' [r]: /u']],
   ['a table row below the column', ['10. para', '   | t |']],
-])('%s closes the paragraph too, so the fence ends at the closer', (_name, lines) => {
-  expect(render(lines).trimEnd().endsWith(endsAtCloser)).toBe(true)
+])('%s closes the paragraph too, and the unclosed fence runs to the end', (_name, lines) => {
+  expect(render(lines).trimEnd().endsWith(runsToEnd)).toBe(true)
 })
 
 it.each([
   ['item prose after a table row', ['- para', '  | t |', '  more']],
-])('control: %s leaves a paragraph open, so the fence is paragraph text', (_name, lines) => {
-  expect(render(lines)).toContain('<p>after <strong>b</strong></p>\n    </div>')
+])('control: %s leaves a paragraph open, and the fence still interrupts it', (_name, lines) => {
+  expect(render(lines)).toContain('      more\n    </li>\n  </ul>\n  <pre><code>code\n::::\n:::\nafter *b*\n</code></pre>')
 })

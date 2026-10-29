@@ -8,14 +8,14 @@ const cases: [string, string, string][] = [
   ['term-tilde-fence', ':: t\n~~~\n', "<dl>\n  <dt>t</dt>\n</dl>\n<pre><code></code></pre>"],
   ['ctrl-closer-at-content-column', ':: t\n: - ```\n    ```\n\n:: t\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n  <dt>t</dt>\n</dl>"],
   ['ctrl-fence-owns-its-content', ':: t\n: - ```\n  a\n```\n\n:: u\n: v\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>a</p>\n  </dd>\n</dl>\n<pre><code>\n:: u\n: v\n</code></pre>"],
-  ['ctrl-term-indented-fence', ':: t\n   ```\n', "<dl>\n  <dt>t\n   <code></code></dt>\n</dl>"],
+  ['ctrl-term-indented-fence', ':: t\n   ```\n', "<dl>\n  <dt>t</dt>\n</dl>\n<pre><code></code></pre>"],
   ['ctrl-term-fence-closed-ahead', ':: t\n```\nx\n```\n', "<dl>\n  <dt>t</dt>\n</dl>\n<pre><code>x\n</code></pre>"],
   ['ctrl-plain-description-body', ':: t\n: ```\n```\n\n:: u\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<pre><code>\n:: u\n</code></pre>"],
   ['ctrl-list-item-host', '- ```\n```\n\nx\n', "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<pre><code>\nx\n</code></pre>"],
   ['ctrl-line-block-lead', ':: t\n: - |\n| x\n\n:: u\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>|\n| x</li>\n    </ul>\n  </dd>\n  <dt>u</dt>\n</dl>"],
   ['ctrl-quote-list-fence', '> - ```\n> ```\n', "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n  <pre><code></code></pre>\n</blockquote>"],
   ['ctrl-quote-list-fence-flush', '> - ```\n```\n', "<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code></code></pre>"],
-  ['ctrl-raw-block-lead-body', ':: t\n: - =html\n```\n\n:: u\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>=html\n<code></code></li>\n    </ul>\n  </dd>\n  <dt>u</dt>\n</dl>"],
+  ['ctrl-raw-block-lead-body', ':: t\n: - =html\n```\n\n:: u\n', "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>=html</li>\n    </ul>\n  </dd>\n</dl>\n<pre><code>\n:: u\n</code></pre>"],
 ]
 
 describe('a flush-left fence line below a nested fence', () => {

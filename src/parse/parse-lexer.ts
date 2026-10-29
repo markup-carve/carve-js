@@ -390,20 +390,6 @@ export class Lexer {
   attachmentFenceClosers?: AttachmentFenceClosers
   scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
-  /** Container-scoped §10 fence lookahead answers, keyed by source line. */
-  fenceLookaheadAnswers: Map<string, boolean>
-  /**
-   * §10 answers a container gave for a fence a DESCENDANT of it owns.
-   *
-   * Separate from `fenceLookaheadAnswers` because the two are written by
-   * different scopes and only this one may outrank a nested re-derivation: the
-   * fence's own container never receives the line that closes it, so it cannot
-   * answer for itself (markup-carve/carve#1399 one level in).
-   */
-  descendantFenceAnswers: Map<string, boolean>
-  /** This lexer reads a container body whose collector supplied those answers. */
-  usesContainerFenceLookahead = false
-
   // EVERY line carrying a `%` run, keyed by run length and ascending, built
   // once by `commentRunLines`. `fenceCloserIndex` keeps only the LAST line of
   // each width, which answers "is there one ahead" and cannot answer "is there
@@ -489,8 +475,6 @@ export class Lexer {
     this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
     this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
     this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
-    this.fenceLookaheadAnswers = inherited?.fenceLookaheadAnswers ?? new Map()
-    this.descendantFenceAnswers = inherited?.descendantFenceAnswers ?? new Map()
     this.parseOptions = opts
     this.unclosedContainerKeys = unclosedContainerKeys
     this.lineNumberOffset = lineNumberOffset
