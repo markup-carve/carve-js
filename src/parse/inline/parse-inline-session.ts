@@ -396,10 +396,13 @@ export class InlineParseSession {
       // No opener on this side of a braced opener, or one an earlier closer
       // takes: the pair cannot form.
       if (open === -1 || bracedOpenBefore()[at - 1]! > open || closerTable(owner)[open + 1]! < at - 1) return true
-      if (open === 0 || bareOpener(text, open) !== 'guarded') return false
-      const guard = text[open - 1]!
-      const guardClose = closerTable(guard)[open + 1]!
-      return guard === marker || bareOpener(text, open - 1) === 'none' || guardClose === -1 || (limit !== -1 && guardClose > limit)
+      // A guarded opener forms only if every guard before it does.
+      for (let at = open; at > 0 && bareOpener(text, at) === 'guarded' && !openerMarks.has(at - 1); at--) {
+        const guard = text[at - 1]!
+        const guardClose = closerTable(guard)[open + 1]!
+        if (guard === marker || bareOpener(text, at - 1) === 'none' || guardClose === -1 || (limit !== -1 && guardClose > limit)) return true
+      }
+      return false
     }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
@@ -876,38 +879,28 @@ export class InlineParseSession {
     const c = text[i]!
 
     // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
-    // bare_opener('/'): the outer `/` does not open after a word character
-    // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
-    if (c === '/' && text[i + 1] === '*' && !/[A-Za-z0-9_/]/.test(text[i - 1] ?? '')) {
+    if (c === '/' && text[i + 1] === '*') {
       const start = i + 2
-      // A bold-italic span requires a non-whitespace char right after `/*`
-      // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
-      // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
-      // matching carve-php parseBoldItalic.
-      // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
-      // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
-      if (start < text.length && !isCarveWhitespace(text[start]) && !extendsGrapheme(text, start)) {
-        const close = combinedSpanCloser(text, start, noClose, (open) => this.bracedFrameEnd(text, open))
-        if (close !== undefined && close + 2 <= end) {
-          const inner = text.slice(start, close)
-          const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
-          return {
-            // `boldItalic` records that the author used the combined form. The
-            // nested spelling `*/x/*` yields the same tree, so the writer needs the
-            // mark to reproduce what was written (PART 11 §6).
-            node: {
-              type: 'strong',
-              boldItalic: true,
-              // The inner emphasis is synthesized from the single `/*…*/` token
-              // rather than scanned as its own delimiter pair, so nothing else
-              // assigns it a span. PART 12 §4 requires one on every node but the
-              // document root, and a consumer cannot tell a synthesized node from
-              // a parsed one. It spans the CONTENT; the outer strong spans the
-              // delimiters too.
-              children: [this.withPos({ type: 'emphasis', children }, source, text, start, close)],
-            },
-            end: close + 2,
-          }
+      const close = this.combinedTokenClose(text, i, noClose)
+      if (close !== undefined && close + 2 <= end) {
+        const inner = text.slice(start, close)
+        const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
+        return {
+          // `boldItalic` records that the author used the combined form. The
+          // nested spelling `*/x/*` yields the same tree, so the writer needs the
+          // mark to reproduce what was written (PART 11 §6).
+          node: {
+            type: 'strong',
+            boldItalic: true,
+            // The inner emphasis is synthesized from the single `/*…*/` token
+            // rather than scanned as its own delimiter pair, so nothing else
+            // assigns it a span. PART 12 §4 requires one on every node but the
+            // document root, and a consumer cannot tell a synthesized node from
+            // a parsed one. It spans the CONTENT; the outer strong spans the
+            // delimiters too.
+            children: [this.withPos({ type: 'emphasis', children }, source, text, start, close)],
+          },
+          end: close + 2,
         }
       }
     }
@@ -1271,18 +1264,34 @@ export class InlineParseSession {
     // Keep the original text so flanking and source offsets use the same run.
     this.pairEndTables(text)
     const attached = this.bareAttributePairs.size === 0 ? undefined : new Map<number, number>()
+    // Closers of attached children, which open nothing. A child whose opener
+    // an earlier glued marker's pair demotes (E2) spends none.
+    let spent: Set<number> | undefined
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
-      const child = ch !== delim && !this.openKinds.has(ch) ? this.pairBareAttributes(text, j) : undefined
-      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver))) attached?.set(child.close + 1, child.end)
+      const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? this.pairBareAttributes(text, j) : undefined
+      if (child && (!child.guarded || this.guardOpens(text, j, from, delim, memo, end, waiver))) {
+        attached?.set(child.close + 1, child.end)
+        if (!this.crossedByGluedOpener(text, j, child.close, delim, memo, end)) (spent ??= new Set()).add(child.close)
+      }
       const attachedEnd = attached?.get(j)
       if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
       // Skip escapes
       if (ch === '\\' && j + 1 < text.length) {
         j++
         continue
+      }
+      // A combined token is the leftmost construct, so its content and block
+      // hide closers of other delimiters (E2a), unless a `*` glued before it
+      // opens first.
+      if (ch === '/' && text[j + 1] === '*' && delim !== '/' && delim !== '*' && !(text[j - 1] === '*' && bareOpener(text, j - 1) !== 'none')) {
+        const close = this.combinedTokenClose(text, j, memo)
+        if (close !== undefined && close + 2 <= end) {
+          j = this.pairAttributeEnd(text, close + 2) - 1
+          continue
+        }
       }
       // Skip verbatim (code) spans. An unclosed run is opaque to the end of the
       // block, so no emphasis closer can follow it — the opener cannot close.
@@ -1422,6 +1431,29 @@ export class InlineParseSession {
     for (const j of visited) marks[j] = 1
     memo.failedGuardsOpen.set(delim, marks)
     return false
+  }
+
+  // The `*/` closing a combined token opened at `at`, or undefined.
+  private combinedTokenClose(text: string, at: number, memo: EmphasisMemo): number | undefined {
+    // bare_opener('/'): the outer `/` does not open after a word character
+    // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
+    if (/[A-Za-z0-9_/]/.test(text[at - 1] ?? '')) return undefined
+    const start = at + 2
+    // A bold-italic span requires a non-whitespace char right after `/*`
+    // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
+    // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
+    // matching carve-php parseBoldItalic.
+    // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
+    // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
+    if (start >= text.length || isCarveWhitespace(text[start]) || extendsGrapheme(text, start)) return undefined
+    return combinedSpanCloser(text, start, memo, (open) => this.bracedFrameEnd(text, open))
+  }
+
+  private crossedByGluedOpener(text: string, at: number, close: number, delim: string, memo: EmphasisMemo, end: number): boolean {
+    const d = text[at - 1]
+    if (d === undefined || !'/*_~='.includes(d) || d === delim || this.openKinds.has(d) || bareOpener(text, at - 1) === 'none') return false
+    const outer = this.cachedFindEmphasisClose(text, at, d, memo, end)
+    return outer !== -1 && outer < close
   }
 
   private guardOpens(text: string, at: number, from: number, delim: string, memo: EmphasisMemo, end: number, waiver: Waiver): boolean {
