@@ -347,7 +347,7 @@ function continuesAfterComment(q: QuoteHostLine): boolean {
   const { host, column, text } = q
   return q.afterComment && host.kinds.at(-1) === 'item' && column > 0 &&
     column < host.columns.at(-1)! &&
-    !(!q.afterCommentBelow && opensCodeFence(text) && host.colons?.some(open => open.floor <= column && open.column < column)) &&
+    !(!q.afterCommentBelow && opensCodeFence(text) && host.colons?.some(open => open.floor <= column && open.column <= column)) &&
     (!lineOpensBlock(text) || isListMarkerLine(text) || column < host.columns[1]! ||
       ((host.colons?.length ?? 0) > 0 && (RE_FENCE.test(text) || RE_RAW_FENCE.test(text))))
 }

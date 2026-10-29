@@ -33,12 +33,6 @@
     "a fence after a footnote boundary closes without claiming the next line": "#3921"
   },
   "a-line-retained-after-a-comment-opens-the-deepest-paragraph.test.ts": {
-    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted ::: inner and a comment span": "#3918",
-    "a line retained after a comment opens the deepest paragraph > releases a marker after a code block following quoted inner and a comment span": "#3918",
-    "preserves inline code continuation * tail in the writer": "#3918",
-    "preserves inline code continuation - tail in the writer": "#3918",
-    "preserves inline code continuation 1. tail in the writer": "#3918",
-    "preserves inline code continuation a) tail in the writer": "#3918",
     "retains a marker after a comment without claiming document text": "#3922"
   },
   "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
@@ -241,8 +235,6 @@
     "the non-HTML render ledger > records the output every renderer still produces": "#3921"
   },
   "corpus.test.ts": {
-    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph": "#3918",
-    "spec corpus > 557-a-line-retained-after-a-comment-opens-a-paragraph-2": "#3918",
     "spec corpus > 581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2": "#3920",
     "spec corpus > 612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence-2": "#3922",
     "spec corpus > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#3922",
@@ -497,9 +489,7 @@
     "quoted comments retain stored host columns > '06-second-literal-depth2-width4-paired' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > 'nested-colon-depth1-code' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 1": "#3918",
-    "quoted comments retain stored host columns > releases the tail after a code block beneath a deeper plain item at quote depth 2": "#3918"
+    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922"
   },
   "quoted-link-definition-in-footnote.test.ts": {
     "quoted link definitions in footnote bodies > keeps a marker-line quote paragraph open across its first continuation": "#3922"
