@@ -19,14 +19,14 @@ const cases = [
     <dl>
       <dt>t</dt>
       <dd>
-        <p>p
-<code>
-x</code></p>
-        <div>
-          <p>d</p>
-        </div>
+        <p>p</p>
+        <pre><code></code></pre>
       </dd>
     </dl>
+    x
+    <div>
+      <p>d</p>
+    </div>
   </li>
 </ul>`,
   },
@@ -176,11 +176,11 @@ x</p>
     <dl>
       <dt>t</dt>
       <dd>
-        <p>p
-<code></code></p>
-        <div>
-          <p>d</p>
-        </div>
+        <p>p</p>
+        <pre><code>:::
+d
+:::
+</code></pre>
       </dd>
     </dl>
   </li>

@@ -2,7 +2,7 @@ import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../pa
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
 import { isListMarkerLine } from '../parse-prepass-core.js'
 import type { listStateHelpers } from '../../parse.js'
-import { createRunPhases, endsOnBlock, type CommentCloser, type FenceCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
+import { createRunPhases, endsOnBlock, type CommentCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
 export function createListStateTracker(helpers: typeof listStateHelpers) {
   const {
@@ -28,7 +28,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     bottomBlockLeavesParagraphOpen,
     colonFenceOpenerLen,
     commentFenceRun,
-    continuesInlineFenceParagraph,
     extractItemAttr,
     fenceCloseRe,
     isBlockAttributeLine,
@@ -67,7 +66,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   function beginLine(
     content: string,
     state: ItemLazyState,
-    hasFenceCloser: FenceCloser,
     atContentColumn: boolean,
     hasCommentCloser: CommentCloser,
     facts: ItemLineFacts | undefined,
@@ -80,10 +78,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
     const wasAbsorbing = state.absorbingFence
     state.absorbingFence = false
-    const wasInlineFence = state.inlineFenceParagraph === true
-    delete state.inlineFenceParagraph
-    const wasInlineFenceBlock = state.inlineFenceBlock === true
-    delete state.inlineFenceBlock
     const wasClosedColon = state.closedColonBody === true
     const wasClosedLiteralComment = state.closedLiteralComment === true
     delete state.closedColonBody
@@ -108,9 +102,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const wasCommentAtColumn = state.commentAtColumn
     state.commentAtColumn = false
     return {
-      content, state, hasFenceCloser, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser,
+      content, state, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser,
       authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen,
-      wasDescendantColumn, wasAbsorbing, wasInlineFence, wasInlineFenceBlock, wasClosedColon,
+      wasDescendantColumn, wasAbsorbing, wasClosedColon,
       wasClosedLiteralComment, wasInTable, wasQuote, quoteOwnerColumn, wasInvisibleAtColumn,
       wasBelowComment, wasCommentAtColumn,
       run: undefined, runColumns: undefined, readFlush: false, readDescendant: false,
@@ -122,8 +116,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { content, state } = line
     if (!(line.wasCommentAtColumn || state.deepest?.commentAtColumn ||
         (line.wasBelowComment && line.atContentColumn && state.inDefList === false && leadingWhitespace(content) === 0))) return false
-    if (line.wasInlineFence) return false
-    if (state.unclosedFenceBase !== undefined && indentColumns(content) > state.unclosedFenceBase) return false
     if (state.opaque !== null || !opensCodeFence(content.trimStart())) return false
     const close = fenceCloserOf(content.trimStart())
     if (!close) return false
@@ -152,7 +144,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
         state.inFootnoteBody = false
         // A line that leaves the body but does not interrupt is the note paragraph's lazy line.
         if (state.noteFrame !== undefined && noteFrameParagraphOpen(state.noteFrame) && noteLazyLine(line)) {
-          trackItemLazyState(content.trimStart(), state.noteFrame, line.hasFenceCloser, false, () => false)
+          trackItemLazyState(content.trimStart(), state.noteFrame, false, () => false)
           state.inFootnoteBody = true
           state.lazyFoldable = noteFrameParagraphOpen(state.noteFrame)
           state.inDefList = false
@@ -179,7 +171,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     }
     // A caller that reads descendant frames reads a list item's in the note's body too.
     trackItemLazyState(noteLine, frame,
-      (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn + descriptionShift), true, () => false,
+      true, () => false,
       line.facts?.descendantFrames === true && (noteFrameOwnsItem(frame) || isListMarkerLine(noteLine.trimStart()))
         ? { terminatorFree: line.facts.terminatorFree, whitespace: leadingWhitespace(noteLine), descendantFrames: true }
         : undefined)
@@ -197,8 +189,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const text = line.content.trimStart()
     // A comment below the body is a block of the host, never note text.
     if (RE_COMMENT_LINE.test(line.content.replace(/^[ \t]+/, ''))) return false
-    const fence = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
-    if (fence !== undefined) return !line.hasFenceCloser(fence)
+    // A fence opener interrupts the note paragraph whether or not it closes.
+    if (RE_FENCE.test(text) || RE_RAW_FENCE.test(text)) return false
     return bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
   }
 
@@ -225,14 +217,14 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
 
   /** A line inside an open literal (line-block) colon container. */
   function literalColonLine(line: LazyLine): boolean {
-    const { content, state, facts, hasFenceCloser, hasCommentCloser } = line
+    const { content, state, facts, hasCommentCloser } = line
     if (state.literalColon === undefined || !line.atContentColumn) return false
     const open = state.literalColon
     const column = indentColumns(content, open.column + 1)
     const text = content.trimStart()
     if (state.definitionBody && column === 0 && opensCodeFence(text) && !open.opaque) {
       delete state.literalColon
-      trackItemLazyState(content, state, hasFenceCloser, line.atContentColumn, hasCommentCloser, facts, line.hasLiteralCommentCloser)
+      trackItemLazyState(content, state, line.atContentColumn, hasCommentCloser, facts, line.hasLiteralCommentCloser)
       return true
     }
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
@@ -251,7 +243,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const group = opaqueGroupCloser(text)
     const codeAtBase = opensCodeFence(text) && (column === 0 || column === open.column)
     if (group && (group.belowBaseCloses ? (line.hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
-      opensCodeFence(text) && (column === 0 || column >= open.column) && hasFenceCloser(group.char.repeat(group.run), state.definitionBody ? -2 : -1))) open.opaque = group
+      opensCodeFence(text) && (column === 0 || column >= open.column) &&
+      (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true))) open.opaque = group
     if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
     if (close && close[1]!.length === open.width && (column === 0 || column === open.column)) {
@@ -274,34 +267,16 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return true
   }
 
-  // Carry real CODE payload across boundaries without letting an interrupter claim a lazy tail.
-  // A definition body's collector reads its own fence groups (carve-js#2819).
-  function inlineFenceContinuation(line: LazyLine): boolean {
-    const { content, state } = line
-    if (!line.wasInlineFence) return false
-    const continuesFenceParagraph = state.definitionBody === true
-      ? bottomBlockLeavesParagraphOpen(content)
-      : continuesInlineFenceParagraph(content, state.unclosedFenceBase, line.facts?.terminatorFree ?? false)
-    if (!(line.wasInlineFenceBlock || continuesFenceParagraph) || RE_COMMENT_LINE.test(content.trimStart()) ||
-        RE_ADMONITION_CLOSE.test(content.trimStart()) || colonFenceOpenerLen(content) !== null) return false
-    state.lazyFoldable = !isBlankLine(content) &&
-      (bottomBlockLeavesParagraphOpen(content) || (line.wasInlineFenceBlock && leadingWhitespace(content) > 0))
-    state.inlineFenceParagraph = true
-    if (line.wasInlineFenceBlock) state.inlineFenceBlock = true
-    state.inDefList = false
-    return true
-  }
-
   /** A line a descendant marker owns while its frame sits in a literal colon container. */
   function descendantLiteralColon(line: LazyLine): boolean {
-    const { content, state, facts, hasFenceCloser } = line
+    const { content, state, facts } = line
     if (!state.deepest?.literalColon || state.ownedAuthored || state.ownedColumn < 0 ||
         indentColumns(content, state.ownedColumn) < state.ownedColumn) return false
     const offset = state.ownedColumn
     const inner = state.deepest
     trackItemLazyState(
       sliceColumns(content, offset, true), inner,
-      (marker, extra = 0) => hasFenceCloser(marker, extra < 0 ? extra : offset + extra), true, () => false,
+      true, () => false,
       {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
       (width, extra = 0) => line.hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
@@ -368,8 +343,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       line.content = sliceColumns(line.content, base, true)
       const facts = line.facts
       if (facts) line.facts = { ...facts, whitespace: facts.whitespace === undefined ? undefined : Math.max(0, facts.whitespace - base) }
-      const closer = line.hasFenceCloser
-      line.hasFenceCloser = (marker, extra = 0) => closer(marker, extra < 0 ? extra : extra + base)
     } else {
       const run = commentFenceRun(line.content.trimStart())
       if (run !== undefined && line.hasCommentCloser(run)) line.content = line.content.trimStart()
@@ -387,19 +360,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.invisibleAtColumn = state.literalColon === undefined
     state.commentAtColumn = state.literalColon === undefined
     return true
-  }
-
-  /** An unterminated comment opener inside an inline fence paragraph stays part of it. */
-  function inlineFenceComment(line: LazyLine): boolean {
-    const { content, state } = line
-    if (!line.wasInlineFence) return false
-    const inlineCommentRun = commentFenceRun(content.trimStart())
-    if (RE_COMMENT_LINE.test(content.trimStart()) &&
-        (inlineCommentRun === undefined || !line.hasCommentCloser(inlineCommentRun))) {
-      state.inlineFenceParagraph = true
-      if (line.wasInlineFenceBlock) state.inlineFenceBlock = true
-    }
-    return false
   }
 
   function openCommentSpan(line: LazyLine): boolean {
@@ -502,38 +462,17 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return true
   }
 
-  // A code or raw fence opens a verbatim block, which holds no open paragraph -
-  // but only when it really opens. Section 10's CLOSER LOOKAHEAD applies here
-  // exactly as it does in the quote's tracker: with a paragraph already open
-  // and no matching closer ahead, the fence is an inline verbatim run that is
-  // PART of that paragraph, so the paragraph stays open. With none open it
-  // dispatches unconditionally and an unterminated one runs to the end of the
-  // item.
-  //
-  // The default callback answers "yes" so a caller that cannot look ahead - the
-  // synthetic blank at a `+` marker, and the attached block's own lines - keeps
-  // the old unconditional behavior.
+  // A code or raw fence opens a verbatim block, which holds no open paragraph,
+  // whether or not it closes: an unterminated one runs to the end of the item.
   function codeFenceOpener(line: LazyLine): boolean {
     const { content, state } = line
     const fence = RE_FENCE.exec(content)
     const raw = fence ? null : RE_RAW_FENCE.exec(content)
     const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
     if (fenceMarker === null) return false
-    // A closed child leaves the following unmatched fence foldable; a blank ends that claim.
-    const followsClosedChild = state.divDepth > 0 && state.deepest?.closedColonBody === true
-    if ((!state.lazyFoldable && !followsClosedChild) || line.hasFenceCloser(fenceMarker)) {
-      state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
-      state.deepest = null
-      return endsOnBlock(state)
-    }
-    // An unterminated fence mid-paragraph: inline verbatim, and the paragraph
-    // it sits in stays open. Fall through to the bottom rather than returning,
-    // which is where ordinary paragraph text lands.
-    state.lazyFoldable = true
-    state.inlineFenceParagraph = true
-    state.unclosedFenceBase ??= 0
-    state.inDefList = false
-    return true
+    state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
+    state.deepest = null
+    return endsOnBlock(state)
   }
 
   // An OPENER may carry an info string: `%%% x` is a comment fence, exactly as
@@ -612,8 +551,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (note === null) return endsOnBlock(state)
     // A note's first block answers like any container's (carve#3885).
     const frame = verbatimOnlyLazyState()
-    const bodyColumn = state.footnoteBodyColumn!
-    trackItemLazyState(note[2]!, frame, (marker, extra = 0) => line.hasFenceCloser(marker, extra + bodyColumn), true, () => false)
+    trackItemLazyState(note[2]!, frame, true, () => false)
     state.noteFrame = frame
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
@@ -647,9 +585,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       quoted[1] ?? '',
       inner,
       () => true,
-      line.facts?.quoteFenceCloser ?? (() => true),
-      // A descent hands each nested quote's fence its own depth to look up.
-      line.facts?.quoteFenceCloser === undefined ? undefined : { levels: 0, askedBelowTop: false },
     )
     state.quoteInner = inner
     state.lazyFoldable = blockQuoteParagraphOpen(inner)
@@ -811,8 +746,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { state, wasQuote } = line
     state.absorbingFence = line.wasAbsorbing
     state.lazyFoldable = true
-    if (line.wasInlineFence) state.inlineFenceParagraph = true
-    if (line.wasInlineFenceBlock && line.wasInlineFence) state.inlineFenceBlock = true
     // A quote's lazy line retains its paragraph claim. A closed quote retains
     // it only while a descendant still owns the line; otherwise a quoted note
     // would lend its claim to prose in the enclosing item (carve-js#3361).
@@ -821,7 +754,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
         line.content,
         wasQuote,
         () => true,
-        () => true,
+        true,
         undefined, undefined, false,
       )
       state.quoteInner = wasQuote
@@ -837,11 +770,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     footnoteBody,
     belowColumnCommentClose,
     literalColonLine,
-    inlineFenceContinuation,
     descendantLiteralColon,
     authoredColonLine,
     belowColumnColonComment,
-    inlineFenceComment,
     openCommentSpan,
     openCodeFence,
     termComment,
@@ -869,15 +800,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     content: string,
     state: ItemLazyState,
     /**
-     * Does a fence of this marker have a closer ahead (PART 9 section 10 I4)?
-     *
-     * `extraColumns` is how far PAST the container's content column the opener is
-     * read, which the descendant recursion needs: a closer at this item's
-     * column is not the descendant's closer, and asking without the offset read an
-     * unterminated descendant fence as a terminated one (corpus 509 rows 4 and 5).
-     */
-    hasFenceCloser: FenceCloser = () => true,
-    /**
      * Does this line sit AT the container's content column, rather than below it?
      *
      * Only the invisible blocks read it. An invisible line AT the column is a
@@ -891,9 +813,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     /**
      * Does a comment fence of this width have a closer ahead (PART 9 §28)?
      *
-     * The default answers "yes" for the same reason `hasFenceCloser`'s does: the
-     * callers that cannot look ahead - the synthetic blank at a `+` marker and an
-     * attached block's own lines - keep the old unconditional behavior.
+     * The default answers "yes": the callers that cannot look ahead - the
+     * synthetic blank at a `+` marker and an attached block's own lines - keep
+     * the unconditional behavior.
      */
     hasCommentCloser: CommentCloser = () => true,
     facts?: ItemLineFacts,
@@ -902,7 +824,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     authoredFenceWhitespace?: number,
     authoredQuoteParagraphOpen = false,
   ): void {
-    const line = beginLine(content, state, hasFenceCloser, atContentColumn, hasCommentCloser, facts,
+    const line = beginLine(content, state, atContentColumn, hasCommentCloser, facts,
       hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
     for (const phase of phases) if (phase(line)) return
   }

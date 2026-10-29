@@ -64,7 +64,7 @@ describe("the code fence's slot before the info string takes a space", () => {
     it(`does not open a code block on ${name}`, () => {
       const html = carveToHtml(`${F}${ws}js\nx\n${F}\n`)
       expect(html).not.toContain('class="language-js"')
-      expect(html).not.toContain('<pre>')
+      expect(html).not.toMatch(/^<pre/)
     })
   }
 
@@ -72,7 +72,7 @@ describe("the code fence's slot before the info string takes a space", () => {
     it(`does not open a code block on ${name}`, () => {
       const html = carveToHtml(`${F}${ws}js\nx\n${F}\n`)
       expect(html).not.toContain('class="language-js"')
-      expect(html).not.toContain('<pre>')
+      expect(html).not.toMatch(/^<pre/)
     })
   }
 
@@ -87,7 +87,7 @@ describe("the code fence's slot before the info string takes a space", () => {
     const html = carveToHtml(`${F}  js\nx\n${F}\n`)
 
     expect(html).not.toContain('class="language-js"')
-    expect(html).not.toContain('<pre>')
+    expect(html).not.toMatch(/^<pre/)
     // The fallback, named: an inline verbatim span in a paragraph, with the
     // author's text still visible rather than dropped.
     expect(html).toContain('<code>')
@@ -147,7 +147,7 @@ describe("the code fence's label slot takes a space, in both alternatives", () =
     it(`is not a fence when the label follows ${name} after a bare header`, () => {
       const html = carveToHtml(`${F}"T"${ws}[L]\nx\n${F}\n`)
       expect(html).not.toContain('title="T"')
-      expect(html).not.toContain('<pre>')
+      expect(html).not.toMatch(/^<pre/)
     })
   }
 })

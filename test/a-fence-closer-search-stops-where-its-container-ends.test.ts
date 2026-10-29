@@ -12,38 +12,41 @@ import { carveToHtml } from '../src/index.js'
  *
  * Expected bytes are the executable reference's, identical at the 0.1.6 tag,
  * at this repo's spec pin and at spec main.
+ *
+ * markup-carve/carve#4018 removed the closer search: every row's fence now opens
+ * and runs to the end of its container.
  */
 describe('a fence closer search stops where its container ends', () => {
   const moved: [string, string, string][] = [
     [
       'an item whose closer is past a blank and a flush-left line',
       '- a\n  ```\n  b\n y\n\nz\n  ```\n',
-      '<ul>\n  <li>a\n<code>\nb\ny</code></li>\n</ul>\n<p>z\n<code></code></p>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y</p>\n<p>z</p>\n<pre><code></code></pre>',
     ],
     [
       'an ordered item whose closer is past a blank and a flush-left line',
       '1. a\n   ```\n   b\n  y\n\nz\n   ```\n',
-      '<ol>\n  <li>a\n<code>\nb\ny</code></li>\n</ol>\n<p>z\n<code></code></p>',
+      '<ol>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ol>\n<p>y</p>\n<p>z</p>\n<pre><code></code></pre>',
     ],
     [
       'a definition body whose closer is past a blank and a flush-left line',
       ':: t\n: a\n  ```\n  b\n y\n\nz\n  ```\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>a\n<code>\nb\ny</code></dd>\n</dl>\n<p>z\n<code></code></p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <pre><code>b\n</code></pre>\n  </dd>\n</dl>\n<p>y</p>\n<p>z</p>\n<pre><code></code></pre>',
     ],
     [
       'a next definition before the closer',
       ':: t\n: a\n  ```\n  b\n y\n: c\n  ```\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>a\n<code>\nb\ny</code></dd>\n  <dd>c\n<code></code></dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <pre><code>b\n</code></pre>\n  </dd>\n</dl>\n<p>y\n: c</p>\n<pre><code></code></pre>',
     ],
     [
       'a next term before the closer',
       ':: t\n: a\n  ```\n  b\n y\n:: u\n  ```\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>a\n<code>\nb\ny</code></dd>\n  <dt>u\n  <code></code></dt>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <pre><code>b\n</code></pre>\n  </dd>\n</dl>\n<p>y</p>\n<dl>\n  <dt>u</dt>\n</dl>\n<pre><code></code></pre>',
     ],
     [
       'a sibling marker before the closer',
       '- a\n  ```\n  b\n y\n- c\n  ```\n',
-      '<ul>\n  <li>a\n<code>\nb\ny</code></li>\n  <li>c\n<code></code></li>\n</ul>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n- c</p>\n<pre><code></code></pre>',
     ],
   ]
 
@@ -72,7 +75,7 @@ describe('a fence closer search stops where its container ends', () => {
     [
       'no closer at all',
       '- a\n  ```\n  b\n y\n',
-      '<ul>\n  <li>a\n<code>\nb\ny</code></li>\n</ul>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y</p>',
     ],
   ]
 

@@ -3,24 +3,23 @@ import { carveToHtml } from '../src/index.js'
 import { parse, renderHtml } from '../src/index.js'
 import { layoutWork } from '../src/parse.js'
 
-describe('an unclosed inline fence span ends at its paragraph blank', () => {
-  it('separates the child item paragraph after an empty span', () => {
+describe('an unclosed fence in an item runs to the end of its container', () => {
+  it('keeps the blank and the next line in a child item fence', () => {
     expect(carveToHtml('- o\n  - h\n    ```\n\n    b\n  t\n')).toBe(
-      '<ul>\n  <li>o\n    <ul>\n      <li><p>h\n<code></code></p>\n        <p>b\nt</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>o\n    <ul>\n      <li>h\n        <pre><code>\nb\n</code></pre>\n      </li>\n    </ul>\n    t\n  </li>\n</ul>',
     )
   })
 
-  it('separates the quoted item after the span', () => {
+  it('keeps the blank in a quoted item fence', () => {
     expect(carveToHtml('> - a\n>   ```\n>   x\n>\n>   z\nflush\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li><p>a\n<code>\nx</code></p>\n      <p>z\nflush</p>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n\nz\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>',
     )
   })
 
   for (const fence of ['```', '````', '~~~', '~~~~']) {
-    it(`separates the paragraph after the unterminated ${fence} span`, () => {
-      const lead = fence.startsWith('`') ? '<code>\nx</code>' : `${fence}\nx`
+    it(`keeps the paragraph after the blank in the unterminated ${fence} fence`, () => {
       expect(carveToHtml(`- a\n  ${fence}\n  x\n\n  z\n`)).toBe(
-        `<ul>\n  <li><p>a\n${lead}</p>\n    <p>z</p>\n  </li>\n</ul>`,
+        '<ul>\n  <li>a\n    <pre><code>x\n\nz\n</code></pre>\n  </li>\n</ul>',
       )
     })
 
@@ -31,9 +30,9 @@ describe('an unclosed inline fence span ends at its paragraph blank', () => {
     })
   }
 
-  it('separates each later paragraph after the unterminated fence', () => {
+  it('keeps each later paragraph in the unterminated fence', () => {
     expect(carveToHtml('- a\n  ```\n  x\n\n  z\n\n  w\n')).toBe(
-      '<ul>\n  <li><p>a\n<code>\nx</code></p>\n    <p>z</p>\n    <p>w</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <pre><code>x\n\nz\n\nw\n</code></pre>\n  </li>\n</ul>',
     )
   })
 
@@ -45,7 +44,7 @@ describe('an unclosed inline fence span ends at its paragraph blank', () => {
     expect(carveToHtml('- a\n\n  z\n')).toContain('<p>z</p>')
   })
 
-  it('bounds repeated inline-span paragraph breaks', () => {
+  it('bounds repeated unclosed fences', () => {
     const previous = layoutWork.on
     try {
       const work = [100, 400, 800].map(count => {
@@ -53,7 +52,7 @@ describe('an unclosed inline fence span ends at its paragraph blank', () => {
         layoutWork.reset()
         layoutWork.on = true
         const html = renderHtml(parse(source))
-        expect(html.match(/<p>z<\/p>/g)?.length).toBe(count)
+        expect(html.match(/<pre><code>x\n\nz\n\n<\/code><\/pre>/g)?.length).toBe(count)
         return layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
       })
       expect(work[1]!).toBeLessThanOrEqual(work[0]! * 4.5)

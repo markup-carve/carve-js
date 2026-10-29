@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { bbcodeToCarve, carveToCarve, carveToHtml } from '../src/index.js'
 
 describe('open issue regressions', () => {
-  it('keeps a list fence open when its closer follows a below-column line', () => {
+  it('ends a list fence at a below-column line before its closer', () => {
     expect(carveToHtml('- a\n  ```\n  b\n y\n  ```').trim()).toBe(
-      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y</p>\n<pre><code></code></pre>',
     )
   })
 
   it('does not use a flush-left fence as a description block closer', () => {
     expect(carveToHtml(':: t\n: a\n  ```\n  b\n y\n```').trim()).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>a\n<code>\nb\ny\n</code></dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <pre><code>b\n</code></pre>\n  </dd>\n</dl>\n<p>y</p>\n<pre><code></code></pre>',
     )
   })
 

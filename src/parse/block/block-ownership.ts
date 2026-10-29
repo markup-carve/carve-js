@@ -71,9 +71,6 @@ interface Form {
   family?: 'code' | 'comment' | 'div'
 }
 
-interface AheadColumn { lengths: number[]; suffix: number[]; from: number }
-interface AheadTree { size: number; columns: AheadColumn[]; max: number[] }
-interface AheadIndex { next: number; at: [('`' | '~'), number][][]; '`': AheadTree; '~': AheadTree }
 
 const CONT_MARKER = /^\+[ \t]*$/
 const COLON_FENCE = /^(:{3,})(.*)$/
@@ -216,7 +213,7 @@ export function ownLines(
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
-  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number>; ahead?: AheadIndex } | null = null
+  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number> } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
   let plusRun: PlusRun = { column: -1, length: 0 }
@@ -527,10 +524,7 @@ export function ownLines(
         const c = closerCol <= col && PURE_FENCE.exec(r)
         return !!(c && c[1]![0] === run[0] && c[1]!.length >= run.length)
       }
-      // A closer below the owner's column never matches (CARVE-P0-014).
-      const reachable = closerAhead(run, at, owner.col, col)
-      if (owner.para && !reachable) return { kind: 'text', interrupts: false }
-      return { kind: 'fence', family: 'code', interrupts: reachable, closes }
+      return { kind: 'fence', family: 'code', interrupts: true, closes }
     }
     const comment = COMMENT_FENCE.exec(rest)
     if (comment) {
@@ -558,7 +552,7 @@ export function ownLines(
     return { kind: 'text', interrupts: false }
   }
 
-  // Closer lookahead in one pass: the widest pure fence run of each character
+  // Span pairing in one pass: the widest pure fence run of each character
   // at or after every line, and the last line of each comment run length.
   function closerRuns(): NonNullable<typeof runs> {
     if (runs) return runs
@@ -577,58 +571,5 @@ export function ownLines(
       if (comment && !runs.lastComment.has(comment[1]!.length)) runs.lastComment.set(comment[1]!.length, j)
     }
     return runs
-  }
-
-  // Whether a closer for `run` lies after line `at`, written from column `lo` to `hi`. The walk asks
-  // in line order, so each line leaves the index once: per character, a max segment tree over columns.
-  function closerAhead(run: string, at: number, lo: number, hi: number): boolean {
-    const all = closerRuns()
-    const index = all.ahead ??= aheadIndex()
-    const char = index[run[0] as '`' | '~']
-    while (index.next <= at) {
-      for (const [ch, column] of index.at[index.next] ?? []) {
-        const tree = index[ch]
-        const entry = tree.columns[column]!
-        entry.from++
-        let k = tree.size + column
-        tree.max[k] = entry.suffix[entry.from] ?? 0
-        for (k >>= 1; k > 0; k >>= 1) tree.max[k] = Math.max(tree.max[2 * k]!, tree.max[2 * k + 1]!)
-      }
-      index.next++
-    }
-    let widest = 0
-    for (let l = char.size + lo, r = char.size + Math.min(hi, char.size - 1) + 1; l < r; l >>= 1, r >>= 1) {
-      if (l & 1) widest = Math.max(widest, char.max[l++]!)
-      if (r & 1) widest = Math.max(widest, char.max[--r]!)
-    }
-    return widest >= run.length
-  }
-
-  function aheadIndex(): AheadIndex {
-    const found: Record<'`' | '~', [number, number][]> = { '`': [], '~': [] }
-    const at: [('`' | '~'), number][][] = []
-    for (let j = 0; j < lines.length; j++) {
-      const m = quotedMeasure(lines[j]!)
-      const c = PURE_FENCE.exec(m.rest)
-      if (!c) continue
-      const ch = c[1]![0] as '`' | '~'
-      found[ch].push([m.col, c[1]!.length])
-      ;(at[j] ??= []).push([ch, m.col])
-    }
-    const tree = (ch: '`' | '~'): AheadTree => {
-      let size = 1
-      for (const [column] of found[ch]) while (size <= column) size *= 2
-      const columns: AheadColumn[] = []
-      for (const [column, length] of found[ch]) (columns[column] ??= { lengths: [], suffix: [], from: 0 }).lengths.push(length)
-      const max = new Array<number>(2 * size).fill(0)
-      columns.forEach((entry, column) => {
-        entry.suffix = new Array<number>(entry.lengths.length)
-        for (let k = entry.lengths.length - 1; k >= 0; k--) entry.suffix[k] = Math.max(entry.lengths[k]!, entry.suffix[k + 1] ?? 0)
-        max[size + column] = entry.suffix[0]!
-      })
-      for (let k = size - 1; k > 0; k--) max[k] = Math.max(max[2 * k]!, max[2 * k + 1]!)
-      return { size, columns, max }
-    }
-    return { next: 0, at, '`': tree('`'), '~': tree('~') }
   }
 }

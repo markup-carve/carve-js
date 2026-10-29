@@ -17,7 +17,7 @@ describe('lint corpus parity', () => {
     ]) {
       const warnings = lintCarve(source)
       const existing = warnings.filter(warning => warning.rule !== 'unclosed-code-fence')
-      expect(existing.map((warning) => warning.rule)).toEqual(['fence-delimiter-indentation'])
+      expect(existing.map((warning) => warning.rule)).toEqual(['block-opener-overindented'])
       expect(existing[0]!.line).toBe(source.split('\n').length - 1)
     }
   })

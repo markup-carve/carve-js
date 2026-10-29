@@ -1080,14 +1080,15 @@ export function lintCarve(
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
   const seenFence = new Set<string>()
   for (const fence of unclosedCodeFences) {
-    const key = `${fence.line}:${fence.column}`
+    const column = fenceSourceColumn(sourceLines[fence.line - 1], fence.marker, fence.column)
+    const key = `${fence.line}:${column}`
     if (seenFence.has(key)) continue
     seenFence.add(key)
-    const start = sourceOffset(fence.line, fence.column)
+    const start = sourceOffset(fence.line, column)
     const ending = fence.reason === 'document' ? 'it runs to the end of the document'
       : fence.reason === 'continuation' ? `a continuation marker on line ${fence.endLine} ends it`
         : `it ends at the end of its container on line ${fence.endLine}`
-    out.push({ line: fence.line, column: fence.column, start, end: start + fence.marker.length,
+    out.push({ line: fence.line, column, start, end: start + fence.marker.length,
       rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
   }
   const seenMarker = new Set<string>()
@@ -2506,6 +2507,15 @@ function collectVerbatimLines(doc: Document): Set<number> {
 }
 
 type SilentFailurePush = (lineNo: number, col: number, len: number, rule: string, message: string) => void
+
+// A top-level opener is read from a dedented line, so take its column from the source.
+function fenceSourceColumn(physical: string | undefined, marker: string, reported: number): number {
+  const at = physical?.indexOf(marker) ?? -1
+  if (physical === undefined || reported !== 1 || at <= 0 || !/^[ \t]+$/.test(physical.slice(0, at))) return reported
+  let column = 1
+  for (const char of physical.slice(0, at)) column += char === '\t' ? 4 - (column - 1) % 4 : 1
+  return column
+}
 
 /** Rule 4a's targeted hint for a fence opener line, or undefined when none applies. */
 function fenceTitleSyntaxMessage(lineText: string): string | undefined {

@@ -47,15 +47,16 @@ describe('a quote-lazy line reaches no content column inside a quoted item', () 
 })
 
 describe('the frame keeps the fence family a wider dedent would lose', () => {
-  it('keeps an unterminated code fence as the term inline verbatim run', () => {
+  it('ends the quote at an unmarked code fence, which a term does not fold', () => {
     expect(carveToHtml('> - :: t\n    ```\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n' +
-        '<code>\ntail</code></dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<pre><code>tail\n</code></pre>',
     )
   })
 
-  it('keeps an unterminated tilde fence as term text', () => {
-    expect(carveToHtml('> - :: t\n    ~~~\ntail\n')).toBe(TERM_FOLD('~~~'))
+  it('ends the quote at an unmarked tilde fence the same way', () => {
+    expect(carveToHtml('> - :: t\n    ~~~\ntail\n')).toBe(
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<pre><code>tail\n</code></pre>',
+    )
   })
 })
 
@@ -142,10 +143,10 @@ describe('marked and unquoted term continuations follow their column', () => {
 })
 
 describe('a lazy marker remains text in its original host', () => {
-  it('leaves a marker the quote folded in to carve#1904, even under a folded fence', () => {
+  it('leaves the quote at an unmarked marker after a quoted fence, which nothing folds into', () => {
     expect(carveToHtml('> - :  d\n> ```\n  - m\n\npara\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>:  d\n<code>\n- m</code></li>\n  </ul>\n' +
-        '</blockquote>\n<p>para</p>',
+      '<blockquote>\n  <ul>\n    <li>:  d</li>\n  </ul>\n  <pre><code></code></pre>\n' +
+        '</blockquote>\n<ul>\n  <li>m</li>\n</ul>\n<p>para</p>',
     )
   })
 })

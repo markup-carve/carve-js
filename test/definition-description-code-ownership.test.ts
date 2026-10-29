@@ -44,14 +44,14 @@ it('folds unmarked indented terms while keeping marked sibling terms', () => {
 })
 
 // CARVE-P2-017 and section 10 I1/I4: inline code does not own layout lines.
-it('opens visible blocks after unmatched description fences', () => {
-  expect(carveToHtml('- :: t\n  :   p\n      ```\n        | a |\n')).toContain('<table>')
-  expect(carveToHtml('- :: a\n  : p\n    ```\n      > q\n')).toContain('<blockquote><p>q</p></blockquote>')
-  expect(carveToHtml('> - :: a\n>   : p\n>         ```\n>       | a |\n')).toContain('<table>')
+it('opens an unmatched description fence, which holds the lines below it', () => {
+  expect(carveToHtml('- :: t\n  :   p\n      ```\n        | a |\n')).toContain('<pre><code>  | a |\n</code></pre>')
+  expect(carveToHtml('- :: a\n  : p\n    ```\n      > q\n')).toContain('<pre><code>  &gt; q\n</code></pre>')
+  expect(carveToHtml('> - :: a\n>   : p\n>         ```\n>       | a |\n')).toContain('<pre><code>| a |\n</code></pre>')
   const colon = carveToHtml('> - :: term\n>   : payload\n   code\n>       ```=html\n>         :::\n>  :: t2\n')
-  expect(colon).toContain('<div>')
+  expect(colon).toContain('<p>payload\ncode</p>\n            :::\n')
   expect(colon).toContain('</ul>\n  <dl>\n    <dt>t2</dt>\n  </dl>')
-  expect(carveToHtml('- :: a\n  : p\n    ```\n      x\n')).toContain('<code>\nx</code>')
+  expect(carveToHtml('- :: a\n  : p\n    ```\n      x\n')).toContain('<pre><code>  x\n</code></pre>')
   expect(carveToHtml('- :: term\n  : desc\n      ```\n      code\n      ```\nafter\n')).toContain('<pre><code>code\n</code></pre>')
 })
 
@@ -62,7 +62,7 @@ it('bounds collection of repeated marker-term descriptions and code', () => {
       const source = '- :: term\n  : payload\n    ```\n    body\n  ```\nafter\n\n'.repeat(count)
       layoutWork.reset()
       layoutWork.on = true
-      expect(carveToHtml(source).match(/<code>/g)).toHaveLength(count)
+      expect(carveToHtml(source).match(/<code>/g)).toHaveLength(count * 2)
       const total = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines + layoutWork.geometryEntries
       expect(total).toBeLessThanOrEqual(source.length * 64)
       return total

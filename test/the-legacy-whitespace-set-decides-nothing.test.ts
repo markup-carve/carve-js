@@ -109,7 +109,7 @@ describe('a fence delimiter line', () => {
     // shed. The trailing run is one rule seen from two ends, so the opener is
     // pinned in the same file: ```<BOM> opened a fence here and stayed prose in
     // carve-rs and carve-php.
-    const opens = (ch: string) => /<pre/.test(carveToHtml('```' + ch + '\nx\n```\n'))
+    const opens = (ch: string) => /^<pre/.test(carveToHtml('```' + ch + '\nx\n```\n'))
     expect(opens('')).toBe(true)
     expect(opens(' ')).toBe(true)
     expect(opens('﻿')).toBe(false)
@@ -135,13 +135,11 @@ describe('a fence delimiter line', () => {
     expect(front(' ')).toContain('t: 1')
   })
 
-  it('is the same rule for the paragraph-interruption closer lookahead', () => {
-    // §10: an UNTERMINATED fence does not interrupt a paragraph. That lookahead
-    // built its own closer regex, so a `<BOM>`-terminated fence counted as
-    // closed and the opener interrupted prose it should have stayed inside.
-    const interrupts = (ch: string) => /<pre/.test(carveToHtml('p\n```\nx\n```' + ch + '\n'))
-    expect(interrupts('')).toBe(true)
-    expect(interrupts('﻿')).toBe(false)
+  it('is the same rule for a fence that interrupts a paragraph', () => {
+    // carve#4018: the opener always interrupts, and the mark still does not close it.
+    const html = (ch: string) => carveToHtml('p\n```\nx\n```' + ch + '\n')
+    expect(html('')).toBe('<p>p</p>\n<pre><code>x\n</code></pre>')
+    expect(html('﻿')).toBe('<p>p</p>\n<pre><code>x\n```﻿\n</code></pre>')
   })
 
   it('is the same rule for the definition prepass, which reads fences too', () => {
@@ -158,12 +156,11 @@ describe('a fence delimiter line', () => {
   })
 
   it('is the same rule for the looseness scan, which reads fences too', () => {
-    // A mark or letter prevents block closure, but the inline run still ends
-    // at the blank paragraph boundary and leaves the list loose.
+    // A mark or letter prevents closure, so the blank is fence payload and the list stays tight.
     const item = (ch: string) => carveToHtml('- a\n  ```\n  x\n  ```' + ch + '\n\n  y\n- b\n')
     expect(item('')).toContain('<li><p>b</p></li>')
-    expect(item('﻿')).toContain('<li><p>b</p></li>')
-    expect(item('X')).toContain('<li><p>b</p></li>')
+    expect(item('﻿')).toContain('<li>b</li>')
+    expect(item('X')).toContain('<li>b</li>')
   })
 })
 

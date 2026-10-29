@@ -5,25 +5,14 @@
       "ticket": "markup-carve/carve#3972",
       "cause": "all three engines agree against the spec model",
       "cases": [
-        "attributes-0df06d3610eb",
-        "attributes-719196d00d25",
         "combined-3448da01d1a5",
         "combined-9558bcc180ca",
         "combined-ad5cfc8e81bf",
-        "fences-094e70214dba",
-        "fences-210eae225792",
         "fences-56d1f5344d97",
-        "fences-bedb43ef18bd",
-        "fences-e9ba3b5bea07",
-        "guards-934580a849cc",
-        "notes-2e2c3497bc39",
         "notes-b468d41965eb",
-        "notes-d347fc2706eb",
         "ownership-34529d739732",
-        "ownership-398f44c68e03",
         "ownership-bd5caf2c0c4d",
         "ownership-ca02e84b0d06",
-        "plus-9f896245edd1",
         "plus-a27fafedeaa0"
       ]
     },
@@ -31,8 +20,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the attributes family",
       "cases": [
-        "attributes-c2b93c1eb074",
-        "attributes-e1149009ae29"
+        "attributes-c2b93c1eb074"
       ]
     },
     {
@@ -53,33 +41,21 @@
       "cause": "untriaged day-one drift in the fences family",
       "cases": [
         "fences-088d930244e3",
-        "fences-12ba255d2b80",
-        "fences-1958265f7488",
-        "fences-3c030897e4af",
-        "fences-498c2b7bdc2d",
-        "fences-4e8b129ee1fb",
-        "fences-560643f4d388",
-        "fences-6896ccccb1be",
         "fences-6bb4b2c08642",
         "fences-7ee69af861a0",
-        "fences-8ed246bfdc05",
         "fences-9e5276462e70",
         "fences-a6ede733e700",
         "fences-be8043b3def8",
         "fences-beb7a2645809",
         "fences-d34ea35bff3e",
-        "fences-dccc1ff8cf70",
-        "fences-e0c82ffb018d"
+        "fences-dccc1ff8cf70"
       ]
     },
     {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
-        "lazy-089311267f17",
         "lazy-10bd0503f93b",
-        "lazy-13e7778cf168",
-        "lazy-36a23222d8a1",
         "lazy-408e39e5714b",
         "lazy-478d76f7299c",
         "lazy-4f5eaac61ed4",
@@ -89,8 +65,6 @@
         "lazy-7f31fa259b62",
         "lazy-7f8806c2a9ca",
         "lazy-828973d41d13",
-        "lazy-866bf2445427",
-        "lazy-93ad85602e94",
         "lazy-a38a85984127",
         "lazy-ce9301a4ca56",
         "lazy-fef11cbd6ca1"
@@ -100,9 +74,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the notes family",
       "cases": [
-        "notes-1d764f61f030",
         "notes-20961955aeb0",
-        "notes-246d1f499031",
         "notes-2ce0a0643b77",
         "notes-32d311a7ca28",
         "notes-39d1eedf337b",
@@ -110,21 +82,15 @@
         "notes-47da77f91f9b",
         "notes-4c972a38291f",
         "notes-5078f8dc86e9",
-        "notes-76c3b47d9531",
         "notes-7758bc8d539d",
-        "notes-793b6c46ddb9",
         "notes-86ea59e81a65",
-        "notes-9022e4c58c93",
-        "notes-a52ebc103a9b",
         "notes-a6dae860b308",
         "notes-a97b2cad213a",
         "notes-ae1372f30051",
         "notes-c3cbc4fb599c",
-        "notes-cff185d47a04",
         "notes-d2500c45a956",
         "notes-dd130b0b59c1",
         "notes-de959a3190f7",
-        "notes-e46b56b71ba2",
         "notes-eb2cca00af0d",
         "notes-ffd53f488294"
       ]
@@ -136,20 +102,14 @@
         "ownership-19a15d4c0b00",
         "ownership-21a349103b78",
         "ownership-25f36671ef59",
-        "ownership-276fc2ecc9ec",
         "ownership-45bdb0dd8da8",
         "ownership-498f1450c332",
         "ownership-4b546e287bf8",
-        "ownership-5527700e441c",
         "ownership-7268daebe735",
         "ownership-75f9e63b2e3f",
-        "ownership-893a70683bb9",
-        "ownership-aa029b4ae556",
         "ownership-ae57ff05e447",
         "ownership-bab956633134",
         "ownership-d2105c9747c5",
-        "ownership-db12bf8f5848",
-        "ownership-faba4478d624",
         "ownership-fdce37c2abe5"
       ]
     },
@@ -169,15 +129,20 @@
       "cases": [
         "roundtrip-29bf84d5501e",
         "roundtrip-356e68ae4d90",
-        "roundtrip-4cea272b514f",
-        "roundtrip-62911e0a7caa",
         "roundtrip-702a692a40ae",
         "roundtrip-73c51797f6b8",
-        "roundtrip-7439f84f3de0",
-        "roundtrip-840844dcac3f",
-        "roundtrip-96f5b8d50c36",
-        "roundtrip-be69d4390d77",
-        "roundtrip-c5731f0c7b04"
+        "roundtrip-96f5b8d50c36"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4018",
+      "cause": "fence opener interruption: a 1-3 space indented opener under a paragraph reached through a + attachment stays inline, and the 763 note-claimed line reads tight here",
+      "cases": [
+        "fences-06ce61cd4497",
+        "fences-870d77f6402c",
+        "notes-bf51f2cb46b8",
+        "ownership-028a847df024",
+        "ownership-94b0c7c5deba"
       ]
     }
   ]

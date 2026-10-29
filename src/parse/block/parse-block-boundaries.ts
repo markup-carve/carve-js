@@ -189,7 +189,6 @@ export interface ItemLazyState {
   // the item, where PART 1 S4 folds the following flush-left line into the
   // paragraph that was never interrupted (carve#891).
   absorbingFence: boolean
-  inlineFenceParagraph?: boolean
   /** Reads a literal line block's marker-shaped payload, which opens no block. */
   literalLayout?: boolean
   // Fed by a definition body's collector rather than a list item's.
@@ -198,11 +197,6 @@ export interface ItemLazyState {
   /** Whether the stored description column came from a term. */
   descriptionHasTerm?: boolean
   closedBelowComment?: boolean
-  // The column of the first fence run with no closer. Its rebase group runs to
-  // the end of the item, so only a line at this exact column is authored again.
-  unclosedFenceBase?: number
-  // The collector's paragraph carry can contain a real code block in a colon body.
-  inlineFenceBlock?: boolean
   unrebasedColonBody?: { width: number }
   // Only a marker-line container admits a named opener past its body column.
   markerColonBody?: boolean
@@ -369,23 +363,6 @@ export function sourceColumn(line: string, quoteLevels = Infinity): number {
  * only removes a TRAILING block, so it cannot change the leading character.
  */
 export const RE_INVISIBLE_BLOCK_LEAD = /^[ \t]*[%[]/
-
-/**
- * Is `content` more text of a paragraph that holds an unclosed fence run?
- *
- * A line that opens a block ends that paragraph instead (section 10), and the
- * block may be a closed one that leaves nothing for a below-column line to
- * continue (CARVE-P0-009). `base` is the column the unclosed run was authored
- * at: a line at exactly that column was rebased with it and is read flush.
- */
-export function continuesInlineFenceParagraph(content: string, base: number | undefined, terminatorFree: boolean): boolean {
-  if (!bottomBlockLeavesParagraphOpen(content)) return false
-  const text = content.trimStart()
-  if (opensCodeFence(text)) return false
-  if (markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, terminatorFree) !== null) return false
-  const atBase = base !== undefined && base > 0 && text !== content && indentColumns(content, base + 1) === base
-  return !atBase || bottomBlockLeavesParagraphOpen(text)
-}
 
 /**
  * The length of the backtick run a cell's source ends INSIDE, or 0 when it ends
@@ -788,7 +765,6 @@ export const listStateHelpers = {
   colonBlockOpenerRun,
   colonFenceOpenerLen,
   commentFenceRun,
-  continuesInlineFenceParagraph,
   extractItemAttr,
   fenceCloseRe,
   hostedAuthoredBlockOpener,

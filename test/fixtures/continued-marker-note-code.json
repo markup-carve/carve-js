@@ -1722,7 +1722,7 @@
   {
     "id": "review-B-f2-body0",
     "source": "- [^n]: text\n  ```\ncode\n  ```\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>code\n<code>\nafter [^n]</code></p>"
+    "html": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>code</p>\n<pre><code>after [^n]\n</code></pre>"
   },
   {
     "id": "review-B-f2-body2",
@@ -1737,22 +1737,22 @@
   {
     "id": "review-B-f4-body0",
     "source": "- [^n]: text\n    ```\ncode\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>code\n<code>\nafter [^n]</code></p>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>code</p>\n<pre><code>after [^n]\n</code></pre>"
   },
   {
     "id": "review-B-f4-body2",
     "source": "- [^n]: text\n    ```\n  code\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li>code\n<code>\nafter [^n]</code></li>\n</ul>"
+    "html": "<ul>\n  <li>code\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <pre><code></code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-f6-body0",
     "source": "- [^n]: text\n      ```\ncode\n      ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>code\n<code>\nafter [^n]</code></p>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>code</p>\n<pre><code>after [^n]\n</code></pre>"
   },
   {
     "id": "review-B-f6-body2",
     "source": "- [^n]: text\n      ```\n  code\n      ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>"
+    "html": "<ul>\n  <li>code\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <pre><code></code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-f6-body4",
@@ -1762,17 +1762,17 @@
   {
     "id": "review-B-unclosed4",
     "source": "- [^n]: text\n    ```\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-unclosed4-more",
     "source": "- [^n]: text\n    more\n    ```\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore</p>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-unclosed-sib",
     "source": "- [^n]: text\n    - child\n    ```\n    code\n- sib\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n  <li>sib\nafter <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child\n<code>\ncode</code><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n  <li>sib\nafter <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></li>\n</ul>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child</p>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-tilde-literal",
@@ -2002,12 +2002,12 @@
   {
     "id": "review-G-fence-holds-marker",
     "source": "- [^n]: text\n    more\n    ```\n- notsib\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n  <li>notsib\n<code>\nafter [^n]</code></li>\n</ul>"
+    "html": "<ul>\n  <li></li>\n  <li>notsib\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore</p>\n      <pre><code></code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-G-fence-first-holds-marker",
     "source": "- [^n]: text\n    ```\n- notsib\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n  <li>notsib\n<code>\nafter [^n]</code></li>\n</ul>"
+    "html": "<ul>\n  <li></li>\n  <li>notsib\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <pre><code></code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-G-comment",
@@ -2117,17 +2117,17 @@
   {
     "id": "review-L-child-unclosed-col0",
     "source": "- [^n]: text\n    - child\n    ```\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child</p>\n      <pre><code>code\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-L-more-fence-body0",
     "source": "- [^n]: text\n    more\n    ```\ncode0\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>code0\n<code>\nafter [^n]</code></p>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>code0</p>\n<pre><code>after [^n]\n</code></pre>"
   },
   {
     "id": "review-L-child-fence-body0",
     "source": "- [^n]: text\n    - child\n    ```\ncode0\n    ```\nafter [^n]\n",
-    "html": "<ul>\n  <li></li>\n</ul>\n<p>code0\n<code>\nafter [^n]</code></p>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>code0</p>\n<pre><code>after [^n]\n</code></pre>"
   },
   {
     "id": "review-L-more-blank-tail0",

@@ -69,11 +69,17 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
   })
 
   // A lazy line continues the item's own paragraph, so the next item's opener still starts a block.
-  for (const before of ['> - a\n> ```\n> x', '> - a\n> b', '> 1. a\n> b\n> c', '> - a\n> - x\n> b', '> - > a\n> b']) {
+  for (const before of ['> - a\n> b', '> 1. a\n> b\n> c', '> - a\n> - x\n> b', '> - > a\n> b']) {
     it(`attaches a heading after ${JSON.stringify(before)} and a sibling stacked quote plus`, () => {
       expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
     })
   }
+
+  // carve#4018: the fence interrupts the item paragraph, so the opener is its payload.
+  it('reads the opener after an unclosed fence below the item as fence payload', () => {
+    expect(flat(carveToHtml('> - a\n> ```\n> x\n> - > +\n# h\n'))).toBe(
+      '<blockquote><ul><li>a</li></ul><pre><code>x- &gt; +</code></pre></blockquote><section id="h"><h1>h</h1></section>')
+  })
 
   // A heading item's lazy line is a paragraph of its own, which the opener folds into.
   it('keeps the opener after a lazy line under a heading item as text', () => {

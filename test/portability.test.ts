@@ -69,8 +69,9 @@ describe('checkPortability — the shapes the withdrawn rule got wrong', () => {
     expect(portable('Some prose.\n1. item\n')).toBe(true)
   })
 
-  it('an unterminated code fence under a paragraph line is portable', () => {
-    expect(portable('Some prose.\n```\ncode\n')).toBe(true)
+  it('an unterminated code fence under a paragraph line is not portable', () => {
+    // Since carve#4018 it interrupts in Carve, while Djot keeps it inline.
+    expect(portable('Some prose.\n```\ncode\n')).toBe(false)
   })
 
   it('a bare image line under a paragraph line is portable', () => {

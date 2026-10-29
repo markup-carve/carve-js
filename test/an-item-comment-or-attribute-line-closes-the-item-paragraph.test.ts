@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 const prefix = '<aside class="admonition note" aria-label="Note">\n'
-const suffix = '  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>\n'
+const suffix = '  <pre><code>code\n::::\n:::\nafter *b*\n</code></pre>\n</aside>\n'
 
 it.each([
   ['- para\n- %% c', '  <ul>\n    <li>para</li>\n    <li></li>\n  </ul>\n'],
@@ -17,12 +17,12 @@ it.each([
 })
 
 it.each([
-  ['- para\n- text', '  <ul>\n    <li>para</li>\n    <li>text\n<code>\ncode</code></li>\n  </ul>\n'],
-  ['para\n- %% c', '  <p>para\n-\n<code>\ncode</code></p>\n'],
-  ['> para\n> - %% c', '  <blockquote><p>para\n-\n<code>\ncode</code></p></blockquote>\n'],
-  ['> para\n> - {#x}', '  <blockquote><p>para\n- {<span class="tag"><strong>#x</strong></span>}\n<code>\ncode</code></p></blockquote>\n'],
+  ['- para\n- text', '  <ul>\n    <li>para</li>\n    <li>text</li>\n  </ul>\n'],
+  ['para\n- %% c', '  <p>para\n-</p>\n'],
+  ['> para\n> - %% c', '  <blockquote><p>para\n-</p></blockquote>\n'],
+  ['> para\n> - {#x}', '  <blockquote><p>para\n- {<span class="tag"><strong>#x</strong></span>}</p></blockquote>\n'],
 ])('keeps a paragraph open after %s', (lead, block) => {
   const source = `::: note\n${lead}\n\`\`\`\ncode\n::::\n:::\nafter *b*\n`
-  const expected = prefix + block + '  <div>\n    <div>\n      <p>after <strong>b</strong></p>\n    </div>\n  </div>\n</aside>\n'
+  const expected = prefix + block + suffix
   expect(carveToHtml(source).trim()).toBe(expected.trim())
 })

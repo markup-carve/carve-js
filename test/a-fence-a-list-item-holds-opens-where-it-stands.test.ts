@@ -169,11 +169,10 @@ describe('a fence a list item holds', () => {
       )
     })
 
-    it('leaves a tilde run on a paragraph continuation line bare', () => {
-      // Four columns in, the run opens nothing, and a tilde fence interrupts
-      // no paragraph in Carve, so an escape there would spell a construct the
-      // source does not hold (carve#2244, carve-js#2020).
-      expect(markdownToCarve(lines('a', sp(4) + tilde))).toBe(lines('a', tilde))
+    it('escapes a tilde run on a paragraph continuation line', () => {
+      // Four columns in, the run is Markdown paragraph text; at column 0 a
+      // Carve fence opener interrupts the paragraph (carve#4018).
+      expect(markdownToCarve(lines('a', sp(4) + tilde))).toBe(lines('a', '\\~\\~\\~'))
     })
   })
 })

@@ -9,10 +9,10 @@ const cases = [
 
 describe('an unclosed run followed by a below-column lazy line', () => {
   for (const [name, source] of cases) {
-    it(`leaves the later paragraph loose: ${name}`, () => {
-      expect(parse(source).children[0]).toMatchObject({ type: 'list', tight: false })
+    it(`ends a tight item at the below-column line: ${name}`, () => {
+      expect(parse(source).children[0]).toMatchObject({ type: 'list', tight: true })
       const html = carveToHtml(source)
-      expect(html).toContain('<li><p>o')
+      expect(html).toContain('<li>o\n    <pre><code></code></pre>')
       expect(html).toContain('<p>t</p>')
     })
   }

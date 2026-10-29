@@ -26,14 +26,14 @@ tail
   ---
     \`\`\`
 `, '<ul><li>outer<ul><li>para</li></ul><hr><pre><code></code></pre></li></ul>'],
-    ['ended sublist with an inline fence', `- outer
+    ['ended sublist with an unclosed fence', `- outer
   - para
     \`\`\`
     code
 
   # h
     \`\`\`
-`, '<ul><li>outer<ul><li>para<code> code</code></li></ul><h1 id="h">h</h1><pre><code></code></pre></li></ul>'],
+`, '<ul><li>outer<ul><li>para<pre><code>code</code></pre></li></ul><h1 id="h">h</h1><pre><code></code></pre></li></ul>'],
     ['quoted heading', `> - ::: box
 >    # h
 tail

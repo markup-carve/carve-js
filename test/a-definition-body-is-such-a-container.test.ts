@@ -31,7 +31,7 @@ const outside = (src: string): string =>
 describe('a definition body is such a container', () => {
   it('a fence on the marker line holds an empty code block', () => {
     expect(carveToHtml(':: t\n:  ```\nbody\n```\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>body\n<code></code></p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>body</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -50,7 +50,7 @@ describe('a definition body is such a container', () => {
     // The other fence kind reaches the tracker through a second pattern, so a
     // fix wired to only one of them passes the row above and fails here.
     expect(outside(':: t\n:  ```=html\nbody\n```\n')).toBe(
-      '<dl>\n</dl>\n<p>body\n<code></code></p>',
+      '<dl>\n</dl>\n<p>body</p>\n<pre><code></code></pre>',
     )
   })
 
@@ -108,20 +108,20 @@ describe('a definition body is such a container', () => {
     )
   })
 
-  it('the closer LOOKAHEAD decides a fence on a line the tracker sees', () => {
+  it('a fence on a line the tracker sees opens with or without a closer', () => {
     // The marker line is seeded by hand and opens its fence unconditionally, so
     // it cannot exercise the lookahead - a mutant that answered "yes, there is a
     // closer" for every fence passed every row above. The lookahead only speaks
     // where a paragraph is ALREADY open and the fence sits at the body column.
     //
-    // No matching closer ahead: the run is inline verbatim and PART of the open
-    // paragraph, so the fold survives and `tail` stays in the `dd`.
+    // No matching closer ahead (carve#4018): the fence still interrupts, and a
+    // fenced body takes no lazy line, so `tail` leaves the `dd`.
     expect(carveToHtml(':: t\n:  para\n   ```\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>para\n<code>\ntail</code></dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>para</p>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>tail</p>',
     )
     // The list spelling of the same document, which is where the rule comes from.
     expect(carveToHtml('- para\n  ```\ntail\n')).toBe(
-      '<ul>\n  <li>para\n<code>\ntail</code></li>\n</ul>',
+      '<ul>\n  <li>para\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>',
     )
     // CONTROL with a closer ahead: the fence really opens, the paragraph ends,
     // and `tail` leaves the `dd`. Without this row the one above passes on a

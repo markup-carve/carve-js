@@ -10,8 +10,8 @@ const h = (s: string) => carveToHtml(s).trim()
 // carve-php. Previously carve-js left an unclosed run as literal text and could
 // shrink the opener to latch onto a shorter closer — both divergences are fixed.
 describe('inline verbatim: unclosed run runs to end of block', () => {
-  it('an unclosed triple-fence inside a paragraph opens a span', () => {
-    expect(h('text\n```\ncode')).toBe('<p>text\n<code>\ncode</code></p>')
+  it('an unclosed triple fence on its own line interrupts the paragraph', () => {
+    expect(h('text\n```\ncode')).toBe('<p>text</p>\n<pre><code>code</code></pre>')
   })
 
   it('a lone unclosed backtick opens a span', () => {
@@ -30,8 +30,8 @@ describe('inline verbatim: unclosed run runs to end of block', () => {
     expect(h('x `` y ` z')).toBe('<p>x <code> y ` z</code></p>')
   })
 
-  it('strips block trailing whitespace from an unclosed span', () => {
-    expect(h('text\n```\ncode ')).toBe('<p>text\n<code>\ncode</code></p>')
+  it('keeps trailing whitespace in an unclosed fence body', () => {
+    expect(h('text\n```\ncode ')).toBe('<p>text</p>\n<pre><code>code </code></pre>')
   })
 
   it('keeps a closed equal-length span unchanged', () => {

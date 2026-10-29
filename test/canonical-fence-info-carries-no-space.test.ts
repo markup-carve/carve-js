@@ -147,11 +147,12 @@ describe('the rule holds under a container prefix', () => {
  */
 describe('the separators inside the info string are not the same slot', () => {
   it('a header glued to the language is not a fence opener', () => {
-    expect(carveToHtml('```js"t"\nx\n```\n')).not.toContain('<pre')
+    // The trailing bare run is a valid opener of its own (carve#4018).
+    expect(carveToHtml('```js"t"\nx\n```\n')).toContain('<p><code>js"t"\nx</code></p>\n<pre><code></code></pre>')
   })
 
   it('a label glued to the language is not a fence opener', () => {
-    expect(carveToHtml('```js[l]\nx\n```\n')).not.toContain('<pre')
+    expect(carveToHtml('```js[l]\nx\n```\n')).toContain('<p><code>js[l]\nx</code></p>\n<pre><code></code></pre>')
   })
 
   it('the writer keeps one separator between every part', () => {

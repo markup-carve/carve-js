@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 const prefix = '<aside class="admonition note" aria-label="Note">\n'
-const tail = '  <pre><code>code\n::::\n</code></pre>\n</aside>\n<p>after <strong>b</strong></p>\n'
+const tail = '  <pre><code>code\n::::\n:::\nafter *b*\n</code></pre>\n</aside>\n'
 const unordered = '  <blockquote>\n    <ul>\n      <li>para</li>\n      <li></li>\n    </ul>\n  </blockquote>\n'
 
 it.each([
@@ -15,9 +15,8 @@ it.each([
   expect(carveToHtml(source).trim()).toBe((prefix + quote + tail).trim())
 })
 
-it('keeps a plain quoted paragraph open', () => {
+it('ends a plain quoted paragraph too', () => {
   const source = '::: note\n> para\n> - %% c\n```\ncode\n::::\n:::\nafter *b*\n'
-  const expected = prefix + '  <blockquote><p>para\n-\n<code>\ncode</code></p></blockquote>\n' +
-    '  <div>\n    <div>\n      <p>after <strong>b</strong></p>\n    </div>\n  </div>\n</aside>\n'
+  const expected = prefix + '  <blockquote><p>para\n-</p></blockquote>\n' + tail
   expect(carveToHtml(source).trim()).toBe(expected.trim())
 })

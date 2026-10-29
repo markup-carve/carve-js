@@ -43,13 +43,13 @@ describe('a code fence line ending in a tab is not a fence', () => {
   // and cannot be `space`. The run is prose.
   it('refuses the opener when an info token follows the tab', () => {
     expect(carveToHtml('```' + TAB + 'php\nx\n```\n')).toBe(
-      '<p><code>' + TAB + 'php\nx\n</code></p>',
+      '<p><code>' + TAB + 'php\nx</code></p>\n<pre><code></code></pre>',
     )
   })
 
   it('refuses the raw-block opener when the format follows the tab', () => {
     expect(carveToHtml('```' + TAB + '=html\n<b>x</b>\n```\n')).toBe(
-      '<p><code>' + TAB + '=html\n&lt;b&gt;x&lt;/b&gt;\n</code></p>',
+      '<p><code>' + TAB + '=html\n&lt;b&gt;x&lt;/b&gt;</code></p>\n<pre><code></code></pre>',
     )
   })
 

@@ -67,14 +67,9 @@ describe('a closed fence in a description body ends it', () => {
         )
       })
 
-      /*
-       * CONTROL, and the reason the rule names the CLOSED fence rather than the
-       * fence line: an unterminated fence opens no block, so the paragraph above
-       * it is still open and the flush-left line folds in. A fix that answered
-       * off the fence line alone would move this row too.
-       */
-      it('keeps the follower inside the body after an UNTERMINATED code fence', () => {
-        expect(html(DOC(col, ['```', 'c']))).toContain('tail</code>')
+      // carve#4018: an unterminated code fence opens too, and the flush-left line ends it.
+      it('ends the body after an UNTERMINATED code fence too', () => {
+        expect(html(DOC(col, ['```', 'c']))).toMatch(/<pre><code>c\n<\/code><\/pre>\n  <\/dd>\n<\/dl>\n<p>tail<\/p>/)
       })
 
       it('keeps the follower inside the body after an UNTERMINATED colon fence', () => {

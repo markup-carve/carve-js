@@ -287,12 +287,12 @@
   {
     "id": "js-38-1",
     "source": "> :: t\n```\n",
-    "html": "<blockquote>\n<dl>\n<dt>t\n<code></code></dt>\n</dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n  </dl>\n</blockquote>\n<pre><code></code></pre>"
   },
   {
     "id": "js-39-1",
     "source": ":: t\n: ::: note\n  more\n [^p]: n\n```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>more</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code></code></pre>"
   },
   {
     "id": "js-39-2",
@@ -317,7 +317,7 @@
   {
     "id": "js-62-1",
     "source": ":: t\n: ::: note\n  para\n [^p]: n\n```\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<pre><code></code></pre>"
   },
   {
     "id": "js-64-1",

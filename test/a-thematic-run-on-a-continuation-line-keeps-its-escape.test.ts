@@ -68,9 +68,9 @@ describe('a thematic run on a continuation line keeps its escape', () => {
     expect(markdownToCarve(continued('| a | b |'))).toBe('foo\n\\| a | b |\n')
   })
 
-  it('leaves a tilde fence bare, which interrupts no paragraph in Carve', () => {
-    expect(markdownToCarve(continued('~~~'))).toBe('foo\n~~~\n')
-    expect(carveToHtml('foo\n~~~\n').trim()).toBe('<p>foo\n~~~</p>')
+  it('escapes a tilde fence, which interrupts a paragraph in Carve', () => {
+    expect(markdownToCarve(continued('~~~'))).toBe('foo\n\\~\\~\\~\n')
+    expect(carveToHtml('foo\n~~~\n').trim()).toBe('<p>foo</p>\n<pre><code></code></pre>')
   })
 
   it('leaves an equals line bare, which opens nothing at column 0', () => {

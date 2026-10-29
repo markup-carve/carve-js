@@ -100,7 +100,7 @@ describe('a fence closer below its authored base uses its available prefix', () 
       '<ul>\n  <li>\n    <div class="box">\n      <pre><code>x\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>after</p>',
     )
     expect(carveToHtml(source('````'))).toBe(
-      '<ul>\n  <li>\n    <div class="box">\n      <pre><code>x\n```\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>after</p>',
+      '<ul>\n  <li>\n    <div class="box">\n      <pre><code>x\n```\n:::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>after</p>',
     )
   })
 

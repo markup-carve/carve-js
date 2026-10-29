@@ -22,8 +22,8 @@ for (const prefix of ['', '> ', '> > ']) for (const fence of ['```', '~~~']) {
 
 it('does not close a note fence with a deeper delimiter', () => {
   const html = carveToHtml('- [^n]: text\n    ```\n    code\n        ```\n    more\nafter [^n]')
-  // The run past the opener is payload, so `after` folds into the open paragraph (CARVE-P2-006).
-  expect(html).toBe('<ul>\n  <li></li>\n</ul>')
+  // The run past the opener is payload; a fenced body takes no lazy line, so `after` leaves (carve#4018).
+  expect(html).toBe('<ul>\n  <li></li>\n</ul>\n<p>after <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>text</p>\n      <pre><code>code\n    ```\nmore\n</code></pre>\n      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>')
 })
 
 it('measures the note body from an ordered item content column', () => {
