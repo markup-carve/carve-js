@@ -73,6 +73,7 @@ interface Frame {
 interface Form {
   kind: 'blank' | 'quote' | 'colon-close' | 'colon' | 'fence' | 'leaf' | 'note' | 'item' | 'term' | 'dd' | 'text'
   interrupts: boolean
+  caption?: boolean
   frame?: number
   run?: number
   closes?: (rest: string, col: number) => boolean
@@ -381,8 +382,6 @@ export function ownLines(
       if (!plusFollower) noteOpener(owner, form, owner.col)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
-      // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
-      if (form.kind === 'leaf' && CAPTION.test(m.rest)) owner.para = true
     }
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
@@ -390,7 +389,8 @@ export function ownLines(
 
     // `col` is where the opener starts in the source, `canon` where it lands.
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon): void {
-      owner.para = false
+      // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
+      owner.para = form.caption === true
       owner.last = form.kind
       if (form.kind === 'term') {
         owner.para = true
@@ -669,7 +669,7 @@ export function ownLines(
         FOOTNOTE_DEF.test(rest) || RE_ABBR_DEF.test(rest) || isAttrLine(rest)) {
       return { kind: 'leaf', interrupts: true }
     }
-    if (CAPTION.test(rest)) return { kind: 'leaf', interrupts: false }
+    if (CAPTION.test(rest)) return { kind: 'leaf', interrupts: false, caption: true }
     return { kind: 'text', interrupts: false }
   }
 
