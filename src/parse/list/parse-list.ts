@@ -3146,7 +3146,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // An attribute line below the child's column has ended that list too.
         let attributeLine = span.start - 1
         const rootSource = lexer.rootLines ?? lexer.lines
-        while (nestedListContentColumn !== undefined && rootSource[attributeLine - 1]?.trimStart().startsWith('{')) {
+        while (nestedListContentColumn !== undefined && /^[ \t>]*\{/.test(rootSource[attributeLine - 1] ?? '')) {
           if (sourceColumn(rootSource[attributeLine - 1]!) < nestedListContentColumn) nestedListContentColumn = undefined
           attributeLine--
         }
