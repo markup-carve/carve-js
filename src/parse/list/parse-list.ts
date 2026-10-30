@@ -3143,6 +3143,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // item. The following paragraph cannot inherit that child's column.
           nestedListContentColumn = undefined
         }
+        // An attribute line below the child's column has ended that list too.
+        let attributeLine = span.start - 1
+        const rootSource = lexer.rootLines ?? lexer.lines
+        while (nestedListContentColumn !== undefined && rootSource[attributeLine - 1]?.trimStart().startsWith('{')) {
+          if (sourceColumn(rootSource[attributeLine - 1]!) < nestedListContentColumn) nestedListContentColumn = undefined
+          attributeLine--
+        }
         const reachesNestedList = nestedListContentColumn !== undefined && rootLine !== undefined &&
           sourceColumn(rootLine) >= nestedListContentColumn
         const belowInlineAdmonition = inlineFenceColumn >= 0 && previousVisibleType === 'admonition' &&
