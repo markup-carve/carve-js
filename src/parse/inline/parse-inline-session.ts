@@ -101,6 +101,32 @@ function editorialCommentEnds(text: string): Map<number, number> {
   return ends
 }
 
+const SYMBOL_TOKENS = ['<-->', '<->', '-->', '<--', '<=>', '==>', '<==', '->', '<-', '!=', '<=', '>=', '+-']
+const COMPARISONS = new Set(['!=', '<=', '>='])
+let comparisonCache: { text: string, at: Set<number> } | undefined
+
+// The `=` of a comparison `!=`, `<=` or `>=` is part of the symbol and neither
+// opens nor closes a bare highlight (PART 9 §9). Symbols read left to right,
+// longest first, so `<==` and `<=>` stay arrows and `!==` closes at its last `=`.
+function comparisonEquals(text: string, at: number): boolean {
+  if (text[at] !== '=') return false
+  if (comparisonCache?.text !== text) {
+    const found = new Set<number>()
+    for (let p = 0; p < text.length;) {
+      if (text[p] === '\\') { p += 2; continue }
+      const tok = '<>=!-+'.includes(text[p]!) ? SYMBOL_TOKENS.find(t => text.startsWith(t, p)) : undefined
+      if (tok) {
+        if (COMPARISONS.has(tok)) found.add(p + 1)
+        p += tok.length
+      } else if (text[p] === '-' && text[p + 1] === '-') {
+        while (text[p] === '-') p++
+      } else p++
+    }
+    comparisonCache = { text, at: found }
+  }
+  return comparisonCache.at.has(at)
+}
+
 // Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
 // `guarded`: it opens only where that character is an open entry on the
 // stack (the PART 3 note under the bare templates, carve#3973 X1).
@@ -108,7 +134,7 @@ function bareOpener(text: string, at: number): 'open' | 'guarded' | 'none' {
   const ch = text[at]!
   const next = text[at + 1]
   const before = text[at - 1]
-  if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && next === '>') || extendsGrapheme(text, at + 1)) return 'none'
+  if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && (next === '>' || comparisonEquals(text, at))) || extendsGrapheme(text, at + 1)) return 'none'
   if (before === undefined) return 'open'
   if (before === '_' || before === '/') return before === '_' || ch === '/' || ch === '_' ? 'guarded' : 'open'
   return /[A-Za-z0-9]/.test(before) ? 'none' : 'open'
@@ -898,7 +924,7 @@ export class InlineParseSession {
     if (!after || isCarveWhitespace(after) || extendsGrapheme(text, i + 1)) return false
     if (after === delim || before === delim || this.openKinds.has(delim)) return false
     if (before && /[A-Za-z0-9]/.test(before)) return false
-    if (delim === '=' && after === '>') return false
+    if (delim === '=' && (after === '>' || comparisonEquals(text, i))) return false
     if (!guardOpen && (before === '_' || ((delim === '/' || delim === '_') && before === '/'))) return false
     return true
   }
@@ -1390,6 +1416,7 @@ export class InlineParseSession {
         // by an alphanumeric. Applies to every delimiter, not just / and _.
         if (next && /[A-Za-z0-9]/.test(next)) continue
         if (extendsGrapheme(text, j + 1)) continue
+        if (delim === '=' && comparisonEquals(text, j)) continue
         return j
       }
     }

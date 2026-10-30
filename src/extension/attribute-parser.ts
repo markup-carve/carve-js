@@ -119,8 +119,11 @@ export function parseAttrs(src: string): Attrs {
         // `class="…"` (invalid HTML), the id branch's reasoning one slot over.
         // The two spellings are not interchangeable in SOURCE - `.` reads an
         // `explicit_identifier`, so `-col` and `w-1/2` are classes only the
-        // key-value form can spell (markup-carve/carve#2435).
-        ;(attrs.classes ??= []).push(val)
+        // key-value form can spell (markup-carve/carve#2435). The value splits
+        // on ASCII whitespace into one class per token; a value with no token
+        // stays one entry (markup-carve/carve#4205).
+        const tokens = val.split(/[\t\n\f\r ]+/).filter(t => t !== '')
+        ;(attrs.classes ??= []).push(...(tokens.length ? tokens : [val]))
         note('.class')
       } else {
         setOwn((attrs.keyValues ??= {}), m[3], val)
