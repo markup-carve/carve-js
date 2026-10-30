@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 // carve-js#3924: a quote's first-block `+` reads its follower at the raw column, before rule A
-// moves the line. Off column 0, the opener line's column and the owning quote's column the `+`
-// is refused and reads like a letter (CARVE-P9-067, carve#3421 rulings of 22 October).
+// moves the line. Off the owning quote's column the `+` is refused and reads like a letter
+// (markup-carve/carve#4409).
 const flat = (html: string): string => html.replace(/>\s+</g, '><').trim()
 
 describe('a quote first-block `+` at an intervening follower column', () => {
@@ -34,10 +34,11 @@ describe('a quote first-block `+` at an intervening follower column', () => {
     for (const host of hosts) {
       for (const stack of ['> +', '> > +', '> > > +']) {
         const opener = host.lead + stack
-        const eligible = [0, host.marker ? host.lead.search(/\S|$/) : host.lead.length, opener.lastIndexOf('>')]
+        const owner = opener.lastIndexOf('>')
         for (let col = 0; col <= 8; col++) {
-          if (eligible.includes(col)) continue
+          if (col === owner) continue
           for (const depth of [0, 1, 2]) {
+            if (col + 2 * depth >= owner && (owner - col) % 2 === 0 && col <= owner) continue
             for (const block of blocks) {
               const follower = ' '.repeat(col) + '> '.repeat(depth) + block
               const doc = (end: string): string => [...host.pre, opener.replace(/\+$/, end), follower].join('\n') + '\n'

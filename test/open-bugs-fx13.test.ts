@@ -3,15 +3,15 @@ import { run, type CliIO } from '../src/cli.js'
 import { carveToHtml, lintCarve, migrateHtml, parse, renderHtml } from '../src/index.js'
 
 describe('first-block item ownership', () => {
-  it('returns a follower at an enclosing item column to that item', () => {
+  it('attaches a follower at the inner marker column to the inner item', () => {
     expect(renderHtml(parse('- - +\n  x\nplain\n'))).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n    x\nplain\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>x\nplain</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
-  it('attaches a block at an item content column without a refusal warning', () => {
-    expect(renderHtml(parse('- +\n  x\n'))).toBe('<ul>\n  <li>x</li>\n</ul>')
-    expect(lintCarve('- +\n  x\n').filter(w => w.rule === 'continuation-marker-refused')).toEqual([])
+  it('refuses a block at an item content column with a warning', () => {
+    expect(renderHtml(parse('- +\n  x\n'))).toBe('<ul>\n  <li>+\nx</li>\n</ul>')
+    expect(lintCarve('- +\n  x\n').filter(w => w.rule === 'continuation-marker-refused')).toHaveLength(1)
   })
 })
 

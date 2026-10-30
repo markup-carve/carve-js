@@ -1,10 +1,10 @@
 import type { Position, BlockNode } from '../ast.js'
 import type { LinkDef } from './inline/inline-resolution.js'
-import type { ParseOptions, UnclosedContainer, RefusedContinuationMarker, StrippedLineOrigin, CloserIndex, QuotedFenceCloserMemo, QuoteLazyHint, AttachedViewScan } from '../parse.js'
+import type { ParseOptions, UnclosedContainer, StrippedLineOrigin, CloserIndex, QuotedFenceCloserMemo, QuoteLazyHint, AttachedViewScan } from '../parse.js'
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
-import type { OverindentedOpener, OwnershipCut } from './block/block-ownership.js'
+import type { OverindentedOpener, OwnershipCut, RefusedPlus } from './block/block-ownership.js'
 
 export const TRAILING_WS = '[ \\t]*$'
 
@@ -114,13 +114,10 @@ export const layoutWork = {
 }
 
 export class Lexer {
-  interruptRefusedSiblingPlusLine = -1
   attachmentBoundaries: Set<number>
   consumedContinuationLines: Set<number>
   /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
-  quoteChainEndsInPlus: Map<number, Map<number, number>>
   /** Per first-block `+` line: the follower column of the outermost quote opened on it. */
-  firstBlockQuoteColumns: Map<number, number>
   prefixMemoLines?: boolean[]
   private storedLines: readonly string[] = []
   private lineView: { lexer: Lexer; start: number; length: number } | undefined
@@ -151,21 +148,20 @@ export class Lexer {
   }
 
   /** Root lines whose quote first-block `+` the walk refused by its follower's raw column. */
-  refusedQuotePlus: Set<number>
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; the offset map already holds it, the column does not. */
   private ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number>; overindented?: OverindentedOpener[] }): void {
-    for (const o of overindented ?? []) {
+  applyOwnership({ lines, cuts, plusLetter, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; plusLetter: string | null; refusedPlus: RefusedPlus[]; overindented: OverindentedOpener[] }): void {
+    for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
+    for (const o of overindented) {
       this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
         column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
         kind: o.kind, owner: o.owner, contentColumn: o.contentColumn, authoredColumn: o.column })
     }
-    for (const index of refusedPlus ?? []) this.refusedQuotePlus.add(index)
-    if (!cuts.size) return
+    if (!cuts.size && plusLetter === null) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
     for (const [index, lineCuts] of cuts) {
       if (lineCuts[0]!.at === 0) {
@@ -461,9 +457,6 @@ export class Lexer {
   ) {
     this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
     this.consumedContinuationLines = inherited?.consumedContinuationLines ?? new Set()
-    this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
-    this.firstBlockQuoteColumns = inherited?.firstBlockQuoteColumns ?? new Map()
-    this.refusedQuotePlus = inherited?.refusedQuotePlus ?? new Set()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
@@ -670,19 +663,6 @@ export class Lexer {
       ? 'continuation' : endLine > this.documentLineCount ? 'document' : 'container'
     this.parseOptions.onUnclosedCodeFence({ line, column: this.lineStartColumn(start) + indent,
       marker, endLine, reason })
-  }
-
-  reportRefusedContinuationMarker(lineIndex: number, column: number, host: RefusedContinuationMarker['host'], reason?: RefusedContinuationMarker['reason'], firstBlock = false): void {
-    const line = this.lineNumber(lineIndex)
-    const next = this.rootLines?.[line] ?? (this.rootLines ? undefined : this.peek())
-    if (reason === undefined && next !== undefined && !isBlankLine(next)) return
-    const physical = this.rootLines?.[line - 1]
-    const plus = physical?.lastIndexOf('+') ?? -1
-    let visual = 1
-    if (plus >= 0) for (const char of physical!.slice(0, plus)) visual += char === '\t' ? 4 - (visual - 1) % 4 : 1
-    this.parseOptions.onRefusedContinuationMarker?.({ line,
-      column: plus >= 0 ? visual : column,
-      host, reason: reason ?? (next === undefined ? 'document' : 'blank'), firstBlock })
   }
 
   /**

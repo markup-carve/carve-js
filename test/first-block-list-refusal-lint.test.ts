@@ -4,18 +4,8 @@ import { lintCarve } from '../src/lint.js'
 const refused = (source: string) =>
   lintCarve(source).filter(w => w.rule === 'continuation-marker-refused').map(w => [w.line, w.column, w.message])
 
-// markup-carve/carve#3482: the first-block form of a note or a description does not pull a column-0 list.
+// A first-block plus of a note or a description attaches a column-0 list (markup-carve/carve#4409).
 describe('a first-block plus above a column-0 list', () => {
-  it.each([
-    ['[^a]: +\n- a list\n', 1, 7, 'It remains text in the footnote.'],
-    ['[^a]: +\n1. b\n', 1, 7, 'It remains text in the footnote.'],
-    [':: t\n: +\n- a list\n', 2, 3, 'The description stays empty.'],
-    [':: t\n: +\n1. b\n', 2, 3, 'The description stays empty.'],
-  ])('%j is reported', (source, line, column, effect) => {
-    expect(refused(source)).toEqual([[line, column, expect.stringContaining('a list')]])
-    expect(refused(source)[0]![2]).toContain(effect)
-  })
-
   // A first-block plus with no eligible block below is refused too (CARVE-P9-067).
   it.each([
     ['[^a]: +\n', 1, 7, 'end of the document'],
@@ -27,6 +17,10 @@ describe('a first-block plus above a column-0 list', () => {
   })
 
   it.each([
+    '[^a]: +\n- a list\n',
+    '[^a]: +\n1. b\n',
+    ':: t\n: +\n- a list\n',
+    ':: t\n: +\n1. b\n',
     '[^a]: +\npara\n',
     ':: t\n: a\n+\n- b\n',
     '[^a]: x\n+\n- b\n',

@@ -31,7 +31,6 @@ import {
   nestedSubLexer,
   newCommentSpanScan,
   orderedMatch,
-  type RefusedContinuationMarker,
   subLexer,
   taskMatch,
   unorderedMatch,
@@ -774,51 +773,6 @@ export function quoteBodyColumn(line: string, levels: number): number {
   return column
 }
 
-/**
- * The columns a stacked marker line's first-block `+` takes a follower at, after `levels` host
- * quote prefixes: the line's own column, and the column of the innermost quote, which owns the
- * `+` (CARVE-P9-067, carve#3421). An intervening opener's column is refused.
- */
-export function stackedOpenerColumns(line: string, levels: number): number[] {
-  let offset = 0
-  for (let level = 0; level < levels; level++) {
-    const end = sourceQuotePrefixEnd(line, offset)
-    if (end < 0) return []
-    offset = end
-  }
-  while (line[offset] === ' ' || line[offset] === '\t') offset++
-  const columns = [sourceColumnAt(line, offset)]
-  let quoteColumn = -1
-  const opener = /^(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] |> )/
-  for (let match = opener.exec(line.slice(offset)); match !== null; match = opener.exec(line.slice(offset))) {
-    if (match[0] === '> ') quoteColumn = sourceColumnAt(line, offset)
-    offset += match[0].length
-    while (line[offset] === ' ') offset++
-  }
-  if (quoteColumn > columns[0]!) columns.push(quoteColumn)
-  return columns
-}
-
-/**
- * The column of a stacked opener's follower after the opener line's `levels` host quote prefixes,
- * or Infinity when its `>` markers sit elsewhere: an indented `>` is no host prefix (`> a` / `  > b`).
- */
-export function stackedFollowerColumn(follower: string, line: string, levels: number): number {
-  let followerOffset = 0
-  let lineOffset = 0
-  for (let level = 0; level < levels; level++) {
-    const followerEnd = sourceQuotePrefixEnd(follower, followerOffset)
-    const lineEnd = sourceQuotePrefixEnd(line, lineOffset)
-    if (followerEnd < 0 || lineEnd < 0) return Infinity
-    if (sourceColumnAt(follower, follower.indexOf('>', followerOffset)) !== sourceColumnAt(line, line.indexOf('>', lineOffset))) {
-      return Infinity
-    }
-    followerOffset = followerEnd
-    lineOffset = lineEnd
-  }
-  return sourceColumn(follower, levels)
-}
-
 export function sourceColumnAt(line: string, offset: number): number {
   let column = 0
   for (let index = 0; index < offset; index++)
@@ -828,7 +782,7 @@ export function sourceColumnAt(line: string, offset: number): number {
 
 export type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean; itemMarkerLine?: boolean }
 
-export type MarkerDecision = { owner?: OpenMarker; reason?: RefusedContinuationMarker['reason']; blockedByInnerList?: boolean; unprefixedQuoteFollower?: boolean }
+export type MarkerDecision = { owner?: OpenMarker }
 
 export class OpenMarkerClassifier {
   private stack: OpenMarker[] = []
@@ -855,7 +809,6 @@ export class OpenMarkerClassifier {
       let owner: OpenMarker | undefined
       const deepestQuote = this.stack.reduce((deepest, entry) => entry.kind === 'quote'
         ? Math.max(deepest, entry.quoteDepth) : deepest, 0)
-      const blockedByInnerList = depth > 0 && this.stack.some(entry => entry.kind === 'list' && entry.quoteDepth >= depth)
       const follower = this.lines[index + 1]
       for (let at = this.stack.length - 1; at >= 0; at--) {
         layoutWork.markerStackEntriesExamined += Number(layoutWork.on)
@@ -867,23 +820,7 @@ export class OpenMarkerClassifier {
         if ((useLocalColumn ? entry.localColumn : entry.column) === markerColumn &&
             entry.quoteDepth === depth && (depth === 0 || depth >= deepestQuote)) { owner = entry; break }
       }
-      if (follower !== undefined) layoutWork.markerFollowerProbes += Number(layoutWork.on)
-      const followerColumn = follower === undefined ? Infinity : useLocalColumn
-        ? sourceQuoteLocalColumn(follower, depth) : sourceColumn(follower, depth)
-      const followerBody = follower === undefined ? '' : sourceQuoteBody(follower)
-      const sibling = follower !== undefined && quotePrefixDepth(follower) === depth &&
-        followerColumn === markerColumn &&
-        (unorderedMatch(followerBody) !== null || orderedMatch(followerBody) !== null)
-      const unprefixedQuoteFollower = depth === 0 && owner?.kind === 'description' && sibling &&
-        this.stack.some(entry => entry.kind === 'quote' && entry.quoteDepth > 0)
-      const reason: MarkerDecision['reason'] = owner === undefined ? 'wrong-column'
-        : follower === undefined ? 'document'
-          : isBlankLine(followerBody) ? 'blank'
-            : followerColumn < markerColumn ? 'left'
-              : followerColumn > markerColumn ? 'right'
-                : sibling && owner.kind === 'list' ? 'sibling' : undefined
-      this.decisions.set(index, { ...(owner ? { owner } : {}), ...(reason ? { reason } : {}),
-        ...(blockedByInnerList ? { blockedByInnerList } : {}), ...(unprefixedQuoteFollower ? { unprefixedQuoteFollower } : {}) })
+      this.decisions.set(index, owner ? { owner } : {})
       return
     }
     if (isBlankLine(line)) return
@@ -954,44 +891,6 @@ export function markerDecision(lexer: Lexer, lineIndex: number): MarkerDecision 
   let classifier = markerClassifiers.get(root)
   if (classifier === undefined) markerClassifiers.set(root, classifier = new OpenMarkerClassifier(root))
   return classifier.get(lexer.lineNumber(lineIndex) - 1)
-}
-
-export function attachesAtDocumentColumnZero(lexer: Lexer, markerColumn = 0, quoteLevels = Infinity, firstBlock = false): boolean {
-  if (lexer.pos > 0) {
-    const marker = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
-    if (marker !== undefined && isContinuationMarker(sourceQuoteBody(marker)) && !firstBlock) {
-      const decision = markerDecision(lexer, lexer.pos - 1)
-      if (decision.reason !== undefined && decision.reason !== 'wrong-column') return false
-    }
-  }
-  // THE DOCUMENT'S OWN LINES, OR THIS LEXER'S IF IT IS THE DOCUMENT. Only a
-  // SUB-lexer carries `rootLines`; the root lexer's `lines` ARE the document,
-  // and reading the absence as "cannot answer" made the gate return true for
-  // every container parsed at top level - which is every one of them
-  // (markup-carve/carve#1814). The distinction that matters is source column
-  // versus FRAME column, and at the root those are the same number.
-  const root = lexer.rootLines ?? lexer.lines
-  const line = root[lexer.lineNumber(lexer.pos) - 1]
-  if (line === undefined) return true
-  // In the document frame, a block quote at column zero is an attachable
-  // first block. An unquoted follower also reaches a stacked quote opener.
-  // A quoted follower in an existing quote must reach the marker's column
-  // inside that quote.
-  if (firstBlock && (quoteLevels === 0 || quotePrefixDepth(line) === 0) &&
-      sourceColumn(line, 0) === 0) return !isListMarkerLine(line)
-  if (quoteLevels === Infinity) {
-    let offset = 0
-    for (let end = sourceQuotePrefixEnd(line, offset); end >= 0; end = sourceQuotePrefixEnd(line, offset)) offset = end
-    return indentColumns(line.slice(offset)) === markerColumn
-  }
-  const column = sourceColumn(line, quoteLevels)
-  return column === markerColumn
-}
-
-/** Is the next line the column-0 list a first-block marker refuses (CARVE-P9-067)? */
-export function firstBlockRefusesList(lexer: Lexer): boolean {
-  const line = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
-  return line !== undefined && sourceColumn(line, 0) === 0 && isListMarkerLine(line)
 }
 
 /**
@@ -1142,8 +1041,6 @@ export const listHelpers = {
   RE_TASK,
   RE_UNORDERED,
   attachBlockPos,
-  attachesAtDocumentColumnZero,
-  firstBlockRefusesList,
   authoredTaskState,
   blockQuoteParagraphOpen,
   bodyHoldsOpenCommentSpan,
@@ -1205,8 +1102,6 @@ export const listHelpers = {
   orderedMatch,
   prefixWalkBound,
   quoteBodyColumn,
-  stackedOpenerColumns,
-  stackedFollowerColumn,
   quoteIndentHasTab,
   quotePrefixDepth,
   quotePrefixLength,

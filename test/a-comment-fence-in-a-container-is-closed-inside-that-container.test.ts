@@ -205,14 +205,11 @@ describe('a comment fence in a container is closed inside that container', () =>
     expect(resolved('- item\n+\n%%%\n[r]: /url\n%%%\n\n[r][]\n')).toBe(false)
     expect(resolved('- item\n+\n\n%%%\n[r]: /url\n%%%\n\n[r][]\n')).toBe(false)
     expect(resolved('- item\n  +\n\n  %%%\n  [r]: /url\n  %%%\n\n[r][]\n')).toBe(false)
-    // And the marker is not a DEPARTURE either. A `+` at column 0 after a blank
-    // line attaches the next block to the item rather than ending it, so the
-    // closer below the marker is still the fence's own. Read as the boundary,
-    // the region never opened and the definition inside it went live while the
-    // body above it stayed invisible.
+    // A refused `+` at column 0 is a paragraph and ends the item, so the line below
+    // it is no closer: the region never opened and the definition is live.
     expect(
       resolved('- item\n  %%%\n  SECRET\n  [r]: /url\n\n+\n  %%%\n\n[r][]\n'),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('an inner container gets its own boundary, not the outer one it follows', () => {

@@ -33,13 +33,13 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
       const source = `${lead}\n${body}${'\n'.repeat(blanks)}${marker}\n${follower}\n`
       const html = carveToHtml(source)
       if (marker.startsWith(' ') && blanks === 2 && code) {
-        expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks - 1)}</code></pre>`)
+        expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)
         expect(html).toContain(follower === 'tail' && lead === '- - - ```' ? '<p>+</p>' : follower === 'tail' ? '<p>+\ntail</p>' : '<p>+</p>')
         return
       }
       if (code) expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)
       else expect(html).toContain(body.trim() ? `x${'\n'.repeat(blanks)}` : '\n'.repeat(blanks))
-      const attached = follower === 'tail' ? 'tail' : follower === '- s' ? '<li>s</li>'
+      const attached = follower === 'tail' ? 'tail' : follower === '- s' ? '<p>+\n- s</p>'
         : follower === '> q' ? '<blockquote><p>q</p></blockquote>'
           : follower === '## heading' ? '<h2>heading</h2>'
             : follower.startsWith('|') ? '<table>'

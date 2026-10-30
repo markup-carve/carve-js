@@ -1,5 +1,7 @@
 import { isValidAttrPayload } from '../../extension/attribute-parser.js'
 import { trimEndSpaceTab } from '../../trim-non-nbsp.js'
+import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
+import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
 import {
   isColonFenceOpener,
   isLinkDefLine,
@@ -16,6 +18,15 @@ export interface OwnershipCut { at: number; removed: number }
 
 /** An opener S3 read past its owner's content column; `char` indexes the input line. */
 export interface OverindentedOpener { index: number; char: number; kind: string; owner: string; contentColumn: number; column: number }
+
+/** A lone `+` the walk spelled as a letter, for the `continuation-marker-refused` lint. */
+export interface RefusedPlus {
+  index: number
+  column: number
+  host: RefusedContinuationMarker['host']
+  reason: RefusedContinuationMarker['reason']
+  firstBlock: boolean
+}
 
 /** One block record of the decision trace, version 1 (carve docs/decision-trace.md). */
 export interface TraceRecord {
@@ -47,8 +58,6 @@ interface Frame {
   // The line a fence or colon body opened on, for trace owner paths only.
   opened?: number
   family?: 'code' | 'comment' | 'div'
-  // The line holding this frame's lone first-block `+`.
-  plus?: number | undefined
   axes?: string | undefined
   run?: number | undefined
   closes?: ((rest: string, col: number) => boolean) | undefined
@@ -57,6 +66,8 @@ interface Frame {
   span?: string | null
   // Lint grouping: the line of the last table row read in this frame.
   tableLine?: number
+  // A description whose marker line held a lone `+`, accepted or refused.
+  plusBody?: boolean
 }
 
 interface Form {
@@ -74,6 +85,7 @@ interface Form {
 
 
 const CONT_MARKER = /^\+[ \t]*$/
+const LINT_HOST: Partial<Record<Frame['kind'], RefusedPlus['host']>> = { item: 'list item', dd: 'definition description', note: 'footnote', quote: 'block quote' }
 const COLON_FENCE = /^(:{3,})(.*)$/
 const COLON_CLOSER = /^(:{3,})[ \t]*$/
 const PURE_FENCE = /^(`{3,}|~{3,})[ \t]*$/
@@ -89,6 +101,8 @@ const ATTR_BLOCK = `\\{(?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\
 const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(?=.)`)
 const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})?( +)(?=.)`)
 const MAX_FRAMES = 200
+const PLUS_LETTER_BASE = 0xf8f0
+const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\[\^[^\]]+\]:) +(?:\[.\] +)?)+\+[ \t]*$/
 // A line that cannot start any opener: no leading punctuation an opener uses and no ordered marker.
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
 const TEXT: Form = { kind: 'text', interrupts: false }
@@ -188,26 +202,11 @@ const quotedRest = (line: string): string => quotedMeasure(line).rest
  * content column. Indentation is only ever removed. `trace` collects one
  * record per line at the step that decided it (S1, S2, S4, S5).
  */
-/** Consecutive lone item `+` lines at one raw column; a quote marker starts none. */
-interface PlusRun { column: number; length: number }
-
-function extendPlusRun(run: PlusRun, afterPlus: boolean, quote: boolean, column: number): PlusRun {
-  if (quote) return { column: -1, length: 1 }
-  return { column, length: afterPlus && column === run.column ? run.length + 1 : 1 }
-}
-
-// A follower left of a lone item `+`'s raw column refuses it, which the canonical lead hides (§17 L3).
-// A run of markers that reached only each other is refused with its last one.
-function refuseLeftFollower(refused: Set<number>, at: number, run: PlusRun, column: number, rest: string): void {
-  if (run.column < 0 || rest === '' || CONT_MARKER.test(rest) || column >= run.column) return
-  for (let k = 1; k <= run.length; k++) refused.add(at - k)
-}
-
 export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number>; overindented: OverindentedOpener[] } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; plusLetter: string | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; overindented: OverindentedOpener[] } {
   const result = lines.slice(0, start)
   if (trace) for (let k = 0; k < start; k++) emit(k, 'INPUT', 'doc', null, 'frontmatter')
   const cuts = new Map<number, OwnershipCut[]>()
@@ -217,9 +216,13 @@ export function ownLines(
   let runs: { widest: Record<string, number[]>; lastComment: Map<number, number> } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
-  let plusRun: PlusRun = { column: -1, length: 0 }
-  // Quote first-block `+` lines whose follower stands at an ineligible raw column.
-  const refusedPlus = new Set<number>()
+  // The stand-in for a refused `+`: readers meet a plain letter, the AST gets the `+` back.
+  let plusLetter: string | null = null
+  // The frames of the host a `+` last attached through. The attached block stands outside
+  // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
+  let attachedHost: Frame[] | null = null
+  const refusedPlus: RefusedPlus[] = []
+  const payloadLines = new Set<number>()
   const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
@@ -249,27 +252,25 @@ export function ownLines(
 
     let reached = 0
     let plus: Frame | null = null
-    // A quote's first-block `+` reads a follower by its raw column (CARVE-P9-067).
-    const quotePlus = top().kind === 'quote' && top().plus === at - 1 ? top() : null
-    const baseAt = quotePlus ? frames.findIndex((f) => f.line === at - 1) : -1
-    let stackCol = quotePlus ? null as number | null : undefined
-    // Column 0 of the follower's own quote level, past host quote prefixes.
-    let zero = 0
+    let quotes = 0
+    let refused = false
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
-      if (stackCol === null && f.line === at - 1) stackCol = -1
       // A lone `+` reaches the marker column of an open marker container.
       if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && m.col === f.markerCol &&
           (f.kind === 'quote' || m.col < f.col)) {
-        plus = f
-        break
+        const reason = refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind)
+        if (reason === null) {
+          plus = f
+          break
+        }
+        refuse(reason, f.kind)
       }
       if (f.kind === 'quote') {
         if (!isQuoteLine(m.rest)) break
-        if (stackCol === -1) stackCol = docColumn(lines[at]!, m.rest)
+        quotes++
         lead(frames[k - 1]!.canon)
         take(src.length - quoteRest(src).length)
-        if (k < baseAt) zero = docColumn(lines[at]!, src)
         m = indentCols(src)
         reached = k
         continue
@@ -277,31 +278,34 @@ export function ownLines(
       if (m.rest !== '' && m.col < f.col) break
       reached = k
     }
+    if (!plus && attachedHost && CONT_MARKER.test(m.rest)) plus = reopenAttachedHost(attachedHost)
     if (plus) {
       // S2: a lone `+` at a marker column (CARVE-P9-067).
       frames.length = frames.indexOf(plus) + 1
+      attachedHost = frames.slice()
       plus.para = false
       lead(plus.markerCanon!)
       finish()
-      plusRun = extendPlusRun(plusRun, afterPlus, plus.kind === 'quote', m.col)
       afterPlus = true
       if (trace) emit(at, 'S2', ownerPath(), 'CARVE-P9-067', 'plus', { cell: 'B-plus-start' })
       continue
     }
     const plusFollower = afterPlus
     afterPlus = false
-    if (plusFollower) refuseLeftFollower(refusedPlus, at, plusRun, m.col, m.rest)
-    const missed = reached < frames.length - 1
-    // A follower at an ineligible raw column refuses the `+` whatever block it starts (CARVE-P9-067, carve#3421).
-    const stacked = typeof stackCol === 'number' && stackCol >= 0
-    if (quotePlus && (missed || stacked) && m.rest !== '' && !CONT_MARKER.test(m.rest)) {
-      const col = stacked ? stackCol! : docColumn(lines[at]!, m.rest)
-      if (col !== 0 && col !== zero && col !== frames[baseAt]!.docMarker && col !== quotePlus.docMarker) refusedPlus.add(at - 1)
+    // An attribute run leads the attached block: the host stays open for the block itself.
+    if (plusFollower && isAttrLine(trimEndSpaceTab(m.rest))) {
+      lead(m.col)
+      finish()
+      afterPlus = true
+      continue
     }
+    if (CONT_MARKER.test(m.rest)) spellStrayPlus(reached)
+    const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
     if (inner.kind === 'fence' && !missed) {
       // S1: an open payload tests its closer first.
+      payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
       lead(Math.max(m.col - inner.cut, inner.canon))
@@ -327,15 +331,20 @@ export function ownLines(
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     const form = classify(m.rest, owner, at, m.col)
+    if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
+    if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
     const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note') &&
       !frames.slice(reached + 1).some((f) => f.kind === 'quote')
-    if (missed && m.rest !== '' && top().para && !form.interrupts &&
+    // A `: ` line below the body column of a description a `+` touched is its sibling at any column (carve#4408).
+    if (missed && m.rest !== '' && top().para && !form.interrupts && !(form.kind === 'dd' && frames[reached + 1]?.plusBody) &&
         !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes) &&
         !(missedNote && form.kind === 'item' &&
           (owner.kind === 'item' || owner.kind === 'dd' || frames.slice(reached + 1).some((f) => f.kind === 'item')))) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
+      if (TRAILING_PLUS.test(m.rest) && !(form.kind === 'dd' &&
+          refusal(at, docColumn(lines[at]!, m.rest), quotes, 'dd') === null)) spellTrailingPlusAsLetter()
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1
       lead(Math.min(Math.max(m.col - owner.cut, owner.canon), limit))
@@ -347,6 +356,7 @@ export function ownLines(
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
     const closedColumn = frames.slice(reached + 1).some((f) => f.kind !== 'quote')
+    const closedDescription = frames.slice(reached + 1).some((f) => f.plusBody)
     frames.length = reached + 1
     owner = top()
     let appliedPath: string | null = null
@@ -373,6 +383,7 @@ export function ownLines(
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
     }
+    if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
     if (trace) traceApply(at, form, appliedPath ?? ownerPath(), closed, reachedPath, plusFollower)
 
@@ -427,10 +438,20 @@ export function ownLines(
       if (m.rest === '' || frames.length > MAX_FRAMES) return
       const form = classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
       if (form.kind === 'text') {
+        if (CONT_MARKER.test(m.rest)) {
+          frame.plusBody = true
+          const reason = refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind)
+          if (reason !== null) {
+            refuse(reason, frame.kind, true)
+            spellPlusAsLetter()
+          } else {
+            afterPlus = true
+            attachedHost = frames.slice()
+          }
+        }
         lead(m.col)
         frame.absorbs = absorbsColon(m.rest)
         frame.para = true
-        if (CONT_MARKER.test(m.rest)) frame.plus = at
         frame.last = 'para'
         return
       }
@@ -445,8 +466,86 @@ export function ownLines(
       lead(m.col)
       apply(frame, col, form, canon + m.col)
     }
+
+    function reopenAttachedHost(host: Frame[]): Frame | null {
+      const col = docColumn(lines[at]!, m.rest)
+      const hostAt = host.findIndex((f, k) => k > 0 && f.docMarker === col &&
+        host.slice(1, k).filter((o) => o.kind === 'quote').length === quotes)
+      if (hostAt <= 0 || refusal(at, col, quotes, host[hostAt]!.kind) !== null) return null
+      frames.length = 0
+      frames.push(...host.slice(0, hostAt + 1))
+      return top()
+    }
+
+    function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
+      if (m.rest === '') return top().kind !== 'fence'
+      return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item'
+    }
+
+    function spellStrayPlus(depth: number): void {
+      if (!refused) reportStray(depth)
+      spellPlusAsLetter()
+    }
+
+    function refuse(reason: RefusedPlus['reason'], kind: Frame['kind'], firstBlock = false): void {
+      refused = true
+      const plusAt = lines[at]!.length - trimEndSpaceTab(lines[at]!).length
+      refusedPlus.push({ index: at, column: docColumn(lines[at]!, lines[at]!.slice(lines[at]!.length - plusAt - 1)) + 1,
+        host: LINT_HOST[kind] ?? 'document', reason, firstBlock })
+    }
+
+    // A `+` no marker column reached: the lint names the shapes that read as a mistaken marker.
+    function reportStray(depth: number): void {
+      const owner = frames[depth]!
+      if (owner.kind === 'quote' && m.col === 0) {
+        const reason = refusal(at, docColumn(lines[at]!, m.rest), quotes, 'item')
+        if (reason !== null) refuse(reason, 'quote')
+      } else if ((owner.kind === 'item' || owner.kind === 'dd' || owner.kind === 'note') && m.col === owner.col) {
+        refuse('wrong-column', owner.kind)
+      } else if (depth === 0 && m.col === 0 && frames.length === 1 && lines[at + 1] !== undefined &&
+          indentCols(lines[at + 1]!).col === 0 && classify(lines[at + 1]!, owner, at + 1, 0).kind !== 'text' &&
+          !COMMENT_LINE.test(lines[at + 1]!)) {
+        refuse('unclaimed', 'doc')
+      }
+    }
+
+    function spellPlusAsLetter(): void {
+      plusLetter ??= pickSentinelRun(occupiedPrivateUse(lines), PLUS_LETTER_BASE, 1)[0]!
+      const letter = plusLetter + m.rest.slice(1)
+      src = src.slice(0, src.length - m.rest.length) + letter
+      m = { col: m.col, rest: letter }
+    }
+
+    // A marker-line `+` read as text under an open paragraph starts no body.
+    function spellTrailingPlusAsLetter(): void {
+      plusLetter ??= pickSentinelRun(occupiedPrivateUse(lines), PLUS_LETTER_BASE, 1)[0]!
+      const letter = m.rest.replace(/\+([ \t]*)$/, `${plusLetter}$1`)
+      src = src.slice(0, src.length - m.rest.length) + letter
+      m = { col: m.col, rest: letter }
+    }
   }
-  return { lines: result, cuts, refusedPlus, overindented }
+  return { lines: result, cuts, plusLetter, refusedPlus, payloadLines, overindented }
+
+  // The one attach rule (carve#4409): the next line stands at `marker` through the
+  // host's `quotes` prefixes and is not the host's sibling. The host decides nothing else.
+  function refusal(at: number, marker: number, quotes: number, host: Frame['kind']): RefusedPlus['reason'] | null {
+    const next = lines[at + 1]
+    if (next === undefined) return 'document'
+    let n = indentCols(next)
+    for (let q = 0; q < quotes; q++) {
+      if (!isQuoteLine(n.rest)) return 'left'
+      n = indentCols(quoteRest(n.rest))
+    }
+    if (n.rest === '') return 'blank'
+    const col = docColumn(next, n.rest)
+    if (col !== marker) return col < marker ? 'left' : 'right'
+    const rest = trimEndSpaceTab(n.rest)
+    // A closer ends a body and is no block.
+    if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon')) return 'document'
+    if (host === 'item' && matchMarker(rest) !== null) return 'sibling'
+    if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return 'sibling'
+    return null
+  }
 
   function openerKind(form: Form, rest: string): string | undefined {
     switch (form.kind) {
@@ -572,5 +671,22 @@ export function ownLines(
       if (comment && !runs.lastComment.has(comment[1]!.length)) runs.lastComment.set(comment[1]!.length, j)
     }
     return runs
+  }
+}
+
+/** Put the `+` back wherever the walk's stand-in landed in the tree. */
+export function restorePlusLetter(root: object, letter: string): void {
+  const stack: object[] = [root]
+  const visited = new WeakSet<object>()
+  while (stack.length > 0) {
+    const node = stack.pop()! as Record<string, unknown>
+    if (visited.has(node)) continue
+    visited.add(node)
+    for (const key of Object.keys(node)) {
+      const value = node[key]
+      if (typeof value === 'string') {
+        if (value.includes(letter)) node[key] = value.replaceAll(letter, '+')
+      } else if (value !== null && typeof value === 'object') stack.push(value)
+    }
   }
 }

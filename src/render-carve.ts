@@ -1,3 +1,4 @@
+import { ownLines } from './parse/block/block-ownership.js'
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { renderHtml } from './render-html.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
@@ -1490,6 +1491,17 @@ export function codeSpanFence(content: string): string {
   return safeFence(content, 1)
 }
 
+const ESCAPED_PLUS_LINE = /\\\+[ \t]*$/
+
+// PART 11 §2: `\+` stays only where a bare `+` would attach the block below it.
+function relaxPlusEscapes(text: string): string {
+  if (!text.includes('\\+')) return text
+  const lines = text.split('\n')
+  const bare = lines.map((line) => line.replace(ESCAPED_PLUS_LINE, '+'))
+  const { lines: owned, payloadLines } = ownLines(bare)
+  return bare.map((line, i) => line === lines[i] || !payloadLines.has(i) && !owned[i]!.endsWith('+') ? line : lines[i]!).join('\n')
+}
+
 export function codeSpanNeedsPad(content: string): boolean {
   return content.startsWith('`') || content.endsWith('`') ||
     (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
@@ -1503,7 +1515,7 @@ export function foldEmptyItemBody(first: string, next: string | undefined, gener
   if (generatedPlaceholder && first === '+' && next?.trim()) {
     return { first: next.trimStart(), consumeNext: true }
   }
-  return { first: first || '+', consumeNext: false }
+  return { first: first && !(generatedPlaceholder && first === '+') ? first : EMPTY_BODY_SENTINEL, consumeNext: false }
 }
 
 export function spellCodeSpan(content: string): string {
@@ -2697,7 +2709,7 @@ class CarveRenderSession {
     for (;;) {
       this.multiLineVerbatim = new Map()
       const out = this.renderCarveOnce(ast, opts, parsedSource)
-      if (this.multiLineVerbatim.size === 0) return out
+      if (this.multiLineVerbatim.size === 0) return relaxPlusEscapes(out)
       const missing = missingVerbatimPayloads(ast, out, this.multiLineVerbatim)
       if (missing.length === 0) return out
       for (const key of missing) {
@@ -3686,7 +3698,7 @@ class CarveRenderSession {
         const spellItem = (body: string): string => {
           const lines = body ? trimNonNbsp(body).split('\n') : ['']
           const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
-          let source = `${indent}${prefix}${first || '+'}\n`
+          let source = `${indent}${prefix}${first || EMPTY_BODY_SENTINEL}\n`
           const continuation = ' '.repeat(continuationWidth)
           for (const line of lines) {
             source += line.startsWith(this.markerColumnTag())

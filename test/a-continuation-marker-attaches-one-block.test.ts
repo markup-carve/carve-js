@@ -86,13 +86,12 @@ describe('a continuation marker attaches one block', () => {
   })
 
   it('a nested marker is measured, not spliced', () => {
-    // The probe measures the definition list, whose body's own `+` takes ONE
-    // block - so the list ends after `q` and the heading is the document's. A
-    // shortcut that let a marker reached INSIDE the probe splice its whole
+    // The probe measures the definition list, whose body's own `+` is refused,
+    // so the list ends after `q` and the heading is the document's. A shortcut that let a marker reached INSIDE the probe splice its whole
     // extent instead restored the old behavior one level down and enlarged the
     // outer block with it, putting the heading inside the item.
     expect(carveToHtml('- a\n+\n:: t\n:  +\n   p\n   q\n# H\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>p\nq</dd>\n    </dl>\n  </li>\n</ul>\n' +
+      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+\np\nq</dd>\n    </dl>\n  </li>\n</ul>\n' +
         '<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })

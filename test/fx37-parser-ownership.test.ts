@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('parser ownership across nested marker bodies', () => {
-  it('returns a line below a nested first-block marker to its definition', () => {
+  it('folds a line below a nested first-block plus into that plus', () => {
     const html = carveToHtml(':: t\n: - - +\n  x\n')
-    expect(html).toContain('<li></li>')
-    expect(html).toContain('</ul>\n    <p>x</p>')
+    expect(html).toContain('<li>+\nx</li>')
   })
 
   it('returns a nested item below a footnote to the enclosing item', () => {
@@ -34,9 +33,9 @@ describe('parser ownership across nested marker bodies', () => {
     expect(html).toContain('</ul>\n<p>x</p>')
   })
 
-  it('attaches heading and quote first blocks inside a description list', () => {
-    expect(carveToHtml(':: t\n: - +\n# H\n')).toContain('<li>\n        <h1 id="H">H</h1>')
-    expect(carveToHtml(':: t\n: - +\n> b\n')).toContain('<li>\n        <blockquote><p>b</p></blockquote>')
+  it('refuses column-zero heading and quote followers inside a description list', () => {
+    expect(carveToHtml(':: t\n: - +\n# H\n')).toContain('<li>+</li>\n    </ul>\n  </dd>\n</dl>\n<section id="H">')
+    expect(carveToHtml(':: t\n: - +\n> b\n')).toContain('<li>+</li>\n    </ul>\n  </dd>\n</dl>\n<blockquote><p>b</p></blockquote>')
   })
 
   it('ends an open footnote paragraph at a below-column list marker', () => {

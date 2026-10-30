@@ -4,7 +4,7 @@ import { carveToHtml } from '../src/index.js'
 // Read by the spec model (scripts/spec/layout.mjs + html.mjs at markup-carve/carve d8a67aa).
 const cases: ReadonlyArray<readonly [string, string]> = [
   ["> - > a\n>   +\n>   - s\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>a\n+\n- s</p></blockquote>\n    </li>\n  </ul>\n</blockquote>"],
+    "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n        <p>a</p>\n        <ul>\n          <li>s</li>\n        </ul>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>"],
   ["- > > q\n    +\n    b\n",
     "<ul>\n  <li>\n    <blockquote>\n      <blockquote><p>q\n+\nb</p></blockquote>\n    </blockquote>\n  </li>\n</ul>"],
   ["- > > q\n    +\n    > r\n",
@@ -38,7 +38,7 @@ const cases: ReadonlyArray<readonly [string, string]> = [
   ["- > > > q\n  >   +\n  >   | a |\n",
     "<ul>\n  <li>\n    <blockquote>\n      <blockquote>\n        <blockquote><p>q\n+</p></blockquote>\n      </blockquote>\n      <table>\n        <tbody>\n          <tr><td>a</td></tr>\n        </tbody>\n      </table>\n    </blockquote>\n  </li>\n</ul>"],
   ["- > - > a\n  >   +\n  >   - s\n",
-    "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>\n          <blockquote><p>a\n+\n- s</p></blockquote>\n        </li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"],
+    "<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>\n          <blockquote>\n            <p>a</p>\n            <ul>\n              <li>s</li>\n            </ul>\n          </blockquote>\n        </li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"],
 ]
 
 describe('a plus on a line short of a quote prefix is paragraph text', () => {

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('quoted first-block list item', () => {
-  it('ends the quote before an unprefixed paragraph or list', () => {
-    expect(carveToHtml('> - +\nflush\n')).toBe('<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>\n<p>flush</p>')
-    expect(carveToHtml('> - +\n- b\n')).toBe('<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>\n<ul>\n  <li>b</li>\n</ul>')
+  it('folds an unprefixed paragraph or list line into the refused plus', () => {
+    expect(carveToHtml('> - +\nflush\n')).toBe('<blockquote>\n  <ul>\n    <li>+\nflush</li>\n  </ul>\n</blockquote>')
+    expect(carveToHtml('> - +\n- b\n')).toBe('<blockquote>\n  <ul>\n    <li>+\n- b</li>\n  </ul>\n</blockquote>')
   })
 
   it('keeps a prefixed line inside the item', () => {

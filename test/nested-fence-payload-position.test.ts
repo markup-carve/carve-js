@@ -14,10 +14,10 @@ it('ends a nested open fence and its lists at the last payload newline', () => {
   expect(code?.type).toBe('code_block')
   if (code?.type !== 'code_block') return
 
-  expect(code.content).toBe('\n')
-  expect(code.pos?.endOffset).toBe(9)
-  expect(item?.pos?.endOffset).toBe(9)
-  expect(inner.pos?.endOffset).toBe(9)
+  expect(code.content).toBe('\n\n')
+  expect(code.pos?.endOffset).toBe(10)
+  expect(item?.pos?.endOffset).toBe(10)
+  expect(inner.pos?.endOffset).toBe(10)
 })
 
 it('keeps the payload boundary when blank lines contain spaces', () => {
@@ -33,8 +33,8 @@ it('keeps the payload boundary when blank lines contain spaces', () => {
   expect(code?.type).toBe('code_block')
   if (code?.type !== 'code_block') return
 
-  expect(code.content).toBe('\n')
-  expect(code.pos?.endOffset).toBe(13)
-  expect(item?.pos?.endOffset).toBe(13)
-  expect(inner.pos?.endOffset).toBe(13)
+  expect(code.content).toBe('\n\n')
+  expect(code.pos?.endOffset).toBe(17)
+  expect(item?.pos?.endOffset).toBe(17)
+  expect(inner.pos?.endOffset).toBe(17)
 })

@@ -14,12 +14,12 @@ const refused = [
   ['quote with a same-column list follower', '> q\n> +\n> - s\n', 3, 2],
 ] as const
 
-const acceptedInNote = [
-  ['footnote, one-column follower', '[^a]: intro\n+\n more\n\nsee[^a]\n'],
-  ['footnote, two-column follower', '[^a]: intro\n+\n  more\n\nsee[^a]\n'],
-  ['footnote, tab-indented follower', '[^a]: intro\n+\n\tmore\n'],
-  ['footnote, blank follower', 'x[^a]\n\n[^a]: note\n+\n\npara\n'],
-  ['quoted note, blank follower', '> [^a]: n\n> +\n\npara\n'],
+const refusedInNote = [
+  ['footnote, one-column follower', '[^a]: intro\n+\n more\n\nsee[^a]\n', [2, 1]],
+  ['footnote, two-column follower', '[^a]: intro\n+\n  more\n\nsee[^a]\n', [2, 1]],
+  ['footnote, tab-indented follower', '[^a]: intro\n+\n\tmore\n', [2, 1]],
+  ['footnote, blank follower', 'x[^a]\n\n[^a]: note\n+\n\npara\n', [4, 1]],
+  ['quoted note, blank follower', '> [^a]: n\n> +\n\npara\n', [2, 3]],
 ] as const
 
 const refusalLocations = (source: string) => lintCarve(source)
@@ -27,8 +27,8 @@ const refusalLocations = (source: string) => lintCarve(source)
   .map(warning => [warning.line, warning.column])
 
 describe('a refused marker at a surviving footnote or quote owner', () => {
-  it.each(acceptedInNote)('keeps %s without a refusal', (_name, source) => {
-    expect(refusalLocations(source)).toEqual([])
+  it.each(refusedInNote)('reports %s in the note', (_name, source, location) => {
+    expect(refusalLocations(source)).toEqual([location])
     if (source.includes('see[^a]') || source.includes('x[^a]')) expect(carveToHtml(source)).toContain('+')
   })
   it.each(refused)('reports %s', (_name, source, column, line) => {

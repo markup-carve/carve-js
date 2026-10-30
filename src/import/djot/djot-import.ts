@@ -16,6 +16,7 @@ import { renderHtml } from '../../render-html.js'
 import { renderDjotImageChildText } from './djot-image-child-text.js'
 import { djotCollapsedReferenceText, djotImageLabelAttributes } from './djot-collapsed-reference.js'
 import { escapeImageAlt } from '../../render-carve.js'
+import { spellEmptyItemPlaceholders } from '../empty-item-placeholder.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
 import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
@@ -1243,7 +1244,7 @@ function collapseLiteralNestedImages(source: string): string {
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
-  try { return convertDjotInput(recoverDjotAttributes(replaceLoneSurrogates(djot)).source) } finally { resetParagraphContext() }
+  try { return spellEmptyItemPlaceholders(convertDjotInput(recoverDjotAttributes(replaceLoneSurrogates(djot)).source)) } finally { resetParagraphContext() }
 }
 
 function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false, skipHeadingTargets = false): string {

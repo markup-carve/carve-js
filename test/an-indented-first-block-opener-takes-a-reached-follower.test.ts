@@ -3,21 +3,21 @@ import { carveToHtml } from '../src/index.js'
 
 const modelHtml = (source: string): string => carveToHtml(source).split('\n').map(line => line.trim()).filter(Boolean).join('\n')
 
-describe('an indented first-block opener takes a reached follower', () => {
-  it('takes a column-zero paragraph into a description quote', () => {
-    expect(modelHtml(':: term\n: body\n  > +\nnext\n')).toBe('<dl>\n<dt>term</dt>\n<dd>\n<p>body</p>\n<blockquote><p>next</p></blockquote>\n</dd>\n</dl>')
+describe('an indented first-block opener refuses a column-zero follower', () => {
+  it('keeps the plus in a description quote', () => {
+    expect(modelHtml(':: term\n: body\n  > +\nnext\n')).toBe('<dl>\n<dt>term</dt>\n<dd>\n<p>body</p>\n<blockquote><p>+\nnext</p></blockquote>\n</dd>\n</dl>')
   })
 
-  it('takes a column-zero paragraph into an item quote', () => {
-    expect(modelHtml('- a\n  > +\npara')).toBe('<ul>\n<li>a\n<blockquote><p>para</p></blockquote>\n</li>\n</ul>')
+  it('keeps the plus in an item quote', () => {
+    expect(modelHtml('- a\n  > +\npara')).toBe('<ul>\n<li>a\n<blockquote><p>+\npara</p></blockquote>\n</li>\n</ul>')
   })
 
-  it('keeps the innermost quote as owner', () => {
-    expect(modelHtml('- a\n  > > +\npara')).toBe('<ul>\n<li>a\n<blockquote>\n<blockquote><p>para</p></blockquote>\n</blockquote>\n</li>\n</ul>')
+  it('keeps the plus in the innermost quote', () => {
+    expect(modelHtml('- a\n  > > +\npara')).toBe('<ul>\n<li>a\n<blockquote>\n<blockquote><p>+\npara</p></blockquote>\n</blockquote>\n</li>\n</ul>')
   })
 
-  it('takes a column-zero paragraph into a task item quote', () => {
-    expect(modelHtml('- [ ] > +\npara')).toBe('<ul class="task-list">\n<li><input type="checkbox" disabled>\n<blockquote><p>para</p></blockquote>\n</li>\n</ul>')
+  it('keeps the plus in a task item quote', () => {
+    expect(modelHtml('- [ ] > +\npara')).toBe('<ul class="task-list">\n<li><input type="checkbox" disabled>\n<blockquote><p>+\npara</p></blockquote>\n</li>\n</ul>')
   })
 
   it('takes a column-zero paragraph into a footnote', () => {

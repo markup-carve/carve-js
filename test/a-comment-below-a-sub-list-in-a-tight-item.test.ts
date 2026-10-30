@@ -25,7 +25,7 @@ import { carveToCarve, carveToHtml, parse, toAstJson } from '../src/index.js'
 /** The parsed tree with source positions dropped - what two passes must share. */
 const treeOf = (source: string): string =>
   JSON.stringify(toAstJson(parse(source)), (key, value) =>
-    key === 'pos' || key === 'srcByteLength' ? undefined : value,
+    key === 'pos' || key === 'srcByteLength' ? undefined : value?.type === 'escaped_text' ? { ...value, type: 'text' } : value,
   )
 
 /** Every property PART 11 §1 asks of the writer, on one document. */

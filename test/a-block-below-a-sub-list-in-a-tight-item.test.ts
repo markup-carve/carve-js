@@ -87,11 +87,8 @@ describe('a paragraph below a sub-list in a tight item', () => {
     roundTrips('- :: T\n  :  d\n+\nZ\n')
   })
 
-  it('needs no marker when the sub-list\'s last item is empty', () => {
-    // Nothing is open below an emptied item, so the marker would cost a
-    // construct the document did not have. This is why the rule recurses into
-    // the last item instead of treating every sub-list as reaching down.
-    expect(carveToCarve('- - +\n  Z\n')).toBe('- - +\n  Z\n')
+  it('needs no marker when the block attaches to the sub-list\'s last item', () => {
+    expect(carveToCarve('- - +\n  Z\n')).toBe('- - Z\n')
     roundTrips('- - +\n  Z\n')
   })
 
@@ -102,9 +99,9 @@ describe('a paragraph below a sub-list in a tight item', () => {
     // middle item and the outer item loses its paragraph.
     const source = '- - - +\n    mid\n+\nout\n'
     expect(shapeOf(source)).toBe(
-      'document(list(list_item(list(list_item(list(list_item),paragraph)),paragraph)))',
+      'document(list(list_item(list(list_item(list(list_item(paragraph)))),paragraph)))',
     )
-    expect(carveToCarve(source)).toBe('- - - +\n    mid\n+\nout\n')
+    expect(carveToCarve(source)).toBe('- - - mid\n+\nout\n')
     roundTrips(source)
   })
 
