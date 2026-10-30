@@ -172,10 +172,12 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
     let table = openers.get(d)
     if (!table) {
       table = new Int32Array(text.length + 1).fill(-1)
+      // A `{X` with no `X}` after it forms nothing, so its `{` is text (CARVE-P9-043).
+      const lastBraced = text.lastIndexOf(`${d}}`)
       for (let i = 0; i < text.length; i++) {
         const prev = text[i - 1]
         const next = text[i + 1]
-        const opens = text[i] === d && next !== undefined && !isCarveWhitespace(next) && next !== d && prev !== d && prev !== '{'
+        const opens = text[i] === d && next !== undefined && !isCarveWhitespace(next) && next !== d && prev !== d && (prev !== '{' || lastBraced <= i)
           && (prev === undefined || !/[\p{L}\p{N}]/u.test(prev))
         table[i + 1] = opens ? i : table[i]!
       }
@@ -202,7 +204,7 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
   // The last `{~` opener and the last `~>` before each position.
   let tildes: { open: Int32Array; arrow: Int32Array } | undefined
   const attached = (at: number): boolean => {
-    if (constructEnds.has(at) || lastLabelClose === at - 1) return true
+    if (constructEnds.has(at) || (at > 0 && lastLabelClose === at - 1)) return true
     const before = text[at - 1]
     if (before === undefined) return false
     if (before === '}') {
