@@ -241,7 +241,7 @@ export const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // code fence allows ```[NPM]; a label after a TYPE word needs a space and is
 // handled by RE_ADMONITION_OPEN. Shares the `:::` closer.
 // Groups: 2 label (bracketed).
-export const RE_DIV_OPEN = balancedLabelMatcher(/^(:{3,}) *(\[[^\n]*\])?[ \t]*$/, [2])
+export const RE_DIV_OPEN = balancedLabelMatcher(/^(:{3,}) *(?:(\[[^\n]*\])[ \t]*|\t[ \t]*)?$/, [2])
 
 export const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 
