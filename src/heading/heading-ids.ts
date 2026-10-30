@@ -2,6 +2,7 @@ import { smartTypographyUsesSource, type SmartTypographyOption } from '../extens
 import { trimMatchingEdges, trimEndNonNbsp } from '../trim-non-nbsp.js'
 import { visitDocumentIds } from '../ast/document-ids.js'
 import { copyResolvedEmptyReferences, hydrateResolvedEmptyReferences, resolveReferenceDestination } from '../parse/inline/reference-state.js'
+import type { UnresolvedReference } from '../parse/inline/reference-state.js'
 import { forEachChildBlockList, withClonedChildBlockLists } from '../parse/block/block-children.js'
 /*
  * Heading identifier generation + cross-reference resolution.
@@ -20,6 +21,7 @@ import type {
   Document,
   Figure,
   FigureGroup,
+  Heading,
   Image,
   InlineNode,
   Paragraph,
@@ -50,6 +52,68 @@ import { hasCaptionAtContentColumn, hasLazySecondLine } from '../parse/block/par
  */
 export function normalizeHeadingRefLabel(label: string): string {
   return normalizeRefLabel(label).normalize('NFC')
+}
+
+/** The headings the resolution pass gives an id; a quoted one enters no heading index. */
+function walkIdHeadings(
+  blocks: BlockNode[],
+  inBlockquote: boolean,
+  visit: (heading: Heading, inBlockquote: boolean) => void,
+): void {
+  for (const b of blocks) {
+    switch (b.type) {
+      case 'heading':
+        visit(b, inBlockquote)
+        break
+      case 'block_quote':
+        walkIdHeadings(b.children, true, visit)
+        break
+      case 'admonition':
+      case 'directive':
+      case 'div':
+      case 'section':
+        walkIdHeadings(b.children, inBlockquote, visit)
+        break
+      case 'list':
+        for (const it of b.items) walkIdHeadings(it.children, inBlockquote, visit)
+        break
+      case 'definition_list':
+        for (const it of b.items)
+          for (const d of it.definitions) walkIdHeadings(d, inBlockquote, visit)
+        break
+      case 'figure':
+        if (b.target.type === 'block_quote') walkIdHeadings(b.target.children, true, visit)
+        else if (b.target.type === 'table') walkIdHeadings([b.target], inBlockquote, visit)
+        break
+      case 'figure_group':
+        walkIdHeadings(b.children, inBlockquote, visit)
+        break
+      case 'table':
+        for (const row of b.rows) for (const cell of row.cells) {
+          if (cell.blocks) walkIdHeadings(cell.blocks, inBlockquote, visit)
+        }
+        break
+      default:
+        break
+    }
+  }
+}
+
+/** Whether the implicit heading index will resolve a reference link still without a destination. */
+export function headingIndexResolves(doc: Document): (node: UnresolvedReference) => boolean {
+  let keys: Set<string> | undefined
+  const collect = (heading: Heading, inBlockquote: boolean): void => {
+    if (!inBlockquote) keys!.add(normalizeHeadingRefLabel(inlineText(heading.children)))
+  }
+  return (node) => {
+    if (node.type !== 'link' || !isCollapsedRef(node.ref, node.rawRef)) return false
+    if (keys === undefined) {
+      keys = new Set()
+      walkIdHeadings(doc.children, false, collect)
+      for (const body of Object.values(doc.footnoteDefs ?? {})) walkIdHeadings(body, false, collect)
+    }
+    return keys.has(normalizeHeadingRefLabel(node.ref)) || keys.has(normalizeHeadingRefLabel(derivedRefLabel(node.ref)))
+  }
 }
 
 /** The key a `</#id>` cross-reference compares ids on (R4): NFC, then exact. */
@@ -448,7 +512,7 @@ export function slugify(
  * `# [Title][maybe]` slugs to `title` regardless of whether `maybe`
  * resolves, so an implicit `[Title][]` can target it consistently.
  */
-export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOption): string {
+export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOption, keepSymbols = false): string {
   let out = ''
   for (const n of nodes) {
     switch (n.type) {
@@ -490,20 +554,20 @@ export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOpti
       case 'small_caps':
       case 'insert':
       case 'delete':
-        out += inlineText(n.children, typography)
+        out += inlineText(n.children, typography, keepSymbols)
         break
       case 'ruby':
-        for (const pair of n.pairs) out += `${inlineText(pair.base, typography)}(${inlineText(pair.annotation, typography)})`
+        for (const pair of n.pairs) out += `${inlineText(pair.base, typography, keepSymbols)}(${inlineText(pair.annotation, typography, keepSymbols)})`
         break
       case 'inline_extension':
         // An `:index[term]` marker is invisible (§8.1): it emits no visible
         // text, so its term must not feed a heading slug or any derived text.
         if (n.name === 'index') break
-        out += inlineText(n.content, typography)
+        out += inlineText(n.content, typography, keepSymbols)
         break
       case 'substitution':
         // CARVE-P2-004: a substitution carries both halves as literal text.
-        out += inlineText(n.old, typography) + inlineText(n.new, typography)
+        out += inlineText(n.old, typography, keepSymbols) + inlineText(n.new, typography, keepSymbols)
         break
       case 'abbreviation':
         out += n.abbr
@@ -528,6 +592,9 @@ export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOpti
       case 'caption_number':
         // Contributes its assigned number (nothing while unresolved).
         out += n.n === undefined ? '' : String(n.n)
+        break
+      case 'symbol':
+        if (keepSymbols) out += `:${n.name}:`
         break
       // footnote, crossref, critic_comment: no slug text
       default:
@@ -604,51 +671,16 @@ function resolveHeadingIdsImpl(
     if (key && !headingRefs.has(key)) headingRefs.set(key, id)
   }
   const assignIds = (blocks: BlockNode[], inBlockquote: boolean): void => {
-    for (const b of blocks) {
-      switch (b.type) {
-        case 'heading':
-          assignHeadingId(b, inBlockquote)
-          break
-        case 'block_quote':
-          assignIds(b.children, true)
-          break
-        case 'admonition':
-        case 'directive':
-        case 'div':
-        case 'section':
-          assignIds(b.children, inBlockquote)
-          break
-        case 'list':
-          for (const it of b.items) assignIds(it.children, inBlockquote)
-          break
-        case 'definition_list':
-          for (const it of b.items)
-            for (const d of it.definitions) assignIds(d, inBlockquote)
-          break
-        case 'figure':
-          if (b.target.type === 'block_quote') assignIds(b.target.children, true)
-          else if (b.target.type === 'table') assignIds([b.target], inBlockquote)
-          break
-        case 'figure_group':
-          assignIds(b.children, inBlockquote)
-          break
-        case 'table':
-          for (const row of b.rows) for (const cell of row.cells) {
-            if (cell.blocks) assignIds(cell.blocks, inBlockquote)
-          }
-          break
-        default:
-          break
-      }
-    }
+    walkIdHeadings(blocks, inBlockquote, assignHeadingId)
   }
   // Reserve every EXPLICIT id in the document (on any node, heading or not)
   // before auto-slugging headings, so a heading's auto id never collides with
   // an explicit `{#id}` elsewhere -- two elements sharing a DOM id is invalid
   // HTML. Matches carve-php, which reserves all explicit ids up front.
-  if (!ingested) visitDocumentIds({ ...doc, footnoteDefs: visibleFootnoteDefs ?? {} }, (id) => {
+  const visibleDoc = { ...doc, footnoteDefs: visibleFootnoteDefs ?? {} }
+  if (!ingested) visitDocumentIds(visibleDoc, (id) => {
     used.reserve(id)
-  })
+  }, headingIndexResolves(visibleDoc))
 
   assignIds(doc.children, false)
   // Not `inBlockquote`: a note body is not quoted material, and the flag only
@@ -1545,7 +1577,8 @@ export function numberCaptionsIn(
     const idx = caption.findIndex((n) => n.type === 'caption_number')
     if (idx === -1) return undefined
     const labelNodes = caption.slice(0, idx)
-    const label = trimLabelWhitespace(inlineText(labelNodes))
+    // A symbol stays in the key as the caption shows it (CARVE-P2-022).
+    const label = trimLabelWhitespace(inlineText(labelNodes, undefined, true))
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next

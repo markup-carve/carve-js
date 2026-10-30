@@ -274,7 +274,10 @@ export class ParseSession extends InlineParseSession {
     const last = nodes[nodes.length - 1]
     if (last?.type !== 'comment' || last.block) return text
     const start = last.pos?.startOffset
-    return start === undefined ? text : text.slice(0, start).replace(/ +$/, '')
+    if (start === undefined) return text
+    const kept = text.slice(0, start).replace(/ +$/, '')
+    // An escaped space is no part of the separating run (carve#4274).
+    return /(?:^|[^\\])(?:\\\\)*\\$/.test(kept) ? `${kept} ` : kept
   }
 
   private lineBlockHost: LineBlockHost | undefined
