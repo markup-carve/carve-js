@@ -331,7 +331,7 @@ export function ownLines(
     // A missed quote keeps the line as the quote's lazy text.
     const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note') &&
       !frames.slice(reached + 1).some((f) => f.kind === 'quote')
-    if (missed && m.rest !== '' && top().para && !form.interrupts &&
+    if (missed && m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
         !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes) &&
         !(missedNote && form.kind === 'item' &&
           (owner.kind === 'item' || owner.kind === 'dd' || frames.slice(reached + 1).some((f) => f.kind === 'item')))) {
