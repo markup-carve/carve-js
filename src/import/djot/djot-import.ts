@@ -10,7 +10,7 @@ import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
-import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from '../../trim-non-nbsp.js'
+import { trimEndMatchingEdges, trimMatchingEdges, trimNonNbsp, trimStartNonNbsp } from '../../trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen, MAX_NESTING_DEPTH } from '../../parse.js'
 import { renderHtml } from '../../render-html.js'
 import { renderDjotImageChildText } from './djot-image-child-text.js'
@@ -332,7 +332,7 @@ function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): s
         const child = lines[end]!.slice(prefix[0].length), body = quoted(child)[1]
         const term = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*):(?:[ \t]|$)/.exec(body)
         if (term) termColumn = term[1]!.length
-        else if (!body.replace(/^[ \t]+|[ \t]+$/g, '') || termColumn !== undefined && leadingIndent(body)[0] <= termColumn && /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)[ \t])/.test(body.replace(/^[ \t]*/, ''))) termColumn = undefined
+        else if (!trimSpaceTab(body) || termColumn !== undefined && leadingIndent(body)[0] <= termColumn && /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)[ \t])/.test(body.replace(/^[ \t]*/, ''))) termColumn = undefined
         nested.push(child)
         end++
       }
@@ -381,22 +381,22 @@ function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth
       let converted = convertDefinitionLists(nested.join('\n'), emptyTerm, depth + 1).replace(/^\{loose\}\n/, '').split('\n')
       const removed = new Set<number>()
       for (let index = 0; index < converted.length; index++) {
-        if (converted[index]!.replace(/^[ \t]+|[ \t]+$/g, '') !== '') continue
+        if (trimSpaceTab(converted[index]!) !== '') continue
         let end = index
-        while (end < converted.length && converted[end]!.replace(/^[ \t]+|[ \t]+$/g, '') === '') end++
+        while (end < converted.length && trimSpaceTab(converted[end]!) === '') end++
         if (converted[end]?.replace(/^[ \t]*/, '').startsWith(':  ')) for (let blank = index; blank < end; blank++) removed.add(blank)
         index = end - 1
       }
       for (let index = 0; index < converted.length; index++) {
         if (converted[index] !== ':  ' + emptyTerm) continue
         let end = index + 1
-        while (end < converted.length && converted[end]!.replace(/^[ \t]+|[ \t]+$/g, '') === '') end++
+        while (end < converted.length && trimSpaceTab(converted[end]!) === '') end++
         if (end > index + 1 && end < converted.length && /^[^ \t]/.test(converted[end]!) && !converted[end]!.startsWith('::')) for (let blank = index + 1; blank < end; blank++) removed.add(blank)
       }
       if (removed.size) converted = converted.filter((_line, index) => !removed.has(index))
       if (end < lines.length && leadingIndent(lines[end]!)[0] === leadingIndent(item[1]!)[0] && /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]/.test(lines[end]!.replace(/^[ \t]*/, ''))) {
         let tail = converted.length
-        while (tail > 0 && converted[tail - 1]!.replace(/^[ \t]+|[ \t]+$/g, '') === '') tail--
+        while (tail > 0 && trimSpaceTab(converted[tail - 1]!) === '') tail--
         if (converted[tail - 1] === ':  ' + emptyTerm) converted.length = tail
       }
       result.push(item[0] + emptyTerm + '\n' + converted.map(value => ' '.repeat(column) + value).join('\n'))
@@ -436,11 +436,11 @@ function convertRootDefinitionLists(source: string, emptyTerm: string): string {
       const [indent] = leadingIndent(term[1]!)
       while (stack.length && indent < stack.at(-1)!.source) pop()
       const top = stack.at(-1)
-      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.replace(/^[ \t]+|[ \t]+$/g, '') === '' || /^ *:{3,}(?:[ \t]+[A-Za-z0-9_-]+)?[ \t]*$/.test(masked[i - 1] ?? '') || (boundaries ??= new Set(djotInlineBoundaries(source, sourceMask, true))).has(sourceAt)
+      const mayStart = top !== undefined || i === 0 || trimSpaceTab(lines[i - 1]!) === '' || /^ *:{3,}(?:[ \t]+[A-Za-z0-9_-]+)?[ \t]*$/.test(masked[i - 1] ?? '') || (boundaries ??= new Set(djotInlineBoundaries(source, sourceMask, true))).has(sourceAt)
       if (mayStart) {
         const authoredTerm = /^([ \t]*):(?:[ \t]+(.*)|$)/.exec(lines[i]!)
         let termText = authoredTerm?.[2] ?? term[2] ?? ''
-        if (termText.replace(/^[ \t]+|[ \t]+$/g, '') === '' || termText.replace(/^[ \t]*/, '').startsWith('{') && /^(?:[ \t]|\{%%\})*$/.test(djotImageLabelAttributes(termText))) termText = emptyTerm
+        if (trimSpaceTab(termText) === '' || termText.replace(/^[ \t]*/, '').startsWith('{') && /^(?:[ \t]|\{%%\})*$/.test(djotImageLabelAttributes(termText))) termText = emptyTerm
         const containerBody = /^:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.test(termText)
         const startsDefinitionBody = rawFence || containerBody
         if (!top || indent === top.source) {
@@ -473,7 +473,7 @@ function convertRootDefinitionLists(source: string, emptyTerm: string): string {
       }
     }
     if (!stack.length) continue
-    if (lines[i]!.replace(/^[ \t]+|[ \t]+$/g, '') === '') {
+    if (trimSpaceTab(lines[i]!) === '') {
       const context = stack.at(-1)!
       if (!context.body && rejectedCommentStartsBlock(lines[i + 1]?.replace(/^[ \t]*/, '') ?? '')) {
         lines[i] = `${' '.repeat(context.target)}:  ${emptyTerm}\n`
@@ -1958,6 +1958,13 @@ function opensDjotCodeBlock(source: string, at: number): boolean {
   return previous === '' || previous.endsWith('|')
 }
 
+// An unclosed span on a marker line can end with its item, so its value is not known here.
+const RE_DJOT_MARKER_LINE = /^[ \t>]*(?:[-*+:]|\(?[0-9A-Za-z]+[.)])[ \t]/
+
+function trimSpaceTab(text: string): string {
+  return trimMatchingEdges(text, code => code === 32 || code === 9)
+}
+
 function normalizeDjotParagraphFences(source: string): string {
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
   const mask = maskDjotOpaque(maskDjotFences(source, undefined, rows, true), false, { code: false })
@@ -2011,12 +2018,12 @@ function normalizeDjotParagraphFences(source: string): string {
       const depth = djotPrefixQuoteDepth(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))
       const valueLines = payload.split('\n').map((value, n) => (n === 0 ? value : trimStartNonNbsp(stripDjotQuotePrefixes(value, depth))))
       // A value line that is a fence run opens a fence in Carve (carve#4018), so the span goes out as raw HTML on one line.
-      if (closed && valueLines.slice(1).some(value => /^(?:`{3,}|~{3,})/.test(value)) && !(run.width >= 3 && opensDjotCodeBlock(source, i))) {
+      if ((closed || !RE_DJOT_MARKER_LINE.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) && valueLines.slice(1).some(value => /^(?:`{3,}|~{3,})/.test(value)) && !(run.width >= 3 && opensDjotCodeBlock(source, i))) {
         output.push(
           source.slice(copied, i),
           '`<code>' + valueLines.join('\n').replace(/[!-\/:-@\[-`{-~]|\n/g, (ch) => `&#${ch.charCodeAt(0)};`) + '</code>`{=html}',
         )
-        copied = end + run.width
+        copied = end + (closed ? run.width : 0)
       // A closer of three or more that starts its line would open a fence (carve#4018); an empty comment after it keeps it a closer.
       } else if (run.width >= 3 && lineHeads.has(i)) {
         let width = 1

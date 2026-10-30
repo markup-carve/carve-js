@@ -6,6 +6,7 @@ import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table/table-display-width.js'
 import { trimCellPadding } from './parse/table/parse-table-cells.js'
+import { openVerbatimRun } from './parse/block/parse-block-boundaries.js'
 import { allocateDashes } from './parse/inline/parse-inline-core.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
@@ -1148,6 +1149,19 @@ function atAnAuthoredBodyColumn<T>(ctx: CarveContext, render: () => T, atItemCon
  * An EMPTY cell takes a single space, not two, so a column does not grow a
  * space each time the document is formatted.
  */
+// A padding pipe after a run that stays open into the next `+` line would be
+// content of the run, so reading the output would change the cell (CARVE-P11-002).
+function dropPaddingInOpenRun(line: string[], openRun: number, restore: (cell: string) => string): number {
+  let run = openRun
+  let lastWritten = -1
+  for (const [index, cell] of line.entries()) {
+    if (cell !== ' ') lastWritten = index
+    run = openVerbatimRun(restore(cell), run)
+  }
+  if (run !== 0 && lastWritten >= 0) line.length = lastWritten + 1
+  return run
+}
+
 export function padCell(prefix: string, content: string): string {
   return content === '' ? `${prefix} ` : `${prefix} ${content} `
 }
@@ -4269,6 +4283,7 @@ class CarveRenderSession {
       }).join('|')}|`
       : undefined
 
+    let openRun = 0
     node.rows.forEach((row, rowIndex) => {
       // `|` alone is prose and `||` is one empty cell (CARVE-P9-082), so a row
       // with no cell has no spelling that keeps its cell count.
@@ -4321,6 +4336,7 @@ class CarveRenderSession {
       rowSlots.push({ index: rows.length, cells, marker: '|', attrs })
       rows.push(renderTableRow(cells, attrs))
       for (const line of continuations[rowIndex]!) {
+        openRun = dropPaddingInOpenRun(line, openRun, cell => this.restoreVerbatim(cell))
         rowSlots.push({ index: rows.length, cells: line, marker: '+', attrs: '' })
         rows.push(`+${line.join('|')}|`)
       }
