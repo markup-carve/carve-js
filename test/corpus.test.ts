@@ -341,6 +341,7 @@ const IMPLEMENTED = new Set([
   'footnotes',
   'inline-footnotes',
   'inside-a-note-a-footnote-shaped-run-is-a-bracket-run',
+  'an-opener-is-open-where-it-stands-so-a-combined-token-after-a-guarded-star-stays-split',
   'generic-divs',
   'definition-lists',
   'comments',

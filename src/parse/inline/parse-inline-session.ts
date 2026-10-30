@@ -1416,7 +1416,7 @@ export class InlineParseSession {
       // opens first.
       if (ch === '/' && text[j + 1] === '*' && delim !== '/' && delim !== '*' && !(text[j - 1] === '*' && bareOpener(text, j - 1) !== 'none')) {
         const close = this.combinedTokenClose(text, j, memo)
-        if (close !== undefined && close + 2 <= end) {
+        if (close !== undefined && close + 2 <= end && !this.combinedTokenDropped(text, j, close, delim, memo)) {
           j = this.pairAttributeEnd(text, close + 2) - 1
           continue
         }
@@ -1635,6 +1635,24 @@ export class InlineParseSession {
     // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
     if (start >= text.length || isCarveWhitespace(text[start]) || extendsGrapheme(text, start)) return undefined
     return combinedSpanCloser(text, start, memo, (open) => this.bracedFrameEnd(text, open), (block) => this.bareBlockOwned(text, block))
+  }
+
+  // A closer of the walk's own span inside a combined token's content would
+  // remove the token's entry from below, so the token did not form (PART 9 §9).
+  private combinedTokenDropped(text: string, at: number, close: number, delim: string, memo: EmphasisMemo): boolean {
+    // A token carrying a block stays formed: test a-combined-token-and-its-guards pins it (carve-js#3910).
+    if (this.pairAttributeEnd(text, close + 2) > close + 2) return false
+    const key = `${delim}c${at}`
+    let found = memo.closes?.get(key)
+    if (found === undefined) {
+      // A walk that stops at `close` proves nothing about the unbounded walks, so
+      // it keeps its failures apart from them; the lazily built tables stay shared.
+      emphasisBrackets(text, memo)
+      linkDestinations(text, memo)
+      const bounded = { ...memo, failed: new Map(), closes: new Map() }
+      ;(memo.closes ??= new Map()).set(key, found = this.findEmphasisClose(text, at + 2, delim, bounded, undefined, undefined, close))
+    }
+    return found !== -1
   }
 
   // A closer that already closed a pair opens nothing, block or no block.
