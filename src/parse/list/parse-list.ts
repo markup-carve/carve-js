@@ -2849,6 +2849,20 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A marker-line note's body runs like a nested definition's, opened by the
     // lead line; its blanks are the note's. A comment closes the note's
     // paragraph, so the run ends with it.
+    // A tail at a sub-item's content column is that sub-item's, and so is the blank before it (§17).
+    const tailInDescendant = (blank: number): boolean => {
+      const tail = nested[blank + 1]
+      if (tail === undefined) return false
+      const column = indentColumns(tail)
+      for (let k = blank - 1; k >= 0; k--) {
+        const ln = nested[k]!
+        if (isBlankLine(ln)) continue
+        const head = /^[ \t]*(?:[-*]|[0-9A-Za-z]+[.)]|\.) +/.exec(ln)
+        if (head && indentColumns(ln) < column) return column >= head[0].length
+        if (indentColumns(ln) === 0) return false
+      }
+      return false
+    }
     const endsOnInvisibleTail = (): boolean => {
       let markerNoteRunEnd = -1
       if (markerNoteItem) {
@@ -2877,7 +2891,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // never loosens. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
-          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
+          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd && !tailInDescendant(k)
         }
         if (invisibleNested(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
