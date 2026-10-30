@@ -215,7 +215,7 @@ export class InlineParseSession {
       const paired = linkDestinations(text, newEmphasisMemo())
       const labels: Array<[number, number]> = []
       const hosts = new Map<number, number>()
-      const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
+      const brackets = text.includes('[') ? buildBracketMap(text, true, undefined, undefined, !this.inNoteBody) : undefined
       for (let at = 0; at < text.length; at++) {
         if (text[at] !== '[') continue
         const close = brackets?.(at)
@@ -284,6 +284,8 @@ export class InlineParseSession {
   private pairEndCacheBytes = 0
   private pairEndCacheBudget = 0
   private inlinePairFrameDepth = 0
+  // No `[^` is a reference inside an inline note (PART 9 section 16), so a pair table reads it as brackets there.
+  private inNoteBody = false
 
   private rememberPairTables(text: string, tables: Array<Int32Array | undefined>, attributeTails = new Map<number, number>(), barePairs = new Map<number, BarePair>()): void {
     const bytes = 128 + text.length * 2 + attributeTails.size * 16 + barePairs.size * 24 + tables.reduce((sum, table) => sum + (table?.byteLength ?? 0), 0)
@@ -303,7 +305,8 @@ export class InlineParseSession {
 
   // A held `_` or `/` changes what a braced marker of its kind guards.
   private pairTableKey(text: string): string {
-    const held = (this.openKinds.has('_') && /\{_[/*~=]/.test(text) ? '_' : '') + (this.openKinds.has('/') && text.includes('{/_') ? '/' : '')
+    const held = (this.openKinds.has('_') && /\{_[/*~=]/.test(text) ? '_' : '') + (this.openKinds.has('/') && text.includes('{/_') ? '/' : '') +
+      (this.inNoteBody && text.includes('[^') ? '^' : '')
     return held === '' ? text : `${text}\0${held}`
   }
 
@@ -346,7 +349,7 @@ export class InlineParseSession {
     }
     const ends = new Int32Array(n + 2).fill(-1)
     const codeEnds = backtickRunEnds(text)
-    const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
+    const brackets = text.includes('[') ? buildBracketMap(text, true, undefined, undefined, !this.inNoteBody) : undefined
     const destinationMemo = newEmphasisMemo()
     const destinations = linkDestinations(text, destinationMemo)
     const editorialDestinations = text.includes('{+') || text.includes('{-') ? linkDestinations(text, destinationMemo, true) : destinations
@@ -907,6 +910,8 @@ export class InlineParseSession {
     this.openKinds = kinds
     const outerTailSlash = this.tailSlash
     this.tailSlash = tailSlash
+    const outerNoteBody = this.inNoteBody
+    this.inNoteBody = inFootnote
     try {
       if (pairs !== undefined) {
         this.pairEndText = text
@@ -936,6 +941,7 @@ export class InlineParseSession {
       this.substitutionScans = outerSubstitutions
       this.openKinds = outer
       this.tailSlash = outerTailSlash
+      this.inNoteBody = outerNoteBody
       inlineDepthState.value--
       this.inlinePairFrameDepth--
     }

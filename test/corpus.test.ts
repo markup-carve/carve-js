@@ -340,6 +340,7 @@ const IMPLEMENTED = new Set([
   'math',
   'footnotes',
   'inline-footnotes',
+  'inside-a-note-a-footnote-shaped-run-is-a-bracket-run',
   'generic-divs',
   'definition-lists',
   'comments',
