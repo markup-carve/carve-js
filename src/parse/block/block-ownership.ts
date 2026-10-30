@@ -11,6 +11,7 @@ import {
   RE_HR,
   RE_LINE_BLOCK_OPEN,
   RE_RAW_FENCE,
+  RE_TABLE_CONT,
 } from '../parse-prepass-core.js'
 
 /** Where a rewritten line lost or gained source characters: `at` is the edited column. */
@@ -64,8 +65,8 @@ interface Frame {
   termCut?: number
   lineBlock?: boolean | undefined
   span?: string | null
-  // Lint grouping: the line of the last table row read in this frame.
-  tableLine?: number
+  // The line of the last table row read in this frame: a `+` row below it is a row, and lint groups by it.
+  tableLine?: number | undefined
   // A description whose marker line held a lone `+`, accepted or refused.
   plusBody?: boolean
 }
@@ -82,6 +83,7 @@ interface Form {
   axes?: string
   lineBlock?: boolean
   family?: 'code' | 'comment' | 'div'
+  table?: boolean
 }
 
 
@@ -180,9 +182,13 @@ function isAttrLine(text: string): boolean {
         break
       }
     }
-    if (close === -1 || !isValidAttrPayload(text.slice(pos + 1, close))) return false
+    if (close === -1) return false
+    const payload = text.slice(pos + 1, close)
+    // `{}` carries no attribute, and a space between blocks ends the run (carve#4078).
+    if (payload.trim() === '' || !isValidAttrPayload(payload)) return false
     lists++
     pos = close + 1
+    if (text[pos] !== '{' && text.slice(pos).trim() !== '') return false
   }
   return lists > 0
 }
@@ -392,6 +398,7 @@ export function ownLines(
       // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
       owner.para = form.caption === true
       owner.last = form.kind
+      owner.tableLine = form.table ? at : undefined
       if (form.kind === 'term') {
         owner.para = true
         owner.termCut = col - canon
@@ -415,9 +422,13 @@ export function ownLines(
           cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes,
           docMarker: docColumn(lines[at]!, src), line: at }
         frames.push(frame)
+        const head = src.slice(0, form.head!)
         take(form.head!)
         m = indentCols(src)
+        const tabLead = (head + src.slice(0, src.length - m.rest.length)).includes('\t')
         content(frame, col + form.head!, canon + form.head!)
+        // Content behind a lead tab is text to the readers, so it opens no row for a `+` to continue.
+        if (tabLead) frame.tableLine = undefined
       }
     }
 
@@ -656,6 +667,10 @@ export function ownLines(
     if (COMMENT_LINE.test(rest)) return { kind: 'leaf', interrupts: true }
     const note = NOTE_HEAD.exec(rest)
     if (note && FOOTNOTE_DEF.test(rest)) return { kind: 'note', width: 2, head: note[0].length, interrupts: true }
+    // T6: a continuation row right under a row of the owner's table moves with the rows (carve#4161).
+    if (owner.tableLine === at - 1 && RE_TABLE_CONT.test(rest) && isTableRow('|' + rest.slice(1))) {
+      return { kind: 'leaf', interrupts: true, table: true }
+    }
     const marker = matchMarker(rest)
     // §10 I2: under an open paragraph a marker opens only in a list item. A term is not such a paragraph.
     if (marker && owner.para && owner.kind !== 'item' && owner.last !== 'term') return { kind: 'text', interrupts: false }
@@ -665,7 +680,8 @@ export function ownLines(
     if (dd && (owner.last === 'term' || owner.last === 'dd')) {
       return { kind: 'dd', width: 1 + dd[1]!.length, head: 1 + dd[1]!.length, interrupts: false }
     }
-    if (HEADING.test(rest) || RE_HR.test(rest) || isTableRow(rest) || isLinkDefLine(rest) ||
+    if (isTableRow(rest)) return { kind: 'leaf', interrupts: true, table: true }
+    if (HEADING.test(rest) || RE_HR.test(rest) || isLinkDefLine(rest) ||
         FOOTNOTE_DEF.test(rest) || RE_ABBR_DEF.test(rest) || isAttrLine(rest)) {
       return { kind: 'leaf', interrupts: true }
     }
