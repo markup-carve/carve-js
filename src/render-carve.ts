@@ -646,6 +646,7 @@ const CLOSED_BEFORE_A_MARKER = new Set<BlockNode['type']>([
   'thematic_break',
   'comment',
   'table',
+  'list',
   'div',
   'admonition',
   'link_reference_definition',

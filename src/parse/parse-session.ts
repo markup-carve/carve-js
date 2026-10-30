@@ -1898,8 +1898,9 @@ export class ParseSession extends InlineParseSession {
     // captionable host. It holds nothing the caption could be about, and taking
     // one binds the caption across the container change that opened the quote -
     // which is how `| a |` / blank / `>` / blank / `^ cap` captioned an empty
-    // quote nobody wrote the caption under (markup-carve/carve#2892).
-    if (children.length === 0) return bq
+    // quote nobody wrote the caption under (markup-carve/carve#2892). A comment
+    // renders nothing, so a comment-only quote is the same (carve#4220).
+    if (children.every(child => child.type === 'comment')) return bq
     // Optional caption with ^
     // Allow one blank line between
     let lookahead = 0
