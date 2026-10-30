@@ -1372,15 +1372,49 @@ export function isBlockAttributeLine(content: string): boolean {
 // attributes); otherwise the `{` is ordinary content and there is no row attr.
 export function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
   const stripped = trimEndSpaceTab(line)
-  const lastPipe = stripped.lastIndexOf('|')
-  if (lastPipe < 0 || stripped[lastPipe + 1] !== '{') return { body: line }
-  const after = stripped.slice(lastPipe + 1)
-  const m = RE_INLINE_ATTR.exec(after)
-  if (m && m[0].length === after.length && isValidInlineAttrPayload(m[1]!)) {
-    const attrs = parseAttrs(m[1]!)
-    if (!isEmptyAttrs(attrs)) return { attrs, body: stripped.slice(0, lastPipe + 1) }
+  const last = stripped.lastIndexOf('|{')
+  if (last < 0 || stripped[stripped.length - 1] !== '}') return { body: line }
+  // A quoted value may hold `|{`, so the block's own `|{` is the last one whose
+  // tail reads as one block, not simply the last one in the line.
+  const tailIsBlock = last === stripped.indexOf('|{') || !/['"]/.test(stripped.slice(last)) ? null : blockTailStarts(stripped)
+  for (let pipe = last; pipe >= 0; pipe = pipe > 0 ? stripped.lastIndexOf('|{', pipe - 1) : -1) {
+    if (tailIsBlock && !tailIsBlock[pipe + 2]) continue
+    const payload = stripped.slice(pipe + 2, -1)
+    if (payload === '' || (!tailIsBlock && RE_INLINE_ATTR.exec(stripped.slice(pipe + 1))?.[0].length !== stripped.length - pipe - 1)) break
+    if (isValidInlineAttrPayload(payload)) {
+      const attrs = parseAttrs(payload)
+      if (!isEmptyAttrs(attrs)) return { attrs, body: stripped.slice(0, pipe + 1) }
+      break
+    }
+    if (!tailIsBlock) break
   }
   return { body: line }
+}
+
+/**
+ * For each index, whether an attribute payload read from there ends at the
+ * line's final `}` with no bare `|`, which no attribute item holds. One
+ * right-to-left pass, so a line of many `|{` stays linear.
+ */
+function blockTailStarts(line: string): Uint8Array {
+  const n = line.length
+  const reads = new Uint8Array(n + 1)
+  // The closing quote for a string whose content is read from each index.
+  const closes = { '"': new Int32Array(n + 2).fill(-1), "'": new Int32Array(n + 2).fill(-1) }
+  for (let i = n - 1; i >= 0; i--) {
+    const c = line[i]!
+    for (const quote of ['"', "'"] as const) {
+      const close = closes[quote]
+      close[i] = c === quote ? i : c === '\\' ? close[i + 2]! : close[i + 1]!
+    }
+    if (c === '}') reads[i] = i === n - 1 ? 1 : 0
+    else if (c === '|') reads[i] = 0
+    else if (c === '"' || c === "'") {
+      const close = closes[c][i + 1]!
+      reads[i] = close < 0 ? 0 : reads[close + 1]!
+    } else reads[i] = reads[i + 1]!
+  }
+  return reads
 }
 
 /**
