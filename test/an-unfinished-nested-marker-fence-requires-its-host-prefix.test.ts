@@ -146,11 +146,11 @@ it("ends the deepest fence before middle item text with ```", () => {
     "          </li>",
     "        </ul>",
     "        x",
+    "tail",
     "      </li>",
     "    </ul>",
     "  </li>",
     "</ul>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -240,11 +240,11 @@ it("ends the deepest fence before middle item text with ~~~", () => {
     "          </li>",
     "        </ul>",
     "        x",
+    "tail",
     "      </li>",
     "    </ul>",
     "  </li>",
     "</ul>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -334,11 +334,11 @@ it("ends the deepest fence before middle item text with ``` x", () => {
     "          </li>",
     "        </ul>",
     "        x",
+    "tail",
     "      </li>",
     "    </ul>",
     "  </li>",
     "</ul>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -428,11 +428,11 @@ it("ends the deepest fence before middle item text with ````", () => {
     "          </li>",
     "        </ul>",
     "        x",
+    "tail",
     "      </li>",
     "    </ul>",
     "  </li>",
     "</ul>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 

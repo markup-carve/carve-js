@@ -154,14 +154,14 @@ export class Lexer {
   private ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, plusLetter, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; plusLetter: string | null; refusedPlus: RefusedPlus[]; overindented: OverindentedOpener[] }): void {
+  applyOwnership({ lines, cuts, letters, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; overindented: OverindentedOpener[] }): void {
     for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
     for (const o of overindented) {
       this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
         column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
         kind: o.kind, owner: o.owner, contentColumn: o.contentColumn, authoredColumn: o.column })
     }
-    if (!cuts.size && plusLetter === null) return
+    if (!cuts.size && letters === null) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
     for (const [index, lineCuts] of cuts) {
       if (lineCuts[0]!.at === 0) {

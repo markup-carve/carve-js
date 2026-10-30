@@ -16,7 +16,7 @@ describe('nested term source columns', () => {
 
   it('returns a below-column marker to the surviving description', () => {
     const source = ':: outer\n:  detail\n    :: inner\n  :  tail\n'
-    expect(carveToHtml(source)).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<p>:  tail<\/p>/)
+    expect(carveToHtml(source)).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<\/dd>\s*<dd>tail<\/dd>/)
   })
 
   it('keeps a marker-column line with its outer list item', () => {

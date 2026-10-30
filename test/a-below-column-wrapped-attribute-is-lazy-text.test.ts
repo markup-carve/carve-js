@@ -3,29 +3,29 @@ import { carveToHtml } from '../src/index.js'
 
 const h = (s: string) => carveToHtml(s)
 
-// A wrapped attribute opener indented below the item's content column is lazy
-// paragraph text, so its closer ends no paragraph (PART 0 O2, O3, carve-js#3855).
+// A wrapped attribute block is the same leaf at any column (corpus 787, 793, carve#4089): it ends the
+// paragraph and its owner reads it, so the line after it is the owner's.
 describe('a below-column wrapped attribute opener', () => {
   it('keeps the next lazy line in the nested paragraph', () => {
     expect(h('- - a\n {c\n}\nx\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a\n{c\n}\nx</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p c="">x</p>',
     )
   })
 
   it('stays text in a single item and inside a quote', () => {
-    expect(h('- a\n {c\n}\nx\n')).toBe('<ul>\n  <li>a\n{c\n}\nx</li>\n</ul>')
-    expect(h('> 1. a\n>  {c\n> }\n> x\n')).toBe('<blockquote>\n  <ol>\n    <li>a\n{c\n}\nx</li>\n  </ol>\n</blockquote>')
+    expect(h('- a\n {c\n}\nx\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p c="">x</p>')
+    expect(h('> 1. a\n>  {c\n> }\n> x\n')).toBe('<blockquote>\n  <ol>\n    <li>a</li>\n  </ol>\n  <p c="">x</p>\n</blockquote>')
   })
 
   it('stays text when an enclosing item admitted it below its column', () => {
     expect(h('10. - a\n  {c\n}\nx\n')).toBe(
-      '<ol start="10">\n  <li>\n    <ul>\n      <li>a\n{c\n}\nx</li>\n    </ul>\n  </li>\n</ol>',
+      '<ol start="10">\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ol>\n<p c="">x</p>',
     )
   })
 
   it('still closes the paragraph at the outer item content column', () => {
     expect(h('- - a\n   {c\n}\nx\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a\n{c\n}</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>',
+      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>',
     )
   })
 })

@@ -34,7 +34,7 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
       const html = carveToHtml(source)
       if (marker.startsWith(' ') && blanks === 2 && code) {
         expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)
-        expect(html).toContain(follower === 'tail' && lead === '- - - ```' ? '<p>+</p>' : follower === 'tail' ? '<p>+\ntail</p>' : '<p>+</p>')
+        expect(html).toContain(follower === 'tail' ? '<p>+\ntail</p>' : '<p>+</p>')
         return
       }
       if (code) expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)

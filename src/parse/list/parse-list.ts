@@ -473,6 +473,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // boundary set, and a second marker that attaches nothing ends the run
       // either way (markup-carve/carve#1814).
       if (more.lines.length === 0) break
+      // A marker at its host column ends an open fence (§17 L4, carve#4354).
+      const opener = attached.find(line => line.trim() !== '' && !isBlockAttributeLine(line.trimStart()))?.trimStart()
+      const run = opener !== undefined && opensCodeFence(opener) ? /^(`{3,}|~{3,})/.exec(opener)?.[1] : undefined
+      if (run !== undefined && !attached.slice(attached.findIndex(line => line.trimStart() === opener) + 1).some(line => fenceCloseRe(run).test(line.trimStart()))) {
+        attached.push(run)
+        attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
+      }
       attached.push('')
       attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
       attached.push(...more.lines)
@@ -581,6 +588,26 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   }
 
   /** The column of the outermost marker holding a fence opened on a nested marker line, memoized per document line. */
+  function commentHoldsAPlace(content: string, nested: readonly string[], children: readonly BlockNode[]): boolean {
+    return RE_COMMENT_LINE.test(content) && commentFenceRun(content) === undefined && nested.length > 1 && isBlankLine(nested[0]!) &&
+      children[0]?.type === 'comment' && children[1]?.type === 'paragraph'
+  }
+
+  // A block below the body has left the note, and so has every line after it. Text folds into an open paragraph.
+  function rebaseTaskNote(nested: string[], shift: number): void {
+    let noteParagraph = true
+    for (let k = 0; k < nested.length; k++) {
+      const text = nested[k]!
+      if (isBlankLine(text)) continue
+      if (indentColumns(text) < shift + FOOTNOTE_BODY_COLUMN) {
+        if (noteParagraph && !lineOpensItemBlock(text.trimStart()) && !isListMarkerLine(text.trimStart())) continue
+        break
+      }
+      noteParagraph = noteParagraph && !lineOpensItemBlock(text.trimStart())
+      nested[k] = sliceColumns(text, shift, true)
+    }
+  }
+
   function markerFenceHolderColumn(
     lexer: Lexer, session: ParseSession, content: string, contentCol: number, itemStartLineIndex: number,
   ): number {
@@ -1146,6 +1173,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           closedListFence = false
           return
         }
+        // At the column of the marker a chain's fence sits behind, the fence is over (corpus 626).
+        const written = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? line
+        if (descendantOpaque.markerLine && descendantOpaque.holder !== undefined && descendantOpaque.holder > contentCol &&
+            indentColumns(written, descendantOpaque.holder + 1) === descendantOpaque.holder) {
+          descendantOpaque = null
+          return
+        }
         // A line between the child's column and the base is payload that loses
         // its prefix (carve#3133); only a line below the child ends the fence,
         // and that case returned above.
@@ -1695,8 +1729,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // `plusColumn` is a source column; the attached lines are this lexer's.
       const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
       for (let k = 0; k < attachedLines.length; k++) {
-        const attachedLine = localPlusColumn > contentCol
-          ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
+        // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
+        const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
+          (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
+        const attachedLine = ownOpener ? sliceColumns(attachedLines[k]!, contentCol, true)
+          : localPlusColumn > contentCol ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
         nested.push(attachedLine)
         nestedSourceLines.push(attachedLines[k])
         nestedLineNumbers.push(attachedLineNumbers[k]!)
@@ -1705,6 +1742,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // dedented line folds.
         trackItemLazyState(attachedLine, lazyState)
         if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
+      }
+      // The `+` takes one block: the blank after an unclosed fence is the host's separator, not payload (carve#4048).
+      if (lazyState.opaque?.kind === 'code' && (lexer.peek() === undefined || isBlankLine(lexer.peek()!))) {
+        const opener = attachedLines.map(line => line.trimStart()).find(line => opensCodeFence(line))
+        const run = opener === undefined ? undefined : /^(`{3,}|~{3,})/.exec(opener)?.[1]
+        if (run !== undefined) {
+          nestedOrigins.set(nested.length, { text: run, parentIndex: plusLineIndex, prefix: plusEnd, virtual: true })
+          nested.push(run)
+          nestedSourceLines.push(undefined)
+          nestedLineNumbers.push(attachedLineNumbers.at(-1) ?? plusLineNumber)
+          lazyState.opaque = null
+          lazyState.lazyFoldable = false
+        }
       }
       if (
         lazyState.opaque === null && lexer.peek() !== undefined &&
@@ -2828,13 +2878,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A task item's marker-line note rebases the lines reaching its body at its own source column.
     const taskNoteShift = isTask && markerNoteItem ? markerNoteFloor - FOOTNOTE_BODY_COLUMN - contentCol : 0
     if (taskNoteShift > 0) {
-      // A line below the body has left the note, and so has every line after it.
-      for (let k = 0; k < nested.length; k++) {
-        const text = nested[k]!
-        if (isBlankLine(text)) continue
-        if (indentColumns(text) < taskNoteShift + FOOTNOTE_BODY_COLUMN) break
-        nested[k] = sliceColumns(text, taskNoteShift, true)
-      }
+      rebaseTaskNote(nested, taskNoteShift)
     }
     if (taskLeadShift > 0) dedentTaskLead(nested, taskLeadShift)
     const firstBlockIdx = subListMarkers.values().next().value ?? -1
@@ -3145,6 +3189,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return loose
     }
     if (childSpacingLoosens()) flags.loose = true
+    // A comment on the marker line holds a block's place: the blank below it sets a paragraph apart (§17 L1, carve-js#4035).
+    if (commentHoldsAPlace(content, nested, children)) flags.loose = true
 
     if (children[0]?.type === 'admonition' && children[0].pos === undefined) {
       children[0] = dropPositions({ type: 'document', children: [children[0]] }).children[0]!

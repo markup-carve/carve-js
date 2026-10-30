@@ -163,11 +163,9 @@ describe('two sibling sub-lists in a tight item', () => {
 
 describe('a sub-list in a tight item gets the separator its neighbour needs', () => {
   it('writes one blank line below a block at the marker column', () => {
-    // §17 L3 puts the attached paragraph at column 0, and a sub-list at the
-    // item's content column below it is INDENTED under an open paragraph, so it
-    // reads as that paragraph's lazy continuation and never opens.
+    // §17 L3 puts the attached paragraph at column 0; the sub-list at the item's content column stays the item's.
     const source = '- x\n+\np2\n\n  - b\n'
-    expect(carveToCarve(source)).toBe('- x\n\n  p2\n\n- b\n')
+    expect(carveToCarve(source)).toBe(source)
     roundTrips(source)
   })
 

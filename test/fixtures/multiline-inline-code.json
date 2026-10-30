@@ -465,7 +465,7 @@
   },
   {
     "source": ":: term\n: ``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -473,7 +473,7 @@
   },
   {
     "source": ":: term\n: ``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code class=\"example\">x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1233,7 +1233,7 @@
   },
   {
     "source": ":: term\n: /before/ `x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x``</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1241,7 +1241,7 @@
   },
   {
     "source": ":: term\n: /before/ `x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code class=\"example\">x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x``</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1929,7 +1929,7 @@
   },
   {
     "source": ":: term\n: `x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x```</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -1937,7 +1937,7 @@
   },
   {
     "source": ":: term\n: `x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code class=\"example\">x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x```</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2697,7 +2697,7 @@
   },
   {
     "source": ":: term\n: /before/ `x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -2705,7 +2705,7 @@
   },
   {
     "source": ":: term\n: /before/ `x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code class=\"example\">x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3393,7 +3393,7 @@
   },
   {
     "source": ":: term\n: `x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -3401,7 +3401,7 @@
   },
   {
     "source": ":: term\n: `x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code class=\"example\">x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x`````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4357,7 +4357,7 @@
   },
   {
     "source": ":: term\n: before ``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore ``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -4365,7 +4365,7 @@
   },
   {
     "source": ":: term\n: before ``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code class=\"example\">x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore ``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5845,7 +5845,7 @@
   },
   {
     "source": ":: term\n: before `x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x```</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -5853,7 +5853,7 @@
   },
   {
     "source": ":: term\n: before `x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code class=\"example\">x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x```</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7333,7 +7333,7 @@
   },
   {
     "source": ":: term\n: before `x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -7341,7 +7341,7 @@
   },
   {
     "source": ":: term\n: before `x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code class=\"example\">x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x`````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8285,7 +8285,7 @@
   },
   {
     "source": ":: term\n: /before/ ``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ ``x`\n : description``\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8293,7 +8293,7 @@
   },
   {
     "source": ":: term\n: /before/ ``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code class=\"example\">x`\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ ``x`\n : description``{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8981,7 +8981,7 @@
   },
   {
     "source": ":: term\n: `x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x``</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -8989,7 +8989,7 @@
   },
   {
     "source": ":: term\n: `x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code class=\"example\">x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x``</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9749,7 +9749,7 @@
   },
   {
     "source": ":: term\n: /before/ `x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x```</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x```\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -9757,7 +9757,7 @@
   },
   {
     "source": ":: term\n: /before/ `x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code class=\"example\">x```\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x```</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x```\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10445,7 +10445,7 @@
   },
   {
     "source": ":: term\n: `x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -10453,7 +10453,7 @@
   },
   {
     "source": ":: term\n: `x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><code class=\"example\">x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><code>x````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n`x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11213,7 +11213,7 @@
   },
   {
     "source": ":: term\n: /before/ `x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x`````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -11221,7 +11221,7 @@
   },
   {
     "source": ":: term\n: /before/ `x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code class=\"example\">x`````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd><em>before</em> <code>x`````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\n/before/ `x`````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12881,7 +12881,7 @@
   },
   {
     "source": ":: term\n: before `x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x``</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x``\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -12889,7 +12889,7 @@
   },
   {
     "source": ":: term\n: before `x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code class=\"example\">x``\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x``</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x``\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14369,7 +14369,7 @@
   },
   {
     "source": ":: term\n: before `x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x````</code></dd>\n  <dd>description<code></code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x````\n : description`\n\nSee [r][], [^n], and [r\\]][].\n",
@@ -14377,7 +14377,7 @@
   },
   {
     "source": ":: term\n: before `x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code class=\"example\">x````\n: description</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>before <code>x````</code></dd>\n  <dd>description<code>{.example}</code></dd>\n</dl>\n<p>See [r][], [^n], and [r\\]][].</p>"
   },
   {
     "source": "- body\n+\nbefore `x````\n : description`{.example}\n\nSee [r][], [^n], and [r\\]][].\n",

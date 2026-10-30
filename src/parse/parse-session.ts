@@ -157,7 +157,7 @@ import {
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
-import { ownLines, restorePlusLetter } from './block/block-ownership.js'
+import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -211,8 +211,29 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
   return count
 }
 
-function restoringPlus(blocks: BlockNode[], letter: string | null): BlockNode[] {
-  if (letter !== null) restorePlusLetter(blocks, letter)
+/** The closer of a code fence these lines open and do not close, at the fence's column. */
+function openFenceCloser(lines: readonly string[]): string | null {
+  let run: string | null = null
+  let column = 0
+  for (const line of lines) {
+    const text = line.trimStart()
+    if (run !== null) {
+      if (fenceCloseRe(run).test(text)) run = null
+      continue
+    }
+    const opener = text.replace(/^(?:(?:[-*]|[0-9]+[.)]) +)+/, '')
+    const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+    if (code !== null) {
+      run = RE_FENCE.test(opener) ? code[2]! : code[1]!
+      column = opener === text ? line.length - text.length : -1
+    }
+  }
+  // A marker-line fence ends with its item at the separator.
+  return run === null || column < 0 ? null : ' '.repeat(column) + run
+}
+
+function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockNode[] {
+  if (letters !== null) restoreLetters(blocks, letters)
   return blocks
 }
 
@@ -401,7 +422,7 @@ export class ParseSession extends InlineParseSession {
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
-    if (ownership.plusLetter !== null) restorePlusLetter(doc, ownership.plusLetter)
+    if (ownership.letters !== null) restoreLetters(doc, ownership.letters)
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = sourceByteLength
@@ -482,11 +503,11 @@ export class ParseSession extends InlineParseSession {
     const ownership = ownLines(sub.lines as string[], 0)
     sub.applyOwnership(ownership)
     this.collectLinkDefs(sub)
-    if (!this.activeMatchers.length) return restoringPlus(this.parseBlocks(sub, 0), ownership.plusLetter)
+    if (!this.activeMatchers.length) return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
     const prevCtx = this.activeMatcherCtx
     this.activeMatcherCtx = this.makeMatcherCtx(sub, opts)
     try {
-      return restoringPlus(this.parseBlocks(sub, 0), ownership.plusLetter)
+      return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
     } finally {
       this.activeMatcherCtx = prevCtx
     }
@@ -1589,7 +1610,8 @@ export class ParseSession extends InlineParseSession {
       q.innerLineNumbers.push(attachedLineNumbers[0]!)
       for (const attachedLine of attached) q.inner.push(stripLazyFrame(attachedLine))
       q.innerLineNumbers.push(...attachedLineNumbers)
-      q.inner.push('')
+      // The separator is not payload of a fence the attached block left open (§17 L3).
+      q.inner.push(openFenceCloser(attached) ?? '')
       q.innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
       // The attached block closed any open paragraph: a following unmarked
       // line no longer lazily continues the quote.

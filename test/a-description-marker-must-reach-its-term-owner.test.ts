@@ -13,8 +13,8 @@ describe('a definition marker below a nested term column', () => {
   it.each(cases)('%s stays in its surviving description', (_name, source) => {
     const html = carveToHtml(source)
     expect(html).toContain('<dt>inner</dt>')
-    expect(html).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<p>:  tail<\/p>/)
-    expect(html).not.toContain('<dd>tail</dd>')
+    // A `: ` line is a sibling at any column where its list's owner reads it (CARVE-P0-024 S3, carve#4180).
+    expect(html).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<\/dd>\s*<dd>tail<\/dd>/)
   })
 
   it('folds a later quote past the surviving body column into the term', () => {
@@ -43,9 +43,9 @@ describe('a definition marker below a nested term column', () => {
     expect(html).toMatch(/<\/dl>\n<ul>\n<li>item<\/li>/)
   })
 
-  it('folds a closed below-column fence into an open outer description paragraph', () => {
+  it('ends a description sibling at a closed below-column fence', () => {
     const source = '- a\n  :: outer\n  :  detail\n     :: inner\n    :  tail\n    ```js\n    code\n    ```\n'
-    expect(normalize(carveToHtml(source))).toContain('<p>:  tail\n<code>js\ncode\n</code></p>')
+    expect(normalize(carveToHtml(source))).toContain('<dd>tail</dd>\n</dl>\n<pre><code class="language-js">code\n</code></pre>')
   })
 
   it.each([
