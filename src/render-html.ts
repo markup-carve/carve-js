@@ -2214,9 +2214,11 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
   const labelLine = floor ? `${floor}\n` : ''
   const body = renderBlocks(node.children, opts, level + 1)
   // Leading block attributes (§15) merge with the admonition's own
-  // wrapper class: extra classes append, id/key attach to the wrapper.
-  const baseClass = canonical ? `admonition ${node.kind}` : node.kind
-  const classValue = [baseClass, ...renderedClasses(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
+  // wrapper class: extra classes append, id/key attach to the wrapper. The
+  // derived classes and the authored ones are one list, each value once
+  // (CARVE-P4-002, markup-carve/carve#4203).
+  const baseClasses = canonical ? ['admonition', node.kind] : [node.kind]
+  const classValue = [...new Set([...baseClasses, ...renderedClasses(node.attrs?.classes ?? [])])].map(escapeAttr).join(' ')
   const restAttrs: Attrs = {}
   if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
   if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
