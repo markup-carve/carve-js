@@ -166,6 +166,30 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
           if (node.attrs === undefined && (node.type === 'text' ||
               (node.type !== 'heading_ref' && typeof node.type === 'string' &&
                (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[node.type] === NO_CHILDREN))) continue
+          if (node.attrs === undefined && node.type === 'paragraph' &&
+              Array.isArray((node as { children?: unknown }).children)) {
+            stack.push((node as { children: unknown[] }).children)
+            continue
+          }
+          if (node.attrs === undefined && node.type === 'table_cell') {
+            const cell = node as { blocks?: unknown; children?: unknown }
+            if ((cell.blocks === undefined || Array.isArray(cell.blocks)) &&
+                (cell.children === undefined || Array.isArray(cell.children))) {
+              if (cell.blocks) stack.push(cell.blocks)
+              if (cell.children) stack.push(cell.children)
+              continue
+            }
+          }
+          if (node.attrs === undefined && (node.type === 'list_item' ||
+              node.type === 'list' || node.type === 'table_row')) {
+            const childField = node.type === 'list' ? 'items' :
+              node.type === 'table_row' ? 'cells' : 'children'
+            const children = (node as Record<string, unknown>)[childField]
+            if (Array.isArray(children)) {
+              stack.push(children)
+              continue
+            }
+          }
           stack.push(child)
         }
       }

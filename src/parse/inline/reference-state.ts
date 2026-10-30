@@ -63,7 +63,8 @@ export function hydrateResolvedEmptyReferences(document: Document, keepResolved 
     }
   }
   // No runtime bit can need restoring or clearing until one has been set.
-  if (!mayHaveResolvedEmptyReferences && !hasEmptyDefinition) return
+  // With no empty definition, a preserving pass has no state to restore.
+  if (!hasEmptyDefinition && (keepResolved || !mayHaveResolvedEmptyReferences)) return
   const stack: unknown[] = [document]
   while (stack.length > 0) {
     const value = stack.pop()

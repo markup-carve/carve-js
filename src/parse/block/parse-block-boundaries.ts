@@ -423,7 +423,7 @@ export function readCaptionText(
     // Only the internal lazy frame is removed; the source line starts here.
     anchors?.push({
       offset: lexer.lineOffset(lexer.pos),
-      column: lexer.lineStartColumn(lexer.pos),
+      column: lexer.sourceStartColumn(lexer.pos),
       line: lexer.lineNumber(lexer.pos),
     })
     lexer.consume()

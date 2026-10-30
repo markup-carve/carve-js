@@ -8,10 +8,10 @@ describe('nested blocks keep the owner selected by authored columns', () => {
     const html = render('[^n]: # H\n\n> </#H>\n')
     expect(html).toContain('<blockquote><p>&lt;/#H&gt;</p></blockquote>')
   })
-  it('keeps an intervening opener in the description after a refused first block', () => {
+  it('opens an intervening heading in the description after a refused first block', () => {
     const html = render(':: t\n: - +\n   # H\n')
-    expect(html).toContain('<p># H</p>')
-    expect(html).not.toContain('<h1')
+    expect(html).toContain('<h1 id="H">H</h1>\n  </dd>')
+    expect(html).not.toContain('<p># H</p>')
   })
   it('leaves an intervening quoted first-block fence outside its description', () => {
     const html = render('> :: t\n> : - +\n>  ::: box\n')

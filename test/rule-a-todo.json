@@ -221,8 +221,6 @@
     "the non-HTML render ledger > records the output every renderer still produces": "#3921"
   },
   "corpus.test.ts": {
-    "spec corpus > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#3922",
-    "spec corpus > 760-a-heading-inside-the-intervening-band-stays-description-text": "#3922",
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },
   "deep-term-comment-code-tails.test.ts": {

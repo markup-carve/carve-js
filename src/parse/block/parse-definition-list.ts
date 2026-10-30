@@ -474,16 +474,24 @@ export function createDefinitionListParser(
         const lastOpener = firstBlockLastOpenerOffset(first) ?? 0
         const sourceOffset = markerSource.lastIndexOf(first)
         const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
-        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
-          markerColumn, quotePrefixDepth(markerSource), true)
+        // A follower left of the body column is not the description's: rule A moved it there.
+        const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1]
+        const leftBody = quotePrefixDepth(markerSource) === 0 && followerSource !== undefined &&
+          !isBlankLine(followerSource) && sourceColumn(followerSource, 0) < bodySourceColumn &&
+          lexer.sourceStartColumn(lexer.pos) > lexer.lineStartColumn(lexer.pos)
+        const attached = leftBody ? { lines: [], lineNumbers: [] } : parseSession.collectAttachedBlock(
+          lexer, isDefBodyBoundary, 0, true, markerColumn, quotePrefixDepth(markerSource), true)
         // An intervening line still reaches the description after this pull
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
         for (let k = 0; k < attached.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
-        bodyLines.push(...attached.lines)
+        // The body reads its lines without the description's own margin, a pulled follower too.
+        const pulled = quotePrefixDepth(markerSource) === 0
+          ? attached.lines.map(line => sliceColumns(line, contentCol, true)) : attached.lines
+        bodyLines.push(...pulled)
         bodySourceLines.push(...attached.lines)
         bodyLineNumbers.push(...attached.lineNumbers)
-        for (const line of attached.lines) track(line)
+        for (const line of pulled) track(line)
       }
       nestedLeadScans = descriptionLeadFenceScans(first)
       lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, true)
@@ -1062,8 +1070,8 @@ export function createDefinitionListParser(
       return {
         startLine: lx.lineNumber(first),
         endLine: lx.lineNumber(last),
-        startColumn: lx.lineStartColumn(first),
-        endColumn: lx.lineStartColumn(last) + lastLine.length,
+        startColumn: lx.sourceStartColumn(first),
+        endColumn: lx.sourceStartColumn(last) + lastLine.length,
         startOffset: lx.lineOffset(first),
         endOffset: lx.lineOffset(last) + lastLine.length,
       }
@@ -1261,7 +1269,7 @@ export function createDefinitionListParser(
           const shift = source === termLineIndex ? termStart : strippedIndent.get(source) ?? 0
           return {
             offset: lexer.lineOffset(source) + shift,
-            column: lexer.lineStartColumn(source) + shift,
+            column: lexer.sourceStartColumn(source) + shift,
             line: lexer.lineNumber(source),
           }
         }

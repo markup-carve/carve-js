@@ -155,7 +155,7 @@ export class Lexer {
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; the offset map already holds it, the column does not. */
-  private ownershipLeads?: Map<number, number>
+  ownershipLeads?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
   applyOwnership({ lines, cuts, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus?: Set<number>; overindented?: OverindentedOpener[] }): void {
@@ -608,15 +608,24 @@ export class Lexer {
       return boundary.parent.sourceBoundary(boundary.line, boundary.start + Math.max(0, column - boundary.synthetic))
     }
     let shift = 0
-    const lead = this.ownershipLeads?.get(lineIndex) ?? 0
     for (const cut of this.ownershipCuts?.get(lineIndex) ?? []) if (cut.at <= column) shift += cut.removed
-    return { offset: this.lineOffset(lineIndex) + column + shift, column: this.lineStartColumn(lineIndex) + column + shift + lead }
+    return { offset: this.lineOffset(lineIndex) + column + shift, column: this.sourceStartColumn(lineIndex) + column + shift }
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
   lineStartColumn(lineIndex: number): number {
     if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineStartColumn(this.contiguousOrigin.start + lineIndex)
     return (this.linePrefixWidths?.[lineIndex] ?? 0) + 1
+  }
+
+  /**
+   * `lineStartColumn` plus the leading columns rule A removed from this line: the
+   * column of the line's first kept character in the source. Positions use it;
+   * structure decisions keep `lineStartColumn`, which they compare in cut space.
+   */
+  sourceStartColumn(lineIndex: number): number {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.sourceStartColumn(this.contiguousOrigin.start + lineIndex)
+    return this.lineStartColumn(lineIndex) + (this.ownershipLeads?.get(lineIndex) ?? 0)
   }
 
   /**

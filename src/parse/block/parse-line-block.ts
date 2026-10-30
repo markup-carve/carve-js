@@ -70,8 +70,8 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           comment.pos = {
             startLine: lexer.lineNumber(lineIndex),
             endLine: lexer.lineNumber(lineIndex),
-            startColumn: lexer.lineStartColumn(lineIndex),
-            endColumn: lexer.lineStartColumn(lineIndex) + ln.length,
+            startColumn: lexer.sourceStartColumn(lineIndex),
+            endColumn: lexer.sourceStartColumn(lineIndex) + ln.length,
             startOffset: lexer.lineOffset(lineIndex),
             endOffset: lexer.lineOffset(lineIndex) + ln.length,
           }
@@ -115,7 +115,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           endLine: lexer.lineNumber(next.lineIndex),
           startColumn:
             lexer.lineStartColumn(line.lineIndex) + (lexer.lineAt(line.lineIndex)?.length ?? 0),
-          endColumn: lexer.lineStartColumn(next.lineIndex),
+          endColumn: lexer.sourceStartColumn(next.lineIndex),
           // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
           // the block layer left behind. The clamp above reads the parsed text's
           // length, which is zero here, so the break would start at the line's
@@ -141,10 +141,10 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
             ? inlineSource({
                 baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
                 startLine: firstLineNumber,
-                startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
+                startColumn: lexer.sourceStartColumn(lines[0]!.lineIndex),
                 lineAnchors: lines.map((line) => ({
                   offset: lexer.lineOffset(line.lineIndex),
-                  column: lexer.lineStartColumn(line.lineIndex),
+                  column: lexer.sourceStartColumn(line.lineIndex),
                   line: lexer.lineNumber(line.lineIndex),
                 })),
               })
@@ -342,8 +342,8 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         paragraph.pos = {
           startLine: lexer.lineNumber(first.lineIndex),
           endLine: lexer.lineNumber(last.lineIndex),
-          startColumn: lexer.lineStartColumn(first.lineIndex),
-          endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
+          startColumn: lexer.sourceStartColumn(first.lineIndex),
+          endColumn: lexer.sourceStartColumn(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
           startOffset: lexer.lineOffset(first.lineIndex),
           endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
         }

@@ -13,6 +13,34 @@ import {
 /** Where a rewritten line lost or gained source characters: `at` is the edited column. */
 export interface OwnershipCut { at: number; removed: number }
 
+/** The frame a lazy line stopped at and the frames it missed, outermost first. */
+export interface LazyOwner { reached: Frame['kind']; missed: Frame['kind'][]; col: number }
+
+/** What the walk decided for one line: the opener it read, the frame it reached and the frames it missed. */
+export interface LineEvent {
+  at: number
+  kind: Form['kind']
+  /** Column the line's own content starts at in the source, before any cut. */
+  sourceCol: number
+  /** Column the content lands at once the walk has moved it onto its owner. */
+  ownedCol: number
+  marker?: { axes: string | undefined; width: number; head: number }
+  reached: Frame['kind']
+  missed: Frame['kind'][]
+  lazy: boolean
+  /** Quote prefixes the walk consumed before the content. */
+  quoteDepth: number
+}
+
+/** A line that stopped short of an open fence frame: the owner of the fence ended before the fence closed. */
+export interface OwnerEnd {
+  at: number
+  /** Line index of the opener of the fence the owner boundary ended. */
+  opener: number
+  reached: Frame['kind']
+  missed: Frame['kind'][]
+}
+
 /** An opener S3 read past its owner's content column; `char` indexes the input line. */
 export interface OverindentedOpener { index: number; char: number; kind: string; owner: string; contentColumn: number; column: number }
 
@@ -69,6 +97,18 @@ interface Form {
   axes?: string
   lineBlock?: boolean
   family?: 'code' | 'comment' | 'div'
+}
+
+function keepsLazyLine(frames: Frame[], reached: number, form: Form, rest: string): boolean {
+  if (reached >= frames.length - 1 || rest === '' || !frames.at(-1)?.para || form.interrupts) return false
+  if (form.kind === 'item' && frames[reached + 1]?.kind === 'item' &&
+      frames[reached + 1]!.axes === form.axes) return false
+  const missed = frames.slice(reached + 1)
+  const missedNote = missed.some((frame) => frame.kind === 'note') &&
+    !missed.some((frame) => frame.kind === 'quote')
+  return !(missedNote && form.kind === 'item' &&
+    (frames[reached]!.kind === 'item' || frames[reached]!.kind === 'dd' ||
+      missed.some((frame) => frame.kind === 'item')))
 }
 
 
@@ -129,8 +169,14 @@ function orderedTokenValid(token: string): boolean {
   return /^[ivxlcdm]+$/.test(token.toLowerCase()) || /^[a-z]$/i.test(token)
 }
 
+function trimSpaceTab(text: string): string {
+  let end = text.length
+  while (end > 0 && (text.charCodeAt(end - 1) === 32 || text.charCodeAt(end - 1) === 9)) end--
+  return end === text.length ? text : text.slice(0, end)
+}
+
 function matchMarker(rest: string): { width: number; head: number; axes: string } | null {
-  const line = rest.replace(/[ \t]+$/, '')
+  const line = trimSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
     return { width: 1 + (m[4] !== undefined ? 1 : m[3]!.length), head: m[0].length, axes: m[1]! }
@@ -177,6 +223,8 @@ function quotedMeasure(line: string): { col: number; rest: string } {
   return m
 }
 
+const QUOTED_MARKER = /^(?:>[ >]*)?(?:[-*]|[0-9]+[.)]) /
+
 const quotedRest = (line: string): string => quotedMeasure(line).rest
 
 /**
@@ -206,10 +254,24 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number>; overindented: OverindentedOpener[] } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; refusedPlus: Set<number>; overindented: OverindentedOpener[];
+  lazy: Map<number, LazyOwner>; abbrText: Set<number>; plusAfterPara: Set<number>;
+  events: Map<number, LineEvent>; ownerEnds: Map<number, OwnerEnd>; textFences: Set<number>;
+  quoteNotes: Set<number>; quoteMarkers: Set<number> } {
   const result = lines.slice(0, start)
   if (trace) for (let k = 0; k < start; k++) emit(k, 'INPUT', 'doc', null, 'frontmatter')
   const cuts = new Map<number, OwnershipCut[]>()
+  const lazy = new Map<number, LazyOwner>()
+  const abbrText = new Set<number>()
+  const plusAfterPara = new Set<number>()
+  const events = new Map<number, LineEvent>()
+  const ownerEnds = new Map<number, OwnerEnd>()
+  // Fence-shaped lines an open paragraph kept as text because no closer reaches them.
+  const textFences = new Set<number>()
+  // Lines that open a footnote definition inside a quote.
+  const quoteNotes = new Set<number>()
+  // Lines whose text after a quote prefix is marker-shaped, whether or not it opened an item.
+  const quoteMarkers = new Set<number>()
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
@@ -247,6 +309,7 @@ export function ownLines(
     }
 
     let reached = 0
+    let quoted = false
     let plus: Frame | null = null
     // A quote's first-block `+` reads a follower by its raw column (CARVE-P9-067).
     const quotePlus = top().kind === 'quote' && top().plus === at - 1 ? top() : null
@@ -271,12 +334,15 @@ export function ownLines(
         if (k < baseAt) zero = docColumn(lines[at]!, src)
         m = indentCols(src)
         reached = k
+        quoted = true
         continue
       }
       if (m.rest !== '' && m.col < f.col) break
       reached = k
     }
+    if (quoted && QUOTED_MARKER.test(m.rest)) quoteMarkers.add(at)
     if (plus) {
+      if (top().para) plusAfterPara.add(at)
       // S2: a lone `+` at a marker column (CARVE-P9-067).
       frames.length = frames.indexOf(plus) + 1
       plus.para = false
@@ -323,21 +389,27 @@ export function ownLines(
       if (trace) emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
       continue
     }
-    if (inner.kind === 'fence') frames.pop()
+    if (inner.kind === 'fence') {
+      ownerEnds.set(at, { at, opener: inner.opened!, reached: frames[reached]!.kind,
+        missed: frames.slice(reached + 1).map((f) => f.kind) })
+      frames.pop()
+    }
     let owner = frames[reached]!
     const form = classify(m.rest, owner, at, m.col)
-    // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
-    // A missed quote keeps the line as the quote's lazy text.
-    const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note') &&
-      !frames.slice(reached + 1).some((f) => f.kind === 'quote')
-    if (missed && m.rest !== '' && top().para && !form.interrupts &&
-        !(form.kind === 'item' && frames[reached + 1]?.kind === 'item' && frames[reached + 1]!.axes === form.axes) &&
-        !(missedNote && form.kind === 'item' &&
-          (owner.kind === 'item' || owner.kind === 'dd' || frames.slice(reached + 1).some((f) => f.kind === 'item')))) {
+    if (missed && top().para && form.kind === 'leaf' && RE_ABBR_DEF.test(m.rest) &&
+        frames.slice(reached + 1).some((f) => f.kind === 'item')) abbrText.add(at)
+    if (keepsLazyLine(frames, reached, form, m.rest)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
+      const missedKinds = frames.slice(reached + 1).map((f) => f.kind)
+      lazy.set(at, { reached: owner.kind, missed: missedKinds, col: m.col })
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1
-      lead(Math.min(Math.max(m.col - owner.cut, owner.canon), limit))
+      const ownedCol = Math.min(Math.max(m.col - owner.cut, owner.canon), limit)
+      events.set(at, { at, kind: form.kind, sourceCol: m.col, ownedCol,
+        ...(form.kind === 'item' || form.kind === 'note' ? { marker: { axes: form.axes, width: form.width!, head: form.head! } } : {}),
+        reached: owner.kind, missed: missedKinds, lazy: true,
+        quoteDepth: frames.slice(1, reached + 1).filter((f) => f.kind === 'quote').length })
+      lead(ownedCol)
       finish()
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
       continue
@@ -384,7 +456,8 @@ export function ownLines(
         owner.termCut = col - canon
       }
       if (form.kind === 'fence' || form.kind === 'colon') {
-        frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut: col - canon,
+        frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at,
+          col: owner.col, canon: owner.canon, cut: col - canon,
           closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null })
         return
       }
@@ -394,10 +467,12 @@ export function ownLines(
         frames.push(quote)
         take(src.length - quoteRest(src).length)
         m = indentCols(src)
+        if (QUOTED_MARKER.test(m.rest)) quoteMarkers.add(at)
         content(quote, 0, 0)
         return
       }
       if (form.kind === 'item' || form.kind === 'note' || form.kind === 'dd') {
+        if (form.kind === 'note' && frames.some((f) => f.kind === 'quote')) quoteNotes.add(at)
         const frame: Frame = { kind: form.kind, col: col + form.width!, canon: canon + form.width!,
           cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes,
           docMarker: docColumn(lines[at]!, src), line: at }
@@ -445,7 +520,8 @@ export function ownLines(
       apply(frame, col, form, canon + m.col)
     }
   }
-  return { lines: result, cuts, refusedPlus, overindented }
+  return { lines: result, cuts, refusedPlus, overindented,
+    lazy, abbrText, plusAfterPara, events, ownerEnds, textFences, quoteNotes, quoteMarkers }
 
   function openerKind(form: Form, rest: string): string | undefined {
     switch (form.kind) {
@@ -491,12 +567,12 @@ export function ownLines(
   }
 
   function absorbsColon(rest: string): boolean {
-    const trimmed = rest.replace(/[ \t]+$/, '')
+    const trimmed = trimSpaceTab(rest)
     return COLON_FENCE.test(trimmed) && !isColonFenceOpener(trimmed)
   }
 
   function classify(rest: string, owner: Frame, at: number, col: number): Form {
-    rest = rest.replace(/[ \t]+$/, '')
+    rest = trimSpaceTab(rest)
     if (rest === '') return { kind: 'blank', interrupts: true }
     if (!OPENER_LEAD.test(rest)) return TEXT
     if (isQuoteLine(rest)) return { kind: 'quote', interrupts: true }

@@ -450,8 +450,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const pos: Position = {
         startLine: lexer.lineNumber(defLineIndex),
         endLine: lexer.lineNumber(lastIndex),
-        startColumn: lexer.lineStartColumn(defLineIndex) + defLead,
-        endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
+        startColumn: lexer.sourceStartColumn(defLineIndex) + defLead,
+        endColumn: lexer.sourceStartColumn(lastIndex) + lastLine.length,
         startOffset: lexer.lineOffset(defLineIndex) + defLead,
         endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
       }

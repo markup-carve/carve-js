@@ -751,7 +751,7 @@ export class ParseSession extends InlineParseSession {
         this.blockLineSpans.set(node, {
           start: lexer.lineNumber(startLine),
           end: lexer.lineNumber(Math.max(startLine, lexer.pos - 1)),
-          startColumn: lexer.lineStartColumn(startLine),
+          startColumn: lexer.sourceStartColumn(startLine),
         })
         if (node.type === 'list') listMarkerColumns.add(indentColumns(line))
       }
@@ -964,7 +964,7 @@ export class ParseSession extends InlineParseSession {
       anchored: lexer.hasDocumentOffsets,
       baseOffset: lexer.lineOffset(lineIndex) + firstLead,
       startLine: lexer.lineNumber(lineIndex),
-      startColumn: lexer.lineStartColumn(lineIndex) + firstLead,
+      startColumn: lexer.sourceStartColumn(lineIndex) + firstLead,
     })
     if (inline.length !== 1) return null
     const only = inline[0]!
@@ -1026,7 +1026,7 @@ export class ParseSession extends InlineParseSession {
       anchored: lexer.hasDocumentOffsets,
       baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
       startLine: lexer.lineNumber(lineIndex),
-      startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
+      startColumn: lexer.sourceStartColumn(lineIndex) + textColumn - 1,
     })
     return node
   }
@@ -1074,7 +1074,7 @@ export class ParseSession extends InlineParseSession {
         payloadPositions.push({
           offset: lexer.lineOffset(lastPayloadLineIndex) + prefixWidth,
           line: lexer.lineNumber(lastPayloadLineIndex),
-          column: lexer.lineStartColumn(lastPayloadLineIndex) + prefixWidth,
+          column: lexer.sourceStartColumn(lastPayloadLineIndex) + prefixWidth,
           text: payload,
         })
       }
@@ -1220,7 +1220,7 @@ export class ParseSession extends InlineParseSession {
         anchored: lexer.hasDocumentOffsets && titleStart > 0,
         baseOffset: lexer.lineOffset(openLineIndex) + titleStart,
         startLine: lexer.lineNumber(openLineIndex),
-        startColumn: lexer.lineStartColumn(openLineIndex) + titleStart,
+        startColumn: lexer.sourceStartColumn(openLineIndex) + titleStart,
       })
     }
     if (GENERATED_CONTENT_KINDS.has(kind)) {
@@ -2366,7 +2366,7 @@ export class ParseSession extends InlineParseSession {
       const within = capLine.length - firstLine.length
       anchors.push({
         offset: lexer.lineOffset(capIndex) + within,
-        column: lexer.lineStartColumn(capIndex) + within,
+        column: lexer.sourceStartColumn(capIndex) + within,
         line: lexer.lineNumber(capIndex),
       })
     }
@@ -2402,7 +2402,7 @@ export class ParseSession extends InlineParseSession {
             anchored: lexer.hasDocumentOffsets,
             baseOffset: lexer.lineOffset(0),
             startLine: lexer.lineNumber(0),
-            startColumn: lexer.lineStartColumn(0),
+            startColumn: lexer.sourceStartColumn(0),
           } : undefined),
     }
   }
@@ -2519,7 +2519,7 @@ export class ParseSession extends InlineParseSession {
             const lead = ln.match(/^[ \t]+/)?.[0].length ?? 0
             return {
               offset: lexer.lineOffset(startLineIndex + i) + lead,
-              column: lexer.lineStartColumn(startLineIndex + i) + lead,
+              column: lexer.sourceStartColumn(startLineIndex + i) + lead,
               line: lexer.lineNumber(startLineIndex + i),
             }
           })
@@ -2530,7 +2530,7 @@ export class ParseSession extends InlineParseSession {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),
-        startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
+        startColumn: lexer.sourceStartColumn(startLineIndex) + firstLead,
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }

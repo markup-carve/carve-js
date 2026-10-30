@@ -1988,34 +1988,39 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       columnValign[c] = entry.cell.valign
     }
   }
+  let hasRowspan = false
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
-      const a = grid[r]![c]!.cell.align ?? columnAlign[c] ?? node.columns?.[c]?.align
-      if (a) grid[r]![c]!.align = a
-      const v = grid[r]![c]!.cell.valign ?? columnValign[c] ?? node.columns?.[c]?.valign
-      if (v) grid[r]![c]!.valign = v
+      const entry = grid[r]![c]!
+      if (entry.rowspan > 1) hasRowspan = true
+      const a = entry.cell.align ?? columnAlign[c] ?? node.columns?.[c]?.align
+      if (a) entry.align = a
+      const v = entry.cell.valign ?? columnValign[c] ?? node.columns?.[c]?.valign
+      if (v) entry.valign = v
     }
   }
-  const sectionEnds = new Set([headerEnd, footerStart])
-  let sectionEnd = headerEnd
-  for (const body of node.rowGroups?.bodies ?? []) { sectionEnd += body.headRows + body.bodyRows; sectionEnds.add(sectionEnd) }
-  let nextBoundary = Infinity
   let crossesSection = false
-  for (let r = grid.length - 1; r >= 0; r--) {
-    if (sectionEnds.has(r + 1)) nextBoundary = r + 1
-    if (grid[r]!.some(entry => !entry.skip && entry.rowspan > 1 && r + entry.rowspan > nextBoundary)) {
-      crossesSection = true
-      break
+  if (hasRowspan) {
+    const sectionEnds = new Set([headerEnd, footerStart])
+    let sectionEnd = headerEnd
+    for (const body of node.rowGroups?.bodies ?? []) { sectionEnd += body.headRows + body.bodyRows; sectionEnds.add(sectionEnd) }
+    let nextBoundary = Infinity
+    for (let r = grid.length - 1; r >= 0; r--) {
+      if (sectionEnds.has(r + 1)) nextBoundary = r + 1
+      if (grid[r]!.some(entry => !entry.skip && entry.rowspan > 1 && r + entry.rowspan > nextBoundary)) {
+        crossesSection = true
+        break
+      }
     }
-  }
-  const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
-  let contextStart = headerEnd
-  for (const body of node.rowGroups?.bodies ?? []) {
-    const end = contextStart + body.headRows + body.bodyRows
-    for (let row = contextStart; row < end; row++) rowContexts[row] = { header: row < contextStart + body.headRows, columns: body.rowHeadColumns ?? 0 }
-    contextStart = end
   }
   if (crossesSection) {
+    const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
+    let contextStart = headerEnd
+    for (const body of node.rowGroups?.bodies ?? []) {
+      const end = contextStart + body.headRows + body.bodyRows
+      for (let row = contextStart; row < end; row++) rowContexts[row] = { header: row < contextStart + body.headRows, columns: body.rowHeadColumns ?? 0 }
+      contextStart = end
+    }
     lines.push(`${pad}  <tbody>`)
     for (let r = 0; r < grid.length; r++) {
       const context = rowContexts[r]!
