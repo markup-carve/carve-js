@@ -2797,7 +2797,7 @@
   {
     "id": "comment-term-claude-275",
     "source": "- :: term\n     %% hidden\n   ``` raw=html\n   a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-276",
@@ -2847,7 +2847,7 @@
   {
     "id": "comment-term-claude-291",
     "source": "- :: term\n     %% hidden\n    ``` raw=html\n    a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-292",
@@ -2897,7 +2897,7 @@
   {
     "id": "comment-term-claude-307",
     "source": "- :: term\n     %% hidden\n      ``` raw=html\n      a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-308",
@@ -2947,7 +2947,7 @@
   {
     "id": "comment-term-claude-339",
     "source": "- :: term\n     %%%\n     # hidden\n     %%%\n   ``` raw=html\n   a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-340",
@@ -2997,7 +2997,7 @@
   {
     "id": "comment-term-claude-355",
     "source": "- :: term\n     %%%\n     # hidden\n     %%%\n    ``` raw=html\n    a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-356",
@@ -3047,7 +3047,7 @@
   {
     "id": "comment-term-claude-371",
     "source": "- :: term\n     %%%\n     # hidden\n     %%%\n      ``` raw=html\n      a\n    {\n    #payload\n    }\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n    </dl>\n    <code> raw=html\na</code>\n    <pre id=\"payload\"><code></code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "comment-term-claude-372",
@@ -4197,7 +4197,7 @@
   {
     "id": "comment-term-claude-659",
     "source": "> - :: term\n>      %% hidden\n>    ``` raw=html\n>    a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-660",
@@ -4247,7 +4247,7 @@
   {
     "id": "comment-term-claude-675",
     "source": "> - :: term\n>      %% hidden\n>     ``` raw=html\n>     a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-676",
@@ -4297,7 +4297,7 @@
   {
     "id": "comment-term-claude-691",
     "source": "> - :: term\n>      %% hidden\n>       ``` raw=html\n>       a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-692",
@@ -4347,7 +4347,7 @@
   {
     "id": "comment-term-claude-723",
     "source": "> - :: term\n>      %%%\n>      # hidden\n>      %%%\n>    ``` raw=html\n>    a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-724",
@@ -4397,7 +4397,7 @@
   {
     "id": "comment-term-claude-739",
     "source": "> - :: term\n>      %%%\n>      # hidden\n>      %%%\n>     ``` raw=html\n>     a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-740",
@@ -4447,7 +4447,7 @@
   {
     "id": "comment-term-claude-755",
     "source": "> - :: term\n>      %%%\n>      # hidden\n>      %%%\n>       ``` raw=html\n>       a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n      <code> raw=html\na</code>\n      <pre id=\"payload\"><code></code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-756",
@@ -5597,7 +5597,7 @@
   {
     "id": "comment-term-claude-1043",
     "source": "> > - :: term\n> >      %% hidden\n> >    ``` raw=html\n> >    a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1044",
@@ -5647,7 +5647,7 @@
   {
     "id": "comment-term-claude-1059",
     "source": "> > - :: term\n> >      %% hidden\n> >     ``` raw=html\n> >     a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1060",
@@ -5697,7 +5697,7 @@
   {
     "id": "comment-term-claude-1075",
     "source": "> > - :: term\n> >      %% hidden\n> >       ``` raw=html\n> >       a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1076",
@@ -5747,7 +5747,7 @@
   {
     "id": "comment-term-claude-1107",
     "source": "> > - :: term\n> >      %%%\n> >      # hidden\n> >      %%%\n> >    ``` raw=html\n> >    a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n <code> raw=html\n a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1108",
@@ -5797,7 +5797,7 @@
   {
     "id": "comment-term-claude-1123",
     "source": "> > - :: term\n> >      %%%\n> >      # hidden\n> >      %%%\n> >     ``` raw=html\n> >     a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n  <code> raw=html\n  a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1124",
@@ -5847,7 +5847,7 @@
   {
     "id": "comment-term-claude-1139",
     "source": "> > - :: term\n> >      %%%\n> >      # hidden\n> >      %%%\n> >       ``` raw=html\n> >       a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term\n\n    <code> raw=html\n    a\n  {\n  #payload\n  }</code></dt></dl><pre><code>after\n</code></pre></li></ul></blockquote></blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n        </dl>\n        <code> raw=html\na</code>\n        <pre id=\"payload\"><code></code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "comment-term-claude-1140",

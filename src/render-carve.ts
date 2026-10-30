@@ -62,6 +62,13 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   preserveTableSeparators?: boolean
 }
 
+function hasLineBelowBody(blocks: BlockNode[], bodyColumn: number): boolean {
+  const only = blocks[0]
+  if (blocks.length !== 1 || only?.type !== 'paragraph') return false
+  const first = only.pos?.startLine
+  return only.children.some((child) => child.pos !== undefined && child.pos.startLine !== first && (child.pos.startColumn ?? bodyColumn) < bodyColumn)
+}
+
 function nestedTightItemLosesTightness(item: ListItem): boolean {
   return item.children.some((child, index) => {
     const previous = item.children[index - 1]
@@ -1502,7 +1509,7 @@ function relaxPlusEscapes(text: string): string {
   const bare = lines.map((line) => line.replace(ESCAPED_PLUS_LINE, '+'))
   const { lines: owned, payloadLines } = ownLines(bare)
   // The canonical form keeps a description's escape (corpus 436).
-  const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+') || /^[ \t>]*:[ \t]/.test(lines[i]!)
+  const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+') || /^[ \t>]*:[ \t]+\\\+[ \t]*$/.test(lines[i]!)
   return bare.map((line, i) => line === lines[i] || !keeps(i) ? line : lines[i]!).join('\n')
 }
 
@@ -3323,6 +3330,10 @@ class CarveRenderSession {
           previousMoved = moved
         }
       }
+      if (item === undefined && previousBlock !== null && parts.length > 0) {
+        const footnote = this.listFootnoteAfter(previousBlock, undefined, ctx)
+        if (footnote !== undefined) parts[parts.length - 1] += `\n${footnote}`
+      }
       return parts.join('\n\n')
     } finally {
       ctx.afterCaptionHost = previousHost
@@ -3727,9 +3738,9 @@ class CarveRenderSession {
             const quotedRawFence = item.children.some((child, index) =>
               child.type === 'block_quote' && item.children[index + 1]?.type === 'block_quote' &&
               child.children.at(-1)?.type === 'raw_block')
-            // A fence after a nested list carries a closer sentinel until normalized.
+            // A fence after or inside a nested list carries a closer sentinel until normalized.
             const dedentedFence = item.children.some((child, index) =>
-              child.type === 'code_block' && item.children[index - 1]?.type === 'list')
+              child.type === 'list' || child.type === 'code_block' && item.children[index - 1]?.type === 'list')
             const probe = quotedRawFence || dedentedFence ? this.normalize(wrapped) : wrapped
             let blocks = parse(probe).children
             for (let depth = 0; depth < ctx.quoteDepth; depth++) {
@@ -3826,19 +3837,21 @@ class CarveRenderSession {
     return written.join('\n')
   }
 
-  private listFootnoteAfter(before: BlockNode, after: BlockNode, ctx: CarveContext): string | undefined {
+  private listFootnoteAfter(before: BlockNode, after: BlockNode | undefined, ctx: CarveContext): string | undefined {
     if (before.type !== 'list') return undefined
     const item = before.items.at(-1)
     const contentColumn = item?.children[0]?.pos?.startColumn
     const from = before.pos?.endLine
-    const to = after.pos?.startLine
+    const to = after === undefined ? Infinity : after.pos?.startLine
     if (contentColumn === undefined || item?.pos?.startColumn === undefined || from === undefined || to === undefined) return undefined
     const definitions: string[] = []
     for (const [line, label] of this.footnoteDefsByLine) {
       const pos = ownValue(this.documentFootnoteDefPos, label)
-      if (line <= from || line >= to || pos?.startColumn !== contentColumn || this.footnotesWrittenInPlace.has(label)) continue
+      if (line <= from || line >= to || pos?.startColumn === undefined || pos.startColumn < contentColumn || this.footnotesWrittenInPlace.has(label)) continue
       const blocks = ownValue(this.documentFootnoteDefs, label)
       if (blocks === undefined) continue
+      // Past the column only a note with a line below its body stays: that line needs the note's own column (corpus 637).
+      if (pos.startColumn > contentColumn && !hasLineBelowBody(blocks, pos.startColumn + 2)) continue
       const written = this.renderOneFootnoteDef(label, blocks, ctx)
       this.footnotesWrittenInPlace.add(label)
       const offset = ' '.repeat(Math.max(0, contentColumn - item.pos.startColumn))
@@ -4317,7 +4330,8 @@ class CarveRenderSession {
           current = next ?? null
         }
       })
-      const attrs = renderAttrs(row.attrs)
+      // A row's attribute block follows the last pipe, so no cell split reaches a pipe in it (corpus 839).
+      const attrs = renderAttrs(row.attrs).replaceAll('\\|', '|')
       rowSlots.push({ index: rows.length, cells, marker: '|', attrs })
       rows.push(renderTableRow(cells, attrs))
       for (const line of continuations[rowIndex]!) {

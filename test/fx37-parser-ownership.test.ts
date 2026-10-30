@@ -7,9 +7,9 @@ describe('parser ownership across nested marker bodies', () => {
     expect(html).toContain('<li>+\nx</li>')
   })
 
-  it('returns a nested item below a footnote to the enclosing item', () => {
+  it('folds a nested item below a footnote into the note (corpus 454-4)', () => {
     const html = carveToHtml('- body\n\n  [^g]: n\n   - item\n\nafter\n')
-    expect(html).toContain('<li>body\n    <ul>\n      <li>item</li>')
+    expect(html).toContain('<li>body</li>')
     expect(html).toContain('<p>after</p>')
   })
 
@@ -29,7 +29,7 @@ describe('parser ownership across nested marker bodies', () => {
 
   it('ends a nested item claim after a wrapped attribute closes', () => {
     const html = carveToHtml('- - a\n   {c\n}\nx\n')
-    expect(html).toContain('<li>a\n{c\n}</li>')
+    expect(html).toContain('<li>a</li>')
     expect(html).toContain('</ul>\n<p>x</p>')
   })
 
@@ -50,9 +50,9 @@ describe('parser ownership across nested marker bodies', () => {
     expect(html).not.toContain('<p>+</p>')
   })
 
-  it('returns a below-floor marker to its description host', () => {
+  it('folds a below-floor marker into a description-hosted note', () => {
     const html = carveToHtml('- q\n  :: t\n  :  [^f]: note\n     - nested\n  after\n')
-    expect(html).toContain('<dd>\n        <ul>\n          <li>nested\nafter</li>')
+    expect(html).toContain('<dd></dd>')
   })
 
 })

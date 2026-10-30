@@ -876,7 +876,8 @@ export function createLinkDefinitionCollector(
       openCols[composed.depth]!.quote
     if (s.inFootnoteBody && !stoppedAtQuote && composed.column >= openColumn) return true
     if (stoppedAtQuote) return reachedOuter !== null && composed.column >= reachedOuter
-    if (s.plusColumn !== null) return leadingWhitespace(v.unquoted) === s.plusColumn
+    if (s.plusColumn !== null && leadingWhitespace(v.unquoted) === s.plusColumn) return true
+    if (s.plusColumn !== null && !anyReached) return false
     if (anyReached) {
       return deepest !== null
         ? composed.column >= deepest

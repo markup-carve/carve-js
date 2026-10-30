@@ -23,10 +23,10 @@ it('keeps a refused plus as text in an open note paragraph', () => {
   expect(html).toContain('intro\n+\nmore')
 })
 
-it('returns a marker below the note body column to the enclosing item', () => {
+it('folds a marker below the note body column into the note (corpus 454-4)', () => {
   const html = carveToHtml('- body\n\n  [^g]: n\n   - item\n\nafter\n')
-  expect(html).toContain('<li>item</li>')
-  expect(html).toContain('<li>body\n    <ul>')
+  expect(html).not.toContain('<li>item</li>')
+  expect(html).toContain('<li>body</li>')
 })
 
 it('keeps a list tight when a note after a blank keeps a prose follower', () => {

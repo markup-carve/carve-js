@@ -4,7 +4,7 @@ import { layoutWork } from '../src/parse.js'
 import fixtures from './fixtures/nested-marker-note-closer.json'
 
 const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
-const itemColumnRuling = new Set(['nested-closer-754', 'nested-closer-755', 'nested-closer-756', 'nested-closer-757'])
+const itemColumnRuling = new Set(['nested-closer-756', 'nested-closer-757'])
 
 for (const row of fixtures) {
   it(`preserves paragraph ownership after nested note CODE: ${row.id}`, () => {
