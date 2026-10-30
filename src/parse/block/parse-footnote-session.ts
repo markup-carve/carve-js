@@ -380,7 +380,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
     return 'continue'
     })
-  if (!lexer.footnoteDefs.has(label)) {
+  // A losing duplicate is still read: only its own label loses, and a definition
+  // nested in its body is collected like any other (PART 9R R2).
+  const wins = !lexer.footnoteDefs.has(label)
+  {
     // A recognized opener at or beyond the note's minimum column establishes
     // its authored column as a local base (carve#1729). The collector has
     // already removed the fixed two-column body margin.
@@ -395,7 +398,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     sub.inFootnoteBody = true
     sub.hostBody = 'footnote'
     sub.hostBodyRoot = 'footnote'
-    lexer.footnoteDefs.set(label, bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : hooks.parseBlocks(sub, 0))
+    const body = bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : hooks.parseBlocks(sub, 0)
+    if (!wins) return null
+    lexer.footnoteDefs.set(label, body)
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
     // any of them, so a span derived from the body would start inside the

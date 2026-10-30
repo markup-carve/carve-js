@@ -221,7 +221,7 @@ const isMarkerLine = (line: string): boolean => /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)
 
 function splitSiteFrontmatter(source: string): [string, string, string] {
   const lines = source.split('\n')
-  if (!/^--- ?\w*[ \t]*$/.test(lines[0] ?? '')) return ['', '', source]
+  if (!/^--- ?[A-Za-z0-9]*[ \t]*$/.test(lines[0] ?? '')) return ['', '', source]
   for (let i = 1; i < lines.length; i++) {
     if (/^---[ \t]*$/.test(lines[i]!)) {
       const frontmatter = lines.slice(0, i + 1).join('\n')

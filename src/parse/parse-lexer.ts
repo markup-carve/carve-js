@@ -8,7 +8,7 @@ import type { OverindentedOpener, OwnershipCut, RefusedPlus } from './block/bloc
 
 export const TRAILING_WS = '[ \\t]*$'
 
-const RE_FRONTMATTER_OPEN = new RegExp('^--- ?(\\w*)' + TRAILING_WS)
+const RE_FRONTMATTER_OPEN = new RegExp('^--- ?([A-Za-z0-9]*)' + TRAILING_WS)
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
 

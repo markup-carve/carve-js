@@ -907,6 +907,17 @@ export class ParseSession extends InlineParseSession {
       if (eq) return eq
     }
     const paragraph = this.parseParagraph(lexer)
+    if (paragraph.children.length === 1 && paragraph.children[0]!.type === 'math' && (paragraph.children[0] as Math).display) {
+      // A span over several lines is the same host as a one-line one (§4, §10 I7).
+      let la = 0
+      while (isBlankLine(lexer.peek(la))) la++
+      const cap = la <= 1 ? RE_CAPTION.exec(lexer.peek(la) ?? '') : null
+      if (cap) {
+        this.recordAttachedCaption(lexer, lexer.pos + la)
+        for (let i = 0; i <= la; i++) lexer.consume()
+        return { type: 'figure', target: paragraph, caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
+      }
+    }
     if (paragraph.children.length === 1 && paragraph.children[0]!.type === 'image' &&
         isBlankLine(lexer.peek()) && RE_CAPTION.test(lexer.peek(1) ?? '')) {
       const cap = RE_CAPTION.exec(lexer.peek(1)!)!
@@ -916,6 +927,26 @@ export class ParseSession extends InlineParseSession {
       return { type: 'figure', target: paragraph.children[0], caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
     }
     return paragraph
+  }
+
+  // A paragraph so far that is one display-math span, closed or still open. An
+  // open span ends at the caret line (§4 names no line count).
+  private isDisplayMathHost(lines: string[], lexer: Lexer): boolean {
+    const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n')
+    if (!text.startsWith('$$`')) return false
+    let run = 1
+    while (text[2 + run] === '`') run++
+    let at = 2 + run
+    for (;;) {
+      at = text.indexOf('`', at)
+      if (at < 0) return true
+      let end = at
+      while (text[end] === '`') end++
+      if (end - at === run) break
+      at = end
+    }
+    const only = this.parseInline(dropTrailingWhitespace(text), lexer.abbrDefs, lexer.linkDefs, { baseOffset: 0, startLine: 1, startColumn: 1 })
+    return only.length === 1 && only[0]!.type === 'math' && (only[0] as Math).display === true
   }
 
   // Parse a standalone display-math line, optionally wrapping it in a figure when
@@ -2137,6 +2168,7 @@ export class ParseSession extends InlineParseSession {
     const lines: string[] = []
     let imageCaptionSlot = false
     let captionAtContentColumn = false
+    let mathCaptionChecked = false
     let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     let secondLineLazy = false
@@ -2155,6 +2187,11 @@ export class ParseSession extends InlineParseSession {
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
+      // Later lines cannot make a paragraph that failed here a sole span again.
+      if (!mathCaptionChecked && RE_CAPTION.test(ln)) {
+        mathCaptionChecked = true
+        if (this.isDisplayMathHost(lines, lexer)) break
+      }
       if (RE_CAPTION.test(ln)) captionAtContentColumn = true
       if (lines.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(lines[0]!) && RE_CAPTION.test(ln))
         imageCaptionSlot = true

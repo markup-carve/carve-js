@@ -6572,7 +6572,7 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
  * The opener's trailing padding is `[ \t]`, as in the parser: a form feed or a
  * no-break space after the token is content, so the line is not an opener.
  */
-const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)[ \t]*$/
+const RE_MD_FRONTMATTER_OPEN = /^--- ?([A-Za-z0-9]*)[ \t]*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---[ \t]*$/
 
 /**
