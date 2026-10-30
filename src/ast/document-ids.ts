@@ -1,4 +1,6 @@
-import type { AnyNode, Document } from '../ast.js'
+import type { AnyNode, Document, InlineNode } from '../ast.js'
+import type { UnresolvedReference } from '../parse/inline/reference-state.js'
+import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { ALL_OWNED_CHILD_FIELDS } from './owned-child-fields.js'
 
 /**
@@ -136,8 +138,17 @@ Object.setPrototypeOf(DOCUMENT_ID_CHILD_FIELDS, null)
 
 export const RECORD_CHILD_FIELDS: readonly string[] = ['terms', 'definitions', 'base', 'annotation']
 
-/** Visit id-bearing AST slots without traversing positions or attribute values. */
-export function visitDocumentIds(doc: Document, visit: (id: string) => void): void {
+/**
+ * Visit id-bearing AST slots without traversing positions or attribute values.
+ * An unresolved reference renders its source, so its ids take part in nothing
+ * (CARVE-P2-004). Before resolution, `resolvesLater` names the reference links
+ * the heading index will still resolve.
+ */
+export function visitDocumentIds(
+  doc: Document,
+  visit: (id: string) => void,
+  resolvesLater?: (node: UnresolvedReference) => boolean,
+): void {
   const stack: unknown[] = [doc]
   const seen = new Set<object>()
   const singletonEdges = new Set<object>([doc])
@@ -182,6 +193,9 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
       if (seen.has(value)) continue
       seen.add(value)
     }
+    if (type === 'footnote_ref' && !Object.hasOwn(doc.footnoteDefs ?? {}, node['label'] as string)) continue
+    const reference = value as InlineNode
+    if (isUnresolvedReference(reference) && !resolvesLater?.(reference)) continue
     const id = (node['attrs'] as { id?: unknown } | undefined)?.id
     if (typeof id === 'string') visit(id)
     for (const field of fields) {

@@ -17,7 +17,7 @@ import type {
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './extension/abbr-budget.js'
 import { replaceLoneSurrogates } from './well-formed.js'
-import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading/heading-ids.js'
+import { crossrefKey, headingIndexResolves, inlineText, isCollapsedRef, numberCaptionsIn, promoteBlockImages, slugify } from './heading/heading-ids.js'
 import { promoteCitationDefinitions } from './extension/citations.js'
 import { markedDelimitedTable, parse, normalizeRefLabel } from './parse.js'
 import { deriveTableMetadata } from './parse/parse-prepass-core.js'
@@ -759,7 +759,7 @@ function resolveChild(
  */
 function headingIdsAsRead(doc: Document): Map<Heading, string> {
   const used = new DocumentIdRegistry()
-  visitDocumentIds(doc, (id) => used.reserve(id))
+  visitDocumentIds(doc, (id) => used.reserve(id), headingIndexResolves(doc))
   const ids = new Map<Heading, string>()
   const visit = (blocks: BlockNode[]): void => {
     for (const block of blocks) {
@@ -1958,9 +1958,10 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     // Parent explicit ids are claimed first (spec I5: parent before child), so
     // an included duplicate is the one renamed - even against a parent id
     // after the include site.
+    // Included headings are not known yet, so any collapsed reference may still resolve.
     visitDocumentIds(doc, (id) => {
       if (id !== '') state.usedIds.add(id)
-    })
+    }, (node) => node.type === 'link' && isCollapsedRef(node.ref, node.rawRef))
     expandBlocks(doc.children, state)
     if (doc.footnoteDefs) {
       // Each footnote body is its own container, with no preceding heading.
