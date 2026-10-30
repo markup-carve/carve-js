@@ -78,6 +78,19 @@ const emphasisPairs: ReadonlyArray<readonly [string, Emphasis['type']]> = [
   ['~', 'strike'], ['=', 'highlight'],
 ]
 
+const ownedBlockClosers = new WeakMap<Map<number, BarePair>, Set<number>>()
+
+// A pair's `crossed` reads the table of the marker glued before it.
+function addEveryBareMarker(markers: Set<number>): void {
+  if (markers.size !== 0) for (const marker of '/*_~=') markers.add(PAIR_MARKERS.indexOf(marker))
+}
+
+function barePair(text: string, open: number, close: number, end: number, guarded: boolean, tables: Array<Int32Array | undefined>): BarePair {
+  const glued = tables[PAIR_MARKERS.indexOf(text[open - 1] ?? '')]?.[open] ?? -1
+  const crossed = glued !== -1 && glued < close && bareOpener(text, open - 1) !== 'none'
+  return { close, end, ...(guarded ? { guarded } : {}), ...(crossed ? { crossed } : {}) }
+}
+
 function canCloseBarePair(text: string, at: number, marker: string, openerMarks: Set<number>): boolean {
   const before = text[at - 1]
   const next = text[at + 1]
@@ -347,6 +360,7 @@ export class InlineParseSession {
       const marker = text[start - 1]
       if (marker !== undefined && '/*_~='.includes(marker)) bareMarkers.add(PAIR_MARKERS.indexOf(marker))
     }
+    addEveryBareMarker(bareMarkers)
     const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
     for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
     const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
@@ -556,7 +570,7 @@ export class InlineParseSession {
         const guarded = opener === 'guarded'
         bareClose = opener !== 'none' ? bareTables[bareId]![j + 1]! : -1
         bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
-        if (bareTail !== undefined) barePairs.set(j, guarded ? { close: bareClose, end: bareTail, guarded } : { close: bareClose, end: bareTail })
+        if (bareTail !== undefined) barePairs.set(j, barePair(text, j, bareClose, bareTail, guarded, bareTables))
         if (guarded) bareTail = undefined
       }
       for (const m of markers) {
@@ -1373,6 +1387,9 @@ export class InlineParseSession {
         !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, delim, memo, end, lastOpener))) {
         attached?.set(child.close + 1, child.end)
         if (!this.crossedByGluedOpener(text, j, child.close, delim, memo, end)) (spent ??= new Set()).add(child.close)
+      } else if (attached !== undefined && child === undefined && spent?.has(j) !== true) {
+        const close = this.closerOfUnblockedOpener(text, j, delim, memo, end)
+        if (close !== -1) (spent ??= new Set()).add(close)
       }
       const attachedEnd = attached?.get(j)
       if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
@@ -1604,7 +1621,29 @@ export class InlineParseSession {
     // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
     // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
     if (start >= text.length || isCarveWhitespace(text[start]) || extendsGrapheme(text, start)) return undefined
-    return combinedSpanCloser(text, start, memo, (open) => this.bracedFrameEnd(text, open))
+    return combinedSpanCloser(text, start, memo, (open) => this.bracedFrameEnd(text, open), (block) => this.bareBlockOwned(text, block))
+  }
+
+  // A closer that already closed a pair opens nothing, block or no block.
+  private closerOfUnblockedOpener(text: string, at: number, delim: string, memo: EmphasisMemo, end: number): number {
+    const ch = text[at]!
+    if (!'/*~='.includes(ch) || ch === delim || this.openKinds.has(ch) || bareOpener(text, at) !== 'open') return -1
+    const key = `${ch}${at + 1}:${end}`
+    let close = memo.closes?.get(key)
+    if (close === undefined) (memo.closes ??= new Map()).set(key, close = this.cachedFindEmphasisClose(text, at + 1, ch, memo, end))
+    return close
+  }
+
+  // Whether a bare pair of the table ends at the block starting at `at`.
+  private bareBlockOwned(text: string, at: number): boolean {
+    this.pairEndTables(text)
+    let closers = ownedBlockClosers.get(this.bareAttributePairs)
+    if (closers === undefined) {
+      closers = new Set()
+      for (const pair of this.bareAttributePairs.values()) if (pair.crossed !== true) closers.add(pair.close)
+      ownedBlockClosers.set(this.bareAttributePairs, closers)
+    }
+    return closers.has(at - 1 + this.pairEndOffset)
   }
 
   private crossedByGluedOpener(text: string, at: number, close: number, delim: string, memo: EmphasisMemo, end: number): boolean {

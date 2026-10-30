@@ -170,7 +170,8 @@ export function splitBracedOpener(text: string, open: number): boolean {
 }
 
 // `guarded`: the opener follows a `_` or `/` and opens only if that one does.
-export interface BarePair { close: number; end: number; guarded?: boolean }
+// `crossed`: a marker glued before the opener closes first, so E2 demotes the opener.
+export interface BarePair { close: number; end: number; guarded?: boolean; crossed?: boolean }
 
 export interface InlinePairView {
   tables: Array<Int32Array | undefined>
@@ -477,7 +478,7 @@ const combinedCloserAt = (text: string, at: number): boolean =>
 
 // `bracedEnd` gives the exclusive end of a forced span or editorial frame
 // opening at a `{`, or -1, as the parser pairs it.
-export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo, bracedEnd?: (open: number) => number): number | undefined {
+export function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo, bracedEnd?: (open: number) => number, ownsBlock?: (at: number) => boolean): number | undefined {
   if (!memo.boldItalic) {
     const closers: number[] = []
     const owners: number[] = []
@@ -525,7 +526,9 @@ export function combinedSpanCloser(text: string, start: number, memo: EmphasisMe
       if (!opaque && text[close] === '{') {
         // A braced inline is a child boundary too (PART 9 E2a, section 22).
         const braced = bracedEnd?.(close) ?? -1
-        const end = braced === -1 ? opaqueEnds.get(close) ?? attributes.get(close) : undefined
+        // A block after a bare marker is opaque only where a pair owns it.
+        const unowned = attributes.has(close) && '*/_~='.includes(text[close - 1] ?? ' ') && ownsBlock?.(close) === false
+        const end = braced === -1 && !unowned ? opaqueEnds.get(close) ?? attributes.get(close) : undefined
         if (braced !== -1) boundaries.push({ open: close, end: braced, opaque: false })
         else if (end !== undefined) boundaries.push({ open: close, end, opaque: true })
       }
