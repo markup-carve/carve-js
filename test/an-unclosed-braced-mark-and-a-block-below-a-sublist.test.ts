@@ -25,4 +25,8 @@ describe('an attribute line below a sublist column', () => {
   ])('ends the sublist, so the blank loosens the item: %j', (source) => {
     expect(carveToHtml(source).trim()).toBe(loose)
   })
+
+  it('reads the same inside a quote', () => {
+    expect(carveToHtml('> - a\n>   - b\n>\n>   {x}\n>     p\n').trim()).toContain('<li><p>a</p>')
+  })
 })
