@@ -959,7 +959,7 @@ export function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
 export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs: Attrs; count: number } | null {
   // The override changes the opening-column test; continuation lines still
   // come from this lexer, as they did in the paragraph classifier.
-  if (!/^\{/.test(firstLine ?? lexer.peek()!)) return null
+  if (!/^[ \t]*\{/.test(firstLine ?? lexer.peek()!)) return null
   let collected = ''
   let count = 0
   for (;;) {

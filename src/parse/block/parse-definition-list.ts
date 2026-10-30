@@ -28,6 +28,7 @@ import type {
   PendingAttrCarry,
 } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
+import { peekBlockAttributes } from '../parse-prepass-core.js'
 
 // A phase's answer for one admitted line, or `undefined` to ask the next phase.
 type DescriptionVerdict = 'continue' | 'stop' | undefined
@@ -679,8 +680,7 @@ export function createDefinitionListParser(
           const result = continueWrappedAttributeBlock(nestedAttributeRun, dedented.trimStart())
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
           closedNestedAttribute = result.verdict === 'attributes'
-        } else if (nestedItemColumn > 0 && indentColumns(dedented) >= nestedItemColumn &&
-            opensWrappedAttributeBlock(dedented.trimStart())) nestedAttributeRun = dedented.trimStart()
+        } else if (opensWrappedAttributeBlock(dedented.trimStart())) nestedAttributeRun = dedented.trimStart()
         // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
         // (markup-carve/carve#1911). `sliceColumns` removes the body's content
         // column and KEEPS the rest, so an opener written one column past it
@@ -937,6 +937,7 @@ export function createDefinitionListParser(
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        if (!atDocumentColumn && opensWrappedAttributeBlock(below) && peekBlockAttributes(lexer)) return 'stop'
         const original = sourceLineAt(lexer, lexer.pos, ln)
         if (descriptionTermOwnerReached(lazyState.inDefList === 'term', below,
           sourceColumn(original, quotePrefixDepth(markerSource)), descriptionSourceColumn,

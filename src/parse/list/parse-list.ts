@@ -9,6 +9,7 @@ import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, ty
 import { dropPositions } from '../../source/source-positions.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, RefusedContinuationMarker, StrippedLineOrigin } from '../../parse.js'
+import { peekBlockAttributes } from '../parse-prepass-core.js'
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
 function noteFenceOpen(state: ItemLazyState): boolean {
@@ -2634,6 +2635,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
+      !(opensWrappedAttributeBlock(l.trimStart()) && peekBlockAttributes(lexer)) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
       (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
         (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||

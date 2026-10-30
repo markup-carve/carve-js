@@ -1204,6 +1204,10 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['740-lazy-quote-owners', {
+    reason: 'carve#4089: an indented wrapped attribute block is an attribute line; the pinned golden predates the ruling',
+    html: '<blockquote>\n\n</blockquote>\n<p>a</p>',
+  }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
