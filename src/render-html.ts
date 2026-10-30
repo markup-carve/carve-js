@@ -1201,7 +1201,7 @@ function renderAttrSlot(attrs: Attrs, slot: string): string {
   if (slot === '.class') {
     return attrs.classes?.length ? `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
   }
-  if (slot === '#id') return attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : ''
+  if (slot === '#id') return attrs.id !== undefined ? `id="${escapeAttr(sanitizeAttrValue('id', attrs.id))}"` : ''
   if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
   if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
   const value = attrs.keyValues?.[slot]
