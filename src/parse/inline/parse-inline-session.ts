@@ -378,14 +378,21 @@ export class InlineParseSession {
       ? editorialCommentEnds(text) : new Map<number, number>()
     const bracketEnds = new Set<number>()
     const openerMarks = new Set<number>()
+    const lastPairClosers = new Map<string, number>()
+    const lastPairCloser = (marker: string): number => {
+      let last = lastPairClosers.get(marker)
+      if (last === undefined) lastPairClosers.set(marker, last = text.lastIndexOf(`${marker}}`))
+      return last
+    }
     for (let at = 0; at < n; at++) {
       if (text[at] === '\\') { at++; continue }
       if (text[at] === '[') {
         const close = brackets?.(at)
         if (close !== undefined) bracketEnds.add(close)
       }
-      // `{X}` is characters (CARVE-P3-014): its X is no opener mark.
-      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && text[at + 2] !== '}' && !splitBracedOpener(text, at)) openerMarks.add(++at)
+      // `{X}` is characters (CARVE-P3-014): its X is no opener mark. Nor is the
+      // X of a `{X` with no `X}` after it: that X is a bare candidate (CARVE-P9-043).
+      if (text[at] === '{' && PAIR_MARKERS.includes(text[at + 1] ?? '\0') && text[at + 2] !== '}' && !splitBracedOpener(text, at) && lastPairCloser(text[at + 1]!) > at + 1) openerMarks.add(++at)
     }
     // Inside a `{X` span the run after a bare closer attaches only if that pair
     // forms: a bare X is literal there (E3), and so is an opener whose guard
