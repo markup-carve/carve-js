@@ -1499,7 +1499,9 @@ function relaxPlusEscapes(text: string): string {
   const lines = text.split('\n')
   const bare = lines.map((line) => line.replace(ESCAPED_PLUS_LINE, '+'))
   const { lines: owned, payloadLines } = ownLines(bare)
-  return bare.map((line, i) => line === lines[i] || !payloadLines.has(i) && !owned[i]!.endsWith('+') ? line : lines[i]!).join('\n')
+  // The canonical form keeps a description's escape (corpus 436).
+  const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+') || /^[ \t>]*:[ \t]/.test(lines[i]!)
+  return bare.map((line, i) => line === lines[i] || !keeps(i) ? line : lines[i]!).join('\n')
 }
 
 export function codeSpanNeedsPad(content: string): boolean {
@@ -4156,6 +4158,8 @@ class CarveRenderSession {
           } finally {
             this.indentedHostDepth--
           }
+          // The canonical form keeps a description's lone `+` escaped (corpus 436).
+          if (written === '+' || written.startsWith('+\n')) written = '\\' + written
         } finally {
           this.descriptionBody = outerDescriptionBody
         }

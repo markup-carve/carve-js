@@ -350,7 +350,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, isItemAttachBoundary)
     }
     if (!firstBlockMarker) return { kind: 'none' }
-    if (lexer.peek() === undefined || !isContinuationMarker(lexer.peek()!) && firstItemAttachBoundary(lexer.peek()!)) return { kind: 'none' }
+    if (lexer.peek() === undefined || isBlankLine(lexer.peek()!)) return { kind: 'none' }
     return attachedFirstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, flags)
   }
 

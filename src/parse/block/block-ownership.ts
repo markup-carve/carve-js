@@ -299,7 +299,7 @@ export function ownLines(
       afterPlus = true
       continue
     }
-    if (CONT_MARKER.test(m.rest)) spellStrayPlus(reached)
+    if (CONT_MARKER.test(m.rest) && !(top().kind === 'fence' && reached === frames.length - 1)) spellStrayPlus(reached)
     const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
@@ -343,8 +343,7 @@ export function ownLines(
         !(missedNote && form.kind === 'item' &&
           (owner.kind === 'item' || owner.kind === 'dd' || frames.slice(reached + 1).some((f) => f.kind === 'item')))) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
-      if (TRAILING_PLUS.test(m.rest) && !(form.kind === 'dd' &&
-          refusal(at, docColumn(lines[at]!, m.rest), quotes, 'dd') === null)) spellTrailingPlusAsLetter()
+      if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1
       lead(Math.min(Math.max(m.col - owner.cut, owner.canon), limit))
@@ -440,7 +439,10 @@ export function ownLines(
       if (form.kind === 'text') {
         if (CONT_MARKER.test(m.rest)) {
           frame.plusBody = true
-          const reason = refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind)
+          // Past the one space after a `>` and behind a lead tab, the `+` is text.
+          const leadTab = src.slice(0, src.length - m.rest.length).includes('\t')
+          const reason = frame.kind === 'quote' && m.col > 0 || leadTab ? 'right'
+            : refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind)
           if (reason !== null) {
             refuse(reason, frame.kind, true)
             spellPlusAsLetter()
@@ -480,6 +482,23 @@ export function ownLines(
     function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
       if (m.rest === '') return top().kind !== 'fence'
       return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item'
+    }
+
+    function lazyMarkerLineAttaches(form: Form): boolean {
+      if (form.kind === 'dd') return refusal(at, docColumn(lines[at]!, m.rest), quotes, 'dd') === null
+      return form.kind === 'item' && refusal(at, innermostMarkerColumn(), quotes, 'item') === null
+    }
+
+    function innermostMarkerColumn(): number {
+      let tail = m.rest
+      let column = docColumn(lines[at]!, m.rest)
+      for (let marker = matchMarker(tail); marker !== null; marker = matchMarker(tail)) {
+        const next = tail.slice(marker.head)
+        if (CONT_MARKER.test(next)) break
+        column += marker.head
+        tail = next
+      }
+      return column
     }
 
     function spellStrayPlus(depth: number): void {
@@ -541,7 +560,7 @@ export function ownLines(
     if (col !== marker) return col < marker ? 'left' : 'right'
     const rest = trimEndSpaceTab(n.rest)
     // A closer ends a body and is no block.
-    if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon')) return 'document'
+    if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return 'document'
     if (host === 'item' && matchMarker(rest) !== null) return 'sibling'
     if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return 'sibling'
     return null
