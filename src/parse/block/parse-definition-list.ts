@@ -246,8 +246,14 @@ export function createDefinitionListParser(
     if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
     return lexer.hostBody === 'description' || returned ? termColumn : -1
   }
+  // Only a flush term continues the marker line's list. The block dispatch also
+  // sends an indented one here, and reading that as the lead would consume nothing.
+  const endMarkerLineLeadAtIndentedTerm = (lexer: Lexer): void => {
+    if (!RE_DEFLIST_TERM.test(stripLazyFrame(lexer.peek() ?? ''))) lexer.definitionLeadFromItemMarker = false
+  }
   return function parseDefinitionList(parseSession: DefinitionListSession, lexer: Lexer): DefinitionList {
     const items: DefinitionItem[] = []
+    endMarkerLineLeadAtIndentedTerm(lexer)
     /**
      * Collect and parse one body.
      *
