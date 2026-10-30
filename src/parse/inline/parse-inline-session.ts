@@ -288,6 +288,12 @@ export class InlineParseSession {
     this.bareAttributePairs = barePairs
   }
 
+  // A held `_` or `/` changes what a braced marker of its kind guards.
+  private pairTableKey(text: string): string {
+    const held = (this.openKinds.has('_') && /\{_[/*~=]/.test(text) ? '_' : '') + (this.openKinds.has('/') && text.includes('{/_') ? '/' : '')
+    return held === '' ? text : `${text}\0${held}`
+  }
+
   /**
    * For each marker the text opens a pair with, where a scan for its closer
    * starting at each position stops: the closer's index, or -1. Built right to
@@ -296,12 +302,13 @@ export class InlineParseSession {
    * than a pass per pair.
    */
   private pairEndTables(text: string): Array<Int32Array | undefined> {
-    if (text === this.pairEndText) return this.pairEndTable
-    const cached = this.pairEndCache.get(text)
+    const key = this.pairTableKey(text)
+    if (key === this.pairEndText) return this.pairEndTable
+    const cached = this.pairEndCache.get(key)
     if (cached !== undefined) {
-      this.pairEndCache.delete(text)
-      this.pairEndCache.set(text, cached)
-      this.pairEndText = text
+      this.pairEndCache.delete(key)
+      this.pairEndCache.set(key, cached)
+      this.pairEndText = key
       this.pairEndOffset = 0
       this.pairEndTable = cached.tables
       this.pairAttributeTails = cached.attributeTails
@@ -321,7 +328,7 @@ export class InlineParseSession {
     }
     // Attribute tails can hide bare closers even when no braced pair is open.
     if (markers.length === 0 && !text.includes('{')) {
-      this.rememberPairTables(text, tables)
+      this.rememberPairTables(key, tables)
       return tables
     }
     const ends = new Int32Array(n + 2).fill(-1)
@@ -437,6 +444,18 @@ export class InlineParseSession {
         const guard = text[at - 1]!
         if (guard === marker || bareOpener(text, at - 1) === 'none') return true
       }
+      // A `{_` or `{/` right before the opener guards it like a bare one. It does
+      // not stand under an open bare opener of its kind that closes later (E3), and
+      // a closer of its kind inside the pair demotes the pair (E2).
+      if (openerMarks.has(open - 1) && text[open - 1] === marker && bareOpener(text, open) === 'guarded') {
+        if (this.openKinds.has(marker)) return true
+        const tail = attributeTails.get(at) ?? attributes.get(at)!
+        const closers = closerTable(marker)
+        const outer = openerTable(marker)[open - 1]!
+        if (outer !== -1 && !openerMarks.has(outer) && bareOpener(text, outer) === 'open' && closers[outer + 1]! >= open - 1 && closers[tail]! !== -1) return true
+        const inner = closers[open + 1]!
+        if (tables[PAIR_MARKERS.indexOf(marker)]![tail] === -1 && inner !== -1 && inner < at - 1) return true
+      }
       return false
     }
     for (let j = n - 1; j >= 0; j--) {
@@ -529,7 +548,7 @@ export class InlineParseSession {
         table[j] = stop
       }
     }
-    this.rememberPairTables(text, tables, attributeTails, barePairs)
+    this.rememberPairTables(key, tables, attributeTails, barePairs)
 
     return tables
   }
@@ -1285,12 +1304,15 @@ export class InlineParseSession {
     let spent: Set<number> | undefined
     // The last opener of each other kind the walk has passed.
     let lastOpener: Map<string, number> | undefined
+    // Openers of a kind already held (E3): text, so they guard what follows.
+    let held: Set<number> | undefined
+    let entries: Set<string> | undefined
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
       const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? this.pairBareAttributes(text, j) : undefined
-      if (child && (!child.guarded || this.guardStands(text, j, from, delim)) &&
+      if (child && (!child.guarded || (held?.has(j - 1) !== true && this.guardStands(text, j, from, delim))) &&
         !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, delim, memo, end, lastOpener))) {
         attached?.set(child.close + 1, child.end)
         if (!this.crossedByGluedOpener(text, j, child.close, delim, memo, end)) (spent ??= new Set()).add(child.close)
@@ -1410,7 +1432,19 @@ export class InlineParseSession {
           continue
         }
       }
-      if (ch !== delim && '/*_~='.includes(ch) && !this.openKinds.has(ch) && bareOpener(text, j) !== 'none') (lastOpener ??= new Map()).set(ch, j)
+      if (ch !== delim && '/*_~='.includes(ch) && !this.openKinds.has(ch) && bareOpener(text, j) !== 'none') {
+        (lastOpener ??= new Map()).set(ch, j)
+      }
+      if ((ch === '_' || ch === '/') && ch !== delim && !this.openKinds.has(ch)) {
+        const before = text[j - 1]
+        if (entries?.has(ch)) {
+          if (before !== undefined && !isCarveWhitespace(before) && !/[A-Za-z0-9]/.test(text[j + 1] ?? '')) entries.delete(ch)
+          else if (bareOpener(text, j) !== 'none') (held ??= new Set()).add(j)
+        } else {
+          const opener = bareOpener(text, j)
+          if (opener === 'open' || (opener === 'guarded' && (j === from || entries?.has(before!) === true))) (entries ??= new Set()).add(ch)
+        }
+      }
       if (ch === delim) {
         // Closer must not be preceded by whitespace (CARVE-P3-013).
         const prev = text[j - 1]
