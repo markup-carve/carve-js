@@ -62,10 +62,10 @@ it.each([
 })
 
 it.each([
-  ['- a\n-\n- c\n', '- a\n- +\n- c\n'],
-  ['-', '- +'],
-  ['1.', '1. +'],
-  ['a.', 'a. +'],
+  ['- a\n-\n- c\n', '- a\n- {empty}\n- c\n'],
+  ['-', '- {empty}'],
+  ['1.', '1. {empty}'],
+  ['a.', 'a. {empty}'],
 ])('writes %j as %j', (source, expected) => {
   expect(djotToCarve(source)).toBe(expected)
 })

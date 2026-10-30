@@ -250,18 +250,16 @@ describe('a continuation marker', () => {
   it('reads the same in the definition prepass, which used the wider `trim()`', () => {
     // A THIRD spelling, and the one that did not even agree with the other two:
     // the prepass used the native `trim()` (full `\s`, U+00A0 included) where the
-    // block lexer used `\s` minus U+00A0. With the marker recognized, the item's
-    // open content column is the MARKER's own, so a definition at the item's
-    // column is not collected and the reference below stays literal; without it
-    // the item's column is live and the definition resolves.
+    // block lexer used `\s` minus U+00A0. A follower at the item's column refuses
+    // the marker, so the definition resolves whichever way the mark is read.
     //
     // U+00A0 is the row that ISOLATES this site: no other spelling ever accepted
     // it, so a reference that resolves here and nowhere else can only mean the
     // prepass and the block lexer disagreed about the same line.
     const resolves = (ch: string) =>
       carveToHtml('-   a\n+' + ch + '\n    [r]: /u\n\nx [t][r]\n').includes('href="/u"')
-    expect(resolves('')).toBe(false)
-    expect(resolves('\t')).toBe(false)
+    expect(resolves('')).toBe(true)
+    expect(resolves('\t')).toBe(true)
     expect(resolves('X')).toBe(true)
     expect(resolves('﻿')).toBe(true)
     expect(resolves('\u00a0')).toBe(true)

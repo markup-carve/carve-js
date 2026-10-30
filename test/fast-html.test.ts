@@ -214,7 +214,6 @@ describe('borrowed HTML layout', () => {
     // The spec pin past carve#2867 adds five more accepted documents; each one
     // is held against the authoritative render above before it is counted.
     // The pin at carve 6a11a860 adds corpus 559-3 and 559-6.
-    // The pin at carve 2965a851 adds 588-3 and 588-4, the bare `> +` that stays text.
     // Corpus 589-32 adds a blank first row promoted to an empty header row.
     // The newer spec pin adds 108-security-hardening-12 to the accepted set.
     // Corpus 617 adds an unmarked CSV fence that stays on the code path.

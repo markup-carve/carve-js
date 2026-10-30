@@ -13,7 +13,7 @@ describe('ruled JavaScript regressions', () => {
 
   it('lets the second consecutive marker attach a block in a hosted quote', () => {
     const source = '::: note\n> q\n+\n+\ntail\n:::\n'
-    expect(carveToHtml(source)).toContain('<p>q\n+</p>\n    <p>tail</p>')
+    expect(carveToHtml(source)).toContain('<p>q</p>\n    <p>tail</p>')
   })
 
   it('denies a scheme exposed by target normalization', () => {

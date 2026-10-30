@@ -12,13 +12,13 @@ describe('an outer-level quote plus before a deeper quote line', () => {
     '> > q\n> +\n> > > r\n',
     '> > > q\n> > +\n> > > r\n',
     '- > > q\n  > +\n  > > r\n',
-    '> > q\n> +\n>  > r\n',
   ])('%j is silent', (source) => {
     expect(refused(source)).toEqual([])
   })
 
   it.each([
     ['> > q\n> +\n\n', 2, 3],
+    ['> > q\n> +\n>  > r\n', 2, 3],
   ])('%j is still reported', (source, line, column) => {
     expect(refused(source)).toEqual([[line, column]])
   })

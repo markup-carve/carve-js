@@ -13,8 +13,8 @@ function check(source: string, expected: string, items: number): void {
 
 describe('Markdown list markers after an open item paragraph', () => {
   it('keeps an empty nested plus item as an item', () => {
-    check('- +\n', '- - +\n', 2)
-    check('> - +\n', '> - - +\n', 2)
+    check('- +\n', '- - {empty}\n', 2)
+    check('> - +\n', '> - - {empty}\n', 2)
     check('> -     +\n', '> - ```\n>   +\n>   ```\n', 1)
   })
 
@@ -27,7 +27,7 @@ describe('Markdown list markers after an open item paragraph', () => {
   })
 
   it('keeps a nested item when a dropped table closes inside it', () => {
-    check('- - |  |\n    | --- |\n  | a |\n', '- - +\n  \\| a |\n', 2)
+    check('- - |  |\n    | --- |\n  | a |\n', '- - \\| a |\n', 2)
   })
 
   for (const tail of ['+', '+ ', '+\t', '1.', '1)']) {

@@ -176,7 +176,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
   //
   // The bullet renderer already refuses `- +` (a marker as an item's content);
   // this is the same construct standing on its own line, which nothing checked.
-  if (lines.some((line) => /^[ \t]*\+[ \t]*$/.test(line))) return undefined
+  if (lines.some((line) => /(?:^|[ \t>])\+[ \t]*$/.test(line))) return undefined
   const collected = collectDefs(lines, stats !== undefined)
   if (!collected) return undefined
   if (stats) for (const line of collected.definitionLines ?? []) accept(stats, 'linkDefinitions', line, line + 1, true)

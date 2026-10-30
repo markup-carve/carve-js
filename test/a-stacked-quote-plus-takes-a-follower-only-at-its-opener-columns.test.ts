@@ -3,9 +3,8 @@ import { carveToHtml } from '../src/index.js'
 
 const flat = (html: string): string => html.split('\n').map((line) => line.trim()).join('')
 
-// CARVE-P9-067: a stacked `- > +` pulls a non-list block at column 0, the line's
-// own column or the quote's column. Anywhere else the `+` is refused and reads
-// like a letter at its column (markup-carve/carve#3421).
+// A stacked `- > +` pulls a block only at the quote's column. Anywhere else the `+`
+// is refused and reads like a letter at its column (markup-carve/carve#4409).
 describe('a stacked quote plus on an item line', () => {
   const refused = [
     '- > +\n b\n',
@@ -17,8 +16,7 @@ describe('a stacked quote plus on an item line', () => {
     '- a\n  - > +\n     b\n',
     '- a\n  - > +\n      b\n',
     '- a\n  - > +\n       b\n',
-    '- > +\n  - b\n',
-    '- a\n  - > +\n    - b\n',
+    '- a\n  - > +\n  b\n',
     '> - > +\n>     b\n',
   ]
   for (const source of refused) {
@@ -31,7 +29,8 @@ describe('a stacked quote plus on an item line', () => {
   const attached: Array<[string, string]> = [
     ['- > +\n  b\n', '<ul><li><blockquote><p>b</p></blockquote></li></ul>'],
     ['- > +\n  | c |\n', '<ul><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ul>'],
-    ['- a\n  - > +\n  b\n', '<ul><li>a<ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul>'],
+    ['- > +\n  - b\n', '<ul><li><blockquote><ul><li>b</li></ul></blockquote></li></ul>'],
+    ['- a\n  - > +\n    - b\n', '<ul><li>a<ul><li><blockquote><ul><li>b</li></ul></blockquote></li></ul></li></ul>'],
     ['- a\n  - > +\n    b\n', '<ul><li>a<ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul>'],
     ['- a\n  - > +\n    | c |\n', '<ul><li>a<ul><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ul></li></ul>'],
     ['1. > +\n   b\n', '<ol><li><blockquote><p>b</p></blockquote></li></ol>'],

@@ -13,17 +13,17 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
   })
 
   const hosted: Array<[string, string]> = [
-    ['> - > +\n# h\n', '<blockquote><ul><li><blockquote><h1 id="h">h</h1></blockquote></li></ul></blockquote>'],
-    ['> - > +\n| c |\n', '<blockquote><ul><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ul></blockquote>'],
-    ['> - > +\npara\n', '<blockquote><ul><li><blockquote><p>para</p></blockquote></li></ul></blockquote>'],
+    ['> - > +\n# h\n', '<blockquote><ul><li><blockquote><p>+</p></blockquote></li></ul></blockquote><section id="h"><h1>h</h1></section>'],
+    ['> - > +\n| c |\n', '<blockquote><ul><li><blockquote><p>+</p></blockquote></li></ul></blockquote><table><tbody><tr><td>c</td></tr></tbody></table>'],
+    ['> - > +\npara\n', '<blockquote><ul><li><blockquote><p>+para</p></blockquote></li></ul></blockquote>'],
   ]
   for (const [source, html] of hosted) {
-    it(`attaches the unprefixed column-0 block of ${JSON.stringify(source)} to the inner quote`, () => {
+    it(`keeps the plus and refuses the unprefixed column-0 block of ${JSON.stringify(source)}`, () => {
       expect(flat(carveToHtml(source))).toBe(html)
     })
   }
 
-  // CARVE-P9-067, corpus 652 (markup-carve/carve#3534): the list follower is refused in every host.
+  // An unprefixed column-0 list line is refused like any other follower (markup-carve/carve#4409).
   for (const source of ['> - > +\n- s\n', '> 1. > +\n1. s\n', '> - - > +\n- s\n']) {
     it(`folds the unprefixed list line of ${JSON.stringify(source)} into the plus`, () => {
       const letter = flat(carveToHtml(source.replace('> +', '> x')))
@@ -31,13 +31,13 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
     })
   }
 
-  // Corpus 655-3: a sibling item's stacked opener starts a block, so any block attaches (carve#3421 ruling 3).
+  // Column 0 is not the owner's column, after a sibling item too (markup-carve/carve#4409).
   const sibling: Array<[string, string]> = [
-    ['> - a\n> - > +\n# h\n', '<blockquote><ul><li>a</li><li><blockquote><h1 id="h">h</h1></blockquote></li></ul></blockquote>'],
-    ['> 1. a\n>   b\n> 2. > +\n| c |\n', '<blockquote><ol><li>ab</li><li><blockquote><table><tbody><tr><td>c</td></tr></tbody></table></blockquote></li></ol></blockquote>'],
+    ['> - a\n> - > +\n# h\n', '<blockquote><ul><li>a</li><li><blockquote><p>+</p></blockquote></li></ul></blockquote><section id="h"><h1>h</h1></section>'],
+    ['> 1. a\n>   b\n> 2. > +\n| c |\n', '<blockquote><ol><li>ab</li><li><blockquote><p>+</p></blockquote></li></ol></blockquote><table><tbody><tr><td>c</td></tr></tbody></table>'],
   ]
   for (const [source, html] of sibling) {
-    it(`attaches the column-0 block after the sibling item of ${JSON.stringify(source)}`, () => {
+    it(`refuses the column-0 block after the sibling item of ${JSON.stringify(source)}`, () => {
       expect(flat(carveToHtml(source))).toBe(html)
     })
   }
@@ -51,10 +51,10 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
     expect(flat(carveToHtml('> a\n> - > +\n# h\n'))).toBe('<blockquote><p>a- &gt; +</p></blockquote><section id="h"><h1>h</h1></section>')
   })
 
-  // Ruling 3: after a closed block the stacked opener starts a block, so any block attaches.
+  // After a closed block the stacked opener starts a block, and its `+` still refuses column 0.
   for (const before of ['> # t', '> | a |', '> ```\n> x\n> ```', '> ::: note\n> x\n> :::', '> :::\n> x\n> :::', '> :::: note\n> x\n> ::::', '> ::: a\n> ::: b\n> x\n> :::', '> ***', '> {.c}', '> %% c', '> [r]: /u']) {
-    it(`attaches a heading after ${JSON.stringify(before)} and a stacked quote plus`, () => {
-      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
+    it(`refuses a heading after ${JSON.stringify(before)} and a stacked quote plus`, () => {
+      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><p>+</p></blockquote></li>')
     })
   }
 
@@ -70,8 +70,8 @@ describe('ruled readings of carve#3421 that carve-js already gave', () => {
 
   // A lazy line continues the item's own paragraph, so the next item's opener still starts a block.
   for (const before of ['> - a\n> b', '> 1. a\n> b\n> c', '> - a\n> - x\n> b', '> - > a\n> b']) {
-    it(`attaches a heading after ${JSON.stringify(before)} and a sibling stacked quote plus`, () => {
-      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><h1 id="h">h</h1></blockquote></li>')
+    it(`refuses a heading after ${JSON.stringify(before)} and a sibling stacked quote plus`, () => {
+      expect(flat(carveToHtml(`${before}\n> - > +\n# h\n`))).toContain('<li><blockquote><p>+</p></blockquote></li>')
     })
   }
 
@@ -143,14 +143,14 @@ describe('an unclosed attached fence and a hosted sibling plus item', () => {
     expect(flat(carveToHtml('- +\n```\nx\n- y\n\npara\n'))).toBe('<ul><li><pre><code>x</code></pre></li><li>y</li></ul><p>para</p>')
   })
 
-  // A sibling item holding only a `+` leaves the host quote no paragraph for a lazy line.
+  // A sibling item's refused `+` is a paragraph, so the unprefixed line folds into it lazily.
   for (const source of ['> - a\n> - +\nb\n', '> 1. a\n> 2. +\nb\n', '> - a\n>   b\n> - +\nc\n']) {
-    it(`ends the host quote before the unprefixed line of ${JSON.stringify(source)}`, () => {
-      expect(flat(carveToHtml(source))).toMatch(/<\/blockquote><p>[bc]<\/p>$/)
+    it(`folds the unprefixed line of ${JSON.stringify(source)} into the plus`, () => {
+      expect(flat(carveToHtml(source))).toMatch(/<li>\+[bc]<\/li><\/[uo]l><\/blockquote>$/)
     })
   }
 
   it('still folds a lazy line after a sibling stacked quote plus', () => {
-    expect(flat(carveToHtml('> - a\n>   - > +\npara\n'))).toContain('<blockquote><p>para</p></blockquote>')
+    expect(flat(carveToHtml('> - a\n>   - > +\npara\n'))).toContain('<blockquote><p>+para</p></blockquote>')
   })
 })

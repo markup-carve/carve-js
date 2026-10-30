@@ -14,7 +14,7 @@ import {
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
-import { firstBlockLastOpenerOffset, firstBlockOpenerContent } from '../list/parse-item-core.js'
+import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import {
   continueWrappedAttributeBlock,
   opensWrappedAttributeBlock,
@@ -109,8 +109,6 @@ type DefinitionListSession = {
     isBoundary: (line: string) => boolean,
     contentColumn?: number,
     endAtFoldedDefinition?: boolean,
-    markerColumn?: number,
-    quoteLevels?: number,
     acceptFirstNonList?: boolean,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   markerPrefixMemo(
@@ -150,8 +148,6 @@ export function createDefinitionListParser(
     RE_HR,
     RE_LINE_BLOCK_OPEN,
     RE_RAW_FENCE,
-    attachesAtDocumentColumnZero,
-    firstBlockRefusesList,
     bodyHoldsOpenCommentSpan,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
@@ -409,18 +405,7 @@ export function createDefinitionListParser(
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
-        const refusesList = firstBlockRefusesList(lexer)
-        lexer.reportRefusedContinuationMarker(firstLineIndex,
-          lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description',
-          refusesList ? 'list' : undefined, true)
-        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
-          sourceColumn(markerSource, quotePrefixDepth(markerSource)), quotePrefixDepth(markerSource), true)
-        const follower = lexer.peek()
-        if (firstBlock.lines.length === 0 && !refusesList && follower !== undefined && !isBlankLine(follower) &&
-          leadingWhitespace(follower) > 0) {
-          lexer.reportRefusedContinuationMarker(firstLineIndex,
-            lexer.lineStartColumn(firstLineIndex) + lexer.lineAt(firstLineIndex)!.indexOf('+'), 'definition description', 'right', true)
-        }
+        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true, true)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
@@ -471,11 +456,7 @@ export function createDefinitionListParser(
         }
       }
       if (firstBlockOpenerContent(first) && !isContinuationMarker(first)) {
-        const lastOpener = firstBlockLastOpenerOffset(first) ?? 0
-        const sourceOffset = markerSource.lastIndexOf(first)
-        const markerColumn = sourceOffset < 0 ? 0 : sourceColumnAt(markerSource, sourceOffset + lastOpener)
-        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true,
-          markerColumn, quotePrefixDepth(markerSource), true)
+        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true, true)
         // An intervening line still reaches the description after this pull
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
@@ -489,15 +470,8 @@ export function createDefinitionListParser(
       lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, true)
       // Form B: `+` pull-left continuation.
       const admitPlusContinuation = (ln: string): DescriptionVerdict => {
-        const descriptionPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-        const descriptionFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
         const descriptionDecision = isContinuationMarker(ln) ? markerDecision(lexer, lexer.pos) : undefined
-        if (descriptionDecision?.owner?.kind === 'description' && descriptionDecision.reason !== undefined)
-          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'definition description', descriptionDecision.reason)
-        if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description' &&
-            descriptionDecision.reason === undefined && !descriptionDecision.unprefixedQuoteFollower &&
-            descriptionFollower !== undefined && !isBlankLine(descriptionFollower) &&
-            sourceColumn(descriptionFollower, quotePrefixDepth(descriptionPlus)) === sourceColumn(descriptionPlus)) {
+        if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description') {
           const follower = lexer.peek(1)
           if (lazyState.opaque?.kind === 'code' &&
               (follower === undefined || isBlankLine(follower) || indentColumns(follower) !== 0)) {
@@ -506,22 +480,11 @@ export function createDefinitionListParser(
           }
           const plusLineIndex = lexer.pos
           lexer.consume()
-          lexer.reportRefusedContinuationMarker(plusLineIndex, 1, 'definition description')
-          // ...AND THE DESCRIPTION ENDS WHERE A COMMENT ENDS IT. Same shape as
-          // the footnote body (markup-carve/carve#1814): a `+` the gate refuses
-          // is an ordinary invisible line at document column 0, and a `<dd>` ends
-          // at one of those. Asked before the body's own continuation branch can
-          // claim the following line. A block quote does NOT end at a comment
-          // there, so it does not end at a refused marker either - that is each
-          // container's invisible-line rule, not a second column rule.
-          if (!attachesAtDocumentColumnZero(lexer, sourceColumn(descriptionPlus), quotePrefixDepth(descriptionPlus))) return 'stop'
           const { lines: attached, lineNumbers: attachedLineNumbers } = parseSession.collectAttachedBlock(
             lexer,
             isDefBodyBoundary,
             0,
             true,
-            sourceColumn(descriptionPlus),
-            quotePrefixDepth(descriptionPlus),
           )
           if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
             bodyBaseEligible.add(bodyLines.length)

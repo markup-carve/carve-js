@@ -1,3 +1,4 @@
+import { spellEmptyItemPlaceholders } from './import/empty-item-placeholder.js'
 import { freeMarkerSerial } from './parse/list/marker-serial.js'
 import { protectNativeMarkdownDestinationGlyphs } from './import/markdown/markdown-native-destination-glyphs.js'
 import { encodeMarkdownDestinationCharacter, writeMarkdownDestinationValue } from './import/markdown/markdown-destination-encoding.js'
@@ -1358,7 +1359,7 @@ let footChainMarker = ''
 // Read adjacency after Markdown links, including references, have become AST nodes.
 function restoreInlineCarriers(source: string): string {
   if (!inlineCarriersEnabled || !source.includes(CARRIER_PREFIX)) return source
-  const tree = parse(source)
+  const tree = parse(spellEmptyItemPlaceholders(source))
   let changed = false
   const restore = (nodes: InlineNode[]): InlineNode[] => {
     const out: InlineNode[] = []
@@ -4038,7 +4039,7 @@ function nestedEmptyPlusItem(line: string): string {
   if (outer === null || columnWidth(outer.indent + outer.marker + outer.padding) - columnWidth(outer.indent + outer.marker) > 4) return line
   const inner = sourceItem(outer.content)
   return inner?.marker === '+' && inner.content.trim() === ''
-    ? outer.indent + outer.marker + outer.padding + inner.indent + '- +'
+    ? outer.indent + outer.marker + outer.padding + inner.indent + '- {empty}'
     : line
 }
 
@@ -5356,7 +5357,7 @@ function writeQuotedInlineRun(
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l))
   return {
-    lines: canonicalItemHeldTildeFence(written).map(line => line.replaceAll(emptyToken, '+')),
+    lines: canonicalItemHeldTildeFence(written).map(line => line.replaceAll(emptyToken, '{empty}')),
     end,
   }
 }
@@ -6986,6 +6987,19 @@ export function markdownToCarveWithLosses(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
   rewriteHeadingFragments = true,
+): { value: string; losses: MarkdownImportLoss[]; unfixed?: string; fixups?: FragmentFixup[]; authored?: AuthoredDestinations } {
+  const result = convertMarkdownSource(markdown, dialect, rewriteHeadingFragments)
+  return {
+    ...result,
+    value: spellEmptyItemPlaceholders(result.value),
+    ...(result.unfixed === undefined ? {} : { unfixed: spellEmptyItemPlaceholders(result.unfixed) }),
+  }
+}
+
+function convertMarkdownSource(
+  markdown: string,
+  dialect: MarkdownDialect,
+  rewriteHeadingFragments: boolean,
 ): { value: string; losses: MarkdownImportLoss[]; unfixed?: string; fixups?: FragmentFixup[]; authored?: AuthoredDestinations } {
   markdown = replaceLoneSurrogates(markdown)
   const losses: MarkdownImportLoss[] = []
@@ -8904,7 +8918,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (line?.endsWith('---')) out[at] = line.slice(0, -3) + FRONTMATTER_SAFE_BREAK
     }
     const respelled = assemble()
-    if (!opensFrontmatter(respelled)) body = renderCarve(parse(respelled))
+    if (!opensFrontmatter(respelled)) body = renderCarve(parse(spellEmptyItemPlaceholders(respelled)))
   }
   // The boundary under a frontmatter closer is the writer's own block
   // separator, and a frontmatter-only document still ends on a newline, so the

@@ -71,16 +71,7 @@
       "description": "The first-block form on the marker line.",
       "source": "- +\n\npara\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 3,
-            "includes": [
-              "blank line",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 1, "column": 3, "includes": ["blank line", "remains text"] }]
       }
     },
     {
@@ -88,16 +79,7 @@
       "description": "The first-block form with nothing after it.",
       "source": "- +\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 3,
-            "includes": [
-              "end of the document",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 1, "column": 3, "includes": ["end of the document", "remains text"] }]
       }
     },
     {
@@ -158,10 +140,10 @@
     },
     {
       "name": "footnote-body",
-      "description": "In a footnote body the plus is ordinary text.",
+      "description": "In a footnote body a plus above a blank line is refused.",
       "source": "x[^a]\n\n[^a]: note\n+\n\npara\n",
       "expected": {
-        "findings": []
+        "findings": [{ "line": 4, "column": 1, "includes": ["blank line", "remains text"] }]
       }
     },
     {
@@ -313,16 +295,7 @@
       "description": "The first-block plus is refused when it cannot attach.",
       "source": "- +\n- b\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 3,
-            "includes": [
-              "+",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 1, "column": 3, "includes": ["+", "remains text"] }]
       }
     },
     {
@@ -330,16 +303,7 @@
       "description": "The first-block plus is refused when it cannot attach.",
       "source": "1. +\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 4,
-            "includes": [
-              "+",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 1, "column": 4, "includes": ["+", "remains text"] }]
       }
     },
     {
@@ -347,84 +311,39 @@
       "description": "The first-block plus is refused when it cannot attach.",
       "source": "- [ ] +\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 7,
-            "includes": [
-              "+",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 1, "column": 7, "includes": ["+", "remains text"] }]
       }
     },
     {
       "name": "footnote-first-block-list",
-      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "description": "The first-block form attaches a column-0 list (carve#4409).",
       "source": "[^a]: +\n- a list\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 7,
-            "includes": [
-              "a list",
-              "remains text"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {
       "name": "footnote-first-block-ordered-list",
-      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "description": "The first-block form attaches a column-0 list (carve#4409).",
       "source": "[^a]: +\n1. b\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 7,
-            "includes": [
-              "a list",
-              "remains text"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {
       "name": "description-first-block-list",
-      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "description": "The first-block form attaches a column-0 list (carve#4409).",
       "source": ":: t\n: +\n- a list\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 3,
-            "includes": [
-              "a list",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {
       "name": "description-first-block-ordered-list",
-      "description": "The first-block form does not pull a column-0 list (carve#3482).",
+      "description": "The first-block form attaches a column-0 list (carve#4409).",
       "source": ":: t\n: +\n1. b\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 3,
-            "includes": [
-              "a list",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {
@@ -491,16 +410,7 @@
       "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
       "source": ":: t\n: +\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 3,
-            "includes": [
-              "end of the document",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 2, "column": 3, "includes": ["end of the document", "remains text"] }]
       }
     },
     {
@@ -508,16 +418,7 @@
       "description": "The first-block plus is refused with no eligible block below (CARVE-P9-067).",
       "source": ":: t\n: +\n  - a\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 3,
-            "includes": [
-              "+",
-              "column rules"
-            ]
-          }
-        ]
+        "findings": [{ "line": 2, "column": 3, "includes": ["+", "right of its column"] }]
       }
     },
     {
@@ -538,27 +439,18 @@
     },
     {
       "name": "description-first-block-blank",
-      "description": "A refused first-block plus leaves the description empty (CARVE-P9-067).",
+      "description": "A refused first-block plus stays text in the description (carve#4409).",
       "source": ":: t\n: +\n\npara\n",
       "expected": {
-        "findings": [
-          {
-            "line": 2,
-            "column": 3,
-            "includes": [
-              "blank line",
-              "stays empty"
-            ]
-          }
-        ]
+        "findings": [{ "line": 2, "column": 3, "includes": ["blank line", "remains text"] }]
       }
     },
     {
       "name": "item-first-block-indented",
-      "description": "The content-column block attaches to the first-block plus (carve#3772).",
+      "description": "A block at the content column is refused; the plus stays text (carve#4409).",
       "source": "- +\n  x\n",
       "expected": {
-        "findings": []
+        "findings": [{ "line": 1, "column": 3, "includes": ["right of its column", "remains text"] }]
       }
     },
     {
@@ -597,19 +489,10 @@
     },
     {
       "name": "quote-first-block-quoted-blank",
-      "description": "A quoted blank line refuses the first-block plus too (CARVE-P9-067).",
+      "description": "A quoted blank line attaches as a nested empty quote (carve#4409).",
       "source": "> +\n>\npara\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 3,
-            "includes": [
-              "blank line",
-              "remains text"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {
@@ -631,19 +514,10 @@
     },
     {
       "name": "quote-first-block-list",
-      "description": "The first-block form does not pull a column-0 list (CARVE-P9-067).",
+      "description": "The first-block form attaches a column-0 list (carve#4409).",
       "source": "> +\n- a\n",
       "expected": {
-        "findings": [
-          {
-            "line": 1,
-            "column": 3,
-            "includes": [
-              "a list",
-              "remains text"
-            ]
-          }
-        ]
+        "findings": []
       }
     },
     {

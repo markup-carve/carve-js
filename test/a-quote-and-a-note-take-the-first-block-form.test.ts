@@ -28,12 +28,12 @@ describe('a block quote takes the first-block form', () => {
     expect(carveToHtml('> +\n```\nx\n```\n')).toBe('<blockquote>\n  <pre><code>x\n</code></pre>\n</blockquote>')
   })
 
-  it('a nested quote takes it from its own first line', () => {
+  it('a nested quote refuses a column-0 follower', () => {
     expect(carveToHtml('> > +\nflush\n')).toBe(
-      '<blockquote>\n  <blockquote><p>flush</p></blockquote>\n</blockquote>',
+      '<blockquote>\n  <blockquote><p>+\nflush</p></blockquote>\n</blockquote>',
     )
     expect(carveToHtml('> > +\n```\nx\n```\n')).toBe(
-      '<blockquote>\n  <blockquote>\n    <pre><code>x\n</code></pre>\n  </blockquote>\n</blockquote>',
+      '<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>',
     )
   })
 
@@ -54,9 +54,9 @@ describe('a block quote takes the first-block form', () => {
     )
   })
 
-  it('a nested quote opened after outer content takes its first block', () => {
+  it('a nested quote opened after outer content refuses a column-0 follower', () => {
     expect(carveToHtml('> outer\n> > +\n```\nx\n```\n')).toBe(
-      '<blockquote>\n  <p>outer</p>\n  <blockquote>\n    <pre><code>x\n</code></pre>\n  </blockquote>\n</blockquote>',
+      '<blockquote>\n  <p>outer</p>\n  <blockquote><p>+</p></blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>',
     )
   })
 
@@ -66,9 +66,9 @@ describe('a block quote takes the first-block form', () => {
     )
   })
 
-  it('a quoted line below the `+` keeps it text', () => {
-    expect(carveToHtml('> +\n> x\n')).toBe('<blockquote><p>+\nx</p></blockquote>')
-    expect(carveToHtml('> > +\n> > x\n')).toBe('<blockquote>\n  <blockquote><p>+\nx</p></blockquote>\n</blockquote>')
+  it('a quoted line below the `+` attaches as a nested quote', () => {
+    expect(carveToHtml('> +\n> x\n')).toBe('<blockquote>\n  <blockquote><p>x</p></blockquote>\n</blockquote>')
+    expect(carveToHtml('> > +\n> > x\n')).toBe('<blockquote>\n  <blockquote>\n    <blockquote><p>x</p></blockquote>\n  </blockquote>\n</blockquote>')
   })
 
   it('a further `+` below makes the first one a marker that attaches nothing', () => {
@@ -91,9 +91,9 @@ describe('a footnote body takes the first-block form', () => {
     expect(carveToHtml('[^a]: +\nflush\n\nsee[^a]\n')).toBe(note(`      <p>flush${backlink}</p>`))
   })
 
-  it('leaves a column-zero list outside the note', () => {
+  it('attaches a column-zero list to the note', () => {
     expect(carveToHtml('[^a]: +\n- x\n- y\n\nsee[^a]\n')).toBe(
-      '<ul>\n  <li>x</li>\n  <li>y</li>\n</ul>\n' + note(`      <p>+${backlink}</p>`),
+      note(`      <ul>\n        <li>x</li>\n        <li>y</li>\n      </ul>\n      <p>${backlink}</p>`),
     )
   })
 

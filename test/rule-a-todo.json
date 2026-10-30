@@ -47,14 +47,6 @@
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
   },
-  "attached-definition-boundaries.test.ts": {
-    "preserves attached definition ownership across render and format paths: '- +\\n:: term\\n: description\\n   [r]: …' [2]": "#3922",
-    "preserves attached definition ownership across render and format paths: '- +\\n:: term\\n: description\\n  [r]: /…' [2]": "#3922",
-    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [^n]: note\\n…'": "#3922",
-    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [r]: /url\\n …'": "#3922",
-    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n [r]: /url\\n\\…'": "#3922",
-    "preserves attached definition ownership across render and format paths: '- +\\nfirst\\n+\\n- inner\\n[r]: /url\\n […'": "#3922"
-  },
   "authoring-acceptance.test.ts": {
     "authoring acceptance suite > errors/E10-sublist-one-space.crv": "#3921"
   },
@@ -221,9 +213,17 @@
     "the non-HTML render ledger > records the output every renderer still produces": "#3921"
   },
   "corpus.test.ts": {
-    "spec corpus > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#3922",
-    "spec corpus > 760-a-heading-inside-the-intervening-band-stays-description-text": "#3922",
-    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
+    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921",
+    "spec corpus > 454-a-block-opener-past-a-nested-footnote-definition-opens-in-the-item-4": "#4034",
+    "spec corpus > 461-a-column-0-line-after-a-description-hosted-note-is-a-document-sibling-4": "#4034",
+    "spec corpus > 626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth": "#4034",
+    "spec corpus > 626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth-2": "#4034",
+    "spec corpus > 626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth-4": "#4034",
+    "spec corpus > 626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth-6": "#4034",
+    "spec corpus > 630-a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener-9": "#4034",
+    "spec corpus > 637-definition-body-note-and-fence-owner-boundaries-4": "#4034",
+    "spec corpus > 740-lazy-quote-owners": "#4034",
+    "spec corpus > 756-a-description-keeps-a-list-marker-below-its-hosted-footnote": "#4034"
   },
   "deep-term-comment-code-tails.test.ts": {
     "keeps the definition term column after its comment: comment-term-claude-1043": "#3922",
@@ -310,10 +310,6 @@
   },
   "lint-reports-a-dead-block-attribute-and-counts-codepoints.test.ts": {
     "lint reports a block attribute that reaches no block > leaves an indented attribute-shaped line to block-marker-as-text": "#3921"
-  },
-  "lint-reports-a-plus-no-container-takes.test.ts": {
-    "continuation-marker-refused for a plus no container takes > reports \"- a\\n  > > +\\n    > q\\n\"": "#3921",
-    "continuation-marker-refused for a plus no container takes > reports \"> +\\n  > q\\n\"": "#3921"
   },
   "list-item-block-indentation-lint.test.ts": {
     "list item block indentation diagnostics > an astral character before the marker > opens the gate at the same indent on either side of the BMP": "#3921"
@@ -458,5 +454,29 @@
   },
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
+  },
+  "ast-round-trip-preserves-source.test.ts": {
+    "a document round-tripped through the AST > comes back as the same source": "#4034"
+  },
+  "html-import-conformance.test.ts": {
+    "shared HTML import contract > list-table-for-block-cells": "#4034"
+  },
+  "the-writer-invents-no-escape-the-re-parse-does-not-need.test.ts": {
+    "the writer invents no escape the re-parse does not need > 436-an-empty-description-body-claims-no-line-below-column-0-2": "#4034",
+    "the writer invents no escape the re-parse does not need > 436-an-empty-description-body-claims-no-line-below-column-0-4": "#4034",
+    "the writer invents no escape the re-parse does not need > 757-an-intervening-column-refuses-a-description-hosted-first-block": "#4034",
+    "the writer invents no escape the re-parse does not need > 760-a-heading-inside-the-intervening-band-stays-description-text": "#4034",
+    "the writer invents no escape the re-parse does not need > 801-a-footnote-body-takes-its-first-block-at-its-body-column-6": "#4034",
+    "the writer invents no escape the re-parse does not need > 839-a-quoted-row-attribute-value-may-hold-a-pipe": "#4034",
+    "the writer invents no escape the re-parse does not need > 839-a-quoted-row-attribute-value-may-hold-a-pipe-2": "#4034",
+    "the writer invents no escape the re-parse does not need > 839-a-quoted-row-attribute-value-may-hold-a-pipe-3": "#4034",
+    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus": "#4034",
+    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-3": "#4034",
+    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-4": "#4034",
+    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-5": "#4034",
+    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-6": "#4034",
+    "the writer invents no escape the re-parse does not need > 846-a-description-left-of-its-term-measures-its-own-plus-follower": "#4034",
+    "the writer invents no escape the re-parse does not need > 846-a-description-left-of-its-term-measures-its-own-plus-follower-2": "#4034",
+    "the writer invents no escape the re-parse does not need > 848-a-description-a-plus-filled-stays-open-for-a-sibling-3": "#4034"
   }
 }

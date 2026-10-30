@@ -30,7 +30,7 @@ describe('container ownership across source columns', () => {
   })
 
   it('does not throw when a stacked item has no owned follower', () => {
-    expect(carveToHtml('> - - +\n    x\n')).toContain('</blockquote>\n<p>x</p>')
+    expect(carveToHtml('> - - +\n    x\n')).toContain('<li>+\nx</li>')
   })
 })
 

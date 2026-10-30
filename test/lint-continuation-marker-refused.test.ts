@@ -17,7 +17,7 @@ describe('continuation-marker-refused vectors', () => {
 
   it('reports an unattached stacked first-block marker', () => {
     expect(lintCarve('* * +\n x\n').filter(w => w.rule === 'continuation-marker-refused')).toEqual([
-      expect.objectContaining({ line: 1, column: 5, message: expect.stringContaining('ordinary column rules') }),
+      expect.objectContaining({ line: 1, column: 5, message: expect.stringContaining('left of its column') }),
     ])
   })
 
@@ -37,7 +37,9 @@ describe('continuation-marker-refused vectors', () => {
 
   it('does not mistake glued markers for quote hosts', () => {
     for (const line of ['>= x', '>>= op', '>+', '>>+']) {
-      expect(lintCarve(`${line}\n+\n\npara`).filter(w => w.rule === 'continuation-marker-refused')).toEqual([])
+      expect(lintCarve(`${line}\n+\n\npara`).filter(w => w.rule === 'continuation-marker-refused')).toEqual([
+        expect.objectContaining({ line: 2, column: 1, message: expect.stringContaining('remains text in the document') }),
+      ])
     }
   })
 })

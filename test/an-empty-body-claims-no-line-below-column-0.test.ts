@@ -2,18 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml, carveToCarve } from '../src/index.js'
 
 /**
- * §17 L3 (`AND FLUSH-LEFT MEANS COLUMN 0`) gives the continuation marker its
- * own control: a refused `+` behaves "exactly as if the `+` line had been a
- * comment". In the FIRST-BLOCK form - `:  +` for a description, `- +` for a
- * list item - no paragraph is open, so the `+` genuinely IS a marker and the
- * clause reads its payload's column. A payload at any column other than 0 is
- * refused, and the body ends there exactly as it ends at a comment
- * (markup-carve/carve#1821).
+ * In the FIRST-BLOCK form - `:  +` for a description, `- +` for a list item -
+ * a refused `+` is a plain letter (markup-carve/carve#4409). A payload at any
+ * column other than the marker's folds into it exactly as it folds into a `x`.
  *
  * WHY A RELATION AND NOT A PAIR OF GOLDENS. The clause states that two
  * SPELLINGS give one answer. Two independent goldens cannot express that: a
  * change repairing one spelling and drifting the other passes both. So the rows
- * below assert the marker spelling EQUALS its comment control across the band,
+ * below assert the marker spelling EQUALS its letter control across the band,
  * and the column-0 rows assert the one pair that must NOT agree - without which
  * a form that refused everything would satisfy all the rest.
  *
@@ -32,40 +28,41 @@ const comment = (container: 'description' | 'item', col: number) =>
     ? `:: t\n:  %% c\n${' '.repeat(col)}flush\n`
     : `- %% c\n${' '.repeat(col)}flush\n`
 
+const letter = (container: 'description' | 'item', col: number) =>
+  marker(container, col).replace('+', 'x')
+
 describe('an empty body claims no line below column 0', () => {
-  it('ends the body exactly where the comment control ends it', () => {
+  it('reads the refused plus exactly like the letter control', () => {
     for (const container of ['description', 'item'] as const) {
       for (const col of [1, 2, 3, 4]) {
         expect(
           carveToHtml(marker(container, col)),
           `${container} at payload column ${col}`,
-        ).toBe(carveToHtml(comment(container, col)))
+        ).toBe(carveToHtml(letter(container, col)).replace('x', '+'))
       }
     }
   })
 
-  it('leaves the payload outside the container across the refused band', () => {
+  it('folds the payload into the plus across the refused band', () => {
     // The relation above is satisfied by any answer both spellings share, so it
     // cannot say WHICH answer. These pin the oracle's.
-    const dd = '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>flush</p>'
-    const li = '<ul>\n  <li></li>\n</ul>\n<p>flush</p>'
+    const dd = '<dl>\n  <dt>t</dt>\n  <dd>+\nflush</dd>\n</dl>'
+    const li = '<ul>\n  <li>+\nflush</li>\n</ul>'
     for (const col of [1, 2]) {
       expect(carveToHtml(marker('description', col)).trim()).toBe(dd)
-      expect(carveToHtml(comment('description', col)).trim()).toBe(dd)
+      expect(carveToHtml(comment('description', col)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>flush</p>')
     }
     expect(carveToHtml(marker('item', 1)).trim()).toBe(li)
-    expect(carveToHtml(comment('item', 1)).trim()).toBe(li)
+    expect(carveToHtml(comment('item', 1)).trim()).toBe('<ul>\n  <li></li>\n</ul>\n<p>flush</p>')
   })
 
-  it('keeps a line at the content column as the container first block', () => {
+  it('folds a line at the content column into the plus', () => {
     // The other end of the band. A change that refused everything would pass
     // the rows above and break these.
-    const dd = '<dl>\n  <dt>t</dt>\n  <dd>flush</dd>\n</dl>'
-    expect(carveToHtml(marker('description', 3)).trim()).toBe(dd)
-    expect(carveToHtml(comment('description', 3)).trim()).toBe(dd)
-    const li = '<ul>\n  <li>flush</li>\n</ul>'
-    expect(carveToHtml(marker('item', 2)).trim()).toBe(li)
-    expect(carveToHtml(comment('item', 2)).trim()).toBe(li)
+    expect(carveToHtml(marker('description', 3)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd>+\nflush</dd>\n</dl>')
+    expect(carveToHtml(comment('description', 3)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd>flush</dd>\n</dl>')
+    expect(carveToHtml(marker('item', 2)).trim()).toBe('<ul>\n  <li>+\nflush</li>\n</ul>')
+    expect(carveToHtml(comment('item', 2)).trim()).toBe('<ul>\n  <li>flush</li>\n</ul>')
   })
 
   it('attaches at column 0, where the two spellings must differ', () => {

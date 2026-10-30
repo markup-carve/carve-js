@@ -14,12 +14,12 @@ describe('refused continuation and first-block ownership', () => {
 
   it.each(['- ', '* ', '1. '])('keeps a sibling after a refused description first block (%s)', marker => {
     const html = carveToHtml(`:: t\n: ${marker}+\n  ${marker}z\n`)
-    expect(html).toContain('<li></li>\n      <li>z</li>')
+    expect(html).toContain('<li>+</li>\n      <li>z</li>')
     expect(html).not.toContain('<li>\n        <ul>')
   })
 
   it('keeps a genuine indented child under a first-block list item', () => {
     const html = carveToHtml('- +\n  - z\n')
-    expect(html).toContain('<li>\n    <ul>')
+    expect(html).toContain('<li>+\n    <ul>')
   })
 })

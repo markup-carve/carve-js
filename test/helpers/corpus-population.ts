@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export function declaredPairCount(source: string): number {
@@ -42,7 +42,8 @@ export function declaredPairCount(source: string): number {
 export function expectedCorpusSize(specRoot: string): number {
   const examples = resolve(specRoot, 'resources/examples')
   let count = 0
-  for (const name of ['core.md', 'extensions.md', 'edge-cases.md']) {
+  const edgeCases = readdirSync(resolve(examples, 'edge-cases')).map(name => `edge-cases/${name}`)
+  for (const name of ['core.md', 'extensions.md', ...edgeCases]) {
     count += declaredPairCount(readFileSync(resolve(examples, name), 'utf8'))
   }
   if (count === 0) throw new Error('no comparison pairs found in spec examples')

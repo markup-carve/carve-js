@@ -63,7 +63,6 @@ import {
   accumulateAttrs,
   appendLinkReferenceDefinitions,
   attachBlockPos,
-  attachesAtDocumentColumnZero,
   blockQuoteParagraphClaimOpen,
   closeBlockQuoteParagraph,
   closerIndex,
@@ -76,13 +75,11 @@ import {
   commentCloserLookup,
   commentLineContent,
   consumeLooseKey,
-  bottomBlockLeavesParagraphOpen,
   deflistMarkerLine,
   delimitedTable,
   deriveTableMetadata,
   dropPositions,
   dropTrailingWhitespace,
-  endsInPlus,
   explicitlyClosedQuotes,
   extractItemAttr,
   fenceCloseRe,
@@ -98,7 +95,6 @@ import {
   isLinkDefLine,
   isListMarkerLine,
   isLiteralColonFenceLine,
-  isPhysicalContinuationMarker,
   isStackedFirstBlockQuoteMarker,
   quotedNoteFirstBlockMarker,
   isTableRow,
@@ -114,7 +110,6 @@ import {
   markSecondLineLazy,
   markerContentColumn,
   markerDecision,
-  markerPrefixLength,
   matchLinkDef,
   mergeAttrs,
   nestedColonLexer,
@@ -122,7 +117,6 @@ import {
   normalizeRefLabel,
   normalizedSourceLines,
   opaqueGroupCloser,
-  openQuoteDepth,
   orderedMatch,
   parseAbbrDef,
   parseAttrs,
@@ -132,8 +126,6 @@ import {
   parseListWithHelpers,
   parseRawBlock,
   parseTableBlock,
-  prefixWalkBound,
-  quoteBodyColumn,
   quotePrefixDepth,
   quotedCommentHasCloser,
   quotedLineText,
@@ -145,10 +137,7 @@ import {
   sourceColumn,
   sourceColumnAt,
   sourceQuoteBody,
-  sourceQuoteLocalColumn,
   sourceQuoteRest,
-  stackedOpenerColumns,
-  stackedFollowerColumn,
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
@@ -163,13 +152,12 @@ import {
   unescapeAttrValue,
   unorderedMatch,
   utf8ByteLength,
-  opensCodeFence,
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
-import { ownLines } from './block/block-ownership.js'
+import { ownLines, restorePlusLetter } from './block/block-ownership.js'
 import { isValidAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -199,15 +187,9 @@ interface QuoteCollect {
   quoteRootLine: string
   quoteMarkerColumn: number
   physicalQuoteColumn: number
-  refusedFirstBlockMarker: string | undefined
   // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
-  stackedAttachEnd: number
   // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
   // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
-  paragraphScan: number
-  innerOpenFence: string | null
-  innerParagraphOpen: boolean
-  innerItemParagraph: boolean
 }
 
 /** How many lines at the start of `at` are block attribute lines. */
@@ -229,24 +211,10 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
   return count
 }
 
-// Why a refused first-block `> +` could not take its follower, or null when
-// the refusal is not reported.
-function refusedFirstBlockReason(follower: string | undefined, marker: string): 'document' | 'blank' | 'right' | 'list' | null {
-  if (follower === undefined) return 'document'
-  if (isBlankLine(follower)) return 'blank'
-  if (quotePrefixDepth(follower) > 0) {
-    if (isBlankLine(follower.replace(/^[ \t]*(?:>[ \t]?)+/, ''))) return 'blank'
-    // A quoted follower indented past the opener line is at no column the `+` pulls from.
-    return sourceColumn(follower, 0) > sourceColumn(marker, 0) ||
-      // Inside a host quote the columns count after the host's prefixes (`> - > > +` / `>   b`).
-      isStackedFirstBlockQuoteMarker(marker) && quotePrefixDepth(marker) > 0 &&
-      stackedFollowerColumn(follower, marker, quotePrefixDepth(marker)) >
-        sourceColumn(marker, quotePrefixDepth(marker))
-      ? 'right' : null
-  }
-  return leadingWhitespace(follower) > 0 ? 'right' : isListMarkerLine(follower) ? 'list' : null
+function restoringPlus(blocks: BlockNode[], letter: string | null): BlockNode[] {
+  if (letter !== null) restorePlusLetter(blocks, letter)
+  return blocks
 }
-
 
 export class ParseSession extends InlineParseSession {
   /**
@@ -414,7 +382,8 @@ export class ParseSession extends InlineParseSession {
     // Consume leading frontmatter first so `lexer.pos` marks the end of the
     // metadata region; the def passes and parseBlocks all start from there.
     lexer.consumeFrontmatter()
-    lexer.applyOwnership(ownLines(lexer.lines as string[], lexer.pos))
+    const ownership = ownLines(lexer.lines as string[], lexer.pos)
+    lexer.applyOwnership(ownership)
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -429,12 +398,13 @@ export class ParseSession extends InlineParseSession {
     const children = this.parseBlocks(lexer, 0)
     appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }
-    // Record the source byte length so renderers can size the
-    // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
-    doc.srcByteLength = sourceByteLength
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
+    if (ownership.plusLetter !== null) restorePlusLetter(doc, ownership.plusLetter)
+    // Record the source byte length so renderers can size the
+    // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
+    doc.srcByteLength = sourceByteLength
     if (opts.positions === false) {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
@@ -509,12 +479,14 @@ export class ParseSession extends InlineParseSession {
     for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
     sub.footnoteDefs = root.footnoteDefs
     sub.footnoteDefPos = root.footnoteDefPos
+    const ownership = ownLines(sub.lines as string[], 0)
+    sub.applyOwnership(ownership)
     this.collectLinkDefs(sub)
-    if (!this.activeMatchers.length) return this.parseBlocks(sub, 0)
+    if (!this.activeMatchers.length) return restoringPlus(this.parseBlocks(sub, 0), ownership.plusLetter)
     const prevCtx = this.activeMatcherCtx
     this.activeMatcherCtx = this.makeMatcherCtx(sub, opts)
     try {
-      return this.parseBlocks(sub, 0)
+      return restoringPlus(this.parseBlocks(sub, 0), ownership.plusLetter)
     } finally {
       this.activeMatcherCtx = prevCtx
     }
@@ -677,12 +649,6 @@ export class ParseSession extends InlineParseSession {
         continue
       }
 
-      const sibling = lexer.peek(1)
-      if (out.at(-1)?.type === 'list' && isContinuationMarker(line) && sibling !== undefined &&
-          isListMarkerLine(sibling) && indentColumns(line) === indentColumns(sibling) &&
-          listMarkerColumns.has(indentColumns(line))) {
-        lexer.interruptRefusedSiblingPlusLine = lexer.pos
-      }
       const startLine = lexer.pos
       let node = this.parseBlockInner(lexer)
       if (node) attachBlockPos(lexer, node, startLine, lexer.pos)
@@ -1417,12 +1383,6 @@ export class ParseSession extends InlineParseSession {
       quoteRootLine,
       quoteMarkerColumn,
       physicalQuoteColumn,
-      refusedFirstBlockMarker: undefined,
-      stackedAttachEnd: -1,
-      paragraphScan: 0,
-      innerOpenFence: null,
-      innerParagraphOpen: false,
-      innerItemParagraph: false,
     }
   }
 
@@ -1495,66 +1455,18 @@ export class ParseSession extends InlineParseSession {
     }
   }
 
-  private scanQuoteParagraph(q: QuoteCollect, until: number): void {
-    const { inner } = q
-    if (until < q.paragraphScan) {
-      q.paragraphScan = 0
-      q.innerOpenFence = null
-      q.innerParagraphOpen = false
-      q.innerItemParagraph = false
-    }
-    for (; q.paragraphScan < until; q.paragraphScan++) {
-      const line = inner[q.paragraphScan]!.trimStart()
-      const run = /^(`{3,}|~{3,})/.exec(line)
-      if (q.innerOpenFence !== null) {
-        if (run && run[1]![0] === q.innerOpenFence && /^(`{3,}|~{3,})[ \t]*$/.test(line)) q.innerOpenFence = null
-        continue
-      }
-      // A valid fence opener interrupts an open paragraph whether or not it closes.
-      if (run && (!q.innerParagraphOpen || opensCodeFence(line))) {
-        q.innerOpenFence = run[1]![0]!
-        q.innerParagraphOpen = false
-        continue
-      }
-      if (run) continue
-      const item = /^(?:[-*] (?:\[[ xX]\] )?|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] )(.*)$/.exec(line)
-      if (isBlankLine(line) || /^:{3,}/.test(line) || !bottomBlockLeavesParagraphOpen(line) ||
-          item !== null && !bottomBlockLeavesParagraphOpen(item[1]!)) {
-        q.innerParagraphOpen = false
-      } else if (!q.innerParagraphOpen) {
-        q.innerParagraphOpen = true
-        q.innerItemParagraph = item !== null
-      }
-    }
-  }
-
   private attachFirstBlockQuote(q: QuoteCollect, ln: string, lineIndex: number, content: string): void {
     const { lexer, inner, innerLineNumbers, origins } = q
     const stackedSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ln
-    const stackedDepth = quotePrefixDepth(stackedSource)
-    const followerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ''
-    const followerColumn = sourceColumn(followerSource, stackedDepth)
-    // Stacked quotes on one line keep the innermost owner (CARVE-P9-067): an
-    // inner quote takes the follower at the outermost quote's column.
-    // A quoted follower continues the outer quotes and is measured inside them.
-    const plusLineNumber = lexer.lineNumber(lineIndex)
-    const followerDepth = quotePrefixDepth(followerSource)
-    const quotedFollower = followerDepth > 0 && followerDepth < stackedDepth
-    const quoteColumn = quotedFollower
-      ? sourceColumn(stackedSource, followerDepth)
-      : lexer.firstBlockQuoteColumns.get(plusLineNumber) ?? q.physicalQuoteColumn
-    if (!quotedFollower && !/^\+[ \t]*$/.test(content)) lexer.firstBlockQuoteColumns.set(plusLineNumber, quoteColumn)
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       lexer,
       (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
       // A follower at a stacked opener's column is read from that column.
       isStackedFirstBlockQuoteMarker(stackedSource) ? indentColumns(lexer.peek() ?? '') : 0,
       true,
-      isStackedFirstBlockQuoteMarker(stackedSource) ? (followerColumn === Infinity ? 0 : followerColumn) : quoteColumn,
-      isStackedFirstBlockQuoteMarker(stackedSource) ? stackedDepth : quotedFollower ? followerDepth : 0,
       true,
     )
-    if (/^\+[ \t]*$/.test(content)) {
+    if (isContinuationMarker(content.trimStart())) {
       if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
       if (attached.length > 0 && inner.length > 0 && !isBlankLine(inner.at(-1)!)) {
         inner.push('')
@@ -1583,75 +1495,19 @@ export class ParseSession extends InlineParseSession {
     q.handDown = null
   }
 
-  // Refused `+` markers on a quoted line after the first, reported where they stand.
-  private reportQuotedMarkerRefusals(
-    lexer: Lexer, lineIndex: number, markerSourceLine: string | undefined,
-    precedingSourceLine: string | undefined, quoteMarkerIsWrongColumn: boolean,
-  ): void {
-    // `> q` / `>   +`: a `+` at a column no open container owns stays quote text.
-    if (quoteMarkerIsWrongColumn &&
-        quotePrefixDepth(precedingSourceLine!) === quotePrefixDepth(markerSourceLine!)) {
-      lexer.reportRefusedContinuationMarker(lineIndex,
-        sourceColumnAt(markerSourceLine!, markerSourceLine!.lastIndexOf('+')) + 1,
-        markerDecision(lexer, lineIndex).blockedByInnerList ? 'list item' : 'block quote', 'wrong-column')
-    }
-    if (markerSourceLine === undefined || !isPhysicalContinuationMarker(markerSourceLine)) return
-    if (quotePrefixDepth(markerSourceLine) > 0) {
-      const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex)]
-      const depth = quotePrefixDepth(markerSourceLine)
-      if (follower !== undefined && quotePrefixDepth(follower) === depth &&
-          sourceColumn(follower, depth) === sourceColumn(markerSourceLine, depth) &&
-          isListMarkerLine(sourceQuoteBody(follower))) {
-        lexer.reportRefusedContinuationMarker(lineIndex,
-          sourceColumnAt(markerSourceLine, markerSourceLine.lastIndexOf('+')) + 1,
-          'block quote', 'sibling')
-      }
-    }
-    if (precedingSourceLine !== undefined &&
-        quotePrefixDepth(precedingSourceLine) > quotePrefixDepth(markerSourceLine)) {
-      // A marker at a surviving outer quote level is still a marker when
-      // it cannot take a block. The inner quote may retain it as text.
-      const follower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex)]
-      const markerDepth = quotePrefixDepth(markerSourceLine)
-      // A deeper-quoted follower at the marker's column is an attached quote that nests.
-      if (follower === undefined || isBlankLine(follower) ||
-          quotePrefixDepth(follower) < markerDepth || sourceQuoteLocalColumn(follower, markerDepth) !== 0) {
-        lexer.reportRefusedContinuationMarker(lineIndex,
-          sourceColumnAt(markerSourceLine, markerSourceLine.lastIndexOf('+')) + 1, 'block quote',
-          follower === undefined ? 'document' : isBlankLine(follower) ? 'blank' : 'right')
-      }
-    }
-  }
-
   private takeQuotedLine(q: QuoteCollect, ln: string, content: string): void {
     const { lexer, firstLineIndex } = q
     const lineIndex = lexer.pos
     lexer.consume()
     if (isBlankLine(content)) q.quoteTermContinuation = false
-    const markerSourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1]
-    const precedingSourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 2]
-    const quoteMarkerIsWrongColumn = isContinuationMarker(content.trimStart()) &&
-      markerSourceLine !== undefined && precedingSourceLine !== undefined &&
-      quotePrefixDepth(precedingSourceLine) >= quotePrefixDepth(markerSourceLine) &&
-      markerDecision(lexer, lineIndex).reason === 'wrong-column'
     // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
     // first line of a quote, at any depth, is a marker when a flush-left line
     // outside the quote follows, and that line's block is the innermost
     // quote's body. Before a blank, a quoted line or the end it stays text.
-    if (endsInPlus(content) && !quoteMarkerIsWrongColumn &&
-        (isPhysicalContinuationMarker(lexer.rootLines?.[lexer.lineNumber(lineIndex) - 1] ?? ln) ||
-          lineIndex === firstLineIndex) &&
-        this.opensFirstBlockQuote(lexer, lineIndex, content, lineIndex === firstLineIndex ? 0 : -1, () => {
-      this.trackUntrackedQuoteLines(q)
-      return openQuoteDepth(q.state)
-    })) {
+    if (lineIndex === firstLineIndex && isContinuationMarker(content.trimStart()) && lexer.peek() !== undefined) {
       this.attachFirstBlockQuote(q, ln, lineIndex, content)
       return
     }
-    if (lineIndex === firstLineIndex && /^\+[ \t]*$/.test(content) && !quoteMarkerIsWrongColumn &&
-        markerSourceLine !== undefined) q.refusedFirstBlockMarker = markerSourceLine
-    if (lineIndex !== firstLineIndex)
-      this.reportQuotedMarkerRefusals(lexer, lineIndex, markerSourceLine, precedingSourceLine, quoteMarkerIsWrongColumn)
     if (lexer.lineTerminatorFree(lineIndex)) q.origins.set(q.inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
     q.inner.push(content)
     q.untracked.push([content, lineIndex])
@@ -1666,51 +1522,31 @@ export class ParseSession extends InlineParseSession {
   // splice them into the quote body behind a blank-line separator, so they
   // parse as their own block instead of folding into the quoted paragraph.
   private attachesQuotedPlusBlock(q: QuoteCollect, ln: string): boolean {
-    const { lexer, quoteRootLine, quoteMarkerColumn, physicalQuoteColumn } = q
+    const { lexer, physicalQuoteColumn } = q
     const physicalPlus = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
     const quoteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
     const quotePlusDecision = quoteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
     const quotePlusDepth = quotePrefixDepth(physicalPlus)
     const quotePlusColumn = sourceColumn(physicalPlus)
-    const quoteFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos)]
-    const afterFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) + 1]
     // Strip source prefixes, not `^>`: a hosted quote line sits behind the item's indentation.
     const quotePlusBody = sourceQuoteRest(physicalPlus, quotePlusDepth) ?? ''
-    const quoteFollowerBody = sourceQuoteRest(quoteFollower ?? '', quotePlusDepth) ?? quoteFollower ?? ''
-    if (!(quoteMarkerLine &&
-        quotePlusDecision?.reason !== 'sibling' &&
-        !(quotePlusDepth === 0 && quotePrefixDepth(quoteRootLine) > 1 &&
-          quotePlusColumn > quoteMarkerColumn) &&
-        !(quotePlusColumn > 0 && quotePlusDecision?.reason === 'wrong-column' &&
-          isListMarkerLine((quoteFollower ?? '').trimStart())) &&
-        // `> - > a` / `>   +` / `>   - s`: an item-held quote refuses a list follower, as at the top level.
-        !(quotePlusDepth > 0 && quotePlusDecision?.reason === 'wrong-column' &&
-          isListMarkerLine(quoteFollowerBody.trimStart()) && quoteOpensBehindItemMarker(quoteRootLine, physicalQuoteColumn)) &&
-        isContinuationMarker(quotePlusBody.trimStart()) &&
-        (quotePlusDepth === 0 || sourceQuoteLocalColumn(physicalPlus, quotePlusDepth) === 0 ||
-          quotePlusColumn === physicalQuoteColumn &&
-          isListMarkerLine(sourceQuoteBody(quoteRootLine))) &&
+    if (!(quoteMarkerLine && isContinuationMarker(quotePlusBody.trimStart()) &&
         (quotePlusColumn === physicalQuoteColumn || quotePlusDecision?.owner?.kind === 'list' &&
-          quotePlusDecision.owner.column === quotePlusColumn && quotePlusDecision.reason === undefined) &&
-        quoteFollower !== undefined &&
-        !isBlankLine(quoteFollowerBody) &&
-        !(isContinuationMarker(quoteFollowerBody.trimStart()) && afterFollower !== undefined &&
-          !isBlankLine(afterFollower) && !/^\s*:{3,}\s*$/.test(afterFollower) &&
-          sourceColumn(afterFollower, quotePlusDepth) === quotePlusColumn) &&
-        (quotePlusDepth === 0 || quotePrefixDepth(quoteFollower) >= quotePlusDepth ||
-          quotePlusColumn > quoteBodyColumn(physicalPlus, quotePlusDepth)) &&
-        sourceColumn(quoteFollower, quotePlusDepth) === quotePlusColumn)) return false
+          quotePlusDecision.owner.column === quotePlusColumn))) return false
     lexer.consume()
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       lexer,
       (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
       0,
       true,
-      quotePlusColumn,
-      quotePlusDepth,
     )
     if (attached.length > 0) {
       lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
+      // An earlier probe may have read these lines as lazy; the `+` decides them.
+      for (const number of attachedLineNumbers) {
+        lexer.quoteLazyMarkerLines.delete(number)
+        lexer.quoteLazyLines.delete(number)
+      }
       // `inner` always holds the quote's first content line, so a leading
       // blank separates the attached block from it.
       // The separators are SYNTHETIC - no such blank line exists in the
@@ -1720,7 +1556,7 @@ export class ParseSession extends InlineParseSession {
       // reported an end offset earlier than its start (#462).
       q.inner.push('')
       q.innerLineNumbers.push(attachedLineNumbers[0]!)
-      for (const attachedLine of attached) q.inner.push(attachedLine)
+      for (const attachedLine of attached) q.inner.push(stripLazyFrame(attachedLine))
       q.innerLineNumbers.push(...attachedLineNumbers)
       q.inner.push('')
       q.innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
@@ -1729,47 +1565,6 @@ export class ParseSession extends InlineParseSession {
       this.trackUntrackedQuoteLines(q)
       closeBlockQuoteParagraph(q.state)
     }
-    return true
-  }
-
-  // A note opener interrupts any paragraph, so its `+` always starts a block.
-  // A stacked `> - > +` takes a non-list block at document column 0 into its
-  // innermost quote (CARVE-P9-067), though the line writes no `>`.
-  private attachesStackedFollower(q: QuoteCollect): boolean {
-    const { lexer, inner } = q
-    const rootLines = lexer.rootLines ?? lexer.lines
-    const stackedOpener = rootLines[lexer.lineNumber(lexer.pos) - 2]
-    const stackedFollower = rootLines[lexer.lineNumber(lexer.pos) - 1]
-    // Only where the opener line starts a block: after a paragraph it is lazy text.
-    // The cheap end-of-line test comes first: this runs for every unprefixed line.
-    const openerStartsBlock = (opener: string): boolean => lexer.pos - 1 === q.firstLineIndex ||
-      inner.length > 1 && isBlankLine(inner[inner.length - 2]!) || inner.length - 1 === q.stackedAttachEnd ||
-      quotePrefixDepth(opener) > quotePrefixDepth(rootLines[lexer.lineNumber(lexer.pos) - 3] ?? '') ||
-      leavesNoTextParagraph()
-    // After a closed block or an item's own paragraph the opener starts a block (CARVE-P9-067).
-    const leavesNoTextParagraph = (): boolean => {
-      this.scanQuoteParagraph(q, inner.length - 1)
-      // An indented opener under an item's paragraph is a nested item, which its own list attaches.
-      return q.innerOpenFence === null && (!q.innerParagraphOpen ||
-        q.innerItemParagraph && leadingWhitespace(inner[inner.length - 1]!) === 0)
-    }
-    if (!(stackedOpener !== undefined && stackedFollower !== undefined && inner.length > 0 &&
-        stackedOpener.trimEnd().at(-1) === '+' && sourceColumn(stackedFollower, 0) === 0 &&
-        quotePrefixDepth(stackedFollower) === 0 && !isBlankLine(stackedFollower) &&
-        !isListMarkerLine(stackedFollower) && !isContinuationMarker(stackedFollower) &&
-        (isStackedFirstBlockQuoteMarker(stackedOpener) && openerStartsBlock(stackedOpener) ||
-          quotedNoteFirstBlockMarker(stackedOpener)) && quotePrefixDepth(stackedOpener) > 0)) return false
-    const opensBody = /^[ \t]*(?:`{3,}|~{3,}|:{3,}|%%%)/.test(stackedFollower)
-    const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
-      // A host-quoted line ends a follower that opens no fence; stopping there keeps the scan short.
-      lexer, (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next) || next.startsWith('>') && !opensBody,
-      0, true, 0, 0, true)
-    if (attached.length === 0) return false
-    inner.push(...attached)
-    q.innerLineNumbers.push(...attachedLineNumbers)
-    q.stackedAttachEnd = inner.length
-    this.trackUntrackedQuoteLines(q)
-    closeBlockQuoteParagraph(q.state)
     return true
   }
 
@@ -1833,7 +1628,6 @@ export class ParseSession extends InlineParseSession {
       const plusColumn = sourceColumn(root[lexer.lineNumber(lineIndex) - 1] ?? ln)
       if (follower === undefined || isBlankLine(follower) ||
           isListMarkerLine(sourceQuoteBody(follower).trimStart()) && sourceColumn(follower) === plusColumn) {
-        lexer.reportRefusedContinuationMarker(lineIndex, indentColumns(ln) + 1, 'list item', markerDecision(lexer, lineIndex).reason)
       }
     }
     q.inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || termContinuation
@@ -1875,7 +1669,7 @@ export class ParseSession extends InlineParseSession {
   }
 
   private finishBlockQuote(q: QuoteCollect): BlockQuote | Figure {
-    const { lexer, firstLineIndex, refusedFirstBlockMarker } = q
+    const { lexer, firstLineIndex } = q
     const subLexer = nestedSubLexer(lexer, q.inner, firstLineIndex, q.innerLineNumbers, q.origins)
     subLexer.quoteLazyHint = q.handDown
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
@@ -1886,15 +1680,6 @@ export class ParseSession extends InlineParseSession {
     subLexer.inFootnoteBody = false
     subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
     const children = this.parseBlocks(subLexer, 0)
-    const lead = children[0]?.type === 'paragraph' ? children[0].children[0] : undefined
-    if (refusedFirstBlockMarker !== undefined && lead?.type === 'text' && lead.value.startsWith('+')) {
-      // CARVE-P9-067: a refused first-block `> +` stays text in the quote.
-      const reason = refusedFirstBlockReason((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex)], refusedFirstBlockMarker)
-      if (reason !== null) {
-        lexer.reportRefusedContinuationMarker(firstLineIndex,
-          sourceColumnAt(refusedFirstBlockMarker, refusedFirstBlockMarker.lastIndexOf('+')) + 1, 'block quote', reason)
-      }
-    }
     const bq: BlockQuote = { type: 'block_quote', children }
     const quoteEndIndex = lexer.pos
     // §4d: a quote built out of nothing but structural-only `>` lines is not a
@@ -1937,7 +1722,6 @@ export class ParseSession extends InlineParseSession {
         continue
       }
       if (this.attachesQuotedPlusBlock(q, ln)) continue
-      if (this.attachesStackedFollower(q)) continue
       if (!this.takeLazyQuoteLine(q, ln)) break
     }
     return this.finishBlockQuote(q)
@@ -2114,75 +1898,11 @@ export class ParseSession extends InlineParseSession {
     }
   }
 
-  /**
-   * Whether the quote line at `lineIndex` (already consumed, quoted text
-   * `content`) is the first-block form: its quote chain ends in a lone `+`, the
-   * innermost quote opens on this line, and the next line is a non-blank,
-   * unquoted line at document column 0. `openDepth` is how many quotes below
-   * this one are already open (0 on the quote's first line), or -1 to ask
-   * `readOpenDepth` lazily.
-   */
-  private opensFirstBlockQuote(
-    lexer: Lexer,
-    lineIndex: number,
-    content: string,
-    openDepth: number,
-    readOpenDepth: () => number,
-  ): boolean {
-    const next = lexer.peek()
-    const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ''
-    const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
-    const nextQuoted = next === undefined ? null : quotedLineText(next, lexer.lineTerminatorFree(lexer.pos))
-    if (next === undefined || isBlankLine(next) || isListMarkerLine(stripLazyFrame(next).trimStart()) ||
-        quotePrefixDepth(nextSource) < quotePrefixDepth(sourceLine) &&
-        isListMarkerLine(sourceQuoteBody(nextSource)) ||
-        nextQuoted !== null && isBlankLine(nextQuoted) ||
-        nextQuoted !== null &&
-        !isStackedFirstBlockQuoteMarker(sourceLine)) return false
-    const lineNumber = lexer.lineNumber(lineIndex)
-    if (lexer.refusedQuotePlus.has(lineNumber - 1)) return false
-    let chain = lexer.quoteChainEndsInPlus.get(lineNumber)
-    if (chain !== undefined && chain.size === 0 && endsInPlus(content)) chain = undefined
-    // A probe that parsed a nested quote first measured a shorter chain.
-    if (chain !== undefined && chain.size > 0 && !chain.has(content.length) && content.length > Math.max(...chain.keys())) chain = undefined
-    if (chain === undefined) {
-      // Asked once per source line: every nested quote's text is a suffix of
-      // this one, so its levels are looked up by length instead of rescanned.
-      const suffixes = [content]
-      for (let deeper = quotedLineText(content, false); deeper !== null; deeper = quotedLineText(deeper, false)) suffixes.push(deeper)
-      chain = new Map()
-      if (/^\+[ \t]*$/.test(suffixes[suffixes.length - 1]!)) {
-        for (let k = 0; k < suffixes.length; k++) chain.set(suffixes[k]!.length, suffixes.length - 1 - k)
-      }
-      lexer.quoteChainEndsInPlus.set(lineNumber, chain)
-    }
-    const levels = chain.get(content.length)
-    if (levels === undefined) return false
-    if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
-    if (isStackedFirstBlockQuoteMarker(sourceLine)) {
-      // A stacked opener line also takes a follower at one of its own opener columns (CARVE-P9-067).
-      const depth = quotePrefixDepth(sourceLine)
-      const followerDepth = quotePrefixDepth(nextSource)
-      const sharedDepth = Math.min(depth, followerDepth)
-      const openerColumns = stackedOpenerColumns(sourceLine, sharedDepth)
-      const followerColumn = stackedFollowerColumn(nextSource, sourceLine, sharedDepth)
-      const atOpener = openerColumns.includes(followerColumn)
-      // A partly quoted follower reaches only the surviving quote's opener.
-      // The deeper quote marker's physical column cannot replace its missing prefix.
-      if (followerDepth > 0 && followerDepth < depth) return followerColumn === openerColumns[0]
-      if (followerDepth > 0) return atOpener
-      return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine), depth, true) || atOpener
-    }
-    return attachesAtDocumentColumnZero(lexer, sourceColumn(sourceLine, 0), 0, true)
-  }
-
   private collectAttachedBlock(
     lexer: Lexer,
     isBoundary: (line: string) => boolean,
     contentColumn = 0,
     endAtFoldedDefinition = true,
-    markerColumn = 0,
-    quoteLevels = Infinity,
     acceptFirstNonList = false,
     viewSlice = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
@@ -2201,9 +1921,6 @@ export class ParseSession extends InlineParseSession {
     // treats an EMPTY result as "the marker attached nothing" and lets its own
     // ordinary rules have the line, which is exactly what the clause's comment
     // spelling does.
-    if (!attachesAtDocumentColumnZero(lexer, markerColumn, quoteLevels, acceptFirstNonList)) {
-      return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
-    }
     const scans = lexer.attachmentScans ??= new Map()
     const cacheKey = viewSlice === 0 ? contentColumn : `${contentColumn}:${viewSlice}`
     let cache = scans.get(cacheKey)
@@ -2255,9 +1972,7 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        const attachedLiteralPlus = take === 0 && !acceptFirstNonList && isContinuationMarker(candidate) &&
-          markerDecision(lexer, lexer.pos).reason !== undefined
-        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList && !attachedLiteralPlus) break
+        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition)
@@ -2281,11 +1996,9 @@ export class ParseSession extends InlineParseSession {
     isBoundary: (line: string) => boolean,
     baseIndent: number,
     endAtFoldedDefinition = true,
-    markerColumn = 0,
-    quoteLevels = Infinity,
     viewSlice = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
-    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, markerColumn, quoteLevels, true,
+    const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
       viewSlice)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     const attributeLines = leadingAttributeRun(offset => view(attached.lines[offset]), lexer.parseOptions)
@@ -2445,8 +2158,6 @@ export class ParseSession extends InlineParseSession {
       if (RE_CAPTION.test(ln)) captionAtContentColumn = true
       if (lines.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(lines[0]!) && RE_CAPTION.test(ln))
         imageCaptionSlot = true
-      if (lines.length === 1 && startLineIndex === lexer.interruptRefusedSiblingPlusLine &&
-          isListMarkerLine(ln)) break
       // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
       // list, quote, table, fence, thematic break, admonition/div) interrupts
       // an open paragraph with no blank line before it, at the top level AND
@@ -2480,23 +2191,6 @@ export class ParseSession extends InlineParseSession {
         break
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
         secondLineLazy = true
-      const physical = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      // `q` / `+` / `- s`: no open container claims a document-level `+` before a block (carve#3421).
-      if (lexer.rootLines === undefined && /^\+[ \t]*$/.test(ln)) {
-        const follower = lexer.peek(1)
-        if (follower !== undefined && indentColumns(follower) === 0 && (isListMarkerLine(follower) ||
-            follower[0] !== '%' && startsInterruptingBlock(lexer, follower, true, false, false))) {
-          lexer.reportRefusedContinuationMarker(lexer.pos, 1, 'document', 'unclaimed')
-        }
-      }
-      if (lexer.hostMarkerColumn !== undefined &&
-          (sourceColumn(physical) === lexer.hostMarkerColumn ||
-            lexer.hostBody === 'list' && markerDecision(lexer, lexer.pos).reason === 'wrong-column') &&
-          isContinuationMarker(ln) &&
-          (isPhysicalContinuationMarker(physical) || isContinuationMarker(sourceQuoteBody(physical)))) {
-        lexer.reportRefusedContinuationMarker(lexer.pos, lexer.lineStartColumn(lexer.pos) + ln.indexOf('+'),
-          lexer.hostBody === 'list' ? 'list item' : 'document', 'wrong-column')
-      }
       lexer.consume()
       // The frame did its work in the interruption test above; a paragraph is
       // where a framed line becomes text, so it comes off here.
@@ -2568,23 +2262,3 @@ export function parseTransientForHtml(source: string, opts: ParseOptions): Docum
   return session.parse(source, opts)
 }
 
-/** Does the quote whose `>` sits at `column` open directly behind a list item marker in `line`'s marker run? */
-function quoteOpensBehindItemMarker(line: string, column: number): boolean {
-  const bound = prefixWalkBound(line)
-  let afterMarker = false
-  for (let at = 0; at < bound;) {
-    let lead = at
-    while (line[lead] === ' ' || line[lead] === '\t') lead++
-    if (line[lead] === '>') {
-      if (sourceColumnAt(line, lead) === column) return afterMarker
-      afterMarker = false
-      at = lead + 1
-      continue
-    }
-    const marker = markerPrefixLength(line, at, bound)
-    if (marker === 0) return false
-    afterMarker = true
-    at += marker
-  }
-  return false
-}
