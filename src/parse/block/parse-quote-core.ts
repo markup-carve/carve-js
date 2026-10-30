@@ -1389,12 +1389,10 @@ export function bottomBlockLeavesParagraphOpen(rest: string): boolean {
  * and the attributes reached nothing (markup-carve/carve#1281, corpus
  * 329-…-container-that-holds-it-6).
  *
- * Flush-left only, like `isBlockAttributeLine` and like every caller's own
- * guard: an indented brace line is lazy paragraph text under the strict column-0
- * rule (§24 C3), not a floater.
+ * Indentation in front of the opener does not change what it opens (carve#4089).
  */
 export function opensWrappedAttributeBlock(content: string): boolean {
-  return content.startsWith('{') && !content.includes('}')
+  return /^[ \t]*\{/.test(content) && !content.includes('}')
 }
 
 /**

@@ -2,6 +2,16 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4089",
+      "cause": "ahead of the spec pin: the pinned pack predates the indented wrapped attribute ruling",
+      "cases": [
+        "lazy-4bc0393d24b2",
+        "lazy-f60632f36c87",
+        "ownership-edfbea8daa50",
+        "roundtrip-d27a8c0b8e38"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#3972",
       "cause": "all three engines agree against the spec model",
       "cases": [
