@@ -17,7 +17,7 @@ import { RE_INLINE_ATTR } from './inline/parse-inline-opaque.js'
 // ` +` delimiter, so the content group starts at the first non-space; a NBSP
 // (U+00A0) counts as content, as everywhere else in the parser.
 export const RE_HEADING =
-  /^(#{1,6}) +((?=[ \t]*[^ \t\n\r]).+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
+  /^(#{1,6}) +((?=[ \t]*[^ \t\n\r]).+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/s
 
 // Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
 // (`---`, `***`, `___`, `----`), followed only by optional trailing
@@ -243,7 +243,7 @@ export const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // Groups: 2 label (bracketed).
 export const RE_DIV_OPEN = balancedLabelMatcher(/^(:{3,}) *(?:(\[[^\n]*\])[ \t]*|\t[ \t]*)?$/, [2])
 
-export const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
+export const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/s
 
 /**
  * `*[ABBR]: expansion`, the only shape a definition line has.
@@ -347,7 +347,7 @@ export const isTableRow = (line: string): boolean => {
 // (PART 7). With `\s` a continuation row whose line ended in a vertical tab was
 // still consumed into the cell above, where the same row ending in any other
 // control character became a paragraph between two tables.
-export const RE_TABLE_CONT = /^\+.*\|[ \t]*$/
+export const RE_TABLE_CONT = /^\+.*\|[ \t]*$/s
 
 // Frontmatter close fence: bare `---` only.
 export const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) ?=([a-zA-Z][\\w-]*)' + FENCE_TRAILING_WS)

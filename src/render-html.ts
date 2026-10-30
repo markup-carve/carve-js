@@ -1829,7 +1829,7 @@ function renderListItem(
   // announce something the reader cannot see.
   const lead = visible[0]
   const taskName = item.checked !== undefined && lead?.type === 'paragraph'
-    ? inlineText(lead.children, opts.smartTypography).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
+    ? inlineText(lead.children, opts.smartTypography).replace(/[ \t\n\r\f\v]+/g, ' ').replace(/^ | $/g, '')
     : ''
   const taskNameAttr = taskName === '' ? '' : ` aria-label="${escapeAttr(taskName)}"`
   const checkbox =
