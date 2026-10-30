@@ -11,12 +11,12 @@ describe('cursor lazy chain owned by a quote paragraph', () => {
     '> > deep\n- a\n    b\n',
     '> > deep\n1. one\n    b\n',
     '> q\ntail\n- a\n  - c\n',
+    '> q\ntail\n- a\n  - c\n+\n',
   ])('keeps every walk-lazy line in the quote paragraph with full AST and positions: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
-    '> q\ntail\n- a\n  - c\n+\n',
     '> > deep\n- b\n    - d\n+\n',
   ])('declines a plus marker that follows a chained lazy run: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)

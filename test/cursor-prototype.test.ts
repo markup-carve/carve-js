@@ -273,12 +273,18 @@ describe('experimental block cursor', () => {
     '[^f]: note\n- a\n\n  ~~~\n',
     '[^f]: note\n- b\n+\n\n  [r]: /u\n',
     '  :::\ntext\n  :::\n  \n[^f]: note\n- a\n\n  ~~~\n',
-    '+\n- b\n~~~\n[r]: /u\n',
-    '+\n- a\n~~~\n> - x\n  :::\n:  meaning\n',
-    'text\n~~~\n[r]: /u\n',
     '- a\n  [^g]: more\n  text\n  :  nested\n%% c\n    b\n',
   ])('declines instead of admitting a wrong tree: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each([
+    '+\n- b\n~~~\n[r]: /u\n',
+    '+\n- a\n~~~\n> - x\n  :::\n:  meaning\n',
+    'text\n~~~\n[r]: /u\n',
+    'b\n~~~\n+\n[r]: /u\n',
+  ])('matches a fence after a continuation boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
@@ -289,7 +295,6 @@ describe('experimental block cursor', () => {
   })
 
   it.each([
-    'b\n~~~\n+\n[r]: /u\n',
     '> q\n+\n- b\n[r]: /u\n',
   ])('declines a link definition after an unclosed fence or plus-swallowed list: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
@@ -305,8 +310,8 @@ describe('experimental block cursor', () => {
   it.each([
     'q\n~~~\nz\n~~~\n\nx\n  [^g]: m\n    b\n\ny\n~~~\n[r]: /u\n',
     'b\n~~~\n+\n[r]: /u\n```\n',
-  ])('declines when a blank line ends the footnote run or a mismatched fence cannot close: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ])('matches a footnote run ending before a later fence: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('declines a flush-left line comment after a footnote paragraph', () => {
@@ -375,9 +380,9 @@ describe('experimental block cursor', () => {
     expect(renderHtml(actual)).toBe(renderHtml(expected))
   })
 
-  it('declines an open list fence before a non-list boundary', () => {
-    expect(() => parseCursorPrototype('- ```\n  b\n\n> q\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('matches an open list fence before a non-list boundary', () => {
+    const source = '- ```\n  b\n\n> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
@@ -429,8 +434,8 @@ describe('experimental block cursor', () => {
   it.each([
     ':: t\n: a\n  ```\n  b\n y\n\nz\n  ```\n',
     ':: t\n:  a\n   ```\ntail\n',
-  ])('declines a definition fence without a contiguous closer: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ])('matches a definition fence without a contiguous closer: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
@@ -805,6 +810,21 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it('keeps lazy text after a quoted list-shaped paragraph line', () => {
+    const source = '> > deep\n> - x\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a terminal plus after a lazy quoted marker', () => {
+    const source = '> q\n  - c\n+\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a lazy list paragraph before a root link definition', () => {
+    const source = '- b\n- b\ntail\n  [r]: /u\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it('keeps repeated below-column list markers in the ordered item paragraph', () => {
     const source = '1. outer\n  - first\n  - head\n\n    ```\n    body\n  ```\n\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
@@ -890,9 +910,12 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['- :::\n  - x\n', '- ::: note\n  - para text\n'])
-  ('declines a colon container with a separately collected nested body: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  it.each(['- :::\n  - x\n', '- ::: note\n  - para text\n',
+    '- ::: note\n  - para text\n:::\n'])
+  ('keeps a nested list in an open list-owned colon container: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
   })
 
   it('keeps one list-owned colon body line before a flush-left boundary', () => {
@@ -1075,9 +1098,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an unclosed fence while a nested list paragraph owns its line', () => {
-    expect(() => parseCursorPrototype('- a\n    - child\n      text\n  ~~~\nafter\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('matches an unclosed fence while a nested list paragraph owns its line', () => {
+    const source = '- a\n    - child\n      text\n  ~~~\nafter\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each([
@@ -1086,6 +1109,82 @@ describe('experimental block cursor', () => {
     '> q\n> ```\n> code\n> ```\n',
   ])('resolves quote fence ownership before parsing its follower: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> >- q\n>   - sub\n+\n  ~~~\n%% c\ntext\n# Heading\n:  meaning\n',
+    '> text\n>   - sub\n+\n```\n  ~~~\n> > deep\n>   - sub\n',
+    '> q\n    - d\n+\n  ```\n>> 1. y\n+\n',
+  ])('keeps an initial quote paragraph and its attached fence in one owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '1. one\n    b\n  +\n  :  nested\n:: term\n> >- q\n+\n```\n',
+    '\n>> - z\n>> - z\n> >- q\n+\n```\n',
+    '> >- q\n+\n  ~~~\n',
+  ])('keeps the existing later quote fence owner exact: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a description line owned by a nested quoted list item', () => {
+    const source = '> - x\n>   - sub\n:  meaning\n# Heading\n- b\n:  meaning\n>> 1. y\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> > deep\n>   - sub\n+\n    b\n:::\n::: note\n',
+    '> > deep\n>   - sub\n+\n  a\n\n> q\n'])
+  ('keeps the nested quote paragraph open across its owned plus and text: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('drops a quote continuation marker before an invisible root link definition', () => {
+    const source = '> q\n  - c\n> >- q\n+\n[r]: /u\n  [^g]: more\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- head\n\n      ::: note\n      a\n      - second\n',
+    '- head\n\n      :::\n      a\n      - second\n',
+    '- head\n\n      :::\n      a\n  - second\n',
+    '- head\n\n      :::\n      a\n    - second\n',
+    '- head\n\n      :::\n      a\n        - second\n',
+    '- head\n\n      ::: note\n      a\n        - second\n'])
+  ('folds a raised list marker into an open colon paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- head\n\n      :::\n  - second\n',
+    '- head\n\n      :::\n      a\n      :::\n  - second\n'])
+  ('keeps a raised empty colon owner distinct from its closer: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- b\n  :::\n  a\n    - d\n',
+    '- b\n  ::: note\n  text\n    - d\n::: note\n> text\n\n'])
+  ('keeps a list marker inside an at-column colon paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an at-column colon paragraph open after its folded list marker', () => {
+    const source = '- x\n  :::\n  a\n  - m\n  b\n  :::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> :: c\n>   %% note\n>   more\n',
+    ':: a\n: b\n  :: c\n    %% note\n    more\n',
+    '[t][r]\n\n> :: c\n>   [r]: /u\n',
+    'x[^n]\n\n:: c\n  [^n]: y\n',
+    ':: a\n: b\n  :: c\n  %% note\n  more\n',
+    '> :: c\n>   %%%\n>   hidden\n>   %%%\n>   more\n',
+    ':: a\n: b\n  :: c\n    %%%\n    hidden\n    %%%\n    more\n',
+  ])('ends a definition term before its authored invisible sibling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines an unresolved flush-left note after a definition term', () => {
+    const source = ':: term\n[^f]: note\n  a\n\n    b\n  [r]: /u\n  ~~~\n  ::: note\n'
+    expectExactOrDeclined(source)
   })
 
   it.each([
@@ -1718,9 +1817,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a root list fence when a later line can own the boundary', () => {
-    expect(() => parseCursorPrototype('- ```\n  x\n\ntail\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('matches a root list fence when a later line can own the boundary', () => {
+    const source = '- ```\n  x\n\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['> > a\nb\n', '> a\n> > b\nc\n'])
@@ -1752,8 +1851,10 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['- - x\n  %%%\n  y\n', '- x\n  %%%\n  body\ny\n'])
-  ('declines degraded comments with unresolved nested ownership: %s', (source) => {
-    expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  ('keeps a degraded comment and its nested paragraph owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
   })
 
   it.each([
@@ -1806,7 +1907,8 @@ describe('experimental block cursor', () => {
   it('treats an unterminated triple-percent opener as a line comment', () => {
     const source = 'before\n\n%%%\nsecret\n\nafter\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-    expect(() => parseCursorPrototype('- x\n%%%%\ny\n')).toThrow(UnsupportedCursorSyntax)
+    const listSource = '- x\n%%%%\ny\n'
+    expect(parseCursorPrototype(listSource)).toStrictEqual(parse(listSource))
   })
 
   it.each(['[^f]: note\n\nSee [^f].\n', '[^f]:   note\n', '[^f]: {empty}\n',
@@ -1826,7 +1928,8 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype('[^f]: note\n\n\n  more\n'))
       .toStrictEqual(parse('[^f]: note\n\n\n  more\n'))
     expect(() => parseCursorPrototype('[^f]: \n')).toThrow(UnsupportedCursorSyntax)
-    expect(() => parseCursorPrototype('[^f]: %% comment\n')).toThrow(UnsupportedCursorSyntax)
+    expect(parseCursorPrototype('[^f]: %% comment\n'))
+      .toStrictEqual(parse('[^f]: %% comment\n'))
   })
 
   it.each(['[^a]: note\n  > quoted\n\nsee[^a]\n',
@@ -2189,7 +2292,8 @@ describe('experimental block cursor', () => {
   it('ends a definition before a closed root comment block', () => {
     const source = ':: term\n:  body\n%%%\nhidden\n%%%\ntail\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
-    expect(() => parseCursorPrototype(':: term\n:  body\n%%%\nhidden\n')).toThrow(UnsupportedCursorSyntax)
+    const unmatched = ':: term\n:  body\n%%%\nhidden\n'
+    expect(parseCursorPrototype(unmatched)).toStrictEqual(parse(unmatched))
   })
 
   it.each(['- [x] done\n', '- [ ] todo\n', '- [-] dropped\n', '- [_] open\n',
@@ -2766,9 +2870,14 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it.each(['> ```\n> x', '- > ```\n  x\nx'])
+  it.each(['> ```\n> x'])
   ('declines a quoted fence with an unresolved continuation owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('matches a quoted fence with a raised continuation line', () => {
+    const source = '- > ```\n  x\nx'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- a\n  - b\n\n    ```\n    p\n ```\n\n    tail\n',
@@ -2878,8 +2987,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype('- a\n  - +\f\n\nb\n')).toStrictEqual(parse('- a\n  - +\f\n\nb\n'))
   })
 
-  it('keeps exact or declines a raised colon container whose list ownership is unresolved', () => {
-    expectExactOrDeclined('- head\n\n      ::: note\n      a\n- second\n')
+  it('keeps a root list sibling outside the raised colon paragraph', () => {
+    const source = '- head\n\n      ::: note\n      a\n- second\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it.each(['- item\n  %%%\n  [r]: /url\n  %%%\n\n[r][]\n',
@@ -3093,9 +3203,9 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines an unclosed nested inline fence with a structural tail', () => {
-    expect(() => parseCursorPrototype('- a\n    - child\n    ```\n- next\n~~~\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('matches an unclosed nested fence with a structural tail', () => {
+    const source = '- a\n    - child\n    ```\n- next\n~~~\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('keeps exact or declines a nested fence whose dedented marker changes physical owner', () => {
@@ -3107,6 +3217,42 @@ describe('experimental block cursor', () => {
     ':: term\n%% c\n:: next\n',
     ':: c\n%% c\n\nend\n'])
   ('ends a term-only definition before a root line comment: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- item\n\n  :: c\n    %% note\n    more\n',
+    '- item\n\n  :: c\n    %%%\n    hidden\n    %%%\n    more\n',
+    'x[^n]\n\n- item\n\n  :: c\n    [^n]: y\n',
+    'x[^n]\n\n- :: c\n    %% note\n    [^n]: y\n',
+  ])('keeps an opaque follower under a list-owned term: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- :: t\n  : para\n  - li\n',
+    '- :: t\n  : para\n   - li\n',
+    '- :: t\n  : para\n %% c\n```\n',
+    '1. :: t\n   : para\n%% c\n```\nx\n',
+    '1. :: t\n   : para\n%% c\n```\n```\n',
+    '- :: t\n:  head\n\n     a\n',
+  ])('keeps a marker-line term through its following item boundary: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '- foo\n  - +\n  - x\n',
+    '- foo\n  - +\n  * x\n',
+    '- foo\n  - +\n  1. x\n',
+    '- foo\n  - +\n  - [ ] x\n',
+    '- foo\n  - +\n  - b\n',
+  ])('keeps a nested plus item empty before its sibling: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- foo\n  - +\n  + x\n',
+    '- foo\n  - +\n    - x\n'])
+  ('takes an authored first block after an indented plus item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
@@ -3134,6 +3280,162 @@ describe('experimental block cursor', () => {
     '- [^n]: text\n    %% c\n    ```\n    code\n    ```\nafter [^n]\n',
     '- [^n]: text\n\n    %% c\n    ```\n    code\n    ```\nafter [^n]\n'])
   ('hoists a marker-line footnote with its owned body: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['a[^1]\n\n[^1]: %% n\n',
+    'a[^1]\n\n[^1]: %%%\n  n\n  %%%\n',
+    'a[^1]\n\n[^1]: ```=latex\n  \\x\n  ```\n',
+    'a[^1]\n\n[^1]: ```=html\n  <b>x</b>\n  ```\n',
+    'a[^1]\n\n[^1]: %% n\n\n  ```=latex\n  \\x\n  ```\n'])
+  ('collects an opaque first block in a root footnote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '[^n]: intro\n\n    ![alt](image.png)\n    ^ Caption\n\nsee[^n]\n',
+    '[^n]: intro\n\n   ::: >\n   > quote\n   :::\n\nsee[^n]\n',
+    '[^outer]: intro\n\n     [^inner]: note\n\n     see[^inner]\n\nsee[^outer]\n',
+  ])('keeps an authored block after a root footnote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '[^n]: intro\n\n   :: term\n   :  definition\n\n      > quote\n\nsee[^n]\n',
+    '[^n]: intro\n\n   :: term\n   :  definition\n\n     > quote\n\nsee[^n]\n',
+    '[^n]: intro\n\n  :: term\n  :  definition\n\n     > quote\n\nsee[^n]\n',
+    '[^n]: intro\n\n   :: term\n   :  definition\n    > quote\n\nsee[^n]\n',
+    '[^f]: b\n\n  :: t\n  : d\n   [r]: /url\n\nSee [r][] and [^f].\n',
+  ])('keeps a definition body at its authored footnote floor: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    ':: t\n:  - a\n   [r]: /url\n\nSee [r][].\n',
+    ':: t\n:  - a\n    [r]: /url\n\nSee [r][].\n',
+    ':: t\n:  - a\n     [r]: /url\n\nSee [r][].\n',
+    ':: t\n: - a\n   [r]: /url\n\nSee [r][].\n',
+    ':: t\n:   - a\n     [r]: /url\n\nSee [r][].\n',
+    ':: t\n:  :: u\n   : d\n    [r]: /url\n\nSee [r][].\n',
+    ':: t\n: [^g]: b\n   [r]: /url\n\nSee [r][] and [^g].\n',
+  ])('hands a link definition below a block description back to the root: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    '> a\n> ::: note\n>  [r]: /url\n> :::\n\n[r][]\n',
+    '> a\n  ::: note\n   [r]: /url\n  :::\n\n[r][]\n',
+    'text\n:::\n  [r]: /u\n:::\n',
+  ])('collects a link definition before a closed colon owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([
+    'x[^n]\n\n[^n]: # H\n\n[H][]\n',
+    '[^n]: # H\n\n[H][]\n',
+    'x[^n]\n\n[^n]: # H\n\n</#H>\n',
+    '[^n]: # H\n\n</#H>\n',
+  ])('keeps a footnote heading visible to later references: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps the label on a titled footnotes directive', () => {
+    const source = '::: footnotes "Notes" [End]\n:::\n\nA[^1].\n\n[^1]: n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a list after a plus-attached paragraph before a root quote', () => {
+    const source = '- a\n+\npara\n> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- a\n+\n> x\n> y\n- next\n',
+    '- item\n+\n> note\n- next\n'])
+  ('keeps a sibling item after a plus-attached quote: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a detached list after a blank run in a root footnote', () => {
+    const source = 'See[^1].\n\n[^1]: - a\n\n\n\n  - b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['  > x\n  > y\n  > ```\n',
+    '  > x\n    > y\n  > ```\n',
+    '  > x\n  > ```\n  > y\n',
+    '  > x\n  > ```\n    > y\n',
+    '  > x\n  > ```\n\n  > y\n',
+    '  > x\n  > ```\n\n    > y\n'])
+  ('keeps a closed marker-line raw block in a list-owned quote: %s', (tail) => {
+    const source = `- > \`\`\`=html\n${tail}`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an indented marker as text in a list paragraph attached by plus', () => {
+    const source = '- a\n+\ntail\n  - c\n  text\n# Heading\n  ~~~\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('declines a task first-block fence that crosses its item column after a blank', () => {
+    expect(() => parseCursorPrototype('- [ ] +\n  ```\n  code\n\nafter\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it('declines a footnote plain run with an indented body after a blank', () => {
+    expect(() => parseCursorPrototype('a[^1]\n\n[^1]: +\nfoo\nbar\n\n  more\n'))
+      .toThrow(UnsupportedCursorSyntax)
+  })
+
+  it.each(['  - c\n  ::: note\n    - d\n>> 1. y\n    b\ntext\n',
+    '1. one\n\n    - d\n  - c\n  +\n',
+    '    - d\n- a\n  - c\n>> - z\n:  meaning\n[r]: /u\n```\n1. one\n'])
+  ('keeps a walk-owned lazy line in its list paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['1. one\n    - d\n:  meaning\ntext\n',
+    '- b\n    b\n  - c\n:  meaning\n  a\n[r]: /u\n>> 1. y\n'])
+  ('keeps a colon line claimed by nested list items in their paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['text\n> >- q\n> > deep\ntext\n> q\n> >- q\n',
+    '  ```\n  \n  ```\n\n> >- q\n> > deep\n>> - z\n',
+    '1. one\n  [^g]: more\n> >- q\n> > deep\n>> 1. y\n>> 1. y\n1. one\n# Heading\n',
+    '> >- q\n> > deep\ntail\n::: note\n',
+    '>> - z\n> >- q\n> > deep\ntext\ntext\n- b\n',
+    '> >- q\n+\n  text\n    - d\n  [^g]: more\n'])
+  ('keeps an attached nested quote marker in the open quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a plus and indented plain follower in a literal nested quote paragraph', () => {
+    const source = '    b\n> >- q\n+\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a colon-owned literal nested quote paragraph open through its plus tail', () => {
+    const source = '    - d\n:  meaning\n:::\n\n> >- q\n+\n  text\n> text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps adjacent quoted list text in a plus-attached quote paragraph', () => {
+    const source = '> >- q\n+\n>> 1. y\n>> - z\n```\n  ::: note\ntext\n  ~~~\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root list marker between quoted list lines in an attached paragraph', () => {
+    const source = '> >- q\n+\n>> 1. y\n- a\n>> - z\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a definition line in an attached quoted list paragraph', () => {
+    const source = '> >- q\n+\n>> - z\n:  meaning\n> > deep\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an open colon block in a plus-attached quote', () => {
+    const source = '> >- q\n+\n:::\n  :  nested\n> q\n'
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
@@ -3267,6 +3569,265 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
+  it.each(['  - c\n   \n    b\n', '- a\ntext\n    \n    b\n'])
+  ('loosens a root list across an owned whitespace-only gap: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a below-column list marker in an indented ordered-item paragraph', () => {
+    const source = '\n1. one\n    b\n  - c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an item tight when a whitespace gap leads into a footnote definition', () => {
+    const source = '- b\n\n  \n  [^g]: more\n    - d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['  a\n\n    - d\n    - d\n   \n- b\n',
+    '1. one\n    - d\n  \n- b\n'])
+  ('keeps a whitespace gap with the list level that owns the next marker: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a list tight across trailing blank lines with authored spaces', () => {
+    const source = '    - d\n\n  \n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a list tight before a colon opener after an owned whitespace line', () => {
+    const source = '  - c\n\n  \n::: note\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends an item at its last visible line before an outdented comment', () => {
+    const source = '  - c\n  \n%% c\n- b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('hands a definition at a description content column back to the root', () => {
+    const source = ':: term\n:  definition\n   [r]: /url\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('loosens a list across an owned whitespace gap before a description marker', () => {
+    const source = '- a\n- b\n   \n  :  nested\n- a\n    - d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('loosens a root item when a whitespace gap precedes its indented plus', () => {
+    const source = '- b\n   \n  +\n::: note\n> - x\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('attaches a heading after a quoted nested literal marker pair', () => {
+    const source = '> >- q\n>   - sub\n+\n# Heading\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a plus literal in a quoted paragraph before an indented text line', () => {
+    const source = '> >- q\n+\n  text\n:: term\n# Heading\n# Heading\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('attaches a final quote to a root item across a blank and plus marker', () => {
+    const source = '%% c\n- b\n\n+\n> text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps ordered siblings together across authored spaces and a blank', () => {
+    const source = '1. one\n  \n\n1. one\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a second indented paragraph in a root footnote after a blank', () => {
+    const source = '\n- a\n[^f]: note\n  text\n\n  a\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a second lazy colon line in a nested item paragraph', () => {
+    const source = ':::\n- b\n  - c\n:  meaning\ntext\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a quoted lazy line before a nested list in a colon item', () => {
+    const source = ':::\n# Heading\n1. one\ntail\n  - c\n>> 1. y\n    - d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('folds an underindented definition line into a list-owned term', () => {
+    const source = '- one\n  :: term\n :  def\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('strips authored indentation from a wrapped list-owned term', () => {
+    const source = '- one\n  :: term\n wrapped\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a flush-left wrapped term inside its list item', () => {
+    const source = '- one\n  :: term\nwrapped\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('carries a nested quote paragraph through a flush-left lazy line', () => {
+    const source = '    - d\n  :  nested\n> > deep\n> q\n> >- q\ntext\n  ~~~\n  ~~~\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps repeated quoted list markers literal in a nested paragraph', () => {
+    const source = '  a\n>   - sub\n> > deep\n> >- q\n> >- q\ntext\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['[r]: /u', '[r]: /u "T"', '[r]: /u {#x}'])
+  ('registers a standalone link definition in a list-owned quote: %s', (definition) => {
+    const source = `- a\n  > ${definition}\n\nsee [t][r]\n`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['[r]: /u', '[r]: /u "T"', '[r]: /u {#x}'])
+  ('registers a standalone link definition in a description: %s', (definition) => {
+    const source = `:: term\n:  ${definition}\n\nsee [t][r]\n`
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('registers a quoted definition after the quote paragraph', () => {
+    const source = '> text\n> [a]: /u {.c}\nlazy\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+
+  it('keeps a nested list inside a bounded root footnote body', () => {
+    const source = '[^a]: note\n\n  - one\n    - deep\n\n  end.\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a closed note container inside a bounded root footnote body', () => {
+    const source = '[^a]: note\n\n  ::: note\n  d\n  :::\n\nsee[^a]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a final ordered marker as lazy text after an indented plus', () => {
+    const source = '> - x\n\n  +\n1. one\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a shallower quote line in the nested quote paragraph after a lazy marker', () => {
+    const source = '# Heading\n> > deep\n>> 1. y\n> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root lazy line in a nested quote after a quoted literal marker', () => {
+    const source = '> > deep\n> >- q\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a document-level lazy line after an item literal definition', () => {
+    const source = '%% c\n- a\n  :  nested\ntext\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a colon-owned quote paragraph through an item marker and its lazy text', () => {
+    const source = ':::\n::: note\n> q\n  - c\n    b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a colon-owned item through a literal definition and lazy text', () => {
+    const source = '  ::: note\n  - c\n:  meaning\n  a\n  ::: note\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a run of root comments in a list before its next sibling', () => {
+    const source = '- a\n%% c\n%% c\n- b\n  :::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a plus after a lazy nested quote paragraph line', () => {
+    const source = '> text\n>> 1. y\n+\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a description marker as literal text after a colon-owned quote item', () => {
+    const source = '::: note\n> q\n  - c\n:  meaning\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a list open across a root link definition after lazy item text', () => {
+    const source = '- b\n  :  nested\ntext\n  [r]: /u\n%% c\n- a\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a nested colon footnote lazy item inside the note owner', () => {
+    const source = ':::\n  ::: note\n  [^g]: more\n- b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an indented literal definition and following text in a colon-owned item', () => {
+    const source = '::: note\n1. one\n  :  nested\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps text after a lazy quoted literal in a nested colon item', () => {
+    const source = ':::\n::: note\n1. one\n>> 1. y\ntext\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps an item marker and its next line in the inner quote paragraph', () => {
+    const source = '> > deep\n> - x\n> text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a root-level quoted list marker in the nested quote paragraph', () => {
+    const source = '> > deep\n> >- q\n>> - z\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a colon-level lazy marker and text in the inner quote paragraph', () => {
+    const source = '::: note\n> > deep\n- b\n>> 1. y\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a description plus attachment before the next root quote', () => {
+    const source = ':: t\n:  a\n+\npara\n> q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a below-column plus and plain line in the definition paragraph', () => {
+    const source = ':: term\n:  intro\n+\n  more\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('releases a wrapped floating attribute after a description body', () => {
+    const source = ':: t\n:  d\n   {.k\n   #x}\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a closed description fence before a below-column root line', () => {
+    const source = ':: term\n:  definition\n   ```\n   c\n   ```\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('ends a closed description colon container before a root line', () => {
+    const source = ':: term\n:  definition\n   ::: note\n   body\n   :::\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a fenced literal colon line inside a closed description container', () => {
+    const source = ':: term\n:  definition\n   ::: note\n   ```\n   :::\n   ```\n   :::\ntail\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each([':: t\n:  x\n%%%\ny\nz\n', ':: t\n:  x\n%%%\n   more\n'])
+  ('ends a description before an unmatched below-column comment fence: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it('keeps a literal description line with the nested quote lazy paragraph', () => {
+    const source = '> > deep\n>   - sub\n  :  nested\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
   it.each(['- > q\n\n   ```=html\n   <b>c</b>\n   ```\n',
     '- > q\n\n        ```=html\n        <b>c</b>\n        ```\n'])
   ('reads a shifted raw fence after a blank in a list-owned quote: %s', (source) => {
@@ -3372,9 +3933,34 @@ describe('experimental block cursor', () => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
-  it('declines a definition inside a nested quote until its owner is indexed', () => {
-    expect(() => parseCursorPrototype('> > [r]: /u\ntail\n\n[r][]\n'))
-      .toThrow(UnsupportedCursorSyntax)
+  it('keeps the outer span of a nested quote definition at its marker', () => {
+    const source = '> > [r]: /u\ntail\n\n[r][]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['> - [d]: u\n\n[go][d]\n',
+    '> r\n>\n> - [d]: u\n\n[go][d]\n'])
+  ('keeps a quoted marker-line definition at its authored span: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['[f]: t\n* [d]: u\n\n[go][d]\n',
+    '-   lead\n - prose\n - [t]: /t\n\nSee [t][].\n'])
+  ('registers a root marker-line definition at its authored span: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['* * [d]: u\n :\n', '* * [d]: u\n  :\n',
+    '* * [d]: u\n    :\n',
+    '* * [d]: u\n%%\n:\n'])
+  ('registers a nested marker-line definition without widening the outer item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+  })
+
+  it.each(['- lead\n  - [t]: /t\n\nSee [t][].\n',
+    '-   lead\n    - [t]: /t\n\nSee [t][].\n'])
+  ('keeps an indented marker-line definition inside its list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
   })
 
   it('declines a list-owned quoted definition with unresolved line ownership', () => {
@@ -3481,6 +4067,306 @@ describe('experimental block cursor', () => {
 
   it('attaches a plain first block after a quote blank and continuation marker', () => {
     const source = '> intro\n>\n+\nmore\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a nested quoted list marker after its continuation marker', () => {
+    const source = '> >- q\n+\n>> - z\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a definition line with its quoted literal list paragraph', () => {
+    const source = '> >- q\n+\n:  meaning\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps an end marker inside an open quoted list paragraph', () => {
+    const source = '> text\n>   - sub\n+\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a lazy list line in the quote after a continuation marker', () => {
+    const source = '> text\n>   - sub\n+\n1. one\n  a\n  ~~~\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps repeated literal list markers in the inner quoted paragraph', () => {
+    const source = '> > deep\n> >- q\n> >- q\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a lazy plus line in a nested quoted paragraph', () => {
+    const source = '> > deep\n> >- q\n  +\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps an indented lazy text line in a nested quoted paragraph', () => {
+    const source = '> > deep\n> >- q\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps an indented definition literal after a quoted continuation', () => {
+    const source = '> >- q\n+\n  :  nested\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a four-column literal after a quoted continuation', () => {
+    const source = '> >- q\n+\n    b\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a final plus line with a quoted literal list marker', () => {
+    const source = '> q\n> >- q\n+\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a below-column list marker owned by an open colon list item', () => {
+    const source = '::: note\n1. one\n  - c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('collects a single footnote definition in a root colon body', () => {
+    const source = ':: term\n:  [^f]: x\n\nsee[^f]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a list-owned lazy line in a footnote paragraph', () => {
+    const source = '- a\n  [^f]: t\n    more\n  b\n\nx[^f]\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- > - - x\n  >     [^f]: note\n\nSee [^f].\n',
+    '> 1. para\n>    [^f]: n\n```\ncode\n'])
+  ('collects a footnote in a quoted list owner: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('collects a footnote in a list owned by a colon container', () => {
+    const source = '::: note\n- a\n  [^g]: more\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('collects a plain footnote after a list continuation marker', () => {
+    const source = '- a\n  +\n  [^g]: more\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('collects a plain footnote after a list-owned literal', () => {
+    const source = '- b\n  :  nested\n  [^g]: more\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['1. one\n  \n1. one\n', '1. one\n>> - z\n  \n1. one\n'])
+  ('keeps ordered list siblings across an owned whitespace line: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a nested item after whitespace owned by its parent list', () => {
+    const source = '1. one\n  \n    - d\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a final plus line in a colon-owned footnote paragraph', () => {
+    const source = ':::\n  [^g]: more\n  +\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['> > deep\n> >- q\n:  meaning\n',
+    '> > deep\n>   - sub\n:  meaning\n'])
+  ('keeps a flush-left definition literal in the nested quote paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('attaches a quoted block after a quoted item continuation', () => {
+    const source = '> text\n>   - sub\n+\n> text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- a\n  :  nested\n>> - z\n', '- b\n  :  nested\n>> - z\n'])
+  ('keeps a nested quoted marker after a list-owned definition literal: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a flush-left definition literal after a list-owned literal', () => {
+    const source = '- a\n  :  nested\n:  meaning\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a final plus line after repeated quoted list literals', () => {
+    const source = '> q\n>   - sub\n>   - sub\n+\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a below-column item after a lazy definition line in an ordered list', () => {
+    const source = '1. one\n:  meaning\n  - c\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a line comment after a blank inside a list before its sibling', () => {
+    const source = '- a\n\n%% c\n- b\n>> - z\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each([':::\n> q\n- a\n  +\n',
+    '> q\n:::\n\n> text\n    - d\n  +\n  - c\n%% c\n',
+    '    - d\n::: note\n> text\n1. one\n  +\n  :::\ntext\n'])
+  ('keeps a plus line with its colon-owned quote item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps an indented plus after colon-owned nested quote text in its list item', () => {
+    const source = ':::\n    - d\n>> - z\n  +\n  [^g]: more\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- b\n  text\n\n  +\n>> - z\n::: note\n  text\n',
+    '- a\n\n  +\n:  meaning\n',
+    '- a\n\n  +\n>> 1. y\n\n'])
+  ('keeps a lazy follower after a blank plus in its list item: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['tail\n  :::\ntext\n> q\n- b\n>> 1. y\n',
+    '::: note\n- a\n> q\n  ```\n  ```\n> text\n  - c\n>> - z\n',
+    '    b\n::: note\n> text\n    - d\n    b\n    - d\n>> - z\n',
+    ':::\n> q\n> > deep\n    - d\n- b\n>> - z\n',
+    '  :::\n> text\n> text\n- b\n>> - z\n- b\n',
+    '  +\n  [r]: /u\n  ::: note\n> q\n1. one\n>> - z\n> > deep\n>> 1. y\n'])
+  ('keeps a colon-owned quoted list marker in its paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['  ::: note\n  [^g]: more\n> q\n> q\n>> 1. y\ntail\n[^f]: note\n> q\n',
+    '  :::\n  text\n> q\n>> 1. y\n  a\n',
+    '  ::: note\n> text\n>> 1. y\n    b\n'])
+  ('keeps a colon-owned quote text follower in its paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['    b\n  - c\n:::\n>> - z\n> text\n>> - z\n:  meaning\n>> 1. y\n',
+    '  a\n  ::: note\n    - d\n> text\n>> 1. y\n:  meaning\n',
+    '  ::: note\n> text\n>> - z\n:  meaning\n    - d\n>   - sub\n'])
+  ('keeps a colon-owned quote definition line in its paragraph: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['+\n:::\n    - d\n:  meaning\n>> - z\n:::\n',
+    '> q\n%% c\n:  meaning\n:::\n  - c\n  - c\n:  meaning\n>> 1. y\n',
+    '  +\n:::\n  ::: note\n1. one\n  :  nested\n>> 1. y\n'])
+  ('keeps a colon-owned quoted marker after a list definition literal: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- x\n  :::\n  a\n\n  b\n  :::\n',
+    '- ::: d\n  b\n\n  tail\n  :::\n',
+    '- x\n\n  ::: d\n  a\n\n  b\n  :::\n- z\n'])
+  ('keeps a blank inside a list-owned colon container without loosening the list: %s', (source) => {
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a blank inside a raised list-owned note without loosening the list', () => {
+    const source = '- a\n  ::: note\n   first\n\n   second\n  :::\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a colon-owned definition line after quoted list text', () => {
+    const source = ':  meaning\n  - c\n  ::: note\n- b\n>> 1. y\n:  meaning\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a repeated colon-owned quoted list marker in its paragraph', () => {
+    const source = '# Heading\n>> - z\n  ::: note\n1. one\n>> 1. y\n>> - z\n\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it('keeps a raised colon-owned text follower after quoted list text', () => {
+    const source = '  [^g]: more\n:::\n  - c\n>> - z\n  text\n'
+    expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
+    expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
+      parse(source, { positions: false }))
+  })
+
+  it.each(['- x\n%%%\ny\n', '1. x\n%%%\ny\n',
+    '-   x\n%%%\ny\n', '- x\n%%%%\ny\n', '- x\n%%%\n- y\n'])
+  ('keeps a flush-left degraded comment after a root list item: %s', (source) => {
     expect(parseCursorPrototype(source)).toStrictEqual(parse(source))
     expect(parseCursorPrototype(source, { positions: false })).toStrictEqual(
       parse(source, { positions: false }))
@@ -3600,8 +4486,7 @@ describe('experimental block cursor', () => {
   })
 
   it.each(['- a\n  - +\n> q\ntail\n',
-    '1. a\n  - +\n> q\n',
-    '- a\n  - +\n  - b\n'])
+    '1. a\n  - +\n> q\n'])
   ('declines an unresolved indented first-block owner: %s', (source) => {
     expect(() => parseCursorPrototype(source)).toThrow(UnsupportedCursorSyntax)
   })
