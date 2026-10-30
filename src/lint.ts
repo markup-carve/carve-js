@@ -2839,6 +2839,7 @@ function collectAuthoringWarnings(
   lines: readonly string[],
   headings: readonly Positioned[],
   paragraphs: readonly Positioned[],
+  noteParagraphs: readonly Positioned[],
   tables: readonly Table[],
   verbatimLines: ReadonlySet<number>,
   listItemLines: ReadonlySet<number>,
@@ -2858,6 +2859,13 @@ function collectAuthoringWarnings(
       paragraphEndAt.set(line, end)
     }
   }
+  const noteParagraphAt = new Set<number>()
+  for (const p of noteParagraphs) {
+    const start = p.pos?.startLine
+    if (!start) continue
+    for (let line = start; line <= (p.pos?.endLine ?? start); line++) noteParagraphAt.add(line)
+  }
+  const foldable = (line: number): boolean => paragraphAt.has(line) || noteParagraphAt.has(line)
   const visible = (line: string): string => {
     let result = line.replace(/\\[\\`*_/<>()\[\]]/g, match => ' '.repeat(match.length))
     result = result.replace(/(`+)(?:(?!\1).)*\1/g, match => ' '.repeat(match.length))
@@ -2936,6 +2944,14 @@ function collectAuthoringWarnings(
     const column = prefix + stripped.search(/\S/) + 1
     const text = visibleAt(stripped, at, prefix)
     const row = rowAt.has(at)
+    if (foldable(at) && index > 0 && !listItemLines.has(at) &&
+        /^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(raw) &&
+        !/^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(lines[index - 1]!) &&
+        !/^\s*$/.test(lines[index - 1]!) && foldable(at - 1)) {
+      const markerColumn = /^(?:\s*> ?)*\s*/.exec(raw)?.[0].length ?? 0
+      push(at, markerColumn + 1, 1, 'list-marker-without-blank-line',
+        'This list marker is part of the preceding paragraph; add a blank line before the list.')
+    }
     if (paragraphAt.has(at)) {
       const shape = /^\s*\|(?:=|\s|[^\s|])/.exec(stripped)
       if (shape && !isTableRow(stripped.trimStart()) && /\S/.test(stripped.slice(stripped.indexOf('|') + 1)) &&
@@ -2943,14 +2959,6 @@ function collectAuthoringWarnings(
            isTableRow(stripContainerPrefixesKeepIndent(lines[index - 1] ?? '').trimStart()))) {
         push(at, Math.max(column, 1), 1, 'table-shaped-paragraph',
           'This table-shaped line lacks a closing pipe and renders as paragraph text; close the table row.')
-      }
-      if (index > 0 && !listItemLines.has(at) &&
-          /^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(raw) &&
-          !/^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(lines[index - 1]!) &&
-          !/^\s*$/.test(lines[index - 1]!) && paragraphAt.has(at - 1)) {
-        const markerColumn = /^(?:\s*> ?)*\s*/.exec(raw)?.[0].length ?? 0
-        push(at, markerColumn + 1, 1, 'list-marker-without-blank-line',
-          'This list marker is part of the preceding paragraph; add a blank line before the list.')
       }
       if (/^\s*:\s+\S/.test(stripped) && index > 0 && paragraphAt.has(at - 1) &&
           !/^\s*:: /.test(stripContainerPrefixesKeepIndent(lines[index - 1] ?? ''))) {
@@ -3077,21 +3085,24 @@ function collectSilentFailures(
     }
   }
   walk(doc.children)
-  // Footnote bodies sit outside `children`; only the span-marker rule reads their tables.
+  // Footnote bodies sit outside `children`; only the span-marker rule reads their tables
+  // and only the folded-marker rule their paragraphs.
   const spanTables = [...tables]
-  const walkTables = (value: unknown): void => {
+  const noteParagraphs: Positioned[] = []
+  const walkNotes = (value: unknown): void => {
     if (Array.isArray(value)) {
-      for (const item of value) walkTables(item)
+      for (const item of value) walkNotes(item)
       return
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
     if (node.type === 'table') spanTables.push(node as unknown as Table)
+    else if (node.type === 'paragraph') noteParagraphs.push(node as Positioned)
     for (const key of Object.keys(node)) {
-      if (key !== 'pos' && key !== 'attrs') walkTables(node[key])
+      if (key !== 'pos' && key !== 'attrs') walkNotes(node[key])
     }
   }
-  walkTables(Object.values(doc.footnoteDefs ?? {}))
+  walkNotes(Object.values(doc.footnoteDefs ?? {}))
 
   const listItemLines = new Set<number>()
   walkDocument(doc, node => {
@@ -3100,7 +3111,7 @@ function collectSilentFailures(
       if (line) listItemLines.add(line)
     }
   })
-  collectAuthoringWarnings(lines, headings, paragraphs, tables, verbatimLines, listItemLines, atomicSpans, pairedEmphasisOpeners, push, captionLookingParagraph)
+  collectAuthoringWarnings(lines, headings, paragraphs, noteParagraphs, tables, verbatimLines, listItemLines, atomicSpans, pairedEmphasisOpeners, push, captionLookingParagraph)
 
   // 1. Trailing attribute block on a heading: literal text, not attributes.
   for (const h of headings) {
