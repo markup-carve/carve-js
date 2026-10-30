@@ -269,11 +269,7 @@
   },
   "fmt-keeps-a-region-s-selection.test.ts": {
     "fmt keeps a region marker on its line (CARVE-P11-073) > \"- a\\n%% note\\n%% #endregion r\\n\" keeps its reading": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- x\\n  - y\\n%% #endregion r\\n\" keeps its reading": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > a-closer-after-a-list-stays-at-column-0: fmt writes the fixture bytes": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > a-closer-after-a-loose-list-stays-at-column-0: fmt writes the fixture bytes": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > nested-closers-after-a-list-stay-at-column-0: fmt writes the fixture bytes": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > normalization-outside-a-region-leaves-it-alone: fmt writes the fixture bytes": "#3921"
+    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- x\\n  - y\\n%% #endregion r\\n\" keeps its reading": "#3921"
   },
   "formatter-parity-regressions.test.ts": {
     "normalizes a constructed carriage return before guarding a quote line": "#3921"
@@ -286,9 +282,6 @@
     "review8-older-o01-overindented-verse-005": "#3922",
     "review8-older-o01-overindented-verse-008": "#3922",
     "review8-older-o01-overindented-verse-009": "#3922"
-  },
-  "include-conformance.test.ts": {
-    "include-conformance vectors (spec §19) > i01b-region-host-renders-no-marker [I1b]": "#3921"
   },
   "inline-fence-paragraph-resume.test.ts": {
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",

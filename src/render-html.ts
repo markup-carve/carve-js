@@ -1656,7 +1656,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
           if (visible.length === 1 && visible[0]!.type === 'paragraph') {
             const para = visible[0] as Paragraph
             const inner = renderInlines(para.children, opts)
-            const body = node.loose
+            const body = node.loose || para.attrs
               ? `<p${renderAttrs(para.attrs, 'p')}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p>`
               : inner
             lines.push(`${pad}  <dd${sourceLineAttr(opts, ddLine)}>${body}</dd>`)

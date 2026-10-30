@@ -1,3 +1,4 @@
+import { maskLiteralDirectiveTokens, unmaskLiteralDirectiveTokens } from './literal-directive-mask.js'
 import type {
   AnchorRange,
   CarveExtension,
@@ -718,7 +719,10 @@ export class InlineParseSession {
     source: InlineSource = inlineSource(),
     captionContext = false,
   ): InlineNode[] {
-    const nodes = applyAbbreviations(this.scanInline(text, source, false, captionContext), abbrDefs)
+    const masked = maskLiteralDirectiveTokens(text)
+    const scanned = this.scanInline(masked?.text ?? text, source, false, captionContext)
+    if (masked) unmaskLiteralDirectiveTokens(scanned, masked.base)
+    const nodes = applyAbbreviations(scanned, abbrDefs)
     return applyLinkDefs(nodes, linkDefs)
   }
 
