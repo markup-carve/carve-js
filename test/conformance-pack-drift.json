@@ -5,9 +5,7 @@
       "ticket": "markup-carve/carve#3972",
       "cause": "all three engines agree against the spec model",
       "cases": [
-        "combined-ad5cfc8e81bf",
         "notes-b468d41965eb",
-        "ownership-34529d739732",
         "ownership-bd5caf2c0c4d",
         "ownership-ca02e84b0d06",
         "plus-a27fafedeaa0"
@@ -31,14 +29,9 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the fences family",
       "cases": [
-        "fences-088d930244e3",
-        "fences-6bb4b2c08642",
         "fences-7ee69af861a0",
         "fences-a6ede733e700",
-        "fences-be8043b3def8",
-        "fences-beb7a2645809",
-        "fences-d34ea35bff3e",
-        "fences-dccc1ff8cf70"
+        "fences-beb7a2645809"
       ]
     },
     {
@@ -46,13 +39,9 @@
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
         "lazy-10bd0503f93b",
-        "lazy-408e39e5714b",
-        "lazy-478d76f7299c",
         "lazy-541f9f3b620e",
-        "lazy-593582276fea",
         "lazy-7eae4bb5a252",
         "lazy-7f31fa259b62",
-        "lazy-7f8806c2a9ca",
         "lazy-ce9301a4ca56",
         "lazy-fef11cbd6ca1"
       ]
@@ -67,14 +56,10 @@
         "notes-39d1eedf337b",
         "notes-414400566580",
         "notes-47da77f91f9b",
-        "notes-4c972a38291f",
         "notes-5078f8dc86e9",
         "notes-7758bc8d539d",
-        "notes-86ea59e81a65",
         "notes-a6dae860b308",
-        "notes-a97b2cad213a",
         "notes-ae1372f30051",
-        "notes-c3cbc4fb599c",
         "notes-dd130b0b59c1",
         "notes-de959a3190f7",
         "notes-eb2cca00af0d",
@@ -86,14 +71,9 @@
       "cause": "untriaged day-one drift in the ownership family",
       "cases": [
         "ownership-19a15d4c0b00",
-        "ownership-21a349103b78",
-        "ownership-25f36671ef59",
         "ownership-45bdb0dd8da8",
         "ownership-498f1450c332",
-        "ownership-4b546e287bf8",
-        "ownership-75f9e63b2e3f",
         "ownership-ae57ff05e447",
-        "ownership-bab956633134",
         "ownership-d2105c9747c5",
         "ownership-fdce37c2abe5"
       ]
@@ -102,9 +82,6 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the plus family",
       "cases": [
-        "plus-0ff7f319247d",
-        "plus-2d792d75e10d",
-        "plus-340779570d5c",
         "plus-40c8543fdc6b"
       ]
     },
@@ -112,19 +89,9 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the roundtrip family",
       "cases": [
-        "roundtrip-29bf84d5501e",
         "roundtrip-702a692a40ae",
         "roundtrip-73c51797f6b8",
         "roundtrip-96f5b8d50c36"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3989",
-      "cause": "a lone + after a blank does not attach a following fence to the list item",
-      "cases": [
-        "fences-06ce61cd4497",
-        "ownership-028a847df024",
-        "ownership-94b0c7c5deba"
       ]
     },
     {
@@ -164,6 +131,99 @@
         "lazy-e5f10323832e",
         "ownership-20db0db56577",
         "roundtrip-1a6a5531cfa5"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#4034",
+      "cause": "corpus rows and pack cases behind the model at spec pin c17e949c",
+      "cases": [
+        "attributes-4db504145296",
+        "fences-53415847bc3e",
+        "fences-9f02253fb10e",
+        "lazy-2f59307d9471",
+        "lazy-2f999a65c4be",
+        "lazy-409aff3004af",
+        "lazy-4bc0393d24b2",
+        "lazy-4ef9ea1e14a9",
+        "lazy-4f5eaac61ed4",
+        "lazy-5e6ce23bb8dc",
+        "lazy-6709b8b97bac",
+        "lazy-74bb39c5c4a8",
+        "lazy-828973d41d13",
+        "lazy-84f9facca8bb",
+        "lazy-90184211b66b",
+        "lazy-a38a85984127",
+        "lazy-af373c5a715b",
+        "lazy-db84134729ff",
+        "lazy-dc0e3940e686",
+        "lazy-e6257fa184f3",
+        "lazy-f60632f36c87",
+        "lazy-fbd48cd0e8d7",
+        "ownership-12346bae899f",
+        "ownership-2d7726aea29e",
+        "ownership-33fb6fb86551",
+        "ownership-5c23f3ce4ed2",
+        "ownership-7589507b556a",
+        "ownership-dd1f4ebccbb0",
+        "ownership-edfbea8daa50",
+        "plus-004eb64f6032",
+        "plus-01e20a4e5649",
+        "plus-0a5046ed3e16",
+        "plus-0f55213ea747",
+        "plus-1366ff31a77f",
+        "plus-14329123d7d9",
+        "plus-1be78b85626b",
+        "plus-28b84becf58f",
+        "plus-28f897eb9414",
+        "plus-2d1c64f5197e",
+        "plus-33bc143cd8b6",
+        "plus-3b4af4b2d7dc",
+        "plus-4524fdbdbbe4",
+        "plus-4a5157e6d93a",
+        "plus-4ca6c7db4d91",
+        "plus-4ea59fae1517",
+        "plus-4fe415fdc6bc",
+        "plus-58422ee0d791",
+        "plus-5cc45215985b",
+        "plus-601427e8efc3",
+        "plus-62fb5a2d0206",
+        "plus-65e223538f59",
+        "plus-668e6912c5a8",
+        "plus-6fd657d53e20",
+        "plus-71ede68f89e0",
+        "plus-74062b56b796",
+        "plus-80de61bd0c55",
+        "plus-82e77748384c",
+        "plus-886bf18f62c4",
+        "plus-8ca51ad695e7",
+        "plus-90e05278c3fc",
+        "plus-98b7d8ce27da",
+        "plus-98c900eeffd2",
+        "plus-9fcfdfad3154",
+        "plus-9ffe2385af32",
+        "plus-a3ec0f6acef5",
+        "plus-a6620a1e6b53",
+        "plus-ad8ea61ae9e3",
+        "plus-b014cab0c1c3",
+        "plus-b2e9e04d76df",
+        "plus-c0cf1c4d2743",
+        "plus-c4a0c635d16d",
+        "plus-cf5e2069858e",
+        "plus-d868f22d87eb",
+        "plus-d8ecf6263804",
+        "plus-df23a6e99260",
+        "plus-e283ab0023a1",
+        "plus-e6cc8ba0d9f9",
+        "plus-eb9794a2f7df",
+        "plus-ed4dc23f2524",
+        "plus-ede731381b2a",
+        "plus-f1de6cdd895c",
+        "plus-fceb407e4f30",
+        "plus-fdb7fc3fe315",
+        "plus-fe956b399843",
+        "roundtrip-0c1279f7ce48",
+        "roundtrip-c2a2864425dc",
+        "roundtrip-d27a8c0b8e38"
       ]
     }
   ]

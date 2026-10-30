@@ -4159,7 +4159,7 @@ class CarveRenderSession {
             this.indentedHostDepth--
           }
           // The canonical form keeps a description's lone `+` escaped (corpus 436).
-          if (written === '+' || written.startsWith('+\n')) written = '\\' + written
+          if (written.startsWith('+\n')) written = '\\' + written
         } finally {
           this.descriptionBody = outerDescriptionBody
         }

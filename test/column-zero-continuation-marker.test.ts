@@ -26,8 +26,8 @@ describe('column-zero continuation markers', () => {
     expect(html).toContain('<p>q\n+\npara</p>')
   })
 
-  it('attaches a quoted line below extra space after a quote marker', () => {
-    expect(carveToHtml('>   +\n> para')).toContain('<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>')
+  it('leaves a plus past the one space after a quote marker as text', () => {
+    expect(carveToHtml('>   +\n> para')).toContain('<blockquote><p>+\npara</p></blockquote>')
     expect(carveToHtml('> + \npara')).toContain('<p>para</p>')
     expect(carveToHtml('- a\n+ \nb')).toContain('<li>a\n    b\n  </li>')
   })
