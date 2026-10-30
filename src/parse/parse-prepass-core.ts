@@ -16,8 +16,9 @@ import { RE_INLINE_ATTR } from './inline/parse-inline-opaque.js'
 // headings, exactly like the caption rule. Leading spaces are folded into the
 // ` +` delimiter, so the content group starts at the first non-space; a NBSP
 // (U+00A0) counts as content, as everywhere else in the parser.
+// The content spends a whitespace run as one step, so the tail is tried once per run.
 export const RE_HEADING =
-  /^(#{1,6}) +((?=[ \t]*[^ \t\n\r]).+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/s
+  /^(#{1,6}) +((?=[ \t]*[^ \t\n\r])(?:[ \t]+(?=[^ \t])|[^ \t])+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
 
 // Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
 // (`---`, `***`, `___`, `----`), followed only by optional trailing
