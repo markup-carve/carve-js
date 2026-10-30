@@ -616,6 +616,8 @@ function isTaskList(list: List): boolean {
 }
 
 /** PART 11 §6g. An absent state is the default for the box. */
+const TASK_BOX_COLUMNS = '[ ] '.length
+
 function taskMarker(item: ListItem): string {
   return `[${item.taskState ?? (item.checked ? 'x' : ' ')}]`
 }
@@ -2690,6 +2692,7 @@ class CarveRenderSession {
   private alignTables = false
   private preserveTableSeparators = false
   private indentedHostDepth = 0
+  private pendingMarkerLineShift = 0
 
   private refusedSpans: SourceUnspellableError[] = []
 
@@ -3360,8 +3363,11 @@ class CarveRenderSession {
     this.descriptionParagraph = this.descriptionBody && ctx.atAnAuthoredBodyColumn && node.type === 'paragraph'
     const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
     ctx.atAnAuthoredBodyColumn = false
+    const markerLineShift = this.pendingMarkerLineShift
+    this.pendingMarkerLineShift = 0
     try {
-      return this.renderBlockBody(node, ctx)
+      const rendered = this.renderBlockBody(node, ctx)
+      return node.type === 'list' && !rendered.startsWith('{') && !renderAttrs(node.items[0]?.attrs) ? this.shiftContinuationLines(rendered, markerLineShift) : rendered
     } finally {
       this.escapeUnit = previous
       this.descriptionParagraph = previousDescriptionParagraph
@@ -3746,10 +3752,16 @@ class CarveRenderSession {
             return false
           }
         }
-        let itemSource = spellItem(this.renderListItem(item, ctx, node.tight))
+        const renderItem = (tight: boolean, relativePlus = false): string => {
+          this.pendingMarkerLineShift = item.checked === undefined || itemAttrs ? 0 : TASK_BOX_COLUMNS
+          const body = this.renderListItem(item, ctx, tight, relativePlus)
+          this.pendingMarkerLineShift = 0
+          return body
+        }
+        let itemSource = spellItem(renderItem(node.tight))
         if (needsReadback && !readsBack(itemSource)) {
-          const relative = spellItem(this.renderListItem(item, ctx, true, true))
-          itemSource = readsBack(relative) ? relative : spellItem(this.renderListItem(item, ctx, false))
+          const relative = spellItem(renderItem(true, true))
+          itemSource = readsBack(relative) ? relative : spellItem(renderItem(false))
         }
         out += itemSource
         if (!node.tight && idx < node.items.length - 1) out += '\n'
@@ -3872,6 +3884,15 @@ class CarveRenderSession {
       const kept = attrs && Object.entries(attrs).some(([key, slot]) => key !== 'order' || (slot as string[]).length > 0)
       return { ...heading, attrs: kept ? attrs : undefined }
     })) as T
+  }
+
+  // A sub-list on a task item's marker line owns the columns after the task box.
+  private shiftContinuationLines(rendered: string, shift: number): string {
+    if (shift === 0) return rendered
+    const tag = this.markerColumnTag()
+    const padding = ' '.repeat(shift)
+    return rendered.split('\n').map((line, index) =>
+      index === 0 || line === '' || line.startsWith(tag) ? line : `${padding}${line}`).join('\n')
   }
 
   private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus = false): string {
