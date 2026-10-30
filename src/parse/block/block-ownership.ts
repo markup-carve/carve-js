@@ -95,7 +95,7 @@ const NOTE_HEAD = /^\[\^[^\]]+\]: +/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
 const DD = /^:( +)(?=[ \t]*[^ \t])/
-const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r\f])(.*)$/
+const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r])(.*)$/
 const CAPTION = /^\^ (?=[^\n\r\u2028\u2029]*$)[ \t\f]*[^ \t\f]/
 const ATTR_BLOCK = `\\{(?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")*\\}`
 const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(?=.)`)
@@ -381,6 +381,8 @@ export function ownLines(
       if (!plusFollower) noteOpener(owner, form, owner.col)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
+      // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
+      if (form.kind === 'leaf' && CAPTION.test(m.rest)) owner.para = true
     }
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()

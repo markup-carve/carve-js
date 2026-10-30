@@ -2103,6 +2103,14 @@ function cellScopeAttr(cell: TableCell, isHeaderCell: boolean, inHeaderRun: bool
   return ` scope="${inHeaderRun ? 'col' : 'row'}"`
 }
 
+// A comment renders nothing, so a comment-only continuation cell adds no joining space (T6).
+function withoutCommentJoin(children: InlineNode[]): InlineNode[] {
+  const n = children.length
+  return n >= 2 && children[n - 1]!.type === 'comment' && children[n - 2]!.type === 'cell_wrap'
+    ? [...children.slice(0, n - 2), children[n - 1]!]
+    : children
+}
+
 function renderTableRowFlat(
   cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>,
   opts: RenderOptions,
@@ -2140,7 +2148,7 @@ function renderTableRowFlat(
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (styleAttrs.length ? ' ' + styleAttrs.join(' ') : '')
     const content = entry.cell.blocks === undefined
-      ? renderInlines(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? [], opts)
+      ? renderInlines(withoutCommentJoin(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? []), opts)
       : renderBlocks(entry.cell.blocks, opts, 0)
     parts.push(`<${tag}${attrStr}>${content}</${tag}>`)
   }
