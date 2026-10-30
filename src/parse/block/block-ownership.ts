@@ -1,4 +1,5 @@
 import { isValidAttrPayload } from '../../extension/attribute-parser.js'
+import { trimEndSpaceTab } from '../../trim-non-nbsp.js'
 import {
   isColonFenceOpener,
   isLinkDefLine,
@@ -83,7 +84,7 @@ const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
 const DD = /^:( +)(?=[ \t]*[^ \t])/
 const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r\f])(.*)$/
-const CAPTION = /^\^ +(?=.*[^ \t\n\r\f])(.*?)[ \t]*$/
+const CAPTION = /^\^ (?=[^\n\r\u2028\u2029]*$)[ \t\f]*[^ \t\f]/
 const ATTR_BLOCK = `\\{(?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")*\\}`
 const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(?=.)`)
 const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})?( +)(?=.)`)
@@ -130,7 +131,7 @@ function orderedTokenValid(token: string): boolean {
 }
 
 function matchMarker(rest: string): { width: number; head: number; axes: string } | null {
-  const line = rest.replace(/[ \t]+$/, '')
+  const line = trimEndSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
     return { width: 1 + (m[4] !== undefined ? 1 : m[3]!.length), head: m[0].length, axes: m[1]! }
@@ -491,12 +492,12 @@ export function ownLines(
   }
 
   function absorbsColon(rest: string): boolean {
-    const trimmed = rest.replace(/[ \t]+$/, '')
+    const trimmed = trimEndSpaceTab(rest)
     return COLON_FENCE.test(trimmed) && !isColonFenceOpener(trimmed)
   }
 
   function classify(rest: string, owner: Frame, at: number, col: number): Form {
-    rest = rest.replace(/[ \t]+$/, '')
+    rest = trimEndSpaceTab(rest)
     if (rest === '') return { kind: 'blank', interrupts: true }
     if (!OPENER_LEAD.test(rest)) return TEXT
     if (isQuoteLine(rest)) return { kind: 'quote', interrupts: true }
