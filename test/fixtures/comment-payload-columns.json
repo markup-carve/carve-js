@@ -3,49 +3,49 @@
     "name": "document",
     "source": "  %%%\n  x\n%%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "deeper document",
     "source": "  %%%\n    x\n  %%%\n",
     "expected": [
-      "    x"
+      "  x"
     ]
   },
   {
     "name": "shallower document",
     "source": "  %%%\n x\n%%%\n",
     "expected": [
-      " x"
+      "x"
     ]
   },
   {
     "name": "document tabs",
     "source": "\t%%%\n\tx\n%%%\n",
     "expected": [
-      "\tx"
+      "x"
     ]
   },
   {
     "name": "description",
     "source": ":: t\n:  head\n\n     %%%\n     x\n%%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "description deeper",
     "source": ":: t\n:  head\n\n     %%%\n       x\n  %%%\n",
     "expected": [
-      "    x"
+      "  x"
     ]
   },
   {
     "name": "item",
     "source": "- head\n\n    %%%\n    x\n%%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
@@ -66,49 +66,49 @@
     "name": "below with deeper payload",
     "source": "- a\n %%% n\n    x\n %%%\n tail\n",
     "expected": [
-      "n\n  x"
+      "n\n   x"
     ]
   },
   {
     "name": "partial tab",
     "source": "- a\n %%% n\n\tx\n %%%\n tail\n",
     "expected": [
-      "n\n  x"
+      "n\n   x"
     ]
   },
   {
     "name": "folded term",
     "source": ":: term\n  %%%\n  x\n  %%%\n:  def\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "quoted",
     "source": ">   %%%\n>   x\n> %%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "nested item",
     "source": "- outer\n  - head\n\n      %%%\n      x\n    %%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "note",
     "source": "see[^f]\n\n[^f]: head\n\n    %%%\n    x\n  %%%\n",
     "expected": [
-      "  x"
+      "x"
     ]
   },
   {
     "name": "whitespace payload",
     "source": "  %%%\n \n  x  \n   \n%%%\n",
     "expected": [
-      " \n  x  \n   "
+      "\nx  \n "
     ]
   },
   {
@@ -151,14 +151,14 @@
     "name": "nested below unordered",
     "source": "- a\n  - b\n %%%\n  x\n %%%\n",
     "expected": [
-      "x"
+      " x"
     ]
   },
   {
     "name": "nested below ordered",
     "source": "1. a\n    - b\n  %%%\n    x\n  %%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
@@ -193,14 +193,14 @@
     "name": "nested below-column blank payload",
     "source": "- a\n  - b\n %%%\n\n      y\n %%%\n",
     "expected": [
-      "\n  y"
+      "\n     y"
     ]
   },
   {
     "name": "nested below-column interior blank payload",
     "source": "- a\n  - b\n %%%\n  x\n\n      y\n %%%\n",
     "expected": [
-      "x\n\n  y"
+      " x\n\n     y"
     ]
   }
 ]
