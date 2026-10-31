@@ -42,7 +42,7 @@ describe('recognition, rendering and positions', () => {
   })
 
   it('accepts content tabs after a required marker separator', () => {
-    expect(carveToHtml('-{} \tx\n')).toBe('<ul>\n  <li>x</li>\n</ul>')
+    expect(carveToHtml('-{} \tx\n')).toBe('<ul>\n  <li>\tx</li>\n</ul>')
     expect(carveToHtml('-{}\tx\n')).toBe('<p>-{}\tx</p>')
   })
 

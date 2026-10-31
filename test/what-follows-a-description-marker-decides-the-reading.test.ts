@@ -38,7 +38,7 @@ describe('what follows a description marker decides the reading', () => {
     // A separator and content: the description opens.
     ['a space then text', ': y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
     ['two spaces then text', ':  y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
-    ['a space, a tab, then text', ': \ty', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
+    ['a space, a tab, then text', ': \ty', '<dl> <dt>t</dt> <dd> y x</dd> </dl>'],
     ['a space then a vertical tab', ': \v', '<dl> <dt>t</dt> <dd> x</dd> </dl>'],
     ['a space then a no-break space', ': \u00a0', '<dl> <dt>t</dt> <dd>&nbsp; x</dd> </dl>'],
     ['a space then a brace pair', ': {}', '<dl> <dt>t</dt> <dd>{} x</dd> </dl>'],

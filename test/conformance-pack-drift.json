@@ -2,6 +2,14 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4610",
+      "cause": "the pinned spec model predates the ruling that a tab after a marker separator is content and keeps the content column",
+      "cases": [
+        "fences-beb7a2645809",
+        "notes-d0f399e3e8f0"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4447",
       "cause": "the pinned spec model predates the ruling that the block after an attribute run, not the run, decides whether a + attaches",
       "cases": [

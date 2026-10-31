@@ -184,15 +184,6 @@ function orderedTokenValid(token: string): boolean {
   return /^[ivxlcdm]+$/.test(token.toLowerCase()) || /^[a-z]$/i.test(token)
 }
 
-// CARVE-P2-010: a tab that begins the content is leading whitespace, so the content column is where the content starts.
-function leadTabWidth(line: string, head: number, width: number): number {
-  const run = /^\t[ \t]*/.exec(line.slice(head))?.[0]
-  if (run === undefined || line.startsWith('%%%', head + 1)) return width
-  let end = width
-  for (const char of run) end = char === '\t' ? end + 4 - end % 4 : end + 1
-  return end
-}
-
 interface MarkerAxes {
   axes?: string | undefined
   task?: boolean | undefined
@@ -211,11 +202,11 @@ function matchMarker(rest: string): { width: number; head: number; axes: string;
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
     if (m[4] !== undefined) return { width: 2, head: m[0].length, axes: m[1]!, task: true }
-    return { width: leadTabWidth(line, m[0].length, 1 + m[3]!.length), head: m[0].length, axes: m[1]!, task: false }
+    return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: false }
   }
   m = ORDERED.exec(line)
   if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3])) {
-    return { width: leadTabWidth(line, m[0].length, m[1]!.length + 1 + m[4]!.length), head: m[0].length, axes: m[2]!, task: false, token: m[1]! }
+    return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]!, task: false, token: m[1]! }
   }
   return null
 }
@@ -669,12 +660,14 @@ export function ownLines(
     // The rest of a marker line. Only a quote starts new coordinates, so only there can its content move.
     function content(frame: Frame, start: number, canon: number): void {
       if (m.rest === '' || frames.length > MAX_FRAMES) return
-      const form = classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
+      const leadTab = src.slice(0, src.length - m.rest.length).includes('\t')
+      // CARVE-P2-010: behind an item marker's tab the line is text, whatever it spells.
+      // A quote's lazy reading of that shape is still open (carve#4404), so a quoted stack keeps the shape.
+      const form = leadTab && !frames.some((f) => f.kind === 'quote') ? TEXT : classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
       if (form.kind === 'text') {
         if (CONT_MARKER.test(m.rest)) {
           frame.plusBody = true
           // Past the one space after a `>` and behind a lead tab, the `+` is text.
-          const leadTab = src.slice(0, src.length - m.rest.length).includes('\t')
           const reason = frame.kind === 'quote' && m.col > 0 || leadTab ? 'right'
             : refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind)
           if (reason !== null) {

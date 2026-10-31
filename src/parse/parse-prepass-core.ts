@@ -83,7 +83,7 @@ export const RE_FENCE = balancedLabelMatcher(
   [5, 7, 8],
 )
 
-export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t\r\n][^\r\n]*)$/
+export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +(?! )([ \t]*[^ \t\r\n][^\r\n]*)$/
 
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
@@ -97,7 +97,7 @@ export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t\r\n][^\r\n]*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 export const RE_ORDERED =
-  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*([^ \t\r\n][^\r\n]*)$/
+  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +(?! )([ \t]*[^ \t\r\n][^\r\n]*)$/
 
 // Task states: `x`/`X` are checked; ` `, `_`, `-`, `/`, `!`, `>`, and `?`
 // render as unchecked checkboxes. `_` is an open-state alias.
@@ -244,7 +244,7 @@ export const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // Groups: 2 label (bracketed).
 export const RE_DIV_OPEN = balancedLabelMatcher(/^(:{3,}) *(?:(\[[^\n]*\])[ \t]*|\t[ \t]*)?$/, [2])
 
-export const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/s
+export const RE_DEFLIST_TERM = /^::(?!:) +(?! )(?=[ \t]*[^ \t])(.+)$/s
 
 /**
  * `*[ABBR]: expansion`, the only shape a definition line has.

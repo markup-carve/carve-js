@@ -79,7 +79,7 @@ for (const marker of ['> ', '- ']) {
 for (const [source, offsets] of [
   ['>\n> x\n', [4]],
   ['-   x\n', [4]],
-  ['* \tx\n', [3]],
+  ['* \tx\n', [2]],
   ['> x\r\n> y\r\n', [2, 7]],
   ['- x\r\n  y\r\n', [2, 7]],
   ['> - x\n', [4]],
