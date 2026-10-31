@@ -55,25 +55,7 @@
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },
   "comment-payload-columns.test.ts": {
-    "comment payload columns (carve#2535) > 'below with deeper payload'": "#3921",
-    "comment payload columns (carve#2535) > 'deeper document'": "#3921",
-    "comment payload columns (carve#2535) > 'description deeper'": "#3921",
-    "comment payload columns (carve#2535) > 'description'": "#3921",
-    "comment payload columns (carve#2535) > 'document tabs'": "#3921",
-    "comment payload columns (carve#2535) > 'document'": "#3921",
-    "comment payload columns (carve#2535) > 'folded term'": "#3921",
-    "comment payload columns (carve#2535) > 'item'": "#3921",
-    "comment payload columns (carve#2535) > 'nested below ordered'": "#3921",
-    "comment payload columns (carve#2535) > 'nested below unordered'": "#3921",
-    "comment payload columns (carve#2535) > 'nested below-column blank payload'": "#3921",
-    "comment payload columns (carve#2535) > 'nested below-column interior blank pa…'": "#3921",
-    "comment payload columns (carve#2535) > 'nested item'": "#3921",
-    "comment payload columns (carve#2535) > 'note'": "#3921",
-    "comment payload columns (carve#2535) > 'partial tab'": "#3921",
-    "comment payload columns (carve#2535) > 'quoted'": "#3921",
-    "comment payload columns (carve#2535) > 'shallower document'": "#3921",
-    "comment payload columns (carve#2535) > 'two spans'": "#3921",
-    "comment payload columns (carve#2535) > 'whitespace payload'": "#3921"
+    "comment payload columns (carve#2535) > 'two spans'": "#3921"
   },
   "continued-marker-note-code.test.ts": {
     "keeps continued marker-note and list CODE ownership: marker-note-199": "#3922",
