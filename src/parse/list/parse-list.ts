@@ -3171,9 +3171,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
           if (width < 0) width = markerContentColumn(markerText)
           nestedListContentColumn = width < 0 ? undefined : markerColumn + width
-        } else if ((child.type === 'block_quote' || child.type === 'admonition') &&
-            nestedListContentColumn !== undefined && rootLine !== undefined &&
-            sourceColumn(rootLine) < nestedListContentColumn) {
+        } else if (child.type !== 'paragraph' && nestedListContentColumn !== undefined && rootLine !== undefined &&
+            sourceColumn(rootLine, itemQuoteDepth) < nestedListContentColumn) {
           // A later block below the child's column returns ownership to this
           // item. The following paragraph cannot inherit that child's column.
           nestedListContentColumn = undefined
