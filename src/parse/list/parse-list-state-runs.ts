@@ -1,5 +1,6 @@
 import type { ItemLazyState, ItemLineFacts, BlockQuoteLazyState } from '../../parse.js'
 import { isBlankLine, sliceColumns } from '../parse-lexer.js'
+import { markerLineBottomBlock, opensCodeFence } from '../block/parse-quote-core.js'
 import type { listStateHelpers } from '../../parse.js'
 
 export type CommentCloser = (fence: number) => boolean
@@ -38,6 +39,20 @@ export interface LazyLine {
   runColumns: number | undefined
   readFlush: boolean
   readDescendant: boolean
+}
+
+/**
+ * A marker between the frame item's marker and content columns folds into its
+ * paragraph as text (PART 0 S4), so a fence behind that marker opens nothing.
+ * `column` is the line's run in the parent's coordinates.
+ */
+export function foldsFenceIntoFrame(frame: ItemLazyState | null | undefined, column: number, text: string): boolean {
+  if (!frame || frame.frameColumn === undefined || frame.ownedAuthored || !frame.lazyFoldable || frame.opaque !== null) return false
+  if (frame.ownedMarker === undefined || frame.ownedColumn < 0) return false
+  const residual = column - frame.frameColumn
+  if (residual <= frame.ownedMarker || residual >= frame.ownedColumn) return false
+  const bottom = markerLineBottomBlock(text)
+  return bottom !== text && opensCodeFence(bottom)
 }
 
 /** A phase returns true when it has decided the line and the rest are skipped. */
@@ -236,12 +251,17 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const { content, state, facts } = line
     if (!line.readDescendant || state.inDefList !== false) return false
     const run = line.run!
+    if (foldsFenceIntoFrame(state.deepest, line.runColumns!, content.slice(run))) {
+      state.inDefList = false
+      return true
+    }
     // A footnote body is measured from the note's column, so its continuation keeps that offset.
     const dedented = state.deepest?.inFootnoteBody === true
       ? sliceColumns(content, state.ownedColumn, true)
       : content.slice(run)
     const inner = (state.deepest ??= {
       ...verbatimOnlyLazyState(),
+      frameColumn: line.runColumns!,
       // The marker line's quote is the sub-item's first block, so its next line continues it.
       quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
       // So is a malformed fence there, which absorbs the bare run below it.
