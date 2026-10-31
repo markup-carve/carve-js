@@ -2,6 +2,16 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4449",
+      "cause": "the pinned pack predates the ruling that invisible lines do not consume a continuation marker",
+      "cases": [
+        "notes-ab5ed6124fb2",
+        "notes-df25868243ba",
+        "notes-e344b261ace5",
+        "notes-f9f3443c5601"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4412",
       "cause": "the pinned pack predates the ruling that an abbreviation definition missing every container frame defines at document level",
       "cases": [

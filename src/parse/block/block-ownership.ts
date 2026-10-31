@@ -323,7 +323,7 @@ export function ownLines(
   const refusedPlus: RefusedPlus[] = []
   const skippedAbbreviations = new Map<number, [string, string]>()
   const separatingAbbreviations = new Set<number>()
-  const skippedComments = new Set<number>()
+  const skippedComments = new Map<number, string>()
   const skippedNotes = new Set<number>()
   const payloadLines = new Set<number>()
   const overindented: OverindentedOpener[] = []
@@ -334,7 +334,7 @@ export function ownLines(
       continue
     }
     if (skippedComments.has(at)) {
-      result.push('%%')
+      result.push(skippedComments.get(at)!)
       continue
     }
     if (skippedNotes.has(at)) {
@@ -849,7 +849,20 @@ export function ownLines(
         skippedAbbreviations.set(index, [name, value])
         if (reason !== null) separatingAbbreviations.add(index)
       }
-      if (reason === null) for (const index of comments) skippedComments.add(index)
+      for (const index of comments) {
+        let rest = lines[index]!
+        let prefix = ''
+        for (let q = 0; q < quotes; q++) {
+          const measured = indentCols(rest)
+          if (!isQuoteLine(measured.rest)) break
+          const body = quoteRest(measured.rest)
+          prefix += rest.slice(0, rest.length - body.length)
+          rest = body
+        }
+        if (reason !== null && !isLinkDefLine(rest.trimStart()) &&
+            !FOOTNOTE_DEF.test(rest.trimStart()) && !RE_ABBR_DEF.test(rest.trimStart())) continue
+        skippedComments.set(index, prefix + '%%')
+      }
       for (const index of notes) skippedNotes.add(index)
       return reason
     }
