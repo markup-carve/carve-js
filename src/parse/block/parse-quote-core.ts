@@ -1627,6 +1627,55 @@ export function opensSublistHere(lexer: Lexer, ln: string, i: number, enabled: b
   )
 }
 
+/**
+ * The closing lines a marker at its host column writes for the fences a body leaves open,
+ * innermost first (PART 9 §17 L4: the fence ends before the attached block begins).
+ * Resumes where the previous call stopped, so a body with many markers is read once.
+ */
+export function openFenceScanner(): (lines: readonly string[]) => string[] {
+  let at = 0
+  let code: string | undefined
+  let comment: number | undefined
+  let colons: number[] = []
+  return (lines) => {
+    if (lines.length < at) {
+      at = 0
+      code = undefined
+      comment = undefined
+      colons = []
+    }
+    for (; at < lines.length; at++) {
+      const text = lines[at]!.trimStart()
+      if (code !== undefined) {
+        if (fenceCloseRe(code).test(text)) code = undefined
+        continue
+      }
+      // A comment span is opaque and closes only on its own width (PART 9 §28).
+      const commentRun = commentFenceRun(text)
+      if (comment !== undefined) {
+        if (commentRun === comment) comment = undefined
+        continue
+      }
+      if (commentRun !== undefined) {
+        comment = commentRun
+        continue
+      }
+      if (opensCodeFence(text)) {
+        code = /^(`{3,}|~{3,})/.exec(text)![1]!
+        continue
+      }
+      const close = RE_ADMONITION_CLOSE.exec(text)
+      const open = close ? colons.lastIndexOf(close[1]!.length) : -1
+      if (open >= 0) colons.length = open
+      else {
+        const run = colonBlockOpenerRun(text)
+        if (run !== null) colons.push(run)
+      }
+    }
+    return [...(code === undefined ? [] : [code]), ...colons.map(run => ':'.repeat(run)).reverse()]
+  }
+}
+
 export function hostedAuthoredBlockOpener(text: string): boolean {
   return RE_FENCE.test(text) || RE_RAW_FENCE.test(text) || RE_HEADING.test(text) ||
     RE_BLOCKQUOTE.test(text) || RE_HR.test(text) || isTableRow(text) ||

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "description-code",
+    "source": ":: t\n: ```\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-tilde-heading",
+    "source": ":: t\n: ~~~\n+\n# h\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n    <h1 id=\"h\">h</h1>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-payload",
+    "source": ":: t\n: ```\n  x\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>x\n</code></pre>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-longer-run",
+    "source": ":: t\n: ````\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-body-fence",
+    "source": ":: t\n: a\n  ```\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <pre><code></code></pre>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-colon",
+    "source": ":: t\n: :::\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <div>\n\n    </div>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "quoted-description",
+    "source": "> :: t\n> : ```\n> +\n> > q\n",
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <pre><code></code></pre>\n      <blockquote><p>q</p></blockquote>\n    </dd>\n  </dl>\n</blockquote>"
+  },
+  {
+    "id": "footnote-code",
+    "source": "[^n]: ```\n+\n> q\n\nr[^n]\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <pre><code></code></pre>\n      <blockquote><p>q</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "footnote-paragraph",
+    "source": "[^n]: ```\n+\npara\n\nr[^n]\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <pre><code></code></pre>\n      <p>para<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "footnote-body-fence",
+    "source": "[^n]: a\n  ```\n+\n> q\n\nr[^n]\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a</p>\n      <pre><code></code></pre>\n      <blockquote><p>q</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "closed-fence-unchanged",
+    "source": ":: t\n: ```\n  ```\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "description-fence-inside-a-comment",
+    "source": ":: t\n: %%%\n  ```\n  %%%\n+\n> q\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>"
+  },
+  {
+    "id": "footnote-fence-inside-a-comment",
+    "source": "[^n]: %%%\n  ```\n  %%%\n+\n> q\n\nr[^n]\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote><p>q</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  }
+]
