@@ -568,7 +568,14 @@ export function ownLines(
       const next = frames[reached + 1]
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
         !(form.kind === 'item' && next?.kind === 'item' && sameListAxes(next, form)) &&
-        !(missedNote && form.kind === 'item' && frames.slice(reached + 1).some((f) => f.kind === 'item'))
+        !(missedNote && form.kind === 'item' && opensBesideMissedItem(form))
+    }
+
+    // Past a missed item a marker opens, unless it stands between a missed item's marker and content
+    // columns and differs on any axis: that one is text of the open paragraph (carve#4545).
+    function opensBesideMissedItem(form: Form): boolean {
+      const items = frames.slice(reached + 1).filter((f) => f.kind === 'item')
+      return items.length > 0 && !items.some((f) => m.col > f.markerCol! && m.col < f.col && !sameListAxes(f, form))
     }
 
     function attachesParagraph(host: Frame, form: Form): boolean {
