@@ -29,14 +29,9 @@ interface FootnoteHooks {
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
 }
 
-function canTakePlainLazyLine(
-  line: string,
-  state: ReturnType<typeof verbatimOnlyLazyState>,
-): boolean {
-  const content = line.trimStart()
+function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): boolean {
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
-    state.deepest?.opaque == null && !state.deepest?.divDepth &&
-    !RE_CAPTION.test(content)
+    state.deepest?.opaque == null && !state.deepest?.divDepth
 }
 
 function trackedFootnoteContent(content: string): string {
@@ -113,6 +108,11 @@ function markerLineCommentContinuesNote(
     isRetainableLineComment(lexer, line)
 }
 
+// A caption below a note on an item's marker line is the item's text; anywhere else it is lazy text.
+function captionLeavesMarkerLineNote(lexer: Lexer, defLineIndex: number, line: string): boolean {
+  return lexer.hostBody === 'list' && defLineIndex === 0 && RE_CAPTION.test(line.trimStart())
+}
+
 /** Whether the nested note opened at `defIndex` still ends on an open paragraph. */
 function nestedNoteParagraphOpen(bodyLines: readonly string[], defIndex: number): boolean {
   const def = RE_FOOTNOTE_DEF.exec((bodyLines[defIndex] ?? '').trimStart())
@@ -122,7 +122,7 @@ function nestedNoteParagraphOpen(bodyLines: readonly string[], defIndex: number)
   const frame = verbatimOnlyLazyState()
   trackItemLazyState(def[2]!, frame)
   lines.forEach(line => trackItemLazyState(line, frame))
-  return canTakePlainLazyLine('', frame)
+  return canTakePlainLazyLine(frame)
 }
 
 function nestedSourceBodyLeft(
@@ -354,7 +354,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
-      (canTakePlainLazyLine(ln, lazyState) ||
+      ((canTakePlainLazyLine(lazyState) && !captionLeavesMarkerLineNote(lexer, defLineIndex, ln)) ||
         markerLineCommentContinuesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, ln) ||
         ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||
