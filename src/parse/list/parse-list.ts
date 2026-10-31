@@ -1736,11 +1736,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       // `plusColumn` is a source column; the attached lines are this lexer's.
       const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
+      let ownBlock = false
       for (let k = 0; k < attachedLines.length; k++) {
         // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
         const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
           (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
-        const attachedLine = ownOpener ? sliceColumns(attachedLines[k]!, contentCol, true)
+        // The lines of that block are measured from the same column.
+        ownBlock ||= ownOpener
+        const attachedLine = ownBlock && indentColumns(attachedLines[k]!, contentCol) >= contentCol ? sliceColumns(attachedLines[k]!, contentCol, true)
           : localPlusColumn > contentCol ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
         nested.push(attachedLine)
         nestedSourceLines.push(attachedLines[k])
