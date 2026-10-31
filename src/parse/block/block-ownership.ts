@@ -754,22 +754,31 @@ export function ownLines(
   // The one attach rule (carve#4409): the next line stands at `marker` through the
   // host's `quotes` prefixes and is not the host's sibling. The host decides nothing else.
   function refusal(at: number, marker: number, quotes: number, host: Frame['kind']): RefusedPlus['reason'] | null {
-    const next = lines[at + 1]
-    if (next === undefined) return 'document'
-    let n = indentCols(next)
-    for (let q = 0; q < quotes; q++) {
-      if (!isQuoteLine(n.rest)) return 'left'
-      n = indentCols(quoteRest(n.rest))
+    // An attribute run leads the attached block, so the block after it decides (carve#4278, carve#4447).
+    for (let k = at + 1; ; k++) {
+      const next = lines[k]
+      if (next === undefined) return 'document'
+      let n = indentCols(next)
+      for (let q = 0; q < quotes; q++) {
+        if (!isQuoteLine(n.rest)) return 'left'
+        n = indentCols(quoteRest(n.rest))
+      }
+      if (n.rest === '') return 'blank'
+      const col = docColumn(next, n.rest)
+      if (col !== marker) return col < marker ? 'left' : 'right'
+      const rest = trimEndSpaceTab(n.rest)
+      if (isAttrLine(rest)) continue
+      const wrapped = rest[0] === '{' ? wrappedAttrRun(rest, quotes, k) : null
+      if (wrapped !== null) {
+        k += wrapped
+        continue
+      }
+      // A closer ends a body and is no block.
+      if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return 'document'
+      if (host === 'item' && matchMarker(rest) !== null) return 'sibling'
+      if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return 'sibling'
+      return null
     }
-    if (n.rest === '') return 'blank'
-    const col = docColumn(next, n.rest)
-    if (col !== marker) return col < marker ? 'left' : 'right'
-    const rest = trimEndSpaceTab(n.rest)
-    // A closer ends a body and is no block.
-    if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return 'document'
-    if (host === 'item' && matchMarker(rest) !== null) return 'sibling'
-    if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return 'sibling'
-    return null
   }
 
   function openerKind(form: Form, rest: string): string | undefined {
@@ -907,7 +916,10 @@ export function ownLines(
 
   // How many lines below `at` a wrapped attribute block runs; its lines carry the owner's quote prefixes.
   function wrappedAttrLines(rest: string, owner: Frame, at: number): number | null {
-    const depth = frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length
+    return wrappedAttrRun(rest, frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length, at)
+  }
+
+  function wrappedAttrRun(rest: string, depth: number, at: number): number | null {
     let collected = rest
     for (let j = at + 1; j < lines.length; j++) {
       let line: string | null = lines[j]!

@@ -83,11 +83,12 @@ describe('lint reports a block attribute that reaches no block', () => {
 
   // An item whose body holds a sublist is parsed in two halves with the run
   // carried across the seam. The second half is the end of the stream, so a run
-  // still pending there is dead, not carried.
+  // still pending there is dead, not carried. A sibling after the run refuses the
+  // `+`, and the run then labels the next list (carve#4278, carve#4447).
   it.each([
-    ['- a\n  - b\n+\n{.x}\n- x\n- y\n', ['4:1']],
-    ['- a\n  - b\n+\n{.x}\n{.z}\n- x\n', ['4:1']],
-    ['- a\n  - b\n+\n{.x\n .z}\n1. x\n', ['4:1']],
+    ['- a\n  - b\n+\n{.x}\n- x\n- y\n', []],
+    ['- a\n  - b\n+\n{.x}\n{.z}\n- x\n', []],
+    ['- a\n  - b\n+\n{.x\n .z}\n1. x\n', []],
     ['- a\n  - b\n+\n{.x}\npara\n', []],
     ['- a\n  {.x}\n  - b\n', []],
   ])('after a sublist in the same item: %s', (source, locations) => {

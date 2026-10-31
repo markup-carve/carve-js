@@ -28,7 +28,8 @@ describe('the invisible-line exemption stops at', () => {
     })
 
     it('does not loosen with an attribute line behind it', () => {
-      expect(carveToHtml('- a\n+\n{.c}\n- b\n')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
+      // The sibling refuses the `+`, and the run labels the next list (carve#4278, carve#4447).
+      expect(carveToHtml('- a\n+\n{.c}\n- b\n')).toBe('<ul>\n  <li>a\n+</li>\n</ul>\n<ul class="c">\n  <li>b</li>\n</ul>')
     })
   })
 
