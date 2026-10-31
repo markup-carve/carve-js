@@ -1408,7 +1408,8 @@ function renderAttrs2(
   const a: FoldedAttrs = attrs ? { ...foldAttrNames(attrs) } : {}
   if (opts.baseClass) {
     a.classes = [opts.baseClass, ...(a.classes ?? [])]
-    a.classSpelling = 'class'
+    // A base class joins the authored slot and takes its spelling (PART 10 §1).
+    a.classSpelling ??= 'class'
     if (a.order && !a.order.includes('.class')) a.order = ['.class', ...a.order]
   }
   // A structural class the CONSTRUCT owns (not one the author wrote) trails the

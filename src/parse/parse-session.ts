@@ -207,6 +207,23 @@ function isReferenceImageLine(line: string): boolean {
   return true
 }
 
+// The syntactic comment strip the caption-host filter shares between math and image hosts.
+// A braced comment keeps the whitespace around it until the line end is trimmed.
+function withoutCaptionHostComments(text: string): string {
+  return text.replace(/\{%(?:(?!%\})[\s\S])*%\}/g, '\u0001').split('\n')
+    .map((line) => line.replace(/(^|[ \t])%%.*$/, '$1').replace(/[ \t]+$/, '')).join('\n').replaceAll('\u0001', '')
+}
+
+// An image line that holds its caption slot once its comments are dropped (PART 9R R7).
+function isCommentedImageLine(line: string): boolean {
+  const trimmed = line.replace(/[ \t]+$/, '')
+  const quiet = withoutCaptionHostComments(trimmed)
+  // The space a braced comment keeps beside the image is content, so the image is no longer alone.
+  const lead = (text: string): string => /^[ \t]*/.exec(text)![0]
+  return quiet !== trimmed && lead(quiet) === lead(trimmed) && !/[ \t]$/.test(quiet) &&
+    (isBlockImageLine(quiet) || isReferenceImageLine(quiet))
+}
+
 /** How many lines at the start of `at` are block attribute lines. */
 function leadingAttributeRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
   let count = 0
@@ -946,7 +963,8 @@ export class ParseSession extends InlineParseSession {
       if (eq) return eq
     }
     const paragraph = this.parseParagraph(lexer)
-    if (paragraph.children.length === 1 && paragraph.children[0]!.type === 'math' && (paragraph.children[0] as Math).display) {
+    const host = paragraph.children.filter((child) => child.type !== 'comment')
+    if (host.length === 1 && host[0]!.type === 'math' && (host[0] as Math).display) {
       // A span over several lines is the same host as a one-line one (§4, §10 I7).
       let la = 0
       while (isBlankLine(lexer.peek(la))) la++
@@ -983,19 +1001,28 @@ export class ParseSession extends InlineParseSession {
   // open span ends at the caret line (§4 names no line count).
   private isDisplayMathHost(lines: string[], lexer: Lexer): boolean {
     const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n')
-    if (!text.startsWith('$$`')) return false
+    if (this.isDisplayMathText(text, text, lexer)) return true
+    // A comment renders nothing, so it does not keep the span from being the host (PART 9R R7).
+    const quiet = withoutCaptionHostComments(text)
+    return quiet !== text && this.isDisplayMathText(quiet, text, lexer)
+  }
+
+  // `shape` is read for the span's extent; the rendered `text` must still be the span alone.
+  private isDisplayMathText(shape: string, text: string, lexer: Lexer): boolean {
+    if (!shape.startsWith('$$`')) return false
     let run = 1
-    while (text[2 + run] === '`') run++
+    while (shape[2 + run] === '`') run++
     let at = 2 + run
     for (;;) {
-      at = text.indexOf('`', at)
+      at = shape.indexOf('`', at)
       if (at < 0) return true
       let end = at
-      while (text[end] === '`') end++
+      while (shape[end] === '`') end++
       if (end - at === run) break
       at = end
     }
     const only = this.parseInline(dropTrailingWhitespace(text), lexer.abbrDefs, lexer.linkDefs, { baseOffset: 0, startLine: 1, startColumn: 1 })
+      .filter((node) => node.type !== 'comment')
     return only.length === 1 && only[0]!.type === 'math' && (only[0] as Math).display === true
   }
 
@@ -2240,6 +2267,7 @@ export class ParseSession extends InlineParseSession {
     let imageCaptionSlot = false
     let captionAtContentColumn = false
     let mathCaptionChecked = false
+    let imageCaptionChecked = false
     let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     let secondLineLazy = false
@@ -2264,8 +2292,12 @@ export class ParseSession extends InlineParseSession {
         if (this.isDisplayMathHost(lines, lexer)) break
       }
       if (RE_CAPTION.test(ln)) captionAtContentColumn = true
-      if (lines.length === 1 && isReferenceImageLine(lines[0]!) && RE_CAPTION.test(ln))
-        imageCaptionSlot = true
+      if (lines.length > 0 && !imageCaptionChecked && RE_CAPTION.test(ln)) {
+        // Only the first caret line can find an image alone; later ones follow caption text.
+        imageCaptionChecked = true
+        if ((lines.length === 1 && isReferenceImageLine(lines[0]!)) || isCommentedImageLine(lines.join('\n')))
+          imageCaptionSlot = true
+      }
       // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
       // list, quote, table, fence, thematic break, admonition/div) interrupts
       // an open paragraph with no blank line before it, at the top level AND
