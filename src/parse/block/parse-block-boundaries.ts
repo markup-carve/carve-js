@@ -192,6 +192,8 @@ export interface ItemLazyState {
   // the item, where PART 1 S4 folds the following flush-left line into the
   // paragraph that was never interrupted (carve#891).
   absorbingFence: boolean
+  /** The sub-item a nested marker line opened holds a malformed colon fence; read by its first line only. */
+  ownedAbsorbing?: boolean
   /** Reads a literal line block's marker-shaped payload, which opens no block. */
   literalLayout?: boolean
   // Fed by a definition body's collector rather than a list item's.

@@ -81,6 +81,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
     const wasAbsorbing = state.absorbingFence
     state.absorbingFence = false
+    const wasOwnedAbsorbing = state.ownedAbsorbing === true
+    delete state.ownedAbsorbing
     const wasClosedColon = state.closedColonBody === true
     const wasClosedLiteralComment = state.closedLiteralComment === true
     delete state.closedColonBody
@@ -107,7 +109,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return {
       content, state, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser,
       authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen,
-      wasDescendantColumn, wasAbsorbing, wasClosedColon,
+      wasDescendantColumn, wasAbsorbing, wasOwnedAbsorbing, wasClosedColon,
       wasClosedLiteralComment, wasInTable, wasQuote, quoteOwnerColumn, wasInvisibleAtColumn,
       wasBelowComment, wasCommentAtColumn,
       run: undefined, runColumns: undefined, readFlush: false, readDescendant: false,
@@ -654,7 +656,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // and from here the paragraph absorbs the next fence-shaped line as well.
     // `:::note` fails §12's opener test because a type word must be separated
     // from the fence by a space; `::: note` passes it and takes the branch above.
-    if (!/^:{3,}/.test(content)) return false
+    // PART 0 S3: an over-indented malformed opener absorbs too, except inside an open container (hosted-colon-review7-scope pins that).
+    if (!/^:{3,}/.test(content) && !(state.divDepth === 0 && /^[ \t]+:{3,}/.test(content))) return false
     // ...but only at the item's own level. Inside an open container the line is
     // ordinary body text and the container's closer below it is still a closer,
     // so arming here would swallow it and hold the paragraph open past the

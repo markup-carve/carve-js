@@ -112,6 +112,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     verbatimOnlyLazyState,
     walkMarkerOwnerPrefix,
   } = helpers
+
+  /** A line that starts with a colon run and opens no colon block, so its paragraph absorbs the bare run below. */
+  function isMalformedColonLead(text: string): boolean {
+    return /^:{3,}/.test(text) && !RE_DIV_OPEN.test(text) && !RE_ADMONITION_OPEN.test(text) &&
+      !RE_LINE_BLOCK_OPEN.test(text) && !RE_HARDBREAKS_OPEN.test(text) && !RE_QUOTE_BLOCK_OPEN.test(text)
+  }
+
   function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
     physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
     lexer: Lexer
@@ -1343,13 +1350,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // The lead line may itself be the malformed fence (`- :::note`), and then
     // the paragraph it opens is already absorbing: the `:::` below it is text,
     // not a closer for a block nothing opened (PART 9 §12, carve#891).
-    lazyState.absorbingFence =
-      /^:{3,}/.test(content) &&
-      !RE_DIV_OPEN.test(content) &&
-      !RE_ADMONITION_OPEN.test(content) &&
-      !RE_LINE_BLOCK_OPEN.test(content) &&
-      !RE_HARDBREAKS_OPEN.test(content) &&
-      !RE_QUOTE_BLOCK_OPEN.test(content)
+    lazyState.absorbingFence = isMalformedColonLead(content)
+    // So may the sub-item a nested marker line opens (`- - :::note`); that is its frame's state, not this item's.
+    if (lazyState.ownedColumn >= 0 && content.includes(':::')) {
+      lazyState.ownedAbsorbing = isMalformedColonLead(markerLineBottomBlock(content, session.markerPrefixMemo(lexer, itemStartLineIndex)))
+    }
     // The marker-line definition did not pass through the body tracker.
     // Track its first paragraph continuation without opening a child list.
     let markerNoteBodyPending = RE_FOOTNOTE_DEF.test(content)

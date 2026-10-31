@@ -456,7 +456,13 @@ export function createDefinitionListParser(
         lazyState.inFootnoteBody = false
         // The note's own frame answers the lazy question (carve#3885).
         if (RE_FOOTNOTE_DEF.test(first)) trackItemLazyState(first, lazyState)
-        if (firstIsColonContainer) lazyState.divDepth = 1
+        if (firstIsColonContainer) {
+          lazyState.divDepth = 1
+          // Its width decides which bare run closes it, as for one opened in the body.
+          lazyState.divWidths = [colonFenceOpenerLen(first) ?? 3]
+        }
+        // A malformed fence on the marker line absorbs the bare run below it, as an item's lead does.
+        lazyState.absorbingFence = /^:{3,}/.test(first) && !firstIsColonContainer
         if (RE_LINE_BLOCK_OPEN.test(first)) lazyState.literalColon = { width: colonFenceOpenerLen(first)!, column: 0 }
         const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
         if (leadFence) {
