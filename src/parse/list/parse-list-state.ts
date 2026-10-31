@@ -174,12 +174,17 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       descriptionShift = frame.descriptionColumn
       noteLine = sliceColumns(noteLine, descriptionShift, true)
     }
+    // The containing item must see the same paragraph boundary as the note parser.
+    const description = RE_DEFLIST_DEF.exec(noteLine)
+    const descriptionFence = line.atContentColumn && frame.inDefList === 'term' &&
+      description !== null && opensCodeFence(description[2]!)
     // A caller that reads descendant frames reads a list item's in the note's body too.
     trackItemLazyState(noteLine, frame,
       true, () => false,
       line.facts?.descendantFrames === true && (noteFrameOwnsItem(frame) || isListMarkerLine(noteLine.trimStart()))
         ? { terminatorFree: line.facts.terminatorFree, whitespace: leadingWhitespace(noteLine), descendantFrames: true }
         : undefined)
+    if (descriptionFence) frame.lazyFoldable = false
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
     return true
