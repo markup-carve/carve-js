@@ -447,8 +447,7 @@ export function ownLines(
     if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
-      // So does a marker that misses a description holding a list: it is that list's lazy text (carve#4479).
-      if ((missedNote || (frames[reached + 1]?.kind === 'dd' && top().kind === 'item' && owner.kind !== 'item' && owner.kind !== 'dd')) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
+      if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
       leadLazy(owner)
       finish()
@@ -556,6 +555,13 @@ export function ownLines(
         : owner.termShift !== undefined && owner.last === 'dd' ? Math.min(owner.termShift, owner.ddShift!)
           : Math.max(owner.cut, shift)
       lead(Math.min(Math.max(m.col - cut, owner.canon), limit))
+    }
+
+    // A lazy marker that misses a description is text too: past a description holding a list it is
+    // that list's lazy text (carve#4479), and where a quote owns it a quote takes no tight sublist (carve#4231).
+    function foldsPastDescription(owner: Frame): boolean {
+      return frames[reached + 1]?.kind === 'dd' &&
+        (owner.kind === 'quote' || top().kind === 'item' && owner.kind !== 'item' && owner.kind !== 'dd')
     }
 
     function foldsLazily(form: Form, missedNote: boolean): boolean {
