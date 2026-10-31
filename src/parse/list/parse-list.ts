@@ -2009,6 +2009,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         definitionHostColumn !== undefined &&
         (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
         ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
+          (markerLineTerm && lazyState.inDefList === 'description' &&
+            sourceMarkerColumn < physicalItemMarkerColumn + contentCol - baseIndent) ||
           definitionAuthored && definitionHostColumn !== undefined &&
             (sourceMarkerColumn < definitionHostColumn ||
               pastDefinitionEntry && !RE_DEFLIST_TERM.test(sourceEntry) &&
