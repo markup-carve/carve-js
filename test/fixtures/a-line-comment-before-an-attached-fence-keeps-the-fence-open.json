@@ -1,0 +1,47 @@
+[
+  {
+    "id": "4024-line-comment-before-the-fence",
+    "source": "- +\n%% c\n```\na\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre><code>a\n- x\n</code></pre>\n  </li>\n</ul>"
+  },
+  {
+    "id": "bare-line-comment",
+    "source": "- +\n%%\n```\na\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre><code>a\n- x\n</code></pre>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-then-attribute",
+    "source": "- +\n%% c\n{.c}\n```\na\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre class=\"c\"><code>a\n- x\n</code></pre>\n  </li>\n</ul>"
+  },
+  {
+    "id": "attribute-then-comment",
+    "source": "- +\n{.c}\n%% c\n```\na\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre class=\"c\"><code>a\n- x\n</code></pre>\n  </li>\n</ul>"
+  },
+  {
+    "id": "two-comments",
+    "source": "- +\n%% c\n%% d\n```\na\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre><code>a\n- x\n</code></pre>\n  </li>\n</ul>"
+  },
+  {
+    "id": "ordered-host",
+    "source": "1. +\n%% c\n~~~\na\n1. x\n",
+    "html": "<ol>\n  <li>\n    <pre><code>a\n1. x\n</code></pre>\n  </li>\n</ol>"
+  },
+  {
+    "id": "quoted-host",
+    "source": "> - +\n> %% c\n> ```\n> a\n> - x\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code>a\n- x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "blank-ends-the-fence",
+    "source": "- +\n%% c\n```\na\n\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre><code>a\n</code></pre>\n  </li>\n  <li><p>x</p></li>\n</ul>"
+  },
+  {
+    "id": "closed-fence",
+    "source": "- +\n%% c\n```\na\n```\n- x\n",
+    "html": "<ul>\n  <li>\n    <pre><code>a\n</code></pre>\n  </li>\n  <li>x</li>\n</ul>"
+  }
+]
