@@ -44,7 +44,7 @@ tail
   :: t
  - [x] c
 tail
-`, '<ul><li><h1>h</h1><dl><dt>t</dt></dl></li></ul><ul class="task-list"><li data-task-state="x"><input type="checkbox" checked disabled aria-label="c tail"> c\ntail</li></ul>'],
+`, '<ul><li><h1>h</h1><dl><dt>t\n- [x] c\ntail</dt></dl></li></ul>'],
   ['quoted marker', `> - # h
 >   :: t
 >  - c
