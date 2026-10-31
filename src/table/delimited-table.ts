@@ -128,6 +128,16 @@ function rowCount(raw: string | undefined): number | undefined {
   return Number.isSafeInteger(count) ? count : undefined
 }
 
+function delimitedHeaderRows(header: string | undefined, footer: string | undefined, rows: number): number {
+  const footRows = rowCount(footer) ?? 0
+  const defaultHeaders = Math.min(1, Math.max(0, rows - footRows))
+  const headRows = header === undefined ? defaultHeaders : rowCount(header) ?? defaultHeaders
+  // Both explicit ranges must fit together. A lone oversized header keeps
+  // marking all rows as headers under the delimited-table rule.
+  if (rowCount(header) !== undefined && rowCount(footer) !== undefined && headRows + footRows > rows) return 0
+  return headRows
+}
+
 export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
   if (code.lang !== 'csv' && code.lang !== 'tsv') return null
   const fieldRanges: { start: number; end: number; textStart: number; textEnd: number; textPlaceable: boolean }[][] = []
@@ -184,11 +194,7 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
     } : undefined
   }
   const width = data.reduce((max, row) => Math.max(max, row.length), 0)
-  const declared = attrs.keyValues?.['header-rows']
-  const footDeclared = attrs.keyValues?.['footer-rows']
-  const footRows = rowCount(footDeclared) ?? 0
-  const defaultHeaders = Math.min(1, Math.max(0, data.length - footRows))
-  const headerRows = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
+  const headerRows = delimitedHeaderRows(attrs.keyValues?.['header-rows'], attrs.keyValues?.['footer-rows'], data.length)
   const rows: TableRow[] = data.map((row, index) => {
     const rowRange = rowRanges[index]
     const emptyRecord = rowRange !== undefined && rowRange.start === rowRange.end
@@ -225,10 +231,7 @@ export function delimitedSource(table: Table): string | null {
   const separator = table.sourceFormat === 'csv' ? ',' : table.sourceFormat === 'tsv' ? '\t' : null
   if (!separator) return null
   if (table.shortCaption || table.separatorWidths || table.rows.some(row => row.continuationLines)) return null
-  const declared = table.attrs?.keyValues?.['header-rows']
-  const footer = rowCount(table.attrs?.keyValues?.['footer-rows']) ?? 0
-  const defaultHeaders = Math.min(1, Math.max(0, table.rows.length - footer))
-  const expectedHeaders = declared === undefined ? defaultHeaders : rowCount(declared) ?? defaultHeaders
+  const expectedHeaders = delimitedHeaderRows(table.attrs?.keyValues?.['header-rows'], table.attrs?.keyValues?.['footer-rows'], table.rows.length)
   if (!Number.isInteger(expectedHeaders) || expectedHeaders < 0) return null
   const quote = (value: string): string =>
     value.includes(separator) || value.includes('"') || value.includes('\n')
