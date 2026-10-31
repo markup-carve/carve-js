@@ -1,4 +1,15 @@
 import type { Attrs } from '../ast.js'
+import { setOwn } from '../own-property.js'
+
+/**
+ * Write a key/value. When another spelling of the name is present the key moves
+ * last, so key order tells which spelling was written last (PART 10 §1).
+ */
+export function writeKeyValue(record: Record<string, string>, key: string, value: string): void {
+  const fold = key.toLowerCase()
+  if (Object.hasOwn(record, key) && Object.keys(record).some((k) => k !== key && k.toLowerCase() === fold)) delete record[key]
+  setOwn(record, key, value)
+}
 
 export function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (!a) return b
@@ -7,7 +18,11 @@ export function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   // over an earlier `#old` (last-wins §15), e.g. `[x]{#old}{id=""}` -> `id=""`.
   if (b.id !== undefined) out.id = b.id
   if (b.classes) out.classes = [...(out.classes ?? []), ...b.classes]
-  if (b.keyValues) out.keyValues = { ...(out.keyValues ?? {}), ...b.keyValues }
+  if (b.keyValues) {
+    const keyValues = { ...(out.keyValues ?? {}) }
+    for (const [key, value] of Object.entries(b.keyValues)) writeKeyValue(keyValues, key, value)
+    out.keyValues = keyValues
+  }
   // Merge source order: keep `a`'s order, append `b`'s new slots (a slot
   // already present keeps its earlier position; values are last-wins via
   // the merges above). §15 + source-order rendering.
@@ -21,6 +36,22 @@ export function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   }
   if (order.length) out.order = order
   return out
+}
+
+/**
+ * The id an element's attributes give, reading an `ID` key in any case as the
+ * id slot (PART 10 §1): the slot written last wins.
+ */
+export function authoredIdOf(a: Attrs | undefined): string | undefined {
+  const keyValues = a?.keyValues
+  if (!keyValues || !Object.keys(keyValues).some((k) => k.toLowerCase() === 'id')) return a?.id
+  let id: string | undefined
+  const slots = attrOrder(a)
+  for (const slot of [...slots, ...(slots.includes('#id') ? [] : ['#id'])]) {
+    if (slot === '#id') id = a.id ?? id
+    else if (slot.toLowerCase() === 'id' && keyValues[slot] !== undefined) id = keyValues[slot]
+  }
+  return id
 }
 
 /** The attribute slots of `a` in order (its `order`, or a derived default). */
@@ -57,9 +88,7 @@ export function accumulateAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   }
   if (b.keyValues) {
     const values = (out.keyValues ??= {})
-    for (const key of Object.keys(b.keyValues)) {
-      Object.defineProperty(values, key, { value: b.keyValues[key], writable: true, enumerable: true, configurable: true })
-    }
+    for (const key of Object.keys(b.keyValues)) writeKeyValue(values, key, b.keyValues[key]!)
   }
   for (const slot of attrOrder(b)) {
     if (!seen.has(slot)) {

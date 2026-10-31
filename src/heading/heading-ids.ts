@@ -32,7 +32,7 @@ import { DocumentIdRegistry } from '../ast/document-ids.js'
 import { reachableFootnoteLabels } from './footnote-numbering.js'
 import { SMART_PUNCTUATION_GLYPHS } from '../ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js'
-import { recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
+import { authoredIdOf, recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
 import { TRANSLIT_MAP } from '../translit-map.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { unboundCaptionParagraph } from '../parse/block/caption-fallback.js'
@@ -652,11 +652,13 @@ function resolveHeadingIdsImpl(
     // produced it. Slugging it here would invent a target the sender did not
     // have, so the reference stays unresolved and renders its own source.
     if (ingested && heading.attrs?.id === undefined) return
-    if (heading.attrs?.id !== undefined) {
+    const authored = authoredIdOf(heading.attrs)
+    if (authored !== undefined) {
       // An explicit id wins verbatim, INCLUDING an explicit empty `id=""`
       // (`{id=""}` then `# T` -> `<section id="">`): it suppresses the auto
       // slug rather than being treated as absent.
-      id = heading.attrs.id
+      id = authored
+      if (heading.attrs!.id !== id) heading.attrs = { ...heading.attrs, id }
       used.reserve(id)
     } else {
       const base = slugify(inlineText(heading.children), opts)
@@ -1052,7 +1054,7 @@ function resolveHeadingIdsImpl(
   // target registration, which only makes sense while resolution is running.
   const numberBlocks = (blocks: BlockNode[]): void => {
     numberCaptionsIn(blocks, counters, (labelNodes, next, attrs, suffix) => {
-      const id = attrs?.id
+      const id = authoredIdOf(attrs)
       if (id === undefined || keyedTargets.has(targetKey(id))) return
       targets.set(id, crossrefAutoText(labelNodes, next, suffix))
       keyedTargets.set(targetKey(id), id)

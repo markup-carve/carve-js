@@ -1666,6 +1666,12 @@ function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
     for (const key of Object.keys(kv)) {
       if (!seen.has(key)) emitKey(key)
     }
+    // Key order records the spelling of a name written last (PART 10 §1);
+    // repeat it so the re-parse keeps that value.
+    const written = [...attrs.order.filter((slot) => Object.hasOwn(kv, slot)), ...Object.keys(kv).filter((key) => !seen.has(key))]
+    const latest = new Map(Object.keys(kv).map((key) => [key.toLowerCase(), key]))
+    const lastWritten = new Map(written.map((key) => [key.toLowerCase(), key]))
+    for (const [fold, key] of latest) if (lastWritten.get(fold) !== key) emitKey(key)
   } else {
     emitId()
     emitClasses()

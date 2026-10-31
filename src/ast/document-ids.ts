@@ -1,7 +1,8 @@
-import type { AnyNode, Document, InlineNode } from '../ast.js'
+import type { AnyNode, Attrs, Document, InlineNode } from '../ast.js'
 import type { UnresolvedReference } from '../parse/inline/reference-state.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { ALL_OWNED_CHILD_FIELDS } from './owned-child-fields.js'
+import { authoredIdOf } from '../extension/attribute-merge.js'
 
 /**
  * Document id namespace shared by explicit `{#id}` attributes, generated
@@ -196,7 +197,7 @@ export function visitDocumentIds(
     if (type === 'footnote_ref' && !Object.hasOwn(doc.footnoteDefs ?? {}, node['label'] as string)) continue
     const reference = value as InlineNode
     if (isUnresolvedReference(reference) && !resolvesLater?.(reference)) continue
-    const id = (node['attrs'] as { id?: unknown } | undefined)?.id
+    const id = authoredIdOf(node['attrs'] as Attrs | undefined)
     if (typeof id === 'string') visit(id)
     for (const field of fields) {
       const child = node[field]
