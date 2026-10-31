@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// Expected HTML from spec main 0a068ca04008d04e59e181e55455e65bd45f2e57.
-// Covers carve-js#2243 and #2289, including adjacent passing shapes. The cases
-// whose tail folds below its item's content column read LOOSE since
-// markup-carve/carve#2558 ruled §17 L1 at every column the item's own paragraph
-// text reaches; b1a592379 read them tight (carve-js#2330).
+// Expected HTML from spec main af3f61bf28c2362e5fe68e69c472faee3071b900; every fence width and extra indent
+// below reads as its case's one HTML there. Covers carve-js#2243, #2289 and #3898.
+// A blank inside the nested item does not loosen the outer one (§17 L1,
+// markup-carve/carve#3977).
 const cases = [
   {
     name: "child column 4, closer 3, tail 4, blanks 0/1",
     source: "- outer\n  - head\n    %%%\n    a\n   %%%\n\n    tail\n",
-    html: "<ul>\n  <li>outer\n    <ul>\n      <li>head</li>\n    </ul>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 4, closer 3, tail 4, blanks 1/0",
@@ -20,7 +19,7 @@ const cases = [
   {
     name: "child column 4, closer 3, tail 4, blanks 1/1",
     source: "- outer\n  - head\n\n    %%%\n    a\n   %%%\n\n    tail\n",
-    html: "<ul>\n  <li>outer\n    <ul>\n      <li>head</li>\n    </ul>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 6, closer 3, tail 4, blanks 0/0",
@@ -30,7 +29,7 @@ const cases = [
   {
     name: "child column 6, closer 3, tail 4, blanks 0/1",
     source: "- a\n  - outer\n    - head\n      %%%\n      a\n   %%%\n\n    tail\n",
-    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li>head</li>\n        </ul>\n      </li>\n    </ul>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>a\n    <ul>\n      <li><p>outer</p>\n        <ul>\n          <li>head</li>\n        </ul>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 6, closer 3, tail 4, blanks 1/0",
@@ -45,12 +44,12 @@ const cases = [
   {
     name: "child column 6, closer 3, tail 4, blanks 1/1",
     source: "- a\n  - outer\n    - head\n\n      %%%\n      a\n   %%%\n\n    tail\n",
-    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li>head</li>\n        </ul>\n      </li>\n    </ul>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>a\n    <ul>\n      <li><p>outer</p>\n        <ul>\n          <li>head</li>\n        </ul>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 6, closer 5, tail 6, blanks 0/1",
     source: "- a\n  - outer\n    - head\n      %%%\n      a\n     %%%\n\n      tail\n",
-    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li>head</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>",
+    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li><p>head</p>\n            <p>tail</p>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 6, closer 5, tail 6, blanks 1/0",
@@ -60,12 +59,12 @@ const cases = [
   {
     name: "child column 6, closer 5, tail 6, blanks 1/1",
     source: "- a\n  - outer\n    - head\n\n      %%%\n      a\n     %%%\n\n      tail\n",
-    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li>head</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>",
+    html: "<ul>\n  <li>a\n    <ul>\n      <li>outer\n        <ul>\n          <li><p>head</p>\n            <p>tail</p>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>",
   },
   {
     name: "child column 5, closer 4, tail 5, blanks 0/1",
     source: "1. outer\n   - head\n     %%%\n     a\n    %%%\n\n     tail\n",
-    html: "<ol>\n  <li>outer\n    <ul>\n      <li>head</li>\n    </ul>\n    tail\n  </li>\n</ol>",
+    html: "<ol>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ol>",
   },
   {
     name: "child column 5, closer 4, tail 5, blanks 1/0",
@@ -75,12 +74,12 @@ const cases = [
   {
     name: "child column 5, closer 4, tail 5, blanks 1/1",
     source: "1. outer\n   - head\n\n     %%%\n     a\n    %%%\n\n     tail\n",
-    html: "<ol>\n  <li>outer\n    <ul>\n      <li>head</li>\n    </ul>\n    tail\n  </li>\n</ol>",
+    html: "<ol>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ol>",
   },
   {
     name: "child column 5, closer 3, tail 5, blanks 0/1",
     source: "- outer\n  1. head\n     %%%\n     a\n   %%%\n\n     tail\n",
-    html: "<ul>\n  <li>outer\n    <ol>\n      <li>head</li>\n    </ol>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ol>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ol>\n  </li>\n</ul>",
   },
   {
     name: "child column 5, closer 3, tail 5, blanks 1/0",
@@ -90,12 +89,12 @@ const cases = [
   {
     name: "child column 5, closer 3, tail 5, blanks 1/1",
     source: "- outer\n  1. head\n\n     %%%\n     a\n   %%%\n\n     tail\n",
-    html: "<ul>\n  <li>outer\n    <ol>\n      <li>head</li>\n    </ol>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ol>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ol>\n  </li>\n</ul>",
   },
   {
     name: "child column 5, closer 4, tail 5, blanks 0/1",
     source: "- outer\n  1. head\n     %%%\n     a\n    %%%\n\n     tail\n",
-    html: "<ul>\n  <li>outer\n    <ol>\n      <li>head</li>\n    </ol>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ol>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ol>\n  </li>\n</ul>",
   },
   {
     name: "child column 5, closer 4, tail 5, blanks 1/0",
@@ -105,7 +104,7 @@ const cases = [
   {
     name: "child column 5, closer 4, tail 5, blanks 1/1",
     source: "- outer\n  1. head\n\n     %%%\n     a\n    %%%\n\n     tail\n",
-    html: "<ul>\n  <li>outer\n    <ol>\n      <li>head</li>\n    </ol>\n    tail\n  </li>\n</ul>",
+    html: "<ul>\n  <li>outer\n    <ol>\n      <li><p>head</p>\n        <p>tail</p>\n      </li>\n    </ol>\n  </li>\n</ul>",
   },
   {
     name: "child column 4, closer 1, tail 6, blanks 1/1",
