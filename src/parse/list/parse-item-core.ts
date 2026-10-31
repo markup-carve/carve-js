@@ -19,6 +19,7 @@ import {
   verbatimOnlyLazyState,
 } from '../block/parse-block-boundaries.js'
 import {
+  bodyHoldsClosableCommentSpan,
   bodyHoldsOpenCommentSpan,
   buildCloserIndex,
   type CloserIndex,
@@ -1043,6 +1044,7 @@ export const listHelpers = {
   attachBlockPos,
   authoredTaskState,
   blockQuoteParagraphOpen,
+  bodyHoldsClosableCommentSpan,
   bodyHoldsOpenCommentSpan,
   bottomBlockLeavesParagraphOpen,
   buildCloserIndex,

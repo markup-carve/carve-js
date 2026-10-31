@@ -148,7 +148,7 @@ export function createDefinitionListParser(
     RE_HR,
     RE_LINE_BLOCK_OPEN,
     RE_RAW_FENCE,
-    bodyHoldsOpenCommentSpan,
+    bodyHoldsClosableCommentSpan,
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
@@ -800,7 +800,8 @@ export function createDefinitionListParser(
         // body ends at one of those, which is right for an opener and for the `%%`
         // line form; the other half of a span the body opened belongs to it, and
         // ending here split the pair so the payload reached the page.
-        if (commentFenceRun(below) !== undefined && bodyHoldsOpenCommentSpan(bodyLines, bodySpanScan)) {
+        if (commentFenceRun(below) !== undefined &&
+            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentBlockHasCloser(lexer, run, lexer.pos - 1))) {
           const lineIndex = lexer.pos
           // ONE COLUMN of the authored indentation is kept, as the list collector
           // keeps it, so the body's own parse cannot read a delimiter written below
