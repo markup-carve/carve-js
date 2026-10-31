@@ -299,6 +299,13 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  if ((out ?? record)['type'] === 'table_cell' &&
+      ((out ?? record)['colspan'] === 1 || (out ?? record)['rowspan'] === 1)) {
+    out = { ...(out ?? record) }
+    if (out['colspan'] === 1) delete out['colspan']
+    if (out['rowspan'] === 1) delete out['rowspan']
+  }
+
   // `escapedLeadingCaret` used to be stripped here (carve#793). The parser no
   // longer sets it at all (carve-js#1259), so there is nothing left to strip:
   // the fact it recorded is stated on the wire by the `escaped_text` node
@@ -881,6 +888,13 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       if (record[field] === undefined) continue
       if (!matchesKind(record[field], kind)) {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
+      }
+    }
+    if (type === 'table_cell') {
+      for (const field of ['colspan', 'rowspan']) {
+        if (record[field] !== undefined && (!Number.isInteger(record[field]) || (record[field] as number) < 1)) {
+          throw new AstJsonSchemaError(`${field} must be an integer of at least 1`, path)
+        }
       }
     }
     if (type === 'comment' && record.form !== undefined) {
