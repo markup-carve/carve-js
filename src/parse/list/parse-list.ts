@@ -3162,9 +3162,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (span === undefined) continue
         // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L2).
         if (child.type === 'paragraph' && isDirectiveLine(previousVisibleBlock)) loose = true
-        // A lead that renders no block of its own (`+`, attributes, a definition) still sets the paragraph apart (§17 L1a).
+        // A lead that renders no block of its own (`+`, attributes, a definition) still sets the paragraph apart (§17 L1a);
+        // a note lead is measured from the note's end below.
         if (previousVisibleSpan === undefined && child.type === 'paragraph' &&
-            (!isBlankLine(content) || /\+[ \t]*$/.test(itemSource)) &&
+            (!isBlankLine(content) && !markerNoteItem || /\+[ \t]*$/.test(itemSource)) &&
             session.hasAuthoredBlankBetween(lexer, lexer.lineNumber(itemStartLineIndex), span.start, opaqueBlankLines))
           loose = true
         const rootLine = (lexer.rootLines ?? lexer.lines)[span.start - 1]

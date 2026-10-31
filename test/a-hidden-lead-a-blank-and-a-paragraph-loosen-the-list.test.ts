@@ -52,6 +52,11 @@ describe('a hidden lead, a blank and a paragraph loosen the list', () => {
       "<ul>\n  <li>\n    <h1 x=\"\" id=\"b\">b</h1>\n  </li>\n  <li>a</li>\n</ul>",
     ],
     [
+      'a blank inside a note lead stays tight',
+      '- [^n]: note\n    ~~~\n    c\n\n    ~~~\n  b\n- a\n\n[^n]\n',
+      "<ul>\n  <li>b</li>\n  <li>a</li>\n</ul>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note</p>\n      <pre><code>c\n\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    ],
+    [
       'no blank stays tight',
       '- {x}\n  b\n- a\n',
       "<ul>\n  <li><p x=\"\">b</p></li>\n  <li>a</li>\n</ul>",
