@@ -1099,6 +1099,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let quotedFootnoteOffset = 0
     let closedListFence = false
     const markerLineTerm = RE_DEFLIST_TERM.test(content)
+    // Only a marker-line term needs the task owner's column. The prefix walk
+    // stops at a task box because that box is the item's content.
+    let taskContentColumn: number | undefined
+    if (markerLineTerm) {
+      const sourceBody = sourceQuoteBody(itemSource)
+      const boxOffset = walkMarkerOwnerPrefix(sourceBody)
+      if (/^\[[ xX\-_>\/!?]\][ \t]+/.test(sourceBody.slice(boxOffset)))
+        taskContentColumn = sourceColumnAt(itemSource, itemSource.length - sourceBody.length + boxOffset)
+    }
     let singleMarkerTerm = markerLineTerm
     let markerDescriptionColumn: number | undefined
     let markerDescriptionCodeBase: number | undefined
@@ -2028,6 +2037,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A separator at the item's marker column or its ancestor's content
       // column releases a marker-line term. A line in the band between them
       // keeps the deepest open term's paragraph claim.
+      if (markerLineTerm && sourceDescription !== null && taskContentColumn !== undefined &&
+          lazyState.inDefList === 'term' && sourceDepth === itemQuoteDepth && !enclosingLazy &&
+          sourceMarkerColumn === taskContentColumn && sourceMarkerColumn < physicalItemMarkerColumn)
+        return 'stop'
       if (markerLineTerm && sourceDescription !== null && lazyState.inDefList === 'term' &&
           sourceDepth === itemQuoteDepth &&
           (sourceMarkerColumn <= lexer.hostContentColumn || sourceMarkerColumn === termOwnerColumn) &&
