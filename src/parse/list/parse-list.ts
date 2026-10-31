@@ -1160,6 +1160,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
      * such fence walks no indentation run for it.
      */
     let childLeadComment = false
+    // A span opened on a child's marker line, held until a line below the child's column ends the child.
+    let childSpan: { run: number; column: number; state: ItemLazyState['opaque'] } | undefined
     const trackDescendantOpaque = (
       line: string,
       opener: string,
@@ -1321,6 +1323,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (!leadFence && leadComment === undefined && content.includes('%')) {
       const bottom = markerLineBottomBlock(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
       childLeadComment = bottom !== content && commentFenceRun(bottom) !== undefined
+      // The child's span is a held span to this item too, so its closer below
+      // both columns closes it instead of ending the item (CARVE-P0-005).
+      const childRun = childLeadComment ? commentFenceRun(bottom)! : undefined
+      if (childRun !== undefined && markerFreeContent(content) === bottom && commentBlockHasCloser(lexer, childRun)) {
+        itemSpanScan.opaque = { comment: true, char: '%', run: childRun }
+        itemSpanScan.atBlockStart = false
+        lazyState.opaque = { kind: 'comment', length: childRun, paragraphBefore: false, atColumn: false }
+        lazyState.lazyFoldable = false
+        childSpan = { run: childRun, column: contentCol + content.length - bottom.length, state: lazyState.opaque }
+      }
     }
     const leadColon = colonFenceOpenerLen(content)
     if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0, sourceLine: lexer.lineNumber(itemStartLineIndex), awaitingBody: true}
@@ -2609,6 +2621,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return false
     }
     const admitContentLine = (l: string): void => {
+      if (childSpan !== undefined && lazyState.opaque === childSpan.state && !isBlankLine(l) &&
+          indentColumns(l, childSpan.column) < childSpan.column && commentFenceRun(l.trimStart()) !== childSpan.run) {
+        bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
+        itemSpanScan.opaque = null
+        itemSpanScan.atBlockStart = true
+        lazyState.opaque = null
+      }
       placeContentLine(l)
       dedentContentLine(l)
       trackNoteBody(l)
