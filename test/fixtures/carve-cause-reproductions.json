@@ -1,0 +1,112 @@
+[
+  {
+    "id": "carve-4101-1",
+    "source": ":: t\n: ```\n  code\n  ```\n +\n: c\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>code\n</code></pre>\n  </dd>\n</dl>\n<p>+\n: c</p>"
+  },
+  {
+    "id": "carve-4101-2",
+    "source": "  :: t\n  : ```\n    code\n    ```\n   +\n  : c\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>code\n</code></pre>\n  </dd>\n</dl>\n<p>+\n: c</p>"
+  },
+  {
+    "id": "carve-4120-1",
+    "source": ":: t\n : d\n+\np\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n+\np</dd>\n</dl>"
+  },
+  {
+    "id": "carve-4120-2",
+    "source": ":: t\n: ```\n +\n> q\n: a\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>+</p>\n<blockquote><p>q\n: a</p></blockquote>"
+  },
+  {
+    "id": "carve-4152-1",
+    "source": "- - +\npara\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>+\npara</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "carve-4152-2",
+    "source": "[^a]: +\n  flush\n\nsee[^a]\n",
+    "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\nflush<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4160-1",
+    "source": ":: t\n:  [^q]: note\n   * child\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>"
+  },
+  {
+    "id": "carve-4166-1",
+    "source": "- a\n  :: t\n  : +\n```\nx\n```\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+</dd>\n    </dl>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
+  },
+  {
+    "id": "carve-4166-2",
+    "source": "- a\n  - +\n```\nx\n```\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
+  },
+  {
+    "id": "carve-4166-3",
+    "source": "1. a\n   :: t\n   : +\nx\n  : d\n",
+    "html": "<ol>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+\nx\n: d</dd>\n    </dl>\n  </li>\n</ol>"
+  },
+  {
+    "id": "carve-4228-1",
+    "source": ":: t\n: [^q]: +\n- y\n\nr[^q]\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\n- y<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4228-2",
+    "source": ":: t\n: [^q]: +\n - y\n\nr[^q]\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\n- y<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4230-1",
+    "source": "> :: t\n> : +\npara\n",
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>+\npara</dd>\n  </dl>\n</blockquote>"
+  },
+  {
+    "id": "carve-4230-2",
+    "source": "> :: t\n> : [^b]: +\n- y\n\nr[^b]\n",
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n</blockquote>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\n- y<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4243-1",
+    "source": "  - a\n  +\n  p\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>"
+  },
+  {
+    "id": "carve-4243-2",
+    "source": " - +\n b\n",
+    "html": "<ul>\n  <li>b</li>\n</ul>"
+  },
+  {
+    "id": "carve-4255-1",
+    "source": "r[^n]\n\n[^n]: n\n\n    :: t\n    : +\n    after\n    tail\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n</p>\n      <dl>\n        <dt>t</dt>\n        <dd>after\ntail</dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4259-1",
+    "source": "[^a]: 1. +\n  - y\ntail\n\nr[^a]\n",
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <ol>\n        <li>+</li>\n      </ol>\n      <ul>\n        <li>y\ntail</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve-4307-1",
+    "source": "- a\n  * +\n    %% c\nafter\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "carve-4407-1",
+    "source": ":: t\n : +\nl\n: b\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>+\nl</dd>\n  <dd>b</dd>\n</dl>"
+  },
+  {
+    "id": "carve-4407-2",
+    "source": ":: t\n : +\n> q\n: b\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>+</dd>\n</dl>\n<blockquote><p>q\n: b</p></blockquote>"
+  },
+  {
+    "id": "carve-4407-3",
+    "source": ":: t\n : +\nl\n: b\n\n  p\n",
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>+\nl</dd>\n  <dd>\n    <p>b</p>\n    <p>p</p>\n  </dd>\n</dl>"
+  }
+]
