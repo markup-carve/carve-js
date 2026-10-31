@@ -12,6 +12,13 @@
       ]
     },
     {
+      "ticket": "markup-carve/carve#4300",
+      "cause": "the pinned spec model predates the ruled block-form boundary after a quoted term",
+      "cases": [
+        "lazy-a25e7b8f38cf"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4610",
       "cause": "the pinned spec model predates the ruling that a tab after a marker separator is content and keeps the content column",
       "cases": [

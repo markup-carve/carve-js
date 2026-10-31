@@ -1207,6 +1207,20 @@ const IMPLEMENTED = new Set([
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   [
+    '620-generated-container-documents-12',
+    {
+      reason: 'carve#4300: a separator below a quoted term ends the term',
+      html: '<blockquote>\n  <ol>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ol>\n</blockquote>\n<p>: para</p>',
+    },
+  ],
+  [
+    '620-generated-container-documents-15',
+    {
+      reason: 'carve#4300: a separator below a quoted term ends the term',
+      html: '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>: definition</p>',
+    },
+  ],
+  [
     '118-cyclic-cross-reference-resolves-to-one-level',
     {
       reason: 'carve#4642: an inner reference contributes its target text without an inner link',

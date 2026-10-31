@@ -211,6 +211,19 @@ function matchMarker(rest: string): { width: number; head: number; axes: string;
   return null
 }
 
+function termRefusesLazyLine(term: Frame, marker: boolean, rest: string, missed: Frame[]): boolean {
+  if (term.last !== 'term') return false
+  return marker ? missed.some((frame) => frame.kind === 'quote' || frame.kind === 'note')
+    : DD.test(rest) && missed.some((frame) => frame.kind === 'quote')
+}
+
+function retireTermAtQuoteSeparator(frames: Frame[], reached: number, owner: Frame, rest: string): void {
+  if (frames[frames.length - 1]?.last !== 'term' || !DD.test(rest) || owner.kind !== 'quote') return
+  frames.length = reached + 1
+  owner.para = true
+  owner.last = 'para'
+}
+
 // Frames inside a quote a marker-line `+` took leave the body's column to its host (CARVE-P9-067, carve#4385).
 function closesAColumn(closed: Frame[]): boolean {
   const quote = closed.findIndex((f) => f.firstBlockQuote === true)
@@ -435,7 +448,11 @@ export function ownLines(
     const missedFrames = frames.slice(reached + 1)
     const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
       !missedFrames.some((f) => f.kind === 'note')
-    if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
+    // A term takes plain lazy text, but a marker or description separator that
+    // misses its quote or note is read by the surviving owner (carve#4300).
+    const marker = matchMarker(m.rest)
+    const termRefuses = termRefusesLazyLine(top(), marker !== null, m.rest, missedFrames)
+    if (missed && !captionsQuote && !termRefuses && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
@@ -443,6 +460,7 @@ export function ownLines(
       leadLazy(owner)
       finish()
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
+      retireTermAtQuoteSeparator(frames, reached, owner, m.rest)
       continue
     }
     // A paragraph a `+` attaches at an item's marker column stays in the item (§17 L3),
@@ -489,7 +507,7 @@ export function ownLines(
       top().para = false
       top().last = 'block'
     } else if (form.kind === 'text') {
-      applyText(owner, closedColumn, plusFollower)
+      applyText(owner, closedColumn, plusFollower, termRefuses)
     } else if (plusLanding !== null) {
       lead(plusLanding)
       apply(owner, m.col, form, plusLanding)
@@ -594,7 +612,13 @@ export function ownLines(
       }
     }
 
-    function applyText(owner: Frame, closedColumn: boolean, plusFollower: boolean): void {
+    function applyText(owner: Frame, closedColumn: boolean, plusFollower: boolean, releasedTerm = false): void {
+      if (releasedTerm) {
+        lead(owner.canon)
+        owner.para = true
+        owner.last = 'para'
+        return
+      }
       // A new paragraph starts at the owner's column, never inside a frame it did not reach.
       // A term's continuation moves with the term, so a later `:` body still follows it.
       const term = owner.para && owner.last === 'term'

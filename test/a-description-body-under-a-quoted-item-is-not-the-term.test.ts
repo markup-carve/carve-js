@@ -1,54 +1,54 @@
-// Unmarked quote continuations fold into the open paragraph under PART 0 O1-O3.
+// A block-form line below a quoted term ends that term under carve#4300.
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 
-describe('unmarked description-shaped lines fold into the quoted term', () => {
+describe('unmarked description-shaped lines leave the quoted term', () => {
   it('reads the ticket document', () => {
-    expect(carveToHtml('> - :: t\n    :  a\ntail\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  a\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>")
+    expect(carveToHtml('> - :: t\n    :  a\ntail\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a\ntail</p>")
   })
 
-  it('folds at the item content column', () => {
-    expect(carveToHtml('> - :: t\n  :  a\ntail\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  a\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>")
+  it('leaves at the item content column', () => {
+    expect(carveToHtml('> - :: t\n  :  a\ntail\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a\ntail</p>")
   })
 
-  it('folds at document column zero', () => {
+  it('leaves at document column zero', () => {
     expect(carveToHtml('> - :: t\n:  a\ntail\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a\ntail</p>")
   })
 
-  it('folds past the item content column', () => {
+  it('leaves past the item content column', () => {
     expect(carveToHtml('> - :: t\n      :  a\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a</p>",
     )
   })
 
   it('reads a one-space separator', () => {
     expect(carveToHtml('> - :: t\n    : a\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n: a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>: a</p>",
     )
   })
 
   it('reads a three-space separator', () => {
     expect(carveToHtml('> - :: t\n    :   a\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:   a</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:   a</p>",
     )
   })
 
-  it('folds under an ordered quoted item', () => {
+  it('leaves an ordered quoted item', () => {
     expect(carveToHtml('> 1. :: t\n     :  a\n')).toBe(
-      "<blockquote>\n  <ol>\n    <li>\n      <dl>\n        <dt>t\n:  a</dt>\n      </dl>\n    </li>\n  </ol>\n</blockquote>",
+      "<blockquote>\n  <ol>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ol>\n</blockquote>\n<p>:  a</p>",
     )
   })
 
   it('reads it one quote deeper', () => {
     expect(carveToHtml('> > - :: t\n      :  a\n')).toBe(
-      "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>t\n:  a</dt>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>",
+      "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>:  a</p>",
     )
   })
 
   it('reads it one item deeper', () => {
     expect(carveToHtml('> - - :: t\n      :  a\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t\n:  a</dt>\n          </dl>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a</p>",
     )
   })
 })
@@ -98,9 +98,9 @@ describe('marked descriptions and container exits', () => {
 })
 
 describe('a non-description payload at the same column', () => {
-  it('a list marker folds into the term', () => {
+  it('a list marker leaves the term', () => {
     expect(carveToHtml('> - :: t\n    - m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n- m</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>m</li>\n</ul>",
     )
   })
 
