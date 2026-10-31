@@ -1,4 +1,4 @@
-// Unmarked quote continuations fold into the open paragraph under PART 0 O1-O3.
+// A quoted term folds plain text but releases block-form lines under carve#4300.
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
@@ -15,8 +15,10 @@ describe('a quote-lazy line reaches no content column inside a quoted item', () 
     expect(carveToHtml('> - :: t\n    plain\ntail\n')).toBe(TERM_FOLD('plain'))
   })
 
-  it('folds a list marker instead of opening a sublist', () => {
-    expect(carveToHtml('> - :: t\n    - m\ntail\n')).toBe(TERM_FOLD('- m'))
+  it('ends the term before a list marker', () => {
+    expect(carveToHtml('> - :: t\n    - m\ntail\n')).toBe(
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>m\ntail</li>\n</ul>',
+    )
   })
 
   it('opens a heading after the quote instead of folding it', () => {
@@ -60,10 +62,10 @@ describe('the frame keeps the fence family a wider dedent would lose', () => {
   })
 })
 
-describe('unmarked entry-shaped lines remain term text', () => {
-  it('folds a description-shaped line into the open term', () => {
+describe('unmarked entry-shaped lines leave a quoted term', () => {
+  it('releases a description-shaped line from the open term', () => {
     expect(carveToHtml('> - :: t\n    :  a\ntail\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  a\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a\ntail</p>",
     )
   })
 
@@ -73,9 +75,9 @@ describe('unmarked entry-shaped lines remain term text', () => {
     )
   })
 
-  it('folds consecutive description-shaped lines into the term', () => {
+  it('reads consecutive description-shaped lines after the term', () => {
     expect(carveToHtml('> - :: t\n    :  a\n    :  b\ntail\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  a\n:  b\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>:  a\n:  b\ntail</p>",
     )
   })
 })
