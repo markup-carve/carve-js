@@ -598,6 +598,7 @@ export {
   combinedSpanCloser,
   emphasisBrackets,
   execLinkTail,
+  flankCharAt,
   inlineSource,
   isFlankSpace,
   isQuoteAlnum,

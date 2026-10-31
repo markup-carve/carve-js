@@ -24,7 +24,8 @@ export const RE_FOOTNOTE_REF = /^\[\^([^\]\r\n]+)\]/
 
 // extension_name = identifier = (letter|'_'){letter|digit|'_'|'-'}
 // (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
-export const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\]/
+// The content ends at the first UNESCAPED `]` (`extension_content`, PART 3).
+export const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[((?:\\[\s\S]|[^\]\\])*)\]/
 
 /**
  * The format a raw inline's `{=format}` tail can name.
@@ -259,6 +260,13 @@ export const isQuoteAlnum = (ch: string) => /[\p{L}\p{N}]/u.test(ch)
 export const QUOTE_LETTER_RUN = /\p{L}+/uy
 
 export const ELISION_WORDS = new Set(['tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould', 'em', 'cause', 'til', 'n', 'bout'])
+
+// A hard break and an escaped space read as the flank character they render, not as their backslash (PART 3).
+export const flankCharAt = (text: string, i: number): string => {
+  if (text[i] !== '\\') return i < text.length ? String.fromCodePoint(text.codePointAt(i)!) : ''
+  if (i + 1 >= text.length || text[i + 1] === '\n') return '\n'
+  return text[i + 1] === ' ' ? '\u00a0' : '\\'
+}
 
 // R1 (CARVE-P3-023): after a dash or a slash, a quote closes before end, whitespace or closing punctuation.
 export const closesAfterDash = (prev: string, next: string) =>

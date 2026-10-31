@@ -38,6 +38,7 @@ import {
   backtickRunEnds,
   buildBracketMap,
   closesAfterDash,
+  flankCharAt,
   codePointAfter,
   combinedSpanCloser,
   crossrefBodyCanEnd,
@@ -808,7 +809,7 @@ export class InlineParseSession {
       let start = i
       while (start > 0 && text[start - 1] === '-') start--
       const before = start > 0 ? text[start - 1]! : ''
-      const after = text[i + n] ?? ''
+      const after = flankCharAt(text, i + n)
       //
       // The whole run is consumed as literal text rather than declined, so the
       // arrow token cannot pick up what the dash rule put down: declining left
@@ -820,12 +821,12 @@ export class InlineParseSession {
     }
     const c = text[i]!
     if (c === '"') {
-      const next = i + 1 < text.length ? codePointAfter(text, i) : this.sourceCharacterAfter(text, source)
+      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : this.sourceCharacterAfter(text, source)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      const next = i + 1 < text.length ? codePointAfter(text, i) : this.sourceCharacterAfter(text, source)
+      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : this.sourceCharacterAfter(text, source)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
       if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
