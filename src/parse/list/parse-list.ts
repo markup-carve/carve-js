@@ -2674,6 +2674,29 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       trackNoteBody(l)
       trackFenceOwnership(l)
       readDescriptionLine()
+      // A plain line between a child marker and its content column continues
+      // the child's paragraph. Keep that frame so a later block can close it.
+      if (nestedOwnerColumn > 0 && lazyState.deepest == null &&
+          lazyState.ownedColumn >= nestedOwnerColumn && !lazyState.ownedAuthored &&
+          lazyState.lazyFoldable && indentColumns(l) > contentCol &&
+          indentColumns(l) < contentCol + nestedOwnerColumn &&
+          !lineOpensItemBlock(dedented.trimStart()) && !isListMarkerLine(dedented.trimStart())) {
+        const deepest = verbatimOnlyLazyState()
+        deepest.lazyFoldable = true
+        lazyState.deepest = deepest
+        let frame = deepest
+        let remaining = content.slice(nestedOwnerColumn)
+        for (let width = walkMarkerOwnerPrefix(remaining); width > 0 && width < remaining.length;
+            width = walkMarkerOwnerPrefix(remaining)) {
+          frame.ownedColumn = width
+          frame.ownedAuthored = false
+          const child = verbatimOnlyLazyState()
+          child.lazyFoldable = true
+          frame.deepest = child
+          frame = child
+          remaining = remaining.slice(width)
+        }
+      }
       trackContentState(l)
       settleContentLine(l)
     }
