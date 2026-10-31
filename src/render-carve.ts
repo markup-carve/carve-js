@@ -4573,7 +4573,11 @@ class CarveRenderSession {
     //
     // So the body's blocks are written at two, and the ONE block whose payload
     // needs the third column asks for it by itself - see `atARaisedBase`.
-    for (const line of lines) defLines.push(`  ${line}`)
+    // CARVE-P9-083: a list on the marker line is measured from its own column, so its lines follow it there.
+    // A fence on that item keeps the body column, as the reader does.
+    const lead = blocks[0]?.type === 'list' && blocks[0].items[0]?.children[0]?.type !== 'code_block'
+    const indent = lead ? ' '.repeat(defLines[0]!.length - (body.split('\n')[0]?.length ?? 0)) : '  '
+    for (const line of lines) defLines.push(line ? `${indent}${line}` : line)
     return defLines.join('\n')
   }
 
