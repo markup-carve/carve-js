@@ -128,11 +128,12 @@ function nestedNoteParagraphOpen(bodyLines: readonly string[], defIndex: number)
 
 function nestedSourceBodyLeft(
   lexer: Lexer, defLineIndex: number, nestedSourceBodyColumn: number | undefined,
-  sourceLine: string | undefined,
+  authoredBodyColumn: number | undefined, sourceLine: string | undefined,
 ): boolean {
   return lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
+    authoredBodyColumn !== undefined &&
     sourceLine !== undefined && !isBlankLine(sourceQuoteBody(sourceLine)) &&
-    sourceColumn(sourceLine) < nestedSourceBodyColumn
+    sourceColumn(sourceLine) < nestedSourceBodyColumn && sourceColumn(sourceLine) < authoredBodyColumn
 }
 
 function framesBelowNoteLine(
@@ -263,7 +264,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     // A line leaving a nested note's body is still that note's lazy line (carve#3885),
     // and a line inside a fence this body opened is its payload.
-    if (lazyState.opaque === null && nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, sourceLine) &&
+    if (lazyState.opaque === null && nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, authoredBodyColumn, sourceLine) &&
         !(pendingBlankRun.count === 0 && nestedParagraphStillOpen() &&
           !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))) return 'stop'
     if (admission.kind === 'blank') {
