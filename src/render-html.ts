@@ -1192,7 +1192,8 @@ function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
       if (styleKey === undefined) next['style'] = declaration
       continue
     }
-    setOwn(next, k, k === styleKey ? appendDeclaration(v, declaration) : v)
+    // Hardened before the append, as for a table cell: a blanked style still takes it (carve#4548).
+    setOwn(next, k, k === styleKey ? appendDeclaration(sanitizeAttrValue('style', v), declaration) : v)
   }
   const result: Attrs = { ...attrs, keyValues: next }
   if (attrs.order) {
@@ -2223,7 +2224,7 @@ function renderTableRowFlat(
       if (styleKey === undefined) styleAttrs.push(`style="${styles}"`)
       else {
         const keyValues = { ...cellAttrs!.keyValues }
-        setOwn(keyValues, styleKey, appendDeclaration(keyValues[styleKey]!, styles))
+        setOwn(keyValues, styleKey, appendDeclaration(sanitizeAttrValue('style', keyValues[styleKey]!), styles))
         cellAttrs = { ...cellAttrs, keyValues }
       }
     }

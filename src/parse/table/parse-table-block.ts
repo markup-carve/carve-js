@@ -3,6 +3,17 @@ import type { InlineSource } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
 import type { Attrs, Figure, InlineNode, Position, Table, TableCell, TableRow } from '../../ast.js'
 
+import { visitInlineChildren } from '../inline/inline-children.js'
+
+// In a cell `\|` is the cell's pipe escape, so an inline destination reads it as `|` (carve#4549).
+function unescapeCellDestinations(nodes: InlineNode[]): void {
+  for (const node of nodes) {
+    if (node.type === 'link' && node.ref === undefined) node.href = node.href.replaceAll('\\|', '|')
+    else if (node.type === 'image' && node.ref === undefined) node.src = node.src.replaceAll('\\|', '|')
+    visitInlineChildren(node, unescapeCellDestinations, undefined)
+  }
+}
+
 type RawCell = Parameters<typeof import('../../parse.js').tableBlockHelpers.joinFragment>[0]
 
 export interface TableBlockHost {
@@ -253,6 +264,7 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
             : host.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 ...(cellWraps ? { cellWraps } : {}),
               }))
+          if (c.raw.includes('\\|')) unescapeCellDestinations(children)
           // Empty earlier continuation lines have no fragment to join. The
           // first text fragment still names its own continuation line.
           if (c.appended) {

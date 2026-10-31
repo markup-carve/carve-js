@@ -1417,7 +1417,7 @@ function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTab
     return node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
-  return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src)}${title})${attrs}`
+  return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src, inTable)}${title})${attrs}`
 }
 
 // Superscript and subscript have no bare delimiter form -- always emit the
@@ -2203,9 +2203,10 @@ function escapeDestinationEscapes(text: string): string {
   return escapeDestinationStructure(text)
 }
 
-function escapeDestination(text: string): string {
+// A cell reads `\|` in a destination as `|` (carve#4549).
+function escapeDestination(text: string, inTable = false): string {
   const escaped = escapeDestinationEscapes(text)
-  return escaped
+  return (inTable ? escaped.replaceAll('|', '\\|') : escaped)
     .replace(/\p{White_Space}/gu, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
 }
 
@@ -5231,7 +5232,7 @@ class CarveRenderSession {
     }
     const text = this.renderLabel(node.children, ctx)
     const title = node.title === undefined ? '' : ` "${ctx.tableCellDepth > 0 ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
-    return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
+    return `[${text}](${escapeDestination(node.href, ctx.tableCellDepth > 0)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
 
   private renderAttributeBracket(children: InlineNode[], ctx: CarveContext): string {
