@@ -267,6 +267,23 @@ function quotedMeasure(line: string): { col: number; rest: string } {
 
 const quotedRest = (line: string): string => quotedMeasure(line).rest
 
+/** Route only a block actually taken by a marker-line plus through its item's trace path. */
+function firstBlockTraceRoute(
+  parent: string, sibling: Frame | undefined, plusFollower: boolean, at: number, form: Form,
+  walkPath: string, opened: boolean, closed: number, reached: string | undefined,
+): { path: string; alias?: { from: string; to: string }; closed: number; reached?: string | undefined } {
+  if (!plusFollower || sibling?.kind !== 'item' || sibling.plus !== at - 1 ||
+      ['item', 'text', 'blank'].includes(form.kind) || form.family === 'comment' ||
+      !(walkPath === parent || walkPath.startsWith(`${parent}/`))) {
+    return { path: walkPath, closed, reached }
+  }
+  const itemPath = `${parent}/item:${(sibling.line ?? sibling.opened!) + 1}`
+  const readPath = itemPath + walkPath.slice(parent.length)
+  return opened
+    ? { path: walkPath, alias: { from: walkPath, to: readPath }, closed: 0 }
+    : { path: readPath, closed: 0 }
+}
+
 /**
  * Rule A (carve#3885): every line is first matched against the open containers,
  * and an opener past its owner's content column opens there, measured from its
@@ -281,6 +298,9 @@ export function ownLines(
   trace: TraceRecord[] | null = null,
 ): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; overindented: OverindentedOpener[] } {
   const result = lines.slice(0, start)
+  // The walk may place a marker-line first block in its parent while the readers
+  // keep it in the item. Trace records use the reader's owner for that block.
+  let traceAlias: { from: string; to: string } | null = null
   if (trace) for (let k = 0; k < start; k++) emit(k, 'INPUT', 'doc', null, 'frontmatter')
   const cuts = new Map<number, OwnershipCut[]>()
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
@@ -464,6 +484,7 @@ export function ownLines(
     const closedColumn = closesAColumn(frames.slice(reached + 1))
     const closedDescription = frames.slice(reached + 1).some((f) => f.plusBody)
     const sibling = frames[reached + 1]
+    const traceParent = trace ? ownerPath(reached) : ''
     frames.length = reached + 1
     owner = top()
     if (m.rest !== '') keepClosedShift(owner, sibling)
@@ -490,7 +511,11 @@ export function ownLines(
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
-    if (trace) traceApply(at, form, appliedPath ?? ownerPath(), closed, reachedPath, plusFollower)
+    if (trace) {
+      const route = firstBlockTraceRoute(traceParent, sibling, plusFollower, at, form,
+        appliedPath ?? ownerPath(), frames.length > reached + 1, closed, reachedPath)
+      traceApply(at, form, route, plusFollower)
+    }
 
     // S1: an open payload tests its closer first.
     function readPayload(inner: Frame): void {
@@ -810,16 +835,22 @@ export function ownLines(
 
   function emit(index: number, step: TraceRecord['step'], owner: string, rule: string | null, form: string,
     extra: { [K in 'cell' | 'closed' | 'reached' | 'plus']?: TraceRecord[K] | undefined } = {}): void {
+    if (traceAlias !== null) {
+      if (owner === traceAlias.from || owner.startsWith(`${traceAlias.from}/`)) {
+        owner = traceAlias.to + owner.slice(traceAlias.from.length)
+      } else traceAlias = null
+    }
     const record: TraceRecord = { line: index + 1, step, owner, rule, form }
     for (const [key, value] of Object.entries(extra)) if (value !== undefined) (record as unknown as Record<string, unknown>)[key] = value
     trace!.push(record)
   }
 
-  function traceApply(at: number, form: Form, owner: string, closed: number, reached: string | undefined, plusFollower: boolean): void {
+  function traceApply(at: number, form: Form, route: ReturnType<typeof firstBlockTraceRoute>, plusFollower: boolean): void {
+    if (route.alias) traceAlias = route.alias
     const kind = TRACE_FORM[form.kind] ?? form.family ?? form.kind
     const cell = form.kind === 'colon-close' ? 'B-div-end' : TRACE_OPENS.has(form.kind) ? `B-${form.family ?? kind}-start` : undefined
-    emit(at, 'S5', owner, TRACE_RULE[form.kind] ?? 'CARVE-P0-024', kind,
-      { cell, closed: closed > 0 ? closed : undefined, reached, plus: plusFollower ? at : undefined })
+    emit(at, 'S5', route.path, TRACE_RULE[form.kind] ?? 'CARVE-P0-024', kind,
+      { cell, closed: route.closed > 0 ? route.closed : undefined, reached: route.reached, plus: plusFollower ? at : undefined })
   }
 
   // A container path keyed by opening line, `depth` cutting it at a frame: `doc/item:1/quote:2`.
