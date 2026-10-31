@@ -1,0 +1,42 @@
+[
+  {
+    "id": "3984-marker-below-the-child-content-column",
+    "source": "* [ ] * a\n - [ ] c\n       - [x] - c\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>a\n- [ ] c\n- [x] - c</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "3990-marker-in-box-columns-after-lazy-lines",
+    "source": "* [x] * b\n  c\n  d\n    - [ ] c\n",
+    "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <ul>\n      <li>b\nc\nd\n- [ ] c</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "3990-marker-at-column-5",
+    "source": "* [x] * b\n  c\n  d\n     - c\n",
+    "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <ul>\n      <li>b\nc\nd\n- c</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "sibling-list-at-the-child-column",
+    "source": "* [x] * b\n  c\n      - c\n",
+    "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <ul>\n      <li>b\nc</li>\n    </ul>\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "nested-at-the-child-content-column",
+    "source": "* [x] * b\n  c\n        - c\n",
+    "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <ul>\n      <li>b\nc\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "heading-after-a-lazy-line",
+    "source": "- [ ] - para\n  c\n        # H\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ul>\n      <li>para\nc\n        <h1 id=\"H\">H</h1>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "ordered-child-after-a-lazy-line",
+    "source": "- [ ] 1. a\n  c\n     - x\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <ol>\n      <li>a\nc\n- x</li>\n    </ol>\n  </li>\n</ul>"
+  },
+  {
+    "id": "stacked-after-a-lazy-line",
+    "source": "- - [ ] - p\n    c\n        - x\n",
+    "html": "<ul>\n  <li>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled> \n        <ul>\n          <li>p\nc</li>\n          <li>x</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  }
+]

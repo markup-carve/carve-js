@@ -525,7 +525,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const text = nested[k]!
       if (isBlankLine(text)) continue
       const indent = indentColumns(text)
-      if (indent > 0 && indent < shift) {
+      if (indent === 0) continue
+      if (indent < shift) {
         nested[k] = sliceColumns(text, indent - 1, true)
         continue
       }
