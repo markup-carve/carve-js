@@ -26,8 +26,8 @@ import { carveToHtml } from '../src/index.js'
 const flat = (html: string): string => html.replace(/\n\s*/g, ' ').trim()
 
 describe('the definition-term separator', () => {
-  it('strips a tab that follows the separator space', () => {
-    expect(flat(carveToHtml(':: \tx\n'))).toBe('<dl> <dt>x</dt> </dl>')
+  it('keeps a tab that follows the separator space as content (carve#4610)', () => {
+    expect(flat(carveToHtml(':: \tx\n'))).toBe('<dl> <dt>\tx</dt> </dl>')
   })
 
   it('still refuses a tab INSTEAD of the separator space', () => {
@@ -53,10 +53,10 @@ describe('the definition-term separator', () => {
     expect(flat(carveToHtml(':::  x\n'))).not.toContain('<dt>')
   })
 
-  it('strips a tab in a term that has a description too', () => {
+  it('keeps a tab in a term that has a description too', () => {
     // The whole construct, not just the term line in isolation.
     const html = flat(carveToHtml(':: \tterm\n:  body\n'))
-    expect(html).toContain('<dt>term</dt>')
+    expect(html).toContain('<dt>\tterm</dt>')
     expect(html).toContain('<dd>')
   })
 })

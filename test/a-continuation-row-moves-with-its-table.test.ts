@@ -37,7 +37,7 @@ describe('T6: an indented + row under a table row continues it (carve#4161)', ()
 
   it('reads a row behind a lead tab as text, with the + line lazy', () => {
     expect(carveToHtml('- \t| a |\n + b |\n')).toBe(`<ul>
-  <li>| a |
+  <li>\t| a |
 + b |</li>
 </ul>`)
   })

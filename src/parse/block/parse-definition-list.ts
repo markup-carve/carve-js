@@ -1,4 +1,5 @@
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { LAZY_FRAME as LEAD_TAB_FRAME } from '../parse-prepass-core.js'
 import type {
   BlockNode,
   DefinitionList,
@@ -36,6 +37,9 @@ type TermFenceState = {
   active: { marker: string; column: number } | null
   closesOnLine: boolean
 }
+
+// CARVE-P2-010: a tab after the separator's spaces is content, so the body is paragraph text.
+const descriptionLead = (body: string): string => body.startsWith('\t') ? LEAD_TAB_FRAME + body : body
 
 function descriptionTermOwnerReached(
   openTerm: boolean, opener: string, sourceColumn: number, ownerColumn: number,
@@ -1332,8 +1336,7 @@ export function createDefinitionListParser(
         if (!d) break
         lexer.consume()
         definitionLines.push(lexer.lineNumber(defLineIndex))
-        // A tab after the separator's spaces is leading whitespace, which stops no opener (PART 0 S3).
-        definitions.push(parseDefBody(d[2]!.replace(/^[ \t]+/, ''), defLineIndex, deflistContentCol(d[1]!)))
+        definitions.push(parseDefBody(descriptionLead(d[2]!), defLineIndex, deflistContentCol(d[1]!)))
         // The description's own extent anchors to its MARKER LINE. The wire
         // derives the END from the placed children (definition-list-wire.ts), so
         // this only supplies the start and the fallback when the body produced no

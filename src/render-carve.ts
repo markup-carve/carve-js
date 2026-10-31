@@ -3463,14 +3463,18 @@ class CarveRenderSession {
         return withAttrs(headingBody)
       }
       case 'paragraph': {
-        const rendered = this.renderInlines(
-          node.children,
+        const head = node.children[0]
+        const tabRun = this.markerLineParagraphs.has(node) && head?.type === 'text' ? /^\t[ \t]*/.exec(head.value)?.[0] : undefined
+        const children = tabRun === undefined || head?.type !== 'text' ? node.children
+          : [{ ...head, value: head.value.slice(tabRun.length) }, ...node.children.slice(1)]
+        const rendered = (tabRun ?? '') + this.renderInlines(
+          children,
           ctx,
           attrs === '' && ctx.paragraphStartsAfterCaptionHost,
           ctx.lineBlockDepth > 0,
         )
         const text = guardThematicBreakLines(
-          ctx.lineBlockDepth === 0 ? paragraphLineText(rendered) : rendered,
+          ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered,
           ctx.lineBlockDepth > 0,
         )
         // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
@@ -3756,7 +3760,7 @@ class CarveRenderSession {
             ((child.type === 'code_block' || child.type === 'figure') && item.children[index - 1]?.type === 'list' ||
               child.type === 'block_quote' && item.children[index - 1]?.type === 'block_quote')))
         const spellItem = (body: string): string => {
-          const lines = body ? trimNonNbsp(body).split('\n') : ['']
+          const lines = body ? (body.startsWith('\t') ? trimEndNonNbsp(body) : trimNonNbsp(body)).split('\n') : ['']
           const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
           let source = `${indent}${prefix}${first || EMPTY_BODY_SENTINEL}\n`
           const continuation = ' '.repeat(continuationWidth)
@@ -3968,6 +3972,7 @@ class CarveRenderSession {
     for (const block of item.children) {
       if (block.type === 'paragraph') this.markerColumnGuardParagraphs.add(block)
     }
+    if (item.children[0]?.type === 'paragraph') this.markerLineParagraphs.add(item.children[0])
     // A definition collected from the ONLY line of an item leaves no child
     // behind.  Do not spell that empty item with `+`: at nested marker depth the
     // marker attaches the outer item's following block to the empty INNER item.
@@ -4223,13 +4228,15 @@ class CarveRenderSession {
          * both keep writing their own text.
          */
         this.markDescriptionParagraphs(def)
+        if (def[0]?.type === 'paragraph') this.markerLineParagraphs.add(def[0])
         const outerDescriptionBody = this.descriptionBody
         this.descriptionBody = true
         let written: string
         try {
           this.indentedHostDepth++
           try {
-            written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true)))
+            const body = atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true))
+            written = body.startsWith('\t') ? trimEndNonNbsp(body) : trimNonNbsp(body)
           } finally {
             this.indentedHostDepth--
           }
@@ -5314,6 +5321,8 @@ class CarveRenderSession {
   private itemParagraph = false
   private descriptionBody = false
   private markerColumnGuardParagraphs = new WeakSet<BlockNode>()
+  // CARVE-P2-010: a tab after a marker's separator is content, so these keep a leading tab.
+  private markerLineParagraphs = new WeakSet<BlockNode>()
   private descriptionParagraph = false
   private verbatimLineGuardNodes: InlineNode[] = []
 

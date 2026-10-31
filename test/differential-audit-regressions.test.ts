@@ -31,9 +31,9 @@ describe('differential audit regressions', () => {
     expect(carveToHtml('*[A]:  \n')).toBe('<p>*[A]:</p>')
   })
 
-  it('accepts a tab as padding only after the required marker space', () => {
-    expect(carveToHtml('. \tb\n')).toContain('<li>b</li>')
-    expect(carveToHtml('- \tb\n')).toContain('<li>b</li>')
+  it('accepts a tab only after the required marker space, as content (carve#4610)', () => {
+    expect(carveToHtml('. \tb\n')).toContain('<li>\tb</li>')
+    expect(carveToHtml('- \tb\n')).toContain('<li>\tb</li>')
   })
 
   it('ends the item on a marker-line attribute, which floats onto nothing', () => {

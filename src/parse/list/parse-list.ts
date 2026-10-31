@@ -249,8 +249,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (attr?.contentOffset !== undefined && attr.headWidth !== undefined) {
       content = line.slice(attr.contentOffset + markerLine.length - markerContentLength - attr.headWidth)
     }
-    const markerTail = markerLine.slice(leadingWhitespace(markerLine), markerLine.length - markerContentLength)
-    if (markerTail.includes('\t') && lineOpensBlock(content)) content = LAZY_FRAME + content
+    // CARVE-P2-010: a tab after the separator is content, so what follows it is paragraph text.
+    if (content.startsWith('\t')) content = LAZY_FRAME + content
     const leadOrigin = terminatorFree && !content.startsWith(LAZY_FRAME)
       ? { text: content, parentIndex: startLineIndex, prefix: line.length - content.length } : undefined
     return { startLineIndex, line, terminatorFree, attr, markerLine, content, markerContentLength, checked, taskState, leadOrigin }

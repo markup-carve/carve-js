@@ -2353,17 +2353,19 @@ export class ParseSession extends InlineParseSession {
     // Carve has no indented code blocks, so indentation never survives into a
     // paragraph. The first line's stripped width is folded into the inline
     // base position so source offsets/columns stay accurate.
-    const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
+    // CARVE-P2-010: an item's tab after its marker separator is content and stays.
+    const keptLead = firstLine.startsWith(LAZY_FRAME + '\t')
+    const firstLead = keptLead ? 0 : lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
     const text = dropTrailingWhitespace(lines.length === 1
       ? lines[0]!.slice(firstLead)
-      : lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
+      : lines.map((ln, i) => i === 0 ? ln.slice(firstLead) : ln.replace(/^[ \t]+/, '')).join('\n'))
     // Each line contributes its OWN leading whitespace on top of whatever prefix
     // the container stripped, so a continuation line needs its own origin rather
     // than a single base offset plus a local one (#444).
     const anchors =
       lines.length > 1
         ? lines.map((ln, i) => {
-            const lead = ln.match(/^[ \t]+/)?.[0].length ?? 0
+            const lead = i === 0 ? firstLead : ln.match(/^[ \t]+/)?.[0].length ?? 0
             return {
               offset: lexer.lineOffset(startLineIndex + i) + lead,
               column: lexer.lineStartColumn(startLineIndex + i) + lead,

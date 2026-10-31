@@ -92,10 +92,9 @@ describe("a heading's leading tab survives the writer", () => {
       expect(after).toBe(before)
     })
 
-    it("a bullet's leading tab is structural and stays dropped", () => {
-      // It never reaches the item's content, so there is nothing to keep
-      // (markup-carve/carve#698).
-      expect(carveToCarve(`- ${TAB}x\n`)).toBe('- x\n')
+    it("a bullet's leading tab is content and is kept", () => {
+      // CARVE-P2-010 (markup-carve/carve#4610, replacing carve#698's reading).
+      expect(carveToCarve(`- ${TAB}x\n`)).toBe(`- ${TAB}x\n`)
       const [before, after] = bothRenders(`- ${TAB}x\n`)
       expect(after).toBe(before)
     })

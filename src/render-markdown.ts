@@ -828,6 +828,14 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
  * its terms as strong paragraphs followed by its descriptions' blocks (PART 11
  * section 10p).
  */
+// CARVE-P2-010: a tab after the term marker's separator is content, so the carrier keeps it.
+function termCarrierText(term: InlineNode[]): string {
+  const head = term[0]
+  const lead = head?.type === 'text' ? /^\t[ \t]*/.exec(head.value)?.[0] : undefined
+  if (head?.type !== 'text' || lead === undefined) return canonicalInline(term)
+  return lead + canonicalInline([{ ...head, value: head.value.slice(lead.length) }, ...term.slice(1)])
+}
+
 function renderDefinitionList(node: Extract<BlockNode, { type: 'definition_list' }>, ctx: MarkdownContext): string {
   const items = node.items
   const carried = ctx.roundtrip
@@ -838,7 +846,7 @@ function renderDefinitionList(node: Extract<BlockNode, { type: 'definition_list'
   try {
     for (const item of items) {
       for (const term of item.terms) {
-        if (carried) out += `${carrierLine(`:: ${canonicalInline(term)}`, depth)}\n`
+        if (carried) out += `${carrierLine(`:: ${termCarrierText(term)}`, depth)}\n`
         out += renderWrappedInlines(term, ctx, '**', 'strong')
         ctx.lastList = undefined
       }

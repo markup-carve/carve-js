@@ -1213,6 +1213,34 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
       html: '<p><img src="u" alt="alt">\n^</p>',
     },
   ],
+  [
+    '439-a-colon-followed-by-only-whitespace-is-not-a-description-8',
+    {
+      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
+      html: "<dl>\n  <dt>t</dt>\n  <dd>\ttext</dd>\n</dl>\n<p>flush</p>",
+    },
+  ],
+  [
+    '222-a-tab-as-the-first-character-of-a-definition-term',
+    {
+      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
+      html: "<dl>\n  <dt>\tx</dt>\n</dl>",
+    },
+  ],
+  [
+    '684-a-post-marker-tab-keeps-a-quote-literal',
+    {
+      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
+      html: "<ul>\n  <li>\t&gt; a</li>\n</ul>",
+    },
+  ],
+  [
+    '736-model-syntax-boundaries-and-ownership-4',
+    {
+      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
+      html: "<ul>\n  <li>\t- B</li>\n</ul>",
+    },
+  ],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
