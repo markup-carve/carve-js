@@ -2200,8 +2200,8 @@ export class ParseSession extends InlineParseSession {
     const trimmedFirst = firstLine.trim()
     const shape = !flattened && trimmedFirst.startsWith('{{') ? scanDirectiveShape(trimmedFirst) : null
     const codeInclude = shape?.end === trimmedFirst.length && shape.options.some(([key]) => key === 'code')
-    // Unexpanded, it is literal text only at document level; nested, its source is inline content.
-    const codeIncludeLiteral = codeInclude && !shape!.quoted && lexer.rootLines === undefined
+    // Unexpanded, a bare path stays literal in every host (PART 10 I2); a quoted one keeps core inline.
+    const codeIncludeLiteral = codeInclude && !shape!.quoted
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break

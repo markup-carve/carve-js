@@ -353,6 +353,22 @@ function pairBeforeLineEnd(text: string, from: number): boolean {
   return pairMemo.at !== Infinity && pairMemo.newline < from
 }
 
+/**
+ * Only the path's quoted form and an option value open a run: a quote anywhere
+ * else is a character of its token, so `{{ it's }} it's }}` closes at the first pair.
+ */
+function opensQuotedSlot(text: string, from: number, at: number): boolean {
+  if (text[at] === '"') {
+    let before = at - 1
+    while (before >= from && text[before] === ' ') before--
+    if (before < from && at > from) return true
+  }
+  if (at - 1 < from || text[at - 1] !== ':') return false
+  let key = at - 2
+  while (key >= from && /[\w-]/.test(text[key]!)) key--
+  return key >= from && text[key] === '@' && OPTION_KEY_RE.test(text.slice(key + 1, at - 1))
+}
+
 /** The first `}}` at or after `from` outside a terminated quoted run, or -1. */
 function closerIndex(text: string, from: number): number {
   if (closerMemo.text === text && from >= closerMemo.from &&
@@ -366,6 +382,7 @@ function closerIndex(text: string, from: number): number {
     if (char === '\n') break
     if (char === '"' || char === "'") {
       quoted = true
+      if (!opensQuotedSlot(text, from, i)) continue
       const end = quotedRunEnd(text, i)
       if (end !== -1) i = end
     } else if (char === '}' && text[i + 1] === '}') {
@@ -378,6 +395,7 @@ function closerIndex(text: string, from: number): number {
 }
 
 const OPTION_KEY_RE = /^[A-Za-z_][\w-]*/
+const LANGUAGE_INFO_RE = /^[A-Za-z0-9_+#./-]+$/
 const OPTION_VALUE_RE = /^[^}|"'\\ \t\r\n@]+/
 
 export interface DirectiveShape {
@@ -403,7 +421,7 @@ export function scanDirectiveShape(text: string, open = 0): DirectiveShape | nul
   const quoted = inner[i] === '"'
   if (quoted) {
     const end = quotedRunEnd(inner, i)
-    if (end === -1) return null
+    if (end === -1 || end === i + 1) return null
     i = end + 1
   } else {
     const start = i
@@ -432,7 +450,7 @@ export function scanDirectiveShape(text: string, open = 0): DirectiveShape | nul
     if (inner[i + 1] === '"' || inner[i + 1] === "'") {
       const end = quotedRunEnd(inner, i + 1)
       if (end === -1) return null
-      options.push([key[0], inner.slice(i + 2, end)])
+      options.push([key[0], inner.slice(i + 2, end).replace(/\\([!-/:-@[-`{-~])/g, '$1')])
       i = end + 1
     } else {
       const value = OPTION_VALUE_RE.exec(inner.slice(i + 1))
@@ -446,12 +464,14 @@ export function scanDirectiveShape(text: string, open = 0): DirectiveShape | nul
 
 /**
  * A directive that stays literal text in core inline content: an invalid
- * `@lines` range, or a bare `@code` on a bare path.
+ * `@lines` range, a malformed `@code` language (I1c), or a bare `@code` on a bare path.
  */
 export function isLiteralInlineDirective(shape: DirectiveShape): boolean {
-  return shape.options.some(([key, value]) => key === 'lines'
-    ? !/^([1-9]\d*)-([1-9]\d*)$/.test(value ?? '') || lineRangeReversed(value!)
-    : key === 'code' && value === null && !shape.quoted)
+  return shape.options.some(([key, value]) => {
+    if (key === 'lines') return !/^([1-9]\d*)-([1-9]\d*)$/.test(value ?? '') || lineRangeReversed(value!)
+    if (key !== 'code') return false
+    return value === null ? !shape.quoted : !LANGUAGE_INFO_RE.test(value)
+  })
 }
 
 function lineRangeReversed(value: string): boolean {
