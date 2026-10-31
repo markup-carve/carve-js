@@ -24,8 +24,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the fences family",
       "cases": [
-        "fences-a6ede733e700",
-        "fences-beb7a2645809"
+        "fences-a6ede733e700"
       ]
     },
     {

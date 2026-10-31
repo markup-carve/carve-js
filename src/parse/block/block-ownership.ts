@@ -162,15 +162,25 @@ function orderedTokenValid(token: string): boolean {
   return /^[ivxlcdm]+$/.test(token.toLowerCase()) || /^[a-z]$/i.test(token)
 }
 
+// CARVE-P2-010: a tab that begins the content is leading whitespace, so the content column is where the content starts.
+function leadTabWidth(line: string, head: number, width: number): number {
+  const run = /^\t[ \t]*/.exec(line.slice(head))?.[0]
+  if (run === undefined || line.startsWith('%%%', head + 1)) return width
+  let end = width
+  for (const char of run) end = char === '\t' ? end + 4 - end % 4 : end + 1
+  return end
+}
+
 function matchMarker(rest: string): { width: number; head: number; axes: string } | null {
   const line = trimEndSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
-    return { width: 1 + (m[4] !== undefined ? 1 : m[3]!.length), head: m[0].length, axes: m[1]! }
+    if (m[4] !== undefined) return { width: 2, head: m[0].length, axes: m[1]! }
+    return { width: leadTabWidth(line, m[0].length, 1 + m[3]!.length), head: m[0].length, axes: m[1]! }
   }
   m = ORDERED.exec(line)
   if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3])) {
-    return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]! }
+    return { width: leadTabWidth(line, m[0].length, m[1]!.length + 1 + m[4]!.length), head: m[0].length, axes: m[2]! }
   }
   return null
 }
