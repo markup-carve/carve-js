@@ -1,7 +1,7 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, markerFreeContent, opensCodeFence, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
@@ -145,6 +145,18 @@ function framesBelowNoteLine(
     !RE_COMMENT_LINE.test(content.trimStart()) &&
     !RE_FOOTNOTE_DEF.test(content.trimStart()) && !isLinkDefLine(content.trimStart()) &&
     !isContinuationMarker(content.trimStart())
+}
+
+// CARVE-P9-083: an item on the marker line is measured from its own source column, so
+// a line at or past that item's content column is read in the item's coordinates.
+function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void {
+  const width = leadShift > 0 ? markerContentColumn(bodyLines[0]!) : -1
+  // A fence on that item keeps its payload where the spec model reads it (carve#4496 thread).
+  if (width < 0 || opensCodeFence(markerFreeContent(bodyLines[0]!))) return
+  for (let k = 1; k < bodyLines.length; k++) {
+    const line = bodyLines[k]!
+    if (!isBlankLine(line) && indentColumns(line) >= leadShift + width) bodyLines[k] = sliceColumns(line, leadShift, true)
+  }
 }
 
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
@@ -429,6 +441,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         index === 0 ? bodyColumn : indentColumns(bodySourceLines[index] ?? ''),
       )
     }
+    if (!firstBlockAttached) measureLeadItemFromSource(bodyLines, defLineRaw.length - m[2]!.length - bodyColumn)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
