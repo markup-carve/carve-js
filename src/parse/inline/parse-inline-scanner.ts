@@ -729,7 +729,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     if (close === undefined || trimStructural(text.slice(i + 2, close)) === '') return false
     flush(s)
     const inner = text.slice(i + 2, close)
-    const children = session.scanInline(inner, session.shiftSource(s.source, text, i + 2), true, false, NO_OPEN_KINDS, false, true)
+    const children = session.scanInline(inner, session.shiftSource(s.source, text, i + 2), true, false, NO_OPEN_KINDS, true, true)
     emit(s, { type: 'inline_footnote', inline: children } as InlineFootnote, i, close + 1)
     s.i = close + 1
     return true
