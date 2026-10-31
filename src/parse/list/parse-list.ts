@@ -132,8 +132,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   }) {
     const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? line
     const classifiedMarker = isContinuationMarker(line.slice(leadingWhitespace(line))) ? markerDecision(lexer, lexer.pos) : undefined
+    // A `+` owned by a list deeper than this item's own sublist keeps its blank there (§17 L1).
     const blankBeforeNestedContinuation = pendingBlankCount > 0 && classifiedMarker?.owner?.kind === 'list' &&
-      classifiedMarker.owner.column > physicalItemMarkerColumn
+      classifiedMarker.owner.column > physicalItemMarkerColumn && classifiedMarker.owner.localColumn <= contentCol
     const plusColumn = itemQuoteDepth > 0 && sourceQuoteLocalColumn(markerSource, itemQuoteDepth) === 0
       ? Math.max(sourceColumn(markerSource), physicalItemMarkerColumn)
       : sourceColumn(markerSource)
