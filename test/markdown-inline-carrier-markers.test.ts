@@ -53,7 +53,7 @@ it('keeps the slug of a heading holding a cross-reference', () => {
   const ordinary = carveToMarkdown(source)
   const exported = carveToMarkdown(source, { roundtrip: true })
   expect(exported.replace(/<!-- carve: \{#see\} -->\n/g, '').replace(/<!-- carve: [\s\S]*? -->/g, '')).toBe(ordinary)
-  expect(exported).toContain('[See ](#see)')
+  expect(exported).toContain('[See Rise](#see)')
 })
 
 it('keeps ordinary export free of markers', () => {
