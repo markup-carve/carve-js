@@ -1370,6 +1370,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (markerNoteItem) {
       trackItemLazyState(content, lazyState)
       lazyState.footnoteBodyColumn = markerNoteFloor - contentCol
+      // A fence behind an item marker in the note is no paragraph (CARVE-P0-013, PART 0 S4).
+      const noteBody = RE_FOOTNOTE_DEF.exec(content)![2]!.trimStart()
+      const behindMarker = markerFreeContent(noteBody)
+      if (behindMarker !== noteBody && opensCodeFence(behindMarker)) lazyState.lazyFoldable = false
     }
     const noteParagraphMarkers = new Set<number>()
     // Filled by the first scan, which resets any state it cannot resume.
