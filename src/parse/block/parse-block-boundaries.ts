@@ -211,6 +211,7 @@ export interface ItemLazyState {
   divDepth: number
   literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; absorbing?: boolean; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
+  divWidths?: number[]
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
   // block WRAP, so the tracker has to hold it open the way it holds a fence

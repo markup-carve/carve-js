@@ -609,8 +609,10 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { content, state } = line
     const bareFence = /^:{3,}[ \t]*$/.test(content)
     // A bare run with a container open is that container's closer.
-    if (bareFence && state.divDepth > 0 && (state.authoredColon === undefined ||
+    const widths = state.divWidths?.length === state.divDepth ? state.divWidths : undefined
+    if (bareFence && state.divDepth > 0 && (widths === undefined || widths.at(-1) === content.trim().length) && (state.authoredColon === undefined ||
       state.divDepth !== state.authoredColon.depth || content.trim().length === state.authoredColon.width)) {
+      widths?.pop()
       state.divDepth--
       return endsOnBlock(state)
     }
@@ -637,6 +639,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
         state.lazyFoldable = true
         return true
       }
+      if (state.divDepth === (state.divWidths?.length ?? 0)) (state.divWidths ??= []).push(colonFenceOpenerLen(content)!)
       state.divDepth++
       if (RE_LINE_BLOCK_OPEN.test(content)) state.literalColon = {width: colonFenceOpenerLen(content)!, column: indentColumns(content)}
       // A valid opener ENDS the absorbing paragraph, so the bare fence that
@@ -653,7 +656,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // ordinary body text and the container's closer below it is still a closer,
     // so arming here would swallow it and hold the paragraph open past the
     // block's end.
-    state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined
+    state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined || state.divWidths?.length === state.divDepth
     state.lazyFoldable = !(line.wasClosedColon && line.wasClosedLiteralComment)
     state.inDefList = false
     return true
