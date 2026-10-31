@@ -367,7 +367,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     itemSource: string, isItemAttachBoundary: AttachBoundary,
   ): FirstBlockOutcome {
     const itemStartLineIndex = head.startLineIndex
-    const attached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, shape.baseIndent, false)
+    // The follower is read at the innermost opener's marker column, so a block it opens is not paragraph text
+    // here, and a line below that column misses the block: it folds only into an open paragraph (PART 0 S4).
+    const followerColumn = indentColumns(lexer.peek()!)
+    const followerText = lexer.peek()!.trimStart()
+    const followerIsQuote = RE_BLOCKQUOTE.test(followerText)
+    const followerOpensBlock = lineOpensBlock(followerText)
+    const attached = session.collectAttachedListBlock(lexer, (line) => isItemAttachBoundary(line) || (followerOpensBlock &&
+      indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart()))),
+    shape.baseIndent, false, followerColumn)
     const nestedContentOffset = itemSource.lastIndexOf(head.content)
     const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(itemSource, nestedContentOffset)
     // The follower stands at the innermost opener's marker column, which is column 0 of the nested line.

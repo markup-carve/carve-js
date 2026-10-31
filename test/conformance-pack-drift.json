@@ -32,13 +32,6 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#3972",
-      "cause": "all three engines agree against the spec model",
-      "cases": [
-        "ownership-ca02e84b0d06"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the fences family",
       "cases": [
