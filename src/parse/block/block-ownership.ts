@@ -47,6 +47,8 @@ export interface TraceRecord {
 
 interface Frame {
   kind: 'doc' | 'quote' | 'item' | 'note' | 'dd' | 'fence' | 'colon'
+  /** A quote a marker-line `+` of an item or description took as its block. */
+  firstBlockQuote?: boolean
   col: number
   canon: number
   cut: number
@@ -216,6 +218,12 @@ function matchMarker(rest: string): { width: number; head: number; axes: string;
     return { width: leadTabWidth(line, m[0].length, m[1]!.length + 1 + m[4]!.length), head: m[0].length, axes: m[2]!, task: false, token: m[1]! }
   }
   return null
+}
+
+// Frames inside a quote a marker-line `+` took leave the body's column to its host (CARVE-P9-067, carve#4385).
+function closesAColumn(closed: Frame[]): boolean {
+  const quote = closed.findIndex((f) => f.firstBlockQuote === true)
+  return (quote < 0 ? closed : closed.slice(0, quote)).some((f) => f.kind !== 'quote')
 }
 
 function isAttrLine(text: string): boolean {
@@ -453,7 +461,7 @@ export function ownLines(
     // S5: apply the line where it reached, closing every frame it missed (T, CARVE-P0-003).
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
-    const closedColumn = frames.slice(reached + 1).some((f) => f.kind !== 'quote')
+    const closedColumn = closesAColumn(frames.slice(reached + 1))
     const closedDescription = frames.slice(reached + 1).some((f) => f.plusBody)
     const sibling = frames[reached + 1]
     frames.length = reached + 1
@@ -479,6 +487,7 @@ export function ownLines(
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form)
     }
+    if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
     if (trace) traceApply(at, form, appliedPath ?? ownerPath(), closed, reachedPath, plusFollower)
@@ -570,6 +579,12 @@ export function ownLines(
     }
 
     // `col` is where the opener starts in the source, `canon` where it lands.
+    function markFirstBlockQuote(host: Frame | undefined): void {
+      if ((host?.kind !== 'item' && host?.kind !== 'dd') || host.plus !== at - 1) return
+      const quote = frames.find((f) => f.kind === 'quote' && f.line === at)
+      if (quote) quote.firstBlockQuote = true
+    }
+
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon): void {
       // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
       owner.para = form.caption === true
