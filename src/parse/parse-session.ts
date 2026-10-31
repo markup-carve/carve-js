@@ -1,3 +1,4 @@
+import { recordUnboundCaption } from './block/caption-fallback.js'
 import type {
   Admonition,
   Attrs,
@@ -158,7 +159,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
-import { isValidAttrPayload } from '../extension/attribute-parser.js'
+import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
@@ -190,6 +191,20 @@ interface QuoteCollect {
   // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
   // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
   // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
+}
+
+const ATTR_BLOCK_SRC = `\\{((?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")*)\\}`
+const RE_REFERENCE_IMAGE_LINE = new RegExp(`^[ \\t]*!\\[(?:[^\\]\\\\]|\\\\.)*\\]\\[(?:[^\\]\\\\]|\\\\.)*\\]((?:${ATTR_BLOCK_SRC})*)[ \\t]*$`)
+
+// A lone reference image, in any label spelling, with only real attribute
+// blocks after it: the shape that holds a caption slot (PART 9 section 4).
+function isReferenceImageLine(line: string): boolean {
+  const m = RE_REFERENCE_IMAGE_LINE.exec(line)
+  if (m === null) return false
+  for (const block of m[1]!.matchAll(new RegExp(ATTR_BLOCK_SRC, 'g'))) {
+    if (block[1]!.trim() === '' || !isValidInlineAttrPayload(block[1]!)) return false
+  }
+  return true
 }
 
 /** How many lines at the start of `at` are block attribute lines. */
@@ -941,11 +956,22 @@ export class ParseSession extends InlineParseSession {
     }
     if (paragraph.children.length === 1 && paragraph.children[0]!.type === 'image' &&
         isBlankLine(lexer.peek()) && RE_CAPTION.test(lexer.peek(1) ?? '')) {
-      const cap = RE_CAPTION.exec(lexer.peek(1)!)!
+      const capLine = lexer.peek(1)!
+      const cap = RE_CAPTION.exec(capLine)!
       this.recordAttachedCaption(lexer, lexer.pos + 1)
       lexer.consume()
       lexer.consume()
-      return { type: 'figure', target: paragraph.children[0], caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
+      const image = paragraph.children[0] as Image
+      const slotStart = lexer.pos
+      const figure = { type: 'figure', target: image, caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
+      if (image.ref !== undefined) {
+        const slotEnd = lexer.pos
+        lexer.pos = slotStart
+        const slot = this.parseCaptionInline(lexer, capLine, false)
+        lexer.pos = slotEnd
+        recordUnboundCaption(figure, [image, { type: 'soft_break' }, ...slot])
+      }
+      return figure
     }
     return paragraph
   }
@@ -2126,7 +2152,7 @@ export class ParseSession extends InlineParseSession {
    * is sitting on does not end with the caption text, the mapping is not exact
    * and the positions are dropped, as before.
    */
-  private parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
+  private parseCaptionInline(lexer: Lexer, firstLine: string, captionContext = true): InlineNode[] {
     const capIndex = lexer.pos - 1
     const capLine = lexer.lineAt(capIndex)
     const anchors: Array<{ offset: number; column: number; line: number }> = []
@@ -2143,7 +2169,7 @@ export class ParseSession extends InlineParseSession {
     const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
     if (!anchorable) {
       return stripPositions(
-        this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, captionContext),
       )
     }
     return this.parseInline(
@@ -2157,7 +2183,7 @@ export class ParseSession extends InlineParseSession {
         startColumn: anchors[0]!.column,
         lineAnchors: anchors,
       }),
-      true,
+      captionContext,
     )
   }
 
@@ -2215,7 +2241,7 @@ export class ParseSession extends InlineParseSession {
         if (this.isDisplayMathHost(lines, lexer)) break
       }
       if (RE_CAPTION.test(ln)) captionAtContentColumn = true
-      if (lines.length === 1 && /^!\[[^\]]*\]\[[^\]]+\][ \t]*$/.test(lines[0]!) && RE_CAPTION.test(ln))
+      if (lines.length === 1 && isReferenceImageLine(lines[0]!) && RE_CAPTION.test(ln))
         imageCaptionSlot = true
       // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
       // list, quote, table, fence, thematic break, admonition/div) interrupts

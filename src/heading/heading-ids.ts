@@ -35,6 +35,7 @@ import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js
 import { recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
 import { TRANSLIT_MAP } from '../translit-map.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
+import { unboundCaptionParagraph } from '../parse/block/caption-fallback.js'
 import { hasCaptionAtContentColumn, hasLazySecondLine } from '../parse/block/paragraph-indent.js'
 
 /**
@@ -1376,6 +1377,16 @@ function forEachCollapsibleBlockList(b: BlockNode, visit: (children: BlockNode[]
 export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
+    if (b.type === 'figure' && isUnresolvedReference(b.target as Image)) {
+      const children = unboundCaptionParagraph(b)
+      if (children !== undefined) {
+        const para: Paragraph = { type: 'paragraph', children }
+        if (b.pos) para.pos = b.pos
+        if (b.attrs) para.attrs = b.attrs
+        blocks[i] = para
+        continue
+      }
+    }
     const loneImage = loneParagraphImage(b)
     // The sole-image -> block-image promotion is skipped in `figuresOnly` mode
     // (the formatter): a paragraph and a bare block image serialize identically,
