@@ -1095,6 +1095,10 @@ function resolveHeadingIdsImpl(
     for (const block of doc.children) walkBlock(block, resolveRefs)
     for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
 
+    // A figure promoted here still needs its caption number (CARVE-P2-022).
+    promoteBlockImages(doc.children)
+    for (const body of footnoteBodies) promoteBlockImages(body)
+
     // Number captions AFTER ref resolution so a label that contains an
     // implicit heading reference (`^ [Setup][] #: …`) is cloned into the
     // crossref auto-text already resolved (no dangling href=""), and BEFORE
@@ -1222,11 +1226,13 @@ function trimLabelWhitespace(value: string): string {
 // marker node is just `"^ "` and the content is a Strong sibling). Rejects an
 // empty first-line caption (`^ ` with content only on later folded lines).
 /** An image's inline children with the comments right after it removed, up to the first line break. */
-function withoutTrailingImageComments(children: InlineNode[]): InlineNode[] {
-  if (children[0]?.type !== 'image') return children
-  let k = 1
+function withoutImageHostComments(children: InlineNode[]): InlineNode[] {
+  let at = 0
+  while (children[at]?.type === 'comment') at++
+  if (children[at]?.type !== 'image') return children
+  let k = at + 1
   while (children[k]?.type === 'comment') k++
-  return k === 1 ? children : [children[0], ...children.slice(k)]
+  return k === 1 ? children : [children[at]!, ...children.slice(k)]
 }
 
 function captionFirstLineHasContent(children: InlineNode[]): boolean {
@@ -1447,9 +1453,9 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     // unresolved ref is a Text node (not an Image), so its paragraph is left
     // literal. The caption inlines are already parsed; strip the `^ ` marker
     // from the leading Text.
-    // Comments between the image and the caption render nothing, so they do not keep it a paragraph (carve#4568).
+    // Comments around the image render nothing, so they do not keep it a paragraph (carve#4568, carve#4621).
     // The formatter keeps such a paragraph, so the comment is written back.
-    const host = b.type === 'paragraph' ? withoutTrailingImageComments(b.children) : []
+    const host = b.type === 'paragraph' ? withoutImageHostComments(b.children) : []
     if (
       b.type === 'paragraph' &&
       host.length >= 3 &&

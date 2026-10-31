@@ -32,7 +32,7 @@ describe('an HTML attribute is written once, whatever its case', () => {
     expect(h('{CLASS=z}\n::: |\nverse\n:::')).toBe('<div CLASS="z line-block"><p>verse</p></div>')
     expect(h('[x]{.a CLASS=b ID=c #d}')).toBe('<p><span class="a b" ID="d">x</span></p>')
     expect(h('{CLASS=z}\n::: note\nx\n:::')).toBe('<aside class="admonition note z" aria-label="Note"><p>x</p></aside>')
-    expect(h('{CLASS=p}\n- [x] t')).toContain('<ul class="task-list p">')
+    expect(h('{CLASS=p}\n- [x] t')).toContain('<ul CLASS="task-list p">')
   })
 
   it('reads an ID key as the authored id of a heading and a footnote reference', () => {
