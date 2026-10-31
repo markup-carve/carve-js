@@ -9,7 +9,8 @@ describe('a combined token is opaque to the closer walk (carve-js#3910)', () => 
   it.each([
     ['_x /*a*/{.q} b/{c_} c_', '<p><u>x <strong class="q"><em>a</em></strong> b/{c</u>} c_</p>'],
     ['_x /*a*/.q} b/{c_} c_', '<p><u>x <strong><em>a</em></strong>.q} b/{c</u>} c_</p>'],
-    ['_x /*a_*/{.q} b/{c_} c_', '<p><u>x <strong class="q"><em>a_</em></strong> b/{c</u>} c_</p>'],
+    // An enclosing closer inside the token drops it even when its closer carries a block (CARVE-P9-043, carve-js#4052).
+    ['_x /*a_*/{.q} b/{c_} c_', '<p><u>x /*a</u>*<em c_="">{.q} b</em> c_</p>'],
     ['_x~/*a*/{.q} b/{c_} c_', '<p><u>x~<strong class="q"><em>a</em></strong> b/{c</u>} c_</p>'],
     ['_x */*a*/{.q} b/{c_} c_', '<p><u>x <strong>/*a</strong><em c_="">{.q} b</em> c</u></p>'],
     ['{*_x /*a*/=/{.q} b/{c_} c_*}', '<p><strong><u>x <strong><em>a</em></strong>=<em c_="">{.q} b</em> c</u></strong></p>'],

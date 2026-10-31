@@ -113,7 +113,6 @@ export interface InlineScannerSession {
     text: string,
     i: number,
     prev: string,
-    source: InlineSource,
     region?: { start: number; close: number },
   ): { out: string; len: number; kind: string } | null
   substitutionAt(
@@ -497,7 +496,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     }
     const prevForQuote = s.buf.length ? s.bufLast : s.quoteContext
     // A literal bracket run is a typography region like a span (CARVE-P3-021, carve#4551).
-    const st = session.smartToken(text, i, prevForQuote, s.source, s.bracketRuns.at(-1))
+    const st = session.smartToken(text, i, prevForQuote, s.bracketRuns.at(-1))
     if (!st) return false
     if (st.kind === 'literal_hyphen_run') {
       // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
