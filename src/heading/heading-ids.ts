@@ -34,6 +34,7 @@ import { SMART_PUNCTUATION_GLYPHS } from '../ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from '../parse.js'
 import { authoredIdOf, recordPromotedImageBlockRun } from '../extension/attribute-merge.js'
 import { TRANSLIT_MAP } from '../translit-map.js'
+import { visitInlineChildren } from '../parse/inline/inline-children.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { unboundCaptionParagraph } from '../parse/block/caption-fallback.js'
 import { hasCaptionAtContentColumn, hasLazySecondLine } from '../parse/block/paragraph-indent.js'
@@ -298,6 +299,22 @@ function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNo
  * footnote apparatus removed, its nested anchors unwrapped for the link the
  * label renders inside.
  */
+/** A heading clone drops every id at every depth, so no id appears twice (PART 9R R4, carve#4554). */
+export function dropCloneIds(nodes: InlineNode[]): InlineNode[] {
+  for (const node of nodes) {
+    const attrs = node.attrs
+    if (attrs) {
+      delete attrs.id
+      if (attrs.keyValues) {
+        for (const key of Object.keys(attrs.keyValues)) if (key.toLowerCase() === 'id') delete attrs.keyValues[key]
+      }
+      if (attrs.order) attrs.order = attrs.order.filter((slot) => slot !== '#id' && slot.toLowerCase() !== 'id')
+    }
+    visitInlineChildren(node, dropCloneIds, undefined)
+  }
+  return nodes
+}
+
 export function deriveDisplayNodes(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
   return unwrapNestedAnchors(stripResolutionApparatus(deepCloneInlines(nodes)), insideLink)
 }
@@ -906,6 +923,7 @@ function resolveHeadingIdsImpl(
             // source omit `pos` rather than invent one, and cloned display text
             // is that case exactly (carve#565).
             stripPositions(children)
+            dropCloneIds(children)
             crossrefCloneCache.set(tgtId, children)
           }
           // The node STAYS a `heading_ref` (PART 12 §3a, carve#614): the

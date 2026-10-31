@@ -259,6 +259,10 @@ export const isQuoteAlnum = (ch: string) => /[\p{L}\p{N}]/u.test(ch)
 
 export const QUOTE_LETTER_RUN = /\p{L}+/uy
 
+// Braced comments that open the content count as nothing for quote direction (carve#4552).
+const LEADING_COMMENTS = /^(?:\{%(?:(?!%\})[\s\S])*%\})+/
+export const leadingCommentsEnd = (text: string): number => LEADING_COMMENTS.exec(text)?.[0].length ?? 0
+
 export const ELISION_WORDS = new Set(['tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould', 'em', 'cause', 'til', 'n', 'bout'])
 
 // A hard break and an escaped space read as the flank character they render, not as their backslash (PART 3).

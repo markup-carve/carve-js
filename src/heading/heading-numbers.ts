@@ -1,6 +1,6 @@
 import type { BlockNode, CrossRef, Document, Heading, InlineNode, Span, Text } from '../ast.js'
 import type { CarveExtension } from '../extension.js'
-import { deepCloneInlines, deriveDisplayNodes } from './heading-ids.js'
+import { deepCloneInlines, deriveDisplayNodes, dropCloneIds } from './heading-ids.js'
 
 /** Options for the {@link headingNumbers} extension (#198). */
 export interface HeadingNumbersOptions {
@@ -108,7 +108,7 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
               ? [{ type: 'text', value: prefix } as Text]
               : [
                   { type: 'text', value: prefix } as Text,
-                  ...deriveDisplayNodes(entry.title, true),
+                  ...dropCloneIds(deriveDisplayNodes(entry.title, true)),
                 ]
         })
 
