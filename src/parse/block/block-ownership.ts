@@ -357,7 +357,11 @@ export function ownLines(
     // A missed quote keeps the line as the quote's lazy text.
     const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note')
     // A `: ` line is a description sibling at any column where its list's owner reads it (CARVE-P0-024 S3).
-    if (missed && foldsLazily(form, missedNote)) {
+    // A caption at its owner's block column attaches to the quote it follows and is never its lazy line (CARVE-P2-008, carve#4312).
+    const missedFrames = frames.slice(reached + 1)
+    const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
+      !missedFrames.some((f) => f.kind === 'note')
+    if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if (missedNote && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
