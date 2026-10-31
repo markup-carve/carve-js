@@ -43,10 +43,11 @@ it('ends an authored quote claim at a line comment', () => {
   expect(html).toContain('    <ul>\n      <li>m</li>')
 })
 
-it('keeps a marker after a quoted caption in the caption paragraph', () => {
+it('ends a quoted caption at a marker on the item content column (carve#4060)', () => {
   for (const quote of ['  > q', '   > q']) {
     const html = carveToHtml(`- a\n${quote}\n  ^ cap\n  - m`)
-    expect(html).toContain('<figcaption>cap\n- m</figcaption>')
+    expect(html).toContain('<figcaption>cap</figcaption>')
+    expect(html).toContain('    <ul>\n      <li>m</li>')
     expect(html).not.toContain('\0L\0')
   }
 })

@@ -261,6 +261,7 @@ export function parseRawBlock(lexer: Lexer): RawBlock {
 }
 
 export const definitionListHelpers = { ...listHelpers,
+  openFenceScanner,
   trackItemLazyState,
   RE_ABBR_DEF,
   RE_COMMENT_BLOCK_ANY,
@@ -787,6 +788,7 @@ export {
   markerPrefixLength,
   opaqueGroupCloser,
   openQuoteDepth,
+  openFenceScanner,
   opensCodeFence,
   opensSublistHere,
   opensWrappedAttributeBlock,
@@ -823,7 +825,7 @@ export {
 } from './table/parse-table-cells.js'
 export type { FragmentPlace, RawCell } from './table/parse-table-cells.js'
 
-import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, fenceCloseRe, trackWrappedAttributeRun } from './block/parse-quote-core.js'
+import { RE_CAPTION, RE_COMMENT_BLOCK_ANY, fenceCloseRe, openFenceScanner, trackWrappedAttributeRun } from './block/parse-quote-core.js'
 
 import type { ParseOptions } from './block/parse-block-scan-core.js'
 import {

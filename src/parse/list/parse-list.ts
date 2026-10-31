@@ -1932,7 +1932,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !captionParagraphClaim && (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen) &&
         isListMarkerLine(l) &&
         !RE_BLOCKQUOTE.test(l.trimStart())
-      captionParagraphMarker = pendingBlankRun.count === 0 && lw > baseIndent && captionParagraphClaim &&
+      // At or past the content column a marker ends the caption as it ends a paragraph (CARVE-P2-021, §24 C3).
+      captionParagraphMarker = pendingBlankRun.count === 0 && lw > baseIndent && lw < contentCol && captionParagraphClaim &&
         isListMarkerLine(l)
       captionParagraphFollower = captionParagraphClaim && pendingBlankRun.count === 0 &&
         indentColumns(l, contentCol + 1) > contentCol &&

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "issue-shape",
+    "source": "- > q\n  ^ p\n  - b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p</figcaption>\n    </figure>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "ordered-marker",
+    "source": "- > q\n  ^ p\n  1. b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p</figcaption>\n    </figure>\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ul>"
+  },
+  {
+    "id": "past-the-content-column",
+    "source": "- > q\n  ^ p\n   - b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p</figcaption>\n    </figure>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "two-columns-past",
+    "source": "- > q\n  ^ p\n    - b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p</figcaption>\n    </figure>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "second-caption-line",
+    "source": "- > q\n  ^ p\n  c\n  - b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p\nc</figcaption>\n    </figure>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "nested-item",
+    "source": "- - > q\n    ^ p\n    - b\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <figure>\n          <blockquote><p>q</p></blockquote>\n          <figcaption>p</figcaption>\n        </figure>\n        <ul>\n          <li>b</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "id": "quoted-item",
+    "source": "> - > q\n>   ^ p\n>   - b\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <figure>\n        <blockquote><p>q</p></blockquote>\n        <figcaption>p</figcaption>\n      </figure>\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "below-the-column-folds",
+    "source": "- > q\n  ^ p\n - b\n",
+    "html": "<ul>\n  <li>\n    <figure>\n      <blockquote><p>q</p></blockquote>\n      <figcaption>p</figcaption>\n    </figure>\n  </li>\n  <li>b</li>\n</ul>"
+  },
+  {
+    "id": "document-level-folds",
+    "source": "> q\n^ p\n- b\n",
+    "html": "<figure>\n  <blockquote><p>q</p></blockquote>\n  <figcaption>p\n- b</figcaption>\n</figure>"
+  }
+]

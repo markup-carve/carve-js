@@ -1,7 +1,7 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
@@ -170,6 +170,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
   const bodyLines = [m[2]!]
+  const bodyFenceClosers = openFenceScanner()
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
   // The source line each collected line came from, and which of them were
   // buffered blanks. `restoreVerbatimBlanks` reads both after the rebase.
@@ -275,6 +276,12 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         true,
       )
       if (attached.length > 0) {
+        for (const closer of bodyFenceClosers(bodyLines)) {
+          bodyLines.push(closer)
+          bodyLineNumbers.push(plusLineNumber)
+          bodySourceLines.push(undefined)
+          trackItemLazyState(closer, lazyState)
+        }
         bodyLines.push('')
         bodyLineNumbers.push(plusLineNumber)
         bodySourceLines.push(undefined)

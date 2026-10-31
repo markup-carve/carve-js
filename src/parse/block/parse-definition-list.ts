@@ -164,6 +164,7 @@ export function createDefinitionListParser(
     insideOpenQuoteParagraph,
     isBlockAttributeLine,
     isContinuationMarker,
+    openFenceScanner,
     isLinkDefLine,
     isListMarkerLine,
     isRetainableLineComment,
@@ -275,6 +276,7 @@ export function createDefinitionListParser(
       const markerSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(firstLineIndex) - 1] ?? ''
       const bodySourceColumn = sourceColumn(markerSource, quotePrefixDepth(markerSource)) + contentCol
       const bodyLines: string[] = []
+      const bodyFenceClosers = openFenceScanner()
       const bodyLineNumbers: number[] = []
       const bodySourceLines: (string | undefined)[] = []
       const bufferedBlanks = new Set<number>()
@@ -494,6 +496,12 @@ export function createDefinitionListParser(
             true,
           )
           if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
+            for (const closer of bodyFenceClosers(bodyLines)) {
+              bodyLines.push(closer)
+              bodySourceLines.push(undefined)
+              bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
+              track(closer)
+            }
             bodyBaseEligible.add(bodyLines.length)
             bodyLines.push('')
             bodySourceLines.push(undefined)
