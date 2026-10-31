@@ -1,0 +1,187 @@
+[
+  {
+    "id": "heading on the marker line in a item",
+    "source": "- :: T\n  : # h\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "table on the marker line in a item",
+    "source": "- :: T\n  : | a |\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "thematic break on the marker line in a item",
+    "source": "- :: T\n  : ***\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <hr>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "reference definition on the marker line in a item",
+    "source": "- :: T\n  : [r]: /u\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "attribute line on the marker line in a item",
+    "source": "- :: T\n  : {.c}\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "comment line on the marker line in a item",
+    "source": "- :: T\n  : %% c\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "div on the marker line in a item",
+    "source": "- :: T\n  : ::: d\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <div class=\"d\">\n\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "heading on the marker line in a ordered item",
+    "source": "1. :: T\n   : # h\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "table on the marker line in a ordered item",
+    "source": "1. :: T\n   : | a |\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "thematic break on the marker line in a ordered item",
+    "source": "1. :: T\n   : ***\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <hr>\n      </dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "reference definition on the marker line in a ordered item",
+    "source": "1. :: T\n   : [r]: /u\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "attribute line on the marker line in a ordered item",
+    "source": "1. :: T\n   : {.c}\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "comment line on the marker line in a ordered item",
+    "source": "1. :: T\n   : %% c\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "div on the marker line in a ordered item",
+    "source": "1. :: T\n   : ::: d\nafter\n",
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <div class=\"d\">\n\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ol>\n<p>after</p>"
+  },
+  {
+    "id": "heading on the marker line in a nested item",
+    "source": "- - :: T\n    : # h\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd>\n            <h1 id=\"h\">h</h1>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "table on the marker line in a nested item",
+    "source": "- - :: T\n    : | a |\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd>\n            <table>\n              <tbody>\n                <tr><td>a</td></tr>\n              </tbody>\n            </table>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "thematic break on the marker line in a nested item",
+    "source": "- - :: T\n    : ***\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd>\n            <hr>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "reference definition on the marker line in a nested item",
+    "source": "- - :: T\n    : [r]: /u\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "attribute line on the marker line in a nested item",
+    "source": "- - :: T\n    : {.c}\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "comment line on the marker line in a nested item",
+    "source": "- - :: T\n    : %% c\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "div on the marker line in a nested item",
+    "source": "- - :: T\n    : ::: d\nafter\n",
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>T</dt>\n          <dd>\n            <div class=\"d\">\n\n            </div>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "heading on the marker line in a task item",
+    "source": "- [ ] :: T\n      : # h\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "table on the marker line in a task item",
+    "source": "- [ ] :: T\n      : | a |\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "thematic break on the marker line in a task item",
+    "source": "- [ ] :: T\n      : ***\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd>\n        <hr>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "reference definition on the marker line in a task item",
+    "source": "- [ ] :: T\n      : [r]: /u\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "attribute line on the marker line in a task item",
+    "source": "- [ ] :: T\n      : {.c}\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "comment line on the marker line in a task item",
+    "source": "- [ ] :: T\n      : %% c\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "div on the marker line in a task item",
+    "source": "- [ ] :: T\n      : ::: d\nafter\n",
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>T</dt>\n      <dd>\n        <div class=\"d\">\n\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "heading on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : # h\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd>\n          <h1 id=\"h\">h</h1>\n        </dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "table on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : | a |\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd>\n          <table>\n            <tbody>\n              <tr><td>a</td></tr>\n            </tbody>\n          </table>\n        </dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "thematic break on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : ***\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd>\n          <hr>\n        </dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "reference definition on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : [r]: /u\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd></dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "attribute line on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : {.c}\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd></dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "comment line on the marker line in a footnote",
+    "source": "[^n]: :: T\n  : %% c\nafter\n\n[^n]\n",
+    "html": "<p>after</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>T</dt>\n        <dd></dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve#4498 caption below a note-hosted table",
+    "source": "[^f]: :: t\n  : | a |\n ^ cap\n\n[^f]\n",
+    "html": "<p>^ cap</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <dl>\n        <dt>t</dt>\n        <dd>\n          <table>\n            <tbody>\n              <tr><td>a</td></tr>\n            </tbody>\n          </table>\n        </dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+  },
+  {
+    "id": "carve#4305 heading after a blank in an item",
+    "source": "- a\n\n  :: T\n  : # h\nafter\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+  },
+  {
+    "id": "paragraph on the marker line keeps the lazy line",
+    "source": "- :: T\n  : p\nafter\n",
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>T</dt>\n      <dd>p\nafter</dd>\n    </dl>\n  </li>\n</ul>"
+  }
+]
