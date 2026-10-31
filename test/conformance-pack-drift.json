@@ -110,9 +110,7 @@
       "cases": [
         "ownership-19a15d4c0b00",
         "ownership-498f1450c332",
-        "ownership-ae57ff05e447",
-        "ownership-d2105c9747c5",
-        "ownership-fdce37c2abe5"
+        "ownership-ae57ff05e447"
       ]
     },
     {
@@ -128,14 +126,6 @@
       "cases": [
         "fences-9caa332a8a41",
         "fences-c9b7d1a267bf"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4449",
-      "cause": "the pinned pack predates the ruled first-block attachment gate after an invisible note definition",
-      "cases": [
-        "notes-ab5ed6124fb2",
-        "notes-df25868243ba"
       ]
     },
     {
