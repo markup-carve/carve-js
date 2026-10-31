@@ -7,6 +7,7 @@ import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
+import { isDirectiveLine } from '../block/paragraph-indent.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
@@ -3159,6 +3160,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         const span = session.blockLineSpan(child)
         if (span === undefined) continue
+        // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L2).
+        if (child.type === 'paragraph' && isDirectiveLine(previousVisibleBlock)) loose = true
         if (previousVisibleSpan === undefined && child.type === 'paragraph' &&
             /\+[ \t]*$/.test(itemSource) &&
             session.hasAuthoredBlankBetween(lexer, lexer.lineNumber(itemStartLineIndex), span.start, opaqueBlankLines))

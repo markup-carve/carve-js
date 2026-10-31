@@ -1,4 +1,5 @@
 import { recordUnboundCaption } from './block/caption-fallback.js'
+import { markDirectiveLine } from './block/paragraph-indent.js'
 import type {
   Admonition,
   Attrs,
@@ -2389,6 +2390,7 @@ export class ParseSession extends InlineParseSession {
     // recover it from the tree (carve-js#1553).
     if (firstLead > 0) markAboveContentColumn(paragraphNode)
     if (captionAtContentColumn) markCaptionAtContentColumn(paragraphNode)
+    if (codeInclude) markDirectiveLine(paragraphNode)
     // A caption line below the container's column reaches no host (§10 I7).
     if (secondLineLazy) markSecondLineLazy(paragraphNode)
     return paragraphNode

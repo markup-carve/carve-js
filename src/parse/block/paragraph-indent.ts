@@ -1,4 +1,4 @@
-import type { Paragraph } from '../../ast.js'
+import type { BlockNode, Paragraph } from '../../ast.js'
 
 /**
  * The paragraphs whose first source line sat ABOVE their container's content
@@ -38,4 +38,15 @@ export function markCaptionAtContentColumn(para: Paragraph): void {
 
 export function hasCaptionAtContentColumn(para: Paragraph): boolean {
   return captionAtContentColumn.has(para)
+}
+
+/** Paragraphs that hold only a code include directive line, which opens no paragraph around it. */
+const directiveLine = new WeakSet<Paragraph>()
+
+export function markDirectiveLine(para: Paragraph): void {
+  directiveLine.add(para)
+}
+
+export function isDirectiveLine(para: BlockNode | undefined): boolean {
+  return para?.type === 'paragraph' && directiveLine.has(para)
 }
