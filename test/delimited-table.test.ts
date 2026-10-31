@@ -72,6 +72,15 @@ describe('delimited table fences', () => {
     expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
   })
 
+  it('leaves overlapping explicit header and footer ranges as plain cells (carve#4640)', () => {
+    for (const lang of ['csv', 'tsv']) {
+      const source = `{table header-rows=2 footer-rows=1}\n\`\`\`${lang}\na\nb\n\`\`\`\n`
+      const expected = '<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>'
+      expect(carveToHtml(source)).toBe(expected)
+      expect(carveToHtml(carveToCarve(source))).toBe(expected)
+    }
+  })
+
   it('leaves unmarked and malformed fences as code', () => {
     expect(parse('```csv\na,b\n```\n').children[0]?.type).toBe('code_block')
     expect(parse('{table}\n```csv\n"bad\n```\n').children[0]?.type).toBe('code_block')
