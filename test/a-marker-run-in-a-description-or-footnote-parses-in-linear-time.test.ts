@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
