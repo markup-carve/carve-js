@@ -1,5 +1,5 @@
 import type { Attrs } from '../ast.js'
-import { setOwn } from '../own-property.js'
+import { writeKeyValue } from './attribute-merge.js'
 
 /**
  * True when `inner` (the text between an attribute block's braces) is
@@ -126,7 +126,7 @@ export function parseAttrs(src: string): Attrs {
         ;(attrs.classes ??= []).push(...(tokens.length ? tokens : [val]))
         note('.class')
       } else {
-        setOwn((attrs.keyValues ??= {}), m[3], val)
+        writeKeyValue((attrs.keyValues ??= {}), m[3], val)
         note(m[3])
       }
     } else if (m[7] !== undefined) {
@@ -136,7 +136,7 @@ export function parseAttrs(src: string): Attrs {
       // It desugars during attribute parsing, so there is no new AST node, no
       // new field, and a consumer that has never heard of the shorthand sees an
       // ordinary `lang` key/value.
-      setOwn((attrs.keyValues ??= {}), 'lang', m[7])
+      writeKeyValue((attrs.keyValues ??= {}), 'lang', m[7])
       note('lang')
     } else if (m[8]) {
       if (m[8] === 'id') {
@@ -154,7 +154,7 @@ export function parseAttrs(src: string): Attrs {
         note('.class')
       } else {
         // Boolean attribute: a bare word with no value.
-        setOwn((attrs.keyValues ??= {}), m[8], '')
+        writeKeyValue((attrs.keyValues ??= {}), m[8], '')
         note(m[8])
       }
     }

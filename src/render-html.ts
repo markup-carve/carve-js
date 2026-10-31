@@ -51,6 +51,7 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading/heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
+import { authoredIdOf } from './extension/attribute-merge.js'
 import {
   CARRIER_CHAR,
   CARRIER_MARKER,
@@ -917,7 +918,7 @@ function collectFootnotes(ast: Document): FootnoteState {
     const number = orderIndex + 1
     const occ = (seen[orderIndex] = (seen[orderIndex] ?? 0) + 1)
     // An authored id replaces the generated one, and the backlink follows it (PART 9 §16).
-    const refId = n.attrs?.id ?? (occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`)
+    const refId = authoredIdOf(n.attrs) ?? (occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`)
     n.refId = refId
     order[orderIndex]!.backrefs.push(refId)
   }
@@ -1102,7 +1103,8 @@ function stripId(attrs?: Attrs): Attrs | undefined {
   if (!attrs) return undefined
   if (attrs.id === undefined) return attrs
   const { id: _omit, ...rest } = attrs
-  return rest
+  // An `ID` key is the same slot (PART 10 §1), so it moves with the id.
+  return Object.keys(rest.keyValues ?? {}).some((k) => k.toLowerCase() === 'id') ? stripKeyValue(rest, 'id') : rest
 }
 
 /** Copy attrs without a given key-value (e.g. a structural `href`). */
@@ -1119,6 +1121,11 @@ function stripKeyValue(attrs: Attrs | undefined, key: string): Attrs | undefined
   const result: Attrs = { ...attrs, keyValues: kv }
   if (attrs.order) result.order = attrs.order.filter((s) => !matches(s))
   return result
+}
+
+/** {@link stripKeyValue} for each R1 name the element emitted itself (PART 10 §1). */
+function stripKeyValues(attrs: Attrs | undefined, keys: readonly string[]): Attrs | undefined {
+  return keys.reduce((out, key) => stripKeyValue(out, key), attrs)
 }
 
 function indent(level: number): string {
@@ -1197,11 +1204,73 @@ function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
   return result
 }
 
-function renderAttrSlot(attrs: Attrs, slot: string): string {
-  if (slot === '.class') {
-    return attrs.classes?.length ? `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
+/** Attrs after {@link foldAttrNames}: the class and id slots keep their first spelling. */
+interface FoldedAttrs extends Attrs {
+  classSpelling?: string
+  idSpelling?: string
+}
+
+/**
+ * PART 10 §1: HTML attribute names compare ASCII case-insensitively in every
+ * merge. A name written in two spellings is emitted once, at the first
+ * spelling and position, with the later value; a `CLASS` or `ID` key joins the
+ * class or id slot.
+ */
+function foldAttrNames(attrs: Attrs): FoldedAttrs {
+  const keyValues = attrs.keyValues
+  if (!keyValues) return attrs
+  const keys = Object.keys(keyValues)
+  const folds = keys.map((k) => k.toLowerCase())
+  if (!folds.some((f, i) => f === 'class' || f === 'id' || folds.indexOf(f) !== i)) return attrs
+  const slots = [...(attrs.order ?? [])]
+  for (const slot of ['.class', '#id', ...keys]) if (!slots.includes(slot)) slots.push(slot)
+  const out: FoldedAttrs = { ...attrs, keyValues: {} }
+  const order: string[] = []
+  const spelling = new Map<string, string>()
+  // Key order records the spelling written last (`writeKeyValue`).
+  const latest = new Map(keys.map((k, i) => [folds[i]!, k]))
+  let classes: string[] | undefined
+  for (const slot of slots) {
+    if (slot === '.class') {
+      if (!attrs.classes?.length) continue
+      if (classes === undefined) { classes = []; order.push('.class'); out.classSpelling = 'class' }
+      classes.push(...attrs.classes)
+      continue
+    }
+    if (slot === '#id') {
+      if (attrs.id === undefined) continue
+      if (!order.includes('#id')) { order.push('#id'); out.idSpelling = 'id' }
+      out.id = attrs.id
+      continue
+    }
+    const value = keyValues[slot]
+    if (value === undefined) continue
+    const fold = slot.toLowerCase()
+    if (fold === 'class') {
+      if (classes === undefined) { classes = []; order.push('.class'); out.classSpelling = slot }
+      const tokens = value.split(/[\t\n\f\r ]+/).filter((t) => t !== '')
+      classes.push(...(tokens.length ? tokens : [value]))
+    } else if (fold === 'id') {
+      if (!order.includes('#id')) { order.push('#id'); out.idSpelling = slot }
+      out.id = value
+    } else {
+      if (spelling.has(fold)) continue
+      spelling.set(fold, slot)
+      order.push(slot)
+      setOwn(out.keyValues!, slot, keyValues[latest.get(fold)!]!)
+    }
   }
-  if (slot === '#id') return attrs.id !== undefined ? `id="${escapeAttr(sanitizeAttrValue('id', attrs.id))}"` : ''
+  if (classes !== undefined) out.classes = classes
+  else delete out.classes
+  out.order = order
+  return out
+}
+
+function renderAttrSlot(attrs: FoldedAttrs, slot: string): string {
+  if (slot === '.class') {
+    return attrs.classes?.length ? `${attrs.classSpelling ?? 'class'}="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
+  }
+  if (slot === '#id') return attrs.id !== undefined ? `${attrs.idSpelling ?? 'id'}="${escapeAttr(sanitizeAttrValue('id', attrs.id))}"` : ''
   if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
   if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
   const value = attrs.keyValues?.[slot]
@@ -1210,7 +1279,7 @@ function renderAttrSlot(attrs: Attrs, slot: string): string {
 
 function renderAttrs(raw?: Attrs, tag?: string): string {
   if (!raw) return ''
-  const attrs = withTextAlignDeclaration(raw, tag)
+  const attrs = foldAttrNames(withTextAlignDeclaration(raw, tag))
   const parts: string[] = []
   // Emit the recorded source order first (matches djot + carve-php),
   // then append any populated slot not covered by `order` -- so an attr
@@ -1298,10 +1367,13 @@ function renderSemanticSpanWith(
     // A DERIVED ATTRIBUTE YIELDS TO AN AUTHORED ONE of the same name: `title`
     // and `datetime` are names an author may also write, and one element never
     // carries the same attribute twice.
-    const attrs: Attrs = name === outermost ? riding : {}
-    const derived = mapsTo !== undefined && attrs.keyValues?.[mapsTo] === undefined
-      ? ` ${mapsTo}="${escapeAttr(value)}"`
-      : ''
+    let attrs: Attrs = name === outermost ? foldAttrNames(riding) : {}
+    // PART 10 §1: an authored copy of the derived name gives its value at the
+    // derived slot, in the derived spelling.
+    const authoredKey = mapsTo === undefined ? undefined : Object.keys(attrs.keyValues ?? {}).find((k) => k.toLowerCase() === mapsTo)
+    const derivedValue = authoredKey === undefined ? value : attrs.keyValues![authoredKey]!
+    if (authoredKey !== undefined) attrs = stripKeyValue(attrs, authoredKey)!
+    const derived = mapsTo !== undefined ? ` ${mapsTo}="${escapeAttr(derivedValue)}"` : ''
     html = `<${name}${derived}${renderAttrs(attrs)}>${html}</${name}>`
   }
   return html
@@ -1327,9 +1399,10 @@ function renderAttrs2(
   // mandatory base class ahead of author classes (math keeps
   // `math inline` while honoring `{.foo}`), and optionally drop the
   // author id when a structural id already exists (footnote refs).
-  const a: Attrs = attrs ? { ...attrs } : {}
+  const a: FoldedAttrs = attrs ? { ...foldAttrNames(attrs) } : {}
   if (opts.baseClass) {
     a.classes = [opts.baseClass, ...(a.classes ?? [])]
+    a.classSpelling = 'class'
     if (a.order && !a.order.includes('.class')) a.order = ['.class', ...a.order]
   }
   // A structural class the CONSTRUCT owns (not one the author wrote) trails the
@@ -1792,7 +1865,9 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
     .join('\n')
   // PART 19 §1: a task list's mandatory base class leads the authored ones.
   const isTaskList = !node.ordered && node.items.length > 0 && node.items.every((it) => it.checked !== undefined)
-  const listAttrs = isTaskList ? renderAttrs2(node.attrs, { baseClass: 'task-list' }) : renderAttrs(node.attrs)
+  const structural = [typeAttr && 'type', startAttr && 'start', delimAttr && 'data-delim'].filter((key) => key !== '')
+  const authored = stripKeyValues(node.attrs, structural)
+  const listAttrs = isTaskList ? renderAttrs2(authored, { baseClass: 'task-list' }) : renderAttrs(authored)
   return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${tightAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
@@ -2135,17 +2210,24 @@ function renderTableRowFlat(
       spans.push(`colspan="${entry.colspan}"`)
       emitted.add('colspan')
     }
+    let cellAttrs: FoldedAttrs | undefined = entry.cell.attrs && foldAttrNames(entry.cell.attrs)
     if (entry.align || entry.valign) {
       const styles = `${entry.align ? `text-align: ${entry.align};` : ''}${entry.align && entry.valign ? ' ' : ''}${entry.valign ? `vertical-align: ${entry.valign};` : ''}`
-      styleAttrs.push(`style="${styles}"`)
-      emitted.add('style')
+      // PART 10 §1: the alignment joins an authored `style` at its slot.
+      const styleKey = Object.keys(cellAttrs?.keyValues ?? {}).find((k) => k.toLowerCase() === 'style')
+      if (styleKey === undefined) styleAttrs.push(`style="${styles}"`)
+      else {
+        const keyValues = { ...cellAttrs!.keyValues }
+        setOwn(keyValues, styleKey, appendDeclaration(keyValues[styleKey]!, styles))
+        cellAttrs = { ...cellAttrs, keyValues }
+      }
     }
     // Computed spans precede authored attributes. Alignment style follows
     // authored attributes; an authored copy of an emitted key is dropped.
     const attrStr =
       cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
       (spans.length ? ' ' + spans.join(' ') : '') +
-      renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
+      renderAttrs(stripStructuralAttrs(cellAttrs, emitted)) +
       (styleAttrs.length ? ' ' + styleAttrs.join(' ') : '')
     const content = entry.cell.blocks === undefined
       ? renderInlines(withoutCommentJoin(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? []), opts)
@@ -2226,13 +2308,17 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
   // derived classes and the authored ones are one list, each value once
   // (CARVE-P4-002, markup-carve/carve#4203).
   const baseClasses = canonical ? ['admonition', node.kind] : [node.kind]
-  const classValue = [...new Set([...baseClasses, ...renderedClasses(node.attrs?.classes ?? [])])].map(escapeAttr).join(' ')
-  const restAttrs: Attrs = {}
-  if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
-  if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
+  const folded: FoldedAttrs | undefined = node.attrs && foldAttrNames(node.attrs)
+  const classValue = [...new Set([...baseClasses, ...renderedClasses(folded?.classes ?? [])])].map(escapeAttr).join(' ')
+  const restAttrs: FoldedAttrs = {}
+  if (folded?.id !== undefined) {
+    restAttrs.id = folded.id
+    if (folded.idSpelling !== undefined) restAttrs.idSpelling = folded.idSpelling
+  }
+  if (folded?.keyValues) restAttrs.keyValues = folded.keyValues
   // The class is structurally first (`admonition {type}`); the id/key
   // attrs after it keep their source order (order minus the class slot).
-  if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
+  if (folded?.order) restAttrs.order = folded.order.filter((s) => s !== '.class')
   const tag = canonical ? 'aside' : 'div'
   const rest = renderAttrs(restAttrs, tag)
   const open = `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}${accessibleName}>`
@@ -2344,7 +2430,7 @@ function renderImage(img: Image, opts: RenderOptions): string {
   const sanitizedSrc = sanitizeUrl(img.src, opts)
   destinationDenied(opts, 'image', 'html', img.src, sanitizedSrc, img.pos)
   const src = escapeAttr(sanitizedSrc)
-  let attrs = stripKeyValue(img.attrs, 'src')
+  let attrs = stripKeyValues(img.attrs, ['src', 'alt'])
   // The destination title is a structural slot, just like src. When it is
   // present it wins over a title= key from an attribute block; emitting both
   // leaves an HTML parser to choose which value survives. Keep title= when the
@@ -2754,7 +2840,7 @@ function renderFootnoteRefNode(node: InlineOf<'footnote_ref' | 'inline_footnote'
       : ''
     if (insideLink)
       return `<sup id="${escapeAttr(node.refId!)}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
-    return `<a id="${escapeAttr(node.refId!)}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
+    return `<a id="${escapeAttr(node.refId!)}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(stripKeyValues(node.attrs, ['href', 'role']), { dropId: true })}><sup>${node.number}</sup></a>`
   }
 }
 
