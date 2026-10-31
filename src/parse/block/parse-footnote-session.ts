@@ -194,6 +194,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   }
   const noteSpanScan = newCommentSpanScan()
   const lazyState = verbatimOnlyLazyState()
+  // A fence an attached block left open still holds its payload.
+  const trackAttached = (attached: string[]): void => {
+    const lastRun = new Map<number, number>()
+    attached.forEach((line, k) => { const run = commentFenceRun(line); if (run !== undefined) lastRun.set(run, k) })
+    attached.forEach((a, k) => trackItemLazyState(a, lazyState, true,
+      (width) => (lastRun.get(width) ?? -1) > k || commentBlockHasCloser(lexer, width)))
+  }
   // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
   // marker-line content, with a non-blank line at document column 0 below it,
   // is a marker, and that line's block is the body. An invisible line (a
@@ -219,6 +226,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodySourceLines.push(a)
     }
     bodyLineNumbers.push(...attachedLineNumbers)
+    trackAttached(attached)
   }
   if (!firstBlockAttached) {
     trackItemLazyState(m[2]!, lazyState)
@@ -280,6 +288,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         // The attachment is a complete block. Its following line cannot
         // continue the paragraph that preceded the plus marker.
         trackItemLazyState('', lazyState)
+        trackAttached(attached)
       }
       return 'continue'
     }
