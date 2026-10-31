@@ -1772,7 +1772,15 @@ export class ParseSession extends InlineParseSession {
     // instead of being swallowed. This is also what ends the quote on a lazy
     // list marker when no open paragraph precedes it.
     this.trackUntrackedQuoteLines(q)
-    q.paragraphOpen ??= blockQuoteParagraphClaimOpen(state)
+    // A comment in a nested quote ends at the missing inner marker. The
+    // unmarked line can still be claimed by this outer quote's paragraph.
+    let nestedComment = false
+    let level = state
+    while (level.mode.kind === 'quote') {
+      level = level.mode.inner
+      nestedComment = nestedComment || level.mode.kind === 'comment_fence'
+    }
+    q.paragraphOpen ??= blockQuoteParagraphClaimOpen(state) || nestedComment
     if (q.handDown && q.handDown.paragraphOpen === undefined) q.handDown.paragraphOpen = q.paragraphOpen
     if (!q.paragraphOpen && !lazyFootnote) return false
     let leaf = state

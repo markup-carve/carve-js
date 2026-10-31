@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// Expected HTML checked against the spec oracle at 223dc952 (carve-js#2237).
+// Expected HTML follows PART 0 S1 and the spec oracle on carve#4617.
 describe('a comment payload below a description column', () => {
   for (const base of [3, 5]) {
     for (const below of [0, 1, 2]) {
       for (const closer of [0, 3, 5]) {
-        it(`keeps the span with opener ${base}, payload ${below}, closer ${closer}`, () => {
+        it(`ends the span at the missed owner with opener ${base}, payload ${below}, closer ${closer}`, () => {
           const source = ':: term\n:  desc\n\n' +
             ' '.repeat(base) + '%%%\n' +
             ' '.repeat(base) + 'p\n' +
             ' '.repeat(below) + 'z\n' +
             ' '.repeat(closer) + '%%%\n   \n   tail\n'
           expect(carveToHtml(source)).toBe(
-            '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>desc</p>\n    <p>tail</p>\n  </dd>\n</dl>',
+            '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>desc</p>\n    <p>p</p>\n  </dd>\n</dl>\n<p>z</p>\n<p>tail</p>',
           )
         })
       }

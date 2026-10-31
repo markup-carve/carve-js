@@ -52,4 +52,23 @@ export class LiteralCommentClosers {
     }
     return true
   }
+
+  reachesEnd(openerIndex: number, floor: number): boolean {
+    if (!Number.isInteger(openerIndex) || openerIndex < 0 || openerIndex >= this.length) return false
+    let left = this.leaves + openerIndex + 1
+    let right = this.leaves + this.length
+    while (left < right) {
+      if (left % 2 === 1) {
+        if (this.minimums[left]! < floor) return false
+        left++
+      }
+      if (right % 2 === 1) {
+        right--
+        if (this.minimums[right]! < floor) return false
+      }
+      left = Math.floor(left / 2)
+      right = Math.floor(right / 2)
+    }
+    return true
+  }
 }

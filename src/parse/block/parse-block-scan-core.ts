@@ -816,8 +816,10 @@ export function commentScopeEnd(
  */
 export function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
   for (let i = fromIndex + 1; i < lexer.lineCount; i++) {
-    const quoted = RE_BLOCKQUOTE.exec(lexer.lineAt(i)!)
-    if (!quoted) return false
+    const line = lexer.lineAt(i)!
+    if (isBlankLine(line)) return false
+    const quoted = RE_BLOCKQUOTE.exec(line)
+    if (!quoted) continue
     const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
     if (run && run[1]!.length === fence) return true
   }
@@ -849,7 +851,26 @@ export function literalCommentHasCloser(lexer: Lexer, width: number, from: numbe
     run = { start, end, index: new LiteralCommentClosers(columns, widths) }
     cache.set(depth, run)
   }
-  return run.index.hasCloser(width, from - run.start, floor)
+  if (run.index.hasCloser(width, from - run.start, floor)) return true
+  // A nonblank line that misses the quote closes the owner's comment before
+  // it can become lazy text. A quoted delimiter beyond that boundary still
+  // establishes that the opener was a span rather than a line comment.
+  if (run.end >= lexer.lineCount || isBlankLine(lexer.lineAt(run.end)!) ||
+      !run.index.reachesEnd(from - run.start, floor)) return false
+  for (let i = run.end + 1; i < lexer.lineCount; i++) {
+    const line = lexer.lineAt(i)!
+    if (isBlankLine(line)) break
+    let at = 0
+    for (let level = 0; level <= depth; level++) {
+      const prefix = quotePrefixLength(line, at, line.length)
+      if (prefix === 0) { at = -1; break }
+      at += prefix
+    }
+    if (at < 0) continue
+    const content = line.slice(at)
+    if (indentColumns(content) >= floor && commentFenceRun(content) === width) return true
+  }
+  return false
 }
 
 /**
