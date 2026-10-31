@@ -217,9 +217,9 @@ function termRefusesLazyLine(term: Frame, marker: boolean, rest: string, missed:
     : DD.test(rest) && missed.some((frame) => frame.kind === 'quote')
 }
 
-function retireTermAtQuoteSeparator(frames: Frame[], reached: number, owner: Frame, rest: string): void {
+function retireTermAtQuoteSeparator(frames: Frame[], owner: Frame, rest: string): void {
   if (frames[frames.length - 1]?.last !== 'term' || !DD.test(rest) || owner.kind !== 'quote') return
-  frames.length = reached + 1
+  frames[frames.length - 1]!.last = 'para'
   owner.para = true
   owner.last = 'para'
 }
@@ -460,7 +460,7 @@ export function ownLines(
       leadLazy(owner)
       finish()
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
-      retireTermAtQuoteSeparator(frames, reached, owner, m.rest)
+      retireTermAtQuoteSeparator(frames, owner, m.rest)
       continue
     }
     // A paragraph a `+` attaches at an item's marker column stays in the item (§17 L3),

@@ -40,7 +40,7 @@ it('folds unmarked indented terms while keeping marked sibling terms', () => {
     expect(carveToHtml(`> - :: a\n${' '.repeat(indent)}:: b\n>   : p\n`)).toContain('</blockquote>\n<dl>\n  <dt>b</dt>\n</dl>')
   }
   expect(carveToHtml('> - :: a\n>   :: b\n>   : p\n')).toContain('<dt>a</dt>\n        <dt>b</dt>')
-  expect(carveToHtml('> - :: a\n  : b\n>   : p\n')).toContain('<dt>a\n: b</dt>')
+  expect(carveToHtml('> - :: a\n  : b\n>   : p\n')).toContain('</blockquote>\n<p>: b</p>')
 })
 
 // CARVE-P2-017 and section 10 I1/I4: inline code does not own layout lines.
