@@ -364,7 +364,8 @@ export function ownLines(
     if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
-      if (missedNote && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
+      // So does a marker that misses a description holding a list: it is that list's lazy text (carve#4479).
+      if ((missedNote || (frames[reached + 1]?.kind === 'dd' && top().kind === 'item' && owner.kind !== 'item' && owner.kind !== 'dd')) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
       leadLazy(owner)
       finish()

@@ -2,6 +2,14 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4479",
+      "cause": "the pinned spec model predates the ruling that a list marker at column 0 is lazy text of a list inside a description it does not reach",
+      "cases": [
+        "plus-f3825032510f",
+        "roundtrip-c5d30c150732"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4470",
       "cause": "the pinned spec model predates the T6 ruling that a continuation cell past the last column is a new cell (carve#4530); these match the pack on carve main",
       "cases": [
