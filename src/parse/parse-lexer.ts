@@ -152,6 +152,8 @@ export class Lexer {
   private ownershipCuts?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; the offset map already holds it, the column does not. */
   private ownershipLeads?: Map<number, number>
+  /** The same leading cuts, keyed by document line number. */
+  private ownershipLeadsByLine?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
   applyOwnership({ lines, cuts, letters, refusedPlus, overindented }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; overindented: OverindentedOpener[] }): void {
@@ -169,6 +171,8 @@ export class Lexer {
         offsets[index]! += removed
         this.ownershipLeads ??= new Map()
         this.ownershipLeads.set(index, removed)
+        this.ownershipLeadsByLine ??= new Map()
+        this.ownershipLeadsByLine.set(this.lineNumber(index), removed)
       }
       if (!lineCuts.length) cuts.delete(index)
     }
@@ -604,6 +608,18 @@ export class Lexer {
     const lead = this.ownershipLeads?.get(lineIndex) ?? 0
     for (const cut of this.ownershipCuts?.get(lineIndex) ?? []) if (cut.at <= column) shift += cut.removed
     return { offset: this.lineOffset(lineIndex) + column + shift, column: this.lineStartColumn(lineIndex) + column + shift + lead }
+  }
+
+  /**
+   * 0-based column, in the `rootLines` frame, where this line's content starts.
+   * The ownership walk's leading cut is gone from `rootLines` but not from the document column.
+   */
+  rootFrameColumn(lineIndex: number): number {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.rootFrameColumn(this.contiguousOrigin.start + lineIndex)
+    const root = this.documentRoot ?? this
+    const column = this.lineStartColumn(lineIndex) - 1
+    if (root === this || this.linePrefixWidths === undefined) return column
+    return Math.max(0, column - (root.ownershipLeadsByLine?.get(this.lineNumber(lineIndex)) ?? 0))
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */

@@ -409,7 +409,6 @@
     "quoted link definitions in footnote bodies > keeps a marker-line quote paragraph open across its first continuation": "#3922"
   },
   "relative-continuation-marker.test.ts": {
-    "relative continuation marker columns > attaches a table at its quote marker column": "#3920",
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
   },
   "render-carve.test.ts": {

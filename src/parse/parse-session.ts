@@ -1434,7 +1434,7 @@ export class ParseSession extends InlineParseSession {
       ? noteLead[1]!.length + FOOTNOTE_BODY_COLUMN
       : Math.max(0, quoteMarkerOffset)
     const localQuoteDepth = quotePrefixDepth(lexer.lineAt(firstLineIndex) ?? '')
-    const localQuoteOffset = lexer.hasDocumentOffsets ? lexer.lineStartColumn(firstLineIndex) - 1 : -1
+    const localQuoteOffset = lexer.hasDocumentOffsets ? lexer.rootFrameColumn(firstLineIndex) : -1
     const physicalQuoteColumn = localQuoteOffset >= 0
       ? sourceColumnAt(quoteRootLine, localQuoteOffset)
       : Math.max(quoteMarkerColumn,

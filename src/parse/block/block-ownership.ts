@@ -142,6 +142,20 @@ function indentCols(line: string): { col: number; rest: string } {
   return { col, rest: i === 0 ? line : line.slice(i) }
 }
 
+// A leading run's column as nested frames strip it (PART 9 §24 C5): tab stops restart at every frame column the run reaches.
+function strippedColumn(line: string, origins: readonly number[]): number {
+  let col = 0
+  let origin = 0
+  let o = 0
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === ' ') col += 1
+    else if (line[i] === '\t') col = origin + (Math.floor((col - origin) / 4) + 1) * 4
+    else break
+    while (o < origins.length && origins[o]! <= col) origin = origins[o++]!
+  }
+  return col
+}
+
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
 function isQuoteLine(rest: string): boolean {
   if (rest[0] !== '>') return false
@@ -270,7 +284,9 @@ export function ownLines(
       const run = src.length - m.rest.length
       if (col === m.col && !(spaces && out === '' && src.slice(0, run).includes('\t'))) out += src.slice(0, run)
       else {
-        lineCuts.push({ at: out.length, removed: run - col })
+        const last = lineCuts.at(-1)
+        if (last?.at === out.length) last.removed += run - col
+        else lineCuts.push({ at: out.length, removed: run - col })
         out += ' '.repeat(col)
       }
       src = m.rest
@@ -288,6 +304,9 @@ export function ownLines(
     let plus: Frame | null = null
     let quotes = 0
     let refused = false
+    let stripped: number | null = null
+    let segment = 1
+    let frameReach = false
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
@@ -306,11 +325,28 @@ export function ownLines(
         lead(frames[k - 1]!.canon)
         take(src.length - quoteRest(src).length)
         m = indentCols(src)
+        stripped = null
+        frameReach = false
+        segment = k + 1
         reached = k
         continue
       }
-      if (m.rest !== '' && m.col < f.col) break
+      if (m.rest !== '' && m.col < f.col) {
+        if (stripped === null && src.slice(0, src.length - m.rest.length).includes('\t')) {
+          const origins: number[] = []
+          for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
+          stripped = strippedColumn(src, origins)
+        }
+        if (stripped === null || stripped < f.col) break
+        frameReach = true
+      }
       reached = k
+    }
+    // The frame columns decided the reach, so the readers see that run as spaces.
+    if (frameReach && stripped !== null && stripped !== m.col) {
+      lineCuts.push({ at: out.length, removed: src.length - m.rest.length - stripped })
+      src = ' '.repeat(stripped) + m.rest
+      m = indentCols(src)
     }
     if (!plus && attachedHost && CONT_MARKER.test(m.rest)) plus = reopenAttachedHost(attachedHost)
     if (plus) {

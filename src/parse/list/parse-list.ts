@@ -303,7 +303,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       : markerEndColumn(baseIndent, head.markerLine.slice(leadingWhitespace(head.markerLine), head.markerLine.length - head.markerContentLength))
     const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(head.startLineIndex) - 1] ?? head.line
     const itemMarkerColumn = sourceColumn(itemSource)
-    const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.lineStartColumn(head.startLineIndex) - 1 + baseIndent)
+    const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.rootFrameColumn(head.startLineIndex) + baseIndent)
     const itemQuoteDepth = quotePrefixDepth(itemSource)
     return { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth }
   }
@@ -1846,7 +1846,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !(markerLineTerm && RE_DEFLIST_DEF.test(l.trimStart())) &&
           (lineOpensItemBlock(l.trimStart()) || deflistMarkerLine(stripLazyFrame(l))) &&
           sourceColumn((lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l) ===
-            lexer.lineStartColumn(itemStartLineIndex) - 1 + baseIndent &&
+            lexer.rootFrameColumn(itemStartLineIndex) + baseIndent &&
           (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term') &&
           lazyState.opaque === null && !insideOpenFence(lazyState)) return 'stop'
       if (lexer.hostBody === 'description' && pendingBlankRun.count === 0 && lw < contentCol &&
@@ -2012,7 +2012,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lazyState.deepest?.lazyFoldable === true
       // A marker-line note's body takes a description at its own column below a deeper term.
       const atMarkerNoteBody = markerNoteItem && sourceDescription !== null && sourceDepth === itemQuoteDepth &&
-        sourceMarkerColumn >= lexer.lineStartColumn(itemStartLineIndex) - 1 + contentCol - baseIndent + FOOTNOTE_BODY_COLUMN
+        sourceMarkerColumn >= lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent + FOOTNOTE_BODY_COLUMN
       belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
         definitionHostColumn !== undefined &&
         (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
@@ -2139,7 +2139,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           : placed
       if (markerTermText) dedented = LAZY_FRAME + sourceEntry
       if (pastDefinitionEntry && survivingItemParagraph &&
-          definitionHostColumn === lexer.lineStartColumn(itemStartLineIndex) - 1 + contentCol - baseIndent &&
+          definitionHostColumn === lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent &&
           (startsInterruptingBlock(lexer, placed.trimStart()) ||
             sourceDescription !== null && returnedTermSourceColumn === sourceMarkerColumn))
         dedented = placed.trimStart()
