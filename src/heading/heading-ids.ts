@@ -1203,6 +1203,14 @@ function trimLabelWhitespace(value: string): string {
 // any following inline node before the first soft break (e.g. `^ *b*`, where the
 // marker node is just `"^ "` and the content is a Strong sibling). Rejects an
 // empty first-line caption (`^ ` with content only on later folded lines).
+/** An image's inline children with the comments right after it removed, up to the first line break. */
+function withoutTrailingImageComments(children: InlineNode[]): InlineNode[] {
+  if (children[0]?.type !== 'image') return children
+  let k = 1
+  while (children[k]?.type === 'comment') k++
+  return k === 1 ? children : [children[0], ...children.slice(k)]
+}
+
 function captionFirstLineHasContent(children: InlineNode[]): boolean {
   const afterMarker = (children[2] as Text).value.replace(/^\^ +/, '')
   if (RE_HAS_CONTENT.test(afterMarker)) return true
@@ -1421,14 +1429,18 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     // unresolved ref is a Text node (not an Image), so its paragraph is left
     // literal. The caption inlines are already parsed; strip the `^ ` marker
     // from the leading Text.
+    // Comments between the image and the caption render nothing, so they do not keep it a paragraph (carve#4568).
+    // The formatter keeps such a paragraph, so the comment is written back.
+    const host = b.type === 'paragraph' ? withoutTrailingImageComments(b.children) : []
     if (
       b.type === 'paragraph' &&
-      b.children.length >= 3 &&
-      b.children[0]!.type === 'image' &&
-      !isUnresolvedReference(b.children[0] as Image) &&
+      host.length >= 3 &&
+      !(figuresOnly && host !== b.children) &&
+      host[0]!.type === 'image' &&
+      !isUnresolvedReference(host[0] as Image) &&
       hasCaptionAtContentColumn(b) &&
       !hasLazySecondLine(b) &&
-      b.children[1]!.type === 'soft_break' &&
+      host[1]!.type === 'soft_break' &&
       // This `text` test is also what keeps an ESCAPED caret literal: `\^`
       // parses to an `escaped_text` node, and coalesceTextRuns never merges one
       // into a text node, so `![a](/u)\n\^ cap` arrives here with an
@@ -1436,17 +1448,17 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // used to be re-checked below through a parser-internal
       // `escapedLeadingCaret` flag, which could not fire and was removed with it
       // (carve-js#1259).
-      b.children[2]!.type === 'text' &&
+      host[2]!.type === 'text' &&
       // Mirror the caption delimiter (§4/§553): `^` + one-or-more spaces (a
       // space, not a tab). The FIRST line must carry content -- either text
       // after the marker on this node, or a following inline node on the same
       // line (before the first soft-break). `^ ` alone, `^\t…`, or content only
       // on a later folded line is not a caption, matching a heading's `#` +
       // space + non-empty rule.
-      /^\^ +/.test((b.children[2] as Text).value) &&
-      captionFirstLineHasContent(b.children)
+      /^\^ +/.test((host[2] as Text).value) &&
+      captionFirstLineHasContent(host)
     ) {
-      const caption = b.children.slice(2)
+      const caption = host.slice(2)
       const first = caption[0] as Text
       const stripped = first.value.replace(/^\^ +/, '')
       if (stripped === '') caption.shift()
@@ -1478,7 +1490,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // Carry a leading block-attribute line (`{#id}` etc.) from the paragraph
       // onto the figure, matching a direct-image figure (which takes the attrs
       // at parse time) and carve-php -- otherwise `carve fmt` would drop it.
-      const figure: Figure = { type: 'figure', target: b.children[0] as Image, caption }
+      const figure: Figure = { type: 'figure', target: host[0] as Image, caption }
       // The PARAGRAPH's span is the figure's: it covered the image line and the
       // caption line, which is exactly what this figure now holds. Without it
       // the node is published with no position at all - the four figure sites in

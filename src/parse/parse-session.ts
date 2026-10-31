@@ -252,6 +252,9 @@ function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockN
   return blocks
 }
 
+const holdsNothing = (block: BlockNode): boolean => block.type === 'comment' ||
+  ((block.type === 'block_quote' || (block.type === 'div' && block.label === undefined)) && block.children.every(holdsNothing))
+
 export class ParseSession extends InlineParseSession {
   /**
    * `text` with a trailing comment and its whole separating run removed, for a
@@ -1768,8 +1771,9 @@ export class ParseSession extends InlineParseSession {
     // one binds the caption across the container change that opened the quote -
     // which is how `| a |` / blank / `>` / blank / `^ cap` captioned an empty
     // quote nobody wrote the caption under (markup-carve/carve#2892). A comment
-    // renders nothing, so a comment-only quote is the same (carve#4220).
-    if (children.every(child => child.type === 'comment')) return bq
+    // renders nothing, so a comment-only quote is the same (carve#4220), and so is
+    // a nested quote or bare div holding only such lines (carve#4573).
+    if (children.every(holdsNothing)) return bq
     // Optional caption with ^
     // Allow one blank line between
     let lookahead = 0

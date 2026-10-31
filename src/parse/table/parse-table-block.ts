@@ -67,7 +67,12 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
           // Past the last column the fragment is a new cell of the row above,
           // its text and never a span marker; a skipped column is an empty cell (T6).
           if (idx >= lastRaw!.length) {
-            const header = lastRaw!.every((c) => c.header)
+            // A `<` marker counts as the cell it extends; a `^` counts as itself (T5, carve#4566).
+            const covering = (c: number): RawCell => {
+              while (c > 0 && lastRaw![c]!.span === 'colspan') c--
+              return lastRaw![c]!
+            }
+            const header = lastRaw!.every((_, c) => covering(c).header)
             while (lastRaw!.length <= idx) {
               const pipe = contCanPosition ? slots[lastRaw!.length]!.start - 1 : -1
               const at = pipe >= 0 ? { offset: contOffset + pipe, line: contLine, column: contColumn + pipe } : null
