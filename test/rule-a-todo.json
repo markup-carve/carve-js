@@ -289,7 +289,6 @@
   },
   "lint-list-marker-below-content-column.test.ts": {
     "list-marker-below-content-column vectors > 'after-blank-continuing-number'": "#3921",
-    "list-marker-below-content-column vectors > alpha marker": "#3921",
     "list-marker-below-content-column vectors > ignores an after-blank line that is no detached list [3]": "#3921"
   },
   "lint-reports-a-dead-block-attribute-and-counts-codepoints.test.ts": {
