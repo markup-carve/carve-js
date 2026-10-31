@@ -1206,6 +1206,13 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-8',
+    {
+      reason: 'carve#4559: a caret line holding only a comment makes no caption (spec PR carve#4609)',
+      html: '<p><img src="u" alt="alt">\n^</p>',
+    },
+  ],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

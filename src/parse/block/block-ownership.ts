@@ -3,6 +3,7 @@ import { trimEndSpaceTab } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import { olKindMatches, olKindOf } from '../list/parse-item-core.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
+import { CAPTION_COMMENT_ONLY } from './parse-quote-core.js'
 import {
   isColonFenceOpener,
   isLinkDefLine,
@@ -117,7 +118,7 @@ const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
 const DD = /^:( +)(?=[ \t]*[^ \t])/
 const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r])(.*)$/
-const CAPTION = /^\^ (?=[^\n\r\u2028\u2029]*$)[ \t\f]*[^ \t\f]/
+const CAPTION = new RegExp(String.raw`^\^ (?=[^\n\r\u2028\u2029]*$)(?!${CAPTION_COMMENT_ONLY})[ \t\f]*[^ \t\f]`, 'u')
 const ATTR_BLOCK = `\\{(?:[^}'"\\\\]|\\\\.|'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")*\\}`
 const BULLET = new RegExp(`^([-*])(${ATTR_BLOCK})?( +)(?:\\[([ xX_>/!?-])\\] )?(?=.)`)
 const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})?( +)(?=.)`)
