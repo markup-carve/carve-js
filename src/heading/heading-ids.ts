@@ -1132,7 +1132,9 @@ export function crossrefAutoText(
   if (last && last.type === 'text') {
     last.value = trimLabelWhitespace(last.value)
   }
-  autoNodes.push({ type: 'text', value: ` ${n}${suffix ?? ''}` } as Text)
+  // R4: an empty label leaves nothing to separate from the number.
+  const separator = inlineText(autoNodes, undefined, true) === '' ? '' : ' '
+  autoNodes.push({ type: 'text', value: `${separator}${n}${suffix ?? ''}` } as Text)
   return autoNodes
 }
 
