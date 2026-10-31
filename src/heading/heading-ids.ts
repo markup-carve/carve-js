@@ -807,19 +807,23 @@ function resolveHeadingIdsImpl(
   // double-expand the text (e.g. `A B ` / `Title Bee` instead of one level).
   const pristineTargets = new Map<string, InlineNode[]>()
 
-  // Flatten any `</#…>` crossref nodes inside a target's text to plain text:
-  // a NESTED crossref does NOT recursively expand its own target. This makes
-  // crossref resolution strictly ONE LEVEL (the target's own text), matching
-  // carve-php / carve-rs and making the result bounded regardless of how
-  // crossrefs chain or cycle. (A resolved crossref shows nothing for the
-  // nested link; an UNresolved `</#x>` would render literally, but at clone
-  // time nested crossrefs are still raw `crossref` nodes, so emit empty text
-  // to mirror the siblings, which drop the nested reference entirely.)
-  const flattenNestedCrossrefs = (nodes: InlineNode[]): void => {
+  // An inner reference contributes its target's authored inline nodes, but a
+  // reference in THAT target contributes nothing. Read both from pristine
+  // headings so resolution order cannot turn a chain or cycle into repeated
+  // expansion. The outer cross-reference still owns the only anchor.
+  const flattenNestedCrossrefs = (nodes: InlineNode[], expand: boolean): InlineNode[] => {
+    const out: InlineNode[] = []
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!
       if (n.type === 'heading_ref') {
-        nodes[i] = { type: 'text', value: '' } as Text
+        if (expand) {
+          const targetId = targets.has(n.target) ? n.target : keyedTargets.get(targetKey(n.target))
+          const source = targetId === undefined ? undefined : pristineTargets.get(targetId) ?? targets.get(targetId)
+          if (source) {
+            const children = flattenNestedCrossrefs(deriveDisplayNodes(source, true), false)
+            for (const child of children) out.push(child)
+          }
+        }
         continue
       }
       switch (n.type) {
@@ -835,28 +839,30 @@ function resolveHeadingIdsImpl(
         case 'small_caps':
         case 'insert':
         case 'delete':
-          flattenNestedCrossrefs(n.children)
+          n.children = flattenNestedCrossrefs(n.children, expand)
           break
         case 'ruby':
           for (const pair of n.pairs) {
-            flattenNestedCrossrefs(pair.base)
-            flattenNestedCrossrefs(pair.annotation)
+            pair.base = flattenNestedCrossrefs(pair.base, expand)
+            pair.annotation = flattenNestedCrossrefs(pair.annotation, expand)
           }
           break
         case 'inline_extension':
-          flattenNestedCrossrefs(n.content)
+          n.content = flattenNestedCrossrefs(n.content, expand)
           break
         case 'inline_footnote':
-          if (n.inline) flattenNestedCrossrefs(n.inline)
+          if (n.inline) n.inline = flattenNestedCrossrefs(n.inline, expand)
           break
         case 'substitution':
-          flattenNestedCrossrefs(n.old)
-          flattenNestedCrossrefs(n.new)
+          n.old = flattenNestedCrossrefs(n.old, expand)
+          n.new = flattenNestedCrossrefs(n.new, expand)
           break
         default:
           break
       }
+      out.push(n)
     }
+    return out
   }
 
   /**
@@ -915,7 +921,7 @@ function resolveHeadingIdsImpl(
             // shared R4 path so footnote apparatus and other resolution-only
             // nodes are not cloned into a second rendered location.
             children = deriveDisplayNodes(source, true)
-            flattenNestedCrossrefs(children)
+            children = flattenNestedCrossrefs(children, true)
             // The clone came from the HEADING, so its spans point at the
             // heading's source, not at the `</#id>` this link was written as -
             // which put a span from one construct inside another's. PART 12 §4

@@ -70,6 +70,17 @@ describe('inlineText', () => {
 })
 
 describe('crossref parsing', () => {
+  it('keeps a nested heading reference as text inside the cloned label (carve#4642)', () => {
+    expect(carveToHtml('# a </#b>\n\n## b\n\n</#a>')).toBe([
+      '<section id="a">',
+      '  <h1>a <a href="#b">b</a></h1>',
+      '  <section id="b">',
+      '    <h2>b</h2>',
+      '    <p><a href="#a">a b</a></p>',
+      '  </section>',
+      '</section>',
+    ].join('\n'))
+  })
   it('parses </#id> into a crossref inline node', () => {
     const doc = parse('See </#intro> now.')
     const para = doc.children[0]
@@ -173,37 +184,32 @@ describe('resolveHeadingIds', () => {
     expect(ref.href).toBe('#target')
   })
 
-  it('clones target text one level for refs that precede the target', () => {
+  it('includes the inner target text for refs that precede the target (carve#4642)', () => {
     // A body crossref appears BEFORE its target heading, and that heading
     // itself contains a nested crossref (`# Title </#b>`). Crossref resolution
-    // is strictly ONE LEVEL (matching carve-php / carve-rs): `</#a>` shows
-    // `Title ` -- the target's own text, with the nested `</#b>` flattened
-    // away, NOT expanded into `Title Bee`. The target heading still renders its
-    // own `</#b>` as a one-level link. The clone cache shares this resolved
-    // one-level text across the early ref AND the later one.
+    // includes the inner target's authored inline text without another link.
+    // The clone cache shares this display text across early and late refs.
     const src = ['See </#a>.', '', '{#a}', '# Title </#b>', '', '{#b}', '# Bee', '', 'Again </#a>.'].join(
       '\n',
     )
     const html = carveToHtml(src)
     expect(html).not.toContain('&lt;/#b&gt;')
     expect(html).not.toContain('</#b>')
-    // Both references resolve to the same one-level text `Title `.
-    expect((html.match(/<a href="#a">Title <\/a>/g) ?? []).length).toBe(2)
-    expect(html).not.toContain('Title Bee')
+    expect((html.match(/<a href="#a">Title Bee<\/a>/g) ?? []).length).toBe(2)
     // The target heading itself still renders its own crossref one level deep.
     expect(html).toContain('<h1>Title <a href="#b">Bee</a></h1>')
   })
 
   // A crossref CYCLE used to overflow the call stack (`RangeError: Maximum
   // call stack size exceeded`) in `enforceNoNesting`, crashing every public
-  // API on tiny untrusted input. Cycles must now resolve to a one-level link
-  // (the target's bare text), matching carve-php / carve-rs.
+  // API on tiny untrusted input. The ruling on carve#4642 includes the first
+  // inner target's text and stops at references inside that target.
   describe('crossref cycles (no stack overflow)', () => {
     it('resolves a self-referencing crossref to a one-level link', () => {
       // `# A </#a>`: the heading title cross-references its OWN id.
       const html = carveToHtml('# A </#A>')
       expect(html).toBe(
-        ['<section id="A">', '  <h1>A <a href="#A">A </a></h1>', '</section>'].join('\n'),
+        ['<section id="A">', '  <h1>A <a href="#A">A A </a></h1>', '</section>'].join('\n'),
       )
     })
 
@@ -212,10 +218,10 @@ describe('resolveHeadingIds', () => {
       expect(html).toBe(
         [
           '<section id="A">',
-          '  <h1>A <a href="#B">B </a></h1>',
+          '  <h1>A <a href="#B">B A </a></h1>',
           '</section>',
           '<section id="B">',
-          '  <h1>B <a href="#A">A </a></h1>',
+          '  <h1>B <a href="#A">A B </a></h1>',
           '</section>',
         ].join('\n'),
       )
@@ -226,8 +232,8 @@ describe('resolveHeadingIds', () => {
       expect(html).toBe(
         [
           '<section id="T">',
-          '  <h1>T <a href="#T">T </a></h1>',
-          '  <p>see <a href="#T">T </a></p>',
+          '  <h1>T <a href="#T">T T </a></h1>',
+          '  <p>see <a href="#T">T T </a></p>',
           '</section>',
         ].join('\n'),
       )
@@ -256,11 +262,10 @@ describe('resolveHeadingIds', () => {
     })
 
     it('resolves a NON-cyclic crossref chain to one-level links', () => {
-      // A->B->C is a one-way chain. Crossref resolution is strictly one level
-      // (matching carve-php / carve-rs): A's link to B shows B's own text, and
-      // B's own `</#C>` is NOT recursively expanded into A's link text.
+      // A->B->C is a one-way chain. A's link to B includes C's text once,
+      // without a nested link or further expansion.
       const html = carveToHtml('# A </#B>\n\n# B </#C>\n\n# C')
-      expect(html).toContain('<h1>A <a href="#B">B </a></h1>')
+      expect(html).toContain('<h1>A <a href="#B">B C</a></h1>')
       expect(html).toContain('<h1>B <a href="#C">C</a></h1>')
       expect(html).toContain('<h1>C</h1>')
     })
