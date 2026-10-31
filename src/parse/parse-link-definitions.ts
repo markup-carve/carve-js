@@ -793,20 +793,16 @@ export function createLinkDefinitionCollector(
   // nothing about what is opaque: it registered a definition written inside a
   // fenced code SAMPLE, so documenting the syntax changed the prose around it
   // (carve#573).
-  // PART 12 §7: an abbreviation definition is recognized ONLY at document
-  // level. Tested against `raw`, NOT the container-stripped `line`: stripping
-  // is what made `> *[X]: y` register a document-wide expansion, which is the
-  // one definition kind with no marker at the use site to point back at it.
-  // The anchored pattern rules out an indented (list-item continuation) line
-  // on its own; `divs` covers the one container that adds no line prefix.
-  // `listCols` covers the remaining container: a flush-left definition line
-  // that directly follows an open list item is that item's lazy continuation
-  // (text), not a document-level definition. A blank line first pops the
-  // stack, and then it is one.
+  // PART 12 §7 recognizes an abbreviation definition at document level.
+  // The carve#4412 ruling reads a line that misses every open frame there.
+  // Keep the raw spelling for a line with no list frame: indentation alone
+  // does not make a document-level definition. Quote and div frames retain
+  // their own text, and a plus-attached quote list retains its item.
   function collectAbbreviation(s: LinkDefScan, raw: string): boolean {
     const abbr =
-      s.divs.length === 0 && s.listCols.length === 0 && !s.inFootnoteBody
-        ? RE_ABBR_DEF.exec(raw)
+      s.divs.length === 0 && s.plusColumn === null && !s.inFootnoteBody &&
+      s.listCols.every(entry => indentColumns(raw) < entry.col)
+        ? RE_ABBR_DEF.exec(s.listCols.length > 0 ? raw.trimStart() : raw)
         : null
     if (!abbr) return false
     s.lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))

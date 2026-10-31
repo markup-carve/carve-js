@@ -100,14 +100,13 @@ describe('a blank line', () => {
  * visible nor active" outcome markup-carve/carve#624 named.
  */
 describe('the definition prepass', () => {
-  it('does not collect an abbreviation an item swallowed, after a mark line', () => {
-    // `prevBlank`. With the mark line read as blank the prepass popped the
-    // item's content column, so `*[A]: Ay` looked like a document-level
-    // definition - and the item still rendered the same line as text.
+  it('collects an abbreviation after a mark line when it misses the item frame', () => {
+    // The mark line is content, but the following definition still misses
+    // the item's frame and registers at document level under carve#4412.
     const html = carveToHtml('- item\n﻿\n*[A]: Ay\n\n[link][r] A text\n')
 
-    expect(html).toContain('*[A]: Ay')
-    expect(html).not.toContain('<abbr')
+    expect(html).not.toContain('*[A]: Ay')
+    expect(html).toContain('<abbr title="Ay">A</abbr>')
   })
 
   it('does not keep a footnote body open across a mark line', () => {

@@ -39,12 +39,11 @@ describe('a definition under a folded marker registers', () => {
   })
 
   it('leaves a REAL item its content column', () => {
-    // The control. Here `- A` opens an item, the definition sits at its content
-    // column, and it is item text rather than a document definition - so the
-    // abbreviation does NOT expand.
+    // The first definition reaches the item's content column. The second
+    // misses it and defines at document level under carve#4412.
     expect(html('- A\n  *[A]: b\n')).toBe('<ul>\n  <li>A\n*[A]: b</li>\n</ul>')
     expect(html('x\n\n- A\n*[A]: b\n')).toBe(
-      '<p>x</p>\n<ul>\n  <li>A\n*[A]: b</li>\n</ul>',
+      '<p>x</p>\n<ul>\n  <li><abbr title="b">A</abbr></li>\n</ul>',
     )
   })
 })

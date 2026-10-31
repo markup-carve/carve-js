@@ -469,6 +469,7 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_LINE_BLOCK_OPEN.test(line) ||
     RE_HARDBREAKS_OPEN.test(line) ||
     RE_QUOTE_BLOCK_OPEN.test(line) ||
+    (lexer.atDocumentLevel && RE_ABBR_DEF.test(line.trimStart())) ||
     (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||

@@ -7,8 +7,8 @@ it('registers an abbreviation after a closed quoted list', () => {
   )
 })
 
-it('keeps an abbreviation-shaped line inside an open root item', () => {
+it('defines after an abbreviation line misses the root item column', () => {
   expect(carveToHtml('- b\n*[H]: L\n\nH\n')).toBe(
-    '<ul>\n  <li>b\n*[H]: L</li>\n</ul>\n<p>H</p>',
+    '<ul>\n  <li>b</li>\n</ul>\n<p><abbr title="L">H</abbr></p>',
   )
 })

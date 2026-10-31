@@ -34,9 +34,9 @@ describe('a definition one column in folds as text', () => {
     )
   })
 
-  it('folds an abbreviation definition the same way', () => {
+  it('lets an abbreviation definition that misses every item define', () => {
     expect(nested(' *[A]: x')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a\n*[A]: x</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
@@ -68,8 +68,8 @@ describe('a definition that folded as text defines nothing', () => {
     expect(carveToHtml('- - a\n [^f]: x\n\nsee[^f]\n')).toContain('<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>')
   })
 
-  it('does not expand an abbreviation', () => {
-    expect(carveToHtml('- - a\n *[A]: x\n\nA here\n')).not.toContain('<abbr')
+  it('expands an abbreviation defined outside every item', () => {
+    expect(carveToHtml('- - a\n *[A]: x\n\nA here\n')).toContain('<abbr title="x">A</abbr>')
   })
 })
 

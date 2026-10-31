@@ -1,36 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-/*
- * An abbreviation definition ONE COLUMN BELOW a definition description's
- * content column folds into the description as prose, and does not end the body
- * (markup-carve/carve-js#1544).
- *
- * AN ABBREVIATION DEFINITION IS RECOGNIZED ONLY AT DOCUMENT LEVEL (PART 12 §7),
- * so inside a container the line "is not a definition at all: it is ordinary
- * paragraph text". By the time the below-column question is asked there is no
- * definition to end the body WITH, only prose - and prose below a description's
- * column folds, which the plain-line control below shows.
- *
- * THE SAME DESCRIPTION ALREADY FOLDED IT WHEN NESTED. `startsInterruptingBlock`
- * gates the abbreviation arm on `lexer.atDocumentLevel`, and
- * `parseDefinitionList` runs on the document lexer for a top-level list and on
- * a sub-lexer for one inside a list item - so this engine gave the identical
- * description two answers according to how deep it sat, which is the reading
- * markup-carve/carve#932 refuses. The nested row below is what makes that
- * visible, and it is why the fix waives the arm for this caller rather than
- * widening the gate.
- *
- * The link and footnote spellings must NOT move: those ARE recognized inside a
- * container, so they end the body and their text belongs to the document. They
- * are pinned here as the rows that tell this fix from a blanket one.
- */
-describe("an abbreviation definition below a description's column folds", () => {
+/* The ruling on carve#4412 recognizes an abbreviation definition that misses
+ * every content column. A line that still reaches an enclosing item remains
+ * text in that item. */
+describe("an abbreviation definition below a description's column", () => {
   const html = (src: string): string => carveToHtml(src)
 
-  it('folds as prose, exactly like the plain line in the same position', () => {
+  it('defines when its source column misses the description body', () => {
     expect(html(':: t\n:  d\n  *[A]: a\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d\n*[A]: a\ntail</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
     )
   })
 
@@ -38,17 +17,13 @@ describe("an abbreviation definition below a description's column folds", () => 
     expect(html(':: t\n:  d\n  x\ntail\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d\nx\ntail</dd>\n</dl>')
   })
 
-  it('registers nothing, so a later use site stays literal', () => {
-    // The line is description text, and text defines no abbreviation: no
-    // `<abbr>` may appear at the use site, and the term must render as written.
+  it('registers for a later use site', () => {
     const out = html(':: t\n:  d\n  *[A]: a\ntail\n\nA here\n')
-    expect(out).not.toContain('<abbr')
-    expect(out).toContain('<p>A here</p>')
+    expect(out).toContain('<p><abbr title="a">A</abbr> here</p>')
   })
 
   it('answers the same for the nested spelling it already answered', () => {
-    // The description inside a list item folded all along. One rule, one answer,
-    // whatever the host depth.
+    // This line misses the description column but reaches the item's column.
     expect(html('- :: t\n  :  d\n   *[A]: a\n  tail\n')).toBe(
       '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d\n*[A]: a\ntail</dd>\n    </dl>\n  </li>\n</ul>',
     )

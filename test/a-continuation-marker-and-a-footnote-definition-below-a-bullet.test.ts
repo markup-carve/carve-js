@@ -48,9 +48,8 @@ describe('a bare continuation marker at document level', () => {
     expect(carveToHtml('| a |\n+\n- [d]: u\n[][d]\n')).toContain('<p>+\n- [d]: u\n[][d]</p>')
   })
 
-  // INSIDE A CONTAINER THE MARKER IS THAT CONTAINER'S ATTACHMENT, so the eager
-  // reading stands: the `- A` opens a real item, and PART 12 §7 recognizes an
-  // abbreviation definition only at document level.
+  // Inside the quote, the attached list still owns the definition line.
+  // Under the item, the same line misses every frame and defines.
   it('still attaches inside a quote', () => {
     expect(carveToHtml('> x\n+\n- A\n*[A]: b\n')).toBe(
       '<blockquote>\n  <p>x</p>\n  <ul>\n    <li>A\n*[A]: b</li>\n  </ul>\n</blockquote>',
@@ -59,7 +58,7 @@ describe('a bare continuation marker at document level', () => {
 
   it('still attaches inside an item', () => {
     expect(carveToHtml('- x\n+\n- A\n*[A]: b\n')).toBe(
-      '<ul>\n  <li>x\n+</li>\n  <li>A\n*[A]: b</li>\n</ul>',
+      '<ul>\n  <li>x\n+</li>\n  <li><abbr title="b">A</abbr></li>\n</ul>',
     )
   })
 
