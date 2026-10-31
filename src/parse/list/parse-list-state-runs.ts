@@ -25,6 +25,7 @@ export interface LazyLine {
   readonly authoredQuoteParagraphOpen: boolean
   readonly wasDescendantColumn: boolean
   readonly wasAbsorbing: boolean
+  readonly wasOwnedAbsorbing: boolean
   readonly wasClosedColon: boolean
   readonly wasClosedLiteralComment: boolean
   readonly wasInTable: boolean
@@ -243,6 +244,8 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       ...verbatimOnlyLazyState(),
       // The marker line's quote is the sub-item's first block, so its next line continues it.
       quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
+      // So is a malformed fence there, which absorbs the bare run below it.
+      absorbingFence: line.wasOwnedAbsorbing,
     })
     trackItemLazyState(
       dedented,

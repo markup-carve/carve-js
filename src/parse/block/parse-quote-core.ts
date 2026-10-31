@@ -966,7 +966,7 @@ export function classifyQuotedLine(
   // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
   // (`:::note` fails §12's opener test - a type word needs a space), and from
   // here the paragraph absorbs the next bare fence-shaped line as well.
-  if (/^:{3,}/.test(content)) {
+  if (/^[ \t]*:{3,}/.test(content)) {
     if (state.mode.kind === 'quote' && continuesParagraph()) {
       let inner = state.mode.inner
       while (inner.mode.kind === 'quote') inner = inner.mode.inner
