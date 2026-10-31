@@ -21,7 +21,7 @@ import { crossrefKey, headingIndexResolves, inlineText, isCollapsedRef, numberCa
 import { promoteCitationDefinitions } from './extension/citations.js'
 import { markedDelimitedTable, parse, normalizeRefLabel } from './parse.js'
 import { deriveTableMetadata } from './parse/parse-prepass-core.js'
-import { setDelimitedPayloadLines } from './table/delimited-table.js'
+import { markIncludedPayload, setDelimitedPayloadLines } from './table/delimited-table.js'
 import { mergeRun } from './coalesce-text-runs.js'
 import { forEachChildBlockList } from './parse/block/block-children.js'
 import { DocumentIdRegistry, visitDocumentIds } from './ast/document-ids.js'
@@ -1000,8 +1000,8 @@ function expandChild(
     const endColumn = last ? 1 + codepoints(last.text) : startColumn
     const child: Document = {
       type: 'document',
-      children: [{ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
-        pos: { startLine, endLine, startColumn, endColumn, startOffset, endOffset, file: resolved.id } }],
+      children: [markIncludedPayload({ type: 'code_block', content, ...(d.code.lang ? { lang: d.code.lang } : {}),
+        pos: { startLine, endLine, startColumn, endColumn, startOffset, endOffset, file: resolved.id } })],
     }
     if (d.tableAttrs && (d.code.lang === 'csv' || d.code.lang === 'tsv') && (d.rows || d.cols || d.lines || d.region)) {
       const fullLines = spans.map((span, index) => index === 0 && span.start === 0 ? span.text.replace(/^\uFEFF/, '') : span.text)
@@ -1015,10 +1015,10 @@ function expandChild(
           line: index + 1, column: index === 0 && resolved.full.startsWith('\uFEFF') ? 2 : 1,
           text: fullLines[index]! }
       })
-      const fullCode: CodeBlock = { type: 'code_block', content: fullContent, lang: d.code.lang, attrs: d.tableAttrs,
+      const fullCode: CodeBlock = markIncludedPayload({ type: 'code_block', content: fullContent, lang: d.code.lang, attrs: d.tableAttrs,
         pos: { startLine: 1, endLine: spans.length, startColumn: resolved.full.startsWith('\uFEFF') ? 2 : 1,
           endColumn: 1, startOffset: resolved.full.startsWith('\uFEFF') ? 1 : 0,
-          endOffset: codepoints(resolved.full), file: resolved.id } }
+          endOffset: codepoints(resolved.full), file: resolved.id } })
       setDelimitedPayloadLines(fullCode, sourcePayloadLines)
       const table = markedDelimitedTable(fullCode)
       if (!table) {
@@ -1039,11 +1039,12 @@ function expandChild(
           return null
         }
         if (range) {
-          const slicedCode: CodeBlock = { ...(child.children[0] as CodeBlock), attrs: d.tableAttrs }
+          const slicedCode: CodeBlock = markIncludedPayload({ ...(child.children[0] as CodeBlock), attrs: d.tableAttrs })
           setDelimitedPayloadLines(slicedCode, sourcePayloadLines.slice(range.start - 1, range.end))
           const sliced = markedDelimitedTable(slicedCode)
           if (!sliced) return { doc: child, file: resolved.id, reach: [...state.sites, site], mode: 'code', source: content, full: resolved.full, firstLine: resolved.base.line }
-          selected = sliced.rows.filter(row => (row.pos?.startLine ?? range.start) > headCount)
+          const headEnd = table.rows[headCount - 1]?.pos?.endLine ?? headCount
+          selected = sliced.rows.filter(row => (row.pos?.startLine ?? range.start) > headEnd)
           for (const row of selected) for (const cell of row.cells) cell.header = false
         }
         table.rows = [...table.rows.slice(0, headCount), ...selected.filter(row => !table.rows.slice(0, headCount).includes(row))]
