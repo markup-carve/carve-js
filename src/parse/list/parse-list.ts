@@ -289,11 +289,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   // width (`- `/`* ` = 2) -- not the full
   // `- [x] ` width (matching the spec's task attribute/continuation
   // convention `- [x] x` / `  {.c}`).
+  // CARVE-P2-010: a tab in the run before the content advances to the next stop of the marker's frame.
+  function markerEndColumn(start: number, marker: string): number {
+    let column = start
+    for (const char of marker) column = char === '\t' ? column + 4 - column % 4 : column + 1
+    return column
+  }
+
   function placeItem(lexer: Lexer, shape: ListShape, head: ItemHead): ItemPlacement {
     const { baseIndent } = shape
     const contentCol = shape.isTask
       ? baseIndent + 2
-      : baseIndent + (head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength)
+      : markerEndColumn(baseIndent, head.markerLine.slice(leadingWhitespace(head.markerLine), head.markerLine.length - head.markerContentLength))
     const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(head.startLineIndex) - 1] ?? head.line
     const itemMarkerColumn = sourceColumn(itemSource)
     const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.lineStartColumn(head.startLineIndex) - 1 + baseIndent)
