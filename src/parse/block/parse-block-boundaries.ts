@@ -44,6 +44,7 @@ import {
   fenceCloseRe,
   hostedAuthoredBlockOpener,
   isBlockImageLine,
+  markerLineQuoteState,
   markerLineState,
   markerPrefixLength,
   type OpaqueGroup,
@@ -57,6 +58,7 @@ import {
   startsInterruptingBlock,
   trackBlockQuoteLazyState,
   trackWrappedAttributeRun,
+  walkMarkerOwnerPrefix,
 } from './parse-quote-core.js'
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
@@ -773,6 +775,7 @@ export const listStateHelpers = {
   isTableRow,
   leadingWhitespace,
   lineOpensBlock,
+  markerLineQuoteState,
   markerLineState,
   markerPrefixLength,
   opaqueGroupCloser,
@@ -786,6 +789,7 @@ export const listStateHelpers = {
   trackWrappedAttributeRun,
   unorderedMatch,
   verbatimOnlyLazyState,
+  walkMarkerOwnerPrefix,
 }
 
 export const trackItemLazyState = createListStateTracker(listStateHelpers)

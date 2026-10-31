@@ -1577,7 +1577,8 @@ export class ParseSession extends InlineParseSession {
     const { lexer, firstLineIndex } = q
     const lineIndex = lexer.pos
     lexer.consume()
-    if (isBlankLine(content)) q.quoteTermContinuation = false
+    // The lead term's claim passes to the tracked leaf on the next quoted line.
+    if (isBlankLine(content) || lineIndex !== firstLineIndex) q.quoteTermContinuation = false
     // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
     // first line of a quote, at any depth, is a marker when a flush-left line
     // outside the quote follows, and that line's block is the innermost
@@ -1709,7 +1710,8 @@ export class ParseSession extends InlineParseSession {
           isListMarkerLine(sourceQuoteBody(follower).trimStart()) && sourceColumn(follower) === plusColumn) {
       }
     }
-    q.inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || termContinuation
+    q.inner.push(ln.startsWith(LAZY_FRAME) ? ln : isListMarkerLine(ln) || lazyPlus || lazyDefinition || termContinuation ||
+      deflistMarkerLine(ln)
       ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
     q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
     if (!lazyLinkDef) this.trackQuoteLine(q, ln, lineIndex)

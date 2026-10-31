@@ -68,10 +68,15 @@ for (const [name, host, indent] of [
     for (const blank of [false, true]) {
       it(`handles ${name} after ${JSON.stringify(payload)}, blank=${blank}`, () => {
         const source = `${host}\n${blank ? indent.trimEnd() + '\n' : ''}${indent}::: |\n${indent}${payload}\nafter\n`
-        const body = name === 'nested item' ? detachedBody : foldedBody
+        // A nested item's line block folds like a shallow one's (PART 0 S4, carve-js#3995);
+        // only a payload line that opens a verbatim run leaves no paragraph.
+        const detached = name === 'nested item' && ['```', '~~~', '%%%'].includes(payload)
+        const body = detached ? detachedBody : foldedBody
         const block = `<div class="line-block"><p>${body}</p></div>`
-        const html = name === 'nested item'
+        const html = detached
           ? `<ul><li>a<ul><li>b${block}</li></ul></li></ul><p>after</p>`
+          : name === 'nested item'
+            ? `<ul><li>a<ul><li>b${block}</li></ul></li></ul>`
           : name === 'quoted item'
             ? `<blockquote><ul><li>a${block}</li></ul></blockquote>`
             : `<ul><li>a${block}</li></ul>`

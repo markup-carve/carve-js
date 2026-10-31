@@ -35,6 +35,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     isTableRow,
     lineOpensBlock,
     leadingWhitespace,
+    markerLineQuoteState,
     markerLineState,
     markerPrefixLength,
     opaqueGroupCloser,
@@ -47,6 +48,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     trackWrappedAttributeRun,
     unorderedMatch,
     verbatimOnlyLazyState,
+    walkMarkerOwnerPrefix,
   } = helpers
 
   /** The closer pattern of a code or raw fence opener `text`, or null. */
@@ -280,13 +282,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
       (width, extra = 0) => line.hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
-    // The checker keeps a descendant line block outside this item's paragraph.
-    state.lazyFoldable = inner.literalColon === undefined && inner.lazyFoldable
+    // A line block's open paragraph takes lazy text at every depth (PART 0 S4).
+    const comment = inner.literalColon !== undefined && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())
+    state.lazyFoldable = inner.lazyFoldable && !comment
     state.inTable = inner.inTable
     // An invisible descendant comment ends its paragraph, not the enclosing item.
-    if (inner.literalColon && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())) {
-      state.commentAtColumn = true
-    }
+    if (comment) state.commentAtColumn = true
     state.inDefList = false
     return true
   }
@@ -719,7 +720,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const frame = verbatimOnlyLazyState()
     frame.lazyFoldable = nested.leavesParagraphOpen
     frame.inTable = nested.endsOnTableRow
-    frame.quoteInner = nested.quote
+    // A quote the sub-item holds below its own marker is the frame's first block too.
+    frame.quoteInner = nested.quote ?? markerLineQuoteState(nestedContent.slice(walkMarkerOwnerPrefix(nestedContent)))
     const nestedColon = colonFenceOpenerLen(nestedContent)
     if (nestedColon !== null) {
       frame.lazyFoldable = false
