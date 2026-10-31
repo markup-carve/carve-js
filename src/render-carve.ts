@@ -1977,6 +1977,24 @@ function codeNeedsOpenRun(value: unknown): boolean {
   return typeof value === 'string' && (value === '' || (/^[\r\n]/.test(value) && value.endsWith('`')))
 }
 
+// A verse comment line written `%%%...` stayed a line because no closer of its
+// run followed it, so a `%%%` pair in the same block takes a longer fence.
+function verseCommentFence(block: object): number {
+  let fence = 3
+  const stack: unknown[] = [block]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    const typed = node as { type?: unknown; block?: unknown; delimited?: unknown; content?: unknown }
+    if (typed.type === 'comment' && typed.block === false && !typed.delimited && typeof typed.content === 'string') {
+      const run = 2 + /^%*/.exec(typed.content)![0].length
+      if (run >= 3) fence = Math.max(fence, run + 1)
+    }
+    for (const value of Object.values(node)) stack.push(value)
+  }
+  return fence
+}
+
 function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
   const found = new WeakSet<object>()
   let anyEmpty = false
@@ -3557,10 +3575,13 @@ class CarveRenderSession {
         const fence = colonFenceFor(ctx)
         ctx.lineBlockDepth++
         ctx.colonFenceDepth++
+        const outerVerseFence = this.verseCommentFence
+        this.verseCommentFence = verseCommentFence(node)
         let body: string
         try {
           body = this.renderBlocks(node.children, ctx)
         } finally {
+          this.verseCommentFence = outerVerseFence
           ctx.colonFenceDepth--
           ctx.lineBlockDepth--
         }
@@ -3641,7 +3662,7 @@ class CarveRenderSession {
         // different construct that pairs with any later same-width run and
         // swallows everything between (markup-carve/carve-js#1674).
         return node.block
-          ? this.renderBlockComment(node.content)
+          ? this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
           : node.delimited
             ? `{% ${node.content} %}`
             : `%% ${node.content}`
@@ -4321,13 +4342,19 @@ class CarveRenderSession {
           const continuationLine = sourceLine >= 1 && sourceLine <= row.continuationLines ? sourceLine : 1
           rendered += `\u00020,${continuationLine},0\u0003${text}`
         }
+        // A leading cell_wrap marks a cell a `+` line appended: it has no slot on
+        // the standard row, and only trailing cells can be appended (T6, CARVE-P12-069).
+        const appended = !cell.span && cell.children?.[0]?.type === 'cell_wrap'
+        if (appended ? cellIndex === 0 : cells.length < cellIndex) {
+          throw new SourceUnspellableError('table_row', 'an appended cell must follow every cell of the row line', row)
+        }
         const marker = /\u0002([0-9]+),([0-9]+),([0-9]+)\u0003/g
         const firstMarker = marker.exec(rendered)
         if (!firstMarker) {
           cells.push(rendered)
           return
         }
-        cells.push(cell.span ? rendered.slice(0, firstMarker.index) : `${rendered.slice(0, firstMarker.index)} `)
+        if (!appended) cells.push(cell.span ? rendered.slice(0, firstMarker.index) : `${rendered.slice(0, firstMarker.index)} `)
         let current: RegExpExecArray | null = firstMarker
         while (current) {
           const start = marker.lastIndex
@@ -4350,6 +4377,8 @@ class CarveRenderSession {
       rowSlots.push({ index: rows.length, cells, marker: '|', attrs })
       rows.push(renderTableRow(cells, attrs))
       for (const line of continuations[rowIndex]!) {
+        // An empty slot past the row line's cells appends nothing, so it is not written.
+        while (line.length > Math.max(cells.length, 1) && line.at(-1) === ' ') line.pop()
         openRun = dropPaddingInOpenRun(line, openRun, cell => this.restoreVerbatim(cell))
         rowSlots.push({ index: rows.length, cells: line, marker: '+', attrs: '' })
         rows.push(`+${line.join('|')}|`)
@@ -4738,6 +4767,9 @@ class CarveRenderSession {
           ? { text: out, offset: 0 }
           : { text: outTail, offset: out.length - outTail.length }
       const overrides = this.directiveOverrides(nodes)
+      // `%%%` pairs after a stanza's last line leave its last break the last one.
+      let stanzaEnd = nodes.length
+      while (isStanza && stanzaEnd > 0 && nodes[stanzaEnd - 1]!.type === 'comment' && (nodes[stanzaEnd - 1] as Comment).block) stanzaEnd--
       nodes.forEach((node, idx) => {
         this.lastLiteralRanges = []
         this.lastNoteCloses = []
@@ -4773,15 +4805,22 @@ class CarveRenderSession {
         }
 
         if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+        // A closed `%%%` pair in verse stands on lines of its own (CARVE-P9-047).
+        if (ctx.lineBlockDepth > 0 && node.type === 'comment' && node.block) {
+          const next = nodes[idx + 1]
+          piece = `${atLineStart ? '' : '\n'}${piece}${next && (atLineStart || next.type !== 'hard_break') ? '\n' : ''}`
+        }
 
         if (
           ctx.lineBlockDepth > 0 &&
           node.type === 'hard_break' &&
           piece === '\n' &&
-          nodes[idx - 1]?.type !== 'comment' &&
+          // A break after a comment line ends that line; after a `%%%` pair
+          // that opened its line it is that line's own backslash.
+          (nodes[idx - 1]?.type !== 'comment' || (atLineStart && (nodes[idx - 1] as Comment).block)) &&
           (atLineStart ||
             /(?:^|[^ \t]) $/.test(lineTail) ||
-            (isStanza && idx === nodes.length - 1))
+            (isStanza && idx === stanzaEnd - 1))
         ) {
           piece = '\\\n'
         }
@@ -5148,7 +5187,7 @@ class CarveRenderSession {
       }
       case 'comment':
         if (node.delimited) return `{% ${node.content} %}`
-        if (node.block) return renderSession.renderBlockComment(node.content)
+        if (node.block) return renderSession.renderBlockComment(node.content, renderSession.verseCommentFence)
         // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
         // joins the opener rather than being separated from it by a space: a
         // comment whose content is `%` is written ` %%%`, not ` %% %`, which
@@ -5231,10 +5270,13 @@ class CarveRenderSession {
     return `${canonicalFrontmatterOpener(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n${FRONTMATTER_CLOSER}`
   }
 
-  private renderBlockComment(content: string): string {
+  /** The shortest `%%%` fence a verse block comment may use in the line block being written. */
+  private verseCommentFence = 3
+
+  private renderBlockComment(content: string, shortest = 3): string {
     let longest = 0
     for (const match of content.matchAll(/%+/g)) longest = Math.max(longest, match[0].length)
-    const fence = '%'.repeat(Math.max(3, longest + 1))
+    const fence = '%'.repeat(Math.max(shortest, longest + 1))
     return `${fence}\n${this.protectVerbatim(content)}\n${fence}`
   }
 

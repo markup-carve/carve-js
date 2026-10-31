@@ -792,7 +792,7 @@
   {
     "id": "review8-c04-marker-payload-frame-010",
     "source": "- ::: |\n    - ```\n  %%%\n    %%%\n  x\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;- <code>\n\n&nbsp;&nbsp;%%%\nx\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;- <code>\nx\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-010",
@@ -1077,7 +1077,7 @@
   {
     "id": "review8-older-o01-overindented-verse-013",
     "source": "- a\n     ::: |\n    %%%\n %%%\n     :::\n    > q\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\n</p>\n    </div>\n  </li>\n</ul>\n<div>\n  <blockquote><p>q</p></blockquote>\n</div>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<div>\n  <blockquote><p>q</p></blockquote>\n</div>"
   },
   {
     "id": "review8-older-o04-fence-comment-shifted-colon-006",

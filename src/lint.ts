@@ -74,7 +74,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './extension/bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, FigureGroup, Heading, InlineNode, Table } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, FigureGroup, Heading, InlineNode, Table, TableRow } from './ast.js'
 import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './table/delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './parse/block/colon-fences.js'
@@ -2835,6 +2835,13 @@ function collectTableAttributeWarnings(
 }
 
 /** Source spellings that reached paragraph or table nodes with a different meaning. */
+// A cell a `+` line appended starts with that line's cell_wrap (T6); the row
+// is reported on that line, with or without a header.
+function appendingContinuationLine(row: TableRow): number | undefined {
+  const first = row.cells.find((cell) => !cell.span && cell.children?.[0]?.type === 'cell_wrap')?.children?.[0]
+  return first?.type === 'cell_wrap' ? first.line : undefined
+}
+
 function collectAuthoringWarnings(
   lines: readonly string[],
   headings: readonly Positioned[],
@@ -2913,7 +2920,13 @@ function collectAuthoringWarnings(
       const at = row.pos?.startLine
       if (!at) continue
       rowAt.set(at, table)
-      if (index > 0 && row.cells.length !== width) {
+      const appendedBy = appendingContinuationLine(row)
+      if (appendedBy !== undefined) {
+        const plusLine = at + appendedBy
+        const col = lines[plusLine - 1]?.indexOf('+') ?? -1
+        push(plusLine, Math.max(col + 1, 1), 1, 'table-row-cell-count',
+          'This continuation line appends a cell past the last column of its table row. Add the cell to the row line or remove it.')
+      } else if (index > 0 && row.cells.length !== width) {
         const col = lines[at - 1]!.indexOf('|') + 1
         push(at, Math.max(col, 1), 1, 'table-row-cell-count',
           `This table row has ${row.cells.length} cells; the header has ${width}. Add or remove a cell to match the table.`)

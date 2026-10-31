@@ -2,12 +2,12 @@
   {
     "id": "review-A",
     "source": "> - ::: |\n>   %%%\n>   hidden\n>   %%%\n>   :::\n> c\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p><br>\nhidden<br></p></div></li></ul><p>c</p></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote>"
   },
   {
     "id": "review-B",
     "source": "> - ::: |\n>   %%%\n>   %%%%\n>   y\n>   %%%%\n>   :::\n> c\n> %%%\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p><br><br>\ny<br></p></div></li></ul><p>c</p></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul><p>c</p></blockquote>"
   },
   {
     "id": "review-C",

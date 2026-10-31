@@ -412,7 +412,7 @@
   {
     "id": "control-paired-comment-line-block",
     "source": "- ::: |\n  %%%\n  :::\n  %%%\n  :::\n- tail\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n:::<br>\n</p>\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "control-closed-box-root-tail",

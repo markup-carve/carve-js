@@ -276,6 +276,8 @@ export interface RawCell {
   anchors?: AnchorRange[]
   /** Continuation text on a span marker, joined to its origin after the span walk. */
   joins?: Array<{ frag: string; at: FragmentPlace | null; marker: FragmentPlace | null; sep: FragmentPlace | null; line: number; rowIndex: number }>
+  /** The continuation line that appended this cell past the row's last column (T6). */
+  appended?: { line: number; at: FragmentPlace | null }
   /** The `+` of the continuation line the last fragment came from. */
   lastMarker?: number
   wraps?: Array<{ offset: number; line: number; row?: number; col?: number; pos?: Position }>

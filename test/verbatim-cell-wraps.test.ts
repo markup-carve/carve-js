@@ -45,8 +45,8 @@ describe('a continuation join inside a verbatim inline', () => {
 
   it('puts each remainder on the plus line its entry names', () => {
     expect(renderCarve(parse('| `a |\n+ |\n+ b` |\n'))).toBe('| `a |\n+ |\n+ b` |\n')
-    expect(renderCarve(parse('| $`a | z |\n+ b` | w |\n'))).toBe('| $`a | z |\n+ b` |\n')
-    expect(renderCarve(parse('| `<b | z |\n+ c>`{=html} | w |\n'))).toBe('| `<b | z |\n+ c>`{=html} |\n')
+    expect(renderCarve(parse('| $`a | z |\n+ b` | w |\n'))).toBe('| $`a | z |\n+ b` | w |\n')
+    expect(renderCarve(parse('| `<b | z |\n+ c>`{=html} | w |\n'))).toBe('| `<b | z |\n+ c>`{=html} | w |\n')
   })
 
   it('reads and writes cellWraps through AST JSON', () => {
@@ -55,7 +55,7 @@ describe('a continuation join inside a verbatim inline', () => {
     expect(withoutPos(atPointer(doc, '/children/0/rows/0/cells/0/children'))).toEqual([
       { type: 'code', value: 'a | z b', cellWraps: [{ offset: 5, line: 1 }] },
     ])
-    expect(renderCarve(doc)).toBe('| `a | z |\n+ b` |\n')
+    expect(renderCarve(doc)).toBe('| `a | z |\n+ b` | w |\n')
   })
 
   it('counts the offset in codepoints and drops padding first', () => {
