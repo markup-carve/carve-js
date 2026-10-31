@@ -226,6 +226,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
     bodyLineNumbers.push(...attachedLineNumbers)
     trackAttached(attached)
+    // A separating blank after this attached block belongs outside its fence.
+    attachmentEnd = bodyLines.length
   }
   if (!firstBlockAttached) {
     trackItemLazyState(m[2]!, lazyState)
