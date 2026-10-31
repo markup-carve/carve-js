@@ -8,6 +8,29 @@ export function setDelimitedPayloadLines(code: CodeBlock, lines: PayloadLine[]):
   payloadLines.set(code, lines)
 }
 
+const includedPayloads = new WeakSet<CodeBlock>()
+
+/** A table include's payload: its well-formed region marker lines are no records (PART 10 I1d). */
+export function markIncludedPayload(code: CodeBlock): CodeBlock {
+  includedPayloads.add(code)
+  return code
+}
+
+/** Whether a physical line is a well-formed I1b region marker in a code include. */
+export function isRegionMarkerLine(sourceLine: string): boolean {
+  const line = sourceLine.replace(/^[ \t]*/, '')
+  let body = line
+  let closer = ''
+  if (line.startsWith('%%') && !line.startsWith('%%%')) body = line.slice(2)
+  else if (line.startsWith('//') || line.startsWith('--')) body = line.slice(2)
+  else if (line.startsWith('/*')) { body = line.slice(2); closer = String.raw`\*/` }
+  else if (line.startsWith('<!--')) { body = line.slice(4); closer = '-->' }
+  body = body.replace(/^[ \t]*/, '')
+  if (!/^#(?:end)?region(?![A-Za-z0-9_])/.test(body)) return false
+  const marker = new RegExp(`^#(end)?region(?:[ \t]+([A-Za-z_][\\w-]*))?[ \t]*${closer}[ \t]*$`).exec(body)
+  return marker !== null && (marker[1] !== undefined || marker[2] !== undefined)
+}
+
 export function delimitedRecordWidths(table: Table): readonly number[] | undefined {
   return sourceRecordWidths.get(table)
 }
@@ -119,6 +142,17 @@ export function delimitedTable(code: CodeBlock, attrs: Attrs): Table | null {
     (start, end) => { fieldRanges.push(fields); fields = []; rowRanges.push({ start, end }) },
   )
   if (data === null) return null
+  if (includedPayloads.has(code)) {
+    // A marker inside a quoted field spans its record's other lines or quotes, so only a whole record is tested.
+    for (let index = data.length - 1; index >= 0; index--) {
+      const range = rowRanges[index]!
+      const text = code.content.slice(range.start, range.end)
+      if (text.includes('\n') || !isRegionMarkerLine(text)) continue
+      data.splice(index, 1)
+      rowRanges.splice(index, 1)
+      fieldRanges.splice(index, 1)
+    }
+  }
   const lines = payloadLines.get(code)
   const lineStarts: number[] = []
   if (lines) {
