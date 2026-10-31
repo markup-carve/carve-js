@@ -192,7 +192,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     return nestedOpenMemo.open
   }
   const noteSpanScan = newCommentSpanScan()
-  const lazyState = verbatimOnlyLazyState()
+  const lazyState = { ...verbatimOnlyLazyState(), noteBody: true }
   // A fence an attached block left open still holds its payload.
   const trackAttached = (attached: string[]): void => {
     const lastRun = new Map<number, number>()

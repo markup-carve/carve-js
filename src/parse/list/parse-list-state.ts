@@ -262,10 +262,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       const marked = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, facts?.terminatorFree ?? false) !== null
       if (marked) open.absorbing = false
       if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
-      // Payload shapes open no blocks; span and definition boundaries still apply.
+      // Payload shapes open no blocks; in an item a bare run of another width is payload too ([B-div-keep]).
       state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
         open.opaque?.belowBaseCloses !== true && text !== '' && !RE_FOOTNOTE_DEF.test(text) &&
-        (close === null || (column > 0 && column !== open.column) || open.absorbing === true)
+        (close === null || (column > 0 && column !== open.column) || open.absorbing === true ||
+          state.definitionBody !== true && state.noteBody !== true)
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false

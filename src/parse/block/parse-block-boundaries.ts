@@ -198,6 +198,8 @@ export interface ItemLazyState {
   literalLayout?: boolean
   // Fed by a definition body's collector rather than a list item's.
   definitionBody?: boolean
+  // Fed by a footnote body's collector rather than a list item's.
+  noteBody?: boolean
   descriptionColumn?: number
   /** Whether the stored description column came from a term. */
   descriptionHasTerm?: boolean
