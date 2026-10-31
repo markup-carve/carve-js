@@ -2082,13 +2082,20 @@ export class ParseSession extends InlineParseSession {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
       viewSlice)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
-    const attributeLines = leadingAttributeRun(offset => view(attached.lines[offset]), lexer.parseOptions)
-    const first = view(attached.lines[attributeLines])
+    // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
+    const isLineComment = (line: string | undefined) => line !== undefined && line.startsWith('%%') && !RE_COMMENT_BLOCK_ANY.test(line)
+    let leadLines = 0
+    for (let from = -1; from !== leadLines;) {
+      from = leadLines
+      leadLines += leadingAttributeRun(offset => view(attached.lines[leadLines + offset]), lexer.parseOptions)
+      while (isLineComment(view(attached.lines[leadLines]))) leadLines++
+    }
+    const first = view(attached.lines[leadLines])
     const last = view(attached.lines.at(-1))
     const code = first === undefined ? null : RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
     const codeMarker = code === null ? null : RE_FENCE.test(first!) ? code[2]! : code[1]!
     // The opener alone is no closer of its own (`- +` / ``` / `- x`).
-    const closedCode = codeMarker !== null && attached.lines.length > attributeLines + 1 && last !== undefined &&
+    const closedCode = codeMarker !== null && attached.lines.length > leadLines + 1 && last !== undefined &&
       fenceCloseRe(codeMarker).test(last)
     const colon = first === undefined ? null : colonBlockOpenerRun(first)
     const closedColon = colon !== null && isFigureGroupOpener(first!, lexer.inFigureGroup) &&
