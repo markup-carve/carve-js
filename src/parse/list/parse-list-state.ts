@@ -26,6 +26,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     RE_TABLE_CONT,
     blockQuoteParagraphOpen,
     bottomBlockLeavesParagraphOpen,
+    colonBlockOpenerRun,
     colonFenceOpenerLen,
     commentFenceRun,
     extractItemAttr,
@@ -459,7 +460,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const description = RE_DEFLIST_DEF.exec(content)
     if (description) state.descriptionColumn = 1 + description[1]!.length
     delete state.termAfterComment
-    state.lazyFoldable = true
+    // A heading, table, rule, definition or comment on the `: ` marker opens no paragraph (carve#4305).
+    state.lazyFoldable = isTerm ||
+      colonBlockOpenerRun(description![2]!) === null && bottomBlockLeavesParagraphOpen(description![2]!)
     return true
   }
 

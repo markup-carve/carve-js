@@ -2339,6 +2339,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (leadColonAwaitingBody && /^:{3,}/.test(trackedContent) && colonFenceOpenerLen(trackedContent) === null) {
         lazyState.unrebasedColonBody = { width: leadColon! }
         leadColonAwaitingBody = false
+        // The div is open all the same, so its bare run is a closer, not absorbed text (carve#4397).
+        if (RE_DIV_OPEN.test(content)) {
+          lazyState.divDepth++
+          lazyState.authoredColon = { width: leadColon!, column: 0, depth: lazyState.divDepth }
+        }
       }
       confirmsLeadBody = leadColonAwaitingBody && !opensCodeFence(trackedContent)
       if (confirmsLeadBody) {

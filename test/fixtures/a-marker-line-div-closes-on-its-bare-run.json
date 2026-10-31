@@ -1,0 +1,22 @@
+[
+  {
+    "id": ":::e as the first line of a item div before l",
+    "source": "- :::\n  :::e\n  :::\nl\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <p>:::e</p>\n    </div>\n  </li>\n</ul>\n<p>l</p>"
+  },
+  {
+    "id": "::: {.x} as the first line of a item div before l",
+    "source": "- :::\n  ::: {.x}\n  :::\nl\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <p>::: {.x}</p>\n    </div>\n  </li>\n</ul>\n<p>l</p>"
+  },
+  {
+    "id": ":::e as the first line of a ordered item div before l",
+    "source": "1. :::\n   :::e\n   :::\nl\n",
+    "html": "<ol>\n  <li>\n    <div>\n      <p>:::e</p>\n    </div>\n  </li>\n</ol>\n<p>l</p>"
+  },
+  {
+    "id": "::: {.x} as the first line of a ordered item div before l",
+    "source": "1. :::\n   ::: {.x}\n   :::\nl\n",
+    "html": "<ol>\n  <li>\n    <div>\n      <p>::: {.x}</p>\n    </div>\n  </li>\n</ol>\n<p>l</p>"
+  }
+]
