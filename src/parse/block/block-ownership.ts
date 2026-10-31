@@ -288,6 +288,16 @@ function firstBlockTraceRoute(
     : { path: readPath, closed: 0 }
 }
 
+function invisibleFollowerLine(
+  at: number, lines: string[], abbreviations: Map<number, [string, string]>,
+  separatingAbbreviations: Set<number>, comments: Map<number, string>, notes: Set<number>,
+): string | null {
+  if (abbreviations.has(at)) return separatingAbbreviations.has(at) ? '' : '%%'
+  if (comments.has(at)) return comments.get(at)!
+  if (notes.has(at)) return lines[at]!
+  return null
+}
+
 /**
  * Rule A (carve#3885): every line is first matched against the open containers,
  * and an opener past its owner's content column opens there, measured from its
@@ -329,16 +339,9 @@ export function ownLines(
   const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
-    if (skippedAbbreviations.has(at)) {
-      result.push(separatingAbbreviations.has(at) ? '' : '%%')
-      continue
-    }
-    if (skippedComments.has(at)) {
-      result.push(skippedComments.get(at)!)
-      continue
-    }
-    if (skippedNotes.has(at)) {
-      result.push(lines[at]!)
+    const invisible = invisibleFollowerLine(at, lines, skippedAbbreviations, separatingAbbreviations, skippedComments, skippedNotes)
+    if (invisible !== null) {
+      result.push(invisible)
       continue
     }
     let src = lines[at]!
@@ -903,7 +906,7 @@ export function ownLines(
         continue
       }
       if (isLinkDefLine(rest)) continue
-      const abbr = frames.length === 2 ? RE_ABBR_DEF.exec(rest) : null
+      const abbr = frames.length === 2 && quotes === 0 ? RE_ABBR_DEF.exec(rest) : null
       if (abbr) {
         skippedAbbr.push([k, abbr[1]!, abbr[2]!])
         continue

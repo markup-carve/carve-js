@@ -22,6 +22,12 @@ describe('invisible followers of a continuation marker', () => {
     )
   })
 
+  it('does not collect a quoted abbreviation at document level', () => {
+    expect(carveToHtml('> a\n> +\n> *[A]: b\n> text\n\nA')).toBe(
+      '<blockquote><p>a\n+\n*[A]: b\ntext</p></blockquote>\n<p>A</p>',
+    )
+  })
+
   it('lets an abbreviation separate a refused item from a later sibling', () => {
     expect(carveToHtml('- +\n*[A]: b\n- b')).toBe(
       '<ul>\n  <li>+</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
