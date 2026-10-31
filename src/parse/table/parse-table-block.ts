@@ -60,10 +60,21 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         const marker = contCanPosition && markerIndex >= 0
           ? { offset: contOffset + markerIndex, line: contLine, column: contColumn + markerIndex }
           : null
-        splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
+        const slots = splitTableRowSpans(line, lastRaw.map((c) => c.openRun))
+        slots.forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
-          const target: RawCell | undefined = lastRaw![idx]
-          if (!frag || !target) return
+          if (!frag) return
+          // Past the last column the fragment is a new cell of the row above,
+          // its text and never a span marker; a skipped column is an empty cell (T6).
+          if (idx >= lastRaw!.length) {
+            const header = lastRaw!.every((c) => c.header)
+            while (lastRaw!.length <= idx) {
+              const pipe = contCanPosition ? slots[lastRaw!.length]!.start - 1 : -1
+              const at = pipe >= 0 ? { offset: contOffset + pipe, line: contLine, column: contColumn + pipe } : null
+              lastRaw!.push({ header, raw: '', openRun: 0, appended: { line: continuationLine, at } })
+            }
+          }
+          const target = lastRaw![idx]!
           const within = contCanPosition ? src.indexOf(frag) : -1
           const at =
             within >= 0 && line.slice(start + within, start + within + frag.length) === frag
@@ -244,7 +255,11 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
               }))
           // Empty earlier continuation lines have no fragment to join. The
           // first text fragment still names its own continuation line.
-          if (c.span && c.joins?.[0]?.line && c.joins[0].line > 1 && children.length) {
+          if (c.appended) {
+            const { line, at } = c.appended
+            children.unshift({ type: 'cell_wrap', line, ...(at ? { pos: { startLine: at.line, endLine: at.line, startColumn: at.column, endColumn: at.column + 1, startOffset: at.offset, endOffset: at.offset + 1 } } : {}) })
+          }
+          else if (c.span && c.joins?.[0]?.line && c.joins[0].line > 1 && children.length) {
             children.unshift({ type: 'cell_wrap', line: c.joins[0].line })
           }
           const cell: TableCell = {

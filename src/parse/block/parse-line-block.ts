@@ -1,7 +1,11 @@
 import type { Lexer } from '../parse-lexer.js'
 import type { InlineSource } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
-import type { Comment, InlineNode, LineBlock, Paragraph, Position } from '../../ast.js'
+import type { BlockNode, Comment, InlineNode, LineBlock, Paragraph, Position } from '../../ast.js'
+import { trimNonNbsp } from '../../trim-non-nbsp.js'
+
+const RE_VERSE_COMMENT_OPEN = /^(%{3,})(.*)$/
+const RE_VERSE_COMMENT_RUN = /^[ \t]*(%{3,})/
 
 export interface LineBlockHost {
   definitionRegionLines: Set<number> | null
@@ -44,15 +48,57 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
        * the author's line back at the column they wrote it at.
        */
       comment?: Comment
+      /** Closed `%%%` pairs before this line's content, at a stanza's start. */
+      before?: Comment[]
+      /** Closed `%%%` pairs after this line, before the break that ends it. */
+      after?: Comment[]
     }
     const stanzas: StanzaLine[][] = []
     let stanza: StanzaLine[] = []
-    for (const { text, lineIndex } of collectLiteralColonFenceBody(lexer, {
+    const body = collectLiteralColonFenceBody(lexer, {
       kind: 'line block',
       lineIndex: openLineIndex,
       fenceWidth: fence,
-    })) {
+    })
+    // A closed `%%%` pair leaves no verse line, and a blank line in its body
+    // splits no stanza (CARVE-P9-047). Only an opener whose first character is
+    // `%` qualifies; the closer may be indented and matches on exact run length.
+    const commentRun = (text: string): number | undefined => RE_VERSE_COMMENT_RUN.exec(stripLazyFrame(text))?.[1]!.length
+    const lastCloser = new Map<number, number>()
+    body.forEach(({ text }, index) => {
+      const run = commentRun(text)
+      if (run !== undefined) lastCloser.set(run, index)
+    })
+    let leading: Comment[] = []
+    for (let bodyIndex = 0; bodyIndex < body.length; bodyIndex++) {
+      const { text, lineIndex } = body[bodyIndex]!
       const ln = stripLazyFrame(text)
+      const opener = RE_VERSE_COMMENT_OPEN.exec(ln)
+      const run = opener?.[1]!.length
+      if (run !== undefined && (lastCloser.get(run) ?? -1) > bodyIndex) {
+        let closer = bodyIndex + 1
+        while (commentRun(body[closer]!.text) !== run) closer++
+        const tail = trimNonNbsp(opener![2]!)
+        const content = [...(tail === '' ? [] : [tail]), ...body.slice(bodyIndex + 1, closer).map((line) => stripLazyFrame(line.text))]
+        const comment: Comment = { type: 'comment', block: true, content: content.join('\n') }
+        if (lexer.hasDocumentOffsets) {
+          const end = body[closer]!.lineIndex
+          const endLength = lexer.lineAt(end)?.length ?? 0
+          comment.pos = {
+            startLine: lexer.lineNumber(lineIndex),
+            endLine: lexer.lineNumber(end),
+            startColumn: lexer.lineStartColumn(lineIndex),
+            endColumn: lexer.lineStartColumn(end) + endLength,
+            startOffset: lexer.lineOffset(lineIndex),
+            endOffset: lexer.lineOffset(end) + endLength,
+          }
+        }
+        const host = stanza.at(-1)
+        if (host) (host.after ??= []).push(comment)
+        else leading.push(comment)
+        bodyIndex = closer
+        continue
+      }
       if (isBlankLine(ln)) {
         if (stanza.length) {
           stanzas.push(stanza)
@@ -76,7 +122,8 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
             endOffset: lexer.lineOffset(lineIndex) + ln.length,
           }
         }
-        stanza.push({ text: '', lineIndex, sourceOffsets: undefined, sourceLength: 0, aligned: true, comment })
+        stanza.push({ text: '', lineIndex, sourceOffsets: undefined, sourceLength: 0, aligned: true, comment, ...(leading.length ? { before: leading } : {}) })
+        leading = []
         continue
       }
       const sourceOffsets: Array<number | undefined> | undefined = ln.includes('\t') ? [] : undefined
@@ -87,9 +134,15 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         sourceOffsets,
         sourceLength: ln.length,
         aligned: sourceOffsets === undefined,
+        ...(leading.length ? { before: leading } : {}),
       })
+      leading = []
     }
     if (stanza.length) stanzas.push(stanza)
+    // Pairs after the last verse line stay with it; with no verse line at all
+    // they are the block's only children.
+    const lastLine = stanzas.at(-1)?.at(-1)
+    if (lastLine && leading.length) (lastLine.after ??= []).push(...leading)
 
     const children = stanzas.map<Paragraph>((lines) => {
       const anchorable = lexer.hasDocumentOffsets
@@ -98,6 +151,9 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const terminalCommentGuard = lines.at(-1)?.comment ? '\uE001' : ''
       const joined = lines.map((line) => line.text).join('\n') + terminalCommentGuard
       const firstLineNumber = lexer.lineNumber(lines[0]!.lineIndex)
+      // A `%%%` pair between two lines removes source lines, so a line's index
+      // is looked up by its number rather than counted from the first.
+      const indexByLine = new Map(lines.map((line, index) => [lexer.lineNumber(line.lineIndex), index]))
       // The break BETWEEN line `index` and the one after it, from line geometry.
       // Unchanged from when each break was built during the per-line walk, down to
       // the clamp: keep the usual start after the parsed text, so a dropped
@@ -110,6 +166,18 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         if (!next) return undefined
         const lineOffset = lexer.lineOffset(line.lineIndex)
         const sourceLineEnd = lineOffset + (lexer.lineAt(line.lineIndex)?.length ?? 0)
+        // The break follows the `%%%` pairs this line hosts, so it starts where the last one ends.
+        const hosted = line.after?.at(-1)?.pos
+        if (hosted?.endColumn !== undefined && hosted.endOffset !== undefined) {
+          return {
+            startLine: hosted.endLine,
+            endLine: lexer.lineNumber(next.lineIndex),
+            startColumn: hosted.endColumn,
+            endColumn: lexer.lineStartColumn(next.lineIndex),
+            startOffset: hosted.endOffset,
+            endOffset: lexer.lineOffset(next.lineIndex),
+          }
+        }
         return {
           startLine: lexer.lineNumber(line.lineIndex),
           endLine: lexer.lineNumber(next.lineIndex),
@@ -221,8 +289,10 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           if (node.type === 'soft_break' || node.type === 'hard_break') {
             const startLine = node.pos?.startLine
             if (startLine === undefined) continue
-            boundaryLines.add(startLine - firstLineNumber)
-            if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
+            const index = indexByLine.get(startLine)
+            if (index === undefined) continue
+            boundaryLines.add(index)
+            if (node.type === 'soft_break') breakIndex.set(node, index)
             continue
           }
           visitInlineChildren(node, readBoundaries, undefined)
@@ -311,11 +381,12 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           const pos = index === undefined ? undefined : breakPos(index)
           if (pos) hardBreak.pos = pos
 
+          if (index !== undefined) out.push(...lines[index]!.after ?? [])
           out.push(hardBreak)
         }
         return out
       }
-      const inline: InlineNode[] = place(parsed)
+      const inline: InlineNode[] = [...lines[0]!.before ?? [], ...place(parsed)]
       // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
       // so it goes at the end - the boundary that opens its line is still there,
       // which is what says the line is still there.
@@ -334,6 +405,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           inline.push(pendingComments.get(index)!)
         }
       }
+      inline.push(...lines.at(-1)!.after ?? [])
 
       const paragraph: Paragraph = { type: 'paragraph', children: inline }
       if (lexer.hasDocumentOffsets) {
@@ -348,9 +420,11 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
           endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
         }
         const placed = anchorable && unchangedColumns ? inline.filter((node) => node.pos !== undefined) : []
-        const firstPos = placed.find(
+        const firstIndex = placed.findIndex(
           (node) => node.type !== 'soft_break' && node.type !== 'hard_break',
-        )?.pos
+        )
+        // A `%%%` pair after a leading break does not move the stanza's start past that break.
+        const firstPos = firstIndex > 0 && placed[firstIndex]!.type === 'comment' ? undefined : placed[firstIndex]?.pos
         const lastPos = placed[placed.length - 1]?.pos
         if (firstPos) {
           paragraph.pos.startLine = firstPos.startLine
@@ -369,7 +443,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
     // line merges onto this node in parseBlocks.
     const node: LineBlock = {
       type: 'line_block',
-      children,
+      children: children.length ? children : leading as BlockNode[],
     }
     return node
   }

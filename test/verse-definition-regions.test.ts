@@ -15,8 +15,7 @@ describe('definition collection follows verse ownership', () => {
 
   it('keeps a colon closer inside a closed comment span literal', () => {
     const html = carveToHtml('::: |\n%%%\n:::\n[r]: /target\n%%%\n\n[t][r]\n')
-    expect(html).toContain('[r]: /target')
-    expect(html).not.toContain('href="/target"')
+    expect(html).toBe('<div class="line-block">\n  <p>[t][r]</p>\n</div>')
   })
   it('keeps an attached code span and its colon line inside verse', () => {
     const html = carveToHtml('> ::: |\n> verse\n+\n```\n:::\n```\n> [r]: /hidden\n> :::\n\n[t][r]\n')
@@ -80,7 +79,7 @@ describe('definition collection follows verse ownership', () => {
   })
 
   it('ends a comment at an indented closer inside verse', () => {
-    expect(carveToHtml("::: |\n%%%\n:::\n  %%%\nkept\n:::\n\n[r]: /url\n\n[t][r]\n")).toBe("<div class=\"line-block\">\n  <p><br>\n:::<br>\n&nbsp;&nbsp;%%%<br>\nkept</p>\n</div>\n<p><a href=\"/url\">t</a></p>")
+    expect(carveToHtml("::: |\n%%%\n:::\n  %%%\nkept\n:::\n\n[r]: /url\n\n[t][r]\n")).toBe("<div class=\"line-block\">\n  <p>kept</p>\n</div>\n<p><a href=\"/url\">t</a></p>")
   })
 
   it('ends a comment at an indented closer inside a div', () => {
