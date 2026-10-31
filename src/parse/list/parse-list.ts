@@ -5,6 +5,7 @@ import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
 import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
+import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
@@ -1234,6 +1235,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
       if (fence === null) return
+      if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
       const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!

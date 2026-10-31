@@ -236,6 +236,8 @@ export interface ItemLazyState {
   ownedColumn: number
   /** Marker column for a descendant item, in this frame's coordinates. */
   ownedMarker?: number
+  /** For a descendant frame, the parent's column the frame's column 0 stands at. */
+  frameColumn?: number
   /**
    * Is `ownedColumn` an AUTHORED base rather than a nested marker's column?
    *
