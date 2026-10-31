@@ -242,7 +242,7 @@ describe('a continuation row is cut while the run is still open', () => {
     // own pipe. An escape rule applied inside the run would carry a run that is
     // not open and swallow the separator.
     expect(html('| a `b \\` |\n+ c | d |')).toBe(
-      '<table>\n  <tbody>\n    <tr><td>a <code>b \\</code> c</td></tr>\n  </tbody>\n</table>',
+      '<table>\n  <tbody>\n    <tr><td>a <code>b \\</code> c</td><td>d</td></tr>\n  </tbody>\n</table>',
     )
   })
 

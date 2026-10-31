@@ -141,7 +141,9 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```']) {
     const source = prefix + '- tail\n'
     expect(parse(source).children).toHaveLength(2)
     expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block'])
-    expect(carveToHtml(source)).toContain('[r]: /target')
+    // A closed %%% pair hides its body in verse (CARVE-P9-047); a code span publishes it.
+    if (fence === '%%%') expect(carveToHtml(source)).not.toContain('[r]: /target')
+    else expect(carveToHtml(source)).toContain('[r]: /target')
   })
 }
 
