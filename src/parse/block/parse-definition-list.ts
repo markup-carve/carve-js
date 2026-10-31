@@ -932,6 +932,8 @@ export function createDefinitionListParser(
             entryColumn() > listColumn &&
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
+        if (indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
+            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentBlockHasCloser(lexer, run, lexer.pos - 1))) return 'stop'
         const atDocumentColumn = below === ln
         const original = sourceLineAt(lexer, lexer.pos, ln)
         if (descriptionTermOwnerReached(lazyState.inDefList === 'term', below,
