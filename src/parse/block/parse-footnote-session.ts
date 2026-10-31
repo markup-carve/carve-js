@@ -379,14 +379,16 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
     ) {
       const content = ln
+      // A wrapped attribute opened in the body takes its later lines at any column (PART 9 §15 A5).
+      const attributeLine = lazyState.attrRun != null && lazyState.opaque === null
       // An open definition term takes below-column lines as term text, even
       // when a line would otherwise look like a block opener.
-      const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
-      bodyLines.push(lazyState.inDefList === 'term' || framedBelow
+      const framedBelow = !attributeLine && framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
+      bodyLines.push(attributeLine ? content.trimStart() : lazyState.inDefList === 'term' || framedBelow
         ? LAZY_FRAME + content.trimStart() : content)
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
-      lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+      if (!attributeLine) lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
       trackItemLazyState(trackedLiteralLine(content, framedBelow), lazyState, false,
         (run) => commentBlockHasCloser(lexer, run))
       lexer.consume()
