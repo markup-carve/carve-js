@@ -431,19 +431,6 @@
   "span-opening-markup-and-containment.test.ts": {
     "every span begins at the markup that opens it, and is contained by its parent > reports nothing over the whole corpus": "#3921"
   },
-  "the-writer-invents-no-escape-the-re-parse-does-not-need.test.ts": {
-    "the writer invents no escape the re-parse does not need > 436-an-empty-description-body-claims-no-line-below-column-0-2": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 436-an-empty-description-body-claims-no-line-below-column-0-4": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 801-a-footnote-body-takes-its-first-block-at-its-body-column-6": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-3": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-4": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-5": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 841-a-description-at-a-pulled-block-s-column-ends-it-below-an-indented-plus-6": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 846-a-description-left-of-its-term-measures-its-own-plus-follower": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 846-a-description-left-of-its-term-measures-its-own-plus-follower-2": "markup-carve/carve#4441",
-    "the writer invents no escape the re-parse does not need > 848-a-description-a-plus-filled-stays-open-for-a-sibling-3": "markup-carve/carve#4441"
-  },
   "two-sibling-sub-lists-in-a-tight-item.test.ts": {
     "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
   },
