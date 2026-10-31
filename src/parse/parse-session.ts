@@ -1560,7 +1560,17 @@ export class ParseSession extends InlineParseSession {
       inner.push(content)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
     }
-    for (const attachedLine of attached) inner.push(attachedLine)
+    // An item may have framed the follower as lazy and clamped its indent; the `+` decides it,
+    // so the line is read again from the source at the item's content column.
+    const root = lexer.rootLines ?? lexer.lines
+    const hostColumn = lexer.hostSourceContentColumn ?? lexer.hostContentColumn
+    attached.forEach((attachedLine, index) => {
+      const source = root[attachedLineNumbers[index]! - 1]
+      inner.push(attachedLine.startsWith(LAZY_FRAME) && hostColumn > 0 && lexer.hostQuoteDepth === 0 &&
+        source !== undefined && indentColumns(source) >= hostColumn
+        ? sliceColumns(source, hostColumn, true)
+        : stripLazyFrame(attachedLine))
+    })
     innerLineNumbers.push(...attachedLineNumbers)
     if (attached.length > 0) {
       // The separator is not fence payload (§17 L3): an unclosed attached fence is closed instead.
