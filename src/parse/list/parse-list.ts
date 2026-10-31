@@ -457,10 +457,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn)
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
-    // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3).
+    // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
+    // and a definition there interrupts it as it does any paragraph (PART 0 S4), unless a folded fence holds it.
     if (attached.length > 1 && !lineOpensBlock(sliceColumns(attached[0]!, localBlockColumn, true))) {
-      const cut = attached.findIndex((line, index) => index > 0 &&
-        indentColumns(line) === placement.contentCol && isListMarkerLine(line.trimStart()))
+      let fenceRun: string | undefined
+      const cut = attached.findIndex((line, index) => {
+        const text = line.trimStart()
+        const inFence = fenceRun !== undefined
+        if (fenceRun !== undefined) {
+          if (fenceCloseRe(fenceRun).test(text)) fenceRun = undefined
+        } else if (opensCodeFence(text)) {
+          fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
+        }
+        return index > 0 && indentColumns(line) === placement.contentCol && (isListMarkerLine(text) ||
+          !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text)))
+      })
       if (cut > 0) {
         lexer.pos -= attached.length - cut
         attached.length = cut
