@@ -2,29 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /*
- * Below a definition description's content column an invisible line is lazy
- * paragraph text OF THAT CONTAINER (markup-carve/carve#1809, §10 I5 DEFINITION
- * OWNERSHIP IS COLUMN-SCOPED; markup-carve/carve-js#1550, corpus 430 and 431).
- *
- * This engine ejected it to DOCUMENT level, while folding the identical line one
- * host over in a list item - one rule, two answers, decided by which container
- * sat above it. §10 I5's missing half was WHICH container: "lazy paragraph text"
- * names an operation on an OPEN paragraph, so ending the container and emitting
- * the same characters one level out has not carried the sentence out.
- *
- * TWO MECHANISMS HAD TO CHANGE, and either alone leaves a HALF fold, which is
- * what corpus 430 and 430-2 are built to catch:
- *
- *  1. the interrupt test had to stop firing, or the body ends;
- *  2. the folded line had to keep its RESIDUAL INDENT into the `dd`, or its
- *     shape is recognized AGAIN one level in - the definition registers in the
- *     description's own table and the attribute attaches to the next paragraph
- *     inside the `dd`. `rebaseOverindentedBlocks` was rebasing the residue away
- *     because the collector passed no `eligible` set, which the list-item
- *     collector one screen over has had all along.
- *
- * So every row here asserts the CHARACTERS and, where the kind has one, the
- * absence of the registration.
+ * A line below the description's content column misses that frame. The later
+ * carve#4412 ruling makes an abbreviation definition interrupt at document
+ * level. Other line kinds keep their own paragraph and definition behavior.
  */
 describe("an invisible line below a description's column", () => {
   const html = (src: string): string => carveToHtml(src)
@@ -39,7 +19,7 @@ describe("an invisible line below a description's column", () => {
         '[r]: /u': `${ended}\n<p>tail</p>`,
         '[^f]: n': ended,
         '{.k}': `${ended}\n<p class="k">tail</p>`,
-        '*[A]: a': folds('*[A]: a'),
+        '*[A]: a': `${ended}\n<p>tail</p>`,
         x: folds('x'),
       }
       for (const line of ['[r]: /u', '[^f]: n', '{.k}', '*[A]: a', 'x']) {
@@ -48,7 +28,7 @@ describe("an invisible line below a description's column", () => {
     }
   })
 
-  it('registers a link or footnote definition, and an abbreviation stays literal', () => {
+  it('registers a link, footnote, or missed-frame abbreviation definition', () => {
     // The half-fold row: characters on the page AND an entry in the table is the
     // shape that passes a bytes-only assertion.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n\nSee [text][r].\n')).toBe(
@@ -58,7 +38,7 @@ describe("an invisible line below a description's column", () => {
       `${ended}\n<p>See<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>n\ntail<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>`,
     )
     expect(html(':: t\n:  d\n  *[A]: a\ntail\n\nA here\n')).toBe(
-      `${folds('*[A]: a')}\n<p>A here</p>`,
+      `${ended}\n<p>tail</p>\n<p><abbr title="a">A</abbr> here</p>`,
     )
   })
 
