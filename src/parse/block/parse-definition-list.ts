@@ -1,3 +1,4 @@
+import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
 import type {
   BlockNode,
   DefinitionList,
@@ -738,6 +739,17 @@ export function createDefinitionListParser(
             lexer.consume()
           }
           return 'continue'
+        }
+        // A blank reaches every frame, so it is the open fence's content (corpus 291, carve#4033).
+        // The run stays in the stream as well: it still separates what follows.
+        if (bodyEndsInOpenCodeFence(bodyLines, false)) {
+          for (let k = 0; k < look; k++) {
+            const lineIndex = lexer.pos + k
+            bufferedBlanks.add(bodyLines.length)
+            bodyLines.push('')
+            bodySourceLines.push(lexer.peek(k))
+            bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          }
         }
         return 'stop'
       }

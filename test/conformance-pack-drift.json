@@ -94,21 +94,8 @@
       "ticket": "markup-carve/carve#4033",
       "cause": "an unclosed fence in a description or footnote body drops its trailing blank run",
       "cases": [
-        "fences-1003c5a0c605",
-        "fences-78bb999cca42",
         "fences-9caa332a8a41",
-        "fences-e0c82ffb018d",
-        "fences-e4b9e8e7d607",
-        "fences-ee4a1e36de97",
-        "notes-04e6ac52d99b",
-        "notes-3534a9739250",
-        "notes-37e54703513f",
-        "notes-499cdee61630",
-        "notes-50dee4b44d0d",
-        "notes-8a58290254d3",
-        "notes-9429cd878645",
-        "notes-ac7d6a615617",
-        "ownership-35dce7b7ed21"
+        "fences-c9b7d1a267bf"
       ]
     }
   ]

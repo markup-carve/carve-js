@@ -42,6 +42,7 @@ import {
   colonFenceOpenerLen,
   commentFenceRun,
   fenceCloseRe,
+  markerLineBottomBlock,
   hostedAuthoredBlockOpener,
   isBlockImageLine,
   markerLineQuoteState,
@@ -277,6 +278,39 @@ export interface ItemLazyState {
  */
 export function insideOpenFence(state: ItemLazyState): boolean {
   return state.opaque !== null || state.divDepth > 0
+}
+
+const RE_BODY_HOST_MARKER = /^(?::[ \t]+|\[\^[^\]]+\]:[ \t]+)/
+
+/** Whether a collected host body ends inside a code fence, on any marker line of the stack (carve#4047). */
+export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFences = true): boolean {
+  let fence: { close: RegExp; base: number } | null = null
+  for (const line of lines) {
+    if (isBlankLine(line)) continue
+    const column = indentColumns(line)
+    const text = line.trimStart()
+    if (fence !== null && column >= fence.base) {
+      if (column === fence.base && fence.close.test(text)) fence = null
+      continue
+    }
+    fence = null
+    let bottom = text
+    let base = column
+    let onItemMarker = false
+    for (;;) {
+      const inner = markerLineBottomBlock(bottom)
+      onItemMarker ||= inner.length !== bottom.length
+      base += bottom.length - inner.length
+      bottom = inner
+      const host = RE_BODY_HOST_MARKER.exec(bottom)
+      if (host === null) break
+      base += 2
+      bottom = bottom.slice(host[0].length)
+    }
+    const open = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
+    if (open !== null && (itemMarkerFences || !onItemMarker)) fence = { close: fenceCloseRe(RE_FENCE.test(bottom) ? open[2]! : open[1]!), base }
+  }
+  return fence !== null
 }
 
 /** An `ItemLazyState` that has seen nothing, for a collector that only reads fences. */

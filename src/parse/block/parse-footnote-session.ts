@@ -1,4 +1,5 @@
 import type { BlockNode, Position } from '../parse-core.js'
+import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, Lexer, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
@@ -174,11 +175,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // buffered blanks. `restoreVerbatimBlanks` reads both after the rebase.
   const bodySourceLines: (string | undefined)[] = [defLineRaw]
   const bufferedBlanks = new Set<number>()
-  // The def line's own content starts past its marker, which is ASCII, so the
-  // prefix length is its column width.
-  const defContentColumn =
-    markerColumn + (defLineRaw.replace(/^[ \t]+/, '').length - m[2]!.length)
   const pendingBlankRun = new ContainerBlankBuffer()
+  let attachmentEnd = -1
   let nestedSourceBodyColumn: number | undefined
   let nestedDefBodyIndex = -1
   // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
@@ -289,6 +287,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         // continue the paragraph that preceded the plus marker.
         trackItemLazyState('', lazyState)
         trackAttached(attached)
+        attachmentEnd = bodyLines.length
       }
       return 'continue'
     }
@@ -389,6 +388,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
     return 'continue'
     })
+  // A blank reaches every frame, so it is the open fence's content (corpus 291, carve#4033).
+  // A `+` attachment ends at the blank instead.
+  const endsOnPlusAttachment = attachmentEnd === bodyLines.length
+  if (pendingBlankRun.count > 0 && !endsOnPlusAttachment && bodyEndsInOpenCodeFence(bodyLines)) {
+    for (let k = 0; k < pendingBlankRun.count; k++) {
+      bufferedBlanks.add(bodyLines.length)
+      bodyLines.push('')
+      bodyLineNumbers.push(pendingBlankRun.lineNumbers[k]!)
+      bodySourceLines.push(pendingBlankRun.lines[k])
+    }
+  }
   // A losing duplicate is still read: only its own label loses, and a definition
   // nested in its body is collected like any other (PART 9R R2).
   const wins = !lexer.footnoteDefs.has(label)
@@ -399,7 +409,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // A fence taken below the column keeps that column, as a `%%` line does.
     if (bodyLines.length !== 1 || !/^[A-Za-z][A-Za-z0-9 .]*$/.test(bodyLines[0]!)) {
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
-        index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
+        index === 0 ? bodyColumn : indentColumns(bodySourceLines[index] ?? ''),
       )
     }
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)

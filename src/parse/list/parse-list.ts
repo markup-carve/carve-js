@@ -167,6 +167,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     itemQuoteDepth: number
   }
 
+  const RE_HOST_MARKER = /^(?::[ \t]+|\[\^[^\]]+\]:[ \t]+)/
   type AttachBoundary = (line: string) => boolean
 
   type FirstBlockOutcome =
@@ -711,9 +712,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         continue
       }
       const prefix = markerPrefixLength(text, at, bound)
-      if (prefix === 0) break
-      base += markerContentColumn(text.slice(at, at + prefix) + 'x')
-      at += prefix
+      if (prefix > 0) {
+        base += markerContentColumn(text.slice(at, at + prefix) + 'x')
+        at += prefix
+        continue
+      }
+      // A description or note holding the fence on its marker line owns it from its body column (carve#4047).
+      const host = RE_HOST_MARKER.exec(text.slice(at))
+      if (host === null) break
+      base += FOOTNOTE_BODY_COLUMN
+      at += host[0].length
     }
     if (!reused) {
       const bottom = text.slice(at)
@@ -804,7 +812,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         commentOpen = commentRun
         continue
       }
-      if (markerFence === null && isListMarkerLine(bodyLine)) {
+      if (markerFence === null && (isListMarkerLine(bodyLine) || RE_HOST_MARKER.test(opener))) {
         const frame = markerFenceAt(session, opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
         frameBase = frame.base
         markerFence = frame.close === null ? null : { close: frame.close, base: frame.base }
@@ -2974,7 +2982,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Parent separators do not belong to fences on child marker lines.
     if (pendingBlankRun.count > 0 && (
       lazyState.opaque !== null || (descendantOpaque !== null && !descendantOpaque.markerLine) ||
-      (trailingDescendantFence && (firstBlockIdx >= 0 || leadIsMarker || RE_DEFLIST_TERM.test(content)))
+      trailingDescendantFence
     )) {
       hasBlank = true
       for (let k = 0; k < pendingBlankRun.lines.length; k++) {
