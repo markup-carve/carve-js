@@ -1799,12 +1799,28 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
       let ownBlock = false
       for (let k = 0; k < attachedLines.length; k++) {
+        // A later block at the item's content column is the item's own. Once
+        // that block leaves no paragraph open, a line below the item column
+        // must return to the ordinary ownership walk (PART 0 S4).
+        if (ownBlock && indentColumns(attachedLines[k]!, contentCol) < contentCol &&
+            !lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== true &&
+            lazyState.opaque === null && lazyState.divDepth === 0 &&
+            !lazyState.inFootnoteBody && !insideOpenQuoteParagraph(lazyState)) {
+          lexer.pos -= attachedLines.length - k
+          attachedLines.length = k
+          attachedLineNumbers.length = k
+          break
+        }
         // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
         const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
           (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
         // The lines of that block are measured from the same column.
         ownBlock ||= ownOpener
-        const attachedLine = ownBlock && indentColumns(attachedLines[k]!, contentCol) >= contentCol ? sliceColumns(attachedLines[k]!, contentCol, true)
+        const attachedLine = ownBlock && indentColumns(attachedLines[k]!, contentCol) < contentCol &&
+          lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false && lazyState.opaque === null &&
+          isListMarkerLine(attachedLines[k]!.trimStart())
+          ? LAZY_FRAME + attachedLines[k]!.trimStart()
+          : ownBlock && indentColumns(attachedLines[k]!, contentCol) >= contentCol ? sliceColumns(attachedLines[k]!, contentCol, true)
           : localPlusColumn > contentCol ? sliceColumns(attachedLines[k]!, localPlusColumn, true) : attachedLines[k]!
         nested.push(attachedLine)
         nestedSourceLines.push(attachedLines[k])
