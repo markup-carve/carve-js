@@ -51,7 +51,7 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading/heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
-import { authoredIdOf } from './extension/attribute-merge.js'
+import { authoredIdOf, slotsByWriteOrder } from './extension/attribute-merge.js'
 import {
   CARRIER_CHAR,
   CARRIER_MARKER,
@@ -1259,6 +1259,11 @@ function foldAttrNames(attrs: Attrs): FoldedAttrs {
       order.push(slot)
       setOwn(out.keyValues!, slot, keyValues[latest.get(fold)!]!)
     }
+  }
+  const written = slotsByWriteOrder(attrs)
+  if (written) {
+    if (Object.hasOwn(written, 'id') && written.id !== undefined) out.id = written.id
+    if (written.classes) classes = written.classes
   }
   if (classes !== undefined) out.classes = classes
   else delete out.classes
