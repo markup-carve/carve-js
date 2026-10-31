@@ -1,5 +1,5 @@
 import type { Attrs } from '../ast.js'
-import { writeKeyValue } from './attribute-merge.js'
+import { recordSlotWrites, writeKeyValue } from './attribute-merge.js'
 
 /**
  * True when `inner` (the text between an attribute block's braces) is
@@ -93,15 +93,23 @@ export function parseAttrs(src: string): Attrs {
   const note = (slot: string) => {
     if (!seen.has(slot)) { seen.add(slot); order.push(slot) }
   }
+  let writes: Array<[string, string | string[]]> | undefined
+  const write = (slot: string, value: string | string[]) => (writes ??= []).push([slot, value])
+  const writeKey = (key: string, value: string) => {
+    const fold = key.toLowerCase()
+    if (fold === 'id' || fold === 'class') write(key, value)
+  }
   const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^}|"'\\ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
       attrs.id = m[1]
       note('#id')
+      write('#id', m[1])
     } else if (m[2]) {
       ;(attrs.classes ??= []).push(m[2])
       note('.class')
+      write('.class', [m[2]])
     } else if (m[3]) {
       const val =
         m[4] !== undefined ? unescapeAttrValue(m[4])
@@ -113,6 +121,7 @@ export function parseAttrs(src: string): Attrs {
         // carve-php; `{#i id=j}` -> `id="j"`.
         attrs.id = val
         note('#id')
+        write('#id', val)
       } else if (m[3] === 'class') {
         // `class=x` is the SAME attribute as `.x` (CARVE-P4-007): it APPENDS to
         // the class slot in source order instead of emitting a second
@@ -125,9 +134,11 @@ export function parseAttrs(src: string): Attrs {
         const tokens = val.split(/[\t\n\f\r ]+/).filter(t => t !== '')
         ;(attrs.classes ??= []).push(...(tokens.length ? tokens : [val]))
         note('.class')
+        write('.class', tokens.length ? tokens : [val])
       } else {
         writeKeyValue((attrs.keyValues ??= {}), m[3], val)
         note(m[3])
+        writeKey(m[3], val)
       }
     } else if (m[7] !== undefined) {
       // `{:TAG}` is exact sugar for `lang=TAG`, and `{:}` for `lang=""` - an
@@ -145,6 +156,7 @@ export function parseAttrs(src: string): Attrs {
         // enters keyValues and no duplicate `id` attribute can be produced.
         attrs.id = ''
         note('#id')
+        write('#id', '')
       } else if (m[8] === 'class') {
         // A bare boolean `class` has the same empty-string value as `class=""`
         // (PART 4), so it feeds the class slot too - left in keyValues the two
@@ -152,14 +164,17 @@ export function parseAttrs(src: string): Attrs {
         // duplicate `class` attribute would survive.
         ;(attrs.classes ??= []).push('')
         note('.class')
+        write('.class', [''])
       } else {
         // Boolean attribute: a bare word with no value.
         writeKeyValue((attrs.keyValues ??= {}), m[8], '')
         note(m[8])
+        writeKey(m[8], '')
       }
     }
   }
   if (order.length) attrs.order = order
+  recordSlotWrites(attrs, writes)
   return attrs
 }
 
