@@ -1522,8 +1522,7 @@ function relaxPlusEscapes(text: string): string {
   const lines = text.split('\n')
   const bare = lines.map((line) => line.replace(ESCAPED_PLUS_LINE, '+'))
   const { lines: owned, payloadLines } = ownLines(bare)
-  // The canonical form keeps a description's escape (corpus 436).
-  const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+') || /^[ \t>]*:[ \t]+\\\+[ \t]*$/.test(lines[i]!)
+  const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+')
   return bare.map((line, i) => line === lines[i] || !keeps(i) ? line : lines[i]!).join('\n')
 }
 
