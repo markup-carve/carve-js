@@ -918,6 +918,8 @@ export interface CommentSpanScan {
   index: number
   opaque: { comment: boolean; char: string; run: number } | null
   atBlockStart: boolean
+  /** The last body line of each delimiter width, for `bodyHoldsClosableCommentSpan`. */
+  runs?: { indexed: number; last: Map<number, number> }
 }
 
 export const newCommentSpanScan = (): CommentSpanScan => ({ index: 0, opaque: null, atBlockStart: true })
@@ -926,8 +928,9 @@ export function bodyHoldsOpenCommentSpan(
   lines: readonly string[],
   scan: CommentSpanScan,
   // Openers with no closer anywhere: each is one line comment (§28) and opens no span.
-  degraded?: ReadonlySet<number>,
+  degraded?: ReadonlySet<number> | ((index: number, run: number) => boolean),
 ): boolean {
+  const isDegraded = typeof degraded === 'function' ? degraded : (index: number) => degraded?.has(index) === true
   for (; scan.index < lines.length; scan.index++) {
     const line = stripLazyFrame(lines[scan.index]!).replace(/^[ \t]+/, '')
     const open = scan.opaque
@@ -957,10 +960,25 @@ export function bodyHoldsOpenCommentSpan(
       continue
     }
     const comment = commentFenceRun(opener)
-    if (comment !== undefined && degraded?.has(scan.index) !== true) scan.opaque = { comment: true, char: '%', run: comment }
+    if (comment !== undefined && !isDegraded(scan.index, comment)) scan.opaque = { comment: true, char: '%', run: comment }
   }
 
   return scan.opaque?.comment === true
+}
+
+/** As `bodyHoldsOpenCommentSpan`, but an opener with no exact-width closer ahead is one line comment (CARVE-P9-053). */
+export function bodyHoldsClosableCommentSpan(
+  lines: readonly string[],
+  scan: CommentSpanScan,
+  hasCloser: (run: number) => boolean,
+): boolean {
+  const runs = scan.runs ??= { indexed: 0, last: new Map() }
+  for (; runs.indexed < lines.length; runs.indexed++) {
+    const run = commentFenceRun(stripLazyFrame(lines[runs.indexed]!).replace(/^[ \t]+/, ''))
+    if (run !== undefined) runs.last.set(run, runs.indexed)
+  }
+  const last = runs.last
+  return bodyHoldsOpenCommentSpan(lines, scan, (index, run) => (last.get(run) ?? -1) <= index && !hasCloser(run))
 }
 
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the

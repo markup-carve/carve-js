@@ -517,6 +517,7 @@ export {
   RE_TASK_HEAD,
   RE_UNORDERED_HEAD,
   attachDocumentOffsets,
+  bodyHoldsClosableCommentSpan,
   bodyHoldsOpenCommentSpan,
   buildCloserIndex,
   closerIndex,
