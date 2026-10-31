@@ -45,8 +45,8 @@ describe('a host run start needs no separator', () => {
     [
       'a figure caption',
       '::: figure\n![a](i)\n^ %% b\n:::\n',
-      '<figure class="carve-figure-group">\n  <figure class="carve-figure-panel">\n' +
-        '    <img src="i" alt="a">\n    <figcaption></figcaption>\n  </figure>\n</figure>',
+      // carve#4559: a caret line holding only a comment makes no caption.
+      '<figure class="carve-figure-group">\n  <p><img src="i" alt="a">\n^</p>\n</figure>',
     ],
     ['a line block stanza', '::: |\n%% b\n:::\n', '<div class="line-block">\n  <p></p>\n</div>'],
   ])('opens a comment in %s', (_name, source, html) => {
@@ -93,7 +93,7 @@ describe('corpus 518', () => {
     ['row 5', '| a\t%% hidden | b |\n|---|---|\n| 1 | 2 |\n', '<table>\n  <thead>\n    <tr><th scope="col">a\t%% hidden</th><th scope="col">b</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td><td>2</td></tr>\n  </tbody>\n</table>'],
     ['row 6', '| %% hidden | b |\n|---|---|\n| 1 | 2 |\n', '<table>\n  <thead>\n    <tr><th scope="col"></th><th scope="col">b</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td><td>2</td></tr>\n  </tbody>\n</table>'],
     ['row 7', '![alt](u)\n^ cap\t%% hidden\n', '<figure>\n  <img src="u" alt="alt">\n  <figcaption>cap\t%% hidden</figcaption>\n</figure>'],
-    ['row 8', '![alt](u)\n^ %% hidden\n', '<figure>\n  <img src="u" alt="alt">\n  <figcaption></figcaption>\n</figure>'],
+    ['row 8', '![alt](u)\n^ %% hidden\n', '<p><img src="u" alt="alt">\n^</p>'],
     ['row 9', '::: note [a\t%% hidden]\nbody\n:::\n', '<aside class="admonition note" aria-label="Note">\n  <p class="div-label">a\t%% hidden</p>\n  <p>body</p>\n</aside>'],
     ['row 10', '::: note [%% hidden]\nbody\n:::\n', '<aside class="admonition note" aria-label="Note">\n  <p class="div-label"></p>\n  <p>body</p>\n</aside>'],
     ['row 11', 'a%%b and 50%% stay\n', '<p>a%%b and 50%% stay</p>'],

@@ -83,7 +83,10 @@ export const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 // as `# ` / `#\t…` is not a heading. "Content" is tested against ASCII
 // whitespace only ([ \t\n\r\f]) -- a non-breaking space (U+00A0) is content
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
-export const RE_CAPTION = /^\^ +(.*[^ \t\n\r].*)$/
+// A comment is not content either: removing it must not change the output
+// (carve#4220), so a line of braced and trailing comments opens no caption (carve#4559).
+export const CAPTION_COMMENT_ONLY = String.raw`(?:\{%(?![\p{Mn}\p{Mc}\p{Me}\u{FE00}-\u{FE0F}\u{200D}])(?:(?!%\})[^\n\r])*%\}|[ \t])*(?:(?<= )%%.*)?$`
+export const RE_CAPTION = new RegExp(String.raw`^\^ (?!${CAPTION_COMMENT_ONLY}) *(.*[^ \t\n\r].*)$`, 'u')
 
 export const RE_BARE_IMAGE = /^ {0,3}!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')? *\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
 
