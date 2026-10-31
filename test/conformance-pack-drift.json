@@ -2,6 +2,13 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4447",
+      "cause": "the pinned spec model predates the ruling that the block after an attribute run, not the run, decides whether a + attaches",
+      "cases": [
+        "attributes-5944b36aa7a1"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4545",
       "cause": "the pinned spec model predates the ruling that a marker between an item's columns folds unless it matches the list on every axis",
       "cases": [
