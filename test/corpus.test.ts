@@ -1207,6 +1207,20 @@ const IMPLEMENTED = new Set([
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   [
+    '118-cyclic-cross-reference-resolves-to-one-level',
+    {
+      reason: 'carve#4642: an inner reference contributes its target text without an inner link',
+      html: '<section id="A">\n  <h1>A <a href="#A">A A </a></h1>\n</section>',
+    },
+  ],
+  [
+    '118-cyclic-cross-reference-resolves-to-one-level-2',
+    {
+      reason: 'carve#4642: each inner reference contributes its target text without another expansion',
+      html: '<section id="A">\n  <h1>A <a href="#B">B A </a></h1>\n</section>\n<section id="B">\n  <h1>B <a href="#A">A B </a></h1>\n</section>',
+    },
+  ],
+  [
     '518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-8',
     {
       reason: 'carve#4559: a caret line holding only a comment makes no caption (spec PR carve#4609)',
