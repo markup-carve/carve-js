@@ -83,9 +83,10 @@ describe('recognition, rendering and positions', () => {
     expect(carveToHtml('![a]( )\n')).toBe('<img src="" alt="a">')
   })
 
-  it('uses the authored closing delimiter to direct a quote after a slash', () => {
-    expect(carveToHtml('*/"*\n')).toBe('<p><strong>/“</strong></p>')
-    expect(carveToHtml("*/'*\n")).toBe('<p><strong>/‘</strong></p>')
+  // A span's closer is not the next character for a quote after a slash (CARVE-P3-023 R1, ruling markup-carve/carve#4318).
+  it('closes a quote after a slash at the end of a span', () => {
+    expect(carveToHtml('*/"*\n')).toBe('<p><strong>/”</strong></p>')
+    expect(carveToHtml("*/'*\n")).toBe('<p><strong>/’</strong></p>')
   })
 
   it('requires an unmarked delimiter cell before promoting a table header', () => {

@@ -772,20 +772,10 @@ export class InlineParseSession {
   protected activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
   protected quoteGlyphHasNul = false
 
-  private sourceCharacterAfter(text: string, source: InlineSource): string {
-    if (this.activeDocument === null) return ''
-    const offset = this.pointAt(source, text, text.length)?.offset
-    if (offset === undefined || (!source.lineAnchors && !source.anchoredRanges &&
-      (source.baseOffset === 0 || this.activeDocument[offset - 1] !== text[text.length - 1]))) return ''
-    const codepoint = this.activeDocument.codePointAt(offset)
-    return codepoint === undefined ? '' : String.fromCodePoint(codepoint)
-  }
-
   private smartToken(
     text: string,
     i: number,
     prev: string,
-    source: InlineSource,
     region?: { start: number; close: number },
   ): { out: string; len: number; kind: string } | null {
     const candidates = smartTokensByFirst.get(text[i]!)
@@ -823,12 +813,12 @@ export class InlineParseSession {
     }
     const c = text[i]!
     if (c === '"') {
-      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : this.sourceCharacterAfter(text, source)
+      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : ''
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : this.sourceCharacterAfter(text, source)
+      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : ''
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
       if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
@@ -1702,8 +1692,6 @@ export class InlineParseSession {
   // A closer of the walk's own span inside a combined token's content would
   // remove the token's entry from below, so the token did not form (PART 9 §9).
   private combinedTokenDropped(text: string, at: number, close: number, delim: string, memo: EmphasisMemo): boolean {
-    // A token carrying a block stays formed: test a-combined-token-and-its-guards pins it (carve-js#3910).
-    if (this.pairAttributeEnd(text, close + 2) > close + 2) return false
     const key = `${delim}c${at}`
     let found = memo.closes?.get(key)
     if (found === undefined) {
