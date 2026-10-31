@@ -1,4 +1,4 @@
-// markup-carve/carve#4461 (PART 9R R4) and markup-carve/carve#4463 (PART 10 I1c, I2).
+// markup-carve/carve#4461 (PART 9R R4), #4463 (PART 10 I1c, I2), #4453 (frontmatter_open) and #4450 (R4).
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
@@ -29,5 +29,22 @@ describe('an unresolved code include', () => {
 
   it('keeps core inline syntax on a quoted path', () => {
     expect(carveToHtml('> {{ "_a_" @code:js }}\n')).toBe('<blockquote><p>{{ “<u>a</u>” <span class="mention"><strong>@code</strong></span>:js }}</p></blockquote>')
+  })
+})
+
+describe('an indented dash line', () => {
+  it.each([
+    ['neither opens frontmatter', ' ---\na\n---\nx\n'],
+    ['nor closes it', '---\na\n ---\nx\n'],
+  ])('%s', (_name, source) => {
+    expect(carveToHtml(source)).toBe('<hr>\n<p>a</p>\n<hr>\n<p>x</p>')
+  })
+})
+
+describe('a duplicate explicit heading id', () => {
+  it('resolves a cross-reference to the first heading', () => {
+    const html = carveToHtml('{#x}\n# A\n\n{#x}\n# B\n\n</#x>\n')
+    expect(html).toContain('<p><a href="#x">A</a></p>')
+    expect(html.match(/<section id="x">/g)).toHaveLength(2)
   })
 })
