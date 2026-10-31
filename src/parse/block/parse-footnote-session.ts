@@ -212,34 +212,52 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     attached.forEach((a, k) => trackItemLazyState(a, lazyState, true,
       (width) => (lastRun.get(width) ?? -1) > k || commentBlockHasCloser(lexer, width)))
   }
-  // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
-  // marker-line content, with a non-blank line at document column 0 below it,
-  // is a marker, and that line's block is the body. An invisible line (a
-  // definition or a comment) is passed over as under `- +`, so a further
-  // footnote definition is no boundary here. Otherwise the `+` stays text.
+  // A marker-line `+` attaches only a visible block at the note's authored
+  // marker column. Definitions with their own bodies are siblings; document
+  // definitions and comments may be skipped when finding the next block.
   let firstBlockAttached = false
-  const below = lexer.peek()
-  if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below)) {
-    // An attached paragraph ends at an opener that reaches the body column: that line is the body's.
-    const attachedParagraph = !lineOpensItemBlock(below.trimStart())
-    const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
-    const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
-      lexer,
-      (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
-        (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)),
-      0, true, true,
-    )
-    firstBlockAttached = true
-    bodyLines[0] = ''
-    bodySourceLines[0] = undefined
-    for (const a of attached) {
-      bodyLines.push(a)
-      bodySourceLines.push(a)
+  let follower: string | undefined
+  if (/^\+[ \t]*$/.test(m[2]!)) {
+    let followerIndex = lexer.pos
+    follower = lexer.lineAt(followerIndex)
+    const noteQuoteDepth = quotePrefixDepth(authoredLine ?? defLineRaw)
+    const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
+    while (follower !== undefined && !isBlankLine(follower)) {
+      const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
+      const atMarker = sourceColumn(source, noteQuoteDepth) === authoredMarkerColumn
+      if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
+          RE_COMMENT_LINE.test(follower.trimStart()))) break
+      follower = lexer.lineAt(++followerIndex)
     }
-    bodyLineNumbers.push(...attachedLineNumbers)
-    trackAttached(attached)
-    // A separating blank after this attached block belongs outside its fence.
-    attachmentEnd = bodyLines.length
+    const followerSource = follower === undefined ? undefined
+      : (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
+    const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
+      followerSource !== undefined && quotePrefixDepth(followerSource) >= noteQuoteDepth &&
+      sourceColumn(followerSource, noteQuoteDepth) === authoredMarkerColumn &&
+      !RE_FOOTNOTE_DEF.test(follower.trimStart()) &&
+      !RE_ADMONITION_CLOSE.test(follower.trimStart())
+    if (canAttachFirstBlock) {
+      // An attached paragraph ends at an opener that reaches the body column.
+      const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
+      const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
+      const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
+        lexer,
+        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
+          (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)),
+        0, true, true,
+      )
+      firstBlockAttached = true
+      bodyLines[0] = ''
+      bodySourceLines[0] = undefined
+      for (const a of attached) {
+        bodyLines.push(a)
+        bodySourceLines.push(a)
+      }
+      bodyLineNumbers.push(...attachedLineNumbers)
+      trackAttached(attached)
+      // A separating blank after this attached block belongs outside its fence.
+      attachmentEnd = bodyLines.length
+    }
   }
   if (!firstBlockAttached) {
     // A fence behind an item marker on the note's line is no paragraph (CARVE-P0-013, PART 0 S4).

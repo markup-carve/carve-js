@@ -119,6 +119,21 @@
         "fences-9caa332a8a41",
         "fences-c9b7d1a267bf"
       ]
+    },
+    {
+      "ticket": "markup-carve/carve#4449",
+      "cause": "the pinned pack predates the ruled first-block attachment gate after an invisible note definition",
+      "cases": [
+        "notes-ab5ed6124fb2",
+        "notes-df25868243ba"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
+      "cases": [
+        "notes-4dc51b5608ab"
+      ]
     }
   ]
 }
