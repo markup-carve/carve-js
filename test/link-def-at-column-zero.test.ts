@@ -64,12 +64,9 @@ describe('the neighbouring definition kinds are unchanged', () => {
     expect(out).not.toContain('[^f]: y')
   })
 
-  it('an abbreviation definition at column 0 still folds as item text', () => {
-    // Deliberately excluded: PART 12 §7 recognizes an abbreviation definition
-    // only as a direct child of the document, and all four implementations fold
-    // this one as text.
+  it('an abbreviation definition at column 0 defines under carve#4412', () => {
     const out = carveToHtml('- x\n*[A]: b\n\nA here\n')
-    expect(out).toContain('*[A]: b')
-    expect(out).not.toContain('<abbr')
+    expect(out).not.toContain('*[A]: b')
+    expect(out).toContain('<abbr title="b">A</abbr>')
   })
 })

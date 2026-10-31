@@ -5,10 +5,9 @@ import { carveToHtml } from '../src/index.js'
 import type { BlockNode, Document } from '../src/ast.js'
 
 /**
- * PART 12 §7: `*[TERM]: expansion` is an abbreviation definition ONLY as a
- * direct child of the document. Inside a block quote, a list item or a div the
- * line is ordinary paragraph text: it defines nothing and is preserved as
- * written.
+ * PART 12 §7 recognizes `*[TERM]: expansion` at document level. Under the
+ * carve#4412 ruling, a line that misses every container frame is read there.
+ * A line that reaches a block quote, list item or div remains paragraph text.
  *
  * This replaces a rule that hoisted a container-authored definition to the
  * document. Hoisting was dropped for two reasons. It could not be represented:
@@ -32,7 +31,7 @@ const abbrDefs = (doc: Document) =>
 
 const squash = (html: string) => html.replace(/\s+/g, ' ').trim()
 
-describe('an abbreviation definition is recognized only at document level', () => {
+describe('an abbreviation definition is recognized at document level', () => {
   it('defines at document level', () => {
     const doc = parse('*[HTML]: HyperText\n\nThe HTML spec.\n')
     expect(types(doc.children)).toEqual(['abbreviation_def', 'paragraph'])
@@ -88,11 +87,9 @@ describe('the definition form is inert in a container for every purpose', () => 
     expect(squash(carveToHtml('- x\n  *[A]: b\n'))).toBe('<ul> <li>x *[A]: b</li> </ul>')
   })
 
-  it('folds as a lazy continuation rather than ending the item', () => {
-    // Flush left but directly after an open item: item content, so no
-    // definition is collected and `A` stays literal.
+  it('defines after missing the item content column', () => {
     expect(squash(carveToHtml('- x\n*[A]: b\n\nThe A spec.\n'))).toBe(
-      '<ul> <li>x *[A]: b</li> </ul> <p>The A spec.</p>',
+      '<ul> <li>x</li> </ul> <p>The <abbr title="b">A</abbr> spec.</p>',
     )
   })
 

@@ -1,49 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// carve-js#1120.
-//
-// PART 12 §7 is NORMATIVE and quoted in full, because the whole defect is a
-// container test that could not see one container:
-//
-//   `*[TERM]: expansion` is an `abbreviation_definition` only as a direct child
-//   of the document. Written inside a block quote, a list item or a div, the
-//   line is not a definition at all: it is ordinary paragraph text, it defines
-//   nothing, and it is preserved as the text the author typed.
-//
-// The definition prepass tracks open list items in `listCols` so it can apply
-// that test, and the marker it tracks them with (`RE_PREPASS_MARKER`) enumerated
-// every ordered value EXCEPT the Carve-only BARE DOT (`resources/grammar.ebnf`,
-// `ordered_marker`, BARE DOT; carve#315). `RE_ORDERED` and `RE_ITEM_ATTR` both
-// carry that branch, so the block lexer opened an item the prepass never saw.
-//
-// The result was the one outcome a definition may never have, in reverse: the
-// line was kept as lazy item TEXT and registered as a definition at the same
-// time, so the abbreviation expanded inside its own definition and again in
-// every later paragraph.
-//
-// `. ` is a Carve addition with no CommonMark or Djot equivalent, which is why
-// it is the ordered marker least likely to have inherited a reference
-// implementation's behavior, and why the numbered and bullet controls below
-// carry the weight: `. ` and `- ` give the same content column of 2, so the
-// column cannot be what separated them.
-//
-// carve-rs never registered. Every expected string below was measured against
-// carve-rs `9b0bc779`, built from a clean checkout.
+// The ruling on carve#4412 makes a definition that misses every item column
+// a document definition. A line at an item content column remains item text.
 
 const ABBR = '<abbr title="d">A</abbr>'
 
-describe('a bare-dot ordered item collects no abbreviation definition', () => {
-  it('keeps the line as item text and defines nothing', () => {
+describe('a bare-dot ordered item measures abbreviation definitions by column', () => {
+  it('defines below the item column', () => {
     expect(carveToHtml('. x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li>x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol>\n  <li>x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
   })
 
-  it('does not expand the abbreviation inside its own definition text', () => {
-    // The half of the defect that is visible without reading further: the
-    // registered expansion reached back into the line that registered it.
-    expect(carveToHtml('. x\n*[A]: d\n\nA here\n')).not.toContain(ABBR)
+  it('expands at the later use site', () => {
+    expect(carveToHtml('. x\n*[A]: d\n\nA here\n')).toContain(ABBR)
   })
 
   it('carries the abutting attribute block too', () => {
@@ -51,7 +22,7 @@ describe('a bare-dot ordered item collects no abbreviation definition', () => {
     // `RE_ITEM_ATTR` already spelled the bare-dot branch. The prepass has to
     // agree with it or the id lands on an item the prepass says is not there.
     expect(carveToHtml('.{#i} x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li id="i">x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol>\n  <li id="i">x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
   })
 
@@ -76,16 +47,15 @@ describe('a bare-dot ordered item collects no abbreviation definition', () => {
   })
 
   it('CONTROL: a VALID abutting brace still opens the item, under all three', () => {
-    // The other side of the same test. Over-rejecting here would put the
-    // definition back at document level under a real list item.
+    // The marker still opens an item; the definition below misses its column.
     expect(carveToHtml('.{#i} x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li id="i">x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol>\n  <li id="i">x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
     expect(carveToHtml('1.{#i} x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li id="i">x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol>\n  <li id="i">x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
     expect(carveToHtml('-{#i} x\n*[A]: d\n\nA here\n')).toBe(
-      '<ul>\n  <li id="i">x\n*[A]: d</li>\n</ul>\n<p>A here</p>',
+      '<ul>\n  <li id="i">x</li>\n</ul>\n<p>' + ABBR + ' here</p>',
     )
   })
 
@@ -95,23 +65,21 @@ describe('a bare-dot ordered item collects no abbreviation definition', () => {
     )
   })
 
-  // The controls. All three were already correct and must stay so: the fix adds
-  // one alternative to a marker pattern, and a wrong one would move these.
-  it('the numbered marker still defines nothing', () => {
+  it('the numbered marker follows the same missed-column rule', () => {
     expect(carveToHtml('1. x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li>x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol>\n  <li>x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
   })
 
-  it('the bullet still defines nothing, at the same content column', () => {
+  it('the bullet follows the same missed-column rule', () => {
     expect(carveToHtml('- x\n*[A]: d\n\nA here\n')).toBe(
-      '<ul>\n  <li>x\n*[A]: d</li>\n</ul>\n<p>A here</p>',
+      '<ul>\n  <li>x</li>\n</ul>\n<p>' + ABBR + ' here</p>',
     )
   })
 
-  it('the paren delimiter still defines nothing', () => {
+  it('the paren delimiter follows the same missed-column rule', () => {
     expect(carveToHtml('1) x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol data-delim=")">\n  <li>x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol data-delim=")">\n  <li>x</li>\n</ol>\n<p>' + ABBR + ' here</p>',
     )
   })
 

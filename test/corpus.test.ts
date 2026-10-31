@@ -1221,6 +1221,13 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
     },
   ],
   [
+    '430-below-a-definition-body-s-column-an-invisible-line-folds-as-text-4',
+    {
+      reason: 'carve#4412: an abbreviation definition below every content column defines at document level',
+      html: '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
+    },
+  ],
+  [
     '518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-8',
     {
       reason: 'carve#4559: a caret line holding only a comment makes no caption (spec PR carve#4609)',

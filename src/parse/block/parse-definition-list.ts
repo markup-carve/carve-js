@@ -860,6 +860,7 @@ export function createDefinitionListParser(
         const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const markedQuoteLine = quoteDepth > 0 && quotePrefixDepth(source) >= quoteDepth
         const sourceInHost = sourceColumn(source, quotePrefixDepth(markerSource))
+        if (lexer.atDocumentLevel && !markedQuoteLine && sourceInHost < bodySourceColumn && RE_ABBR_DEF.test(below)) return true
         if (!markedQuoteLine && lazyState.lazyFoldable && opensCodeFence(below) &&
             sourceInHost > bodySourceColumn - contentCol && sourceInHost < bodySourceColumn) return false
         if (!markedQuoteLine && lineIndent > 0 && lineIndent < contentCol && opensCodeFence(below)) return true
