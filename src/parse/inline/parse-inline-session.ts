@@ -484,8 +484,46 @@ export class InlineParseSession {
       }
       return table
     }
+    // A braced child whose closer comes before `at` is a region of its own
+    // (PART 9 section 9 R1), so the bound is the nearest opener still open there.
+    let childClosers: Map<number, number> | undefined
+    let enclosing: Int32Array | undefined
+    const childCloser = (mark: number): number => {
+      if (childClosers === undefined) {
+        childClosers = new Map()
+        // An escaped closer or one in code closes nothing.
+        const hidden = new Uint8Array(n + 1)
+        for (let i = 0; i < n; i++) {
+          const codeEnd = text[i] === '`' ? codeEnds?.[i] : undefined
+          if (text[i] === '\\') hidden[++i] = 1
+          else if (codeEnd !== undefined) {
+            const end = codeEnd === -1 ? n : codeEnd
+            hidden.fill(1, i, end)
+            i = end - 1
+          }
+        }
+        const next = new Map<string, number>()
+        for (let i = n - 1; i >= 0; i--) {
+          if (openerMarks.has(i)) childClosers.set(i, next.get(text[i]!) ?? -1)
+          if (text[i + 1] === '}' && hidden[i] === 0) next.set(text[i]!, i)
+        }
+      }
+      return childClosers.get(mark) ?? -1
+    }
+    const enclosingOpener = (at: number): number => {
+      if (enclosing === undefined) {
+        enclosing = new Int32Array(n + 1).fill(-1)
+        const open: number[] = []
+        for (let i = 0; i <= n; i++) {
+          while (open.length !== 0 && childCloser(open[open.length - 1]!) !== -1 && childCloser(open[open.length - 1]!) < i) open.pop()
+          enclosing[i] = open.length === 0 ? -1 : open[open.length - 1]!
+          if (openerMarks.has(i)) open.push(i)
+        }
+      }
+      return enclosing[at]!
+    }
     const closesLeftToRight = (owner: string, close: number, marker: string): boolean => {
-      const bound = bracedOpenBefore()[close]!
+      const bound = enclosingOpener(close)
       // A bare mark of the braced kind inside the pair is read by its own rule.
       if (lastMark(marker)[close]! > bound) return true
       const key = `${owner}${bound}`
@@ -493,6 +531,10 @@ export class InlineParseSession {
       if (!walk) pairWalks.set(key, walk = { next: bound + 1, closers: new Set() })
       while (walk.next < close) {
         const at = walk.next
+        if (openerMarks.has(at) && childCloser(at) !== -1) {
+          walk.next = childCloser(at) + 2
+          continue
+        }
         if (text[at] !== owner || openerTable(owner)[at + 1]! !== at) {
           walk.next++
           continue
@@ -509,11 +551,28 @@ export class InlineParseSession {
     }
     const bareTailHides = (open: number, close: number, marker: string): boolean =>
       closesLeftToRight(text[open]!, close, marker) && !crossedPair(open, close, marker)
+    // A span of another kind that closes inside the pair removes its opener
+    // (R2), and a braced child's closer between the two ends its region (R1).
+    const crossedBarePair = (pair: BarePair, open: number, close: number): BarePair => {
+      if (pair.crossed !== true && (crossedPair(open, close, '') || enclosingOpener(open) !== enclosingOpener(close))) pair.crossed = true
+      return pair
+    }
+    let runStarts: Map<number, number> | undefined
     const bareRunIsContent = (at: number, marker: string): boolean => {
       const owner = text[at - 1]
+      // A run glued to a brace group that was content attaches to nothing either.
+      if (owner === '}') {
+        if (runStarts === undefined) {
+          runStarts = new Map()
+          for (const [start, end] of attributes) if (text[start] === '{') runStarts.set(end, start)
+        }
+        const previous = runStarts.get(at)
+        return previous !== undefined && attributeRunAt(previous) && bareRunIsContent(previous, marker)
+      }
       if (owner === undefined || !'/*_~='.includes(owner) || text[at - 2] === '\\') return false
       if (owner === marker) return true
       const open = openerTable(owner)[at - 1]!
+      if (open !== -1 && enclosingOpener(open) !== enclosingOpener(at - 1)) return true
       if (open !== -1 && !closesLeftToRight(owner, at - 1, marker)) return true
       // No opener on this side of a braced opener, or one an earlier closer
       // takes: the pair cannot form.
@@ -580,7 +639,7 @@ export class InlineParseSession {
         const guarded = opener === 'guarded'
         bareClose = opener !== 'none' ? bareTables[bareId]![j + 1]! : -1
         bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
-        if (bareTail !== undefined) barePairs.set(j, barePair(text, j, bareClose, bareTail, guarded, bareTables))
+        if (bareTail !== undefined) barePairs.set(j, crossedBarePair(barePair(text, j, bareClose, bareTail, guarded, bareTables), j, bareClose))
         if (guarded) bareTail = undefined
       }
       for (const m of markers) {
