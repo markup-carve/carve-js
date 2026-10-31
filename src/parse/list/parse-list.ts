@@ -2914,6 +2914,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
+      if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
       const attached = admitAttachedLead(admission)
       if (attached !== undefined) return attached
       // An enclosing item already took this line as lazy text: it reached no column.

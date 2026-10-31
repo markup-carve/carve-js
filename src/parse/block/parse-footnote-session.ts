@@ -259,6 +259,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   runIndentationContainer(
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
+    if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
     if (lexer.atDocumentLevel && lazyState.opaque === null && sourceLine !== undefined && authoredBodyColumn !== undefined &&
         sourceColumn(sourceLine) < authoredBodyColumn && RE_ABBR_DEF.test(ln.trimStart())) return 'stop'

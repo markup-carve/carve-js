@@ -300,7 +300,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; overindented: OverindentedOpener[] } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -321,10 +321,26 @@ export function ownLines(
   // The continuation lines of a wrapped attribute block the walk opened.
   let attrRest = null as { left: number; cut: number; floor?: number } | null
   const refusedPlus: RefusedPlus[] = []
+  const skippedAbbreviations = new Map<number, [string, string]>()
+  const separatingAbbreviations = new Set<number>()
+  const skippedComments = new Set<number>()
+  const skippedNotes = new Set<number>()
   const payloadLines = new Set<number>()
   const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
+    if (skippedAbbreviations.has(at)) {
+      result.push(separatingAbbreviations.has(at) ? '' : '%%')
+      continue
+    }
+    if (skippedComments.has(at)) {
+      result.push('%%')
+      continue
+    }
+    if (skippedNotes.has(at)) {
+      result.push(lines[at]!)
+      continue
+    }
     let src = lines[at]!
     let out = ''
     let m = indentCols(src)
@@ -814,7 +830,7 @@ export function ownLines(
       m = { col: m.col, rest }
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, overindented }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0 }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
@@ -825,29 +841,70 @@ export function ownLines(
   // host's `quotes` prefixes and is not the host's sibling. The host decides nothing else.
   function refusal(at: number, marker: number, quotes: number, host: Frame['kind']): RefusedPlus['reason'] | null {
     // An attribute run leads the attached block, so the block after it decides (carve#4278, carve#4447).
+    const skippedAbbr: Array<[number, string, string]> = []
+    const comments: number[] = []
+    const notes: number[] = []
+    const decide = (reason: RefusedPlus['reason'] | null): RefusedPlus['reason'] | null => {
+      for (const [index, name, value] of skippedAbbr) {
+        skippedAbbreviations.set(index, [name, value])
+        if (reason !== null) separatingAbbreviations.add(index)
+      }
+      if (reason === null) for (const index of comments) skippedComments.add(index)
+      for (const index of notes) skippedNotes.add(index)
+      return reason
+    }
     for (let k = at + 1; ; k++) {
       const next = lines[k]
-      if (next === undefined) return 'document'
+      if (next === undefined) return decide('document')
       let n = indentCols(next)
       for (let q = 0; q < quotes; q++) {
-        if (!isQuoteLine(n.rest)) return 'left'
+        if (!isQuoteLine(n.rest)) return decide('left')
         n = indentCols(quoteRest(n.rest))
       }
-      if (n.rest === '') return 'blank'
+      if (n.rest === '') return decide('blank')
       const col = docColumn(next, n.rest)
-      if (col !== marker) return col < marker ? 'left' : 'right'
+      if (col !== marker) return decide(col < marker ? 'left' : 'right')
       const rest = trimEndSpaceTab(n.rest)
       if (isAttrLine(rest)) continue
+      const comment = COMMENT_FENCE.exec(rest)
+      if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > k) {
+        const opener = k
+        for (k++; k < lines.length; k++) {
+          let closer = indentCols(lines[k]!)
+          for (let q = 0; q < quotes && isQuoteLine(closer.rest); q++) closer = indentCols(quoteRest(closer.rest))
+          if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
+        }
+        for (let line = opener; line <= k; line++) comments.push(line)
+        continue
+      }
+      if (COMMENT_LINE.test(rest)) { comments.push(k); continue }
+      if (FOOTNOTE_DEF.test(rest)) {
+        const opener = k
+        for (k++; k < lines.length; k++) {
+          let body = indentCols(lines[k]!)
+          for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))
+          if (body.rest === '' || /^::? /.test(body.rest) || classify(body.rest, frames[0]!, k, body.col).kind !== 'text') break
+        }
+        for (let line = opener; line < k; line++) notes.push(line)
+        k--
+        continue
+      }
+      if (isLinkDefLine(rest)) continue
+      const abbr = frames.length === 2 ? RE_ABBR_DEF.exec(rest) : null
+      if (abbr) {
+        skippedAbbr.push([k, abbr[1]!, abbr[2]!])
+        continue
+      }
       const wrapped = rest[0] === '{' ? wrappedAttrRun(rest, quotes, k) : null
       if (wrapped !== null) {
         k += wrapped
         continue
       }
       // A closer ends a body and is no block.
-      if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return 'document'
-      if (host === 'item' && matchMarker(rest) !== null) return 'sibling'
-      if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return 'sibling'
-      return null
+      if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return decide('document')
+      if (host === 'item' && matchMarker(rest) !== null) return decide('sibling')
+      if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return decide('sibling')
+      return decide(null)
     }
   }
 
