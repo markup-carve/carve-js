@@ -996,6 +996,7 @@ export function createLinkDefinitionCollector(
     for (let index = lexer.pos; index < lexer.lineCount; index++) {
       if (lexer.lineAt(index)!.includes(']:')) lastDefinitionLine = index
     }
+    for (const index of lexer.skippedAbbreviations?.keys() ?? []) lastDefinitionLine = Math.max(lastDefinitionLine, index)
     if (lastDefinitionLine === -1) return
     const s: LinkDefScan = {
       session,
@@ -1088,7 +1089,11 @@ export function createLinkDefinitionCollector(
       // The definition term whose column later lines are measured against (carve#2411).
       term: null,
     }
-    for (let idx = lexer.pos; idx <= lastDefinitionLine; idx++) scanLine(s, idx)
+    for (let idx = lexer.pos; idx <= lastDefinitionLine; idx++) {
+      scanLine(s, idx)
+      const skipped = lexer.skippedAbbreviations?.get(idx)
+      if (skipped) lexer.abbrDefs.set(skipped[0], dropTrailingWhitespace(skipped[1]))
+    }
   }
 
 }

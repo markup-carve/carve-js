@@ -71,9 +71,8 @@ describe('a boundary line inside an open fence does not end the container', () =
     })
 
     it('keeps a comment fence whole', () => {
-      // The whole span is invisible, so the item holds only its lead text and
-      // nothing escapes to document level.
-      expect(html(doc('- x', '+', ...COMMENT, '', 'z'))).toBe('<ul><li>x</li></ul><p>z</p>')
+      // The whole span is invisible, so the blank after it refuses the marker.
+      expect(html(doc('- x', '+', ...COMMENT, '', 'z'))).toBe('<ul><li>x +</li></ul><p>z</p>')
     })
   })
 
@@ -87,7 +86,7 @@ describe('a boundary line inside an open fence does not end the container', () =
     })
 
     it('keeps a comment fence whole', () => {
-      expect(html(doc('- +', ...COMMENT, '', 'z'))).toBe('<ul><li></li></ul><p>z</p>')
+      expect(html(doc('- +', ...COMMENT, '', 'z'))).toBe('<ul><li>+</li></ul><p>z</p>')
     })
   })
 
@@ -106,7 +105,7 @@ describe('a boundary line inside an open fence does not end the container', () =
 
     it('keeps a comment fence whole', () => {
       expect(html(doc('> q', '+', ...COMMENT, '', 'z'))).toBe(
-        '<blockquote><p>q</p></blockquote><p>z</p>',
+        '<blockquote><p>q +</p></blockquote><p>z</p>',
       )
     })
   })
@@ -121,8 +120,8 @@ describe('a boundary line inside an open fence does not end the container', () =
     })
 
     it('keeps a comment fence whole', () => {
-      // Invisible, so the note body is its definition line and the backlink,
-      // and `b` no longer escapes to document level.
+      // Invisible, so the note keeps the refused marker and the backlink;
+      // `b` does not escape to document level.
       //
       // TIGHT since markup-carve/carve-js#1545. This row used to record a
       // second divergence here - the note came out LOOSE, with the backlink in
@@ -131,7 +130,7 @@ describe('a boundary line inside an open fence does not end the container', () =
       // dropped. Dropping it puts the backlink on the last VISIBLE block, and
       // carve-php and carve-rs now agree byte for byte.
       expect(html(doc('[^f]: n', '+', ...COMMENT, '', 'see[^f]'))).toBe(
-        `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n${BACKLINK}</p></li></ol></section>`,
+        `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n +${BACKLINK}</p></li></ol></section>`,
       )
     })
   })
@@ -155,9 +154,9 @@ describe('a boundary line inside an open fence does not end the container', () =
       // single-paragraph shape rather than the block one whose only extra child
       // renders the empty string. carve-php `925f7dc` agrees. What this row
       // pins is unchanged by that: `b` stays inside the comment instead of
-      // becoming a document-level paragraph.
+      // becoming a document-level paragraph. The marker is literal by carve#4449.
       expect(html(doc(':: t', ':  d', '+', ...COMMENT, '', 'z'))).toBe(
-        '<dl><dt>t</dt><dd>d</dd></dl><p>z</p>',
+        '<dl><dt>t</dt><dd>d +</dd></dl><p>z</p>',
       )
     })
   })
@@ -177,7 +176,7 @@ describe('a boundary line inside an open fence does not end the container', () =
 
     it('keeps a comment fence whole', () => {
       expect(html(doc(':: t', ':  +', ...COMMENT, '', 'z'))).toBe(
-        '<dl><dt>t</dt><dd></dd></dl><p>z</p>',
+        '<dl><dt>t</dt><dd>+</dd></dl><p>z</p>',
       )
     })
   })
@@ -216,7 +215,7 @@ describe('a boundary line inside an open fence does not end the container', () =
     })
 
     it('keeps an item tight around a blank inside a `+`-attached comment fence', () => {
-      expect(html(doc('- x', '+', ...COMMENT, '- y'))).toBe('<ul><li>x</li><li>y</li></ul>')
+      expect(html(doc('- x', '+', ...COMMENT, '- y'))).toBe('<ul><li>x +</li><li>y</li></ul>')
     })
 
     it('is not latched by an unterminated opener above a closed fence', () => {

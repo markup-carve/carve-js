@@ -20,11 +20,9 @@ describe('the invisible-line exemption stops at', () => {
 
   describe('a `+` separator, which is not a blank the author wrote', () => {
     it('does not loosen with a comment behind it', () => {
-      // The second-paragraph scan has always exempted a `+`-injected separator;
-      // the sibling clause has to exempt it too, or the item goes loose through
-      // the back door. The same document without the comment is tight, so the
-      // comment must not be what changes the answer.
-      expect(carveToHtml('- a\n+\n%% note\n- b\n')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
+      // The comment is invisible. The sibling refuses the marker, which stays
+      // a letter in a tight item under the carve#4449 ruling.
+      expect(carveToHtml('- a\n+\n%% note\n- b\n')).toBe('<ul>\n  <li>a\n+</li>\n  <li>b</li>\n</ul>')
     })
 
     it('does not loosen with an attribute line behind it', () => {

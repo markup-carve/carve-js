@@ -999,6 +999,7 @@ export function createDefinitionListParser(
       //    CommonMark lazy rule list items and block quotes use, matching djot).
       runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
         const ln = admission.line
+        if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
         const early = admitPlusContinuation(ln)
         if (early !== undefined) return early
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln

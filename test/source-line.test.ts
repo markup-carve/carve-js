@@ -107,6 +107,7 @@ describe('sourceLine render option', () => {
         '<ul data-source-line="3">\n' +
         '  <li data-source-line="3">first</li>\n' +
         '</ul>\n' +
+        '<p data-source-line="5">+</p>\n' +
         '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +

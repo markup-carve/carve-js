@@ -1221,6 +1221,34 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
     },
   ],
   [
+    '226-a-definition-attached-by-a-continuation-marker-is-collected-and-the-item-keeps-no-trace',
+    {
+      reason: 'carve#4449 ruling: a link definition does not consume a continuation marker before a blank',
+      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<p>see <a href="/u">t</a></p>',
+    },
+  ],
+  [
+    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column',
+    {
+      reason: 'carve#4449 ruling: an attribute run is skipped and the content-column list refuses the plus',
+      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<ul x="">\n  <li>c</li>\n</ul>',
+    },
+  ],
+  [
+    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-2',
+    {
+      reason: 'carve#4449 ruling: a wrapped attribute run is skipped before testing the list column',
+      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<ul x="" y="">\n  <li>c</li>\n</ul>',
+    },
+  ],
+  [
+    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-3',
+    {
+      reason: 'carve#4449 ruling: a quoted attribute line is skipped before testing the list column',
+      html: '<blockquote>\n  <ul>\n    <li>a\n+</li>\n  </ul>\n  <ul x="">\n    <li>c</li>\n  </ul>\n</blockquote>',
+    },
+  ],
+  [
     '118-cyclic-cross-reference-resolves-to-one-level',
     {
       reason: 'carve#4642: an inner reference contributes its target text without an inner link',

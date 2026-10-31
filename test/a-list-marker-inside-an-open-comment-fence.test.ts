@@ -87,15 +87,14 @@ describe('a list marker at the content column inside an open comment fence', () 
   })
 
   it('applies to the flush-left block a `+` first-block item attaches', () => {
-    // Control first: the same document with plain body text. The two must
-    // agree, for the reason the marker and plain spellings above must.
-    expect(carveToHtml('- +\n%%%\nx\n%%%\n').trim()).toBe(emptyItem)
-    expect(carveToHtml('- +\n%%%\n- x\n%%%\n').trim()).toBe(emptyItem)
+    // Both payload spellings are invisible, so the marker remains a letter.
+    expect(carveToHtml('- +\n%%%\nx\n%%%\n').trim()).toBe('<ul>\n  <li>+</li>\n</ul>')
+    expect(carveToHtml('- +\n%%%\n- x\n%%%\n').trim()).toBe('<ul>\n  <li>+</li>\n</ul>')
   })
 
   it('applies to the flush-left block a mid-item `+` attaches', () => {
-    expect(carveToHtml('- a\n+\n%%%\nx\n%%%\n').trim()).toBe('<ul>\n  <li>a</li>\n</ul>')
-    expect(carveToHtml('- a\n+\n%%%\n- x\n%%%\n').trim()).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml('- a\n+\n%%%\nx\n%%%\n').trim()).toBe('<ul>\n  <li>a\n+</li>\n</ul>')
+    expect(carveToHtml('- a\n+\n%%%\n- x\n%%%\n').trim()).toBe('<ul>\n  <li>a\n+</li>\n</ul>')
   })
 
   it('CONTROL: a marker AFTER the comment closes still opens a sub-list', () => {
