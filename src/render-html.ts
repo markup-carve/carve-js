@@ -1276,7 +1276,7 @@ function renderAttrSlot(attrs: FoldedAttrs, slot: string): string {
   if (slot === '.class') {
     return attrs.classes?.length ? `${attrs.classSpelling ?? 'class'}="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
   }
-  if (slot === '#id') return attrs.id !== undefined ? `${attrs.idSpelling ?? 'id'}="${escapeAttr(sanitizeAttrValue('id', attrs.id))}"` : ''
+  if (slot === '#id') return attrs.id !== undefined ? `${attrs.idSpelling ?? 'id'}="${escapeAttr(attrs.id)}"` : ''
   if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
   if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
   const value = attrs.keyValues?.[slot]
