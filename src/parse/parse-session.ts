@@ -2106,7 +2106,7 @@ export class ParseSession extends InlineParseSession {
       last !== undefined && RE_ADMONITION_CLOSE.exec(last)?.[1]?.length === colon
     // An unclosed attached fence takes the rest of its container when no blank line or closer
     // follows; otherwise its extent is the attached block's (§17 L3, CARVE-P9-067).
-    if (codeMarker !== null && !closedCode) {
+    if (codeMarker !== null && !closedCode && viewSlice === 0) {
       const closer = fenceCloseRe(codeMarker)
       let rest = 0
       for (let line = lexer.peek(rest); line !== undefined; line = lexer.peek(++rest)) {

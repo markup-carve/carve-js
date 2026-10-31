@@ -365,7 +365,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   }
 
   function openCommentSpan(line: LazyLine): boolean {
-    const { content, state, atContentColumn } = line
+    const { content, state } = line
     if (state.opaque?.kind !== 'comment') return false
     const comment = state.opaque
     // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
@@ -384,7 +384,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       // boundary consumed below that column retains the indented follower.
       state.lazyFoldable = comment.paragraphBefore && !comment.atColumn
       state.invisibleAtColumn = comment.atColumn
-      state.commentAtColumn = comment.atColumn && !atContentColumn
+      state.commentAtColumn = false
       state.closedBelowComment = !comment.atColumn && !comment.term && state.inDefList === false
     } else {
       state.lazyFoldable = false

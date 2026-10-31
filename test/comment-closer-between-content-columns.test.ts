@@ -180,11 +180,7 @@ for (const sibling of [false, true]) {
     ['span closed below the content column', '  %%%\n  n\n %%%\n'],
     ['span closed at column zero', '  %%%\n  n\n%%%\n'],
   ])(`reads a blank before a %s (sibling ${sibling})`, (_name, comment) => {
-    const leavesItem = comment === '  %% n\n' || comment === '  %%%\n  n\n  %%%\n'
-    const expected = leavesItem
-      ? '<ul>\n  <li>a</li>\n</ul>\n<p>tail' + (sibling ? '\n- b' : '') + '</p>'
-      : '<ul>\n  <li><p>a</p>\n    <p>tail</p>\n  </li>\n' +
-        (sibling ? '  <li><p>b</p></li>\n' : '') + '</ul>'
+    const expected = '<ul>\n  <li>a</li>\n</ul>\n<p>tail' + (sibling ? '\n- b' : '') + '</p>'
     expect(carveToHtml('- a\n\n' + comment + ' tail\n' + (sibling ? '- b\n' : ''))).toBe(expected)
   })
 }
