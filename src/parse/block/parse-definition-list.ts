@@ -922,7 +922,10 @@ export function createDefinitionListParser(
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         // Track the body's reading: retained openers stay flush, while a
         // clamped fence continues the paragraph.
+        const paragraphOpen = lazyState.lazyFoldable
         track(folded, false)
+        // A folded marker line is paragraph text, whatever its content would open in an item.
+        if (paragraphOpen && folded === ln && markerContentColumn(below) >= 0) lazyState.lazyFoldable = true
         const commentRun = commentFenceRun(below)
         if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
         lexer.consume()

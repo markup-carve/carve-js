@@ -30,3 +30,12 @@ describe('the writer escapes only what the re-parse needs', () => {
     expect(carveToCarve('{~p~>[x](/u){k="~}"}b~}\n')).toBe('{~p~>[x](/u){k="~}"}b~}\n')
   })
 })
+
+describe('a marker line folded into a description stays paragraph text', () => {
+  it.each([
+    [':: t\n: d\n- {.k}\n- tail\n', '<dl>\n  <dt>t</dt>\n  <dd>d\n- {.k}\n- tail</dd>\n</dl>'],
+    [':: t\n: d\n- {.k}\ntail\n', '<dl>\n  <dt>t</dt>\n  <dd>d\n- {.k}\ntail</dd>\n</dl>'],
+  ])('%j', (source, html) => {
+    expect(carveToHtml(source)).toBe(html)
+  })
+})
