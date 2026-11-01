@@ -59,7 +59,8 @@ export function applyAbbreviations(
 ): InlineNode[] {
   if (defs.size === 0) return nodes
   const out: InlineNode[] = []
-  const abbrRe = new RegExp(`\\b(${[...defs.keys()].join('|')})\\b`, 'g')
+  // PART 9R R3: a boundary is an absent neighbor or one outside Unicode L and N (`_` is a boundary).
+  const abbrRe = new RegExp(`(?<![\\p{L}\\p{N}])(${[...defs.keys()].join('|')})(?![\\p{L}\\p{N}])`, 'gu')
   for (const node of nodes) {
     if (node.type !== 'text') {
       mapInlineChildren(node, applyAbbreviations, defs)
