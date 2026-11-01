@@ -67,6 +67,17 @@ describe('delimited table fences', () => {
     expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
   })
 
+  it('treats a header count that is no count as absent (carve#4802)', () => {
+    for (const format of ['csv', 'tsv']) {
+      for (const value of ['x', '-1', '1.5']) {
+        const source = `{table header-rows=${value}}\n\`\`\`${format}\na\nb\n\`\`\`\n`
+        const html = '<table>\n  <thead>\n    <tr><th scope="col">a</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>'
+        expect(carveToHtml(source)).toBe(html)
+        expect(carveToHtml(carveToCarve(source))).toBe(html)
+      }
+    }
+  })
+
   it('uses no implicit header when the footer owns the only row', () => {
     const source = '{table footer-rows=1}\n```csv\nonly\n```\n'
     expect(withoutSourceLocations(carveToAstJson(carveToCarve(source)))).toEqual(withoutSourceLocations(carveToAstJson(source)))
