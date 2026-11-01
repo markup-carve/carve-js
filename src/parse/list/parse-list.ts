@@ -1214,6 +1214,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (descendantOpaque !== null) {
         const base = descendantOpaque.base
         const column = indentColumns(line, base + 1)
+        // A sibling marker below a marker-line fence's base ends that
+        // descendant. Its paragraph can then become the deepest open leaf.
+        if (descendantOpaque.markerLine && column < base && isListMarkerLine(opener)) {
+          descendantOpaque = null
+          return
+        }
         // A closer stands at its fence's base or at its container's content
         // column (CARVE-P0-004), never past the base.
         if (column <= base && descendantOpaque.close.test(opener)) {
