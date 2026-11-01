@@ -971,6 +971,7 @@ export class InlineParseSession {
     const outerPairText = this.pairEndText
     const outerPair = this.pairView(0)
     const outerSubstitutions = this.substitutionScans
+    const outerAbortedSubstitutions = this.abortedSubstitutionCache
     this.substitutionScans = undefined
     const outer = this.openKinds
     this.openKinds = kinds
@@ -1005,6 +1006,7 @@ export class InlineParseSession {
       this.pairAttributeTails = outerPair.attributeTails
       this.bareAttributePairs = outerPair.barePairs
       this.substitutionScans = outerSubstitutions
+      this.abortedSubstitutionCache = outerAbortedSubstitutions
       this.openKinds = outer
       this.tailSlash = outerTailSlash
       this.inNoteBody = outerNoteBody
