@@ -40,9 +40,9 @@ describe('smart punctuation nodes', () => {
 
   it('resolves the glyph in every presentation renderer', () => {
     const src = 'a...b -> c (c)'
-    expect(carveToHtml(src).trim()).toBe('<p>a…b → c ©</p>')
-    expect(carveToMarkdown(src).trim()).toBe('a…b → c ©')
-    expect(carveToPlainText(src).trim()).toBe('a…b → c ©')
+    expect(carveToHtml(src).trim()).toBe('<p>a…b → c (c)</p>')
+    expect(carveToMarkdown(src).trim()).toBe('a…b → c (c)')
+    expect(carveToPlainText(src).trim()).toBe('a…b → c (c)')
   })
 
   it.each(['--', '---', '...', '-->', '<==', '+-', '(c)'])(

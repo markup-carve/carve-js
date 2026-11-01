@@ -12,10 +12,10 @@ const written = (inlines: string): string =>
 
 describe('adjacent text is written as one run', () => {
   it.each([
-    ['{"type":"text","value":"x (r"},{"type":"text","value":") y"}', 'x \\(r) y\n'],
+    ['{"type":"text","value":"x (r"},{"type":"text","value":") y"}', 'x (r) y\n'],
     [
       '{"type":"text","value":"x "},{"type":"text","value":"("},{"type":"text","value":"r"},{"type":"text","value":")"},{"type":"text","value":" y"}',
-      'x \\(r) y\n',
+      'x (r) y\n',
     ],
     ['{"type":"text","value":"x -"},{"type":"text","value":"- y"}', 'x \\-\\- y\n'],
   ])('%s', (inlines, expected) => {
@@ -25,9 +25,9 @@ describe('adjacent text is written as one run', () => {
 
   it('writes a flattened ruby as the text it flattens to', () => {
     const ruby = '{"type":"ruby","pairs":[{"base":[{"type":"text","value":"["}],"annotation":[{"type":"text","value":"r"}]}]}'
-    expect(written(`{"type":"span","attrs":{"classes":["c"]},"children":[${ruby}]}`)).toBe('[\\[\\(r)]{.c}\n')
+    expect(written(`{"type":"span","attrs":{"classes":["c"]},"children":[${ruby}]}`)).toBe('[\\[(r)]{.c}\n')
     expect(written(`{"type":"span","attrs":{"classes":["c"]},"children":[{"type":"emphasis","children":[${ruby}]}]}`)).toBe(
-      '[/\\[\\(r)/]{.c}\n',
+      '[/\\[(r)/]{.c}\n',
     )
   })
 })

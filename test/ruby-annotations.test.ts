@@ -210,8 +210,8 @@ describe('ruby annotations', () => {
     }
     const rendered = renderCarveWithReport(collision).value
     expect(rendered).not.toContain('[x](ann)')
-    // Escaped at its opener (PART 11 §2): `\(c)`, never a bare `(c)`.
-    expect(rendered).not.toMatch(/(?<!\\)\(c\)/)
+    // The literal `(c)` needs no escape under carve#4808.
+    expect(rendered).toContain('mark(c)')
   })
 
   it('uses the fallback for profile to_text', () => {

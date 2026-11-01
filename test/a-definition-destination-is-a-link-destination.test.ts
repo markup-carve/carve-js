@@ -20,8 +20,8 @@ describe("a definition's destination is link_destination", () => {
     ['a parenthesis with no opener', '[a]: a)b\n\n[x][a]\n', '<p>[a]: a)b</p>\n<p>[x][a]</p>'],
     // The inner pair balances and the outer opener does not, so a counter that
     // only asks "did every `)` find an opener" reads this as a definition.
-    // `(c)` becomes the copyright sign once the line is prose.
-    ['an outer opener left unclosed', '[a]: a(b(c)d\n\n[x][a]\n', '<p>[a]: a(b©d</p>\n<p>[x][a]</p>'],
+    // The literal `(c)` survives once the line is prose.
+    ['an outer opener left unclosed', '[a]: a(b(c)d\n\n[x][a]\n', '<p>[a]: a(b(c)d</p>\n<p>[x][a]</p>'],
     // The counts match and the order does not.
     ['a closer before its opener', '[a]: )a(\n\n[x][a]\n', '<p>[a]: )a(</p>\n<p>[x][a]</p>'],
     // The title slot opens only after the destination, so a run that is not one

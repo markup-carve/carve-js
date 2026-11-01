@@ -68,8 +68,8 @@ describe('inline literal: smart typography is suppressed inside', () => {
   })
 
   it('still transforms the same characters in ordinary text (control)', () => {
-    // Proves the case above is a real suppression, not an inert input.
-    expect(h('a -- b ... "q" (c)')).toBe('<p>a – b … “q” ©</p>')
+    // Dashes, ellipsis and quotes prove suppression; (c) stays literal in both.
+    expect(h('a -- b ... "q" (c)')).toBe('<p>a – b … “q” (c)</p>')
   })
 
   it('suppresses typography inside an attributed literal too', () => {
