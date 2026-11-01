@@ -151,8 +151,7 @@ function framesBelowNoteLine(
 // a line at or past that item's content column is read in the item's coordinates.
 function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void {
   const width = leadShift > 0 ? markerContentColumn(bodyLines[0]!) : -1
-  // A fence on that item keeps its payload where the spec model reads it (carve#4496 thread).
-  if (width < 0 || opensCodeFence(markerFreeContent(bodyLines[0]!))) return
+  if (width < 0) return
   for (let k = 1; k < bodyLines.length; k++) {
     const line = bodyLines[k]!
     if (!isBlankLine(line) && indentColumns(line) >= leadShift + width) bodyLines[k] = sliceColumns(line, leadShift, true)
