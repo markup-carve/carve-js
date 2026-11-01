@@ -6,9 +6,7 @@
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
         "lazy-10bd0503f93b",
-        "lazy-541f9f3b620e",
-        "lazy-21cb87fd7067",
-        "lazy-fc49faf4b6f8"
+        "lazy-541f9f3b620e"
       ]
     },
     {
@@ -25,16 +23,14 @@
       "cause": "untriaged day-one drift in the ownership family",
       "cases": [
         "ownership-19a15d4c0b00",
-        "ownership-498f1450c332",
-        "ownership-aec21029593f"
+        "ownership-498f1450c332"
       ]
     },
     {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the roundtrip family",
       "cases": [
-        "roundtrip-73c51797f6b8",
-        "roundtrip-e3b6651f99d3"
+        "roundtrip-73c51797f6b8"
       ]
     },
     {
@@ -42,21 +38,6 @@
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
         "notes-4dc51b5608ab"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the fences family",
-      "cases": [
-        "fences-350b56897079",
-        "fences-a46060654787"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the plus family",
-      "cases": [
-        "plus-a0f7cf7091d8"
       ]
     },
     {

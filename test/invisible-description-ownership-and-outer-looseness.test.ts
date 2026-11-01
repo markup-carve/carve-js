@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('invisible lines preserve description ownership (carve#4716)', () => {
+  it('keeps an indented attribute line attached to the following paragraph', () => {
+    expect(carveToHtml(':: t\n   {.k}\n:  d\n   # H\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n</dl>\n<p class="k">:  d</p>\n<section id="H">\n  <h1>H</h1>\n</section>',
+    )
+  })
+
   it.each(['%% c', '%%%tail', '[r]: /u', '*[A]: b'])(
     'keeps a description at the term column after %s', invisible => {
       expect(carveToHtml(`:: t\n${invisible}\n : d\n`)).toBe(
