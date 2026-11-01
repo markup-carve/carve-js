@@ -880,7 +880,9 @@ export function createLinkDefinitionCollector(
         : composed.peeled.some((one) => one.content === composed.column) ||
           openCols.some((entry, i) => i < composed.depth && entry.col === composed.column)
     }
-    return s.inFootnoteBody ? composed.column >= openColumn : composed.column === openColumn
+    // PART 0 S3 admits an opener at or past its owner's content column, even
+    // when no marker prefix had to be peeled on this line.
+    return composed.column >= openColumn
   }
 
   function noteBodyDeclines(s: LinkDefScan, v: LineRead, composed: Composed, openColumn: number, collectsNothing: boolean): boolean {
@@ -896,22 +898,10 @@ export function createLinkDefinitionCollector(
   }
 
   function collectLinkDef(
-    s: LinkDefScan, v: LineRead, composed: Composed, contentCol: number, deIndented: string, collectsNothing: boolean,
+    s: LinkDefScan, v: LineRead, composed: Composed, contentCol: number, collectsNothing: boolean,
   ): void {
     const { raw, idx } = v
     const { lexer } = s
-    // Strict column-0 rule: a definition is a block opener recognized ONLY at
-    // its container's content column. At the true document top level
-    // (contentCol 0, outside any footnote body) a def indented above column 0 is
-    // literal paragraph text -- not collected here (and rendered literally by the
-    // block parser, whose RE_LINK_DEF consumption is likewise flush-only), so the
-    // flat pre-pass does not resolve a reference against an indented non-def line.
-    // Nested defs (list items, footnote bodies, blockquotes) keep the lenient
-    // collection: their real content column is >0 or the flat pass cannot model
-    // it, and the oracle resolves them, so `deIndented` residual whitespace must
-    // NOT reject them.
-    const topLevelIndentedDef =
-      contentCol === 0 && !s.inFootnoteBody && /^[ \t]/.test(deIndented)
     if (isContinuationMarker(raw)) s.plusColumn = leadingWhitespace(v.unquoted)
     else if (isBlankLine(raw)) s.plusColumn = null
     // Container ownership below matters only for a definition candidate.
@@ -935,7 +925,6 @@ export function createLinkDefinitionCollector(
     // fold this marker into the paragraph above, its definition-shaped content
     // is visible text and cannot also define a reference.
     const declines =
-      topLevelIndentedDef ||
       notAtContentColumn ||
       noteBodyDeclines(s, v, composed, openColumn, collectsNothing) ||
       (collectsNothing && composed.peeled.some((one) => !one.quote))
@@ -985,7 +974,7 @@ export function createLinkDefinitionCollector(
     // A footnote def (`[^label]: body`) is parsed as a block in
     // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
     if (RE_FOOTNOTE_DEF.test(v.line)) return
-    collectLinkDef(s, v, composed, contentCol, view.deIndented, para.collectsNothing)
+    collectLinkDef(s, v, composed, contentCol, para.collectsNothing)
   }
 
   return function collectLinkDefs(session: LinkDefinitionSession, lexer: Lexer) {
