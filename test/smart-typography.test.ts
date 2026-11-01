@@ -12,10 +12,8 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     expect(h('<-- --> <--> <== ==> <=>')).toBe('<p>← → ↔ ⇐ ⇒ ⇔</p>')
   })
 
-  it('still converts the deprecated single-hyphen forms', () => {
-    // Deprecated by markup-carve/carve#1442, not removed: a document written
-    // before the rule goes on working.
-    expect(h('-> <- <->')).toBe('<p>→ ← ↔</p>')
+  it('keeps the removed single-hyphen forms literal (carve#4815)', () => {
+    expect(h('-> <- <->')).toBe('<p>-&gt; &lt;- &lt;-&gt;</p>')
   })
 
   it('leaves `=>` literal, because it is code rather than an arrow', () => {

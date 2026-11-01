@@ -5,7 +5,7 @@ import {
 } from '../src/index.js'
 
 const options = { smartTypography: { quotes: false } }
-const source = `He said "hi" and 'yes'; it's fine... a--b c---d -> <= (c) (r) (tm) +-\n`
+const source = `He said "hi" and 'yes'; it's fine... a--b c---d --> <= (c) (r) (tm) +-\n`
 const expected = `He said "hi" and 'yes'; it's fine… a–b c—d → ≤ (c) (r) ™ ±`
 const targets = [carveToHtml, carveToMarkdown, carveToPlainText, carveToAnsi]
 const renderers = [renderHtml, renderMarkdown, renderPlainText, renderAnsi]

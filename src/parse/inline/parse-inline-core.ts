@@ -203,7 +203,6 @@ export const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
 export const SMART_TOKENS: Array<[string, string, string]> = [
   ['<-->', '↔', 'left_right_arrow'],
-  ['<->', '↔', 'left_right_arrow'],
   ['-->', '→', 'rightwards_arrow'],
   ['<--', '←', 'leftwards_arrow'],
   ['<=>', '⇔', 'left_right_double_arrow'],
@@ -211,8 +210,6 @@ export const SMART_TOKENS: Array<[string, string, string]> = [
   ['<==', '⇐', 'leftwards_double_arrow'],
   ['(tm)', '™', 'trademark'],
   ['...', '…', 'ellipsis'],
-  ['->', '→', 'rightwards_arrow'],
-  ['<-', '←', 'leftwards_arrow'],
   ['<=', '≤', 'less_than_or_equal'],
   ['>=', '≥', 'greater_than_or_equal'],
   ['!=', '≠', 'not_equal'],
