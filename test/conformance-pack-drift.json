@@ -60,30 +60,125 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4807",
-      "cause": "invalid code fence metadata recovers its language ahead of the pinned spec model",
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the ownership family",
       "cases": [
-        "lazy-20b00bdee7fc",
-        "lazy-c5b0b08a512a",
-        "lazy-e2b892cd05e2",
-        "notes-ef170eff7258",
-        "fences-05dfb47f13f2",
-        "fences-0b4476cd774e",
-        "fences-6d4033fce117",
-        "fences-701d91b58311",
-        "fences-8ab033d9d772",
-        "fences-b314ec762e60",
-        "fences-cd29c71895fc",
-        "fences-cf6e82cfe467",
-        "guards-452f40158533",
-        "guards-6c1c1a31402e",
-        "guards-943f45b7ba97",
-        "guards-b0869d33055f",
-        "guards-d289e5b76040",
-        "guards-d9f2c06986a8",
-        "roundtrip-0d0b6ab806b5",
-        "roundtrip-a1486263b16e",
-        "roundtrip-c09a3a8a043a"
+        "ownership-34fa9b509539",
+        "ownership-7e96653cd703"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the lazy family",
+      "cases": [
+        "lazy-83177b2ed116",
+        "lazy-f6908add6b39"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the fences family",
+      "cases": [
+        "fences-71becdeddb36",
+        "fences-a6d596da0873"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the inline family",
+      "cases": [
+        "inline-00ec4febb903",
+        "inline-03155db5e823",
+        "inline-0a963796db69",
+        "inline-2a8d1d536d47",
+        "inline-40b8e22fb745",
+        "inline-4c5322e2e695",
+        "inline-68745d509b91",
+        "inline-6944c61ff846",
+        "inline-8957caef9941",
+        "inline-c702204f208a",
+        "inline-cf70d44fa904",
+        "inline-e59c2d8d5c7c"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4810",
+      "cause": "spec pin drift in the inline family",
+      "cases": [
+        "inline-b57dce59e1d6"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4810",
+      "cause": "spec pin drift in the guards family",
+      "cases": [
+        "guards-0ae1e7cf5796",
+        "guards-0e0fc39f0596",
+        "guards-11d3c29b2665",
+        "guards-153e8b05b9cb",
+        "guards-15a9109d8e3b",
+        "guards-16989181fda6",
+        "guards-245a4551d0e2",
+        "guards-24a53be1d849",
+        "guards-2b7fb4ac3fc8",
+        "guards-44609b4341fd",
+        "guards-538f8f3d5647",
+        "guards-58469fc51e16",
+        "guards-5d99fcddeb1f",
+        "guards-6252f82b074f",
+        "guards-63ab4e3cd217",
+        "guards-678b7f2445b0",
+        "guards-6e5e0526a7a8",
+        "guards-72b7ec5a9d87",
+        "guards-784386fcc34c",
+        "guards-7c0814c12f9e",
+        "guards-80a8f39b6aec",
+        "guards-81d567ec370d",
+        "guards-81fb5229db8a",
+        "guards-8e441b658f28",
+        "guards-95dff57d1cf3",
+        "guards-98ffc177480c",
+        "guards-9dad92e90e2e",
+        "guards-ae980139912d",
+        "guards-bac12aa94ce8",
+        "guards-c0829a2caebd",
+        "guards-c0a7aa0a48ae",
+        "guards-d3b31f777ca6",
+        "guards-e5c740c83e1d",
+        "guards-e7d7661f3da3",
+        "guards-eeed8105767a",
+        "guards-f2819695d45d",
+        "guards-fe76b0d67261"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the guards family",
+      "cases": [
+        "guards-3a21f1ad43c8",
+        "guards-71b78fb9e703"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "spec pin drift in the guards family",
+      "cases": [
+        "guards-61e1689d452b",
+        "guards-9576a8f87b86"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the attributes family",
+      "cases": [
+        "attributes-3481180e4ffd"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve#4815",
+      "cause": "spec pin drift in the roundtrip family",
+      "cases": [
+        "roundtrip-603bc6197796"
       ]
     }
   ]
