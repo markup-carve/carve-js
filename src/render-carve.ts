@@ -1472,10 +1472,10 @@ function nearestOfType(nodes: readonly InlineNode[], type: string, scopes?: Weak
 /** Whether the characters around a span refuse a bare opener or closer (CARVE-P3-013). */
 function neighborsForceBraces(delim: string, prevChar: string, nextChar: string): boolean {
   return (
-    /[A-Za-z0-9_]/.test(prevChar) ||
+    /[\p{L}\p{N}_]/u.test(prevChar) ||
     prevChar === delim ||
     (prevChar === '/' && (delim === '/' || delim === '_')) ||
-    /[A-Za-z0-9_]/.test(nextChar) ||
+    /[\p{L}\p{N}_]/u.test(nextChar) ||
     extendsGrapheme(nextChar, 0)
   )
 }
@@ -2733,11 +2733,19 @@ function markVerbatimCellWraps(content: string, cellWraps: readonly VerbatimCell
   return (leading ?? '') + chars.join('') + (trailing ?? '')
 }
 
+function lastCodePoint(text: string): string {
+  const end = text.length
+  if (end === 0) return ''
+  const last = text.charCodeAt(end - 1)
+  return last >= 0xdc00 && last <= 0xdfff && end > 1
+    ? text.slice(end - 2) : text.slice(end - 1)
+}
+
 function lastBoundary(node: InlineNode | undefined): string {
   if (!node) return ''
   switch (node.type) {
     case 'text':
-      return node.value[node.value.length - 1] ?? ''
+      return lastCodePoint(node.value)
     case 'escaped_text':
       return node.value
     case 'non_breaking_space':
@@ -2746,11 +2754,11 @@ function lastBoundary(node: InlineNode | undefined): string {
     case 'hard_break':
       return '\n'
     case 'code':
-      return node.value[node.value.length - 1] ?? ''
+      return lastCodePoint(node.value)
     case 'mention':
-      return node.user[node.user.length - 1] ?? ''
+      return lastCodePoint(node.user)
     case 'tag':
-      return node.name[node.name.length - 1] ?? ''
+      return lastCodePoint(node.name)
     default:
       return ''
   }
@@ -4864,7 +4872,7 @@ class CarveRenderSession {
           ctx,
           // A span leaves no boundary character of its own, so the one it WROTE
           // (its closer) is what the next opener sits against.
-          lastBoundary(nodes[idx - 1]) || lineTail.slice(-1),
+          lastBoundary(nodes[idx - 1]) || lastCodePoint(lineTail),
           firstBoundary(nodes[idx + 1]),
           captionCanOpen,
           opensBacktickRun(nodes[idx + 1]),
@@ -5142,7 +5150,7 @@ class CarveRenderSession {
           // emphasis holding literal stars, so fall back to the nested spelling.
           // An opener after a word character or slash, or a closer before a
           // letter or digit, fails (carve#3217); the nested path braces it.
-          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !extendsGrapheme(content, 0) && !extendsGrapheme(nextChar, 0) && !/[A-Za-z0-9_/]/.test(prevChar) && !/[A-Za-z0-9]/.test(nextChar)) {
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !extendsGrapheme(content, 0) && !extendsGrapheme(nextChar, 0) && !/[\p{L}\p{N}_/]/u.test(prevChar) && !/[\p{L}\p{N}]/u.test(nextChar)) {
             return withAttrs(`/*${content}*/`)
           }
         }

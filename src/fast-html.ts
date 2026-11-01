@@ -6,6 +6,7 @@ import type { RenderLossSinkOptions } from './render/render-loss.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue } from './link-destination.js'
 import { isTableRow } from './parse/parse-prepass-core.js'
+import { wordAfter, wordBefore } from './parse/inline/parse-inline-core.js'
 
 type Options = ParseOptions & RenderOptions & { profile?: unknown }
 type LinkDef = { href: string; title?: string }
@@ -356,8 +357,8 @@ function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options, o
     if (delimiter === '*' || delimiter === '/') {
       const close = text.indexOf(delimiter, i + 1)
       if (close <= i + 1 || /\s/.test(text[i + 1]!) || /\s/.test(text[close - 1]!) ||
-        (i > 0 && (/[A-Za-z0-9]/.test(text[i - 1]!) || text[i - 1] === delimiter)) ||
-        /[A-Za-z0-9]/.test(text[close + 1] ?? '')) return undefined
+        (i > 0 && (wordBefore(text, i) || text[i - 1] === delimiter)) ||
+        wordAfter(text, close + 1)) return undefined
       const tag = delimiter === '*' ? 'strong' : 'em'
       out.push(`<${tag}>`)
       if (!renderInline(text.slice(i + 1, close), defs, opts, out)) return undefined

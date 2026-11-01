@@ -1,4 +1,5 @@
 import { maskLiteralDirectiveTokens, unmaskLiteralDirectiveTokens } from './literal-directive-mask.js'
+import { wordAfter, wordBefore } from './parse-inline-core.js'
 import type {
   AnchorRange,
   CarveExtension,
@@ -98,7 +99,7 @@ function canCloseBarePair(text: string, at: number, marker: string, openerMarks:
   const before = text[at - 1]
   const next = text[at + 1]
   return text[at] === marker && !(next === '}' && openerMarks.has(at)) && before !== undefined
-    && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next)) && !extendsGrapheme(text, at + 1)
+    && !isCarveWhitespace(before) && !wordAfter(text, at + 1) && !extendsGrapheme(text, at + 1)
 }
 
 // Each closed editorial comment body `{#...#}` mapped to its end, as `edScan`
@@ -154,7 +155,7 @@ function bareOpener(text: string, at: number): 'open' | 'guarded' | 'none' {
   if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && (next === '>' || comparisonEquals(text, at))) || extendsGrapheme(text, at + 1)) return 'none'
   if (before === undefined) return 'open'
   if (before === '_' || before === '/') return before === '_' || ch === '/' || ch === '_' ? 'guarded' : 'open'
-  return /[A-Za-z0-9]/.test(before) ? 'none' : 'open'
+  return wordBefore(text, at) ? 'none' : 'open'
 }
 
 function editorialCloserInsideAttribute(text: string, start: number, marker: string, closer: number, attributeEnd: number): boolean {
@@ -1106,7 +1107,7 @@ export class InlineParseSession {
     const before = text[i - 1]
     if (!after || isCarveWhitespace(after) || extendsGrapheme(text, i + 1)) return false
     if (after === delim || before === delim || this.openKinds.has(delim)) return false
-    if (before && /[A-Za-z0-9]/.test(before)) return false
+    if (before && wordBefore(text, i)) return false
     if (delim === '=' && (after === '>' || comparisonEquals(text, i))) return false
     if (!guardOpen && (before === '_' || ((delim === '/' || delim === '_') && before === '/'))) return false
     return true
@@ -1610,7 +1611,7 @@ export class InlineParseSession {
       if ((ch === '_' || ch === '/') && ch !== delim && !this.openKinds.has(ch)) {
         const before = text[j - 1]
         if (entries?.has(ch)) {
-          if (before !== undefined && !isCarveWhitespace(before) && !/[A-Za-z0-9]/.test(text[j + 1] ?? '')) entries.delete(ch)
+          if (before !== undefined && !isCarveWhitespace(before) && !wordAfter(text, j + 1)) entries.delete(ch)
           else if (bareOpener(text, j) !== 'none') (held ??= new Set()).add(j)
         } else {
           const opener = bareOpener(text, j)
@@ -1624,7 +1625,7 @@ export class InlineParseSession {
         const next = text[j + 1]
         // Word-boundary closer (spec §9): no bare delimiter closes when followed
         // by an alphanumeric. Applies to every delimiter, not just / and _.
-        if (next && /[A-Za-z0-9]/.test(next)) continue
+        if (next && wordAfter(text, j + 1)) continue
         if (extendsGrapheme(text, j + 1)) continue
         if (delim === '=' && comparisonEquals(text, j)) continue
         return j
@@ -1699,7 +1700,7 @@ export class InlineParseSession {
           o = newline
           continue
         }
-        if (ch !== '/' || text[o + 1] !== '*' || /[A-Za-z0-9]/.test(text[o - 1] ?? '') || isCarveWhitespace(text[o + 2]) || extendsGrapheme(text, o + 2)) continue
+        if (ch !== '/' || text[o + 1] !== '*' || wordBefore(text, o) || isCarveWhitespace(text[o + 2]) || extendsGrapheme(text, o + 2)) continue
         const close = combinedSpanCloser(text, o + 2, memo)
         if (close === undefined) continue
         shapes.push([o, close])
@@ -1726,7 +1727,7 @@ export class InlineParseSession {
     // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
     // A `_` or `/` guard that is an open entry does not block it (carve#3973 X1).
     const before = text[at - 1] ?? ''
-    if (/[A-Za-z0-9]/.test(before) || (!guardOpen && (before === '_' || before === '/'))) return undefined
+    if (wordBefore(text, at) || (!guardOpen && (before === '_' || before === '/'))) return undefined
     const start = at + 2
     // A bold-italic span requires a non-whitespace char right after `/*`
     // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
@@ -1805,7 +1806,7 @@ export class InlineParseSession {
     const d = text[at - 1]!
     const before = text[at - 2]
     if (d === delim || this.openKinds.has(d) || before === d || before === '\\') return false
-    if (before !== undefined && /[A-Za-z0-9]/.test(before)) return false
+    if (before !== undefined && wordBefore(text, at - 1)) return false
     if (isCarveWhitespace(text[at])) return false
     if ((before === '_' || (before === '/' && (d === '/' || d === '_'))) && !this.guardStands(text, at - 1, from, delim)) return false
     return true
