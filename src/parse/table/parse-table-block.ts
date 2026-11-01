@@ -3,15 +3,34 @@ import type { InlineSource } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
 import type { Attrs, Figure, InlineNode, Position, Table, TableCell, TableRow } from '../../ast.js'
 
-import { visitInlineChildren } from '../inline/inline-children.js'
-
-// In a cell `\|` is the cell's pipe escape, so an inline destination reads it as `|` (carve#4549).
-function unescapeCellDestinations(nodes: InlineNode[]): void {
-  for (const node of nodes) {
-    if (node.type === 'link' && node.ref === undefined) node.href = node.href.replaceAll('\\|', '|')
-    else if (node.type === 'image' && node.ref === undefined) node.src = node.src.replaceAll('\\|', '|')
-    visitInlineChildren(node, unescapeCellDestinations, undefined)
+// Table splitting consumes its pipe escape before the inline pass, except in
+// a backtick run whose content is verbatim.
+function cellInlineValue(raw: string): string {
+  let run = 0
+  let value = ''
+  for (let at = 0; at < raw.length; at++) {
+    if (raw[at] === '\\' && run === 0 && raw[at + 1] === '`') {
+      value += raw.slice(at, at + 2)
+      at++
+      continue
+    }
+    if (raw[at] === '`') {
+      let width = 1
+      while (raw[at + width] === '`') width++
+      if (run === 0) run = width
+      else if (run === width) run = 0
+      value += raw.slice(at, at + width)
+      at += width - 1
+      continue
+    }
+    if (run === 0 && raw[at] === '\\' && raw[at + 1] === '|') {
+      value += '|'
+      at++
+      continue
+    }
+    value += raw[at]
   }
+  return value
 }
 
 type RawCell = Parameters<typeof import('../../parse.js').tableBlockHelpers.joinFragment>[0]
@@ -138,7 +157,7 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         // where we think it is. `\|` unescapes to one character, so a cell holding
         // an escaped pipe is not a verbatim slice and gets no anchor.
         const within = content === '' || !canPosition ? -1 : src.indexOf(content)
-        if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
+        if (!content.includes('\\|') && within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
           c.anchors = [
             {
               from: 0,
@@ -255,21 +274,21 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         type: 'table_row',
         ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
+          const value = cellInlineValue(c.raw)
           const cellWraps = c.wraps?.length
             ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))
             : undefined
           const children = c.span && !c.raw ? [] : c.anchors?.length
-            ? host.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
+            ? host.parseInline(value, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 baseOffset: c.anchors[0]!.offset,
                 startLine: c.anchors[0]!.line,
                 startColumn: c.anchors[0]!.column,
                 anchoredRanges: c.anchors,
                 ...(cellWraps ? { cellWraps } : {}),
               }))
-            : host.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
+            : host.parseInline(value, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 ...(cellWraps ? { cellWraps } : {}),
               }))
-          if (c.raw.includes('\\|')) unescapeCellDestinations(children)
           // Empty earlier continuation lines have no fragment to join. The
           // first text fragment still names its own continuation line.
           if (c.appended) {
