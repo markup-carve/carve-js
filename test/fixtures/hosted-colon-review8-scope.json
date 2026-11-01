@@ -262,7 +262,7 @@
   {
     "id": "review8-older-o01-overindented-verse-006",
     "source": "- a\n    ::: |\n    [^a]: n\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>[^a]: n</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>[^a]: n<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-007",

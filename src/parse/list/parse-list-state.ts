@@ -237,11 +237,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       state.divDepth = Math.max(0, state.divDepth - 1)
       return false
     }
-    if (state.definitionBody && column === 0 && opensCodeFence(text) && !open.opaque) {
-      delete state.literalColon
-      trackItemLazyState(content, state, line.atContentColumn, hasCommentCloser, facts, line.hasLiteralCommentCloser)
-      return true
-    }
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
     if (open.opaque) {
       const closedPayload = open.opaque.closes(text)
@@ -260,7 +255,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (group && (group.belowBaseCloses ? (line.hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
       opensCodeFence(text) && (column === 0 || column >= open.column) &&
       (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true))) open.opaque = group
-    if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0) open.opaque = group
+    if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0 &&
+        (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true)) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
     if (close && close[1]!.length === open.width && (column === 0 || column === open.column)) {
       if (open.rejectedComment) state.closedLiteralComment = true
@@ -272,9 +268,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       const marked = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, facts?.terminatorFree ?? false) !== null
       if (marked) open.absorbing = false
       if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
-      // Payload shapes open no blocks; span and definition boundaries still apply.
+      // A payload line opens no block, even when it looks like a definition.
       state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
-        open.opaque?.belowBaseCloses !== true && text !== '' && !RE_FOOTNOTE_DEF.test(text) &&
+        open.opaque?.belowBaseCloses !== true && text !== '' &&
         (close === null || close[1]!.length !== open.width ||
           (column > 0 && column !== open.column) || open.absorbing === true)
     }

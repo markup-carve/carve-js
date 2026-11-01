@@ -92,7 +92,7 @@
   {
     "id": "review9-g7",
     "source": "- a\n  ::: |\n   [^a]: n\n:::bad\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;[^a]: n</p>\n    </div>\n  </li>\n</ul>\n<p>:::bad</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;[^a]: n<br>\n:::bad</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review9-g7-sibling",

@@ -2169,7 +2169,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
           isListMarkerLine(placed.trimStart())) blockedNoteClaimFloor = undefined
-      if (lazyState.opaque === null && descendantOpaque === null && RE_FOOTNOTE_DEF.test(placed.trimStart())) {
+      if (lazyState.opaque === null && descendantOpaque === null &&
+          lazyState.literalColon === undefined && lazyState.deepest?.literalColon === undefined &&
+          RE_FOOTNOTE_DEF.test(placed.trimStart())) {
         lexer.hostedFootnoteLines.add(lexer.lineNumber(lexer.pos))
         blockedNoteClaimFloor = indentColumns(l) + FOOTNOTE_BODY_COLUMN
       }
@@ -2803,7 +2805,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         retainedFenceOpen = true
         retainedFenceItemColumn = sourceColumn(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? l) +
           contentCol - indentColumns(l)
-      } else if (lazyState.quoteInner === null && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
+      } else if (lazyState.quoteInner === null && lazyState.literalColon === undefined &&
+          lazyState.deepest?.literalColon === undefined && RE_FOOTNOTE_DEF.test(l.trimStart()) &&
           !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         lazyLine = enclosingLazy || lexer.atDocumentLevel ? LAZY_FRAME + l.replace(/^[ \t]+/, '') : l
       } else if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
