@@ -2,13 +2,6 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
-      "ticket": "markup-carve/carve#4545",
-      "cause": "the pinned spec model predates the ruling that a marker between an item's columns folds unless it matches the list on every axis",
-      "cases": [
-        "ownership-baace234ff19"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the fences family",
       "cases": [
@@ -71,11 +64,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the ownership family that the spec bump to carve 7840b69 surfaced",
       "cases": [
-        "ownership-08cd1743ebaf",
-        "ownership-1647bf107571",
-        "ownership-999f1d288b11",
-        "ownership-af75e477c466",
-        "ownership-bd136514e326"
+        "ownership-08cd1743ebaf"
       ]
     },
     {
@@ -83,36 +72,21 @@
       "cause": "untriaged drift in the lazy family that the spec bump to carve 7840b69 surfaced",
       "cases": [
         "lazy-70acba91ccbd",
-        "lazy-777e736ed857",
         "lazy-b4f620882c93",
         "lazy-f8190f90c806"
       ]
     },
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged drift in the fences family that the spec bump to carve 7840b69 surfaced",
-      "cases": [
-        "fences-06e5e9514aab",
-        "fences-1c15b73bc154",
-        "fences-42fe4e73aeaa",
-        "fences-55cd350a4d6d",
-        "fences-6aa76a6c725f"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the plus family that the spec bump to carve 7840b69 surfaced",
       "cases": [
-        "plus-a0f7cf7091d8",
-        "plus-c843bfd6fe62"
+        "plus-a0f7cf7091d8"
       ]
     },
     {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the roundtrip family that the spec bump to carve 7840b69 surfaced",
       "cases": [
-        "roundtrip-3273596976e5",
-        "roundtrip-5cb05799a0e5",
         "roundtrip-702a692a40ae"
       ]
     }
