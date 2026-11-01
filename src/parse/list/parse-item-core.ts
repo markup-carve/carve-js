@@ -602,6 +602,7 @@ export interface AttachedScan {
   end: number
   contentColumn: number
   indexBase: number
+  boundary?: (line: string) => boolean
 }
 
 /**
@@ -718,7 +719,23 @@ export function fencedBlockEnd(scan: AttachedScan): number {
   if (first === undefined) return -1
   const run = colonBlockOpenerRun(first)
   if (run !== null) {
-    const close = findColonCloser(scan, 0, run)
+    let end = scan.end
+    if (scan.boundary !== undefined) {
+      for (let offset = 1; scan.base + offset < scan.end; offset++) {
+        const line = scan.at(offset)
+        if (line === undefined) break
+        const opaque = opaqueSpanEnd(scan, offset)
+        if (opaque !== -1) {
+          offset = opaque
+          continue
+        }
+        if (isListMarkerLine(line) && scan.boundary(line)) {
+          end = scan.base + offset
+          break
+        }
+      }
+    }
+    const close = findColonCloser(end === scan.end ? scan : { ...scan, end, cache: {} }, 0, run)
     if (close !== -1) return close
   }
 
