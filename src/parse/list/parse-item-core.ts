@@ -799,7 +799,7 @@ export function sourceColumnAt(line: string, offset: number): number {
   return column
 }
 
-export type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean; itemMarkerLine?: boolean }
+export type OpenMarker = { kind: 'list' | 'footnote' | 'description' | 'quote'; column: number; localColumn: number; quoteDepth: number; contentColumn: number; firstBlock: boolean; taskMarkerLine?: boolean }
 
 export type MarkerDecision = { owner?: OpenMarker }
 
@@ -828,14 +828,13 @@ export class OpenMarkerClassifier {
       let owner: OpenMarker | undefined
       const deepestQuote = this.stack.reduce((deepest, entry) => entry.kind === 'quote'
         ? Math.max(deepest, entry.quoteDepth) : deepest, 0)
-      const follower = this.lines[index + 1]
       for (let at = this.stack.length - 1; at >= 0; at--) {
         layoutWork.markerStackEntriesExamined += Number(layoutWork.on)
         const entry = this.stack[at]!
-        // A note on an item's marker line gives up this `+` when the follower
-        // opens a deeper quote. Otherwise the quoted note keeps the marker.
-        if (entry.itemMarkerLine === true &&
-            (entry.quoteDepth === 0 || follower !== undefined && quotePrefixDepth(follower) > depth)) continue
+        // A child opened on an ordinary item's marker line stands at its
+        // authored marker column (CARVE-P9-067). A task box instead keeps its
+        // own content coordinate (CARVE-P0-008).
+        if (entry.taskMarkerLine) continue
         if ((useLocalColumn ? entry.localColumn : entry.column) === markerColumn &&
             entry.quoteDepth === depth && (depth === 0 || depth >= deepestQuote)) { owner = entry; break }
       }
@@ -863,19 +862,16 @@ export class OpenMarkerClassifier {
     let innerColumn = column
     let innerLocalColumn = localColumn
     let innerDepth = depth
-    let itemOnLine = false
-    let itemDepth = -1
-    let quoteOpenedAfterItem = false
+    let taskMarkerLine = false
     for (let level = 0; level < 32; level++) {
-      const marker = taskMatch(inner) ?? unorderedMatch(inner) ?? orderedMatch(inner)
+      const task = taskMatch(inner)
+      const marker = task ?? unorderedMatch(inner) ?? orderedMatch(inner)
       if (marker !== null) {
+        taskMarkerLine ||= task !== null
         const content = marker.at(-1) ?? ''
         const width = inner.length - content.length
         this.stack.push({ kind: 'list', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth,
           contentColumn: innerColumn + width, firstBlock: isContinuationMarker(content) })
-        itemOnLine = true
-        itemDepth = innerDepth
-        quoteOpenedAfterItem = false
         innerColumn += width
         innerLocalColumn += width
         inner = content.trimStart()
@@ -883,7 +879,6 @@ export class OpenMarkerClassifier {
       }
       const quoted = quotedLineText(inner, false)
       if (quoted !== null) {
-        if (itemOnLine) quoteOpenedAfterItem = true
         innerDepth++
         innerColumn += inner.length - quoted.length
         innerLocalColumn = indentColumns(quoted)
@@ -893,9 +888,7 @@ export class OpenMarkerClassifier {
         continue
       }
       if (inner.startsWith('[^') && inner.includes(']:'))
-        this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false,
-          // The follower decides whether a quoted marker-line note owns `+`.
-          ...(itemOnLine && (innerDepth === 0 || quoteOpenedAfterItem && itemDepth === 0) ? { itemMarkerLine: true } : {}) })
+        this.stack.push({ kind: 'footnote', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false, taskMarkerLine })
       else if (inner.startsWith(': '))
         this.stack.push({ kind: 'description', column: innerColumn, localColumn: innerLocalColumn, quoteDepth: innerDepth, contentColumn: innerColumn + 2, firstBlock: false })
       break
