@@ -86,6 +86,7 @@ const IMPLEMENTED = new Set([
   'a-final-tab-does-not-change-list-ownership-in-a-description',
   'a-flush-left-description-leaves-a-deeper-host',
   'a-flush-left-description-leaves-a-nested-term-s-host',
+  'a-shifted-line-block-keeps-a-lazy-follower-at-its-reader-column',
   'a-hard-break-in-a-pipe-table-cell-survives-markdown-export',
   'a-list-import-preserves-its-hard-break',
   'a-marker-line-sublist-stays-open-in-a-description-body',
