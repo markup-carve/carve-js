@@ -17,3 +17,15 @@ it('ends the caption at a blank line', () => {
   expect(html).toContain('<figcaption>p</figcaption>')
   expect(html).toContain('<p>z</p>')
 })
+
+it('keeps a caption follower through an item in a description', () => {
+  const html = carveToHtml(':: t\n: - ```\n    ```\n    ^ p\n   z\n')
+  expect(html).toContain('<figcaption>p\nz</figcaption>')
+})
+
+for (const follower of ['# H', '- x', '1. x', '> q']) {
+  it(`keeps a ${follower} block outside a nested caption`, () => {
+    const html = carveToHtml(`:: t\n: - \`\`\`\n    \`\`\`\n    ^ p\n  ${follower}\n`)
+    expect(html).toContain('<figcaption>p</figcaption>')
+  })
+}

@@ -801,7 +801,8 @@ export function createDefinitionListParser(
         const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
           (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
             lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
-        bodyLines.push(captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn
+        bodyLines.push(captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn &&
+          !lineOpensItemBlock(dedented.trimStart()) && !isListMarkerLine(dedented.trimStart())
           ? LAZY_FRAME + dedented.trimStart() : dedented)
         bodySourceLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
