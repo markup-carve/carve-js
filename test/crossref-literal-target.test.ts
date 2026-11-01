@@ -22,7 +22,7 @@ describe('cross-reference target spelling', () => {
       const target = source.slice(source.indexOf("</#") + 3, source.indexOf(">"))
       const tree = JSON.stringify(parse(source))
       expect(tree).toContain('"type":"heading_ref"')
-      expect(tree).toContain('"target":' + JSON.stringify(target))
+      expect(tree).toContain('"target":' + JSON.stringify(source.startsWith('|') ? target.replaceAll('\\|', '|') : target))
       expect(carveToCarve(once)).toBe(once)
       expect(carveToHtml(once)).toBe(carveToHtml(source))
     })

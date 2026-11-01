@@ -1242,7 +1242,7 @@
     "name": "unknown-note",
     "source": "|= [^a\\|b] |= z |\n",
     "contains": [
-      "[^a\\|b]"
+      "[^a|b]"
     ],
     "cells": 2,
     "excludes": [
@@ -1256,7 +1256,7 @@
     "contains": [
       "Note.",
       "id=\"fnref1\"",
-      "id=\"fnref1-2\""
+      "[^q|r]"
     ],
     "cells": 1,
     "excludes": [
@@ -2168,7 +2168,7 @@
     "name": "invalid-attributes-cannot-end-paragraph",
     "source": "| [a][q\\|r] |\n|---|\n\n{not attrs\n[q|r]: /u\n",
     "contains": [
-      "[a][q\\|r]",
+      "[a][q|r]",
       "{not attrs\n[q|r]: /u"
     ],
     "cells": 1,

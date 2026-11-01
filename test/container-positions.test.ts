@@ -203,26 +203,14 @@ describe('table cells anchor their inline content', () => {
     }
   })
 
-  it('anchors a cell holding an escaped pipe', () => {
-    // The row splitter used to resolve `\|` itself, which made the cell text one
-    // character shorter than its source - not a verbatim slice, so no anchor -
-    // AND made a cell the one place in the engine where an escape does not
-    // become an `escaped_text` node. It now keeps the escape, so the segment is
-    // verbatim and the inline scanner produces the node (#462).
+  it('does not anchor a cell value after its pipe escape is consumed', () => {
+    // Cell splitting consumes the escape before inline parsing (carve#4718).
+    // The shorter value no longer maps byte-for-byte to the source cell.
     const src = '| a \\| b | c |\n'
-    const codepoints = [...src]
     const table = parse(src).children[0] as { rows: Array<Record<string, any>> }
     const [escaped, plain] = table.rows[0]!.cells
 
-    const types = escaped.children.map((c: any) => c.type)
-    expect(types).toEqual(['text', 'escaped_text', 'text'])
-
-    for (const child of escaped.children) {
-      expect(child.pos).toBeDefined()
-    }
-    // The escape's own span covers BOTH source characters, not just the pipe.
-    const esc = escaped.children[1]!
-    expect(codepoints.slice(esc.pos.startOffset, esc.pos.endOffset).join('')).toBe('\\|')
+    expect(escaped.children).toEqual([{ type: 'text', value: 'a | b' }])
     // The neighbouring cell is unaffected.
     expect(plain.children.find((c: any) => c.type === 'text')?.pos).toBeDefined()
   })

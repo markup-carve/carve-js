@@ -1420,16 +1420,21 @@ function escapeNoteReferenceLabel(label: string, ctx: CarveContext): string {
   return /^\^[^\]\r\n]/.test(label) ? `\\${label}` : label
 }
 
+function escapeTableReferencePipes(source: string): string {
+  return source.replace(/(\\*)\|/g, (_run, slashes: string) =>
+    slashes + (slashes.length % 2 === 0 ? '\\|' : '|'))
+}
+
 function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTable = false): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
   // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
   if (node.ref !== undefined && node.rawRef !== undefined && !node.src) {
-    return node.rawRef
+    return inTable ? escapeTableReferencePipes(node.rawRef) : node.rawRef
   }
   // A RESOLVED reference image stays a reference, for the same reason as a link.
   if (node.ref !== undefined && node.rawRef !== undefined) {
-    return node.rawRef
+    return inTable ? escapeTableReferencePipes(node.rawRef) : node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src, inTable)}${title})${attrs}`
@@ -5170,7 +5175,7 @@ class CarveRenderSession {
       case 'inline_footnote':
         return withAttrs(node.inline
           ? `^[${renderSession.renderAttributeBracket(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
-          : `[^${writeFlatBracketRun(node.label ?? '')}]`)
+          : `[^${ctx.tableCellDepth > 0 ? escapeTableReferencePipes(writeFlatBracketRun(node.label ?? '')) : writeFlatBracketRun(node.label ?? '')}]`)
       case 'non_breaking_space':
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':
@@ -5204,7 +5209,7 @@ class CarveRenderSession {
         }
         return `{#${node.text}#}`
       case 'heading_ref':
-        return `</#${spellCrossrefTarget(node.target)}>`
+        return `</#${ctx.tableCellDepth > 0 ? escapeTableReferencePipes(spellCrossrefTarget(node.target)) : spellCrossrefTarget(node.target)}>`
       case 'caption_number':
         return '#'
       case 'citation_group': {
@@ -5253,10 +5258,10 @@ class CarveRenderSession {
     // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
     // no longer answers this question (carve#596).
     if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
-      return node.rawRef
+      return ctx.tableCellDepth > 0 ? escapeTableReferencePipes(node.rawRef) : node.rawRef
     }
     if (node.ref !== undefined && node.rawRef !== undefined) {
-      return node.rawRef
+      return ctx.tableCellDepth > 0 ? escapeTableReferencePipes(node.rawRef) : node.rawRef
     }
     const text = this.renderLabel(node.children, ctx)
     const title = node.title === undefined ? '' : ` "${ctx.tableCellDepth > 0 ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
