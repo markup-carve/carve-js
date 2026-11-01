@@ -72,7 +72,8 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
     let leading: Comment[] = []
     for (let bodyIndex = 0; bodyIndex < body.length; bodyIndex++) {
       const { text, lineIndex } = body[bodyIndex]!
-      const ln = stripLazyFrame(text)
+      const line = stripLazyFrame(text)
+      const ln = lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) ? line.trimStart() : line
       const opener = RE_VERSE_COMMENT_OPEN.exec(ln)
       const run = opener?.[1]!.length
       if (run !== undefined && (lastCloser.get(run) ?? -1) > bodyIndex) {
