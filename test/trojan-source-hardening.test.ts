@@ -86,6 +86,12 @@ describe('Change 1: heading-id Trojan-Source hardening', () => {
 })
 
 describe('Change 2: strip bidi controls from rendered text and code', () => {
+  it('strips controls from rendered link titles and image alt and title (carve#4804)', () => {
+    const source = '[a](/u "t\u202e")\n\n![t\u202e](/u)\n\n![a](/u "t\u2066")\n\n[b][r]\n\n[r]: /u "t\u2066"\n'
+    expect(carveToHtml(source)).toBe('<p><a href="/u" title="t">a</a></p>\n<img src="/u" alt="t">\n<img src="/u" alt="a" title="t">\n<p><a href="/u" title="t">b</a></p>')
+    expect(carveToHtml('[a](/u\u202eb)')).toContain('href="/u\u202eb"')
+    expect(carveToHtml('[a](/u){title="t\u202e"}')).toContain('title="t\u202e"')
+  })
   it('strips U+202E from inline text (DOM-inert)', () => {
     expect(carveToHtml(`a${BIDI.RLO}b`)).toBe('<p>ab</p>')
   })
