@@ -1280,6 +1280,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const continuationFenceBreaks = new Set<number>()
     let authoredDescendantFenceBlanks = 0
     const { leadState, lazyState } = leadLazyState(lexer, session, content, itemStartLineIndex, markerLineTerm)
+    const closeDescendantParagraphClaim = (): void => {
+      if (descendantOpaque === null) return
+      // A description under another list item can leave that ancestor's
+      // paragraph open even while its own fence is awaiting payload.
+      if (descriptionFenceAwaitingPayload && markerDescription === null) return
+      lazyState.lazyFoldable = false
+      if (lazyState.deepest) lazyState.deepest.lazyFoldable = false
+    }
     // X2: track an authored quote's paragraph without changing the item's block state.
     let authoredQuoteClaim: BlockQuoteLazyState | null = null
     let authoredQuoteParagraphOpen = false
@@ -1292,6 +1300,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // both.
     const descendantLead = content.includes("`") || content.includes('~') || content.includes(':')
       ? markerLineBottomBlock(content, session.markerPrefixMemo(lexer, itemStartLineIndex)) : content
+    const seedDescendantLineBlock = (): void => {
+      if (descendantLead === content || !RE_LINE_BLOCK_OPEN.test(descendantLead) || lazyState.ownedColumn < 0) return
+      const frame = verbatimOnlyLazyState()
+      frame.divDepth = 1
+      frame.literalColon = { width: colonFenceOpenerLen(descendantLead)!, column: 0 }
+      lazyState.deepest = frame
+      lazyState.literalLayout = true
+    }
+    seedDescendantLineBlock()
     if (descendantLead !== content && colonFenceOpenerLen(descendantLead) !== null) lazyState.lazyFoldable = false
     const descendantLeadFence = descendantLead !== content
       ? RE_FENCE.exec(descendantLead) ?? RE_RAW_FENCE.exec(descendantLead) : null
@@ -2368,7 +2385,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           : trimmed
         const opener = opensCodeFence(bottom) ? bottom : trimmed
         const indented = opener !== dedented
-        const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
+        const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined && !lazyState.literalLayout &&
           !noteFenceOpen(lazyState) &&
           (lazyState.quoteInner === null || !blockQuoteParagraphOpen(lazyState.quoteInner)) &&
           opensCodeFence(opener)
@@ -2621,7 +2638,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       // The item holds no paragraph a below-column line can continue while a
       // descendant holds a fence open. PART 1 S4 asks about the open STACK.
-      if (descendantOpaque !== null && !descriptionFenceAwaitingPayload) lazyState.lazyFoldable = false
+      closeDescendantParagraphClaim()
       // A quoted invisible definition ends the descendant quote paragraph.
       // Its body may follow, but neither can keep this item's paragraph open.
       const quotedInvisible = lazyState.opaque === null && descendantOpaque === null

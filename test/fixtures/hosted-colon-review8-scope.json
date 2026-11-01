@@ -432,7 +432,7 @@
   {
     "id": "review8-c05-malformed-verse-absorption-003",
     "source": "- ::: |\n   :::bad\n  ::::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;:::bad<br>\n::::</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;:::bad<br>\n::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c02-below-column-comment-020",
@@ -452,7 +452,7 @@
   {
     "id": "review8-c05-malformed-verse-absorption-004",
     "source": "- ::: |\n    :::bad\n  ::::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;:::bad<br>\n::::</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;:::bad<br>\n::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c01-authored-div-base-037",

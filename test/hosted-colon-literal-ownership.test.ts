@@ -148,7 +148,7 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```']) {
 }
 
 for (const [name, source, html] of [
-  ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::</p>\n    </div>\n  </li>\n</ul>\n<p>tail</p>'],
+  ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::<br>\ntail</p>\n    </div>\n  </li>\n</ul>'],
   ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code></code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>'],
   ['below-column line after an empty container', '1. ::: box\n  %% c\n  - tail\n', "<ol>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ol>\n<ul>\n  <li>tail</li>\n</ul>"],
   ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n\n        </div>\n        <div>\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],

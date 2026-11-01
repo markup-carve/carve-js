@@ -122,10 +122,9 @@ it("ends the nested description fence before host text with ```", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <p>x</p>",
+    "    <p>x\ntail</p>",
     "  </dd>",
     "</dl>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -216,10 +215,9 @@ it("ends the nested description fence before host text with ~~~", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <p>x</p>",
+    "    <p>x\ntail</p>",
     "  </dd>",
     "</dl>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -310,10 +308,9 @@ it("ends the nested description fence before host text with ``` x", () => {
     "        <pre><code class=\"language-x\"></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <p>x</p>",
+    "    <p>x\ntail</p>",
     "  </dd>",
     "</dl>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 
@@ -404,10 +401,9 @@ it("ends the nested description fence before host text with ````", () => {
     "        <pre><code></code></pre>",
     "      </li>",
     "    </ul>",
-    "    <p>x</p>",
+    "    <p>x\ntail</p>",
     "  </dd>",
     "</dl>",
-    "<p>tail</p>",
   ].join('\n'))
 })
 

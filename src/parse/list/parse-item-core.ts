@@ -954,14 +954,14 @@ export function descriptionLeadFenceScans(lead: string): {
     code: new AppendOnlyCloser(close ? line => close.test(line.replace(/^[ \t]+/, '')) : undefined),
     paragraphOpen: (lines, fallback, atContentColumn) => {
       if (ownClose === undefined) return fallback
-      if (!ownsBody) return false
+      if (!ownsBody) return fallback
       for (; next < lines.length; next++) {
         const line = lines[next]!
         if (!closed) {
           const indent = indentColumns(line)
           if (atContentColumn && !isBlankLine(line) && indent < column) {
             ownsBody = false
-            return false
+            return fallback
           }
           if (indent === column && ownClose.test(line.trimStart())) closed = true
           continue
