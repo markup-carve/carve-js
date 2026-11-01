@@ -18,9 +18,12 @@ describe('Markdown writer targets fixture', () => {
   for (const c of cases) {
     it(c.name, () => {
       const out = c.carve !== undefined ? carveToMarkdown(c.carve) : renderMarkdown(fromAstJson(c.ast))
-      const expected = c.name === 'fragment-link-destination-is-encoded' || c.name === 'autolink-encoded-destination-fallback'
-        ? c.markdown.replaceAll('%28', '\\(').replaceAll('%29', '\\)')
-        : c.markdown
+      const expected = c.name === 'strong-around-italic-before-a-letter'
+        // carve#4806 makes the closing * before Unicode letters literal; the shared fixture still pins the old reading.
+        ? 'x \\**a*\\*é y \\**b*\\*中 z\n'
+        : c.name === 'fragment-link-destination-is-encoded' || c.name === 'autolink-encoded-destination-fallback'
+          ? c.markdown.replaceAll('%28', '\\(').replaceAll('%29', '\\)')
+          : c.markdown
       expect(out).toBe(expected)
     })
   }

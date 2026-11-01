@@ -24,11 +24,11 @@ describe('borrowed HTML layout', () => {
       const source = `${text}\n\n${text}\n`
       expect(tryFastHtml(source, {}), text).toBe(authoritative(source))
     }
-    for (const text of ['- café', '1. 中文', 'café\n\n---', 'é*bold*', '# café', '[é](/x)', 'Café *bold*', '東京 [link](/x)']) {
+    for (const text of ['- café', '1. 中文', 'café\n\n---', '# café', '[é](/x)', 'Café *bold*', '東京 [link](/x)']) {
       const source = `${text}\n`
       expect(tryFastHtml(source, {}), text).toBe(authoritative(source))
     }
-    for (const text of ['`😀`', '*a*\uFE0F\u20E3', 'e\u0301 *bold*', '“q” *b*', '© *b*', 'a\u00a0b', 'a\u2028b', '\ufeffcafé', 'a\u202eb', 'é\u200db', 'é\u0085b']) {
+    for (const text of ['`😀`', '*a*\uFE0F\u20E3', 'e\u0301 *bold*', 'é*bold*', '“q” *b*', '© *b*', 'a\u00a0b', 'a\u2028b', '\ufeffcafé', 'a\u202eb', 'é\u200db', 'é\u0085b']) {
       const source = `${text}\n`
       expect(tryFastHtml(source, {}), text).toBeUndefined()
       expect(carveToHtml(source), text).toBe(authoritative(source))

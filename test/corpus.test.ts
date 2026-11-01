@@ -1224,7 +1224,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // parser change lands.
 const behindSpec = new Map<string, string>([
   ['01-emphasis-6', '<p><em>usr/local</em></p>'],
-  ['704-a-non-ascii-letter-does-not-block-a-bare-delimiter', '<p>é<strong>x</strong> y and a*x* y\ny <strong>x</strong>é and y *x*a</p>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
