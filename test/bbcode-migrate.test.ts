@@ -226,9 +226,9 @@ describe('bbcodeToCarve — punctuation the post typed itself', () => {
 
   // BBCode has no smart typography: two hyphens in a post are two hyphens. Left
   // unescaped they reach the parse as `smart_punctuation` and the migrated
-  // document renders a dash, ellipsis or arrow the author never typed.
-  it('keeps a dash, ellipsis and arrow run as the characters they are', () => {
-    expect(bbcodeToCarve('a -- b ... c -> d')).toBe('a \\-- b \\... c \\-> d\n')
+  // document renders a dash or ellipsis the author never typed.
+  it('keeps a dash, ellipsis and short arrow run as the characters they are', () => {
+    expect(bbcodeToCarve('a -- b ... c -> d')).toBe('a \\-- b \\... c -> d\n')
     expect(render('a -- b ... c -> d')).toBe('<p>a -- b ... c -&gt; d</p>')
   })
 

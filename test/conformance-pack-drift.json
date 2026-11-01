@@ -60,48 +60,6 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the ownership family",
-      "cases": [
-        "ownership-34fa9b509539",
-        "ownership-7e96653cd703"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the lazy family",
-      "cases": [
-        "lazy-83177b2ed116",
-        "lazy-f6908add6b39"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the fences family",
-      "cases": [
-        "fences-71becdeddb36",
-        "fences-a6d596da0873"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the inline family",
-      "cases": [
-        "inline-00ec4febb903",
-        "inline-03155db5e823",
-        "inline-0a963796db69",
-        "inline-2a8d1d536d47",
-        "inline-40b8e22fb745",
-        "inline-4c5322e2e695",
-        "inline-68745d509b91",
-        "inline-6944c61ff846",
-        "inline-8957caef9941",
-        "inline-c702204f208a",
-        "inline-cf70d44fa904",
-        "inline-e59c2d8d5c7c"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve#4810",
       "cause": "spec pin drift in the inline family",
       "cases": [
@@ -152,33 +110,11 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the guards family",
-      "cases": [
-        "guards-3a21f1ad43c8",
-        "guards-71b78fb9e703"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "spec pin drift in the guards family",
       "cases": [
         "guards-61e1689d452b",
         "guards-9576a8f87b86"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the attributes family",
-      "cases": [
-        "attributes-3481180e4ffd"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4815",
-      "cause": "spec pin drift in the roundtrip family",
-      "cases": [
-        "roundtrip-603bc6197796"
       ]
     }
   ]

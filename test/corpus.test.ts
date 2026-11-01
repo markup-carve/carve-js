@@ -1224,8 +1224,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // parser change lands.
 const behindSpec = new Map<string, string>([
   ['01-emphasis-6', '<p><em>usr/local</em></p>'],
-  ['15-heading-ids-4', '<section id="Don-t-repeat-yourself">\n  <h1>Don’t repeat yourself</h1>\n</section>\n<section id="Step-1-done">\n  <h1>Step 1 → done…</h1>\n</section>'],
-  ['386-the-doubled-run-is-the-canonical-arrow-in-both-families', '<p>Canonical: ← → ↔ and ⇐ ⇒ ⇔</p>\n<p>Removed, now text: ← → ↔</p>\n<p>Not an arrow: key =&gt; value stays literal, and p ≤ q is a comparison.</p>'],
   ['704-a-non-ascii-letter-does-not-block-a-bare-delimiter', '<p>é<strong>x</strong> y and a*x* y\ny <strong>x</strong>é and y *x*a</p>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
