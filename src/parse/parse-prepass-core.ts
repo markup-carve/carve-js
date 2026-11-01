@@ -1001,11 +1001,30 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     if (count > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return null
     collected += (count === 0 ? '' : '\n') + line
     count++
-    if (closed) {
-      const attrs = parseBlockAttributeRun(collected)
-      return attrs ? { attrs, count } : null
+    const attrs = parseBlockAttributeRun(collected)
+    if (attrs) return { attrs, count }
+    if (!hasOpenAttributeBlock(collected)) return null
+  }
+}
+
+function hasOpenAttributeBlock(source: string): boolean {
+  let open = false
+  let quote: '"' | "'" | null = null
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i]!
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = null
+    } else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '{') {
+      if (open) return false
+      open = true
+    } else if (ch === '}') {
+      if (!open) return false
+      open = false
     }
   }
+  return open
 }
 
 export function parseBlockAttributeRun(src: string): Attrs | null {
@@ -1104,8 +1123,6 @@ export function parseBlockAttributeRun(src: string): Attrs | null {
 
   if (count === 0) return null
   if (count === 1) return first
-  // A glued run is one physical line: only a lone block may wrap (carve#4078).
-  if (src.includes('\n')) return null
   const out: Attrs = {}
   if (id !== undefined) out.id = id
   if (classes.length) out.classes = classes
