@@ -179,7 +179,7 @@ export function opensFrontmatter(source: string, opts: ParseOptions = {}): boole
 
 // Shared only for the synchronous recursion budget: extensions can re-enter
 // public parse(), whose document state belongs to a separate session.
-export const inlineDepthState = { value: 0 }
+export const inlineDepthState = { value: 0, bareEmphasis: 0 }
 
 /**
  * Hoist every authored `[label]: /url` definition into the document as a
@@ -377,7 +377,7 @@ export const inlineScannerHelpers = { ...listHelpers,
   trimStructural,
   unescapeAttrValue,
   verbatimSpanEnd,
-  get inlineDepth() { return inlineDepthState.value },
+  get inlineDepth() { return inlineDepthState.value - inlineDepthState.bareEmphasis },
 }
 export const scanInlineInnerWithHelpers = createInlineScanner(inlineScannerHelpers)
 

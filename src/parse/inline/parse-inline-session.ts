@@ -958,7 +958,7 @@ export class InlineParseSession {
     pairs?: InlinePairView,
     tailSlash = false,
   ): InlineNode[] {
-    if (inlineDepthState.value >= MAX_NESTING_DEPTH) {
+    if (inlineDepthState.value - inlineDepthState.bareEmphasis >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
     if (this.activeMatchers.length === 0 && !source.cellWraps && text.length <= 64 && /^[A-Za-z0-9 ]+$/.test(text)) {
@@ -1125,7 +1125,7 @@ export class InlineParseSession {
       const close = this.combinedTokenClose(text, i, noClose, guardOpen)
       if (close !== undefined && close + 2 <= end) {
         const inner = text.slice(start, close)
-        const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
+        const children = this.scanBareEmphasis(inner, this.shiftSource(source, text, start), inFootnote, new Set([...this.openKinds, '/', '*']))
         return {
           // `boldItalic` records that the author used the combined form. The
           // nested spelling `*/x/*` yields the same tree, so the writer needs the
@@ -1160,13 +1160,22 @@ export class InlineParseSession {
         if (close !== -1) {
           const inner = text.slice(i + 1, close)
           return {
-            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim), false, false, undefined, delim === '/') },
+            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanBareEmphasis(inner, this.shiftSource(source, text, i + 1), inFootnote, this.withOpenKind(delim), delim === '/') },
             end: close + 1,
           }
         }
       }
     }
     return null
+  }
+
+  private scanBareEmphasis(inner: string, source: InlineSource, inFootnote: boolean, kinds: ReadonlySet<string>, tailSlash = false): InlineNode[] {
+    inlineDepthState.bareEmphasis++
+    try {
+      return this.scanInline(inner, source, inFootnote, false, kinds, false, false, undefined, tailSlash)
+    } finally {
+      inlineDepthState.bareEmphasis--
+    }
   }
 
   private cachedFindEmphasisClose(

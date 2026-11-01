@@ -36,4 +36,21 @@ describe('a bracket span at the inline cap', () => {
     expect(html.match(/<span/g)).toHaveLength(199)
     expect(html).toContain('[[*x*]{.a}]{.a}')
   })
+
+  it('keeps 199 spans under bare emphasis without moving the forced-emphasis cap', () => {
+    const spans = '['.repeat(199) + 'x' + ']{.a}'.repeat(199)
+    const bare = p(`*w ${spans}*`)
+    const forced = p(`{*w ${spans}*}`)
+    expect(bare.match(/<span/g)).toHaveLength(199)
+    expect(bare).toContain('<strong>w <span')
+    expect(forced.match(/<span/g)).toHaveLength(198)
+    expect(forced).toContain('[x]{.a}')
+  })
+
+  it('still parses a bare span inside 198 bracket spans under bare emphasis', () => {
+    const source = `*w ${'['.repeat(198)}*x*${']{.a}'.repeat(198)}*`
+    const html = p(source)
+    expect(html.match(/<span/g)).toHaveLength(198)
+    expect(html).toContain('<strong>x</strong>')
+  })
 })
