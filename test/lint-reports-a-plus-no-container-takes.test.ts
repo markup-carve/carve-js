@@ -9,17 +9,9 @@ const refused = (source: string): string[] =>
 // markup-carve/carve#3421, #3529, #3530: every `+` the renderer leaves as text is reported.
 describe('continuation-marker-refused for a plus no container takes', () => {
   const reported: Array<[string, string[]]> = [
-    // carve#3421 ruling 5: any block after a document-level `+` no container claims.
-    ['q\n+\n| a |\n', ['2:1']],
-    ['q\n+\n# h\n', ['2:1']],
-    ['q\n+\n```\nx\n```\n', ['2:1']],
-    ['q\n+\n> x\n', ['2:1']],
-    ['+\n# h\n', ['1:1']],
     // A refused stacked quote plus inside a host quote, like its top-level twin.
     ['> - > > +\n>   b\n', ['1:9']],
     ['> - - > +\n>   b\n', ['1:9']],
-    ['> - a\n>   +\n', ['2:5']],
-    ['q\n+\n{.c}\npara\n', ['2:1']],
     ['- > +\n> q\n', ['1:5']],
     ['> > +\n  > q\n', ['1:5']],
     // Corpus 649-4 and 649-5: a quoted follower right of the opener line.
@@ -47,6 +39,14 @@ describe('continuation-marker-refused for a plus no container takes', () => {
     '> ```\n> q\n>   +\n> ```\n',
     '> %%%\n> q\n>   +\n> %%%\n',
     '%%%\nq\n+\n- s\n%%%\n',
+    // PART 0 S2: a `+` at no open container's marker column is a letter (carve#4648).
+    'q\n+\n| a |\n',
+    'q\n+\n# h\n',
+    'q\n+\n```\nx\n```\n',
+    'q\n+\n> x\n',
+    '+\n# h\n',
+    '> - a\n>   +\n',
+    'q\n+\n{.c}\npara\n',
   ]
   for (const source of quiet) {
     it(`does not report ${JSON.stringify(source)}`, () => {
@@ -55,7 +55,7 @@ describe('continuation-marker-refused for a plus no container takes', () => {
   }
 
   it('names the list item that keeps the plus as text', () => {
-    const [warning] = lintCarve('> - a\n>   +\n').filter((w) => w.rule === 'continuation-marker-refused')
+    const [warning] = lintCarve('> - a\n> +\n>\n> b\n').filter((w) => w.rule === 'continuation-marker-refused')
     expect(warning?.message).toContain('remains text in the list item')
   })
 })

@@ -3413,7 +3413,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     for (const node of session.parseInvisibleRun(lexer, k)) {
       if (node.type === 'abbreviation_def' && node.pos?.startLine !== undefined) {
         lexer.skippedAbbreviations?.set(node.pos.startLine - 1, [node.abbr, node.expansion])
-      } else last.children.push(node)
+      } else {
+        last.children.push(node)
+        // The item ends at its last placed child, and this one is placed after its span was set.
+        const end = node.pos
+        if (last.pos && end?.endOffset !== undefined && end.endColumn !== undefined && end.endOffset > (last.pos.endOffset ?? 0)) {
+          last.pos = { ...last.pos, endLine: end.endLine, endColumn: end.endColumn, endOffset: end.endOffset }
+        }
+      }
     }
   }
 

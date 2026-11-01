@@ -37,9 +37,8 @@ describe('continuation-marker-refused vectors', () => {
 
   it('does not mistake glued markers for quote hosts', () => {
     for (const line of ['>= x', '>>= op', '>+', '>>+']) {
-      expect(lintCarve(`${line}\n+\n\npara`).filter(w => w.rule === 'continuation-marker-refused')).toEqual([
-        expect.objectContaining({ line: 2, column: 1, message: expect.stringContaining('remains text in the document') }),
-      ])
+      // A document-level `+` is a letter under PART 0 S2, so it is quiet (carve#4648).
+      expect(lintCarve(`${line}\n+\n\npara`).filter(w => w.rule === 'continuation-marker-refused')).toEqual([])
     }
   })
 })

@@ -1074,11 +1074,10 @@ export function lintCarve(
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
   pushUnclosedCodeFences(unclosedCodeFences, sourceLines, lineOffsets, sourceOffset, out)
   const seenMarker = new Set<string>()
-  // A wrong-column `+` inside a code or comment payload is payload, not a marker (`> ``` ` / `>   +`).
-  const payloadLines = new Set([...collectVerbatimLines(doc), ...collectCommentLines(doc)])
   for (const marker of refusedContinuationMarkers) {
     const key = `${marker.line}:${marker.column}`
-    if (seenMarker.has(key) || marker.reason === 'wrong-column' && payloadLines.has(marker.line)) continue
+    // A `+` no marker column reaches is a letter under PART 0 S2, so it is quiet (carve#4704).
+    if (seenMarker.has(key) || marker.reason === 'wrong-column' || marker.reason === 'unclaimed') continue
     seenMarker.add(key)
     const sourceLine = sourceLines[marker.line - 1] ?? ''
     const plus = sourceLine.lastIndexOf('+')
@@ -1089,9 +1088,7 @@ export function lintCarve(
       sibling: 'the next list item is a sibling',
       left: 'the next block starts left of its column',
       right: 'the next block starts right of its column',
-      'wrong-column': 'its column names no open container',
       list: 'the first-block form does not attach a list',
-      unclaimed: 'no open container claims it',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
