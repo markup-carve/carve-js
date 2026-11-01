@@ -3364,9 +3364,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               previousVisibleType === 'list' ? undefined : opaqueBlankLines) ||
               previousVisibleType === 'list' &&
                 session.hasAuthoredBlankBetween(lexer, span.start - 2, span.start))) loose = true
-        // A paragraph below a marker-line child's column has left that list, so a later one cannot reach it (corpus 907).
-        if (child.type === 'paragraph' && !reachesNestedList && children[0]?.type === 'list' &&
-            session.blockLineSpan(children[0])?.start === lexer.lineNumber(itemStartLineIndex)) nestedListContentColumn = undefined
+        // Once a paragraph belongs to this item, a later line cannot reenter
+        // the nested list merely by reaching its old source column.
+        if (child.type === 'paragraph' && !reachesNestedList) nestedListContentColumn = undefined
         previousVisibleSpan = span
         previousVisibleType = child.type
         previousVisibleBlock = child
