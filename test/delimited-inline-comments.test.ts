@@ -65,16 +65,16 @@ describe('delimited inline comments (PART 9 §21a)', () => {
   })
 
   it('records delimiter choice and trims at most one padding space', () => {
-    const children = (parse('{%  bar  %}') as any).children[0].children
-    expect(children[0]).toMatchObject({
+    const children = (parse('a {%  bar  %}') as any).children[0].children
+    expect(children[1]).toMatchObject({
       type: 'comment',
       block: false,
       delimited: true,
       content: ' bar ',
     })
-    const wire = carveToAstJson('{%bar%}') as any
-    expect(wire.children[0].children[0]).toMatchObject({ delimited: true, content: 'bar' })
-    expect(renderCarve(fromAstJson(wire))).toBe('{% bar %}\n')
+    const wire = carveToAstJson('a {%bar%}') as any
+    expect(wire.children[0].children[1]).toMatchObject({ delimited: true, content: 'bar' })
+    expect(renderCarve(fromAstJson(wire))).toBe('a {% bar %}\n')
   })
 
   it('formats without swallowing following prose and is idempotent', () => {

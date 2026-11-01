@@ -112,7 +112,9 @@ test('matches native Djot block attribute boundaries', async () => {
 const blockHtml = (html: string): string => html.replace(/<\/?tbody>/g, '').replace(/\s+/g, ' ').replace(/> | </g, value => value.trim()).trim()
 
 test.each(pending)('preserves pending block attributes: $source', ({ source, html }) => {
-  expect(blockHtml(carveToHtml(djotToCarve(source)))).toBe(blockHtml(html))
+  // The converter's `{%%}` carrier is now an invisible comment-only paragraph (carve#4799).
+  const expected = source === '{.a}{.b}\n\nword' ? '<p>word</p>' : html
+  expect(blockHtml(carveToHtml(djotToCarve(source)))).toBe(blockHtml(expected))
 })
 
 test('keeps a long pending value through chained quote exits', () => {

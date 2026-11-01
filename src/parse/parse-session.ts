@@ -279,6 +279,11 @@ function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockN
 const holdsNothing = (block: BlockNode): boolean => block.type === 'comment' ||
   ((block.type === 'block_quote' || (block.type === 'div' && block.label === undefined)) && block.children.every(holdsNothing))
 
+const commentOnlyParagraph = (paragraph: Paragraph): boolean =>
+  paragraph.children.some(child => child.type === 'comment') && paragraph.children.every(child =>
+    child.type === 'comment' || child.type === 'soft_break' || child.type === 'hard_break' ||
+    child.type === 'text' && /^[ \t\n\r]*$/.test(child.value))
+
 export class ParseSession extends InlineParseSession {
   /**
    * `text` with a trailing comment and its whole separating run removed, for a
@@ -848,7 +853,10 @@ export class ParseSession extends InlineParseSession {
     // Past the nesting limit, stop opening recursive containers and treat the
     // line as paragraph text. Prevents a call-stack overflow on pathologically
     // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
-    if (lexer.depth >= MAX_NESTING_DEPTH) return this.parseParagraph(lexer, true)
+    if (lexer.depth >= MAX_NESTING_DEPTH) {
+      const paragraph = this.parseParagraph(lexer, true)
+      return commentOnlyParagraph(paragraph) ? null : paragraph
+    }
 
     // Block-level constructs in priority order
     if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
@@ -977,6 +985,7 @@ export class ParseSession extends InlineParseSession {
       if (eq) return eq
     }
     const paragraph = this.parseParagraph(lexer)
+    if (commentOnlyParagraph(paragraph)) return null
     const host = paragraph.children.filter((child) => child.type !== 'comment')
     if (host.length === 1 && host[0]!.type === 'math' && (host[0] as Math).display) {
       // A span over several lines is the same host as a one-line one (§4, §10 I7).
