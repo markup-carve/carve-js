@@ -2142,12 +2142,9 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
 }
 
 /**
- * Drop author cell attributes that collide with a structural attribute this
- * renderer ACTUALLY emits for the cell (a computed `rowspan` / `colspan` /
- * `style` from `^`/`<` markers or column alignment) -- the computed value is
- * authoritative, so an author copy would duplicate it. Comparison is
- * case-insensitive (HTML attribute names are). When no structural attribute is
- * emitted, the author's value (e.g. a custom `style`) is preserved.
+ * Drop authored spans even when this cell has no computed span. Only grid
+ * markers shape rowspan and colspan. Other authored attributes are dropped
+ * only when they collide with an emitted key.
  */
 function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): Attrs | undefined {
   if (!attrs?.keyValues || emitted.size === 0) return attrs
@@ -2208,7 +2205,7 @@ function renderTableRowFlat(
     const tag = entry.cell.header || promoteToHeader || column < rowHeadColumns ? 'th' : 'td'
     const spans: string[] = []
     const styleAttrs: string[] = []
-    const emitted = new Set<string>()
+    const emitted = new Set<string>(['rowspan', 'colspan'])
     if (entry.rowspan > 1) {
       spans.push(`rowspan="${entry.rowspan}"`)
       emitted.add('rowspan')
