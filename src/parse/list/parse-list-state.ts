@@ -674,6 +674,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // from the fence by a space; `::: note` passes it and takes the branch above.
     // PART 0 S3: an over-indented malformed opener absorbs too, except inside an open container (hosted-colon-review7-scope pins that).
     if (!/^:{3,}/.test(content) && !(state.divDepth === 0 && /^[ \t]+:{3,}/.test(content))) return false
+    // A line folded into a child quote's paragraph is that quote's text, not the item's (carve#4525).
+    if (line.wasQuote !== null && blockQuoteParagraphOpen(line.wasQuote)) return false
     // ...but only at the item's own level. Inside an open container the line is
     // ordinary body text and the container's closer below it is still a closer,
     // so arming here would swallow it and hold the paragraph open past the

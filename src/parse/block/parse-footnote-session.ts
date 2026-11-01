@@ -1,5 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { markerLineBottomBlock } from './parse-quote-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
@@ -156,6 +157,13 @@ function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void
     const line = bodyLines[k]!
     if (!isBlankLine(line) && indentColumns(line) >= leadShift + width) bodyLines[k] = sliceColumns(line, leadShift, true)
   }
+}
+
+// Whether the body's last line, past the lazy lines that continue it, is a term behind its openers.
+function bodyEndsInTerm(bodyLines: readonly string[]): boolean {
+  let k = bodyLines.length - 1
+  while (k >= 0 && bodyLines[k]!.startsWith(LAZY_FRAME)) k--
+  return k >= 0 && RE_DEFLIST_TERM.test(markerLineBottomBlock(bodyLines[k]!.trimStart()))
 }
 
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
@@ -422,6 +430,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       lexer.consume()
     } else if (lazyState.opaque === null && RE_COMMENT_LINE.test(ln.trimStart())) {
       // A comment below the body's column closes the body (carve#3885).
+      return 'stop'
+    } else if (lazyState.opaque === null && isListMarkerLine(ln.trimStart()) && bodyEndsInTerm(bodyLines) &&
+        !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) {
+      // PART 0 [B-term-keep]: a list marker that misses the note's body leaves its term (carve#4478).
+      // A host's lazy line is already text, not a marker.
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&

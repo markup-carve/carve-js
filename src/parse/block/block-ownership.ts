@@ -217,6 +217,17 @@ function termRefusesLazyLine(term: Frame, marker: boolean, rest: string, missed:
     : DD.test(rest) && missed.some((frame) => frame.kind === 'quote')
 }
 
+// A separator that ends a quote's term, where a container around the quote also missed it, is that
+// container's lazy text (carve#4432). Closes the quote frames and reports whether it applied.
+function releaseSeparatorPastQuote(frames: Frame[], marker: boolean, missed: Frame[]): boolean {
+  if (marker || missed[0]!.kind === 'quote' || missed.some((frame) => frame.kind === 'note')) return false
+  frames.length = frames.map((frame) => frame.kind).lastIndexOf('quote')
+  const owner = frames[frames.length - 1]!
+  owner.para = true
+  owner.last = 'para'
+  return true
+}
+
 function retireTermAtQuoteSeparator(frames: Frame[], owner: Frame, rest: string): void {
   if (frames[frames.length - 1]?.last !== 'term' || !DD.test(rest) || owner.kind !== 'quote') return
   frames[frames.length - 1]!.last = 'para'
@@ -474,13 +485,15 @@ export function ownLines(
     // A term takes plain lazy text, but a marker or description separator that
     // misses its quote or note is read by the surviving owner (carve#4300).
     const marker = matchMarker(m.rest)
-    const termRefuses = termRefusesLazyLine(top(), marker !== null, m.rest, missedFrames)
+    const refuses = termRefusesLazyLine(top(), marker !== null, m.rest, missedFrames)
+    const releasedSeparator = refuses && releaseSeparatorPastQuote(frames, marker !== null, missedFrames)
+    const termRefuses = refuses !== releasedSeparator
     if (missed && !captionsQuote && !termRefuses && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
-      leadLazy(owner)
+      leadLazy(owner, releasedSeparator)
       finish()
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
       retireTermAtQuoteSeparator(frames, owner, m.rest)
@@ -583,7 +596,12 @@ export function ownLines(
     }
 
     // S4: a lazy line is written short of the frame it missed.
-    function leadLazy(owner: Frame): void {
+    function leadLazy(owner: Frame, released: boolean): void {
+      // A released separator stands at its owner's column, so no reader takes it back into the term.
+      if (released) {
+        lead(owner.canon)
+        return
+      }
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1
       // A line at or past a missed list's column moves with that list, until one left of it
@@ -778,7 +796,8 @@ export function ownLines(
     }
 
     function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
-      if (m.rest === '') return top().kind !== 'fence'
+      // A blank after an item's attached block still lets a `+` reach that item (§17 L3, carve#4629).
+      if (m.rest === '') return top().kind !== 'fence' && attachedHost?.at(-1)?.kind !== 'item'
       return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item'
     }
 
@@ -894,7 +913,8 @@ export function ownLines(
         if (!isQuoteLine(n.rest)) return decide('left')
         n = indentCols(quoteRest(n.rest))
       }
-      if (n.rest === '') return decide('blank')
+      // A line of nothing but quote markers is blank at its own level (CARVE-P9-085).
+      if (/^(?:>[ \t]*)*$/.test(n.rest)) return decide('blank')
       const col = docColumn(next, n.rest)
       if (col !== marker) return decide(col < marker ? 'left' : 'right')
       const rest = trimEndSpaceTab(n.rest)

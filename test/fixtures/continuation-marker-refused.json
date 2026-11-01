@@ -489,10 +489,19 @@
     },
     {
       "name": "quote-first-block-quoted-blank",
-      "description": "A quoted blank line attaches as a nested empty quote (carve#4409).",
+      "description": "A quoted blank line refuses the first-block plus too (CARVE-P9-067).",
       "source": "> +\n>\npara\n",
       "expected": {
-        "findings": []
+        "findings": [
+          {
+            "line": 1,
+            "column": 3,
+            "includes": [
+              "blank line",
+              "remains text"
+            ]
+          }
+        ]
       }
     },
     {
