@@ -2322,16 +2322,6 @@ class Importer {
       }
       flush()
       const produced = this.block(node, path, depth + level + 1)
-      const previous = out.at(-1)
-      const next = produced[0]
-      // Carve source has no boundary between two definition lists, so an
-      // attribute-less one following another joins it (carve#2369).
-      if (previous?.type === 'definition_list' && next?.type === 'definition_list' && !next.attrs) {
-        previous.items.push(...next.items)
-        if (next.loose) previous.loose = true
-        produced.shift()
-        this.report.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
-      }
       out.push(...produced)
     }
     flush()
@@ -3179,14 +3169,6 @@ class Importer {
       for (const name of this.attrNames(attrs)) {
         this.report.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
       }
-    }
-    // A leading `<dd>` can end in a definition list, which this list would
-    // join on the reparse, so it joins here the way a sibling `<dl>` does.
-    const lead = before.at(-1)
-    if (items.length && !attrs && lead?.type === 'definition_list') {
-      lead.items.push(...items)
-      this.report.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
-      return [...before, ...this.blocks(trailing, path, depth + 1, trailingPaths)]
     }
     return [...before, ...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }

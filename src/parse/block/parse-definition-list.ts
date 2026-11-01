@@ -38,7 +38,10 @@ type TermFenceState = {
   closesOnLine: boolean
 }
 
-function advanceToEntry(lexer: Lexer, entry: RegExp, helpers: typeof definitionListHelpers): boolean {
+function advanceToEntry(
+  lexer: Lexer, entry: RegExp, helpers: typeof definitionListHelpers,
+  session: DefinitionListSession, keepComment: (comment: Comment) => void,
+): boolean {
   const { RE_ABBR_DEF, RE_COMMENT_LINE, RE_COMMENT_BLOCK_ANY, isLinkDefLine,
     commentBlockHasCloser, stripLazyFrame } = helpers
   let next = lexer.pos
@@ -70,8 +73,25 @@ function advanceToEntry(lexer: Lexer, entry: RegExp, helpers: typeof definitionL
     lexer.skippedAbbreviations?.set(line, [abbr, expansion])
     lexer.abbrDefs.set(abbr, expansion)
   }
-  lexer.pos = next
+  for (const node of session.parseInvisibleRun(lexer, next))
+    if (node.type === 'comment') keepComment(node)
   return true
+}
+
+function abbreviationBridgesDescription(lexer: Lexer, helpers: typeof definitionListHelpers): boolean {
+  if (!lexer.atDocumentLevel) return false
+  const { RE_COMMENT_LINE, RE_DEFLIST_DEF, isLinkDefLine } = helpers
+  let blanks = 0
+  for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
+    const line = lexer.lineAt(at) ?? ''
+    if (isBlankLine(line)) {
+      if (++blanks >= 3) return false
+      continue
+    }
+    if (RE_DEFLIST_DEF.test(line)) return true
+    if (indentColumns(line) !== 0 || (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line))) return false
+  }
+  return false
 }
 
 function primeSiblingAbbreviations(lexer: Lexer, helpers: typeof definitionListHelpers): void {
@@ -168,6 +188,7 @@ function dropsTermIndent(lexer: Lexer, sourceColumn: number, termColumn: number,
 }
 
 type DefinitionListSession = {
+  parseInvisibleRun(lexer: Lexer, end: number): BlockNode[]
   collectAttachedBlock(
     lexer: Lexer,
     isBoundary: (line: string) => boolean,
@@ -1213,7 +1234,8 @@ export function createDefinitionListParser(
         while (!lexer.eof()) {
           const next = lexer.peek()!
           if (commentLeavesTerm(lexer, next, termColumn) ||
-              (lexer.atDocumentLevel && RE_ABBR_DEF.test(next) && entryLeadColumn(next) <= termColumn)) break
+              (lexer.atDocumentLevel && RE_ABBR_DEF.test(next) && entryLeadColumn(next) <= termColumn &&
+                abbreviationBridgesDescription(lexer, helpers))) break
           if (/^[ \t]+%%/.test(next)) {
             const first = lexer.pos
             const fence = RE_COMMENT_BLOCK_ANY.exec(next)
@@ -1387,7 +1409,8 @@ export function createDefinitionListParser(
         // separated from its term (or a previous definition) by a blank line for
         // readability, matching djot. The blank is a separator only - it does not
         // end the entry when a `:  ` definition follows.
-        if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers)) break
+        if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers,
+          parseSession, comment => { terms.at(-1)?.push(comment) })) break
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
@@ -1415,7 +1438,8 @@ export function createDefinitionListParser(
         )
       }
       items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
-      if (!RE_DEFLIST_TERM.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers)) break
+      if (!RE_DEFLIST_TERM.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers,
+        parseSession, comment => definitions.at(-1)?.push(comment))) break
     }
     return { type: 'definition_list', items }
   }
