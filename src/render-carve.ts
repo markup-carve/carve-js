@@ -1319,6 +1319,14 @@ function codeIncludeCaptionGap(previous: BlockNode, next: BlockNode): number | n
 }
 
 /**
+ * A caption may follow a code include after one blank or none, so the writer joins them; in a list item
+ * the blank also spells looseness, and dropping it would cost a `{loose}` key (PART 9 §17 L7).
+ */
+function codeIncludeCaptionJoins(gap: number | null, item: ListItem | undefined): boolean {
+  return gap === 1 || gap === 2 && item === undefined
+}
+
+/**
  * Per-node serializations that must be emitted VERBATIM because the node is
  * covered, whole or in part, by a SHAPE-well-formed include directive.
  *
@@ -3349,7 +3357,7 @@ class CarveRenderSession {
           if (
             previousBlock !== null &&
             parts.length > 0 &&
-            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeCaptionGap !== null && codeCaptionGap <= 2)
+            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0 && descriptionBody) {
@@ -4905,7 +4913,8 @@ class CarveRenderSession {
           lineTail = piece.slice(lastNewline + 1).slice(-2)
         }
         if (node.type === 'soft_break') {
-          captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
+          // A `^ ` line at a term's content column ends the term (carve-js#4135 row 856).
+          captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption || this.termKeepsLineIndent
           firstLine = false
           lineNodeCount = 0
           lineHostsCaption = false
