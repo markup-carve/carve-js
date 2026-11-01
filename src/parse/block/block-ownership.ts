@@ -847,6 +847,7 @@ export function ownLines(
     // An attribute run leads the attached block, so the block after it decides (carve#4278, carve#4447).
     const skippedAbbr: Array<[number, string, string]> = []
     const comments: number[] = []
+    const fenced = new Set<number>()
     const notes: number[] = []
     const decide = (reason: RefusedPlus['reason'] | null): RefusedPlus['reason'] | null => {
       for (const [index, name, value] of skippedAbbr) {
@@ -865,7 +866,9 @@ export function ownLines(
         }
         if (reason !== null && !isLinkDefLine(rest.trimStart()) &&
             !FOOTNOTE_DEF.test(rest.trimStart()) && !RE_ABBR_DEF.test(rest.trimStart())) continue
-        skippedComments.set(index, prefix + '%%')
+        // A line comment keeps its text; a fence's lines stay bare `%%` lines, since a body line
+        // left as written would end the host.
+        skippedComments.set(index, prefix + (fenced.has(index) ? '%%' : rest))
       }
       for (const index of notes) skippedNotes.add(index)
       return reason
@@ -891,7 +894,7 @@ export function ownLines(
           for (let q = 0; q < quotes && isQuoteLine(closer.rest); q++) closer = indentCols(quoteRest(closer.rest))
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
         }
-        for (let line = opener; line <= k; line++) comments.push(line)
+        for (let line = opener; line <= k; line++) { comments.push(line); fenced.add(line) }
         continue
       }
       if (COMMENT_LINE.test(rest)) { comments.push(k); continue }

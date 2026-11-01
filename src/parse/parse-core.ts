@@ -42,6 +42,7 @@ export { isBlankLine, layoutWork } from './parse-lexer.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
 import type {
   Admonition,
+  AbbreviationDef,
   Attrs,
   BlockNode,
   BlockQuote,
@@ -224,6 +225,37 @@ export function appendLinkReferenceDefinitions(
   }
   authored.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   children.push(...authored)
+}
+
+/**
+ * An abbreviation definition a `+` skipped stays a document-level `abbreviation_def`
+ * (PART 12 §7), placed after the block whose lines it stood among.
+ */
+export function insertSkippedAbbreviationDefinitions(
+  children: BlockNode[],
+  lexer: Lexer,
+  sourceLines: readonly string[],
+  source: string,
+): void {
+  if (!lexer.skippedAbbreviations?.size) return
+  const defs = [...lexer.skippedAbbreviations].sort((a, b) => a[0] - b[0])
+  const merged: BlockNode[] = []
+  let next = 0
+  for (const child of children) {
+    const startLine = child.pos?.startLine ?? 0
+    while (next < defs.length && defs[next]![0] + 1 < startLine) merged.push(skippedAbbreviation(defs[next++]!))
+    merged.push(child)
+  }
+  while (next < defs.length) merged.push(skippedAbbreviation(defs[next++]!))
+  children.length = 0
+  for (const node of merged) children.push(node)
+
+  function skippedAbbreviation([line, [abbr, expansion]]: [number, [string, string]]): AbbreviationDef {
+    const node: AbbreviationDef = { type: 'abbreviation_def', abbr, expansion: dropTrailingWhitespace(expansion) }
+    node.pos = definitionLinePosition(sourceLines, lexer.sourceOffsetMap ?? lexer.lineOffsets, line, source.length,
+      lexer.lineStartColumn(line))
+    return node
+  }
 }
 
 // Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
