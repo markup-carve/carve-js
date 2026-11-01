@@ -4622,11 +4622,8 @@ class CarveRenderSession {
     // So the body's blocks are written at two, and the ONE block whose payload
     // needs the third column asks for it by itself - see `atARaisedBase`.
     // CARVE-P9-083: a list on the marker line is measured from its own column, so its lines follow it there.
-    // A fence with content on that item uses the item's content column.
-    // An empty, lone fence has no continuation to place at that column.
-    const lead = blocks[0]?.type === 'list' &&
-      (blocks.length > 1 || blocks[0].items[0]?.children[0]?.type !== 'code_block' ||
-        blocks[0].items[0].children[0].content !== '')
+    // Even an empty fence has a closer at the item's content column.
+    const lead = blocks[0]?.type === 'list'
     const indent = lead ? ' '.repeat(defLines[0]!.length - (body.split('\n')[0]?.length ?? 0)) : '  '
     for (const line of lines) defLines.push(line ? `${indent}${line}` : line)
     return defLines.join('\n')
