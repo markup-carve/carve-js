@@ -33,7 +33,7 @@ interface FootnoteHooks {
 
 function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): boolean {
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
-    state.deepest?.opaque == null && !state.deepest?.divDepth
+    state.deepest?.opaque == null && (!state.deepest?.divDepth || state.deepest.literalLayout === true)
 }
 
 function trackedFootnoteContent(content: string): string {
