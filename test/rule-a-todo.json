@@ -41,7 +41,12 @@
   "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
     "does not claim a quote marker inside an inline code span": "#3921"
   },
-  "an-imported-source-is-a-writer-fixed-point.test.ts": {},
+  "an-imported-source-is-a-writer-fixed-point.test.ts": {
+    "an imported source is a carve fmt fixed point > 872-every-list-item-measures-its-content-against-its-own-content-column-4: the imported source is what the writer emits": "#4135",
+    "an imported source is a carve fmt fixed point > 872-the-third-confirmation-round-s-model-findings-12: the imported source is what the writer emits": "#4135",
+    "an imported source is a carve fmt fixed point > 875-a-fence-opened-at-a-block-start-in-a-note-keeps-no-paragraph-open: the imported source is what the writer emits": "#4135",
+    "an imported source is a carve fmt fixed point > 882-attributed-bracket-spans-share-the-inline-cap: the imported source is what the writer emits": "#4135"
+  },
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
   },
@@ -78,19 +83,14 @@
     "spec corpus non-HTML render fixtures > fmt: 187-a-comment-fence-is-a-comment-at-any-column-too": "#3921",
     "spec corpus non-HTML render fixtures > fmt: 192-a-comment-fence-under-a-nested-item-does-not-close-it-either": "#3921",
     "spec corpus non-HTML render fixtures > fmt: 637-definition-body-note-and-fence-owner-boundaries-5": "#3921",
-    "spec corpus non-HTML render fixtures > md: 103-heading-marker-column-zero": "#3921",
-    "spec corpus non-HTML render fixtures > md: 103-heading-marker-column-zero-2": "#3921",
-    "spec corpus non-HTML render fixtures > md: 159-indented-reference-and-footnote-definitions-stay-literal-2": "#3921",
-    "spec corpus non-HTML render fixtures > md: 184-a-definition-below-every-content-column-folds-as-text": "#3921",
+    "spec corpus non-HTML render fixtures > md: 103-a-heading-marker-opens-at-an-indented-top-level-column": "#3921",
+    "spec corpus non-HTML render fixtures > md: 103-a-heading-marker-opens-at-an-indented-top-level-column-2": "#3921",
+    "spec corpus non-HTML render fixtures > md: 159-indented-reference-and-footnote-definitions-register-2": "#3921",
+    "spec corpus non-HTML render fixtures > md: 184-a-definition-below-every-content-column-ends-the-item-and-registers": "#3921",
     "spec corpus non-HTML render fixtures > md: 422-a-recognized-opener-in-a-body-needs-no-blank-line-above-it-6": "#3921"
   },
-  "corpus-render-ledger.test.ts": {
-    "the non-HTML render ledger > records every corpus document": "#3921",
-    "the non-HTML render ledger > records the output every renderer still produces": "#3921"
-  },
   "corpus.test.ts": {
-    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921",
-    "spec corpus > 626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth-6": "markup-carve/carve#4437"
+    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },
   "deep-term-comment-code-tails.test.ts": {
     "keeps the definition term column after its comment: comment-term-claude-1043": "#3922",
@@ -147,9 +147,6 @@
     "review8-older-o01-overindented-verse-005": "#3922",
     "review8-older-o01-overindented-verse-008": "#3922",
     "review8-older-o01-overindented-verse-009": "#3922"
-  },
-  "html-import-conformance.test.ts": {
-    "shared HTML import contract > list-table-for-block-cells": "markup-carve/carve#4442"
   },
   "inline-fence-paragraph-resume.test.ts": {
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
@@ -295,6 +292,19 @@
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
   },
   "render-carve.test.ts": {
+    "renderCarve corpus > 854-an-indented-dash-line-neither-opens-nor-closes-frontmatter-2: parses to the same tree": "#4135",
+    "renderCarve corpus > 854-an-indented-dash-line-neither-opens-nor-closes-frontmatter: parses to the same tree": "#4135",
+    "renderCarve corpus > 856-every-folded-caret-line-loses-its-leading-whitespace-in-a-deep-term: idempotent": "#4135",
+    "renderCarve corpus > 856-every-folded-caret-line-loses-its-leading-whitespace-in-a-deep-term: parses to the same tree": "#4135",
+    "renderCarve corpus > 856-every-folded-caret-line-loses-its-leading-whitespace-in-a-deep-term: semantic": "#4135",
+    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: idempotent": "#4135",
+    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: parses to the same tree": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-2: parses to the same tree": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-2: semantic": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-3: parses to the same tree": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-3: semantic": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition: parses to the same tree": "#4135",
+    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition: semantic": "#4135"
   },
   "sibling-term-item-column.test.ts": {
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",
@@ -308,5 +318,10 @@
   },
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
+  },
+  "the-writer-invents-no-escape-the-re-parse-does-not-need.test.ts": {
+    "the writer invents no escape the re-parse does not need > 870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds-6": "#4135",
+    "the writer invents no escape the re-parse does not need > 870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds-7": "#4135",
+    "the writer invents no escape the re-parse does not need > 872-the-third-confirmation-round-s-model-findings-15": "#4135"
   }
 }

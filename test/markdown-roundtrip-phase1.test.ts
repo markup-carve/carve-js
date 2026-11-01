@@ -32,7 +32,7 @@ it.each([
   '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-5',
   '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-10',
   '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-11',
-  '160-indented-colon-fence-blocks-stay-literal-4',
+  '160-indented-colon-fence-blocks-open-4',
   '170-headings-inside-containers-are-not-wrapped',
 ])('reads the corpus repro without a damaged marker set: %s', (slug) => {
   const source = readFileSync(new URL(`../spec/tests/corpus/${slug}.crv`, import.meta.url), 'utf8')

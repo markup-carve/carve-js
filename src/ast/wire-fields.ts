@@ -382,7 +382,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "table.columns": { "align": "enum:left\u0000right\u0000center", "valign": "enum:top\u0000middle\u0000bottom" },
   "table.rowGroups": { "bodies": "array", "footAttrs": "object", "footRows": "integer>=0", "headAttrs": "object", "headRows": "integer>=0" },
   "table.rowGroups.bodies": { "attrs": "object", "bodyRows": "integer>=0", "headRows": "integer>=0", "rowHeadColumns": "integer>=0" },
-  "table_cell": { "align": "enum:left\u0000right\u0000center", "attrs": "object", "blocks": "array", "children": "array", "colspan": "integer", "header": "boolean", "pos": "object", "rowspan": "integer", "span": "enum:rowspan\u0000colspan", "valign": "enum:top\u0000middle\u0000bottom" },
+  "table_cell": { "align": "enum:left\u0000right\u0000center", "attrs": "object", "blocks": "array", "children": "array", "colspan": "integer>=1", "header": "boolean", "pos": "object", "rowspan": "integer>=1", "span": "enum:rowspan\u0000colspan", "valign": "enum:top\u0000middle\u0000bottom" },
   "table_row": { "attrs": "object", "cells": "array", "continuationLines": "integer>=1", "pos": "object" },
   "tag": { "attrs": "object", "name": "string", "pos": "object" },
   "text": { "attrs": "object", "pos": "object", "value": "string" },

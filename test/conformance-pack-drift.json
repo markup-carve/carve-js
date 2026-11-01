@@ -2,75 +2,10 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
-      "ticket": "markup-carve/carve#4449",
-      "cause": "the pinned pack predates the ruling that invisible lines do not consume a continuation marker",
-      "cases": [
-        "notes-ab5ed6124fb2",
-        "notes-df25868243ba",
-        "notes-e344b261ace5",
-        "notes-f9f3443c5601"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4412",
-      "cause": "the pinned pack predates the ruling that an abbreviation definition missing every container frame defines at document level",
-      "cases": [
-        "lazy-152051755b0d",
-        "lazy-353dc1c74791",
-        "lazy-7753aedc9422",
-        "plus-2bca1c74608b"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4300",
-      "cause": "the pinned spec model predates the ruled block-form boundary after a quoted term",
-      "cases": [
-        "lazy-a25e7b8f38cf"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4610",
-      "cause": "the pinned spec model predates the ruling that a tab after a marker separator is content and keeps the content column",
-      "cases": [
-        "fences-beb7a2645809",
-        "notes-d0f399e3e8f0"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4447",
-      "cause": "the pinned spec model predates the ruling that the block after an attribute run, not the run, decides whether a + attaches",
-      "cases": [
-        "attributes-5944b36aa7a1"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve#4545",
       "cause": "the pinned spec model predates the ruling that a marker between an item's columns folds unless it matches the list on every axis",
       "cases": [
-        "ownership-53d830f1834e",
-        "ownership-80748f26d9ed",
-        "ownership-baace234ff19",
-        "ownership-dc80fafb5ce9"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4479",
-      "cause": "the pinned spec model predates the ruling that a list marker at column 0 is lazy text of a list inside a description it does not reach",
-      "cases": [
-        "plus-f3825032510f",
-        "roundtrip-c5d30c150732"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4470",
-      "cause": "the pinned spec model predates the T6 ruling that a continuation cell past the last column is a new cell (carve#4530); these match the pack on carve main",
-      "cases": [
-        "inline-cb88dff1b472",
-        "plus-50d07ed355d0",
-        "plus-69d271a411f9",
-        "plus-baf998c9d969",
-        "plus-d438ebc082a8",
-        "plus-f56c0c6d25a9"
+        "ownership-baace234ff19"
       ]
     },
     {
@@ -122,8 +57,7 @@
       "ticket": "markup-carve/carve#4033",
       "cause": "an unclosed fence in a description or footnote body drops its trailing blank run",
       "cases": [
-        "fences-9caa332a8a41",
-        "fences-c9b7d1a267bf"
+        "fences-9caa332a8a41"
       ]
     },
     {
@@ -131,6 +65,55 @@
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
         "notes-4dc51b5608ab"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the ownership family that the spec bump to carve 7840b69 surfaced",
+      "cases": [
+        "ownership-08cd1743ebaf",
+        "ownership-1647bf107571",
+        "ownership-999f1d288b11",
+        "ownership-af75e477c466",
+        "ownership-bd136514e326"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the lazy family that the spec bump to carve 7840b69 surfaced",
+      "cases": [
+        "lazy-70acba91ccbd",
+        "lazy-777e736ed857",
+        "lazy-b4f620882c93",
+        "lazy-f8190f90c806"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the fences family that the spec bump to carve 7840b69 surfaced",
+      "cases": [
+        "fences-06e5e9514aab",
+        "fences-1c15b73bc154",
+        "fences-42fe4e73aeaa",
+        "fences-55cd350a4d6d",
+        "fences-6aa76a6c725f"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the plus family that the spec bump to carve 7840b69 surfaced",
+      "cases": [
+        "plus-a0f7cf7091d8",
+        "plus-c843bfd6fe62"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the roundtrip family that the spec bump to carve 7840b69 surfaced",
+      "cases": [
+        "roundtrip-3273596976e5",
+        "roundtrip-5cb05799a0e5",
+        "roundtrip-702a692a40ae"
       ]
     }
   ]
