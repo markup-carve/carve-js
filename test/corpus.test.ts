@@ -1188,6 +1188,10 @@ const IMPLEMENTED = new Set([
   'an-attribute-block-after-a-span-behind-a-guarding-opener-belongs-to-that-span',
   // carve#4752.
   'a-comment-span-in-a-quote-closes-at-an-unmarked-closer',
+  // carve#4641, carve#4680 and the shared inline cap.
+  'a-line-comment-hides-a-substitution-arrow',
+  'a-reference-label-across-a-line-stays-verbatim-in-every-form',
+  'attributed-bracket-spans-share-the-inline-cap',
 ])
 
 /**

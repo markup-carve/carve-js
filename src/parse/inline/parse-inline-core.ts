@@ -121,7 +121,7 @@ export function execLinkTail(tail: string, canReadAttrs?: (offset: number) => bo
   return [tail.slice(0, end + (attrs?.[0].length ?? 0)), scanned.dest, rest[1], rest[2], attrs?.[1]]
 }
 
-export const RE_REF_TAIL = /^\[([^\]\r\n]*)\]/
+export const RE_REF_TAIL = /^\[([^\]]*)\]/
 
 export const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 

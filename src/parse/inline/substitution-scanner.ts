@@ -1,6 +1,54 @@
 import { backtickRunEnds } from './backtick-run-index.js'
 import { extendsGrapheme } from '../../grapheme-extender.js'
 
+/**
+ * A `{~` whose `%%` comment holds the arrow forms nothing, and the comment owns the frame's `~}` (carve#4641).
+ * Maps each such comment's `%%` to the end of that closer; `openers` holds the `{~` left as text.
+ */
+export function abortedSubstitutions(text: string): { openers: Set<number>; comments: Map<number, number> } {
+  const openers = new Set<number>()
+  const comments = new Map<number, number>()
+  const codeEnds = backtickRunEnds(text)
+  const lastClosers = new Map<string, number>()
+  let open = -1
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at]
+    if (char === '\\') at++
+    else if (char === '`') {
+      const end = codeEnds![at]!
+      if (end === -1) break
+      at = end - 1
+    } else if (char === '{' && text[at + 1] === '~' && !extendsGrapheme(text, at + 2)) {
+      open = at
+      at++
+    } else if (char === '{' && open !== -1 && '=+-*/_^,'.includes(text[at + 1] ?? ' ')) {
+      // A closed span inside the frame owns a comment in it.
+      const marker = text[at + 1]!
+      const last = lastClosers.get(marker) ?? text.lastIndexOf(`${marker}}`)
+      lastClosers.set(marker, last)
+      if (last > at + 1) at = text.indexOf(`${marker}}`, at + 2) + 1
+    } else if (char === '~' && (text[at + 1] === '>' || text[at + 1] === '}')) open = -1
+    else if (char === '%' && text[at + 1] === '%' && text[at - 1] === ' ') {
+      let line = text.indexOf('\n', at)
+      if (line === -1) line = text.length
+      if (open !== -1) {
+        const arrow = text.slice(at + 2, line).indexOf('~>') + at + 2
+        const first = text.slice(at + 2, line).indexOf('~}') + at + 2
+        const close = arrow < at + 2 ? -1 : text.slice(arrow + 2, line).indexOf('~}') + arrow + 2
+        if (arrow >= at + 2 && (first < at + 2 || arrow < first) && close >= arrow + 2) {
+          openers.add(open)
+          comments.set(at, close + 2)
+          open = -1
+          at = close + 1
+          continue
+        }
+      }
+      at = line - 1
+    }
+  }
+  return { openers, comments }
+}
+
 /** Find arrows under the substitution scanner's escape and comment rules. */
 export class SubstitutionScanner {
   private first: { from: number; to: number; arrow: number } | undefined

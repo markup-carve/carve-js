@@ -31,6 +31,7 @@ import {
   RE_RAW_INLINE_STICKY,
   SMART_TOKENS,
   SubstitutionScanner,
+  abortedSubstitutions,
   allocateDashes,
   anchorRangeAt,
   applyAbbreviations,
@@ -226,6 +227,12 @@ export class InlineParseSession {
       for (const [at, close] of linkDestinations(text, newEmphasisMemo(), true)) {
         hosts.set(at, close + 1)
         if (!paired.has(at)) labels.push([at, close])
+      }
+      // A line comment hides an arrow behind it (carve#4641).
+      for (let at = text.indexOf(' %%'); at !== -1; at = text.indexOf(' %%', at + 3)) {
+        if (hosts.has(at + 1)) continue
+        const line = text.indexOf('\n', at)
+        hosts.set(at + 1, line === -1 ? text.length : line)
       }
       // An autolink or a cross-reference is atomic (PART 9 E2a): a `~>` ending one is no arrow.
       for (const [at, end] of atomicLinkRegions(text)) if (!hosts.has(at)) hosts.set(at, end)
@@ -1043,6 +1050,7 @@ export class InlineParseSession {
       shiftSource: this.shiftSource.bind(this),
       smartToken: this.smartToken.bind(this),
       substitutionAt: this.substitutionAt.bind(this),
+      substitutionAborted: this.substitutionAborted.bind(this),
       trimUnclosedRun: this.trimUnclosedRun.bind(this),
       tryInlineMatchers: this.tryInlineMatchers.bind(this),
       verbatimCellWraps: this.verbatimCellWraps.bind(this),
@@ -1604,8 +1612,24 @@ export class InlineParseSession {
   // the `/*` ... `*/` shape it stands in, whether or not that shape forms
   // (PART 9 §9 P1, §21a, carve#4042).
   inlineCommentEnd(text: string, at: number, lineEnd = this.lineEndFrom(text, at)): number {
+    const aborted = this.abortedSubstitutionsOf(text)?.comments.get(at)
+    if (aborted !== undefined) return aborted
     const close = this.shapeCloseAround(text, at) ?? (this.tailSlash && text.endsWith('*') ? this.shapeCloseAround(text + '/', at) : undefined)
     return close !== undefined && close < lineEnd ? close : lineEnd
+  }
+
+  private abortedSubstitutionCache: { text: string; found: ReturnType<typeof abortedSubstitutions> | undefined } | undefined
+
+  private abortedSubstitutionsOf(text: string): ReturnType<typeof abortedSubstitutions> | undefined {
+    if (this.abortedSubstitutionCache?.text !== text) {
+      this.abortedSubstitutionCache = { text, found: text.includes('{~') && text.includes(' %%') ? abortedSubstitutions(text) : undefined }
+    }
+    return this.abortedSubstitutionCache.found
+  }
+
+  /** Whether this `{~` is left as text because its comment holds the arrow. */
+  substitutionAborted(text: string, open: number): boolean {
+    return this.abortedSubstitutionsOf(text)?.openers.has(open) === true
   }
 
   private lineEndFrom(text: string, at: number): number {
