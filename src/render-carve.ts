@@ -1434,7 +1434,7 @@ function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTab
   }
   // A RESOLVED reference image stays a reference, for the same reason as a link.
   if (node.ref !== undefined && node.rawRef !== undefined) {
-    return node.rawRef
+    return inTable ? escapeTableReferencePipes(node.rawRef) : node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src, inTable)}${title})${attrs}`
@@ -5209,7 +5209,7 @@ class CarveRenderSession {
         }
         return `{#${node.text}#}`
       case 'heading_ref':
-        return `</#${spellCrossrefTarget(node.target)}>`
+        return `</#${ctx.tableCellDepth > 0 ? escapeTableReferencePipes(spellCrossrefTarget(node.target)) : spellCrossrefTarget(node.target)}>`
       case 'caption_number':
         return '#'
       case 'citation_group': {
