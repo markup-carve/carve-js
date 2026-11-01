@@ -53,7 +53,7 @@ it('keeps the original markers and reports only whole-set damage when pairing br
 
 it('preserves an invalid marker when no valid markers remain', () => {
   const result = migrateMarkdown(`${garbage}\nBody.\n`)
-  expect(result.value).toBe(markdownToCarveWithLosses('<!-- foo -->\nBody.\n').value.replace('<!-- foo -->', garbage))
+  expect(result.value).toBe(['```=html', garbage, '```', '', 'Body.', ''].join('\n'))
   expect(result.report.diagnostics.filter(d => d.code === 'carrier-marker-dropped')).toEqual([
     expect.objectContaining({ path: 'line:1' }),
   ])
@@ -71,7 +71,7 @@ const invalidOpener = '<!-- carve: ::: {key="x -->'
 it('drops an invalid opener together with its shape-paired closer', () => {
   const source = `${invalidOpener}\nBody.\n${closer}\n`
   const result = migrateMarkdown(source)
-  expect(result.value).toBe(markdownToCarveWithLosses(source.replaceAll('carve:', 'ordinary:')).value.replaceAll('ordinary:', 'carve:'))
+  expect(result.value).toBe(['```=html', invalidOpener, '```', '', 'Body.', '', '```=html', closer, '```', ''].join('\n'))
   expect(result.report.diagnostics.filter(d => d.code.startsWith('carrier-marker'))).toEqual([expect.objectContaining({
     code: 'carrier-marker-dropped',
     path: 'line:1',
@@ -86,8 +86,7 @@ it('restores the valid outer pair around an invalid inner pair', () => {
   const innerCloser = closer.replace(':::', '::::')
   const body = `${innerOpener}\nBody.\n${innerCloser}\n`
   const result = migrateMarkdown(`${opener}\n${body}${closer}\n`)
-  const ordinaryBody = markdownToCarveWithLosses(body.replaceAll('carve:', 'ordinary:')).value.replaceAll('ordinary:', 'carve:')
-  expect(result.value).toBe(`::: note\n${ordinaryBody}:::\n`)
+  expect(result.value).toBe(['::: note', '```=html', innerOpener, '```', '', 'Body.', '', '```=html', innerCloser, '```', ':::', ''].join('\n'))
   expect(result.report.diagnostics.filter(d => d.code.startsWith('carrier-marker'))).toEqual([expect.objectContaining({
     code: 'carrier-marker-dropped',
     path: 'line:2',

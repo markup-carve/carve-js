@@ -863,6 +863,27 @@ function rawBlockHtml(lines: readonly string[]): string[] {
   return [`${fence}=html`, content, fence]
 }
 
+/** Import a Markdown HTML block that contains exactly one comment as Carve comment syntax. */
+function markdownHtmlBlock(lines: readonly string[], sourceLine?: number): string[] {
+  const source = lines.join('\n')
+  const match = /^[ \t]*<!--([\s\S]*?)-->[ \t]*$/.exec(source)
+  if (!match || match[1]!.includes('<!--') || match[1]!.includes('-->') || /^[ \t]*<!-- carve:/.test(source)) {
+    const fence = '`'.repeat(Math.max(3, longestBacktickRun(source) + 1))
+    return [`${fence}=html`, ...lines, fence]
+  }
+  const body = match[1]!.trim()
+  importLosses.push({
+    code: 'markdown-html-comment',
+    message: 'Imported a Markdown HTML comment as a Carve comment.',
+    fidelity: 'normalized',
+    ...(sourceLine === undefined ? {} : { line: sourceLine }),
+  })
+  if (!match[1]!.includes('\n')) return [body === '' ? '%%' : `%% ${body}`]
+  const width = Math.max(3, ...body.split('\n').map(line => /^%{3,}[ \t]*$/.test(line) ? line.trimEnd().length + 1 : 3))
+  const fence = '%'.repeat(width)
+  return [fence, ...body.split('\n'), fence]
+}
+
 function scanHtmlTag(
   s: string,
   start: number,
@@ -3022,13 +3043,13 @@ import { replaceLoneSurrogates } from './well-formed.js'
 
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
-    | 'carrier-marker-dropped' | 'carrier-markers-damaged' | 'raw-code-fallback'
+    | 'carrier-marker-dropped' | 'carrier-markers-damaged' | 'raw-code-fallback' | 'markdown-html-comment'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
   confidence?: 'exact' | 'inferred' | 'fallback'
   /** Overrides the code's default, where the construct survives the text does not. */
-  fidelity?: 'degraded'
+  fidelity?: 'degraded' | 'normalized'
 }
 
 
@@ -8195,10 +8216,10 @@ function writeHeldBlock(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
   // nested item whose content starts at column 4 it is an ordinary block.
   const contained = containerHtmlBlockAt(lines, i, listCols, quoteMarkers)
   if (contained) {
-    const fence = '`'.repeat(Math.max(3, longestBacktickRun(contained.lines.join('\n')) + 1))
+    const converted = markdownHtmlBlock(contained.lines, st.sourceLine(i))
     const prefix = contained.prefix.includes('>') ? contained.prefix
       : ' '.repeat(Math.max(0, contentCol + listMarkers.shiftAt(contentCol)))
-    for (const [offset, emitted] of [`${fence}=html`, ...contained.lines, fence].entries()) {
+    for (const [offset, emitted] of converted.entries()) {
       const linePrefix = offset === 0 ? contained.openerPrefix ?? prefix : prefix
       out.push(emitted === '' ? linePrefix.trimEnd() : linePrefix + emitContainerLine(emitted, 'verbatim', {
         listDepth: listCols.length, quoteDepth: quoteDepth(prefix), prefix,
@@ -8292,7 +8313,7 @@ function writeHeldBlock(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
   const htmlBlock = htmlBlockAt(lines, i)
   if (htmlBlock) {
     if (st.prevType !== 'blank' && out.length > 0) out.push('')
-    out.push(...rawBlockHtml(htmlBlock.lines))
+    out.push(...markdownHtmlBlock(htmlBlock.lines, st.sourceLine(i)))
     i = htmlBlock.end
     if (markdown.endsWith('\n') && i >= lines.length - 2) st.terminalHtmlBlock = true
     if (i + 1 === lines.length - 1 && lines[i + 1] === '') {

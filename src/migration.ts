@@ -113,7 +113,7 @@ export function migrateMarkdownWithDestinations(
       // `frontmatter-synthesized` records a DECISION between two readings, not
       // a loss: the mapping is carried over whole. The other codes name
       // something the conversion could not spell.
-      severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
+      severity: loss.code === 'frontmatter-synthesized' || loss.code === 'markdown-html-comment' ? 'info' : 'warning',
       // `normalized`, not `preserved`: a bare `---` block becoming front
       // matter is an alternate block form resolved, which is what the term
       // covers in docs/format-bridges.md (markup-carve/carve#2806).

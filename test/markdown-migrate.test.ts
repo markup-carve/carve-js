@@ -410,11 +410,11 @@ describe('markdownToCarve — raw HTML migration', () => {
     expect(carveToHtml(carve)).toBe('<div class="x">\n  <span>hi</span>\n</div>\n<p>after</p>')
   })
 
-  it('preserves an HTML comment block', () => {
+  it('imports an HTML comment block as a Carve comment', () => {
     const md = ['<!-- keep "this"', 'and `that` -->', '', 'after'].join('\n')
-    const carve = ['```=html', '<!-- keep "this"', 'and `that` -->', '```', '', 'after'].join('\n')
+    const carve = ['%%%', 'keep "this"', 'and `that`', '%%%', '', 'after'].join('\n')
     expect(conv(md)).toBe(carve)
-    expect(carveToHtml(carve)).toBe('<!-- keep "this"\nand `that` -->\n<p>after</p>')
+    expect(carveToHtml(carve)).toBe('<p>after</p>')
   })
 
   it('preserves inline HTML in a sentence as raw html', () => {

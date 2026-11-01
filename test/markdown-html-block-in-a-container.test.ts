@@ -54,7 +54,7 @@ describe('a block-level HTML element inside a container', () => {
 
     it('reads an HTML comment as a block', () => {
       const carve = markdownToCarve('> a\n>\n> <!-- c -->\n')
-      expect(carve).toBe('> a\n>\n> ```=html\n> <!-- c -->\n> ```\n')
+      expect(carve).toBe('> a\n>\n> %% c\n')
       expect(carveToHtml(carve)).not.toContain('<p><!-- c -->')
     })
 
@@ -108,8 +108,8 @@ describe('a block-level HTML element inside a container', () => {
 
     it('reads an HTML comment as a block', () => {
       const carve = markdownToCarve('- a\n\n  <!-- c -->\n')
-      expect(carve).toBe('{loose}\n- a\n\n  ```=html\n  <!-- c -->\n  ```\n')
-      expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<!-- c -->[\s\S]*<\/li>/)
+      expect(carve).toBe('{loose}\n- a\n\n  %% c\n')
+      expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<\/li>/)
     })
 
     it('CONTROL: an inline element in the same position stays inline', () => {
