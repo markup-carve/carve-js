@@ -14,12 +14,13 @@ describe('a blank inside a marker-line note', () => {
     ['second note paragraph', '- [^n]: text\n\n    more\n- b\n'],
     ['closed fence', '- [^n]: text\n\n    ```\n    x\n    ```\n- b\n'],
     ['comment alone', '- [^n]: text\n\n    %% c\n- b\n'],
+    // carve#4639 ruling B: a one-line note lead is invisible, so the blank after it separates nothing.
+    ['item paragraph at its content column', '- [^n]: text\n\n  own\n'],
   ])('keeps the list tight: %s', (_name, src) => {
     expect(tight(src)).toBe(true)
   })
 
   it.each([
-    ['item paragraph at its content column', '- [^n]: text\n\n  own\n'],
     ['paragraph after a comment closed the note', '- [^n]: text\n    %% c\n\n    more\n- b\n'],
     ['paragraph after a blank, comment and blank', '- [^n]: text\n\n    %% c\n\n    more\n- b\n'],
     ['blank after the comment that closed the note', '- [^n]: text\n\n    %% c\n\n    %% d\n- b\n'],
