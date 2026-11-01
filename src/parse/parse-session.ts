@@ -256,11 +256,15 @@ function openFenceCloser(lines: readonly string[]): string | null {
       if (fenceCloseRe(run).test(text)) run = null
       continue
     }
-    const opener = text.replace(/^(?:(?:[-*]|[0-9]+[.)]) +)+/, '')
+    const afterItems = text.replace(/^(?:(?:[-*]|[0-9]+[.)]) +)+/, '')
+    // A description or note marker line holds its fence at its body column (carve#4047).
+    const hosts = /^(?:: )?(?:\[\^[^\]]+\]: )*(?! )/.exec(afterItems)?.[0] ?? ''
+    const opener = afterItems.slice(hosts.length)
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     if (code !== null) {
       run = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      column = opener === text ? line.length - text.length : -1
+      const hostDepth = hosts.match(/(?:^:|\]:) /g)?.length ?? 0
+      column = afterItems === text ? line.length - text.length + hostDepth * FOOTNOTE_BODY_COLUMN : -1
     }
   }
   // A marker-line fence ends with its item at the separator.
