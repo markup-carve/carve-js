@@ -145,6 +145,18 @@ function comparisonEquals(text: string, at: number): boolean {
   return comparisonCache.at.has(at)
 }
 
+function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1 {
+  const prev = text[at - 1]
+  if (prev === undefined || isCarveWhitespace(prev)) return 0
+  const next = text[at + 1]
+  // An inner word delimiter declines the entire bare candidate (carve#4810).
+  if (wordBefore(text, at) && next && wordAfter(text, at + 1)) return -1
+  if (next && wordAfter(text, at + 1)) return 0
+  if (extendsGrapheme(text, at + 1)) return 0
+  if (delim === '=' && comparisonEquals(text, at)) return 0
+  return 1
+}
+
 // Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
 // `guarded`: it opens only where that character is an open entry on the
 // stack (the PART 3 note under the bare templates, carve#3973 X1).
@@ -1619,16 +1631,9 @@ export class InlineParseSession {
         }
       }
       if (ch === delim) {
-        // Closer must not be preceded by whitespace (CARVE-P3-013).
-        const prev = text[j - 1]
-        if (prev === undefined || isCarveWhitespace(prev)) continue
-        const next = text[j + 1]
-        // Word-boundary closer (spec §9): no bare delimiter closes when followed
-        // by an alphanumeric. Applies to every delimiter, not just / and _.
-        if (next && wordAfter(text, j + 1)) continue
-        if (extendsGrapheme(text, j + 1)) continue
-        if (delim === '=' && comparisonEquals(text, j)) continue
-        return j
+        const decision = bareCloserDecision(text, j, delim)
+        if (decision < 0) return -1
+        if (decision > 0) return j
       }
     }
     return -1

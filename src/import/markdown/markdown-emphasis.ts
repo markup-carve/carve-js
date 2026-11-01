@@ -1,6 +1,6 @@
 import { MAX_NESTING_DEPTH } from '../../parse.js'
 import { extendsGrapheme } from '../../grapheme-extender.js'
-import { emphasisNeedsBraces, renderForcedEmphasis } from '../../render-carve.js'
+import { emphasisNeedsBraces, hasInnerWordDelimiter, renderForcedEmphasis } from '../../render-carve.js'
 
 interface Run {
   start: number
@@ -252,7 +252,8 @@ function closingSpanNeedsBraces(ctx: BraceContext, frame: Frame, pair: Pair, fir
   const bodyBoundary = pair.kind === '/' && first === '*' || pair.kind === '*' &&
     (source[pair.close - 2] === '\\' && source[pair.close - 1] === '*' || bodyValue.endsWith('\\*'))
   return emphasisNeedsBraces(pair.kind, first + last, beforeSpelled, afterSpelled,
-    scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary)
+    scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary ||
+    hasInnerWordDelimiter(pair.kind, source.slice(bodyStart, pair.close)))
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
