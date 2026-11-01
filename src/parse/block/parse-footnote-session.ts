@@ -283,7 +283,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     // A line leaving a nested note's body is still that note's lazy line (carve#3885),
     // and a line inside a fence this body opened is its payload.
-    if (lazyState.opaque === null && nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, sourceLine) &&
+    if (admission.kind !== 'content' && lazyState.opaque === null &&
+        nestedSourceBodyLeft(lexer, defLineIndex, nestedSourceBodyColumn, sourceLine) &&
         !(pendingBlankRun.count === 0 && nestedParagraphStillOpen() &&
           !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))) return 'stop'
     if (admission.kind === 'blank') {

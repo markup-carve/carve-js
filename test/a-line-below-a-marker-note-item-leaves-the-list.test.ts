@@ -66,7 +66,7 @@ below</li>
 </section>`)
 })
 
-it("leaves the list after the following nested item closes its fence", () => {
+it("keeps the following nested item in the outer note after its fence closes", () => {
   const source = `- [^a]: text
     more
     [^b]: inner
@@ -83,14 +83,7 @@ below
 [^a] [^b]
 `
   expect(carveToHtml(source)).toBe(`<ul>
-  <li>
-    <ul>
-      <li>sub
-        <pre><code>x
-</code></pre>
-      </li>
-    </ul>
-  </li>
+  <li></li>
 </ul>
 <p>below</p>
 <p><a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> <a id="fnref2" href="#fn2" role="doc-noteref"><sup>2</sup></a></p>
@@ -99,7 +92,14 @@ below
   <ol>
     <li id="fn1">
       <p>text
-more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+more</p>
+      <ul>
+        <li>sub
+          <pre><code>x
+</code></pre>
+        </li>
+      </ul>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
     <li id="fn2">
       <p>inner

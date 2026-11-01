@@ -3,13 +3,6 @@
   "entries": [
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the fences family",
-      "cases": [
-        "fences-a6ede733e700"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
         "lazy-10bd0503f93b",
@@ -20,14 +13,8 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the notes family",
       "cases": [
-        "notes-20961955aeb0",
-        "notes-2ce0a0643b77",
         "notes-39d1eedf337b",
-        "notes-47da77f91f9b",
-        "notes-a6dae860b308",
-        "notes-ae1372f30051",
-        "notes-de959a3190f7",
-        "notes-eb2cca00af0d"
+        "notes-de959a3190f7"
       ]
     },
     {
