@@ -3309,17 +3309,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sourceColumn(rootLine, itemQuoteDepth) < previousVisibleSpan.startColumn - 1
         const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
           authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
-        // A one-line note lead is invisible (§17 L1b); the model reads a note's later body lines as visible.
+        // A lazy note paragraph owns the blank before the item's first child.
+        // Once the note ends on a block-shaped line, that blank separates the
+        // closed note run from the item's paragraph instead.
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem) {
           let noteEndLine = lexer.lineNumber(itemStartLineIndex)
+          let noteEndsOnBlock = false
           for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
             const source = nestedSourceLines[index] ?? ''
             if (nestedLineNumbers[index]! >= span.start || isBlankLine(nested[index] ?? '') ||
                 isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
             noteEndLine = nestedLineNumbers[index]!
+            noteEndsOnBlock = lineOpensItemBlock(source.trimStart())
             break
           }
-          if (noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
+          if (noteEndsOnBlock && noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
               session.hasAuthoredBlankBetween(lexer, noteEndLine, span.start, opaqueBlankLines)) loose = true
         }
         let previousVisibleEnd = previousVisibleSpan?.end
