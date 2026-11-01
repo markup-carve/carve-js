@@ -117,7 +117,7 @@ it.each(['b. x', 'A) x', 'i. x', 'IV. x'])(
   'keeps a lettered or roman ordered marker after a heading separate: %s',
   (marker) => {
     const source = '# a\n' + marker + '\n'
-    expect(djotToCarve(source)).toBe(source)
+    expect(djotToCarve(source)).toBe('# a\n' + marker.replace(/^([A-Za-z]+\.) /, '$1  ') + '\n')
     const html = carveToHtml(djotToCarve(source))
     expect(html).toContain('<h1>a</h1>')
     expect(html).toContain('<ol')

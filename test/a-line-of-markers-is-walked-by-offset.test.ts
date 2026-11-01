@@ -40,8 +40,8 @@ describe('a container prefix is walked by offset', () => {
     'an ordered marker': '1. ',
     'a paren-delimited marker': '1) ',
     'a bare-dot marker': '. ',
-    'a roman marker': 'iv. ',
-    'a letter marker': 'A. ',
+    'a roman marker': 'iv.  ',
+    'a letter marker': 'A.  ',
     'a task box': '- [x] ',
     'an abutting attribute block': '-{#a} ',
     // The payload is unbounded, so it is the one part of a marker that a fixed

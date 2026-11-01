@@ -205,7 +205,8 @@ function matchMarker(rest: string): { width: number; head: number; axes: string;
     return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: false }
   }
   m = ORDERED.exec(line)
-  if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3])) {
+  if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3]) &&
+      !(m[2] === '.' && /^[A-Za-z]+$/.test(m[1]!) && m[4]!.length < 2)) {
     return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]!, task: false, token: m[1]! }
   }
   return null

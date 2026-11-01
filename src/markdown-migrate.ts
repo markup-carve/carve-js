@@ -3121,8 +3121,9 @@ const isDefinitionPayload = (payload: string): boolean => /^::[ \t]/.test(payloa
 function carrierListStyle(payload: string, start?: number): List['olType'] | undefined {
   const markers = /^([A-Za-z]+[.)])(?: ([A-Za-z]+[.)]))?$/.exec(payload)
   if (!markers) return undefined
+  const probe = (marker: string): string => `${marker}${marker.endsWith('.') ? '  ' : ' '}item`
   if (markers[2] !== undefined) {
-    const node = parse(`${markers[1]} item\n${markers[2]} item\n`).children[0]
+    const node = parse(`${probe(markers[1]!)}\n${probe(markers[2])}\n`).children[0]
     return node?.type === 'list' && node.ordered && node.items.length === 2 ? node.olType : undefined
   }
   const first = markers[1]!.slice(0, -1)
@@ -3131,7 +3132,7 @@ function carrierListStyle(payload: string, start?: number): List['olType'] | und
     if (roman === start) return first === first.toLowerCase() ? 'i' : 'I'
     if (first.toLowerCase().charCodeAt(0) - 96 === start) return first === first.toLowerCase() ? 'a' : 'A'
   }
-  const node = parse(`${payload} item\n`).children[0]
+  const node = parse(`${probe(payload)}\n`).children[0]
   return node?.type === 'list' && node.ordered ? node.olType : undefined
 }
 
@@ -3721,7 +3722,7 @@ function restoreCarrierMarkers(carve: string): string {
               if (!item.pos) continue
               const line = item.pos.startLine - 1
               sourceLines[line] = sourceLines[line]!.replace(/^([ \t>]*?)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
-                `${lead}${orderedMarker((list.start ?? 1) + index, style)}${delim}`)
+                `${lead}${orderedMarker((list.start ?? 1) + index, style)}${delim}${delim === '.' ? ' ' : ''}`)
             }
           }
         }
@@ -7494,7 +7495,7 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
         if (!item.pos) return undefined
         const line = item.pos.startLine - 1
         lines[line] = lines[line]!.replace(/^([ \t]*)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
-          `${lead}${orderedMarker((list.start ?? 1) + itemIndex, style)}${delim}`)
+          `${lead}${orderedMarker((list.start ?? 1) + itemIndex, style)}${delim}${delim === '.' ? ' ' : ''}`)
       }
     }
   }

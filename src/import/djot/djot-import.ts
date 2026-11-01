@@ -560,6 +560,15 @@ function convertDjotBlockMarkers(source: string): string {
     if ((masked[i] ?? '').trim() === '') continue
     const contentAt = /^[ \t]*/.exec(lines[i]!)![0].length
     if (masked[i]![contentAt] !== lines[i]![contentAt]) continue
+    // Djot accepts one space after a letter-dot item; Carve requires two.
+    // Keep the marker a list when migrating, including below quote prefixes.
+    const letterDot = /^([ \t]*(?:>[ \t]*)*)([A-Za-z]+)(\.(?:\{[^}\n]*\})?) (?! )(?=\S)/.exec(masked[i]!)
+    const token = letterDot?.[2] ?? ''
+    const roman = /^(?=[MDCLXVI]+$)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/i.test(token)
+    const invisibleBody = letterDot && /^(?:\[\^[^\]\n]+\]:|%%%%|\x00DJOTEMPTYNOTE)/.test(lines[i]!.slice(letterDot[0].length))
+    if (letterDot && !invisibleBody && lines[i]!.startsWith(letterDot[0]) &&
+        (token.length === 1 || roman && (token === token.toLowerCase() || token === token.toUpperCase())))
+      lines[i] = lines[i]!.replace(/^([ \t]*(?:>[ \t]*)*[A-Za-z]+\.(?:\{[^}\n]*\})?) (?! )/, '$1  ')
     let view = lines[i]!
     const prefix =
       /^(?:[ \t]*> ?|[ \t]*(?:(?:[-*+]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-zA-Z])[.)]|\([0-9A-Za-z]+\)) +(?:\[[ xX]\] +)?|: |\[\^[^\]\r\n]+\]: +))/

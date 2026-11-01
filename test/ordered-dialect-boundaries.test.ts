@@ -13,10 +13,10 @@ describe('an ordered dialect cannot cross a hard list boundary', () => {
       expect(carveToHtml(imported.value)).toBe(row.html)
     })
   }
-  it('three blanks inside the item body do not end the sibling search', () => {
-    expect(carveToHtml('x. one\n\n\n\n   body\n\nxi. two\n')).toContain('<ol type="i" start="10">')
+  it('three blanks leave the later roman marker separate', () => {
+    expect(carveToHtml('x.  one\n\n\n\n   body\n\nxi.  two\n')).toContain('<ol type="i" start="11">')
   })
   it('two blank lines still permit the sibling tie-break', () => {
-    expect(carveToHtml('v. x\n\n\nvi. y\n')).toContain('<ol type="i" start="5">')
+    expect(carveToHtml('v.  x\n\n\nvi.  y\n')).toContain('<ol type="i" start="5">')
   })
 })

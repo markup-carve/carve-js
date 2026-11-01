@@ -80,7 +80,7 @@ describe('ordered list indentation (Model A: content column)', () => {
   })
 
   it('an ordered dialect change at the base column still starts a new list (§11)', () => {
-    expect(h('1. a\nb. c')).toBe(
+    expect(h('1. a\nb.  c')).toBe(
       '<ol>\n  <li>a</li>\n</ol>\n<ol type="a" start="2">\n  <li>c</li>\n</ol>',
     )
   })
@@ -144,7 +144,7 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
   })
 
   it('keeps a base-column ordered dialect change as a new list (§11)', () => {
-    expect(h('1. a\nb. c')).toBe(
+    expect(h('1. a\nb.  c')).toBe(
       '<ol>\n  <li>a</li>\n</ol>\n<ol type="a" start="2">\n  <li>c</li>\n</ol>',
     )
   })

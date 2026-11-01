@@ -2,13 +2,13 @@ import { expect, it } from 'vitest'
 import { carveToHtml, lintCarve } from '../src/index.js'
 
 it('preserves Unicode separators in list marker payloads', () => {
-  for (const marker of ['- ', '* ', '1. ', 'a. ', '- [x] ', '-{#x} ', '2.{#x} ']) {
+  for (const marker of ['- ', '* ', '1. ', 'a.  ', '- [x] ', '-{#x} ', '2.{#x} ']) {
     for (const separator of ['\u2028', '\u2029']) {
       for (const ending of ['\n', '\r\n', '\r']) {
         const source = `${marker}before${separator}after${ending}`
         const html = carveToHtml(source)
         const payload = `before${separator}after`
-        const opening = marker === 'a. ' ? '<ol type="a">' : marker === '2.{#x} '
+        const opening = marker === 'a.  ' ? '<ol type="a">' : marker === '2.{#x} '
           ? '<ol start="2">' : marker === '1. ' ? '<ol>' : marker === '- [x] ' ? '<ul class="task-list">' : '<ul>'
         const li = marker.includes('{#x}') ? '<li id="x">' : marker === '- [x] ' ? '<li data-task-state="x">' : '<li>'
         const content = marker === '- [x] '

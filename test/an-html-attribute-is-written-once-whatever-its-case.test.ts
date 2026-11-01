@@ -8,7 +8,7 @@ const h = (s: string) => carveToHtml(s).replace(/>\s+</g, '><').trim()
 // authored copy of its name.
 describe('an HTML attribute is written once, whatever its case', () => {
   it('omits an authored copy of a structural attribute', () => {
-    expect(h('{type=x}\na. alpha')).toBe('<ol type="a"><li>alpha</li></ol>')
+    expect(h('{type=x}\na.  alpha')).toBe('<ol type="a"><li>alpha</li></ol>')
     expect(h('{START=9}\n3. x')).toBe('<ol start="3"><li>x</li></ol>')
     expect(h('{data-delim=x}\na) alpha')).toBe('<ol type="a" data-delim=")"><li>alpha</li></ol>')
     expect(h('![a](/u.png){ALT=z}')).toBe('<img src="/u.png" alt="a">')
