@@ -6,6 +6,7 @@
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
         "lazy-10bd0503f93b",
+        "lazy-21cb87fd7067",
         "lazy-541f9f3b620e"
       ]
     },
@@ -22,14 +23,21 @@
       "cause": "untriaged day-one drift in the ownership family",
       "cases": [
         "ownership-19a15d4c0b00",
-        "ownership-498f1450c332"
+        "ownership-31696bef6f5e",
+        "ownership-498f1450c332",
+        "ownership-aec21029593f",
+        "ownership-fed027499f76"
       ]
     },
     {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the roundtrip family",
       "cases": [
-        "roundtrip-73c51797f6b8"
+        "roundtrip-2ca215ed4cc3",
+        "roundtrip-600b6e265ced",
+        "roundtrip-73c51797f6b8",
+        "roundtrip-95c287319027",
+        "roundtrip-ef2690538ca4"
       ]
     },
     {
@@ -44,6 +52,21 @@
       "cause": "untriaged drift in the plus family that the spec bump to carve 7840b69 surfaced",
       "cases": [
         "plus-a0f7cf7091d8"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the fences family exposed by spec pin 4484a51",
+      "cases": [
+        "fences-12567203d079",
+        "fences-a46060654787"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "untriaged drift in the attributes family exposed by spec pin 4484a51",
+      "cases": [
+        "attributes-039947672a58"
       ]
     }
   ]

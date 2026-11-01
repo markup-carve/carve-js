@@ -3324,6 +3324,13 @@ class CarveRenderSession {
       let previousBlock: BlockNode | null = null
       let previousMoved = false
       for (const block of blocks) {
+        // A collected definition between two description lists is the boundary
+        // that kept them separate in this tree. Write it at that boundary before
+        // the document-level pass moves it out of its host.
+        if (previousBlock?.type === 'definition_list' && block.type === 'definition_list' && parts.length > 0) {
+          const definition = this.definitionInGap(previousBlock, block, ctx)
+          if (definition !== undefined) parts[parts.length - 1] += `\n${definition}`
+        }
         if (item === undefined && previousBlock !== null && parts.length > 0) {
           const footnote = this.listFootnoteAfter(previousBlock, block, ctx)
           if (footnote !== undefined) parts[parts.length - 1] += `\n${footnote}`
@@ -4595,8 +4602,11 @@ class CarveRenderSession {
     // So the body's blocks are written at two, and the ONE block whose payload
     // needs the third column asks for it by itself - see `atARaisedBase`.
     // CARVE-P9-083: a list on the marker line is measured from its own column, so its lines follow it there.
-    // A fence on that item keeps the body column, as the reader does.
-    const lead = blocks[0]?.type === 'list' && blocks[0].items[0]?.children[0]?.type !== 'code_block'
+    // A fence with content on that item uses the item's content column.
+    // An empty, lone fence has no continuation to place at that column.
+    const lead = blocks[0]?.type === 'list' &&
+      (blocks.length > 1 || blocks[0].items[0]?.children[0]?.type !== 'code_block' ||
+        blocks[0].items[0].children[0].content !== '')
     const indent = lead ? ' '.repeat(defLines[0]!.length - (body.split('\n')[0]?.length ?? 0)) : '  '
     for (const line of lines) defLines.push(line ? `${indent}${line}` : line)
     return defLines.join('\n')
