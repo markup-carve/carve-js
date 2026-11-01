@@ -847,7 +847,7 @@
   {
     "id": "review8-c04-marker-payload-frame-014",
     "source": "- ::: |\n  ::: in\n    - a\n    %%%\n  %%%\n  - - ::: |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::: in<br>\n&nbsp;&nbsp;- a<br>\n&nbsp;&nbsp;%%%<br>\n<br>\n- - ::: |<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::: in<br>\n&nbsp;&nbsp;- a<br>\n- - ::: |<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-012",

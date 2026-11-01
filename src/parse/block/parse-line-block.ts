@@ -4,7 +4,7 @@ import type { LinkDef } from '../inline/inline-resolution.js'
 import type { BlockNode, Comment, InlineNode, LineBlock, Paragraph, Position } from '../../ast.js'
 import { trimNonNbsp } from '../../trim-non-nbsp.js'
 
-const RE_VERSE_COMMENT_OPEN = /^(%{3,})(.*)$/
+const RE_VERSE_COMMENT_OPEN = /^ {0,3}(%{3,})(.*)$/
 const RE_VERSE_COMMENT_RUN = /^[ \t]*(%{3,})/
 
 export interface LineBlockHost {
@@ -61,8 +61,8 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       fenceWidth: fence,
     })
     // A closed `%%%` pair leaves no verse line, and a blank line in its body
-    // splits no stanza (CARVE-P9-047). Only an opener whose first character is
-    // `%` qualifies; the closer may be indented and matches on exact run length.
+    // splits no stanza (CARVE-P9-047). An opener may be indented up to 3 spaces;
+    // the closer may be indented and matches on exact run length.
     const commentRun = (text: string): number | undefined => RE_VERSE_COMMENT_RUN.exec(stripLazyFrame(text))?.[1]!.length
     const lastCloser = new Map<number, number>()
     body.forEach(({ text }, index) => {

@@ -12,7 +12,7 @@
   {
     "id": "review-C",
     "source": "::: |\n- ::: |\n  %%%\n  :::\n%%%\n:::\n",
-    "html": "<div class=\"line-block\"><p>- ::: |<br>\n&nbsp;&nbsp;%%%<br>\n&nbsp;&nbsp;:::<br></p></div>"
+    "html": "<div class=\"line-block\"><p>- ::: |</p></div>"
   },
   {
     "id": "review-D",

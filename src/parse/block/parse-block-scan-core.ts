@@ -1213,6 +1213,9 @@ export function nestedColonLexer(parent: Lexer, body: ColonFenceBody, start: num
   return sub
 }
 
+const RE_COLON_RUN = /^[ \t]*:{3}/
+const RE_ENDS_PARAGRAPH = /^[ \t]*$|^[ \t]*(?:#{1,6}[ \t]|>|`{3}|~{3}|\|)/
+
 export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBody {
   const origin = lexer.contiguousOrigin
   const index = (origin?.lexer ?? lexer).colonFenceEnds
@@ -1227,15 +1230,21 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
   }
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
+  // A paragraph holding an invalid opener absorbs a bare run of another width (CARVE-P9-016, carve#4550).
+  let absorbing = false
   while (!lexer.eof()) {
     if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
+      absorbing = false
+      continue
+    }
     const close = RE_ADMONITION_CLOSE.exec(text)
 
     if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
       lexer.consume()
+      absorbing = false
       const closed = stack.pop()!
       index.set(base + closed.lineIndex, base + lineIndex)
       if (stack.length === 0) break
@@ -1246,7 +1255,11 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
     lexer.consume()
     lines.push({ text, lineIndex })
     if (stack.at(-1)!.kind === 'line block') continue
+    if (close && absorbing) continue
     const openerLen = colonFenceOpenerLen(text)
+    if (openerLen === null) {
+      absorbing = !RE_ENDS_PARAGRAPH.test(text) && (absorbing || RE_COLON_RUN.test(text))
+    } else absorbing = false
     if (openerLen !== null) {
       stack.push({
         kind: colonFenceKind(text),
