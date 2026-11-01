@@ -4090,6 +4090,17 @@ class CarveRenderSession {
         ) rendered = '\\+'
         if (b.type === 'paragraph' && !separated) rendered = guardLeadingPlusBelowList(rendered, previousEmitted, true)
         if (rendered.length === 0) return
+        // An authored blank run ends the nested list before this comment.
+        // Keep that boundary or readback assigns the comment to the last
+        // nested item and joins the following list to it.
+        if (b.type === 'comment' && previousEmitted?.type === 'list' &&
+            b.pos?.startLine !== undefined && previousEmitted.pos?.endLine !== undefined &&
+            b.pos.startLine - previousEmitted.pos.endLine >= 3) {
+          parts.push(`${this.boundaryTag()}${rendered}`)
+          previousEmitted = b
+          previousAtMarkerColumn = false
+          return
+        }
         if (b.type === 'definition_list') {
           if (previousDescriptionList) {
             parts.push(`${this.boundaryTag()}${rendered}`)
