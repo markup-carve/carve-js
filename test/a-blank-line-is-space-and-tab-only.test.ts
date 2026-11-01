@@ -109,14 +109,13 @@ describe('the definition prepass', () => {
     expect(html).toContain('<abbr title="Ay">A</abbr>')
   })
 
-  it('does not keep a footnote body open across a mark line', () => {
-    // `inFootnoteBody`. A mark-only line at column 0 is content, so it leaves
-    // the body; the indented `[r]: /u` is then below no open column and defines
-    // nothing, which is what the rendered text already says.
+  it('collects a definition at its content column after a mark line', () => {
+    // The mark-only line remains content. PART 0 S3 also admits the later
+    // definition at or past the document's content column.
     const html = carveToHtml('[^f]: note\n﻿\n  [r]: /u\n\n[link][r] text[^f]\n')
 
-    expect(html).toContain('[r]: /u')
-    expect(html).not.toContain('href="/u"')
+    expect(html).not.toContain('[r]: /u')
+    expect(html).toContain('href="/u"')
   })
 
   it('does not keep a continuation marker open across a mark line', () => {
