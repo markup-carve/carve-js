@@ -85,20 +85,6 @@ const files = readdirSync(vectorDir)
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
 const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>([
-  ['i02-directive-in-a-table-cell', [{ field: 'fmt', value: '|= A |= {{ c.crv }} |\n| 1 | 2 |\n', reason: 'carve#3784 native table headers' }]],
-  ...[
-    ['i01-lines-bom-only-file-has-no-lines', '<p>{{ bom.txt @lines:1-1 @code }}</p>'],
-    ['i01-lines-start-past-the-end-code', '<p>{{ two.txt @lines:3-3 @code }}</p>'],
-    ['i01c-code-marker-block-closer-on-the-same-line', '<p>{{ a.css @region:demo @code:css }}</p>'],
-    ['i01c-code-marker-keyword-is-case-sensitive', '<p>{{ a.js @region:demo @code:js }}</p>'],
-    ['i01c-code-section-conflict', '<p>{{ child #intro @code:js }}</p>'],
-    ['i01-repeated-option-bare-code-and-language', '<p>{{ a.js @code @code:js }}</p>'],
-    ['i01-repeated-option-code-language', '<p>{{ a.js @code:js @code:py }}</p>'],
-    ['i01-repeated-option-lines', '<p>{{ a.js @lines:1-1 @lines:3-3 @code }}</p>'],
-    ['i01-repeated-option-shift', '<p>{{ a.js @shift:1 @shift:2 @code }}</p>'],
-    ['i01c-code-language-must-be-a-language-token', '<p>{{ a.js @code:=html }}</p>'],
-  ].map(([name, html]): [string, Array<{ field: string; value: unknown; reason: string }>] =>
-    [name, [{ field: 'html', value: html, reason: 'a refused code include is literal under PART 10 I2 (#3759)' }]]),
 ])
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.

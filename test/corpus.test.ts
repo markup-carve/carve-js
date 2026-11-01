@@ -34,14 +34,14 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
-  'a-below-column-line-returns-to-its-definition-body',
+  'a-follower-at-a-body-hosted-item-s-marker-column-attaches-to-the-item',
   'a-below-column-term-stays-in-the-footnote-paragraph',
   'a-closed-footnote-child-releases-a-flush-line',
   'a-content-tab-does-not-hide-a-description-boundary',
   'a-description-keeps-a-list-marker-below-its-hosted-footnote',
   'a-footnote-heading-does-not-loosen-its-host-item',
   'a-generic-extension-parses-its-captured-content-as-inline-content',
-  'a-heading-inside-the-intervening-band-stays-description-text',
+  'a-heading-past-a-body-hosted-item-s-marker-column-refuses-its-plus-and-opens-in-the-description',
   'a-hosted-footnote-keeps-a-heading-at-its-body-floor',
   'a-lazy-line-keeps-its-plus-through-three-quote-levels',
   'a-literal-bracket-run-bounds-emphasis-like-a-resolved-one',
@@ -67,7 +67,7 @@ const IMPLEMENTED = new Set([
   'opaque-reference-and-inline-bounds',
   'the-deepest-quoted-paragraph-takes-a-lazy-line-across-missed-prefixes',
   'visible-footnote-headings',
-  'a-nested-first-block-item-releases-the-next-root-block',
+  'a-nested-item-whose-plus-is-refused-releases-the-next-root-block',
   'compact-single-paragraph-quote',
   'consecutive-continuation-markers-in-a-div-hosted-quote',
   'invalid-line-range-includes-within-paragraphs-stay-literal',
@@ -97,7 +97,7 @@ const IMPLEMENTED = new Set([
   'a-reference-definition-needs-a-separator-before-its-destination',
   'a-resolved-reference-image-also-leaves-the-checkbox-unnamed',
   'a-tabbed-table-ends-before-a-flush-left-list-line',
-  'an-indented-line-after-a-table-is-a-paragraph',
+  'an-indented-row-after-a-table-continues-it',
   'an-invalid-attribute-block-leaves-a-definition-as-prose',
   'an-unclosed-backtick-run-still-forms-math',
   'an-unresolved-symbol-leaves-a-colon-before-a-quote',
@@ -133,8 +133,8 @@ const IMPLEMENTED = new Set([
   'a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns',
   'a-caption-after-a-continuation-marker-fence-stays-with-the-fence',
   'a-column-zero-marker-below-an-open-div-attaches-beside-the-div',
-  'a-continuation-marker-stands-alone-at-column-zero-or-right-after-a-block-opener',
-  'a-dangling-plus-marker-adds-nothing-and-a-nested-quote-reads-it-like-an-unnested-one',
+  'a-continuation-marker-stands-alone-at-an-open-marker-column-or-right-after-a-block-opener',
+  'a-dangling-plus-is-a-letter-and-a-nested-quote-reads-it-like-an-unnested-one',
   'a-fence-closer-outside-the-child-folds-and-leaves-the-child-open',
   'a-fence-run-folded-into-a-child-paragraph-loosens-the-outer-item',
   'a-fence-run-folded-into-a-child-paragraph-loosens-the-outer-item-when-it-closes-at-the-outer-column',
@@ -219,7 +219,7 @@ const IMPLEMENTED = new Set([
   'an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not',
   'a-boolean-attribute-does-not-start-with-an-underscore',
   'a-braced-hyphen-pair-is-an-en-dash',
-  'a-continuation-marker-attaches-only-a-flush-left-block',
+  'a-continuation-marker-attaches-a-block-only-at-its-owner-s-marker-column',
   'a-hyphen-run-opening-a-word-after-whitespace-is-a-flag',
   'a-lazy-marker-line-s-definition-defines-nothing-in-any-container',
   'a-marker-line-link-definition-is-collected-where-no-paragraph-is-open',
@@ -427,7 +427,7 @@ const IMPLEMENTED = new Set([
   'an-explicit-table-head-span-keeps-one-row-group',
   'a-table-foot-span-keeps-one-row-group',
   'block-quote-continuation-marker',
-  'heading-marker-column-zero',
+  'a-heading-marker-opens-at-an-indented-top-level-column',
   'paragraph-trailing-whitespace',
   'marker-line-nested-lists',
   'blocked-span-marker-renders-as-empty-cell',
@@ -478,13 +478,13 @@ const IMPLEMENTED = new Set([
   'indented-ordered-marker-content-column-includes-the-marker-indent',
   'leading-attribute-brace-before-an-inline-span-stays-literal',
   'attribute-block-after-a-mention-stays-literal',
-  'under-indented-definition-attaches-over-indented-definition-folds',
+  'an-over-indented-definition-attaches-an-under-indented-one-folds',
   'image-trailing-attribute-is-strict-about-the-glue',
   'wrapped-definition-term-continuation-below-the-content-column-strips-leading-whitespace',
-  'indented-attribute-line-stays-literal',
-  'indented-image-and-caption-stay-literal',
-  'indented-reference-and-footnote-definitions-stay-literal',
-  'indented-colon-fence-blocks-stay-literal',
+  'an-indented-attribute-line-attaches-at-top-level',
+  'an-indented-image-and-caption-form-a-figure',
+  'indented-reference-and-footnote-definitions-register',
+  'indented-colon-fence-blocks-open',
   'below-content-column-div-body-in-a-list-item-stays-literal',
   'outer-item-with-an-internal-blank-before-an-attached-block-is-loose',
   'unresolved-footnote-reference-with-a-trailing-attribute-stays-literal',
@@ -527,7 +527,7 @@ const IMPLEMENTED = new Set([
   'two-abbreviation-definitions',
   'openers-past-the-nesting-cap-are-one-paragraph',
   'a-comment-is-recognized-at-any-column',
-  'a-definition-below-every-content-column-folds-as-text',
+  'a-definition-below-every-content-column-ends-the-item-and-registers',
   'a-caret-is-a-reference-label-not-an-empty-footnote',
   'an-invisible-line-does-not-cancel-a-blank-line-separation',
   'a-comment-fence-is-a-comment-at-any-column-too',
@@ -789,7 +789,7 @@ const IMPLEMENTED = new Set([
   'a-boolean-attribute-does-not-start-with-an-underscore',
   // markup-carve/carve#1436. A continuation marker attaches a document-column-0
   // block and nothing else.
-  'a-continuation-marker-attaches-only-a-flush-left-block',
+  'a-continuation-marker-attaches-a-block-only-at-its-owner-s-marker-column',
   // Categories this engine already reproduced when the pin moved to them.
   'a-lazy-marker-line-s-definition-defines-nothing-in-any-container',
   'a-marker-line-link-definition-is-collected-where-no-paragraph-is-open',
@@ -914,11 +914,11 @@ const IMPLEMENTED = new Set([
   'the-continuation-marker-s-column-gate-reaches-every-container',
   // markup-carve/carve#1822. An empty description body claims no line below
   // its column - column 0 included, which is where the claim used to be made.
-  'an-empty-description-body-claims-no-line-below-column',
-  'an-empty-description-body-claims-no-line-below-column-0',
+  'a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not',
+  'a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not',
   // markup-carve/carve#1828. A container reached by its own marker does not
   // also honor a LEADING continuation marker, so that marker stays text.
-  'a-leading-continuation-marker-in-a-footnote-body-or-a-quote-is-text',
+  'a-first-block-marker-in-a-footnote-body-or-a-quote-attaches-only-at-its-marker-column',
   // markup-carve/carve#3105. The leading marker above is a marker when a
   // flush-left block follows it: a quote and a note take the first-block form.
   'a-block-quote-and-a-footnote-body-take-the-first-block-form',
@@ -1030,7 +1030,7 @@ const IMPLEMENTED = new Set([
   'an-unclosed-fence-after-an-attribute-line-in-a-container-ends-at-its-closer',
   // Arrives with carve 9f88255d and all ten documents already render
   // byte-exact: a definition term has no content column at any depth.
-  'a-block-opener-indented-under-a-definition-term-is-term-text-at-every-depth',
+  'a-block-opener-indented-under-a-definition-term-ends-the-term-at-every-depth',
   // Arrives with carve cd289cf4 and all twenty-five documents already render
   // byte-exact: the term-folded comment span landed on carve-js#2202.
   'a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth',
@@ -1147,11 +1147,11 @@ const IMPLEMENTED = new Set([
   // ARRIVED WITH THIS PIN BUMP (spec ae67c6c3).
   'csv-and-tsv-table-bodies',
   'a-continuation-marker-uses-its-container-column',
-  'a-first-block-marker-on-an-indented-opener-reads-two-columns',
+  'a-first-block-marker-on-an-indented-opener-reads-only-its-marker-column',
   'a-refused-continuation-plus-remains-text',
   'a-task-item-takes-a-first-block-continuation-marker-after-its-checkbox',
   'a-lazy-colon-shaped-line-in-a-quote-paragraph-keeps-no-indentation',
-  'a-first-block-marker-does-not-pull-a-column-zero-list-into-a-note-or-description',
+  'a-first-block-marker-takes-a-list-at-a-note-s-or-description-s-marker-column',
   // ARRIVED WITH THIS PIN BUMP (spec 069a7015).
   'a-separate-plus-after-content-attaches-a-list-to-a-note-or-description',
   'a-comment-line-leaves-a-description-s-list-item-open-for-a-fence',
@@ -1159,22 +1159,22 @@ const IMPLEMENTED = new Set([
   'a-quote-opened-on-its-own-line-in-an-item-takes-the-first-block-form',
   // ARRIVED WITH THIS PIN BUMP (spec 7f080efe).
   'a-first-block-plus-refuses-a-follower-at-an-intervening-column',
-  'a-hosted-quote-s-first-block-plus-attaches-any-non-list-block-at-column-zero',
+  'a-hosted-quote-s-first-block-plus-refuses-a-block-without-the-host-quote-s-prefix',
   'a-quote-follower-below-stacked-quote-openers-in-an-item-is-read-at-its-raw-column',
   'a-quote-opened-on-an-item-s-marker-line-attaches-a-quote-at-its-own-depth',
-  'a-quote-s-first-block-plus-refuses-a-list-follower-in-every-host',
-  'a-stacked-first-block-plus-takes-a-follower-only-at-column-zero-or-its-line-s-column',
+  'a-quote-s-first-block-plus-takes-a-list-that-carries-its-quote-prefixes-at-its-marker-column',
+  'a-stacked-first-block-plus-takes-a-follower-only-at-its-innermost-opener-s-marker-column',
   'a-wrapped-attribute-line-interrupts-like-a-one-line-attribute-line',
   'a-wrapped-attribute-line-opened-at-a-container-s-column-is-one-construct',
   'the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth',
   // Categories added by the spec pin at 83357930; all are checked below.
   'a-contentless-description-marker-folds-under-a-quoted-term',
-  'a-first-block-item-takes-the-next-owned-block',
+  'a-refused-first-block-plus-folds-its-content-column-line-and-the-next-root-block-ends-the-item',
   'a-lone-brace-stays-inside-forced-emphasis',
   'a-quoted-include-with-no-resolver-parses-inline-content',
   'a-second-plus-starts-its-own-paragraph-after-attachment',
   'an-enclosing-closer-ends-a-tag-name',
-  'an-overindented-colon-opener-keeps-the-quote-paragraph-open',
+  'an-overindented-colon-opener-ends-the-quote-paragraph',
   'an-unclosed-nested-fence-keeps-blanks-before-outer-text',
   'citation-shaped-lines-remain-core-text',
   'combined-emphasis-finds-a-later-nonempty-closer',
@@ -1206,104 +1206,6 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '620-generated-container-documents-12',
-    {
-      reason: 'carve#4300: a separator below a quoted term ends the term',
-      html: '<blockquote>\n  <ol>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ol>\n</blockquote>\n<p>: para</p>',
-    },
-  ],
-  [
-    '620-generated-container-documents-15',
-    {
-      reason: 'carve#4300: a separator below a quoted term ends the term',
-      html: '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>: definition</p>',
-    },
-  ],
-  [
-    '226-a-definition-attached-by-a-continuation-marker-is-collected-and-the-item-keeps-no-trace',
-    {
-      reason: 'carve#4449 ruling: a link definition does not consume a continuation marker before a blank',
-      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<p>see <a href="/u">t</a></p>',
-    },
-  ],
-  [
-    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column',
-    {
-      reason: 'carve#4449 ruling: an attribute run is skipped and the content-column list refuses the plus',
-      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<ul x="">\n  <li>c</li>\n</ul>',
-    },
-  ],
-  [
-    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-2',
-    {
-      reason: 'carve#4449 ruling: a wrapped attribute run is skipped before testing the list column',
-      html: '<ul>\n  <li>a\n+</li>\n</ul>\n<ul x="" y="">\n  <li>c</li>\n</ul>',
-    },
-  ],
-  [
-    '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-3',
-    {
-      reason: 'carve#4449 ruling: a quoted attribute line is skipped before testing the list column',
-      html: '<blockquote>\n  <ul>\n    <li>a\n+</li>\n  </ul>\n  <ul x="">\n    <li>c</li>\n  </ul>\n</blockquote>',
-    },
-  ],
-  [
-    '118-cyclic-cross-reference-resolves-to-one-level',
-    {
-      reason: 'carve#4642: an inner reference contributes its target text without an inner link',
-      html: '<section id="A">\n  <h1>A <a href="#A">A A </a></h1>\n</section>',
-    },
-  ],
-  [
-    '118-cyclic-cross-reference-resolves-to-one-level-2',
-    {
-      reason: 'carve#4642: each inner reference contributes its target text without another expansion',
-      html: '<section id="A">\n  <h1>A <a href="#B">B A </a></h1>\n</section>\n<section id="B">\n  <h1>B <a href="#A">A B </a></h1>\n</section>',
-    },
-  ],
-  [
-    '430-below-a-definition-body-s-column-an-invisible-line-folds-as-text-4',
-    {
-      reason: 'carve#4412: an abbreviation definition below every content column defines at document level',
-      html: '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
-    },
-  ],
-  [
-    '518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-8',
-    {
-      reason: 'carve#4559: a caret line holding only a comment makes no caption (spec PR carve#4609)',
-      html: '<p><img src="u" alt="alt">\n^</p>',
-    },
-  ],
-  [
-    '439-a-colon-followed-by-only-whitespace-is-not-a-description-8',
-    {
-      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
-      html: "<dl>\n  <dt>t</dt>\n  <dd>\ttext</dd>\n</dl>\n<p>flush</p>",
-    },
-  ],
-  [
-    '222-a-tab-as-the-first-character-of-a-definition-term',
-    {
-      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
-      html: "<dl>\n  <dt>\tx</dt>\n</dl>",
-    },
-  ],
-  [
-    '684-a-post-marker-tab-keeps-a-quote-literal',
-    {
-      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
-      html: "<ul>\n  <li>\t&gt; a</li>\n</ul>",
-    },
-  ],
-  [
-    '736-model-syntax-boundaries-and-ownership-4',
-    {
-      reason: 'carve#4610: a tab after a marker separator is content and keeps the content column (spec PR carve#4636)',
-      html: "<ul>\n  <li>\t- B</li>\n</ul>",
-    },
-  ],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

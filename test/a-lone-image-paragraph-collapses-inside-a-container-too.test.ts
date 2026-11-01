@@ -136,7 +136,7 @@ describe('a container hosting a lone image past its content column', () => {
  * the second is never evaluated on the side where it would fail.
  */
 describe('what does not collapse, inside a container', () => {
-  // Corpus `158-indented-image-and-caption-stay-literal`, in a quote. The FIGURE
+  // Corpus `158-an-indented-image-and-caption-form-a-figure`, in a quote. The FIGURE
   // promotion stays column-gated on both paths - lifting the gate there would
   // build a figure the author did not write - and this pass cannot reach the
   // shape anyway, because a captioned paragraph holds three inlines.

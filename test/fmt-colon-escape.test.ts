@@ -9,7 +9,7 @@ import { parse } from '../src/parse.js'
  * A colon can only OPEN something at the start of a line - `:: term`, `:  def`,
  * a `:::` fence. Mid-line it is ordinary punctuation, and escaping it there is
  * the over-escaping §4 forbids. The writer escaped every colon in a text run,
- * so corpus `158-indented-image-and-caption-stay-literal` came out
+ * so corpus `158-an-indented-image-and-caption-form-a-figure` came out
  * `\^ Figure 1\: moon` where carve-rs writes `\^ Figure 1: moon` - and the
  * caret on that line is ALREADY escaped, so the line is a paragraph and nothing
  * downstream reads the colon at all.

@@ -106,6 +106,15 @@ function optionParts(rest: string): string[] {
   return parts
 }
 
+// PART 10: outside `@cols`, quotes only delimit an option value (carve#4707).
+function quotedOption(part: string): [string, string, string] | null {
+  const m = /^@([A-Za-z_][\w-]*):(["'])(.*)\2$/s.exec(part)
+  if (!m) return null
+  if (m[1] === 'cols') return ['', 'cols', part.slice(6)]
+  if (quotedRunEnd(part, m[1]!.length + 2) !== part.length - 1) return null
+  return ['', m[1]!, m[3]!.replace(/\\([!-/:-@[-`{-~])/g, '$1')]
+}
+
 function range(value: string): { start: number; end: number } | undefined {
   const match = /^([1-9]\d*)-([1-9]\d*)$/.exec(value)
   if (!match) return undefined
@@ -182,7 +191,7 @@ export function parseDirective(
         code = {}
         continue
       }
-      const opt = OPTION_RE.exec(part) ?? (/^@cols:(["'])(.*)\1$/.test(part) ? ['','cols',part.slice(6)] : null)
+      const opt = quotedOption(part) ?? OPTION_RE.exec(part)
       const invalid = (): null => {
         // Spec I1: an unrecognized (or malformed) option makes the directive
         // unresolvable - Warning + literal, never silent.

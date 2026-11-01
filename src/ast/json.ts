@@ -973,6 +973,8 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       const at = path === '' ? key : `${path}.${key}`
       refuseNodePosition(value, positionKind, admitted, at)
     }
+    // `attrs.keyValues` is a string map: `{type=text}` there is an attribute, not a node.
+    if (key === 'keyValues' && typeof type !== 'string') continue
     refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
   }
 }
