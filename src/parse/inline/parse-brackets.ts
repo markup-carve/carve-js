@@ -63,7 +63,10 @@ function lastBacktickRunStarts(s: string): Map<number, number> {
  * The balancing `]` of the `[` at an offset, or undefined. `footnotes` holds
  * each `[` after a `^` or `!` that closes as a footnote reference instead.
  */
-export type BracketClose = ((open: number) => number | undefined) & { footnotes?: ReadonlySet<number> }
+export type BracketClose = ((open: number) => number | undefined) & {
+  footnotes?: ReadonlySet<number>
+  declinedImageAsLink?: (open: number) => number | undefined
+}
 
 /**
  * How many characters the per-bracket scans below may walk in one text, as a
@@ -255,7 +258,7 @@ export function buildBracketMap(
     walk(structural, new Set(unclosed), demoted)
   } else if (first !== structural) for (const at of first!) structural!.add(at)
   let budget = BRACKET_RESCAN_BUDGET * s.length + 64
-  const scanFrom = (open: number): number | undefined => {
+  const scanFrom = (open: number, asLink = false): number | undefined => {
     let bangEscapes = 0
     if (s[open - 1] === '!') {
       for (let k = open - 2; k >= 0 && s[k] === '\\'; k--) {
@@ -263,7 +266,7 @@ export function buildBracketMap(
         bangEscapes++
       }
     }
-    const imageDepth = [s[open - 1] === '!' && bangEscapes % 2 === 0]
+    const imageDepth = [!asLink && s[open - 1] === '!' && bangEscapes % 2 === 0]
     let rescanBang = -1
     for (let j = open + 1; j < s.length; j++) {
       if (--budget < 0) return undefined
@@ -326,6 +329,7 @@ export function buildBracketMap(
     if (direct !== undefined) return direct
     return !outsideOnly && insideSpan(open) ? scanFrom(open) : undefined
   }
+  close.declinedImageAsLink = (open) => s[open] === '[' ? scanFrom(open, true) : undefined
   if (footnotes.size > 0) close.footnotes = footnotes
   return close
 }
