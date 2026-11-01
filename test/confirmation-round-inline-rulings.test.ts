@@ -42,7 +42,7 @@ describe("a cell's escaped pipe reaches a destination as a pipe (carve#4549)", (
 describe('a literal bracket run is a typography region (carve#4551)', () => {
   it.each([
     ['a run at the region start', 'a [--x] y and a [---x] y\n', '<p>a [--x] y and a [---x] y</p>'],
-    ['a parenthesis opens no region', 'a (--x) y\n', '<p>a (–x) y</p>'],
+    ['a spaced parenthesis keeps a flag literal (carve#4813)', 'a (--x) y\n', '<p>a (--x) y</p>'],
     ['a run at the region end', '[x--] y\n', '<p>[x–] y</p>'],
     ['an unbalanced bracket', 'a [--x y\n', '<p>a [–x y</p>'],
     ['a nested run', '[a [--b] --c]\n', '<p>[a [--b] --c]</p>'],

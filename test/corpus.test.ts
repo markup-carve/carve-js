@@ -1218,19 +1218,15 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ["11-fenced-code-11", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">code\n</code></pre>\n" }],
-  ["11-fenced-code-12", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-php\">code\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-4", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-5", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-6", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-7", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-8", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
-  ["258-code-fence-metadata-slots-must-be-a-space-too-9", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
 const behindSpec = new Map<string, string>([
+  ['01-emphasis-6', '<p><em>usr/local</em></p>'],
+  ['15-heading-ids-4', '<section id="Don-t-repeat-yourself">\n  <h1>Don’t repeat yourself</h1>\n</section>\n<section id="Step-1-done">\n  <h1>Step 1 → done…</h1>\n</section>'],
+  ['386-the-doubled-run-is-the-canonical-arrow-in-both-families', '<p>Canonical: ← → ↔ and ⇐ ⇒ ⇔</p>\n<p>Removed, now text: ← → ↔</p>\n<p>Not an arrow: key =&gt; value stays literal, and p ≤ q is a comparison.</p>'],
+  ['704-a-non-ascii-letter-does-not-block-a-bare-delimiter', '<p>é<strong>x</strong> y and a*x* y\ny <strong>x</strong>é and y *x*a</p>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

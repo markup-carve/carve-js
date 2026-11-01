@@ -818,12 +818,16 @@ export class InlineParseSession {
       let start = i
       while (start > 0 && text[start - 1] === '-') start--
       const before = start > 0 ? text[start - 1]! : ''
+      const openerBeforeRun = before === '(' || before === '"' || before === "'"
+      const beforeOpener = start > 1 ? flankCharAt(text, start - 2) : ''
+      const flagAtOpener = openerBeforeRun
+        && (beforeOpener === '' || isFlankSpace(beforeOpener) || start - 1 === region?.start)
       const after = i + n === region?.close ? '' : flankCharAt(text, i + n)
       //
       // The whole run is consumed as literal text rather than declined, so the
       // arrow token cannot pick up what the dash rule put down: declining left
       // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
-      if ((before === '' || isFlankSpace(before) || start === region?.start) && after !== '' && !isFlankSpace(after)) {
+      if ((before === '' || isFlankSpace(before) || start === region?.start || flagAtOpener) && after !== '' && !isFlankSpace(after)) {
         return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
       }
       return { out: allocateDashes(n), len: n, kind: 'dash_run' }
