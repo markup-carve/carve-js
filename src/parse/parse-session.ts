@@ -2116,6 +2116,7 @@ export class ParseSession extends InlineParseSession {
       contentColumn: contentColumn + viewSlice,
       indexBase,
       base: lexer.pos + attributeLines,
+      boundary: isBoundary,
     })
     const fenced = fencedFromAttributes === -1 ? -1 : fencedFromAttributes + attributeLines
     let take = 0
