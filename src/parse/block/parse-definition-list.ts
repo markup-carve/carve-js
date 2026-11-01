@@ -38,6 +38,65 @@ type TermFenceState = {
   closesOnLine: boolean
 }
 
+function advanceToEntry(lexer: Lexer, entry: RegExp, helpers: typeof definitionListHelpers): boolean {
+  const { RE_ABBR_DEF, RE_COMMENT_LINE, RE_COMMENT_BLOCK_ANY, isLinkDefLine,
+    commentBlockHasCloser, stripLazyFrame } = helpers
+  let next = lexer.pos
+  let blanks = 0
+  const abbreviations: Array<[number, string, string]> = []
+  while (next < lexer.lineCount) {
+    const line = lexer.lineAt(next) ?? ''
+    if (isBlankLine(line)) {
+      blanks++
+      next++
+      continue
+    }
+    const abbr = lexer.atDocumentLevel ? RE_ABBR_DEF.exec(line) : null
+    if (abbr) abbreviations.push([next, abbr[1]!, abbr[2]!])
+    else if (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line)) break
+    const fence = RE_COMMENT_BLOCK_ANY.exec(line)?.[1]
+    if (fence && commentBlockHasCloser(lexer, fence.length, next)) {
+      for (let at = next + 1; at < lexer.lineCount; at++) {
+        if (RE_COMMENT_BLOCK_ANY.exec(lexer.lineAt(at) ?? '')?.[1] === fence) {
+          next = at
+          break
+        }
+      }
+    }
+    next++
+  }
+  if (blanks >= 3 || !entry.test(stripLazyFrame(lexer.lineAt(next) ?? ''))) return false
+  for (const [line, abbr, expansion] of abbreviations) {
+    lexer.skippedAbbreviations?.set(line, [abbr, expansion])
+    lexer.abbrDefs.set(abbr, expansion)
+  }
+  lexer.pos = next
+  return true
+}
+
+function primeSiblingAbbreviations(lexer: Lexer, helpers: typeof definitionListHelpers): void {
+  if (!lexer.atDocumentLevel) return
+  const { RE_DEFLIST_TERM, RE_DEFLIST_DEF, RE_ABBR_DEF, RE_COMMENT_LINE, isLinkDefLine } = helpers
+  const abbreviations: Array<[string, string]> = []
+  let blanks = 0
+  for (let at = lexer.pos; at < lexer.lineCount; at++) {
+    const line = lexer.lineAt(at) ?? ''
+    if (isBlankLine(line)) {
+      blanks++
+      if (blanks >= 3) break
+      continue
+    }
+    if (RE_DEFLIST_TERM.test(line)) continue
+    if (RE_DEFLIST_DEF.test(line)) {
+      for (const [abbr, expansion] of abbreviations) lexer.abbrDefs.set(abbr, expansion)
+      break
+    }
+    const abbr = RE_ABBR_DEF.exec(line)
+    if (abbr) abbreviations.push([abbr[1]!, abbr[2]!])
+    else if (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line)) break
+  }
+}
+
 // CARVE-P2-010: a tab after the separator's spaces is content, so the body is paragraph text.
 const descriptionLead = (body: string): string => body.startsWith('\t') ? LEAD_TAB_FRAME + body : body
 
@@ -1098,6 +1157,7 @@ export function createDefinitionListParser(
       const line = stripLazyFrame(lexer.peek(n) ?? '')
       return lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker ? line.trimStart() : line
     }
+    primeSiblingAbbreviations(lexer, helpers)
     const entryColumn = (n = 0): number => {
       const index = lexer.pos + n
       const ownerColumn = lexer.returnedDescriptionOwnerColumns.get(lexer.lineNumber(index))
@@ -1152,7 +1212,8 @@ export function createDefinitionListParser(
         const termFence: TermFenceState = { active: null, closesOnLine: false }
         while (!lexer.eof()) {
           const next = lexer.peek()!
-          if (commentLeavesTerm(lexer, next, termColumn)) break
+          if (commentLeavesTerm(lexer, next, termColumn) ||
+              (lexer.atDocumentLevel && RE_ABBR_DEF.test(next) && entryLeadColumn(next) <= termColumn)) break
           if (/^[ \t]+%%/.test(next)) {
             const first = lexer.pos
             const fence = RE_COMMENT_BLOCK_ANY.exec(next)
@@ -1326,12 +1387,7 @@ export function createDefinitionListParser(
         // separated from its term (or a previous definition) by a blank line for
         // readability, matching djot. The blank is a separator only - it does not
         // end the entry when a `:  ` definition follows.
-        if (isBlankLine(lexer.peek()!)) {
-          let look = 1
-          while (isBlankLine(lexer.peek(look))) look++
-          if (!RE_DEFLIST_DEF.test(peekEntry(look))) break
-          for (let k = 0; k < look; k++) lexer.consume()
-        }
+        if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers)) break
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
@@ -1359,13 +1415,7 @@ export function createDefinitionListParser(
         )
       }
       items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
-      // Allow a single blank line before the next entry's `:: term`.
-      if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
-        let look = 1
-        while (isBlankLine(lexer.peek(look))) look++
-        if (RE_DEFLIST_TERM.test(peekEntry(look))) for (let k = 0; k < look; k++) lexer.consume()
-        else break
-      }
+      if (!RE_DEFLIST_TERM.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers)) break
     }
     return { type: 'definition_list', items }
   }

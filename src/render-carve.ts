@@ -3355,6 +3355,7 @@ class CarveRenderSession {
           listSeparated = false
           descriptionListOffset = 0
         }
+        const descriptionListsMerge = previousBlock?.type === 'definition_list' && block.type === 'definition_list'
         // A block that spells nothing contributes nothing - not even the blank
         // line a part of its own would open. As far as the page is concerned it
         // is the empty paragraph above it (PART 11 §10j).
@@ -3379,7 +3380,7 @@ class CarveRenderSession {
             descriptionListOffset++
             const indent = ' '.repeat(descriptionListOffset)
             parts[parts.length - 1] += `\n\n${text.split('\n').map(line => line ? indent + line : line).join('\n')}`
-          } else if (listSeparated && parts.length > 0) {
+          } else if ((listSeparated || descriptionListsMerge) && parts.length > 0) {
             descriptionListOffset = 0
             // §11 N1a's boundary, written as a SENTINEL rather than as four
             // literal newlines. `normalize` squeezes every run of three or more
