@@ -252,6 +252,19 @@ export const isQuoteSpace = (ch: string) => /[ \t\n\r\u00a0]/.test(ch)
 
 export const isQuoteAlnum = (ch: string) => /[\p{L}\p{N}]/u.test(ch)
 
+const UNICODE_WORD = /[\p{L}\p{N}]/u
+export const wordAfter = (text: string, at: number): boolean => {
+  const point = text.codePointAt(at)
+  return point !== undefined && UNICODE_WORD.test(String.fromCodePoint(point))
+}
+export const wordBefore = (text: string, at: number): boolean => {
+  if (at === 0) return false
+  const last = at - 1
+  const start = last > 0 && text.charCodeAt(last) >= 0xdc00 && text.charCodeAt(last) <= 0xdfff
+    && text.charCodeAt(last - 1) >= 0xd800 && text.charCodeAt(last - 1) <= 0xdbff ? last - 1 : last
+  return wordAfter(text, start)
+}
+
 export const QUOTE_LETTER_RUN = /\p{L}+/uy
 
 // Braced comments that open the content count as nothing for quote direction (carve#4552).
@@ -481,7 +494,7 @@ export interface EmphasisMemo {
 }
 
 const combinedCloserAt = (text: string, at: number): boolean =>
-  at > 0 && !isCarveWhitespace(text[at - 1]) && !extendsGrapheme(text, at + 2) && !/[A-Za-z0-9]/.test(text[at + 2] ?? '')
+  at > 0 && !isCarveWhitespace(text[at - 1]) && !extendsGrapheme(text, at + 2) && !wordAfter(text, at + 2)
 
 // `bracedEnd` gives the exclusive end of a forced span or editorial frame
 // opening at a `{`, or -1, as the parser pairs it.
