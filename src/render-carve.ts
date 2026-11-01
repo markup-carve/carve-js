@@ -529,6 +529,7 @@ function canonical(value: unknown): unknown {
         key === 'pos' ||
         key === 'footnoteDefPos' ||
         key === 'definitionSpans' ||
+        key === 'definitionLines' ||
         key === 'termSpans' ||
         key === 'srcByteLength'
       )
@@ -3769,7 +3770,8 @@ class CarveRenderSession {
         const needsReadback = node.tight && (
           this.itemNeedsIndentedBlocks(ctx) &&
             (nestedTightItemLosesTightness(item) || nestedListHasLiteralPlusTail(item) || item.children.some((child, index) =>
-              index > 0 && child.type === 'paragraph' && item.children[index - 1]?.type === 'paragraph')) ||
+              index > 0 && child.type === 'paragraph' &&
+                (item.children[index - 1]?.type === 'paragraph' || item.children[index - 1]?.type === 'definition_list'))) ||
           item.children.some((child, index) => index > 0 &&
             ((child.type === 'code_block' || child.type === 'figure') && item.children[index - 1]?.type === 'list' ||
               child.type === 'block_quote' && item.children[index - 1]?.type === 'block_quote')))
