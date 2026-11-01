@@ -2859,6 +2859,30 @@ function appendingContinuationLine(row: TableRow): number | undefined {
   return first?.type === 'cell_wrap' ? first.line : undefined
 }
 
+function reportHtmlCommentWarnings(
+  text: string,
+  at: number,
+  prefix: number,
+  paragraphEnd: number,
+  lines: readonly string[],
+  verbatimLines: ReadonlySet<number>,
+  visibleAt: (line: string, lineNumber: number, prefix: number) => string,
+  push: SilentFailurePush,
+): void {
+  for (const opener of text.matchAll(/<!--/g)) {
+    const tail = [text.slice(opener.index! + opener[0].length)]
+    for (let next = at + 1; next <= paragraphEnd; next++) {
+      if (verbatimLines.has(next)) break
+      const nextRaw = lines[next - 1]!
+      const nextText = stripContainerPrefixesKeepIndent(nextRaw)
+      tail.push(visibleAt(nextText, next, nextRaw.length - nextText.length))
+    }
+    if (!tail.join('\n').includes('-->')) continue
+    push(at, prefix + opener.index! + 1, 4, 'html-comment-renders-as-text',
+      'This HTML comment renders as visible text. Use %% for one line or %%% for a comment block.')
+  }
+}
+
 function collectAuthoringWarnings(
   lines: readonly string[],
   headings: readonly Positioned[],
@@ -2974,6 +2998,8 @@ function collectAuthoringWarnings(
     const column = prefix + stripped.search(/\S/) + 1
     const text = visibleAt(stripped, at, prefix)
     const row = rowAt.has(at)
+    if (paragraphAt.has(at)) reportHtmlCommentWarnings(text, at, prefix, paragraphEndAt.get(at) ?? at,
+      lines, verbatimLines, visibleAt, push)
     if (foldable(at) && index > 0 && !listItemLines.has(at) &&
         /^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(raw) &&
         !/^(?:\s*> ?)*\s*(?:[-*]|\d+[.)])\s+\S/.test(lines[index - 1]!) &&
