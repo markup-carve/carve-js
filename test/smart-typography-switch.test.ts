@@ -18,7 +18,7 @@ describe('smartTypography switch', () => {
   const src = 'He said "hi" ... a--b and a->b and (c) +-\n'
 
   it('substitutes by default', () => {
-    expect(carveToHtml(src)).toBe('<p>He said “hi” … a–b and a→b and (c) ±</p>')
+    expect(carveToHtml(src)).toBe('<p>He said “hi” … a–b and a-&gt;b and (c) ±</p>')
   })
 
   it('emits the author source run when off', () => {

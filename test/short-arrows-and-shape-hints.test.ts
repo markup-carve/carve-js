@@ -24,4 +24,9 @@ describe('comment and glob shape hints (carve#4815)', () => {
       expect(lintCarve(source).filter(w => w.rule === 'comment-shaped-emphasis' || w.rule === 'glob-shaped-strong'))
         .toEqual([])
     })
+
+  it('reports a parsed shape at its column inside a quote', () => {
+    expect(lintCarve('> /* foo */\n').filter(w => w.rule === 'comment-shaped-emphasis'))
+      .toMatchObject([{ line: 1, column: 3, severity: 'Hint' }])
+  })
 })
