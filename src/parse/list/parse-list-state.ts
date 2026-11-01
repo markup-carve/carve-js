@@ -270,7 +270,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       // Payload shapes open no blocks; span and definition boundaries still apply.
       state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
         open.opaque?.belowBaseCloses !== true && text !== '' && !RE_FOOTNOTE_DEF.test(text) &&
-        (close === null || (column > 0 && column !== open.column) || open.absorbing === true)
+        (close === null || close[1]!.length !== open.width ||
+          (column > 0 && column !== open.column) || open.absorbing === true)
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false

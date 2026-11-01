@@ -453,6 +453,10 @@ export function ownLines(
       readPayload(inner)
       continue
     }
+    if (keepsMissedLineBlock(inner, missed, reached)) {
+      readPayload(inner, true)
+      continue
+    }
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
@@ -545,11 +549,11 @@ export function ownLines(
     }
 
     // S1: an open payload tests its closer first.
-    function readPayload(inner: Frame): void {
+    function readPayload(inner: Frame, lazyMissed = false): void {
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      lead(Math.max(m.col - inner.cut, inner.canon))
+      lead(lazyMissed ? 0 : Math.max(m.col - inner.cut, inner.canon))
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
         if (c && c[1]![0] === inner.span[0] &&
@@ -565,8 +569,17 @@ export function ownLines(
         if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
         else if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > at) inner.span = comment[1]!
       }
+      if (inner.lineBlock) inner.para = m.rest !== '' && !COMMENT_LINE.test(m.rest)
       finish()
       if (trace) emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
+    }
+
+    function keepsMissedLineBlock(inner: Frame, missed: boolean, reached: number): boolean {
+      if (inner.kind !== 'fence' || !inner.lineBlock || !missed || !inner.para || m.rest === '' ||
+          classify(m.rest, frames[reached]!, at, m.col).interrupts) return false
+      const marker = matchMarker(m.rest)
+      return marker === null || !frames.slice(1).some(f => f.kind === 'item' && f.markerCol !== undefined &&
+        m.col <= f.markerCol)
     }
 
     // S4: a lazy line is written short of the frame it missed.

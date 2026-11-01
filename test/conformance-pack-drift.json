@@ -54,23 +54,9 @@
     },
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged drift in the lazy family that the spec bump to carve 7840b69 surfaced",
-      "cases": [
-        "lazy-70acba91ccbd"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the plus family that the spec bump to carve 7840b69 surfaced",
       "cases": [
         "plus-a0f7cf7091d8"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged drift in the roundtrip family that the spec bump to carve 7840b69 surfaced",
-      "cases": [
-        "roundtrip-702a692a40ae"
       ]
     }
   ]
