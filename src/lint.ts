@@ -3116,6 +3116,26 @@ function collectSilentFailures(
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
+    if (node.type === 'emphasis' || node.type === 'strong') {
+      const pos = node.pos as Positioned['pos'] | undefined
+      if (pos?.startOffset !== undefined && pos.endOffset !== undefined) {
+        const start = toUtf16(pos.startOffset)
+        const raw = source.slice(start, toUtf16(pos.endOffset))
+        const commentShape = node.type === 'emphasis' && raw.startsWith('/') && raw.endsWith('/')
+          && (raw[1] === '*' || raw.at(-2) === '*')
+          || node.type === 'strong' && raw.startsWith('*') && raw.endsWith('*')
+          && (raw[1] === '/' || raw.at(-2) === '/')
+        const globShape = node.type === 'strong' && raw.startsWith('*.') && raw.endsWith('*')
+        if (commentShape || globShape) out.push({
+          line: pos.startLine, column: pos.startColumn ?? 1, start, end: start + 1,
+          rule: commentShape ? 'comment-shaped-emphasis' : 'glob-shaped-strong',
+          severity: 'Hint',
+          message: commentShape
+            ? 'This emphasis looks like a C comment; use Carve comment syntax if you meant a comment.'
+            : 'This strong span looks like a file glob; escape the asterisk if you meant a glob.',
+        })
+      }
+    }
     if (node.type === 'code' || node.type === 'autolink' || node.type === 'heading_ref' || node.type === 'image') {
       const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
       if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
