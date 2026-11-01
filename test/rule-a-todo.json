@@ -42,7 +42,6 @@
     "does not claim a quote marker inside an inline code span": "#3921"
   },
   "an-imported-source-is-a-writer-fixed-point.test.ts": {
-    "an imported source is a carve fmt fixed point > 875-a-fence-opened-at-a-block-start-in-a-note-keeps-no-paragraph-open: the imported source is what the writer emits": "#4135",
     "an imported source is a carve fmt fixed point > 882-attributed-bracket-spans-share-the-inline-cap: the imported source is what the writer emits": "#4135"
   },
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
@@ -288,10 +287,6 @@
   },
   "relative-continuation-marker.test.ts": {
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
-  },
-  "render-carve.test.ts": {
-    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: idempotent": "#4135",
-    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: parses to the same tree": "#4135"
   },
   "sibling-term-item-column.test.ts": {
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",

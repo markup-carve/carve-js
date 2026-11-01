@@ -414,6 +414,14 @@ describe('renderCarve corpus', () => {
 })
 
 describe('renderCarve targeted canonicalization', () => {
+  it('writes an empty fence closer at a marker-line note item content column (issue 4167)', () => {
+    const source = '[^n]: - ``` js\ntail\n'
+    const formatted = 'tail\n\n[^n]: - ```js\n        ```\n'
+    expect(carveToCarve(source)).toBe(formatted)
+    expect(carveToCarve(formatted)).toBe(formatted)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(source))
+  })
+
   it('collapses blank-line runs', () => {
     expect(carveToCarve('a\n\n\n\nb')).toBe('a\n\nb\n')
   })
