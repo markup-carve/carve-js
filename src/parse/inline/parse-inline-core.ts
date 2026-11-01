@@ -217,8 +217,6 @@ export const SMART_TOKENS: Array<[string, string, string]> = [
   ['>=', '≥', 'greater_than_or_equal'],
   ['!=', '≠', 'not_equal'],
   ['+-', '±', 'plus_minus'],
-  ['(c)', '©', 'copyright'],
-  ['(r)', '®', 'registered'],
 ]
 
 /**

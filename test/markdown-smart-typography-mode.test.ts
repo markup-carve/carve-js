@@ -13,7 +13,7 @@ const CASES: Array<[string, string]> = [
   ['a----b', 'a––b'],
   ['a -> b', 'a → b'],
   ['a <= b', 'a ≤ b'],
-  ['(c) 2026', '© 2026'],
+  ['(c) 2026', '(c) 2026'],
   ['say "hi"', 'say “hi”'],
   ["say 'hi'", 'say ‘hi’'],
 ]

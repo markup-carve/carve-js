@@ -37,8 +37,11 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     expect(h('<==')).toBe('<p>⇐</p>')
   })
 
-  it('converts symbols', () => {
-    expect(h('(c) (r) (tm)')).toBe('<p>© ® ™</p>')
+  it('keeps lettered markers literal and converts the remaining symbol', () => {
+    expect(h('(c) (r) (tm)')).toBe('<p>(c) (r) ™</p>')
+    expect(h('options (a), (b) and (c) apply')).toBe('<p>options (a), (b) and (c) apply</p>')
+    expect(h('a(c) and a(r)')).toBe('<p>a(c) and a(r)</p>')
+    expect(h('© ® +-')).toBe('<p>© ® ±</p>')
   })
 
   it('does not convert fractions (removed: they collide with dates/paths)', () => {
