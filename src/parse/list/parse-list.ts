@@ -628,12 +628,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     return { leadState, lazyState }
   }
 
-  /** The column of the outermost marker holding a fence opened on a nested marker line, memoized per document line. */
-  function commentHoldsAPlace(content: string, nested: readonly string[], children: readonly BlockNode[]): boolean {
-    return RE_COMMENT_LINE.test(content) && commentFenceRun(content) === undefined && nested.length > 1 && isBlankLine(nested[0]!) &&
-      children[0]?.type === 'comment' && children[1]?.type === 'paragraph'
-  }
-
   // A block below the body has left the note, and so has every line after it. Text folds into an open paragraph.
   function rebaseTaskNote(nested: string[], shift: number): void {
     let noteParagraph = true
@@ -649,6 +643,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
   }
 
+  /** The column of the outermost marker holding a fence opened on a nested marker line, memoized per document line. */
   function markerFenceHolderColumn(
     lexer: Lexer, session: ParseSession, content: string, contentCol: number, itemStartLineIndex: number,
   ): number {
@@ -3249,10 +3244,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (span === undefined) continue
         // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L2).
         if (child.type === 'paragraph' && isDirectiveLine(previousVisibleBlock)) loose = true
-        // A lead that renders no block of its own (`+`, attributes, a definition) still sets the paragraph apart (§17 L1a);
-        // a note lead is measured from the note's end below.
-        if (previousVisibleSpan === undefined && child.type === 'paragraph' &&
-            (!isBlankLine(content) && !markerNoteItem || /\+[ \t]*$/.test(itemSource)) &&
+        // A `+` lead still sets the paragraph apart; an invisible lead separates nothing (§17 L1a, L1b, carve#4639).
+        if (previousVisibleSpan === undefined && child.type === 'paragraph' && /\+[ \t]*$/.test(itemSource) &&
             session.hasAuthoredBlankBetween(lexer, lexer.lineNumber(itemStartLineIndex), span.start, opaqueBlankLines))
           loose = true
         const rootLine = (lexer.rootLines ?? lexer.lines)[span.start - 1]
@@ -3294,16 +3287,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sourceColumn(rootLine, itemQuoteDepth) < previousVisibleSpan.startColumn - 1
         const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
           authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
+        // A one-line note lead is invisible (§17 L1b); the model reads a note's later body lines as visible.
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem) {
           let noteEndLine = lexer.lineNumber(itemStartLineIndex)
           for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
             const source = nestedSourceLines[index] ?? ''
             if (nestedLineNumbers[index]! >= span.start || isBlankLine(nested[index] ?? '') ||
-                isBlankLine(source) || isQuoteBlankLine(source)) continue
+                isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
             noteEndLine = nestedLineNumbers[index]!
             break
           }
-          if (session.hasAuthoredBlankBetween(lexer, noteEndLine, span.start, opaqueBlankLines)) loose = true
+          if (noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
+              session.hasAuthoredBlankBetween(lexer, noteEndLine, span.start, opaqueBlankLines)) loose = true
         }
         let previousVisibleEnd = previousVisibleSpan?.end
         const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
@@ -3333,8 +3328,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return loose
     }
     if (childSpacingLoosens()) flags.loose = true
-    // A comment on the marker line holds a block's place: the blank below it sets a paragraph apart (§17 L1, carve-js#4035).
-    if (commentHoldsAPlace(content, nested, children)) flags.loose = true
 
     if (children[0]?.type === 'admonition' && children[0].pos === undefined) {
       children[0] = dropPositions({ type: 'document', children: [children[0]] }).children[0]!
