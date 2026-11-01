@@ -404,7 +404,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     }
     // The bracket scanner decides which escapes and opaque spans hide a closer.
     if (c === '[') {
-      const close = s.bracketClose(s.i)
+      const close = s.text[s.i - 1] === '!' && s.bracketClose.declinedImageAsLink
+        ? s.bracketClose.declinedImageAsLink(s.i) : s.bracketClose(s.i)
       if (close !== undefined) bracketRuns.push({ start: s.i + 1, close })
     }
   }
@@ -825,7 +826,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   // then parsed by the same sub-patterns the old fast-path regexes used.
   function scanBracket(s: InlineScan): boolean {
     const { text, i } = s
-    const closeAbs = s.bracketClose(i)
+    const closeAbs = text[i - 1] === '!' && s.bracketClose.declinedImageAsLink
+      ? s.bracketClose.declinedImageAsLink(i) : s.bracketClose(i)
     const close = closeAbs === undefined ? -1 : closeAbs - i
     const rest = text.slice(i)
     if (close > 0) {
