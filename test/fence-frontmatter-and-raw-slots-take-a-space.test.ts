@@ -115,12 +115,10 @@ describe("the code fence's header slot takes a space", () => {
   })
 
   for (const [name, ws] of [...WIDE, ...MIXED]) {
-    it(`is not a fence when the header follows ${name}`, () => {
+    it(`recovers the language and drops a header after ${name}`, () => {
       const html = carveToHtml(`${F}js${ws}"T"\nx\n${F}\n`)
       expect(html).not.toContain('title="T"')
-      // The whole line falls back to prose - it does not silently become a
-      // language-only fence with the header quietly dropped.
-      expect(html).not.toContain('class="language-js"')
+      expect(html).toContain('class="language-js"')
     })
   }
 
@@ -136,10 +134,10 @@ describe("the code fence's label slot takes a space, in both alternatives", () =
   })
 
   for (const [name, ws] of [...WIDE, ...MIXED]) {
-    it(`is not a fence when the label follows ${name} after a language and header`, () => {
+    it(`recovers the language and drops metadata after ${name}`, () => {
       const html = carveToHtml(`${F}js "T"${ws}[L]\nx\n${F}\n`)
       expect(html).not.toContain('title="T"')
-      expect(html).not.toContain('class="language-js"')
+      expect(html).toContain('class="language-js"')
     })
 
     // The label slot appears in two alternatives and is one slot with one role,

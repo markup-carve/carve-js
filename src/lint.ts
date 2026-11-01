@@ -28,6 +28,7 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { recoveredCodeFence } from './parse/parse-prepass-core.js'
 import { sourceQuotePrefixEnd } from './parse/block/parse-block-boundaries.js'
 import {
   parse,
@@ -1073,6 +1074,25 @@ export function lintCarve(
   const sourceOffset = (line: number, column: number): number =>
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
   pushUnclosedCodeFences(unclosedCodeFences, sourceLines, lineOffsets, sourceOffset, out)
+  walkDocument(doc, (node) => {
+    const code = node.type === 'code_block' ||
+      (node.type === 'figure' && (node as { target?: { type?: string } }).target?.type === 'code_block')
+    if (!code) return
+    const line = (node as Positioned).pos?.startLine
+    if (!line) return
+    const physical = sourceLines[line - 1] ?? ''
+    const view = stripContainerPrefixesKeepIndent(physical).trimStart()
+    if (!recoveredCodeFence(view)) return
+    const start = lineOffsets[line - 1]! + physical.length - view.length
+    out.push({
+      line,
+      column: physical.length - view.length + 1,
+      rule: 'fence-title-syntax',
+      message: 'The code fence keeps its language and drops invalid opener metadata. Use a quoted title and optional [label] in that order.',
+      start,
+      end: lineOffsets[line - 1]! + physical.length,
+    })
+  })
   const seenMarker = new Set<string>()
   for (const marker of refusedContinuationMarkers) {
     const key = `${marker.line}:${marker.column}`

@@ -1218,6 +1218,14 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ["11-fenced-code-11", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">code\n</code></pre>\n" }],
+  ["11-fenced-code-12", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-php\">code\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-4", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-5", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-6", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-7", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-8", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
+  ["258-code-fence-metadata-slots-must-be-a-space-too-9", { reason: 'carve#4807 recovery keeps the language and drops invalid metadata', html: "<pre><code class=\"language-js\">x\n</code></pre>\n" }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

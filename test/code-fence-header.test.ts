@@ -28,25 +28,25 @@ describe('code-fence header and grouping label', () => {
     )
   })
 
-  it('falls back to an inline span for a key="value" pair', () => {
+  it('recovers a language before a key="value" pair', () => {
     expect(carveToHtml('```js title="x"\ncode\n```')).toBe(
-      '<p><code>js title="x"\ncode</code></p>\n<pre><code></code></pre>',
+      '<pre><code class="language-js">code\n</code></pre>',
     )
   })
 
-  it('falls back when the header and label are in the wrong order', () => {
+  it('recovers the language when header and label are in the wrong order', () => {
     expect(carveToHtml('```php [Composer] "x"\ncode\n```')).toBe(
-      '<p><code>php [Composer] "x"\ncode</code></p>\n<pre><code></code></pre>',
+      '<pre><code class="language-php">code\n</code></pre>',
     )
   })
 
-  it('falls back when metadata is glued to the language (no space)', () => {
-    expect(carveToHtml('```php"x"\ncode\n```')).toBe('<p><code>php"x"\ncode</code></p>\n<pre><code></code></pre>')
+  it('recovers the language when metadata is glued to it', () => {
+    expect(carveToHtml('```php"x"\ncode\n```')).toBe('<pre><code class="language-php">code\n</code></pre>')
   })
 
-  it('falls back when a label is glued to the header (no space)', () => {
+  it('recovers the language when a label is glued to the header', () => {
     expect(carveToHtml('```php "x"[Install]\ncode\n```')).toBe(
-      '<p><code>php "x"[Install]\ncode</code></p>\n<pre><code></code></pre>',
+      '<pre><code class="language-php">code\n</code></pre>',
     )
   })
 
