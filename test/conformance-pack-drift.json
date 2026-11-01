@@ -47,13 +47,6 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4033",
-      "cause": "an unclosed fence in a description or footnote body drops its trailing blank run",
-      "cases": [
-        "fences-9caa332a8a41"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
@@ -64,9 +57,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the lazy family that the spec bump to carve 7840b69 surfaced",
       "cases": [
-        "lazy-70acba91ccbd",
-        "lazy-b4f620882c93",
-        "lazy-f8190f90c806"
+        "lazy-70acba91ccbd"
       ]
     },
     {

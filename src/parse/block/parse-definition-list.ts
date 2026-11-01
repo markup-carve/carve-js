@@ -760,7 +760,7 @@ export function createDefinitionListParser(
         }
         // A blank reaches every frame, so it is the open fence's content (corpus 291, carve#4033).
         // The run stays in the stream as well: it still separates what follows.
-        if (bodyEndsInOpenCodeFence(bodyLines, false)) {
+        if (bodyEndsInOpenCodeFence(bodyLines)) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos + k
             bufferedBlanks.add(bodyLines.length)

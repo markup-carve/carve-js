@@ -18,6 +18,7 @@ describe('an unclosed fence keeps its trailing blank in every host', () => {
     'r[^1]\n\n- a\n  [^1]: ```\n    code\n\nafter\n',
     'r[^1]\n\n:: t\n: [^1]: ```\n    code\n\nafter\n',
     'r[^1]\n\n[^1]: :: t\n  : ```\n    code\n\nafter\n',
+    ':: t\n: - ```\n    code\n\nafter\n',
   ])('%j', (source) => {
     expect(code(source)).toBe('code\n\n')
     expect(carveToHtml(source)).toContain('<p>after</p>')
@@ -29,7 +30,6 @@ describe('an unclosed fence keeps its trailing blank in every host', () => {
 
   it.each([
     ['a + attachment ends at the blank', 'see[^f]\n\n[^f]: n\n+\n```\na\n\nb\n', 'a\n'],
-    ['an item fence on a description marker line', ':: t\n: - ```\n    code\n\nafter\n', 'code\n'],
     ['a closed fence', ':: t\n: ```\n  code\n  ```\n\nafter\n', 'code\n'],
   ])('%s has no trailing blank', (_name, source, payload) => {
     expect(code(source)).toBe(payload)
