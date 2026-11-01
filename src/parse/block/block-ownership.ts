@@ -692,7 +692,9 @@ export function ownLines(
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon): void {
       // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
       owner.para = form.caption === true
-      owner.last = form.kind
+      const invisibleLeaf = form.kind === 'leaf' &&
+        (COMMENT_LINE.test(m.rest) || isLinkDefLine(m.rest) || RE_ABBR_DEF.test(m.rest) || isAttrLine(m.rest))
+      if (!invisibleLeaf) owner.last = form.kind
       owner.tableLine = form.table ? at : undefined
       if (form.attrLines) attrRest = { left: form.attrLines, cut: col - canon }
       if (form.kind === 'term') {
