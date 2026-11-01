@@ -64,6 +64,7 @@ import {
   RE_VALID_ADMONITION_OPEN,
   accumulateAttrs,
   appendLinkReferenceDefinitions,
+  insertSkippedAbbreviationDefinitions,
   attachBlockPos,
   blockQuoteParagraphClaimOpen,
   closeBlockQuoteParagraph,
@@ -387,6 +388,7 @@ export class ParseSession extends InlineParseSession {
   // which lines a block consumes, so the probe leaves them unscanned.
   private skipParagraphInlines = false
   private skipPositionDrop = false
+  private skippedAbbreviationLines = new Set<number>()
 
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
@@ -439,8 +441,11 @@ export class ParseSession extends InlineParseSession {
     // Consume leading frontmatter first so `lexer.pos` marks the end of the
     // metadata region; the def passes and parseBlocks all start from there.
     lexer.consumeFrontmatter()
+    const sourceLines = lexer.lines
     const ownership = ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
+    this.skippedAbbreviationLines = new Set([...ownership.skippedAbbreviations.keys()]
+      .filter((index) => !ownership.separatingAbbreviations.has(index)).map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -453,6 +458,7 @@ export class ParseSession extends InlineParseSession {
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
     const children = this.parseBlocks(lexer, 0)
+    insertSkippedAbbreviationDefinitions(children, lexer, sourceLines, strippedBom ? '\ufeff' + source : source)
     appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
@@ -852,6 +858,8 @@ export class ParseSession extends InlineParseSession {
     }
     if (RE_COMMENT_LINE.test(line)) {
       const l = lexer.consume()
+      // The stand-in for an abbreviation definition a `+` skipped; the document holds its node.
+      if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
       // ONE separator character, and it is `whitespace` - a space or a tab
       // (markup-carve/carve#977, PART 7). This read `/^\s/`, the host language's
       // class, so a `%%<VT>note` line had its vertical tab eaten as the

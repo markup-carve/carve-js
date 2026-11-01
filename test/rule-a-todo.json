@@ -297,13 +297,7 @@
     "renderCarve corpus > 856-every-folded-caret-line-loses-its-leading-whitespace-in-a-deep-term: parses to the same tree": "#4135",
     "renderCarve corpus > 856-every-folded-caret-line-loses-its-leading-whitespace-in-a-deep-term: semantic": "#4135",
     "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: idempotent": "#4135",
-    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: parses to the same tree": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-2: parses to the same tree": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-2: semantic": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-3: parses to the same tree": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-3: semantic": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition: parses to the same tree": "#4135",
-    "renderCarve corpus > 866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition: semantic": "#4135"
+    "renderCarve corpus > 864-a-fence-a-note-s-marker-line-item-opens-ends-at-a-column-zero-line: parses to the same tree": "#4135"
   },
   "sibling-term-item-column.test.ts": {
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",
