@@ -3353,20 +3353,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   function commentsBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
     const line = lexer.peek()
     if (line === undefined || !RE_COMMENT_LINE.test(line)) return
-    // Three consecutive blanks end the list; a comment line breaks the run.
-    let run = 0
-    for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) run++
-    let blanks = run
-    let longest = run
+    // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
+    let blanks = 0
+    for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) blanks++
     let k = lexer.pos
     for (let at = lexer.peek(k - lexer.pos); at !== undefined && (isBlankLine(at) || RE_COMMENT_LINE.test(at)); at = lexer.peek(k - lexer.pos)) {
       if (isBlankLine(at)) {
         blanks++
-        longest = Math.max(longest, ++run)
         k++
         continue
       }
-      run = 0
       const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
       let end = k
       if (fence) {
@@ -3379,7 +3375,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       k = end + 1
     }
-    if (k >= lexer.lineCount || longest >= 3) return
+    if (k >= lexer.lineCount || blanks >= 3) return
     const start = lexer.pos
     lexer.pos = k
     const sibling = readItemHead(lexer, shape) !== null

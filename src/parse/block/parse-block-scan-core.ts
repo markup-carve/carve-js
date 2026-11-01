@@ -819,7 +819,8 @@ export function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: n
     const line = lexer.lineAt(i)!
     if (isBlankLine(line)) return false
     const quoted = RE_BLOCKQUOTE.exec(line)
-    if (!quoted) continue
+    // An open span tests its closer before ownership, so an unmarked closer still closes it (PART 0 S1, corpus 888).
+    if (!quoted) return commentFenceRun(line) === fence
     const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
     if (run && run[1]!.length === fence) return true
   }
@@ -852,6 +853,13 @@ export function literalCommentHasCloser(lexer: Lexer, width: number, from: numbe
     cache.set(depth, run)
   }
   if (run.index.hasCloser(width, from - run.start, floor)) return true
+  // The first line short of the depth is still tested as the span's closer (PART 0 S1, corpus 888).
+  const short = lexer.lineAt(run.end)
+  if (short !== undefined && run.index.reachesEnd(from - run.start, floor)) {
+    let at = 0
+    for (let prefix = quotePrefixLength(short, 0, short.length); prefix > 0; prefix = quotePrefixLength(short, at, short.length)) at += prefix
+    if (commentFenceRun(short.slice(at)) === width) return true
+  }
   // A nonblank line that misses the quote closes the owner's comment before
   // it can become lazy text. A quoted delimiter beyond that boundary still
   // establishes that the opener was a span rather than a line comment.

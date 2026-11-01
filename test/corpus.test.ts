@@ -1186,6 +1186,8 @@ const IMPLEMENTED = new Set([
   'a-combined-token-inside-a-forced-span-stops-at-the-span-s-closer',
   'a-nested-braced-span-hides-an-editorial-closer',
   'an-attribute-block-after-a-span-behind-a-guarding-opener-belongs-to-that-span',
+  // carve#4752.
+  'a-comment-span-in-a-quote-closes-at-an-unmarked-closer',
 ])
 
 /**

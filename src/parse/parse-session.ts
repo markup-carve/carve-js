@@ -149,6 +149,7 @@ import {
   taskMatch,
   toCodepointPositions,
   trackBlockQuoteLazyState,
+  commentFenceRun,
   trimEndSpaceTab,
   tryCollectBlockAttributes,
   unclosedContainerFromOpener,
@@ -1766,11 +1767,31 @@ export class ParseSession extends InlineParseSession {
     if (!lazyLinkDef) this.trackQuoteLine(q, ln, lineIndex)
   }
 
+  // An open comment span tests its closer before ownership, so an unmarked closer stays in the quote (PART 0 S1, corpus 888).
+  private takesUnmarkedCommentCloser(q: QuoteCollect, ln: string): boolean {
+    const width = commentFenceRun(ln)
+    if (width === undefined) return false
+    this.trackUntrackedQuoteLines(q)
+    let level = q.state
+    let open: number | undefined = level.mode.kind === 'comment_fence' ? level.mode.length : undefined
+    while (level.mode.kind === 'quote') {
+      level = level.mode.inner
+      if (level.mode.kind === 'comment_fence') open = level.mode.length
+    }
+    if (open !== width) return false
+    const { lexer } = q
+    const lineIndex = lexer.pos
+    lexer.consume()
+    this.appendLazyQuoteLine(q, ln, lineIndex, false)
+    return true
+  }
+
   // False when the unmarked line ends the quote instead of continuing it.
   private takeLazyQuoteLine(q: QuoteCollect, ln: string): boolean {
     const { lexer, state } = q
     const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
       indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) < q.quoteMarkerColumn
+    if (this.takesUnmarkedCommentCloser(q, ln)) return true
     if (this.interruptsQuoteLazily(q, ln, lazyFootnote)) return false
     // A list marker interrupts the one-line paragraph a refused quoted note `+` forms (§10 I2).
     const preceding = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2] ?? ''
