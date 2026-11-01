@@ -281,6 +281,16 @@ export class InlineParseSession {
     return last < from ? -1 : text.indexOf('%}', from)
   }
 
+  private quoteFlankAfter(text: string, from: number): string {
+    let at = from
+    while (text[at] === '{' && text[at + 1] === '%' && !extendsGrapheme(text, at + 2)) {
+      const close = this.delimitedCommentClose(text, at + 2)
+      if (close < 0) break
+      at = close + 2
+    }
+    return at < text.length ? flankCharAt(text, at) : ''
+  }
+
   private pairEndText: string | undefined
 
   private pairEndTable: Array<Int32Array | undefined> = []
@@ -820,12 +830,12 @@ export class InlineParseSession {
     }
     const c = text[i]!
     if (c === '"') {
-      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : ''
+      const next = this.quoteFlankAfter(text, i + 1)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      const next = i + 1 < text.length ? flankCharAt(text, i + 1) : ''
+      const next = this.quoteFlankAfter(text, i + 1)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
       if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
