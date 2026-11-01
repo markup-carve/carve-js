@@ -22,6 +22,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   const {
     FOOTNOTE_BODY_COLUMN,
     LAZY_FRAME,
+    RE_ABBR_DEF,
     RE_ADMONITION_CLOSE,
     RE_ADMONITION_OPEN,
     RE_BLOCKQUOTE,
@@ -3371,14 +3372,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   // below the item's source content column is the body's, not the item's (corpus 750).
   // Siblings group by their container and a comment is invisible, so a comment
   // that closed the item above does not end the list (carve#3885).
-  function commentsBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
+  function invisibleBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
     const line = lexer.peek()
-    if (line === undefined || !RE_COMMENT_LINE.test(line)) return
+    if (line === undefined || !(RE_COMMENT_LINE.test(line) || isLinkDefLine(line) ||
+      (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)))) return
     // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
     let blanks = 0
     for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) blanks++
     let k = lexer.pos
-    for (let at = lexer.peek(k - lexer.pos); at !== undefined && (isBlankLine(at) || RE_COMMENT_LINE.test(at)); at = lexer.peek(k - lexer.pos)) {
+    for (let at = lexer.peek(k - lexer.pos); at !== undefined &&
+      (isBlankLine(at) || RE_COMMENT_LINE.test(at) || isLinkDefLine(at) ||
+        (lexer.atDocumentLevel && RE_ABBR_DEF.test(at))); at = lexer.peek(k - lexer.pos)) {
       if (isBlankLine(at)) {
         blanks++
         k++
@@ -3403,7 +3407,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     lexer.pos = start
     if (!sibling) return
     if (blanks > 0) flags.loose = true
-    last.children.push(...session.parseInvisibleRun(lexer, k))
+    for (const node of session.parseInvisibleRun(lexer, k)) {
+      if (node.type === 'abbreviation_def' && node.pos?.startLine !== undefined) {
+        lexer.skippedAbbreviations?.set(node.pos.startLine - 1, [node.abbr, node.expansion])
+      } else last.children.push(node)
+    }
   }
 
   return function parseList(lexer: Lexer, session: ParseSession): List {
@@ -3443,7 +3451,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !isBlankLine(a) && !isContinuationMarker(a))
 
     while (!lexer.eof()) {
-      if (items.length) commentsBeforeSibling(lexer, session, shape, items.at(-1)!, flags)
+      if (items.length) invisibleBeforeSibling(lexer, session, shape, items.at(-1)!, flags)
       const head = readItemHead(lexer, shape)
       if (!head) break
       const oneLine = oneLineItem(lexer, session, shape, head)

@@ -1038,6 +1038,7 @@ export const listHelpers = {
   trackWrappedAttributeRun,
   FOOTNOTE_BODY_COLUMN,
   LAZY_FRAME,
+  RE_ABBR_DEF,
   RE_ADMONITION_CLOSE,
   RE_ADMONITION_OPEN,
   RE_BLOCKQUOTE,

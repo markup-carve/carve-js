@@ -3322,6 +3322,7 @@ class CarveRenderSession {
       let listSeparated = false
       let descriptionListOffset = 0
       let previousBlock: BlockNode | null = null
+      let previousDescriptionList = false
       let previousMoved = false
       for (const block of blocks) {
         // A collected definition between two description lists is the boundary
@@ -3355,6 +3356,10 @@ class CarveRenderSession {
           listSeparated = false
           descriptionListOffset = 0
         }
+        const descriptionListsMerge = previousDescriptionList && block.type === 'definition_list'
+        if (block.type === 'definition_list') previousDescriptionList = true
+        else if (block.type !== 'comment' && block.type !== 'abbreviation_def' &&
+          block.type !== 'link_reference_definition') previousDescriptionList = false
         // A block that spells nothing contributes nothing - not even the blank
         // line a part of its own would open. As far as the page is concerned it
         // is the empty paragraph above it (PART 11 §10j).
@@ -3379,7 +3384,7 @@ class CarveRenderSession {
             descriptionListOffset++
             const indent = ' '.repeat(descriptionListOffset)
             parts[parts.length - 1] += `\n\n${text.split('\n').map(line => line ? indent + line : line).join('\n')}`
-          } else if (listSeparated && parts.length > 0) {
+          } else if ((listSeparated || descriptionListsMerge) && parts.length > 0) {
             descriptionListOffset = 0
             // §11 N1a's boundary, written as a SENTINEL rather than as four
             // literal newlines. `normalize` squeezes every run of three or more
@@ -4051,6 +4056,7 @@ class CarveRenderSession {
       // below it is read against. `item.children[i - 1]` is not that: a definition
       // hoisted out of the item renders nothing and still sits in `children`.
       let previousEmitted: BlockNode | null = null
+      let previousDescriptionList = false
       // Whether a sub-list has already opened at this item's content column - the
       // condition under which a later bullet written there joins it instead of
       // opening below the paragraph above it. See `needsABlankLineAbove`.
@@ -4078,6 +4084,16 @@ class CarveRenderSession {
         ) rendered = '\\+'
         if (b.type === 'paragraph' && !separated) rendered = guardLeadingPlusBelowList(rendered, previousEmitted, true)
         if (rendered.length === 0) return
+        if (b.type === 'definition_list') {
+          if (previousDescriptionList) {
+            parts.push(`${this.boundaryTag()}${rendered}`)
+            previousEmitted = b
+            previousAtMarkerColumn = false
+            return
+          }
+          previousDescriptionList = true
+        } else if (b.type !== 'comment' && b.type !== 'abbreviation_def' &&
+          b.type !== 'link_reference_definition') previousDescriptionList = false
         if (b.type === 'list') {
           if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
@@ -4171,12 +4187,16 @@ class CarveRenderSession {
     let run: InlineNode[] = []
     for (let i = 0; i < term.length; i++) {
       const node = term[i]!
-      const own = node.type === 'comment' && !node.delimited && i > 0 && term[i - 1]!.type === 'soft_break'
+      const previous = term[i - 1]
+      const own = node.type === 'comment' && !node.delimited && previous !== undefined &&
+        (previous.type === 'soft_break' ||
+          node.pos?.startLine !== undefined && previous.pos?.endLine !== undefined &&
+          node.pos.startLine > previous.pos.endLine)
       if (!own) {
         run.push(node)
         continue
       }
-      run.pop()
+      if (previous?.type === 'soft_break') run.pop()
       if (run.length > 0 || lines.length === 0) lines.push(this.renderInlines(run, ctx))
       run = []
       const comment = node as Comment

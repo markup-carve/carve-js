@@ -1453,6 +1453,7 @@ export class ParseSession extends InlineParseSession {
   private parseDefinitionList(lexer: Lexer): DefinitionList {
     return parseDefinitionListWithHelpers({
       collectAttachedBlock: this.collectAttachedBlock.bind(this),
+      parseInvisibleRun: this.parseInvisibleRun.bind(this),
       markerPrefixMemo: this.markerPrefixMemo.bind(this),
       parseBlocks: this.parseBlocks.bind(this),
       parseInline: this.parseInline.bind(this),

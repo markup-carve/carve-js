@@ -552,12 +552,12 @@
   {
     "id": "term-comment-break-controls-30",
     "source": "- :: term\n     %% hidden\n  : description\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-32",
     "source": "- :: term\n     %% hidden\n  : description\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-36",
@@ -652,12 +652,12 @@
   {
     "id": "term-comment-break-controls-66",
     "source": "- :: term\n     %%%\n     body\n     %%%\n  : description\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-68",
     "source": "- :: term\n     %%%\n     body\n     %%%\n  : description\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-72",
@@ -752,12 +752,12 @@
   {
     "id": "term-comment-break-controls-102",
     "source": "- :: term\n     %%%\n  : description\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-104",
     "source": "- :: term\n     %%%\n  : description\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    : description\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-108",
@@ -952,12 +952,12 @@
   {
     "id": "term-comment-break-controls-174",
     "source": "> - :: term\n>      %% hidden\n>   : description\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-176",
     "source": "> - :: term\n>      %% hidden\n>   : description\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-180",
@@ -1052,12 +1052,12 @@
   {
     "id": "term-comment-break-controls-210",
     "source": "> - :: term\n>      %%%\n>      body\n>      %%%\n>   : description\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-212",
     "source": "> - :: term\n>      %%%\n>      body\n>      %%%\n>   : description\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-216",
@@ -1152,12 +1152,12 @@
   {
     "id": "term-comment-break-controls-246",
     "source": "> - :: term\n>      %%%\n>   : description\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-248",
     "source": "> - :: term\n>      %%%\n>   : description\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      : description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-252",
@@ -1352,12 +1352,12 @@
   {
     "id": "term-comment-break-controls-318",
     "source": "> > - :: term\n> >      %% hidden\n> >   : description\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-320",
     "source": "> > - :: term\n> >      %% hidden\n> >   : description\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-324",
@@ -1452,12 +1452,12 @@
   {
     "id": "term-comment-break-controls-354",
     "source": "> > - :: term\n> >      %%%\n> >      body\n> >      %%%\n> >   : description\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-356",
     "source": "> > - :: term\n> >      %%%\n> >      body\n> >      %%%\n> >   : description\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-360",
@@ -1552,12 +1552,12 @@
   {
     "id": "term-comment-break-controls-390",
     "source": "> > - :: term\n> >      %%%\n> >   : description\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-392",
     "source": "> > - :: term\n> >      %%%\n> >   : description\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        : description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-396",

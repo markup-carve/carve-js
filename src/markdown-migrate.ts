@@ -7314,9 +7314,10 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
  * The written lines joined, with 3+ consecutive newlines collapsed to 2, and
  * which lines of the result are blank lines of the source.
  */
-function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { text: string; sourceBlanks: Set<number> } {
+function joinOutput(out: readonly string[], fromSource: readonly boolean[], hardBlanks: ReadonlySet<number>): { text: string; sourceBlanks: Set<number> } {
   const lines: string[] = []
   const flags: boolean[] = []
+  const hard: boolean[] = []
   // Whether the line sits inside a fence, where an empty line is CONTENT rather
   // than block separation. The distinction used to be drawn at `=html` only, so
   // a raw block kept its blank lines while an ordinary code block one line away
@@ -7331,6 +7332,7 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
         run[1]!.length >= fence.length && run[2]!.trim() === ''
       lines.push(fence !== null && !closer || line.indexOf('`<') > 0 ? line : dropTrailingWs(line))
       flags.push(fromSource[idx]! && /^[ \t>]*$/.test(line))
+      hard.push(hardBlanks.has(idx))
       fenced.push(fence !== null && !closer)
       if (closer) fence = null
       else if (fence === null && run !== null && (run[1]![0] === '~' || !run[2]!.includes('`'))) {
@@ -7352,7 +7354,7 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
     // A run of empty lines is that many newlines, one more between two lines,
     // and a run of 3+ newlines keeps 2.
     const newlines = end - at + (at > 0 && end < lines.length ? 1 : 0)
-    const keep = fenced.slice(at, end).some(Boolean)
+    const keep = hard.slice(at, end).some(Boolean) ? 3 : fenced.slice(at, end).some(Boolean)
       ? end - at
       : at === 0 && end === lines.length ? Math.min(end - at, 2)
         : at === 0 && end < lines.length ? 0
@@ -7497,6 +7499,8 @@ interface MarkdownConversion {
   readonly dialect: MarkdownDialect
   readonly markdown: string
   readonly sourceLine: (index: number) => number | undefined
+  readonly referenceSeparatedLists: ReadonlySet<number>
+  readonly hardBlanks: Set<number>
   readonly out: string[]
   terminalHtmlBlock: boolean
   // Where `out` holds a blank line of the source, as opposed to one the
@@ -7571,6 +7575,32 @@ interface MarkdownConversion {
   shiftBy: number
   prevType: MarkdownBlockKind
   footnoteEnd: number
+}
+
+function referenceSeparatedListStarts(
+  source: readonly string[], kept: readonly string[], sourceLines: readonly number[],
+): Set<number> {
+  const starts = new Set<number>()
+  const marker = /^([ \t]*)([-*+]|\d+[.)])(?=[ \t])/
+  const reference = /^[ \t]*\[[^\]\n]+\]:[ \t]*/
+  let previous = -1
+  for (let at = 0; at < kept.length; at++) {
+    const line = kept[at] ?? ''
+    const next = marker.exec(line)
+    if (next === null) {
+      if (line.trim() !== '' && !reference.test(line)) previous = -1
+      continue
+    }
+    const prior = previous < 0 ? null : marker.exec(kept[previous] ?? '')
+    if (prior && prior[1] === next[1] &&
+        (prior[2] === next[2] || /^\d/.test(prior[2]!) && /^\d/.test(next[2]!) && prior[2]!.at(-1) === next[2]!.at(-1))) {
+      const between = source.slice((sourceLines[previous] ?? -1) + 1, sourceLines[at] ?? 0)
+      if (between.some(line => reference.test(line) && indentColumns(line) <= indentColumns(next[1]!)) &&
+          between.every(line => line.trim() === '' || reference.test(line))) starts.add(at)
+    }
+    previous = at
+  }
+  return starts
 }
 
 /** What the phases of one source line hand each other. */
@@ -8556,6 +8586,15 @@ function writeContainerOpener(st: MarkdownConversion, ln: MarkdownLine, i: numbe
   const listSibling = siblingMarker !== null &&
     listMarkers.continues(columnWidth(siblingMarker[1]!), siblingMarker[2] ?? siblingMarker[3]!)
   if (isTopLevelList && st.prevType !== 'blank' && !listSibling) out.push('')
+  if (isList && st.referenceSeparatedLists.has(i)) {
+    listMarkers.end(indentColumns(line))
+    let blanks = 0
+    for (let at = out.length - 1; at >= 0 && out[at] === ''; at--) blanks++
+    while (blanks++ < 3) {
+      st.hardBlanks.add(out.length)
+      out.push('')
+    }
+  }
 
   // Carve recognizes `#` headings and `>` blockquotes at their container's
   // content column, but Markdown allows 1-3 further spaces of indent — dedent
@@ -8813,6 +8852,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   importSourceLine = sourceLine
   const st: MarkdownConversion = {
     lines, dialect, markdown, sourceLine,
+    referenceSeparatedLists: referenceSeparatedListStarts(allLines.slice(bodyStart), lines, removed.sourceLines),
+    hardBlanks: new Set<number>(),
     out: [],
     terminalHtmlBlock: false,
     sourceBlanks: new Set<number>(),
@@ -8897,7 +8938,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (markdown.endsWith('\n')) out.push('')
   }
   const assemble = (): string => {
-    const written = joinOutput(out, fromSource)
+    const written = joinOutput(out, fromSource, st.hardBlanks)
     let text = separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)
       .replace(/\x00REFITEM\x00/g, '%%')
     if (st.terminalHtmlBlock && !text.endsWith('\n')) text += '\n'
