@@ -41,7 +41,8 @@ describe('marker recognition is unchanged at every indent', () => {
   it('recognizes every ordered dialect at any indent', () => {
     for (const n of [0, 2, 5, 40]) {
       for (const marker of ['1.', '1)', 'iv.', 'A.', 'x.', '.']) {
-        expect(carveToHtml(at(n, `${marker} x\n`)), `${marker} at ${n}`).toContain('<li>x</li>')
+        const separator = /^[A-Za-z]+\.$/.test(marker) ? '  ' : ' '
+        expect(carveToHtml(at(n, `${marker}${separator}x\n`)), `${marker} at ${n}`).toContain('<li>x</li>')
       }
     }
   })

@@ -14,10 +14,10 @@ import { run, type CliIO } from '../src/cli.js'
 // keeps its start and delimiter and reports its style as lost.
 describe('list-style-dropped on the Markdown target', () => {
   const styled: Array<[string, string, string]> = [
-    ['a. one\na. two\n', '1. one\n2. two\n', 'lower-alpha'],
-    ['A. one\n', '1. one\n', 'upper-alpha'],
-    ['i. one\n', '1. one\n', 'lower-roman'],
-    ['I. one\n', '1. one\n', 'upper-roman'],
+    ['a.  one\na.  two\n', '1. one\n2. two\n', 'lower-alpha'],
+    ['A.  one\n', '1. one\n', 'upper-alpha'],
+    ['i.  one\n', '1. one\n', 'lower-roman'],
+    ['I.  one\n', '1. one\n', 'upper-roman'],
     ['iv) x\nv) y\n', '4) x\n5) y\n', 'lower-roman'],
   ]
 
@@ -54,7 +54,7 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it('stacks an attribute marker directly above the list-style marker', () => {
-    const source = '{.steps}\na. one\nb. two\n'
+    const source = '{.steps}\na.  one\nb.  two\n'
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.value).toBe('<!-- carve: {.steps} -->\n<!-- carve: a. -->\n1. one\n2. two\n')
     expect(exported.losses).toEqual([])
@@ -76,11 +76,11 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it.each([
-    'i. one\nj. two\n',
-    'v. one\nvi. two\n',
-    'V. one\nVI. two\n',
-    '> a. q\n> b. r\n',
-    '{.x}\na. one\nb. two\n',
+    'i.  one\nj.  two\n',
+    'v.  one\nvi.  two\n',
+    'V.  one\nVI.  two\n',
+    '> a.  q\n> b.  r\n',
+    '{.x}\na.  one\nb.  two\n',
   ])('restores a styled list and its host %j', source => {
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.losses).toEqual([])
@@ -90,7 +90,7 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it('restores a styled list in a footnote body', () => {
-    const source = '[^n]: text\n\n    a. one\n    b. two\nafter [^n]\n'
+    const source = '[^n]: text\n\n    a.  one\n    b.  two\nafter [^n]\n'
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     const restored = migrateMarkdown(exported.value)
     expect(exported.losses).toEqual([])
@@ -99,9 +99,9 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it.each([
-    '[^n]: text\n\n    - x\n\n      a. one\n',
-    '[^n]: text\n\n    > a. one\n',
-    '[^n]: a. one\n',
+    '[^n]: text\n\n    - x\n\n      a.  one\n',
+    '[^n]: text\n\n    > a.  one\n',
+    '[^n]: a.  one\n',
   ])('reports style loss where a footnote cannot carry its list %j', source => {
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.losses.map(loss => loss.code)).toContain('list-style-dropped')
@@ -109,7 +109,7 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it('keeps adjacent styled lists separate with their authored delimiters', () => {
-    const source = 'a. one\n\nI. two\n'
+    const source = 'a.  one\n\nI.  two\n'
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.value).toContain('<!-- carve: I. -->\n1. two')
     expect(exported.losses).toEqual([])
@@ -117,21 +117,21 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it('preserves a styled list before a plain ordered list', () => {
-    const source = 'a. one\n\n1. two\n'
+    const source = 'a.  one\n\n1. two\n'
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.value).toContain('<!-- carve: a. -->')
     expect(parse(migrateMarkdown(exported.value).value).children.find(node => node.type === 'list')).toMatchObject({ olType: 'a' })
   })
 
   it('reports an ordered delimiter changed to keep adjacent lists separate', () => {
-    const source = 'a. one\n\n1. two\n'
+    const source = 'a.  one\n\n1. two\n'
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.value).toContain('1) two')
     expect(exported.losses).toMatchObject([{
       code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', delim: '.', emittedDelim: ')',
     }])
     expect(exported.totalLosses).toBe(1)
-    expect(carveToMarkdownWithReport('a. one\n\n1) two\n', { roundtrip: true }).losses).toEqual([])
+    expect(carveToMarkdownWithReport('a.  one\n\n1) two\n', { roundtrip: true }).losses).toEqual([])
   })
 
   it('rejects a separated list-style marker in a footnote body', () => {
@@ -182,7 +182,7 @@ describe('list-style-dropped on the Markdown target', () => {
   })
 
   it('reports one loss per list, in document order', () => {
-    const { losses } = carveToMarkdownWithReport('a. x\n\n> I. quoted\n\n- y\n\n  i. nested\n')
+    const { losses } = carveToMarkdownWithReport('a.  x\n\n> I.  quoted\n\n- y\n\n  i.  nested\n')
     expect(losses.map(loss => loss.code === 'list-style-dropped' && loss.style)).toEqual(['lower-alpha', 'upper-roman', 'lower-roman'])
   })
 
@@ -193,7 +193,7 @@ describe('list-style-dropped on the Markdown target', () => {
 
   it('reports nothing on the HTML, plain and ANSI targets', () => {
     for (const render of [carveToHtmlWithReport, carveToPlainTextWithReport, carveToAnsiWithReport]) {
-      expect(render('a. one\ni. two\n').losses).toEqual([])
+      expect(render('a.  one\ni.  two\n').losses).toEqual([])
     }
   })
 
@@ -201,7 +201,7 @@ describe('list-style-dropped on the Markdown target', () => {
     let out = ''
     let err = ''
     const io: CliIO = {
-      readStdin: async () => 'a. one\n',
+      readStdin: async () => 'a.  one\n',
       write: (s) => { out += s },
       writeErr: (s) => { err += s },
       readFile: (p) => { throw new Error(`ENOENT: ${p}`) },

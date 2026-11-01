@@ -3783,8 +3783,9 @@ class CarveRenderSession {
       node.items.forEach((item, idx) => {
         const indent = ''
         let prefix: string
+        const orderedSeparator = delim === '.' && node.olType !== undefined ? '  ' : ' '
         if (node.ordered) {
-          prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
+          prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim}${orderedSeparator}`
           counter++
         } else if (item.checked !== undefined) {
           prefix = `${bullet} ${taskMarker(item)} `
@@ -3795,7 +3796,7 @@ class CarveRenderSession {
         const itemAttrs = renderAttrs(item.attrs)
         if (itemAttrs) {
           prefix = node.ordered
-            ? `${prefix.trimEnd()}${itemAttrs} `
+            ? `${prefix.trimEnd()}${itemAttrs}${orderedSeparator}`
             : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
         }
         const needsReadback = node.tight && (

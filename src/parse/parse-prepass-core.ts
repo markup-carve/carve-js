@@ -121,7 +121,7 @@ export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +(?! )([ \t]*[^ \t\r\n][^\r\n]*
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 export const RE_ORDERED =
-  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +(?! )([ \t]*[^ \t\r\n][^\r\n]*)$/
+  /^(?=([ \t]*))\1(?![A-Za-z]+\. (?! ))([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +(?! )([ \t]*[^ \t\r\n][^\r\n]*)$/
 
 // Task states: `x`/`X` are checked; ` `, `_`, `-`, `/`, `!`, `>`, and `?`
 // render as unchecked checkboxes. `_` is an open-state alias.
@@ -161,6 +161,7 @@ export const RE_TASK_CONTENT_HEAD = /^\[([ xX\-_>/!?])\] +[ \t]*(?=[^ \t])/
 export function extractItemAttr(line: string, terminatorFree = false): ItemAttributeMarker | null {
   const m = (terminatorFree ? RE_ITEM_ATTR_HEAD : RE_ITEM_ATTR).exec(line)
   if (!m || !isValidInlineAttrPayload(m[3]!)) return null
+  if (/^[A-Za-z]+\.$/.test(m[2]!) && /^ (?! )/.test(m[4]!)) return null
   const parsed = parseAttrs(m[3]!)
   // Empty braces remove marker metadata without adding an empty AST attribute object.
   const attrs = isEmptyAttrs(parsed) ? undefined : parsed

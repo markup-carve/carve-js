@@ -1218,6 +1218,11 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['235-an-uppercase-roman-numeral-is-a-list-marker', { reason: 'carve#4811', html: '<p>I. one\nII. two</p>' }],
+  ['289-a-structural-attribute-leads-the-author-s-own', { reason: 'carve#4811', html: '<p k="v" class="attr">a. alpha</p>' }],
+  ['32-ordered-list-dialects', { reason: 'carve#4811', html: '<p>a. apple\nb. banana</p>' }],
+  ['32-ordered-list-dialects-2', { reason: 'carve#4811', html: '<p>iv. four\nv. five\nvi. six</p>' }],
+  ['90-list-item-attributes-3', { reason: 'carve#4811', html: '<p>a.{.c} An alpha item.</p>' }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

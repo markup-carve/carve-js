@@ -68,7 +68,7 @@ describe('footnote definitions inside containers reach the lint rules', () => {
   })
 
   it('reports duplicate definitions under alphabetic list markers', () => {
-    const src = 'see[^x].\n\na. [^x]: one\na. [^x]: two\n'
+    const src = 'see[^x].\n\na.  [^x]: one\na.  [^x]: two\n'
     expect(Object.keys(parse(src).footnoteDefs ?? {})).toEqual(['x'])
     expect(rules(src)).toContain('duplicate-footnote-definition')
   })

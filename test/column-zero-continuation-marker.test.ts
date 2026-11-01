@@ -75,7 +75,7 @@ describe('column-zero continuation markers', () => {
     expect(html).toContain('<p>+\nflush</p>')
   })
 
-  it.each(['a. > +', 'i. > +', 'A) > +'])('refuses a column-zero follower of ordered opener %s', opener => {
+  it.each(['a.  > +', 'i.  > +', 'A) > +'])('refuses a column-zero follower of ordered opener %s', opener => {
     expect(carveToHtml(`${opener}\nflush`)).toContain('<p>+\nflush</p>')
   })
 })

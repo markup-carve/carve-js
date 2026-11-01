@@ -1313,7 +1313,7 @@ export function unorderedMatch(line: string, terminatorFree = false): RegExpExec
 
 export const RE_UNORDERED_HEAD = /^(?=([ \t]*))\1[-*] +(?! )(?=[ \t]*[^ \t])/
 
-export const RE_ORDERED_HEAD = /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +(?! )(?=[ \t]*[^ \t])/
+export const RE_ORDERED_HEAD = /^(?=([ \t]*))\1(?![A-Za-z]+\. (?! ))([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +(?! )(?=[ \t]*[^ \t])/
 
 export const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>/!?])\] +[ \t]*(?=[^ \t])/
 

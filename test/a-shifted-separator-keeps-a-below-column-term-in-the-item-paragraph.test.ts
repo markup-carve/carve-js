@@ -21,19 +21,19 @@ it.each([
 })
 
 it('leaves the term open when another nested item still owns the separator', () => {
-  const html = carveToHtml('- * a. :: t\n  : a\n   - sibling\n   tail\n')
+  const html = carveToHtml('- * a.  :: t\n  : a\n   - sibling\n   tail\n')
   expect(html).toContain('<dt>t\n: a\n- sibling\ntail</dt>')
   expect(html.match(/<ul>/g)).toHaveLength(2)
 })
 
 it('ends a deeper item at a below-column term marker', () => {
-  const html = carveToHtml('- * a. :: t\n  : a\n :: sibling\n tail\n')
+  const html = carveToHtml('- * a.  :: t\n  : a\n :: sibling\n tail\n')
   expect(html).toContain('<dt>t\n: a</dt>')
   expect(html.match(/<dl>/g)).toHaveLength(2)
 })
 
 it('opens a later term at the surviving nested item column', () => {
-  const html = carveToHtml('- * a. :: t\n  : a\n    :: sibling\n    tail\n')
+  const html = carveToHtml('- * a.  :: t\n  : a\n    :: sibling\n    tail\n')
   expect(html).toContain('<dt>t\n: a</dt>')
   expect(html).toContain('<dt>sibling\ntail</dt>')
   expect(html.match(/<dl>/g)).toHaveLength(2)

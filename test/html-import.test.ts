@@ -562,13 +562,13 @@ describe('change tracking and ordered-list alphabets on import', () => {
   it('counts an ordered list in the alphabet the HTML asked for', () => {
     // The attribute was exempt from the unsupported-attribute report and then
     // unread, so the list came back counting 1. 2. 3. and nothing said so.
-    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\nb. y')
-    expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I. x')
+    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a.  x\nb.  y')
+    expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I.  x')
     expect(carveToHtml(carve('<ol type="a"><li>x</li></ol>'))).toContain('<ol type="a">')
   })
 
   it('keeps the start together with the alphabet', () => {
-    expect(carve('<ol type="a" start="3"><li>x</li></ol>')).toBe('c. x')
+    expect(carve('<ol type="a" start="3"><li>x</li></ol>')).toBe('c.  x')
     expect(carveToHtml(carve('<ol type="a" start="3"><li>x</li></ol>'))).toContain('<ol type="a" start="3">')
   })
 
@@ -682,7 +682,7 @@ describe('change tracking and ordered-list alphabets on import', () => {
       expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('no numeral above 3999') }),
     ])
     // The boundary itself is spellable and keeps the alphabet.
-    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li></ol>').value).toBe('mmmcmxcix. x\n')
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li></ol>').value).toBe('mmmcmxcix.  x\n')
     // And the LAST item is the one asked about: a list opened below the
     // boundary crosses it from inside, where the output grows as the square of
     // the list's length.
@@ -715,7 +715,7 @@ describe('change tracking and ordered-list alphabets on import', () => {
     ])
     for (const bad of ['foo', '2.9', '1e3', '']) {
       expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).value).toBe('1. x\n')
-      expect(htmlToCarve(`<ol type="a" start="${bad}"><li>x</li></ol>`).value).toBe('a. x\n')
+      expect(htmlToCarve(`<ol type="a" start="${bad}"><li>x</li></ol>`).value).toBe('a.  x\n')
       expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).report.diagnostics).toEqual([
         expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
       ])

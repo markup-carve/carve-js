@@ -23,7 +23,7 @@ describe('ordered-list delimiter in the AST', () => {
 
   it('records the delimiter for alpha and roman dialects', () => {
     expect(firstList('a) x\nb) y').delim).toBe(')')
-    expect('delim' in firstList('i. x\nii. y')).toBe(false)
+    expect('delim' in firstList('i.  x\nii.  y')).toBe(false)
   })
 
   it('is absent on unordered lists', () => {

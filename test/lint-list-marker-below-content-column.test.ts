@@ -22,11 +22,11 @@ describe('list-marker-below-content-column vectors', () => {
     ['block quote', '> 10. c\n>    - d\n', 2, 6],
     ['tab indent', '100. c\n\t- d\n', 2, 2],
     ['task item', '10. c\n   - [ ] d\n', 2, 4],
-    ['alpha marker', '10. c\n   a. d\n', 2, 4],
+    ['alpha marker', '10. c\n   a.  d\n', 2, 4],
     ['after a blank, CRLF', '10. c\r\n\r\n   - d\r\n', 3, 4],
     ['after a blank, block quote', '> 10. c\n>\n>    - d\n', 3, 6],
     ['after a blank, tab indent', '100. c\n\n\t- d\n', 3, 2],
-    ['after a blank, alpha marker', '10. c\n\n   a. d\n', 3, 4],
+    ['after a blank, alpha marker', '10. c\n\n   a.  d\n', 3, 4],
   ])('%s', (_name, source, line, column) => {
     expect(findings(source as string)).toMatchObject([{ line, column }])
   })

@@ -97,6 +97,22 @@
         "guards-61e1689d452b",
         "guards-9576a8f87b86"
       ]
+    },
+    {
+      "ticket": "markup-carve/carve#4811",
+      "cause": "letter or roman dot markers need two spaces after the marker; engine follows current spec ahead of this pin",
+      "cases": [
+        "attributes-26b1700c816a",
+        "attributes-598027ed4800",
+        "attributes-7821c695246b",
+        "attributes-a4b7751c4295",
+        "attributes-b13a601b659e",
+        "attributes-b5be44e0e3e6",
+        "attributes-b82665ca49d4",
+        "attributes-ce5424571331",
+        "attributes-e06761438664",
+        "attributes-eb06611ecd8d"
+      ]
     }
   ]
 }

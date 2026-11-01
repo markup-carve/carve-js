@@ -161,8 +161,8 @@ describe('the render-loss code enum', () => {
         seen.add(loss.code)
       }
     }
-    for (const loss of carveToMarkdownWithReport('a. one\n').losses) seen.add(loss.code)
-    for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('a.  one\n').losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('a.  one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('|= First | < |\n|= Second | Cell |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('|= First |\n|= Second |\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses) seen.add(loss.code)
@@ -183,8 +183,8 @@ describe('the render-loss code enum', () => {
         ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
       )
     }
-    records.push(...carveToMarkdownWithReport('a. one\n').losses)
-    records.push(...carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses)
+    records.push(...carveToMarkdownWithReport('a.  one\n').losses)
+    records.push(...carveToMarkdownWithReport('a.  one\n\n1. two\n', { roundtrip: true }).losses)
     records.push(...carveToMarkdownWithReport('| A | B |\n|= C |= D |\n').losses)
     records.push(...carveToMarkdownWithReport('| A |= B |\n| C | D |\n').losses)
     records.push(...carveToMarkdownWithReport('``` "T" [Build]\nx\n```\n').losses)
