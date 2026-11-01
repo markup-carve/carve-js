@@ -798,7 +798,11 @@ export function createDefinitionListParser(
           else if (dedented === localLine && (RE_DEFLIST_TERM.test(localLine) || isListMarkerLine(localLine))) nestedDescriptionOpened = false
         }
         if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
-        bodyLines.push(dedented)
+        const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
+          (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
+            lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
+        bodyLines.push(captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn
+          ? LAZY_FRAME + dedented.trimStart() : dedented)
         bodySourceLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         let closedNestedAttribute = false
@@ -1054,8 +1058,11 @@ export function createDefinitionListParser(
         // a second list where the fold continues the first. Every other kind
         // either ends the body above or reads the same at both columns.
         //
+        const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
+          (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
+            lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
         const folded =
-          RE_CAPTION.test(below) && lazyState.opaque === null
+          (RE_CAPTION.test(below) && lazyState.opaque === null || captionFollower)
             ? LAZY_FRAME + below
             : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
                 (lazyState.divDepth > 0 || lazyState.inDefList === 'term')

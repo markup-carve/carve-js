@@ -36,6 +36,15 @@ function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): 
     state.deepest?.opaque == null && (!state.deepest?.divDepth || state.deepest.literalLayout === true)
 }
 
+function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatimOnlyLazyState>, follower: string): boolean {
+  const prior = (lines.at(-2) ?? '').trimStart()
+  const fenceClosed = state.opaque?.kind === 'code' && state.opaque.close.test(prior)
+  return RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) && !isListMarkerLine(follower.trimStart()) &&
+    /^(`{3,}|~{3,})\s*$/.test(prior) &&
+    lines.slice(0, -2).some(line => /^(?:(?::|-|\d+[.)])\s*)*(`{3,}|~{3,})/.test(line.trimStart())) &&
+    (state.opaque === null || fenceClosed)
+}
+
 function isLiteralLineBlockListMarker(state: ReturnType<typeof verbatimOnlyLazyState>, line: string): boolean {
   return state.deepest?.literalLayout === true && isListMarkerLine(line.trimStart())
 }
@@ -442,7 +451,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
-      ((canTakePlainLazyLine(lazyState) && !captionLeavesMarkerLineNote(lexer, defLineIndex, ln)) ||
+      (((canTakePlainLazyLine(lazyState) || captionParagraphOpen(bodyLines, lazyState, ln)) &&
+        !captionLeavesMarkerLineNote(lexer, defLineIndex, ln)) ||
         markerLineCommentContinuesNote(lexer, defLineIndex, sourceLine, authoredBodyColumn, ln) ||
         ((nestedMarkerHasText && bodyLines.length > 1) && isRetainableLineComment(lexer, ln))) &&
       (isRetainableLineComment(lexer, ln) ||

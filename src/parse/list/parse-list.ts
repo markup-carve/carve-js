@@ -2720,12 +2720,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       settleContentLine(l)
     }
 
+    const captionLeafOpen = (line: string): boolean =>
+      pendingBlankRun.count === 0 &&
+      RE_CAPTION.test((nested.at(-1) ?? '').trimStart()) &&
+      !RE_DEFLIST_DEF.test(line.trimStart()) &&
+      !isListMarkerLine(line.trimStart()) && !lineOpensItemBlock(line.trimStart()) &&
+      /^(`{3,}|~{3,})\s*$/.test((nested.at(-2) ?? '').trimStart()) &&
+      nested.slice(0, -2).some(entry => /^(?:(?::|-|\d+[.)])\s*)*(`{3,}|~{3,})/.test(entry.trimStart())) &&
+      (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
+        lazyState.opaque.close.test((nested.at(-2) ?? '').trimStart()))
+
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-      (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim ||
+      (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim || captionLeafOpen(l) ||
         (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
         (lazyState.deepest?.inDefList === 'description' &&
           (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
@@ -2784,6 +2794,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
+      if (captionLeafOpen(l)) return LAZY_FRAME + l.trimStart()
       if ((enclosingLazy || ancestorTermBand) && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term'))
         return LAZY_FRAME + l.trimStart()
       if (markerTermText && !shape.isTask) return LAZY_FRAME + l.trimStart()
@@ -2946,7 +2957,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const decision = admitContinuationMarker(l) ?? stopsBeforeBody(l) ?? readQuoteFacts(l) ??
         readDefinitionSource(l) ?? readDefinitionBand(l)
       if (decision !== undefined) return decision
-      if (lw >= contentCol && !ancestorTermBand &&
+      if (lw >= contentCol && !captionLeafOpen(l) && !ancestorTermBand &&
         !(enclosingLazy && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term')) &&
         !belowOpenDescription && !belowDefinitionEntry && !quoteLazyFramed &&
         // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
