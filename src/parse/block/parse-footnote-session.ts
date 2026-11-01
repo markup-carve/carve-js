@@ -36,6 +36,10 @@ function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): 
     state.deepest?.opaque == null && (!state.deepest?.divDepth || state.deepest.literalLayout === true)
 }
 
+function isLiteralLineBlockListMarker(state: ReturnType<typeof verbatimOnlyLazyState>, line: string): boolean {
+  return state.deepest?.literalLayout === true && isListMarkerLine(line.trimStart())
+}
+
 function trackedFootnoteContent(content: string): string {
   return content !== content.trimStart() && lineOpensItemBlock(content.trimStart())
     ? content.trimStart() : content
@@ -445,7 +449,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         (lexer.hostBody === 'list' && sourceLine !== undefined && authoredBodyColumn !== undefined &&
           sourceColumn(sourceLine) < authoredBodyColumn - FOOTNOTE_BODY_COLUMN &&
           isListMarkerLine(sourceQuoteBody(sourceLine).trimStart())) ||
-        !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))
+        !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart())) &&
+      !isLiteralLineBlockListMarker(lazyState, ln)
     ) {
       const content = ln
       // A wrapped attribute opened in the body takes its later lines at any column (PART 9 §15 A5).
