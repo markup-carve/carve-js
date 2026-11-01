@@ -27,7 +27,7 @@ describe('raw block (```=FORMAT djot syntax)', () => {
 
   it('no longer recognizes the removed ```raw FORMAT keyword form', () => {
     expect(h('```raw html\n<b>x</b>\n```')).toBe(
-      '<p><code>raw html\n&lt;b&gt;x&lt;/b&gt;</code></p>\n<pre><code></code></pre>',
+      '<pre><code class="language-raw">&lt;b&gt;x&lt;/b&gt;\n</code></pre>',
     )
   })
 })

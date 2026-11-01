@@ -18,14 +18,13 @@ describe('fenced code language tags with punctuation', () => {
     expect(html('```asp.net\nx\n```')).toContain('class="language-asp.net"')
   })
 
-  it('still rejects a multiword info string (stays an inline code span)', () => {
-    // The bare closer line below is a valid opener of its own (carve#4018).
+  it('recovers the language from a multiword info string', () => {
     const out = html('```js title="x"\ny\n```')
-    expect(out).toBe('<p><code>js title="x"\ny</code></p>\n<pre><code></code></pre>')
+    expect(out).toBe('<pre><code class="language-js">y\n</code></pre>')
   })
 
-  it('rejects an inline `{...}` after the language (use a preceding line)', () => {
-    expect(html('```php {.fancy}\ny\n```')).toBe('<p><code>php {.fancy}\ny</code></p>\n<pre><code></code></pre>')
+  it('drops an inline `{...}` after the language', () => {
+    expect(html('```php {.fancy}\ny\n```')).toBe('<pre><code class="language-php">y\n</code></pre>')
   })
 
   it('accepts a bracketed [label] after the language; label is not in the class', () => {

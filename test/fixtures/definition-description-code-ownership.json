@@ -3652,7 +3652,7 @@
   {
     "id": "review-final-12",
     "source": "> - :: a\n>   : p\n```js extra`\n>     ~~~\n>   ~~~\n>         ~~~\n>   ~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dd>\n          <p>p\n<code>js extra`</code></p>\n          <pre><code></code></pre>\n        </dd>\n      </dl>\n      <pre><code>      ~~~\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dd>p</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<pre><code class=\"language-js\">&gt;     ~~~\n&gt;   ~~~\n&gt;         ~~~\n&gt;   ~~~\n</code></pre>"
   },
   {
     "id": "review-final-13",

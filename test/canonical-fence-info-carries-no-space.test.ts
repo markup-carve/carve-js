@@ -139,20 +139,17 @@ describe('the rule holds under a container prefix', () => {
 
 /*
  * The slot the fix must NOT touch. These separators are `space+` inside
- * `code_fence_info`; removing one does not tighten the opener, it stops the
- * line being a fence opener and the run falls back to an inline code span
- * (the INVALID-FENCE FALLBACK). So the reader is checked here too: if a later
- * change were to join the parts without a separator, the writer would emit a
- * document that no longer holds a code block at all.
+ * `code_fence_info`; removing one makes the metadata invalid. Recovery keeps
+ * the language and code block but drops the metadata, so the writer must still
+ * keep each separator when writing a header or label.
  */
 describe('the separators inside the info string are not the same slot', () => {
-  it('a header glued to the language is not a fence opener', () => {
-    // The trailing bare run is a valid opener of its own (carve#4018).
-    expect(carveToHtml('```js"t"\nx\n```\n')).toContain('<p><code>js"t"\nx</code></p>\n<pre><code></code></pre>')
+  it('a header glued to the language is dropped by recovery', () => {
+    expect(carveToHtml('```js"t"\nx\n```\n')).toBe('<pre><code class="language-js">x\n</code></pre>')
   })
 
-  it('a label glued to the language is not a fence opener', () => {
-    expect(carveToHtml('```js[l]\nx\n```\n')).toContain('<p><code>js[l]\nx</code></p>\n<pre><code></code></pre>')
+  it('a label glued to the language is dropped by recovery', () => {
+    expect(carveToHtml('```js[l]\nx\n```\n')).toBe('<pre><code class="language-js">x\n</code></pre>')
   })
 
   it('the writer keeps one separator between every part', () => {

@@ -102,9 +102,9 @@ describe('the fence info line reads the same production', () => {
   })
 
   it.each([
-    ['an unclosed backtick run', '``` js [a ` b]\nq\n```\n', '<p><code> js [a ` b]\nq</code></p>\n<pre><code></code></pre>'],
-    ['trailing text after the run', '``` js [a] b]\nq\n```\n', '<p><code> js [a] b]\nq</code></p>\n<pre><code></code></pre>'],
-  ])('%s leaves the line as prose', (_name, source, expected) => {
+    ['an unclosed backtick run', '``` js [a ` b]\nq\n```\n', JS],
+    ['trailing text after the run', '``` js [a] b]\nq\n```\n', JS],
+  ])('%s recovers the language', (_name, source, expected) => {
     expect(html(source)).toBe(expected)
   })
 })

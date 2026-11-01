@@ -74,7 +74,7 @@ export function balancedLabelMatcher(
   return { test: (line) => exec(line) !== null, exec }
 }
 
-export const RE_FENCE = balancedLabelMatcher(
+const STRICT_FENCE = balancedLabelMatcher(
   new RegExp(
     '^()(`{3,}|~{3,}) ?(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\n]*\\]))?' +
       '|("[^"]*")(?: +(\\[[^\\n]*\\]))?|(\\[[^\\n]*\\]))?' +
@@ -82,6 +82,30 @@ export const RE_FENCE = balancedLabelMatcher(
   ),
   [5, 7, 8],
 )
+
+// A valid language keeps its code block when the remaining opener metadata is
+// invalid. A same-length run later on this line still closes an inline span.
+export function recoveredCodeFence(line: string): RegExpExecArray | null {
+  if (STRICT_FENCE.test(line)) return null
+  const opener = /^()(`{3,}|~{3,})( ?)([a-zA-Z0-9_+#/.-]+)([^\n]*)$/.exec(line)
+  if (!opener) return null
+  const run = opener[2]!
+  const tail = opener[5]!
+  if (!/^[\s\u0085"{[“”]/.test(tail) || tail.includes(run)) return null
+  const match = [line, '', run, opener[4]!] as unknown as RegExpExecArray
+  match.index = 0
+  match.input = line
+  return match
+}
+
+export const RE_FENCE = {
+  exec(line: string): RegExpExecArray | null {
+    return STRICT_FENCE.exec(line) ?? recoveredCodeFence(line)
+  },
+  test(line: string): boolean {
+    return STRICT_FENCE.test(line) || recoveredCodeFence(line) !== null
+  },
+}
 
 export const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +(?! )([ \t]*[^ \t\r\n][^\r\n]*)$/
 

@@ -334,8 +334,8 @@ describe('lintCarve — trailing heading attribute', () => {
 describe('lintCarve — legacy raw fence', () => {
   it('flags ```raw FORMAT and suggests ```=FORMAT', () => {
     const w = lintCarve('```raw html\n<b>x</b>\n```')
-    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax', 'unclosed-code-fence'])
-    expect(w[0]!.message).toContain('```=html')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain('keeps its language')
     expect(w[0]!.line).toBe(1)
   })
 
@@ -512,7 +512,7 @@ describe('lintCarve — verbatim regions still suppress in-block warnings', () =
     // fenced code block it is verbatim content and must be skipped. This proves
     // the shared verbatim set still gates both source-line collectors.
     const inProse = lintCarve('~~~raw html\n<b>x</b>\n~~~').map((w) => w.rule)
-    expect(inProse).toContain('raw-block-syntax')
+    expect(inProse).toContain('fence-title-syntax')
     const inBlock = lintCarve('````\n~~~raw html\n<b>x</b>\n~~~\n````').map(
       (w) => w.rule,
     )
@@ -713,25 +713,26 @@ describe('lintCarve — empty-include-path advisory', () => {
   })
 })
 
-describe('lintCarve — fence opener that fell back to inline text', () => {
+describe('lintCarve — invalid fence metadata recovery', () => {
   const rulesOf = (src: string) => lintCarve(src).map((w) => w.rule)
   const RULE = 'fence-opener-fallback'
+  const RECOVERED = 'fence-title-syntax'
 
   it('flags a trailing attribute block and suggests the line above', () => {
     // carve#4018: the bare ``` after a fallback opener opens a fence of its own.
     const w = lintCarve('```js {.diff}\n const a = 1\n-let b = 2\n```\n')
-    expect(w.map((x) => x.rule)).toEqual([RULE, 'unclosed-code-fence'])
+    expect(w.map((x) => x.rule)).toEqual([RECOVERED])
     expect(w[0].line).toBe(1)
     expect(w[0].column).toBe(1)
-    expect(w[0].message).toContain('(use: "{.diff}" on its own line directly above the fence, then "```js")')
-    expect(w[0].data).toEqual({ attributes: '{.diff}', opener: '```js' })
+    expect(w[0].message).toContain('drops invalid opener metadata')
+    expect(w[0].data).toBeUndefined()
   })
 
   it('flags a tilde opener, an unquoted title and a key="value" pair', () => {
-    expect(rulesOf('~~~js {.diff}\nx\n~~~\n')).toEqual([RULE, 'unclosed-code-fence'])
-    expect(rulesOf('```js main.js\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
-    expect(rulesOf('```js title="x"\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
-    expect(rulesOf('```php [l] "h"\nx\n```\n')).toEqual([RULE, 'unclosed-code-fence'])
+    expect(rulesOf('~~~js {.diff}\nx\n~~~\n')).toEqual([RECOVERED])
+    expect(rulesOf('```js main.js\nx\n```\n')).toEqual([RECOVERED])
+    expect(rulesOf('```js title="x"\nx\n```\n')).toEqual([RECOVERED])
+    expect(rulesOf('```php [l] "h"\nx\n```\n')).toEqual([RECOVERED])
   })
 
   it('does not suggest moving anything when there is no trailing attribute block', () => {
@@ -745,23 +746,24 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
     expect(w.rule).toBe(RULE)
     expect(w.message).toContain('(use: "```php")')
     const [t] = lintCarve('```js\t"T"\nx\n```\n')
-    expect(t.message).toContain('(use: "```js "T"")')
+    expect(t.rule).toBe(RECOVERED)
+    expect(t.message).toContain('drops invalid opener metadata')
   })
 
   it('flags an opener that interrupts a paragraph', () => {
     const w = lintCarve('para\n```js {.x}\ny\n```\n')
-    expect(w.map((x) => [x.rule, x.line])).toEqual([[RULE, 2], ['unclosed-code-fence', 4]])
+    expect(w.map((x) => [x.rule, x.line])).toEqual([[RECOVERED, 2]])
   })
 
   it('flags an opener inside a block quote and a list item', () => {
     const q = lintCarve('> ```js {.x}\n> y\n> ```\n')
-    expect(q.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 1, 3], ['unclosed-code-fence', 3, 3]])
+    expect(q.map((x) => [x.rule, x.line, x.column])).toEqual([[RECOVERED, 1, 3]])
     const l = lintCarve('- item\n\n  ```js {.x}\n  y\n  ```\n')
-    expect(l.map((x) => [x.rule, x.line, x.column])).toEqual([[RULE, 3, 3], ['unclosed-code-fence', 5, 3]])
+    expect(l.map((x) => [x.rule, x.line, x.column])).toEqual([[RECOVERED, 3, 3]])
   })
 
   it('handles CRLF line endings', () => {
-    expect(rulesOf('```js {.x}\r\ny\r\n```\r\n')).toEqual([RULE, 'unclosed-code-fence'])
+    expect(rulesOf('```js {.x}\r\ny\r\n```\r\n')).toEqual([RECOVERED])
     expect(rulesOf('```js\r\ny\r\n```\r\n')).toEqual([])
   })
 
@@ -794,13 +796,13 @@ describe('lintCarve — fence opener that fell back to inline text', () => {
 
   it('leaves a legacy raw fence to raw-block-syntax', () => {
     const rules = rulesOf('``` raw html\nx\n```\n')
-    expect(rules).toContain('raw-block-syntax')
+    expect(rules).toContain(RECOVERED)
     expect(rules).not.toContain(RULE)
   })
 
-  it('reports an indented invalid opener once, as a fallback, not as an indentation problem', () => {
+  it('reports recovered metadata and the overindented opener', () => {
     const w = lintCarve('  ```js {.x}\n  y\n  ```\n').filter((x) => x.line === 1)
-    expect(w.map((x) => x.rule)).toEqual([RULE])
+    expect(w.map((x) => x.rule)).toEqual([RECOVERED, 'block-opener-overindented'])
   })
 })
 
