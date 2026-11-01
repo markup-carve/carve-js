@@ -1,5 +1,6 @@
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './extension/smart-typography-mode.js'
 import { withResolvedEmptyReferenceDefinitions } from './parse/inline/reference-state.js'
+import { stripBidiControls } from './extension/bidi-controls.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -2430,7 +2431,7 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // no longer answers this question (carve#596) - the shared predicate is the
   // one the footnote-numbering pass asks as well.
   if (isUnresolvedReference(img)) return escapeHtml(referenceSourceText(img.rawRef))
-  const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
+  const titleAttr = img.title !== undefined ? ` title="${escapeAttr(stripBidiControls(img.title))}"` : ''
   const sanitizedSrc = sanitizeUrl(img.src, opts)
   destinationDenied(opts, 'image', 'html', img.src, sanitizedSrc, img.pos)
   const src = escapeAttr(sanitizedSrc)
@@ -2446,7 +2447,7 @@ function renderImage(img: Image, opts: RenderOptions): string {
     : ''
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
-  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${refAttr}${renderAttrs(attrs)}>`
+  return `<img src="${src}" alt="${escapeAttr(stripBidiControls(img.alt))}"${titleAttr}${refAttr}${renderAttrs(attrs)}>`
 }
 
 // ============================================================================
@@ -2750,7 +2751,7 @@ function renderLinkNode(node: InlineOf<'link'>, opts: RenderOptions): string {
   // This used to run in the resolver, which flattened the tree itself and
   // lost the inner destination from every consumer of the AST.
   if (insideLink) return renderInlines(node.children, opts)
-  const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
+  const titleAttr = node.title !== undefined ? ` title="${escapeAttr(stripBidiControls(node.title))}"` : ''
   const sanitizedHref = sanitizeUrl(node.href, opts)
   destinationDenied(opts, 'link', 'html', node.href, sanitizedHref, node.pos)
   const href = escapeAttr(sanitizedHref)
