@@ -309,9 +309,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
   function placeItem(lexer: Lexer, shape: ListShape, head: ItemHead): ItemPlacement {
     const { baseIndent } = shape
-    const contentCol = shape.isTask
-      ? baseIndent + 2
-      : markerEndColumn(baseIndent, head.markerLine.slice(leadingWhitespace(head.markerLine), head.markerLine.length - head.markerContentLength))
+    const markerHead = head.markerLine.slice(leadingWhitespace(head.markerLine), head.markerLine.length - head.markerContentLength)
+    // A task item's content column is its box's column, as the ownership walk measures it.
+    const contentCol = markerEndColumn(baseIndent, shape.isTask ? markerHead.replace(/\[.\][ \t]*$/, '') : markerHead)
     const itemSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(head.startLineIndex) - 1] ?? head.line
     const itemMarkerColumn = sourceColumn(itemSource)
     const physicalItemMarkerColumn = Math.max(itemMarkerColumn, lexer.rootFrameColumn(head.startLineIndex) + baseIndent)

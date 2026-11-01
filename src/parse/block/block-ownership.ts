@@ -201,7 +201,7 @@ function matchMarker(rest: string): { width: number; head: number; axes: string;
   const line = trimEndSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
-    if (m[4] !== undefined) return { width: 2, head: m[0].length, axes: m[1]!, task: true }
+    if (m[4] !== undefined) return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: true }
     return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: false }
   }
   m = ORDERED.exec(line)
