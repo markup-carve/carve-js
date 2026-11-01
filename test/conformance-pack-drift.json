@@ -62,13 +62,6 @@
     },
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged drift in the ownership family that the spec bump to carve 7840b69 surfaced",
-      "cases": [
-        "ownership-08cd1743ebaf"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged drift in the lazy family that the spec bump to carve 7840b69 surfaced",
       "cases": [
         "lazy-70acba91ccbd",
