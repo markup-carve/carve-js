@@ -383,7 +383,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
       if (lazyMarker && lazyItem) break
-      if (paragraph && !insideItem && !sibling && !leftOfOutermost) break
+      if (paragraph && !blockStart && !insideItem && !sibling && !leftOfOutermost) break
       host.initialMarkerColumn ??= at
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
@@ -422,6 +422,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
         at += 2
         inner = bodyNote[2]!
       }
+      continue
     }
     break
   }

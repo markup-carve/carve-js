@@ -1,4 +1,4 @@
-import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, verbatimOnlyLazyState } from './parse-block-boundaries.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME } from '../parse-prepass-core.js'
 import type {
   BlockNode,
@@ -19,7 +19,11 @@ import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import {
   continueWrappedAttributeBlock,
+  markerLineBottomBlock,
+  markerPrefixLength,
   opensWrappedAttributeBlock,
+  payloadFenceHasCloser,
+  prefixWalkBound,
   RE_DEFLIST_DEF as DEFINITION_MARKER,
 } from './parse-quote-core.js'
 import { RE_DEFLIST_TERM as TERM_MARKER } from '../parse-prepass-core.js'
@@ -404,6 +408,46 @@ export function createDefinitionListParser(
       const paragraphFenceLines = new Set<number>()
       const lazyParagraphFenceLines = new Set<number>()
       const authoredOpeners = new Set<number>()
+      let pendingMarkerLineBlock: { line: string; column: number } | null = null
+      const quoteColumn = (line: string): { at: number; column: number } => {
+        let at = 0
+        let column = 0
+        for (let end = sourceQuotePrefixEnd(line, at); end >= 0;
+          end = sourceQuotePrefixEnd(line, at)) {
+          column += end - at
+          at = end
+        }
+        return { at, column }
+      }
+      const payloadColumn = (line: string): number => {
+        const { at, column } = quoteColumn(line)
+        return column + indentColumns(line.slice(at))
+      }
+      const seedMarkerLineBlock = (line: string): void => {
+        if (lazyState.literalColon || lazyState.deepest?.literalColon) return
+        const bottom = markerLineBottomBlock(line)
+        if (bottom === line || !RE_LINE_BLOCK_OPEN.test(bottom)) return
+        let { at, column } = quoteColumn(line)
+        const bound = prefixWalkBound(line)
+        for (let width = markerPrefixLength(line, at, bound); width > 0;
+          width = markerPrefixLength(line, at, bound)) {
+          column += markerContentColumn(line.slice(at, at + width) + 'x')
+          at += width
+        }
+        const literal = { width: colonFenceOpenerLen(bottom)!, column: 0 }
+        if (lazyState.ownedColumn > 0) {
+          const frame = verbatimOnlyLazyState()
+          frame.divDepth = 1
+          frame.literalColon = literal
+          frame.literalLayout = true
+          lazyState.deepest = frame
+        } else {
+          lazyState.literalColon = { ...literal, column }
+          lazyState.divDepth = 1
+        }
+        lazyState.literalLayout = true
+        lazyState.lazyFoldable = false
+      }
       /**
        * Feed one collected body line to the S4 tracker.
        *
@@ -418,7 +462,11 @@ export function createDefinitionListParser(
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
-        trackItemLazyState(content, lazyState, atContentColumn)
+        trackItemLazyState(content, lazyState, atContentColumn, () => true, {
+          terminatorFree: true,
+          payloadFenceCloser: marker => payloadFenceHasCloser(lexer, marker),
+        })
+        seedMarkerLineBlock(content)
         if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
           paragraphFenceLines.add(bodyLines.length - 1)
           const previous = bodyLines.length - 2
@@ -548,6 +596,16 @@ export function createDefinitionListParser(
         // A malformed fence on the marker line absorbs the bare run below it, as an item's lead does.
         lazyState.absorbingFence = /^:{3,}/.test(first) && !firstIsColonContainer
         if (RE_LINE_BLOCK_OPEN.test(first)) lazyState.literalColon = { width: colonFenceOpenerLen(first)!, column: 0 }
+        if (RE_LINE_BLOCK_OPEN.test(markerLineBottomBlock(first))) {
+          let { at, column } = quoteColumn(first)
+          const bound = prefixWalkBound(first)
+          for (let width = markerPrefixLength(first, at, bound); width > 0;
+            width = markerPrefixLength(first, at, bound)) {
+            column += markerContentColumn(first.slice(at, at + width) + 'x')
+            at += width
+          }
+          pendingMarkerLineBlock = { line: first, column }
+        }
         const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
         if (leadFence) {
           lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!) }
@@ -645,6 +703,7 @@ export function createDefinitionListParser(
         // came out as prose where the oracle starts a fresh table.
         if (
           !bodyHoldsQuote &&
+          lazyState.deepest?.literalColon === undefined &&
           lazyState.literalColon === undefined &&
           !insideOpenQuoteParagraph(lazyState) &&
           (!lazyState.inFootnoteBody || residual < (lazyState.footnoteBodyColumn ?? FOOTNOTE_BODY_COLUMN)) &&
@@ -747,7 +806,7 @@ export function createDefinitionListParser(
           const result = continueWrappedAttributeBlock(nestedAttributeRun, dedented.trimStart())
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
           closedNestedAttribute = result.verdict === 'attributes'
-        } else if (nestedItemColumn > 0 && indentColumns(dedented) >= nestedItemColumn &&
+        } else if (!lazyState.literalLayout && nestedItemColumn > 0 && indentColumns(dedented) >= nestedItemColumn &&
             opensWrappedAttributeBlock(dedented.trimStart())) nestedAttributeRun = dedented.trimStart()
         // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
         // (markup-carve/carve#1911). `sliceColumns` removes the body's content
@@ -784,6 +843,13 @@ export function createDefinitionListParser(
         // moved 26 documents off the oracle while fixing 72.
         const flush = dedented.replace(/^[ \t]+/, '')
         const residual = indentColumns(ln) - contentCol
+        if (pendingMarkerLineBlock !== null) {
+          if (payloadColumn(dedented) >= pendingMarkerLineBlock.column) {
+            lazyState.ownedColumn = pendingMarkerLineBlock.column
+            seedMarkerLineBlock(pendingMarkerLineBlock.line)
+          }
+          pendingMarkerLineBlock = null
+        }
         const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody)
         if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
         // A line AT the body's column 0 is the body's own block, so it replaces
@@ -928,7 +994,7 @@ export function createDefinitionListParser(
         // A comment below the body's column closes the body (carve#3885).
         if (lazyState.opaque === null && RE_COMMENT_LINE.test(below)) return 'stop'
         const lastBodyLine = bodyLines.at(-1)?.trimStart() ?? ''
-        if (atDocumentColumn && lazyState.divDepth > 0 && lazyState.opaque === null &&
+        if (atDocumentColumn && lazyState.literalColon === undefined && lazyState.divDepth > 0 && lazyState.opaque === null &&
             !RE_COMMENT_LINE.test(below) &&
             ((colonFenceShapeEndsLazyContinuation(first) &&
               (RE_HEADING.test(lastBodyLine) || RE_HR.test(lastBodyLine) || isTableRow(lastBodyLine))) ||
