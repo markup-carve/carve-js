@@ -25,11 +25,11 @@ describe('source metadata and promoted captions', () => {
     if (figure?.type === 'figure') expect(figure.caption?.find(node => node.type === 'caption_number')).toMatchObject({ n: 1 })
   })
 
-  it('publishes malformed multiline reference labels as literal text and a break', () => {
-    for (const source of ['[a][b\nc]', '![a][b\nc]']) {
+  it('publishes a multiline reference label as a reference that does not resolve (carve#4680)', () => {
+    for (const [source, type] of [['[a][b\nc]', 'link'], ['![a][b\nc]', 'image']] as const) {
       const paragraph = carveToAstJson(source).children[0]
       expect(paragraph?.type).toBe('paragraph')
-      if (paragraph?.type === 'paragraph') expect(paragraph.children.map(node => node.type)).toEqual(['text', 'soft_break', 'text'])
+      if (paragraph?.type === 'paragraph') expect(paragraph.children.map(node => node.type)).toEqual([type])
     }
   })
 })

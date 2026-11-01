@@ -89,7 +89,7 @@ import { Lexer, indentColumns, isBlankLine, layoutWork, normalizeNewlines, slice
 import { createListParser } from './list/parse-list.js'
 import { referenceImage, referenceLink } from './inline/reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from '../source/source-positions.js'
-import { SubstitutionScanner } from './inline/substitution-scanner.js'
+import { SubstitutionScanner, abortedSubstitutions } from './inline/substitution-scanner.js'
 import { resolveSpanGrid } from '../table/table-spans.js'
 import { isCarveWhitespace, trimEndNonNbsp, trimEndSpaceTab } from '../trim-non-nbsp.js'
 import { codeContent } from '../verbatim-payload.js'
@@ -431,6 +431,7 @@ export {
   Lexer,
   RE_AUTOLINK_STICKY,
   SubstitutionScanner,
+  abortedSubstitutions,
   accumulateAttrs,
   applyAbbreviations,
   applyLinkDefs,

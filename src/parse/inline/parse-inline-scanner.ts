@@ -115,6 +115,7 @@ export interface InlineScannerSession {
     prev: string,
     region?: { start: number; close: number },
   ): { out: string; len: number; kind: string } | null
+  substitutionAborted(text: string, open: number): boolean
   substitutionAt(
     text: string,
     open: number,
@@ -320,7 +321,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
   function scanReservedReferenceTail(s: InlineScan, close: number, tail: string): boolean {
     const match = execReferenceTail(s, tail, s.i + close + 1)
-    if (!match?.[1]?.startsWith('@')) return false
+    if (!match?.[1]?.startsWith('@') || match[1].includes('\n')) return false
     const end = s.i + close + 1 + match[0].length
     flush(s)
     emit(s, { type: 'text', value: s.text.slice(s.i, end) }, s.i, end)
@@ -798,6 +799,13 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
         : null
     if (!ms || !isValidInlineAttrPayload(ms[1]!)) return false
     flush(s)
+    // A span at the inline cap is its own source, unparsed (corpus 882).
+    if (helpers.inlineDepth >= MAX_NESTING_DEPTH) {
+      const end = i + close + 1 + ms[0].length
+      emit(s, { type: 'text', value: text.slice(i, end) } as Text, i, end)
+      s.i = end
+      return true
+    }
     emit(s, {
       type: 'span',
       // A BRACKETED LABEL IS A HOST - see `scanLinkLabel`.
@@ -947,6 +955,11 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
   function scanSubstitution(s: InlineScan, hasBrace: boolean, inlineEnd: number): boolean {
     const { text, i, session, source } = s
+    if (hasBrace && session.substitutionAborted(text, i)) {
+      append(s, '{~')
+      s.i += 2
+      return true
+    }
     const sub = hasBrace ? session.substitutionAt(text, i) : null
     if (!sub || sub.end > inlineEnd) return false
     flush(s)
