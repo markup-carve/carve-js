@@ -103,6 +103,29 @@ function sortedAttrSlots(attrs: unknown): unknown {
 const tree = (source: string): string => JSON.stringify(canonicalTree(carveToAstJson(source)))
 
 /**
+ * PART 11 §6a (CARVE-P11-002): where dash breaks written back would open frontmatter, the
+ * writer spells them `***`, so the re-parsed breaks carry `marker: "*"` by design.
+ */
+const respelledAsStarBreaks = (source: string, written: string): boolean => {
+  const asDashes = written.replace(/^\*\*\*$/gm, '---')
+  return asDashes !== written && parse(source).frontmatter === undefined && parse(asDashes).frontmatter !== undefined
+}
+
+const withStarBreaks = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.map(withStarBreaks)
+  if (node === null || typeof node !== 'object') return node
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(node)) out[key] = withStarBreaks(value)
+  if (out['type'] === 'thematic_break' && out['marker'] === undefined) out['marker'] = '*'
+  return out
+}
+
+const sourceTreeAsWritten = (source: string, written: string): string =>
+  respelledAsStarBreaks(source, written)
+    ? JSON.stringify(canonicalTree(withStarBreaks(carveToAstJson(source)) as ReturnType<typeof carveToAstJson>))
+    : tree(source)
+
+/**
  * True where a node is a bare WRAPPER: one child and nothing of its own.
  *
  * `type` and `children` and no third key, so the node carries no attributes, no
@@ -297,7 +320,8 @@ describe('renderCarve corpus', () => {
       })
     } else {
       it(`${name}: parses to the same tree`, () => {
-        expect(tree(carveToCarve(source))).toBe(tree(source))
+        const written = carveToCarve(source)
+        expect(tree(written)).toBe(sourceTreeAsWritten(source, written))
       })
     }
   }
