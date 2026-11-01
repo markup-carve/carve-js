@@ -915,6 +915,12 @@ function nestedFenceTail(previous: BlockNode | null): 'plain' | 'task' | undefin
   return item?.checked === undefined ? 'plain' : 'task'
 }
 
+function isLiteralPlusParagraphOnly(children: readonly BlockNode[]): boolean {
+  const only = children.length === 1 ? children[0] : undefined
+  return only?.type === 'paragraph' && only.children.length === 1 &&
+    only.children[0]!.type === 'text' && only.children[0]!.value === '+'
+}
+
 function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null, inItem = false): string {
   const fence = inItem ? nestedFenceTail(previous) : undefined
   if (fence === 'task' && (rendered === '+' || rendered.startsWith('+\n'))) return `\\${rendered}`
@@ -4155,7 +4161,9 @@ class CarveRenderSession {
         if ((b.type === 'block_quote' || b.type === 'code_block') &&
             !separated && previousEmitted?.type === 'list') {
           const last = previousEmitted.items[previousEmitted.items.length - 1]
-          if (last !== undefined && last.children.length === 0) {
+          // A last item that is only a literal `+` would take the block at its marker column as
+          // a first-block continuation, so the block moves one column right too (CARVE-P11-042).
+          if (last !== undefined && (last.children.length === 0 || isLiteralPlusParagraphOnly(last.children))) {
             parts.push(rendered.split('\n').map(line => line ? ` ${line}` : line).join('\n'))
             previousEmitted = b
             return
