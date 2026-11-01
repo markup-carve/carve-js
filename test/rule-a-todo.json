@@ -42,7 +42,6 @@
     "does not claim a quote marker inside an inline code span": "#3921"
   },
   "an-imported-source-is-a-writer-fixed-point.test.ts": {
-    "an imported source is a carve fmt fixed point > 872-every-list-item-measures-its-content-against-its-own-content-column-4: the imported source is what the writer emits": "#4135",
     "an imported source is a carve fmt fixed point > 872-the-third-confirmation-round-s-model-findings-12: the imported source is what the writer emits": "#4135",
     "an imported source is a carve fmt fixed point > 875-a-fence-opened-at-a-block-start-in-a-note-keeps-no-paragraph-open: the imported source is what the writer emits": "#4135",
     "an imported source is a carve fmt fixed point > 882-attributed-bracket-spans-share-the-inline-cap: the imported source is what the writer emits": "#4135"
@@ -318,10 +317,5 @@
   },
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
-  },
-  "the-writer-invents-no-escape-the-re-parse-does-not-need.test.ts": {
-    "the writer invents no escape the re-parse does not need > 870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds-6": "#4135",
-    "the writer invents no escape the re-parse does not need > 870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds-7": "#4135",
-    "the writer invents no escape the re-parse does not need > 872-the-third-confirmation-round-s-model-findings-15": "#4135"
   }
 }

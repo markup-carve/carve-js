@@ -595,7 +595,8 @@ export function ownLines(
     function foldsLazily(form: Form, missedNote: boolean): boolean {
       const next = frames[reached + 1]
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
-        !(form.kind === 'item' && next?.kind === 'item' && sameListAxes(next, form)) &&
+        // An item at its owner's own column starts a list, whatever its axes.
+        !(form.kind === 'item' && next?.kind === 'item' && (sameListAxes(next, form) || m.col <= frames[reached]!.col)) &&
         !(missedNote && form.kind === 'item' && opensBesideMissedItem(form))
     }
 
@@ -996,7 +997,7 @@ export function ownLines(
       const interrupts = !COLON_CLOSER.test(rest) || !(owner === top() && owner.para && owner.absorbs)
       if (owner.para && !interrupts) return { kind: 'text', interrupts: false }
       if (RE_LINE_BLOCK_OPEN.test(rest)) {
-        return { kind: 'fence', family: 'div', interrupts, lineBlock: true, closes: (r) => COLON_CLOSER.exec(r)?.[1]!.length === run }
+        return { kind: 'fence', family: 'div', interrupts, lineBlock: true, closes: (r, closerCol) => closerCol <= col && COLON_CLOSER.exec(r)?.[1]!.length === run }
       }
       return { kind: 'colon', run, interrupts }
     }

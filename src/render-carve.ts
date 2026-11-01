@@ -736,8 +736,14 @@ function regionMarkerAtItemMarkerColumn(
   return at.startLine === before.endLine + 1 && at.startColumn <= host.startColumn
 }
 
+// A quote or bare div of structural-only lines holds nothing, so it hosts no caption (carve#4600).
+function holdsNothing(block: BlockNode): boolean {
+  if (block.type === 'block_quote') return block.fenced !== true && block.children.every(holdsNothing)
+  return block.type === 'div' && block.label === undefined && block.children.every(holdsNothing)
+}
+
 function hostsCaption(block: BlockNode): boolean {
-  if (block.type === 'block_quote') return block.fenced === true || block.children.length > 0
+  if (block.type === 'block_quote') return block.fenced === true || !block.children.every(holdsNothing)
   // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
   // `^ …` paragraph written after one must have its caret escaped or it would
   // re-attach as the group caption on the way back (the F6 detached shape).
@@ -1601,9 +1607,9 @@ function renderBlockAttrs(attrs: Attrs | undefined): string {
   return rendered
 }
 
-function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
+function renderAttrs(attrs: Attrs | undefined, markers: string = '', escapeEnclosure = markers !== ''): string {
   const conflicts = (value: string) => [...markers].some(marker => value.includes(marker))
-  const quote = (value: string) => quoteAttrValue(value, conflicts(value), markers)
+  const quote = (value: string) => quoteAttrValue(value, conflicts(value), markers, escapeEnclosure)
   if (!attrs) return ''
   const parts: string[] = []
   const kv = attrs.keyValues ?? {}
@@ -1623,7 +1629,7 @@ function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
       // its own parser reads as a PARAGRAPH - `{.-2col}` came back as text plus
       // a class-less element, losing the class.
       if (isExplicitIdOrClassIdentifier(cls) && !conflicts(cls)) parts.push(`.${escapeAttrNameValue(cls)}`)
-      else parts.push(`class=${quoteAttrValue(cls, true, markers)}`)
+      else parts.push(`class=${quoteAttrValue(cls, true, markers, escapeEnclosure)}`)
     }
   }
   const emitKey = (key: string) => {
@@ -1708,14 +1714,14 @@ export function escapeQuotedValue(value: string, separators: string): string {
   return out
 }
 
-export function quoteAttrValue(value: string, force: boolean = false, markers: string = ''): string {
+export function quoteAttrValue(value: string, force: boolean = false, markers: string = '', escapeEnclosure = markers !== ''): string {
   // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
   // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
   // leaves them inside the value (CARVE-P2-019).
   const enclosureSyntax = markers ? '{}[]`' : ''
   if (!force && ![...enclosureSyntax].some(ch => value.includes(ch)) && /^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
-  return `"${escapeQuotedValue(value, '"|' + enclosureSyntax)}"`
+  return `"${escapeQuotedValue(value, '"|' + (escapeEnclosure ? enclosureSyntax : markers ? '`' : ''))}"`
 }
 
 /**
@@ -5707,7 +5713,8 @@ class CarveRenderSession {
     const enclosures = this.attributeEnclosures.filter(node => node !== owner)
     const delimiters = (node: InlineNode) => node.type === 'strong' && node.boldItalic && !this.expandedBoldItalic.has(node) ? '*/' : markers[node.type] ?? ''
     const active = enclosures.map(delimiters).join('') + (this.attributeBracketDepth > 0 ? '[]' : '')
-    const rendered = renderAttrs(attrs, active)
+    // A quoted value never closes a substitution (carve#4638), so it alone needs no enclosure escapes.
+    const rendered = renderAttrs(attrs, active, this.attributeBracketDepth > 0 || enclosures.some(node => node.type !== 'substitution'))
     const payload = [attrs?.id ?? '', ...(attrs?.classes ?? []), ...Object.entries(attrs?.keyValues ?? {}).flat()].join('')
     for (const node of enclosures) {
       if ([...delimiters(node)].some(marker => payload.includes(marker)) || node.type === 'highlight' && rendered.includes('="')) this.bracedForAttributes.add(node)
