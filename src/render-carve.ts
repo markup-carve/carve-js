@@ -7,7 +7,7 @@ import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js
 import { tableDisplayWidth } from './table/table-display-width.js'
 import { trimCellPadding } from './parse/table/parse-table-cells.js'
 import { openVerbatimRun } from './parse/block/parse-block-boundaries.js'
-import { allocateDashes } from './parse/inline/parse-inline-core.js'
+import { allocateDashes, wordAfter, wordBefore } from './parse/inline/parse-inline-core.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
@@ -1480,9 +1480,20 @@ function neighborsForceBraces(delim: string, prevChar: string, nextChar: string)
   )
 }
 
+export function hasInnerWordDelimiter(delim: string, content: string): boolean {
+  for (let at = 0; at < content.length; at++) {
+    if (content[at] !== delim || !wordBefore(content, at) || !wordAfter(content, at + 1)) continue
+    let slashes = 0
+    for (let before = at - 1; before >= 0 && content[before] === '\\'; before--) slashes++
+    if (slashes % 2 === 0) return true
+  }
+  return false
+}
+
 export function emphasisNeedsBraces(delim: string, content: string, prevChar: string, nextChar: string, forced = false, closeDelim = delim): boolean {
   return forced ||
     neighborsForceBraces(delim, prevChar, nextChar) ||
+    hasInnerWordDelimiter(delim, content) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
     // A bare opener may not be followed, nor a closer preceded, by `ws`
