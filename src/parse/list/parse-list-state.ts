@@ -232,6 +232,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const open = state.literalColon
     const column = indentColumns(content, open.column + 1)
     const text = content.trimStart()
+    if (column < open.column && !state.lazyFoldable) {
+      delete state.literalColon
+      state.divDepth = Math.max(0, state.divDepth - 1)
+      return false
+    }
     if (state.definitionBody && column === 0 && opensCodeFence(text) && !open.opaque) {
       delete state.literalColon
       trackItemLazyState(content, state, line.atContentColumn, hasCommentCloser, facts, line.hasLiteralCommentCloser)
@@ -293,10 +298,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     )
     // A line block's open paragraph takes lazy text at every depth (PART 0 S4).
     const comment = inner.literalColon !== undefined && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())
-    state.lazyFoldable = inner.lazyFoldable && !comment
+    state.lazyFoldable = inner.lazyFoldable && (inner.literalLayout === true || !comment)
     state.inTable = inner.inTable
-    // An invisible descendant comment ends its paragraph, not the enclosing item.
-    if (comment) state.commentAtColumn = true
+    if (comment && inner.literalLayout !== true) state.commentAtColumn = true
     state.inDefList = false
     return true
   }
@@ -466,7 +470,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.descriptionHasTerm = hasTerm
     state.inDefList = isTerm ? 'term' : 'description'
     const description = RE_DEFLIST_DEF.exec(content)
-    if (description) state.descriptionColumn = 1 + description[1]!.length
+    if (description) {
+      state.descriptionColumn = 1 + description[1]!.length
+      if (RE_LINE_BLOCK_OPEN.test(description[2]!)) {
+        state.divDepth++
+        state.literalColon = { width: colonFenceOpenerLen(description[2]!)!, column: state.descriptionColumn }
+      }
+    }
     delete state.termAfterComment
     // A heading, table, rule, definition or comment on the `: ` marker opens no paragraph (carve#4305).
     state.lazyFoldable = isTerm ||
@@ -741,7 +751,10 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (nestedColon !== null) {
       frame.lazyFoldable = false
       frame.divDepth = 1
-      if (RE_LINE_BLOCK_OPEN.test(nestedContent)) frame.literalColon = { width: nestedColon, column: 0 }
+      if (RE_LINE_BLOCK_OPEN.test(nestedContent)) {
+        frame.literalColon = { width: nestedColon, column: 0 }
+        frame.literalLayout = true
+      }
     }
     // A fence on the marker line is the sub-item's first block. It interrupts
     // no paragraph, so it opens with or without a closer and leaves none open.

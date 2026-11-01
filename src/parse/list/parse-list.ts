@@ -1305,6 +1305,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const frame = verbatimOnlyLazyState()
       frame.divDepth = 1
       frame.literalColon = { width: colonFenceOpenerLen(descendantLead)!, column: 0 }
+      frame.literalLayout = true
       lazyState.deepest = frame
       lazyState.literalLayout = true
     }

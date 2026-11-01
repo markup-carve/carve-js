@@ -569,7 +569,7 @@ export function ownLines(
         if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
         else if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > at) inner.span = comment[1]!
       }
-      if (inner.lineBlock) inner.para = m.rest !== '' && !COMMENT_LINE.test(m.rest)
+      if (inner.lineBlock) inner.para = m.rest !== '' && !COMMENT_FENCE.test(m.rest)
       finish()
       if (trace) emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
     }
