@@ -207,8 +207,9 @@ describe('relative continuation marker columns', () => {
 
   it.each([
     ['a\n+\nb', []],
-    ['- a\n  +\n  x', [[2, 3]]],
-    ['- foo\n  - [ ] task\n    +\n    text', [[3, 5]]],
+    // PART 0 S2: a `+` at an item's content column is a letter, so it is quiet (carve#4648).
+    ['- a\n  +\n  x', []],
+    ['- foo\n  - [ ] task\n    +\n    text', []],
   ] as const)('keeps the plus literal and reports any unowned marker in %s', (input, expected) => {
     expect(lintCarve(input).filter(warning => warning.rule === 'continuation-marker-refused')
       .map(warning => [warning.line, warning.column])).toEqual(expected)

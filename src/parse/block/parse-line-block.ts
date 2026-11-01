@@ -85,12 +85,14 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         if (lexer.hasDocumentOffsets) {
           const end = body[closer]!.lineIndex
           const endLength = lexer.lineAt(end)?.length ?? 0
+          // A leaf begins at its markup, not at the indent before `%%%` (carve#1928).
+          const markup = lexer.sourceBoundary(lineIndex, (lexer.lineAt(lineIndex) ?? '').search(/[^ \t]|$/))
           comment.pos = {
             startLine: lexer.lineNumber(lineIndex),
             endLine: lexer.lineNumber(end),
-            startColumn: lexer.lineStartColumn(lineIndex),
+            startColumn: markup.column,
             endColumn: lexer.lineStartColumn(end) + endLength,
-            startOffset: lexer.lineOffset(lineIndex),
+            startOffset: markup.offset,
             endOffset: lexer.lineOffset(end) + endLength,
           }
         }
