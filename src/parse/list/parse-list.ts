@@ -3128,6 +3128,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
+    // A definition at a description body's column is invisible there, as one at the item's column is (carve#4903).
+    // The tail is scanned upward, so the owner line found for a column serves every line below it.
+    let descriptionOwner: { column: number, line: number, body: boolean } | undefined
+    const definitionAtDescriptionBody = (index: number): boolean => {
+      const text = nested[index]!
+      const rest = text.trimStart()
+      // A footnote definition there opens a frame, so it is not one of them.
+      if (rest === text || !/^[[*]/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || !(isLinkDefLine(rest) || RE_ABBR_DEF.test(rest))) return false
+      const column = indentColumns(text)
+      if (descriptionOwner?.column === column && descriptionOwner.line < index) return descriptionOwner.body
+      let k = index - 1
+      while (k >= 0 && (isBlankLine(nested[k]!) || indentColumns(nested[k]!) >= column)) k--
+      const marker = k < 0 ? null : /^ *:( +)(?=[^ ])(?=.*[^ \t])/.exec(nested[k]!)
+      descriptionOwner = { column, line: k, body: marker !== null && marker[0].length === column }
+      return descriptionOwner.body
+    }
     const endsOnInvisibleTail = (): boolean => {
       let markerNoteRunEnd = -1
       if (markerNoteItem) {
@@ -3158,7 +3174,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // document without the comment is tight.
           return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd && !tailInDescendant(k)
         }
-        if (invisibleNested(k)) continue
+        if (invisibleNested(k) || definitionAtDescriptionBody(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
         const opener = wrappedAttributeOpener(k)
         if (opener >= 0) {
