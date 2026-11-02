@@ -1398,7 +1398,12 @@ export function bottomBlockLeavesParagraphOpen(rest: string): boolean {
  * rule (§24 C3), not a floater.
  */
 export function opensWrappedAttributeBlock(content: string): boolean {
-  return content.startsWith('{') && !content.includes('}')
+  return content.startsWith('{') && !closesAttributeBlock(content)
+}
+
+// A `}` in a quoted value closes nothing.
+function closesAttributeBlock(run: string): boolean {
+  return run.includes('}') && run.replace(/"(?:\\.|[^"\\])*"/g, '').includes('}')
 }
 
 /**
@@ -1417,9 +1422,12 @@ export function continueWrappedAttributeBlock(
 ): { run: string; verdict: 'open' | 'attributes' | 'text' } {
   if (isBlankLine(content)) return { run: '', verdict: 'text' }
   const run = `${collected}\n${content}`
-  if (!content.includes('}')) return { run, verdict: 'open' }
+  if (!content.includes('}') || !closesAttributeBlock(run)) return { run, verdict: 'open' }
 
-  return { run: '', verdict: parseBlockAttributeRun(run) !== null ? 'attributes' : 'text' }
+  // A failed opener is one text line; a later `{` line can still open the block (carve#4089).
+  const lastOpener = run.lastIndexOf('\n{')
+  const opens = parseBlockAttributeRun(run) !== null || (lastOpener !== -1 && parseBlockAttributeRun(run.slice(lastOpener + 1)) !== null)
+  return { run: '', verdict: opens ? 'attributes' : 'text' }
 }
 
 /**

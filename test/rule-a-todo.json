@@ -277,9 +277,6 @@
     "preserves source columns in '* * * * :: t\\n     : a\\n         :: s…'": "#3922",
     "preserves source columns in '- - - :: t\\n   : a\\n       :: sibling…'": "#3922"
   },
-  "span-opening-markup-and-containment.test.ts": {
-    "every span begins at the markup that opens it, and is contained by its parent > reports nothing over the whole corpus": "#3921"
-  },
   "two-sibling-sub-lists-in-a-tight-item.test.ts": {
     "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
   },

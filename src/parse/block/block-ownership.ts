@@ -1,5 +1,5 @@
 import { isValidAttrPayload } from '../../extension/attribute-parser.js'
-import { trimEndSpaceTab } from '../../trim-non-nbsp.js'
+import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
 import { CAPTION_COMMENT_ONLY } from './parse-quote-core.js'
@@ -309,7 +309,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }> } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -333,6 +333,7 @@ export function ownLines(
   const skippedAbbreviations = new Map<number, [string, string]>()
   const separatingAbbreviations = new Set<number>()
   const skippedComments = new Map<number, string>()
+  const skippedFences = new Map<number, { closer: number; content: string }>()
   const skippedNotes = new Set<number>()
   const payloadLines = new Set<number>()
   const lazyCaptions = new Set<number>()
@@ -851,7 +852,7 @@ export function ownLines(
       m = { col: m.col, rest }
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0 }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
@@ -865,6 +866,8 @@ export function ownLines(
     const skippedAbbr: Array<[number, string, string]> = []
     const comments: number[] = []
     const fenced = new Set<number>()
+    const fences = new Map<number, number>()
+    const closers = new Set<number>()
     const notes: number[] = []
     const decide = (reason: RefusedPlus['reason'] | null): RefusedPlus['reason'] | null => {
       for (const [index, name, value] of skippedAbbr) {
@@ -884,8 +887,21 @@ export function ownLines(
         if (reason !== null && !isLinkDefLine(rest.trimStart()) &&
             !FOOTNOTE_DEF.test(rest.trimStart()) && !RE_ABBR_DEF.test(rest.trimStart())) continue
         // A line comment keeps its text; a fence's lines stay bare `%%` lines, since a body line
-        // left as written would end the host.
-        skippedComments.set(index, prefix + (fenced.has(index) ? '%%' : rest))
+        // left as written would end the host. The closer's stand-in keeps its width for the span.
+        const closer = fences.get(index)
+        if (closer !== undefined) {
+          const opener = indentCols(rest)
+          const body: string[] = []
+          const tail = trimNonNbsp(COMMENT_FENCE.exec(trimEndSpaceTab(opener.rest))![2]!)
+          if (tail !== '') body.push(tail)
+          for (let line = index + 1; line < closer; line++) {
+            let text = lines[line]!
+            for (let q = 0; q < quotes && isQuoteLine(indentCols(text).rest); q++) text = quoteRest(indentCols(text).rest)
+            body.push(text)
+          }
+          skippedFences.set(index, { closer, content: body.join('\n') })
+        }
+        skippedComments.set(index, prefix + (!fenced.has(index) ? rest : closers.has(index) ? '%% '.padEnd(rest.length, 'x') : '%%'))
       }
       for (const index of notes) skippedNotes.add(index)
       return reason
@@ -913,6 +929,8 @@ export function ownLines(
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
         }
         for (let line = opener; line <= k; line++) { comments.push(line); fenced.add(line) }
+        fences.set(opener, k)
+        closers.add(k)
         continue
       }
       if (COMMENT_LINE.test(rest)) { comments.push(k); continue }

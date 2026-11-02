@@ -21,8 +21,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the ownership family",
       "cases": [
-        "ownership-19a15d4c0b00",
-        "ownership-498f1450c332"
+        "ownership-19a15d4c0b00"
       ]
     },
     {
@@ -37,13 +36,6 @@
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
         "notes-4dc51b5608ab"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve#4810",
-      "cause": "bare same-kind word delimiters follow the current spec ahead of this pin",
-      "cases": [
-        "combined-8a09e2d68fb4"
       ]
     },
     {
