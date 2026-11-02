@@ -56,6 +56,8 @@ import { EscapeWindows, type EscapeWindow } from './parse/inline/escape-window.j
 import { utf8ByteLength } from './extension/abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './parse/inline/bracket-escapes.js'
 import { escapeDestinationStructure } from './import/markdown/markdown-destination-encoding.js'
+import { footnoteAttrSource } from './parse/inline/unresolved-reference.js'
+import { normalizeRefLabel } from './label-key.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
@@ -5247,10 +5249,17 @@ class CarveRenderSession {
       case 'abbreviation':
         return renderSession.escapeText(node.abbr)
       case 'footnote_ref':
-      case 'inline_footnote':
+      case 'inline_footnote': {
+        // An unresolved reference renders its attribute run as text (carve#4816), so it is written as typed.
+        const keptRun = node.inline ? '' : footnoteAttrSource(node)
+        if (keptRun !== '' && !renderSession.definesFootnote(node.label ?? '')) {
+          const literal = `[^${writeFlatBracketRun(node.label ?? '')}]${keptRun}`
+          return ctx.tableCellDepth > 0 ? escapeTableReferencePipes(literal) : literal
+        }
         return withAttrs(node.inline
           ? `^[${renderSession.renderAttributeBracket(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
           : `[^${ctx.tableCellDepth > 0 ? escapeTableReferencePipes(writeFlatBracketRun(node.label ?? '')) : writeFlatBracketRun(node.label ?? '')}]`)
+      }
       case 'non_breaking_space':
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':
@@ -5892,6 +5901,13 @@ class CarveRenderSession {
 
   /** The document's footnote bodies, so a description can write one back. */
   private documentFootnoteDefs: Record<string, BlockNode[]> | undefined
+
+  private footnoteKeys: Set<string> | undefined
+
+  definesFootnote(label: string): boolean {
+    this.footnoteKeys ??= new Set(Object.keys(this.documentFootnoteDefs ?? {}).map(normalizeRefLabel))
+    return this.footnoteKeys.has(normalizeRefLabel(label))
+  }
 
   private destinationParensByUnit = new WeakMap<object, Set<number>>()
 

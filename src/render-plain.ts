@@ -11,7 +11,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './ast/legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './extension/bidi-controls.js'
-import { isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
+import { footnoteRefSourceText, isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
 import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './parse/inline/reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, tableSpanFlattened, type RenderLossSinkOptions } from './render/render-loss.js'
 import { resolveTableSpans } from './table/table-spans.js'
@@ -525,7 +525,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // dropping the caret invented a reference the document does not have.
       // carve-php already did this; carve-js and carve-rs both emitted `[a]`
       // (carve#352, corpus 132/133/157/161).
-      return ctx.definedFootnotes.has(id) ? `[${id}]` : `[^${id}]`
+      return ctx.definedFootnotes.has(id) ? `[${id}]` : stripControls(footnoteRefSourceText(node))
     }
     case 'non_breaking_space':
       return '\0'
