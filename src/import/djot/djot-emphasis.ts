@@ -486,6 +486,7 @@ class EmphasisRenderer {
   private readonly literals: string[] = []
   private readonly bracketCloses: Set<number>
   private readonly rendered = new Map<Pair, string>()
+  private emptyAttributeEnds: Set<number> | undefined
 
   constructor(
     private readonly source: string,
@@ -598,7 +599,10 @@ class EmphasisRenderer {
   private needsBraces(pair: Pair, content: string, delimiter: string): boolean {
     const { source } = this
     // An empty attribute block writes a comment, which counts as nothing for a bare guard (carve#4719).
-    const emptyBoundary = source.startsWith('{}', pair.end) ||
+    // `{ }` is as empty as `{}`, so the scanned runs decide, not the spelling.
+    this.emptyAttributeEnds ??= new Set([...this.attributes.attributes].filter(([, run]) => run.source === '{}').map(([, run]) => run.end))
+    const emptyBoundary = this.attributes.attributes.get(pair.end)?.source === '{}' || this.emptyAttributeEnds.has(pair.start) ||
+      source.startsWith('{}', pair.end) ||
       (pair.start >= 2 && source.startsWith('{}', pair.start - 2) && !isDjotEscaped(source, pair.start - 2))
     return this.options.omitQuoteDelimiters || pair.kind === '~' || pair.kind === '^' || pair.forced ||
       extendsGrapheme(source, pair.end) ||
