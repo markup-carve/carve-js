@@ -3444,7 +3444,8 @@ class CarveRenderSession {
           listSeparated = previousList !== null && listsWouldMerge(previousList, block)
           if (!listSeparated) descriptionListOffset = 0
           previousList = block
-        } else if (spellsSomething(rendered)) {
+        } else if (spellsSomething(rendered) && block.type !== 'comment') {
+          // A comment does not part two lists (§11 N1a), so the boundary must survive it.
           previousList = null
           listSeparated = false
           descriptionListOffset = 0
@@ -4237,7 +4238,10 @@ class CarveRenderSession {
         } else if (b.type !== 'comment' && b.type !== 'abbreviation_def' &&
           b.type !== 'link_reference_definition') previousDescriptionList = false
         if (b.type === 'list') {
-          if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
+          // A comment does not part two lists (§11 N1a), so the boundary must survive it.
+          const above = previousEmitted?.type === 'comment' ? item.children.slice(0, i).reverse().find((block: BlockNode) => block.type !== 'comment') : undefined
+          const mergesAcrossComments = above?.type === 'list' && listsWouldMerge(above, b)
+          if (!separated && previousEmitted !== null && (adjacentBlocksMerge(previousEmitted, b) || mergesAcrossComments)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
           } else if (
             !separated &&
