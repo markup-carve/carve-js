@@ -842,6 +842,12 @@ export class ParseSession extends InlineParseSession {
     return out
   }
 
+  private dropsCommentOnlyParagraph(lexer: Lexer, paragraph: Paragraph): boolean {
+    if (!commentOnlyParagraph(paragraph)) return false
+    for (const child of paragraph.children) if (child.type === 'comment') lexer.parseOptions.onDroppedComment?.(child)
+    return true
+  }
+
   private parseBlockInner(lexer: Lexer): BlockNode | null {
     const line = lexer.peek()!
     const hostedLinkDef =
@@ -855,7 +861,7 @@ export class ParseSession extends InlineParseSession {
     // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
     if (lexer.depth >= MAX_NESTING_DEPTH) {
       const paragraph = this.parseParagraph(lexer, true)
-      return commentOnlyParagraph(paragraph) ? null : paragraph
+      return this.dropsCommentOnlyParagraph(lexer, paragraph) ? null : paragraph
     }
 
     // Block-level constructs in priority order
@@ -985,7 +991,7 @@ export class ParseSession extends InlineParseSession {
       if (eq) return eq
     }
     const paragraph = this.parseParagraph(lexer)
-    if (commentOnlyParagraph(paragraph)) return null
+    if (this.dropsCommentOnlyParagraph(lexer, paragraph)) return null
     const host = paragraph.children.filter((child) => child.type !== 'comment')
     if (host.length === 1 && host[0]!.type === 'math' && (host[0] as Math).display) {
       // A span over several lines is the same host as a one-line one (§4, §10 I7).

@@ -93,6 +93,18 @@ describe('delimited inline comments (PART 9 §21a)', () => {
 })
 
 describe('braced-comment-in-a-template-source lint', () => {
+  it.each([
+    ['{% if user %}\n', [[1, 1]]],
+    ['{% raw %}\n{% if user %}\n', [[1, 1], [2, 1]]],
+    ['> {% endif %}\n', [[1, 3]]],
+    ['- {% for a in b %}\n', [[1, 3]]],
+    ['a {% if user %} b\n', [[1, 3]]],
+    ['{% a note %}\n', []],
+  ])('reports each tag in %j, whether or not its paragraph survives', (src, want) => {
+    const found = lintCarve(src).filter((w) => w.rule === 'braced-comment-in-a-template-source').map((w) => [w.line, w.column])
+    expect(found).toEqual(want)
+  })
+
   it('reports template tag shapes alongside braced comments without rewriting', () => {
     const source = '{% raw %}\ntext {% note %}\n{% endraw %}'
     expect(lintCarve(source).map((warning) => warning.rule)).toContain(
