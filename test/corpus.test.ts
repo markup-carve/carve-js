@@ -78,6 +78,7 @@ const IMPLEMENTED = new Set([
   'a-bare-dot-starts-a-list-after-a-blank-line',
   'a-below-column-fence-stays-in-a-definition-paragraph',
   'a-blank-ends-the-old-quote-s-child-column',
+  'a-line-block-behind-nested-markers-takes-a-lazy-line-after-a-fence-shaped-payload',
   'a-class-key-value-shares-the-class-slot',
   'a-cross-reference-clones-heading-inline-nodes',
   'a-definition-opens-a-sibling-block-after-a-list',

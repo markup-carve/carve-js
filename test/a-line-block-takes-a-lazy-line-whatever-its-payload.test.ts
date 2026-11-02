@@ -69,8 +69,8 @@ for (const [name, host, indent] of [
       it(`handles ${name} after ${JSON.stringify(payload)}, blank=${blank}`, () => {
         const source = `${host}\n${blank ? indent.trimEnd() + '\n' : ''}${indent}::: |\n${indent}${payload}\nafter\n`
         // A nested item's line block folds like a shallow one's (PART 0 S4, carve-js#3995);
-        // only a payload line that opens a verbatim run leaves no paragraph.
-        const detached = name === 'nested item' && ['```', '~~~', '%%%'].includes(payload)
+        // a fence-shaped payload opens no fence there either (CARVE-P9-047, carve#4661).
+        const detached = name === 'nested item' && payload === '%%%'
         const body = detached ? detachedBody : foldedBody
         const block = `<div class="line-block"><p>${body}</p></div>`
         const html = detached
