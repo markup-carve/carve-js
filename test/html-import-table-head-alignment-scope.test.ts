@@ -40,11 +40,11 @@ describe('HTML import keeps header alignment in its original scope', () => {
     expect(carveToHtml(imported)).toBe(html)
   })
 
-  it('puts generated delimiter alignment in colons and reaches a fixed point', () => {
+  it('writes a mid-row header span natively and reaches a fixed point', () => {
     const source = '|=> Wide|<|=~ Last|\n|a|b|c|\n'
     const html = carveToHtml(source)
     const imported = htmlToCarve(html).value
-    expect(imported).toContain('|---:|---|:---:|')
+    expect(imported).toContain('|=> Wide | < |=~ Last |')
     expect(carveToCarve(imported)).toBe(imported)
     expect(carveToHtml(imported)).toBe(html)
   })

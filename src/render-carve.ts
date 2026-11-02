@@ -4502,16 +4502,12 @@ class CarveRenderSession {
    * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
    * per-cell `<`/`>`/`~` alignment markers.
    *
-   * A colspan cell is always written plain (`| < |`), so a header row can keep
-   * the native form when its span markers form a TRAILING run of COLSPANS after
-   * at least one real header cell: each `<` absorbs into the `|=` header on its
-   * left, and the row is still promoted by those `|=` markers
-   * (`|= Engine |= Timing | < |`). Everything else needs a delimiter row: a
-   * LEADING span has no `|=` anchor before it; a real cell AFTER a span
-   * (`|~ H | < | < |< K |`) would have to be written `|=< K`, read as an aligned
-   * header rather than the promoted data cell; and a trailing ROWSPAN (`^`) does
-   * not absorb left, so a native `| ^ |` in the first row is not a header cell
-   * and the row would fall out of `<thead>`.
+   * A colspan cell is always written plain (`| < |`) and absorbs into the
+   * `|=` header on its left, so a head row with spans keeps the native form
+   * (`|= Engine | < |= Timing |`). Only two shapes need a generated separator
+   * (carve#4974 ruling A): a placeholder with no origin in the row (any `^`, or
+   * a `<` in column 0), and a placeholder carrying an alignment, which a plain
+   * `| < |` cannot spell.
    */
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []

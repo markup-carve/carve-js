@@ -13,9 +13,8 @@ import { renderCarve } from '../src/render-carve.js'
  * `|---|---|---|` instead of the cleaner `|= A |= B | < |`.
  *
  * The fallback is still needed where the native form cannot promote the row: a
- * LEADING span (no `|=` anchor before it) and a real cell AFTER a span (which
- * would have to be written `|=< K`, read as an aligned header rather than the
- * promoted data cell). Both are pinned here so the narrowing cannot creep.
+ * LEADING span (no `|=` anchor before it). A real cell AFTER a span is written
+ * natively since carve#4974 ruling A (`|= H | < |=< K |` keeps the tree).
  */
 const carve = (html: string): string => htmlToCarve(html, { mode: 'roundtrip' }).value
 const back = (carveSrc: string): string => renderHtml(parse(carveSrc)).replace(/\n\s*/g, '')
@@ -43,14 +42,10 @@ describe('a trailing header span writes the native form', () => {
     expect(renderCarve(parse(leading))).toBe(leading)
   })
 
-  it('keeps the delimiter row when a real cell follows a header span', () => {
+  it('writes native cells when a real cell follows a header span', () => {
     // H spans three columns, then K - the span is mid-row, not trailing.
     const midSpan = '|~ H | < | < |< K |\n|---|---|---|---|\n| p | q |> s | t |\n'
-    // The ROW survives; the header's alignment moves into the separator's own
-    // colons, because PART 11 §6h [CARVE-P11-066] writes the colon from the
-    // CELL's alignment and the cell marker would be a second spelling of it.
-    // The widths are the authored ones and the tree is unchanged.
-    const written = '| H | < | < | K |\n|:---:|---|---|:---|\n| p | q |> s | t |\n'
+    const written = '|=~ H | < | < |=< K |\n| p | q |> s | t |\n'
     expect(renderCarve(parse(midSpan))).toBe(written)
     expect(renderCarve(parse(written))).toBe(written)
   })
