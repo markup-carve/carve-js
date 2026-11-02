@@ -977,8 +977,8 @@ export function ownLines(
       if (col !== marker) return decide(col < marker ? 'left' : 'right')
       const rest = trimEndSpaceTab(n.rest)
       if (isAttrLine(rest)) continue
-      // A paragraph of only braced comments is skipped as a `%%` line is (carve#4799).
-      const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k)
+      // A paragraph of only braced comments is skipped as a `%%` line is (carve#4799); in an item a marker ends it (carve#4890).
+      const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k, host === 'item')
       if (paragraphEnd !== -1) {
         k = paragraphEnd - 1
         continue
