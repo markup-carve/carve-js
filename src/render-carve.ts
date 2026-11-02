@@ -4343,7 +4343,10 @@ class CarveRenderSession {
         comments.push(node.block ? this.renderBlockComment(node.content) : node.content === '' ? '%%' : `%% ${node.content}`)
       } else if (comments.length === 0 || node.type !== 'soft_break') inline.push(node)
     }
-    return [`:: ${singleLineText(this.renderInlines(inline, ctx))}`, ...comments].join('\n')
+    let line = this.renderInlines(inline, ctx)
+    // A hard break that ends the term keeps its backslash: it is not a line join (carve-js#4258).
+    if (inline.at(-1)?.type === 'hard_break' && line.endsWith('\\\n')) line = line.slice(0, -1)
+    return [`:: ${singleLineText(line)}`, ...comments].join('\n')
   }
 
   private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
