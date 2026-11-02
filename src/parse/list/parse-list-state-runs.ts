@@ -206,6 +206,14 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const text = content.slice(run)
     const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
     const rebased = facts?.rebasedFrame === true
+    // The quote a sub-item's first-block `+` attaches at its marker column is the sub-item's (§17 L3).
+    if (state.deepest?.firstBlockPlus && !state.ownedAuthored && run === state.ownedMarker && RE_BLOCKQUOTE.test(text)) {
+      trackItemLazyState(text, state.deepest)
+      state.lazyFoldable = state.deepest.lazyFoldable
+      state.inTable = state.deepest.inTable
+      state.inDefList = false
+      return true
+    }
     if (!state.literalLayout && !rebased && !state.ownedAuthored && (state.deepest?.ownedColumn ?? -1) < 0 &&
         (state.deepest?.commentAtColumn || line.wasCommentAtColumn) && marker) {
       state.retainedMarker = true

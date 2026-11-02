@@ -11,13 +11,6 @@
     },
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the roundtrip family",
-      "cases": [
-        "roundtrip-73c51797f6b8"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
         "notes-4dc51b5608ab"

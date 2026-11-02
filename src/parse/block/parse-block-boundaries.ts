@@ -170,6 +170,8 @@ export interface ItemLazyState {
    * own nested tracker is - a quoted table spanning two of them is one table.
    */
   quoteInner: BlockQuoteLazyState | null
+  /** A sub-item frame whose marker line holds only a first-block `+`. */
+  firstBlockPlus?: boolean
   // Whether the item currently has an OPEN definition list (a `:: term` or
   // `:  def` marker was the last structural line, possibly across a separator
   // blank). Used so an UNDER-indented (below content-column) def/term marker

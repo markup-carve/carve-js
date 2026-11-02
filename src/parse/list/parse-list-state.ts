@@ -696,6 +696,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     frame.inTable = nested.endsOnTableRow
     // A quote the sub-item holds below its own marker is the frame's first block too.
     frame.quoteInner = nested.quote ?? markerLineQuoteState(nestedContent.slice(walkMarkerOwnerPrefix(nestedContent)))
+    if (/^\+[ \t]*$/.test(nestedContent)) frame.firstBlockPlus = true
     const nestedColon = colonFenceOpenerLen(nestedContent)
     if (nestedColon !== null) {
       frame.lazyFoldable = false
