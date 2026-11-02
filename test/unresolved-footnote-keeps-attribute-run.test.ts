@@ -23,5 +23,7 @@ describe('an unresolved footnote reference keeps its attribute run (carve#4816)'
 
   it('writes the run back as typed, so formatting keeps the text', () => {
     expect(carveToCarve('x[^n]{a="<b>"}{.c}\n')).toBe('x[^n]{a="<b>"}{.c}\n')
+    // A table-cell hard break makes the writer copy the tree first.
+    expect(carveToCarve('x[^n]{.a}{.b}\n\n| a\\ | b |\n')).toBe('x[^n]{.a}{.b}\n\n| a\\ | b |\n')
   })
 })

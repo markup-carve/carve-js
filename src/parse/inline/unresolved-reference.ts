@@ -79,6 +79,19 @@ export function appendFootnoteAttrSource(node: object, source: string): void {
   footnoteAttrSources.set(node, (footnoteAttrSources.get(node) ?? '') + source)
 }
 
+/** Hands the recorded runs from a tree to its structural copy, which a WeakMap does not follow. */
+export function carryFootnoteAttrSources<T>(from: T, to: T): T {
+  const stack: Array<[unknown, unknown]> = [[from, to]]
+  while (stack.length > 0) {
+    const [a, b] = stack.pop()!
+    if (!a || typeof a !== 'object' || !b || typeof b !== 'object' || a === b) continue
+    const run = footnoteAttrSources.get(a)
+    if (run !== undefined) footnoteAttrSources.set(b, run)
+    for (const key of Object.keys(a)) stack.push([(a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]])
+  }
+  return to
+}
+
 export function footnoteAttrSource(node: object): string {
   return footnoteAttrSources.get(node) ?? ''
 }

@@ -56,7 +56,7 @@ import { EscapeWindows, type EscapeWindow } from './parse/inline/escape-window.j
 import { utf8ByteLength } from './extension/abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './parse/inline/bracket-escapes.js'
 import { escapeDestinationStructure } from './import/markdown/markdown-destination-encoding.js'
-import { footnoteAttrSource } from './parse/inline/unresolved-reference.js'
+import { carryFootnoteAttrSources, footnoteAttrSource } from './parse/inline/unresolved-reference.js'
 import { normalizeRefLabel } from './label-key.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
@@ -419,7 +419,7 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
   // rather than throwing a stack overflow ahead of it.
   let copy: Document
   try {
-    copy = JSON.parse(JSON.stringify(ast)) as Document
+    copy = carryFootnoteAttrSources(ast, JSON.parse(JSON.stringify(ast)) as Document)
   } catch {
     return out
   }
@@ -2473,7 +2473,7 @@ export function withTextAsOneRun(ast: Document): Document {
     found ||= splits(list)
   })
   if (!found) return ast
-  const copy = structuredClone(ast)
+  const copy = carryFootnoteAttrSources(ast, structuredClone(ast))
   lists(copy, (list) => {
     if (!splits(list)) return
     let nodes = (list as InlineNode[]).slice()
@@ -2517,7 +2517,7 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     }
   }
   if (cells.length === 0) return ast
-  const copy = structuredClone(ast)
+  const copy = carryFootnoteAttrSources(ast, structuredClone(ast))
   stack.push(copy)
   while (stack.length > 0) {
     const node = stack.pop()
@@ -4000,13 +4000,13 @@ class CarveRenderSession {
 
   /** The node as a fresh parse reads it: a generated heading id is not in the source. */
   private withoutRedundantIds<T>(node: T): T {
-    return JSON.parse(JSON.stringify(node, (_key, value: unknown) => {
+    return carryFootnoteAttrSources(node, JSON.parse(JSON.stringify(node, (_key, value: unknown) => {
       if (!value || typeof value !== 'object' || !this.redundantIds.has(value)) return value
       const heading = value as { attrs?: Attrs }
       const attrs = withoutIdSlot(heading.attrs)
       const kept = attrs && Object.entries(attrs).some(([key, slot]) => key !== 'order' || (slot as string[]).length > 0)
       return { ...heading, attrs: kept ? attrs : undefined }
-    })) as T
+    })) as T)
   }
 
   // A sub-list on a task item's marker line owns the columns after the task box.
