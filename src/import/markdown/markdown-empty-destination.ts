@@ -125,6 +125,19 @@ const ANGLE_DESTINATION = String.raw`<(?:[^<>\n\\]|\\[^\n])*>`
 const DESTINATION = String.raw`(?:${ANGLE_DESTINATION}|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)`
 const TITLE = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\((?:[^()\\\n]|\\.)*\))`
 
+/** A bare destination whose parentheses do not balance, which ends no definition (CommonMark 6.3). */
+export function unbalancedDestination(rest: string): boolean {
+  const destination = /^[ \t]*([^<\x00-\x20\x7f][^\x00-\x20\x7f]*)/.exec(rest)?.[1]
+  if (destination === undefined) return false
+  let depth = 0
+  for (let at = 0; at < destination.length; at++) {
+    if (destination[at] === '\\') at++
+    else if (destination[at] === '(') depth++
+    else if (destination[at] === ')' && --depth < 0) return true
+  }
+  return depth !== 0
+}
+
 function normalizeReferenceLabel(label: string): string {
   return label.trim().replace(/\s+/gu, ' ').toLowerCase().toUpperCase().toLowerCase()
 }
@@ -651,7 +664,7 @@ export function extractReferenceDefinitions(
       continue
     }
     if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {
-      const single = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
+      const single = /^ {0,3}\[(?=[^\]]*[^\s\]])((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
       const ordinary = single && !labelNeedsInline(single[1]!) && (single[2]!.trim() === '' || LINE_TITLE.test(single[2]!))
       const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
@@ -676,7 +689,9 @@ export function extractReferenceDefinitions(
       }
     }
     // A deeper quote opens a block; a shallower line is lazy continuation.
-    const definition = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
+    // A label needs a non-whitespace character (CommonMark 4.7).
+    const head = /^ {0,3}\[(?=[^\]]*[^\s\]])((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
+    const definition = head && (head[1]!.startsWith('^') || !unbalancedDestination(head[2]!)) ? head : null
     if (definition?.[1]?.startsWith('^')) {
       const label = definition[1].slice(1)
       const key = label
