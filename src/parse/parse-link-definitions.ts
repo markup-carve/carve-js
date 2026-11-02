@@ -29,7 +29,8 @@ type PrepassFence = {
   ch: string
   len: number
   contentCol: number
-  quoted: boolean
+  // The column a line needs behind the fence's quote markers.
+  bodyCol: number
   scope: PrepassScope
 }
 
@@ -70,6 +71,7 @@ type LinkDefScan = {
   hasBlockMatchers: boolean
   lazyProbeBudget: number
   term: { col: number; quotes: number } | null
+  noteLeadCommentRefuted: { key: string; stop: number } | null
 }
 
 // One line as the pass reads it, before any container is decided.
@@ -82,7 +84,6 @@ type LineRead = {
   unquoted: string
   wasPrevBlank: boolean
   rawQuoteDepth: number
-  rawIsQuoted: boolean
   rawTrimmed: string
 }
 
@@ -201,8 +202,21 @@ export function createLinkDefinitionCollector(
     const rawQuoteDepth = containerQuoteDepth(raw)
     return {
       idx, raw, afterTerm, kept, line, unquoted, wasPrevBlank,
-      rawQuoteDepth, rawIsQuoted: rawQuoteDepth > 0, rawTrimmed: raw.trim(),
+      rawQuoteDepth, rawTrimmed: raw.trim(),
     }
+  }
+
+  // The line behind exactly the fence's quote markers, each after any indent an
+  // item's column adds; a deeper `>` is the fence's payload. Null when it has
+  // fewer: the line has left the fence's innermost quote.
+  function behindFenceQuotes(raw: string, depth: number): string | null {
+    let rest = raw
+    for (let left = depth; left > 0; left--) {
+      const marker = /^[ \t]*>(?: |(?=>)|$)/.exec(rest)
+      if (marker === null) return null
+      rest = rest.slice(marker[0].length)
+    }
+    return rest
   }
 
   // True when an open fence keeps the line as its verbatim content.
@@ -216,7 +230,11 @@ export function createLinkDefinitionCollector(
     // NEVER a list marker -- a fence delimiter is a continuation line of pure
     // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
     // is not a closer. Re-base to the column the fence opened at.
-    const k = fence.quoted ? v.raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : v.raw
+    const k = behindFenceQuotes(v.raw, fence.scope.quoteDepth)
+    if (k === null) {
+      s.fence = null
+      return false
+    }
     const ki = k.length - k.replace(/^[ \t]+/, '').length
     const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
     // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
@@ -263,7 +281,8 @@ export function createLinkDefinitionCollector(
     // is never the SHALLOWER of the two, since `k` removes a superset of what
     // `unquoted` does wherever the fence is quoted at all.
     if (
-      scopeHoldsLine(fence.scope, v.raw, v.rawQuoteDepth, v.unquoted)
+      scopeHoldsLine(fence.scope, v.raw, fence.scope.quoteDepth, v.unquoted) &&
+      (isBlankLine(k) || indentColumns(k, fence.bodyCol) >= fence.bodyCol)
     ) {
       return true // definitions inside fenced code are literal samples
     }
@@ -489,7 +508,7 @@ export function createLinkDefinitionCollector(
     return false
   }
 
-  function commentFenceTakesLine(s: LinkDefScan, v: LineRead, contentCol: number): boolean {
+  function commentFenceTakesLine(s: LinkDefScan, v: LineRead, composed: Composed, contentCol: number): boolean {
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
     if (s.commentFence !== null) {
@@ -505,7 +524,8 @@ export function createLinkDefinitionCollector(
     // use the stripped container view. Attached blocks start at the `+`
     // marker column, which can differ from the item content column.
     const commentScope: PrepassScope = {
-      quoteDepth: v.rawQuoteDepth,
+      // A description marker hides its quote from the raw count; the walk peeled it.
+      quoteDepth: Math.max(v.rawQuoteDepth, composed.peeled.filter((one) => one.quote).length),
       contentCol: s.plusColumn ?? contentCol,
     }
     const atDocumentLevel = commentScope.quoteDepth === 0 && commentScope.contentCol === 0
@@ -757,7 +777,7 @@ export function createLinkDefinitionCollector(
       ch: run[0]!,
       len: run.length,
       contentCol: view.openerCol,
-      quoted: v.rawIsQuoted,
+      bodyCol: 0,
       scope: { quoteDepth: v.rawQuoteDepth, contentCol: view.scopeCol },
     }
     s.paraState = 'no'
@@ -935,6 +955,60 @@ export function createLinkDefinitionCollector(
     lexer.linkDefs.set(normalizeRefLabel(matched.label), def)
   }
 
+  // A comment on a note's opening line closes before any line leaves the
+  // containers on that line: no paragraph carries one past them. A refuted walk
+  // refutes every same-shaped opener before its stop, which keeps a run of them linear.
+  function noteLeadCommentCloses(s: LinkDefScan, from: number, width: number, scope: PrepassScope, bodyCol: number): boolean {
+    const key = `${width}|${scope.quoteDepth}|${scope.contentCol}|${bodyCol}`
+    if (s.noteLeadCommentRefuted?.key === key && from < s.noteLeadCommentRefuted.stop) return false
+    let i = from + 1
+    for (; i < s.lexer.lineCount; i++) {
+      const raw = s.lexer.lineAt(i)!
+      const held = behindFenceQuotes(raw, scope.quoteDepth)
+      if (held === null) break
+      if (isBlankLine(raw)) continue
+      if (indentColumns(raw.replace(/^(?:>(?: |$))+/, ''), scope.contentCol) < scope.contentCol ||
+          indentColumns(held, bodyCol) < bodyCol) break
+      if (RE_COMMENT_BLOCK_ANY.exec(held.trimStart())?.[1]!.length === width) return true
+    }
+    s.noteLeadCommentRefuted = { key, stop: i }
+    return false
+  }
+
+  // The note's opening line holds its first block: a definition registers from
+  // it, and a fence or comment opened on it holds the lines below. Before any
+  // quote a marker's item is measured on the raw line, behind one inside the quote.
+  function readNoteLead(s: LinkDefScan, v: LineRead, body: string): void {
+    const floor = v.unquoted.length - v.line.length + 1
+    let lead = body
+    let quotes = v.rawQuoteDepth
+    let outerCol = floor
+    let bodyCol = 0
+    for (let peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead); peel; peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead)) {
+      lead = lead.slice(peel[0].length)
+      if (peel[0][0] === '>') {
+        quotes++
+        bodyCol = 0
+      } else if (quotes > v.rawQuoteDepth) bodyCol += peel[0].length
+      else outerCol = v.unquoted.length - lead.length
+    }
+    if (!RE_FOOTNOTE_DEF.test(lead)) registerDefinition(s.lexer, v.idx, s.session.matchLinkDef(lead), RE_ABBR_DEF.exec(lead), v.raw.length - lead.length)
+    const scope: PrepassScope = { quoteDepth: quotes, contentCol: outerCol }
+    const comment = RE_COMMENT_BLOCK_ANY.exec(lead)
+    if (comment !== null) {
+      const width = comment[1]!.length
+      if (commentCloserInScope(s.lexer, width, v.idx, scope, s.commentScopeMemo) && noteLeadCommentCloses(s, v.idx, width, scope, bodyCol)) {
+        s.commentFence = width
+        s.paraState = 'no'
+      }
+      return
+    }
+    const opened = RE_FENCE.exec(lead)?.[2] ?? RE_RAW_FENCE.exec(lead)?.[1]
+    if (!opened) return
+    s.fence = { ch: opened[0]!, len: opened.length, contentCol: Math.max(outerCol, floor + 1), bodyCol, scope }
+    s.paraState = 'no'
+  }
+
   function scanLine(s: LinkDefScan, idx: number): void {
     const v = readLine(s, idx)
     if (fenceHoldsLine(s, v)) return
@@ -950,7 +1024,7 @@ export function createLinkDefinitionCollector(
       return
     }
     if (s.commentFence === null && termTakesLine(s, v, composed)) return
-    if (commentFenceTakesLine(s, v, contentCol)) return
+    if (commentFenceTakesLine(s, v, composed, contentCol)) return
     trackDivs(s, v, contentCol)
     const para = paragraphVerdict(s, v, composed, lists, inFootnoteBodyAbove)
     if (quoteAtWrongColumn(s, v.raw)) return
@@ -961,21 +1035,7 @@ export function createLinkDefinitionCollector(
     // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
     const note = RE_FOOTNOTE_DEF.exec(v.line)
     if (note) {
-      // A definition on the note's opening line registers from the body it opens.
-      if (s.noteColumns.at(-1)?.openedAt === idx) {
-        let lead = note[2]!
-        for (let peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead); peel; peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead)) {
-          lead = lead.slice(peel[0].length)
-        }
-        if (!RE_FOOTNOTE_DEF.test(lead)) registerDefinition(s.lexer, idx, s.session.matchLinkDef(lead), RE_ABBR_DEF.exec(lead), v.raw.length - lead.length)
-        // A fence the note opens on this line holds the lines below it until one misses the note.
-        const opened = RE_FENCE.exec(note[2]!)?.[2] ?? RE_RAW_FENCE.exec(note[2]!)?.[1]
-        if (opened) {
-          s.fence = { ch: opened[0]!, len: opened.length, contentCol: composed.column + 2, quoted: v.rawIsQuoted,
-            scope: { quoteDepth: v.rawQuoteDepth, contentCol: composed.column + 1 } }
-          s.paraState = 'no'
-        }
-      }
+      if (s.noteColumns.at(-1)?.openedAt === idx) readNoteLead(s, v, note[2]!)
       return
     }
     collectLinkDef(s, v, composed, contentCol, para.collectsNothing)
@@ -1077,6 +1137,7 @@ export function createLinkDefinitionCollector(
       lazyProbeBudget: utf8ByteLength(lexer.lines.join('\n')) * 4 + 4096,
       // The definition term whose column later lines are measured against (carve#2411).
       term: null,
+      noteLeadCommentRefuted: null,
     }
     for (let idx = lexer.pos; idx <= lastDefinitionLine; idx++) {
       scanLine(s, idx)
