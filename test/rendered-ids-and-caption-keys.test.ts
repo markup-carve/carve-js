@@ -9,7 +9,7 @@ function expand(source: string, files: Record<string, string>) {
 
 describe('an id dropped with an unresolved reference reserves nothing (CARVE-P2-004)', () => {
   it.each([
-    ['footnote reference', 'x[^n]{#i}\n\n## i\n', '<p>x[^n]</p>'],
+    ['footnote reference', 'x[^n]{#i}\n\n## i\n', '<p>x[^n]{#i}</p>'],
     ['full reference', '[a][r]{#i}\n\n## i\n', '<p>[a][r]{#i}</p>'],
     ['collapsed reference', '[r][]{#i}\n\n## i\n', '<p>[r][]{#i}</p>'],
     ['reference image', '![a][r]{#i}\n\n## i\n', '<p>![a][r]{#i}</p>'],
