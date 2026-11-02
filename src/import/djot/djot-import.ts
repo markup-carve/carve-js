@@ -537,6 +537,35 @@ function normalizeDjotDivOpeners(source: string): string {
 
 /** Rewrite Djot block spellings that Carve does not recognize. */
 
+const djotRomanToken = /^(?=[MDCLXVI]+$)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/i
+
+const djotMarkerToken = (token: string): boolean =>
+  token.length === 1 || djotRomanToken.test(token) && (token === token.toLowerCase() || token === token.toUpperCase())
+
+function widenLetterDotChain(lines: string[], masked: string[], i: number): void {
+  let at = /^[ \t]*(?:>[ \t]*)*/.exec(masked[i]!)![0].length
+  // The marker bytes must be unmasked; the body after them may be code.
+  const unmasked = (length: number) => masked[i]!.slice(at, at + length) === lines[i]!.slice(at, at + length)
+  for (;;) {
+    const rest = lines[i]!.slice(at)
+    const letterDot = /^([A-Za-z]+)\. (?! )(?=\S)/.exec(rest)
+    if (letterDot) {
+      const token = letterDot[1]!
+      if (!djotMarkerToken(token) || !unmasked(letterDot[0].length) ||
+          /^(?:\[\^[^\]\n]+\]:|%%%%|\x00DJOTEMPTYNOTE)/.test(rest.slice(letterDot[0].length))) return
+      const end = at + letterDot[0].length
+      lines[i] = lines[i]!.slice(0, end) + ' ' + lines[i]!.slice(end)
+      masked[i] = masked[i]!.slice(0, end) + ' ' + masked[i]!.slice(end)
+      at = end + 1
+      continue
+    }
+    const other = /^(?:[-*+]|[0-9]+[.)]|([A-Za-z]+)(?:\.(?= {2})|\))|\(([0-9]+|[A-Za-z]+)\))[ \t]+(?=\S)/.exec(rest)
+    const letters = other?.[1] ?? (other?.[2] && !/^[0-9]/.test(other[2]) ? other[2] : undefined)
+    if (!other || !unmasked(other[0].length) || letters !== undefined && !djotMarkerToken(letters)) return
+    at += other[0].length
+  }
+}
+
 function convertDjotBlockMarkers(source: string): string {
   const lines = source.split('\n')
   const masked = maskDjotCodeAndDestinations(source).split('\n')
@@ -560,15 +589,9 @@ function convertDjotBlockMarkers(source: string): string {
     if ((masked[i] ?? '').trim() === '') continue
     const contentAt = /^[ \t]*/.exec(lines[i]!)![0].length
     if (masked[i]![contentAt] !== lines[i]![contentAt]) continue
-    // Djot accepts one space after a letter-dot item; Carve requires two.
-    // Keep the marker a list when migrating, including below quote prefixes.
-    const letterDot = /^([ \t]*(?:>[ \t]*)*)([A-Za-z]+)(\.(?:\{[^}\n]*\})?) (?! )(?=\S)/.exec(masked[i]!)
-    const token = letterDot?.[2] ?? ''
-    const roman = /^(?=[MDCLXVI]+$)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/i.test(token)
-    const invisibleBody = letterDot && /^(?:\[\^[^\]\n]+\]:|%%%%|\x00DJOTEMPTYNOTE)/.test(lines[i]!.slice(letterDot[0].length))
-    if (letterDot && !invisibleBody && lines[i]!.startsWith(letterDot[0]) &&
-        (token.length === 1 || roman && (token === token.toLowerCase() || token === token.toUpperCase())))
-      lines[i] = lines[i]!.replace(/^([ \t]*(?:>[ \t]*)*[A-Za-z]+\.(?:\{[^}\n]*\})?) (?! )/, '$1  ')
+    // Djot takes one space after a letter-dot marker and Carve two (carve#4811), at every
+    // marker of the line's chain (`- a. x`, `J. R. x`). Djot puts no attributes on a marker.
+    widenLetterDotChain(lines, masked, i)
     let view = lines[i]!
     const prefix =
       /^(?:[ \t]*> ?|[ \t]*(?:(?:[-*+]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-zA-Z])[.)]|\([0-9A-Za-z]+\)) +(?:\[[ xX]\] +)?|: |\[\^[^\]\r\n]+\]: +))/
