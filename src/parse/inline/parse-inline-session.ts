@@ -1,5 +1,5 @@
 import { maskLiteralDirectiveTokens, unmaskLiteralDirectiveTokens } from './literal-directive-mask.js'
-import { flankIndexAfter, flankIndexBefore, RE_SYMBOL, symbolOpensAt, wordAfter, wordBefore } from './parse-inline-core.js'
+import { flankIndexAfter, flankIndexBefore, RE_MENTION, RE_SYMBOL, RE_TAG, symbolOpensAt, wordAfter, wordBefore, wordBeforeGrapheme } from './parse-inline-core.js'
 import { RE_INLINE_ATTR } from './parse-inline-opaque.js'
 import { isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
 import type {
@@ -155,11 +155,27 @@ function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1
   const nextAt = flankIndexAfter(text, at + 1)
   const next = text[nextAt]
   // An inner word delimiter closes nothing; the closer that follows declines (carve#4810).
-  if (wordBefore(text, beforeAt) && next && wordAfter(text, nextAt)) return -1
+  if (wordBeforeGrapheme(text, beforeAt) && next && wordAfter(text, nextAt)) return -1
   if (next && wordAfter(text, nextAt)) return 0
   if (extendsGrapheme(text, nextAt)) return 0
   if (delim === '=' && comparisonEquals(text, at)) return 0
   return 1
+}
+
+const RE_MENTION_NAME = new RegExp(RE_MENTION.source.slice(1), 'y')
+const RE_TAG_NAME = new RegExp(RE_TAG.source.slice(1), 'y')
+
+// Where the mention or tag name at `at` ends. A `_` in it belongs to the name,
+// not to the region a bare span's own delimiter is looked for in (carve#4810 R2).
+function nameEnd(text: string, at: number, from: number): number {
+  const ch = text[at]
+  if (ch !== '@' && ch !== '#') return -1
+  if (at !== from && /[A-Za-z0-9_]/.test(text[at - 1]!)) return -1
+  const re = ch === '@' ? RE_MENTION_NAME : RE_TAG_NAME
+  re.lastIndex = at
+  const m = re.exec(text)
+  if (!m || !/[A-Za-z]/.test(m[1]!)) return -1
+  return at + m[0].length
 }
 
 // An entry of a kind in `kinds` that declines at or past `at` is still on the
@@ -1549,6 +1565,7 @@ export class InlineParseSession {
     let held: Set<number> | undefined
     let entries: Set<string> | undefined
     let holdsOwnDelimiter = false
+    let nameUntil = -1
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
@@ -1677,6 +1694,7 @@ export class InlineParseSession {
           continue
         }
       }
+      if (delim === '_' && j >= nameUntil) nameUntil = nameEnd(text, j, from)
       if (ch !== delim && '/*_~='.includes(ch) && !this.openKinds.has(ch) && bareOpener(text, j) !== 'none') {
         (lastOpener ??= new Map()).set(ch, j)
       }
@@ -1692,7 +1710,7 @@ export class InlineParseSession {
       }
       if (ch === delim) {
         const decision = bareCloserDecision(text, j, delim)
-        if (decision < 0) holdsOwnDelimiter = true
+        if (decision < 0 && j >= nameUntil) holdsOwnDelimiter = true
         if (decision > 0) {
           if (!holdsOwnDelimiter) return j
           ;(memo.declines ??= []).push({ from, at: j, kind: delim })
