@@ -1226,6 +1226,9 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ['60-tag-requires-a-word-boundary-2', { reason: 'carve#4809', html: '<p>Issue #123 and <span class="tag"><strong>#v2</strong></span> here.</p>' }],
   ['288-heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key-3', { reason: 'carve#4809', html: '<section id="a-65-b">\n  <h1>a &amp;#65; b</h1>\n  <p><a href="#a-65-b">a &amp;#65; b</a></p>\n</section>' }],
   ['489-a-caption-s-placeholder-is-any-that-does-not-begin-a-tag-5', { reason: 'carve#4809', html: '<figure>\n  <img src="p.png" alt="p">\n  <figcaption>Figure #1 q</figcaption>\n</figure>' }],
+  ['163-unresolved-footnote-reference-with-a-trailing-attribute-stays-literal', { reason: 'carve#4816', html: '<p>Text[^a]{.ref}.</p>' }],
+  ['822-an-id-dropped-with-an-unresolved-reference-reserves-nothing', { reason: 'carve#4816', html: '<p>x[^n]{#i}</p>\n<section id="i">\n  <h2>{<span class="tag"><strong>#i</strong></span>}</h2>\n</section>' }],
+  ['822-an-id-dropped-with-an-unresolved-reference-reserves-nothing-2', { reason: 'carve#4816', html: '<p>x[^n]{#i}</p>\n<section id="i">\n  <h2>i</h2>\n</section>' }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

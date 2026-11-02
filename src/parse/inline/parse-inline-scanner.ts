@@ -38,6 +38,7 @@ import type {
   Text,
 } from '../../ast.js'
 import { isLiteralInlineDirective, scanDirectiveShape } from '../../include-directive.js'
+import { appendFootnoteAttrSource } from './unresolved-reference.js'
 
 const RE_EMPTY_ATTR = /\{ *\}/y
 
@@ -1044,6 +1045,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     // An unresolved reference renders as its source, so a later block of the run is part of it.
     const reference = prev as { rawRef?: string }
     if (reference.rawRef !== undefined) reference.rawRef += s.session.rawSourceSlice(s.source, text, i, i + attr[0].length) ?? attr[0]
+    if (prev.type === 'footnote_ref') appendFootnoteAttrSource(prev, s.session.rawSourceSlice(s.source, text, i, i + attr[0].length) ?? attr[0])
     s.i += attr[0].length
     return true
   }

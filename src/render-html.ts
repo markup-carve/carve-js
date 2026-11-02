@@ -49,7 +49,7 @@ import { numberFootnotes } from './heading/footnote-numbering.js'
 import { ownValue, setOwn } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render/render-loss.js'
-import { isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
+import { footnoteRefSourceText, isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading/heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
 import { authoredIdOf, slotsByWriteOrder } from './extension/attribute-merge.js'
@@ -2835,7 +2835,7 @@ function renderAutolinkNode(node: InlineOf<'autolink'>, opts: RenderOptions): st
 function renderFootnoteRefNode(node: InlineOf<'footnote_ref' | 'inline_footnote'>, opts: RenderOptions): string {
   // number is assigned by collectFootnotes for refs with a matching
   // definition; an unresolved ref falls back to literal source.
-  if (node.number === undefined) return escapeHtml(`[^${node.label ?? ''}]`)
+  if (node.number === undefined) return escapeHtml(footnoteRefSourceText(node))
   else {
     // §13a: the AUTHORED label, on the reference and on the endnote item.
     // The rendered `<sup>1</sup>` publishes the NUMBER, assigned by

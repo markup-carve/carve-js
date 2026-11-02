@@ -66,3 +66,37 @@ export function referenceSourceText(rawRef: string | undefined): string {
 export function referenceDisplayText(rawRef: string | undefined): string {
   return referenceSourceText(rawRef).replace(/\r?\n/g, ' ')
 }
+
+/**
+ * The attribute run an unresolved footnote reference keeps as text (carve#4816).
+ *
+ * Kept beside the node rather than on it: the AST schema names no field for it,
+ * and a resolved reference still takes the run as attributes.
+ */
+const footnoteAttrSources = new WeakMap<object, string>()
+
+export function appendFootnoteAttrSource(node: object, source: string): void {
+  footnoteAttrSources.set(node, (footnoteAttrSources.get(node) ?? '') + source)
+}
+
+/** Hands the recorded runs from a tree to its structural copy, which a WeakMap does not follow. */
+export function carryFootnoteAttrSources<T>(from: T, to: T): T {
+  const stack: Array<[unknown, unknown]> = [[from, to]]
+  while (stack.length > 0) {
+    const [a, b] = stack.pop()!
+    if (!a || typeof a !== 'object' || !b || typeof b !== 'object' || a === b) continue
+    const run = footnoteAttrSources.get(a)
+    if (run !== undefined) footnoteAttrSources.set(b, run)
+    for (const key of Object.keys(a)) stack.push([(a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]])
+  }
+  return to
+}
+
+export function footnoteAttrSource(node: object): string {
+  return footnoteAttrSources.get(node) ?? ''
+}
+
+/** The literal source of an unresolved `[^label]`, with its attribute run. */
+export function footnoteRefSourceText(node: { label?: string | undefined }): string {
+  return `[^${node.label ?? ''}]${footnoteAttrSource(node)}`
+}

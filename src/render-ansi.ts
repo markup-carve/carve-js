@@ -13,7 +13,7 @@ import { blankDeniedDestination } from './import/markdown/deny-listed-destinatio
 import { codeLines, rawSource } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './extension/bidi-controls.js'
-import { isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
+import { footnoteRefSourceText, isUnresolvedReference, referenceDisplayText } from './parse/inline/unresolved-reference.js'
 import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './parse/inline/reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, tableSpanFlattened, type RenderLoss, type RenderLossSinkOptions } from './render/render-loss.js'
 import { resolveTableSpans } from './table/table-spans.js'
@@ -685,7 +685,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // text. Styling it cyan-bold and dropping the caret announced a footnote
       // the document does not have. carve-php already did this (carve#352,
       // corpus 132/133/157/161).
-      if (!ctx.definedFootnotes.has(id)) return `[^${id}]`
+      if (!ctx.definedFootnotes.has(id)) return stripControls(footnoteRefSourceText(node))
       return style(`[${id}]`, FG_CYAN + BOLD)
     }
     case 'non_breaking_space':
