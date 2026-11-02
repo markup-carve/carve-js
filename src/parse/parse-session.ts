@@ -1770,8 +1770,10 @@ export class ParseSession extends InlineParseSession {
 
   private appendLazyQuoteLine(q: QuoteCollect, ln: string, lineIndex: number, termContinuation: boolean): void {
     const { lexer } = q
-    // A line without the quote prefix cannot close an attribute opened inside it.
-    q.state.attrRun = null
+    // A line without the quote prefix cannot close an attribute opened inside it, at any quote depth.
+    for (let level: BlockQuoteLazyState | undefined = q.state; level; level = level.mode.kind === 'quote' ? level.mode.inner : undefined) {
+      level.attrRun = null
+    }
     const lazyLinkDef = this.isLinkDefLine(ln)
     if (lazyLinkDef) {
       lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
