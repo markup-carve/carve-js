@@ -32,9 +32,9 @@ describe('a tab after a marker separator is content', () => {
       "<ul>\n  <li><p>\tx</p>\n    <p>y</p>\n  </li>\n</ul>",
     ],
     [
-      'a heading shape behind the tab is text and keeps a lazy marker',
+      'a heading shape behind the tab is text and a marker below it opens a list',
       "1. \t# H\n  - z\n",
-      "<ol>\n  <li>\t# H\n- z</li>\n</ol>",
+      "<ol>\n  <li>\t# H</li>\n</ol>\n<ul>\n  <li>z</li>\n</ul>",
     ],
     [
       'an item attribute block',

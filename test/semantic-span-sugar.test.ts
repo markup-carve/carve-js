@@ -20,12 +20,12 @@ describe('semantic span attributes', () => {
     )
   })
 
-  it('combines wrappers, which the deprecated spelling cannot', () => {
+  it('combines wrappers', () => {
     const html = carveToHtml('[CSS]{kbd abbr="Cascading Style Sheets"}', { extensions: [semanticSpan()] })
     expect(html).toBe('<p><kbd><abbr title="Cascading Style Sheets">CSS</abbr></kbd></p>')
-    // `:kbd[:abbr[CSS]]` does not nest - the outer body stops at the first `]`.
+    // An extension's content closes at bracket depth zero (carve#4513), so this nests.
     expect(carveToHtml(':kbd[:abbr[CSS]]', { extensions: [semanticSpan()] }))
-      .toBe('<p><kbd>:abbr[CSS</kbd>]</p>')
+      .toBe('<p><kbd><abbr>CSS</abbr></kbd></p>')
   })
 
   it('preserves the ordinary span AST and non-HTML targets', () => {

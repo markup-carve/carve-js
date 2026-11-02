@@ -50,9 +50,6 @@
   "ast-round-trip-preserves-source.test.ts": {
     "a document round-tripped through the AST > comes back as the same source": "#4034"
   },
-  "authoring-acceptance.test.ts": {
-    "authoring acceptance suite > errors/E10-sublist-one-space.crv": "#3921"
-  },
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },
@@ -164,10 +161,6 @@
   "lint-description-separator-below-content-column.test.ts": {
     "description-separator-below-content-column > 'double-colon'": "#3921",
     "description-separator-below-content-column > term marker marker range": "#3921"
-  },
-  "lint-list-marker-below-content-column.test.ts": {
-    "list-marker-below-content-column vectors > 'after-blank-continuing-number'": "#3921",
-    "list-marker-below-content-column vectors > ignores an after-blank line that is no detached list [3]": "#3921"
   },
   "lint-reports-a-dead-block-attribute-and-counts-codepoints.test.ts": {
     "lint reports a block attribute that reaches no block > leaves an indented attribute-shaped line to block-marker-as-text": "#3921"

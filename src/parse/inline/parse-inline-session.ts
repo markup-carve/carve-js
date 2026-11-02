@@ -1,5 +1,5 @@
 import { maskLiteralDirectiveTokens, unmaskLiteralDirectiveTokens } from './literal-directive-mask.js'
-import { RE_SYMBOL, symbolOpensAt, wordAfter, wordBefore } from './parse-inline-core.js'
+import { flankIndexAfter, flankIndexBefore, RE_SYMBOL, symbolOpensAt, wordAfter, wordBefore } from './parse-inline-core.js'
 import { RE_INLINE_ATTR } from './parse-inline-opaque.js'
 import { isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
 import type {
@@ -98,10 +98,11 @@ function barePair(text: string, open: number, close: number, end: number, guarde
 }
 
 function canCloseBarePair(text: string, at: number, marker: string, openerMarks: Set<number>): boolean {
-  const before = text[at - 1]
+  const before = text[flankIndexBefore(text, at) - 1]
   const next = text[at + 1]
+  const nextAt = flankIndexAfter(text, at + 1)
   return text[at] === marker && !(next === '}' && openerMarks.has(at)) && before !== undefined
-    && !isCarveWhitespace(before) && !wordAfter(text, at + 1) && !extendsGrapheme(text, at + 1)
+    && !isCarveWhitespace(before) && !wordAfter(text, nextAt) && !extendsGrapheme(text, nextAt)
 }
 
 // Each closed editorial comment body `{#...#}` mapped to its end, as `edScan`
@@ -148,13 +149,15 @@ function comparisonEquals(text: string, at: number): boolean {
 }
 
 function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1 {
-  const prev = text[at - 1]
+  const beforeAt = flankIndexBefore(text, at)
+  const prev = text[beforeAt - 1]
   if (prev === undefined || isCarveWhitespace(prev)) return 0
-  const next = text[at + 1]
+  const nextAt = flankIndexAfter(text, at + 1)
+  const next = text[nextAt]
   // An inner word delimiter declines the entire bare candidate (carve#4810).
-  if (wordBefore(text, at) && next && wordAfter(text, at + 1)) return -1
-  if (next && wordAfter(text, at + 1)) return 0
-  if (extendsGrapheme(text, at + 1)) return 0
+  if (wordBefore(text, beforeAt) && next && wordAfter(text, nextAt)) return -1
+  if (next && wordAfter(text, nextAt)) return 0
+  if (extendsGrapheme(text, nextAt)) return 0
   if (delim === '=' && comparisonEquals(text, at)) return 0
   return 1
 }
@@ -164,12 +167,14 @@ function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1
 // stack (the PART 3 note under the bare templates, carve#3973 X1).
 function bareOpener(text: string, at: number): 'open' | 'guarded' | 'none' {
   const ch = text[at]!
-  const next = text[at + 1]
-  const before = text[at - 1]
-  if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && (next === '>' || comparisonEquals(text, at))) || extendsGrapheme(text, at + 1)) return 'none'
+  const nextAt = flankIndexAfter(text, at + 1)
+  const next = text[nextAt]
+  const beforeAt = flankIndexBefore(text, at)
+  const before = text[beforeAt - 1]
+  if (next === undefined || isCarveWhitespace(next) || next === ch || before === ch || (ch === '=' && (next === '>' || comparisonEquals(text, at))) || extendsGrapheme(text, nextAt)) return 'none'
   if (before === undefined) return 'open'
   if (before === '_' || before === '/') return before === '_' || ch === '/' || ch === '_' ? 'guarded' : 'open'
-  return wordBefore(text, at) ? 'none' : 'open'
+  return wordBefore(text, beforeAt) ? 'none' : 'open'
 }
 
 function editorialCloserInsideAttribute(text: string, start: number, marker: string, closer: number, attributeEnd: number): boolean {
@@ -838,7 +843,8 @@ export class InlineParseSession {
     const candidates = smartTokensByFirst.get(text[i]!)
     if (candidates) {
       for (const [tok, out, kind] of candidates) {
-        if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
+        // A hyphen run longer than the arrow's is a dash run (carve#4645).
+        if (text.startsWith(tok, i) && !(tok === '<--' && text[i + 3] === '-')) return { out, len: tok.length, kind }
       }
     }
     // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
@@ -857,17 +863,20 @@ export class InlineParseSession {
       // `---foo` into an en dash.
       let start = i
       while (start > 0 && text[start - 1] === '-') start--
-      const before = start > 0 ? text[start - 1]! : ''
+      const flankStart = flankIndexBefore(text, start)
+      const before = flankStart > 0 ? text[flankStart - 1]! : ''
       const openerBeforeRun = before === '(' || before === '"' || before === "'"
-      const beforeOpener = start > 1 ? flankCharAt(text, start - 2) : ''
+      const openerStart = openerBeforeRun ? flankIndexBefore(text, flankStart - 1) : 0
+      const beforeOpener = openerStart > 0 ? flankCharAt(text, openerStart - 1) : ''
       const flagAtOpener = openerBeforeRun
-        && (beforeOpener === '' || isFlankSpace(beforeOpener) || start - 1 === region?.start)
-      const after = i + n === region?.close ? '' : flankCharAt(text, i + n)
+        && (beforeOpener === '' || isFlankSpace(beforeOpener) || openerStart === region?.start)
+      const flankEnd = flankIndexAfter(text, i + n)
+      const after = flankEnd === region?.close ? '' : flankCharAt(text, flankEnd)
       //
       // The whole run is consumed as literal text rather than declined, so the
       // arrow token cannot pick up what the dash rule put down: declining left
       // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
-      if ((before === '' || isFlankSpace(before) || start === region?.start || flagAtOpener) && after !== '' && !isFlankSpace(after)) {
+      if ((before === '' || isFlankSpace(before) || flankStart === region?.start || flagAtOpener) && after !== '' && !isFlankSpace(after)) {
         return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
       }
       return { out: allocateDashes(n), len: n, kind: 'dash_run' }
@@ -1142,11 +1151,13 @@ export class InlineParseSession {
   // does not guard (carve#3973 X1).
   bareOpenerStands(text: string, i: number, guardOpen: boolean): boolean {
     const delim = text[i]!
-    const after = text[i + 1]
-    const before = text[i - 1]
-    if (!after || isCarveWhitespace(after) || extendsGrapheme(text, i + 1)) return false
+    const afterAt = flankIndexAfter(text, i + 1)
+    const after = text[afterAt]
+    const beforeAt = flankIndexBefore(text, i)
+    const before = text[beforeAt - 1]
+    if (!after || isCarveWhitespace(after) || extendsGrapheme(text, afterAt)) return false
     if (after === delim || before === delim || this.openKinds.has(delim)) return false
-    if (before && wordBefore(text, i)) return false
+    if (before && wordBefore(text, beforeAt)) return false
     if (delim === '=' && (after === '>' || comparisonEquals(text, i))) return false
     if (!guardOpen && (before === '_' || ((delim === '/' || delim === '_') && before === '/'))) return false
     return true
@@ -1648,9 +1659,9 @@ export class InlineParseSession {
         (lastOpener ??= new Map()).set(ch, j)
       }
       if ((ch === '_' || ch === '/') && ch !== delim && !this.openKinds.has(ch)) {
-        const before = text[j - 1]
+        const before = text[flankIndexBefore(text, j) - 1]
         if (entries?.has(ch)) {
-          if (before !== undefined && !isCarveWhitespace(before) && !wordAfter(text, j + 1)) entries.delete(ch)
+          if (before !== undefined && !isCarveWhitespace(before) && !wordAfter(text, flankIndexAfter(text, j + 1))) entries.delete(ch)
           else if (bareOpener(text, j) !== 'none') (held ??= new Set()).add(j)
         } else {
           const opener = bareOpener(text, j)
@@ -1732,7 +1743,8 @@ export class InlineParseSession {
           o = newline
           continue
         }
-        if (ch !== '/' || text[o + 1] !== '*' || wordBefore(text, o) || isCarveWhitespace(text[o + 2]) || extendsGrapheme(text, o + 2)) continue
+        const bodyAt = flankIndexAfter(text, o + 2)
+        if (ch !== '/' || text[o + 1] !== '*' || wordBefore(text, flankIndexBefore(text, o)) || isCarveWhitespace(text[bodyAt]) || extendsGrapheme(text, bodyAt)) continue
         const close = combinedSpanCloser(text, o + 2, memo)
         if (close === undefined) continue
         shapes.push([o, close])
@@ -1758,8 +1770,9 @@ export class InlineParseSession {
     // bare_opener('/'): the outer `/` does not open after a word character
     // or another slash (carve#3217); `a{/*y*/}b` is the intraword spelling.
     // A `_` or `/` guard that is an open entry does not block it (carve#3973 X1).
-    const before = text[at - 1] ?? ''
-    if (wordBefore(text, at) || (!guardOpen && (before === '_' || before === '/'))) return undefined
+    const beforeAt = flankIndexBefore(text, at)
+    const before = text[beforeAt - 1] ?? ''
+    if (wordBefore(text, beforeAt) || (!guardOpen && (before === '_' || before === '/'))) return undefined
     const start = at + 2
     // A bold-italic span requires a non-whitespace char right after `/*`
     // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
@@ -1767,7 +1780,8 @@ export class InlineParseSession {
     // matching carve-php parseBoldItalic.
     // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
     // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
-    if (start >= text.length || isCarveWhitespace(text[start]) || extendsGrapheme(text, start)) return undefined
+    const bodyAt = flankIndexAfter(text, start)
+    if (start >= text.length || isCarveWhitespace(text[bodyAt]) || extendsGrapheme(text, bodyAt)) return undefined
     return combinedSpanCloser(text, start, memo, (open) => this.bracedFrameEnd(text, open), (block) => this.bareBlockOwned(text, block))
   }
 

@@ -23,7 +23,7 @@ describe('a list marker outside the fold window opens an item', () => {
   // `- lead` hands its body out at column 2, so column 1 is the whole window.
   it.each([
     [0, 'collect', 'collect'],
-    [1, 'collect', 'text'],
+    [1, 'collect', 'collect'],
     [2, 'collect', 'collect'],
     [3, 'collect', 'collect'],
     [6, 'collect', 'collect'],
@@ -38,8 +38,8 @@ describe('a list marker outside the fold window opens an item', () => {
   // `1. lead` hands its body out at column 3, so the window is 1 and 2.
   it.each([
     [0, 'collect', 'collect'],
-    [1, 'text', 'collect'],
-    [2, 'text', 'collect'],
+    [1, 'collect', 'collect'],
+    [2, 'collect', 'collect'],
     [3, 'collect', 'collect'],
     [5, 'collect', 'collect'],
   ])('reads column %i under a three-column item as %s (bullet) and %s (ordered)', (indent, bullet, ordered) => {
@@ -54,9 +54,9 @@ describe('a list marker outside the fold window opens an item', () => {
   // the two rows in the middle are the ones column equality got backwards.
   it.each([
     [0, 'collect', 'collect'],
-    [1, 'collect', 'text'],
-    [2, 'collect', 'text'],
-    [3, 'collect', 'text'],
+    [1, 'collect', 'collect'],
+    [2, 'collect', 'collect'],
+    [3, 'collect', 'collect'],
     [4, 'collect', 'collect'],
     [5, 'collect', 'collect'],
   ])('reads column %i under a four-column item as %s (bullet) and %s (ordered)', (indent, bullet, ordered) => {
@@ -91,18 +91,13 @@ describe('a list marker outside the fold window opens an item', () => {
     )
   })
 
-  it('reads a marker inside the window by its family', () => {
-    // The other direction, and the one column equality answered by accident: a
-    // marker at column 2 under `-   lead` lands exactly on the open item's
-    // content column while sitting INSIDE its window. It is lead text, so a
-    // reference must not resolve against it - the page printing the line and
-    // the link table holding it are the two halves the pass may not have at
-    // once.
+  it('reads a marker inside the window as at the marker column', () => {
+    // Between an item's columns a marker reads as at the marker column (carve#4545).
     expect(carveToHtml('-   lead\n  - [t]: /t\n\n[go][t]\n')).toBe(
       '<ul>\n  <li>lead</li>\n  <li></li>\n</ul>\n<p><a href="/t">go</a></p>',
     )
     expect(carveToHtml('1. lead\n - [t]: /t\n\n[go][t]\n')).toBe(
-      '<ol>\n  <li>lead\n- [t]: /t</li>\n</ol>\n<p>[go][t]</p>',
+      '<ol>\n  <li>lead</li>\n</ol>\n<ul>\n  <li></li>\n</ul>\n<p><a href="/t">go</a></p>',
     )
   })
 

@@ -57,7 +57,7 @@ describe('a blank line inside a sibling sub-list does not loosen the outer list'
     ['a fence in a quote', '- e\n  1. x\n  * > ```\n    >\n    > c\n    > ```\n', 'tight'],
     ['a third sub-list', '- e\n  1. x\n  * y\n  1. ```\n\n     ```\n', 'tight'],
     ['a second paragraph of the sibling sub-item', '- e\n  1. x\n  * y\n\n    z\n', 'tight'],
-    ['a folded marker below the sub-item column', '- e\n  1. x\n    * y\n\n     z\n', 'tight'],
+    ['a folded marker below the sub-item column', '- e\n  1. x\n    * y\n\n     z\n', 'loose'],
   ])('%s leaves the outer item %s', (_name, src, outer) => {
     expect(carveToHtml(src)).toMatch(outer === 'tight' ? /^<ul>\n {2}<li>e\n/ : /^<ul>\n {2}<li><p>e<\/p>\n/)
   })

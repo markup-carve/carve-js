@@ -56,8 +56,8 @@ describe('the block walk reads attribute lines the way the block readers do', ()
     ['{x} {y}'],
     ['{.a}{}'],
     ['{}{.a}'],
-  ])('%j in an item is text a marker below its column folds into', (run) => {
-    expect(carveToHtml(`1. a\n   ${run}\n  - s\n`)).toBe(`<ol>\n  <li>a\n${run}\n- s</li>\n</ol>`)
+  ])('%j in an item is text a marker below its column ends', (run) => {
+    expect(carveToHtml(`1. a\n   ${run}\n  - s\n`)).toBe(`<ol>\n  <li>a\n${run}</li>\n</ol>\n<ul>\n  <li>s</li>\n</ul>`)
   })
 
   it('a real attribute run still ends the paragraph', () => {

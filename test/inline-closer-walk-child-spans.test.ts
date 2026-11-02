@@ -15,7 +15,7 @@ describe('a combined closer inside a braced inline stays in it', () => {
     ['/*{+a*/+} b*/', '<p><strong><em><ins>a*/</ins> b</em></strong></p>'],
     ['/*{-a*/-} b*/', '<p><strong><em><del>a*/</del> b</em></strong></p>'],
     ['/*{#a*/#} b*/', '<p><strong><em><span class="critic-comment">a*/</span> b</em></strong></p>'],
-    ['/*{%a*/%} b*/', '<p><strong><em> b</em></strong></p>'],
+    ['/*{%a*/%} b*/', '<p><em>* b*</em></p>'],
   ])('%s', (source, expected) => expect(html(source)).toBe(expected))
 })
 

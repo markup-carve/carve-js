@@ -596,10 +596,10 @@ class EmphasisRenderer {
   }
 
   private needsBraces(pair: Pair, content: string, delimiter: string): boolean {
-    const { source, mask } = this
-    const emptyBoundary =
-      (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||
-      (mask[pair.start - 2] === '{' && source.slice(Math.max(0, pair.start - 2), pair.start) === '{}')
+    const { source } = this
+    // An empty attribute block writes a comment, which counts as nothing for a bare guard (carve#4719).
+    const emptyBoundary = source.startsWith('{}', pair.end) ||
+      (pair.start >= 2 && source.startsWith('{}', pair.start - 2) && !isDjotEscaped(source, pair.start - 2))
     return this.options.omitQuoteDelimiters || pair.kind === '~' || pair.kind === '^' || pair.forced ||
       extendsGrapheme(source, pair.end) ||
       emptyBoundary ||

@@ -22,8 +22,8 @@ it.each([
 
 it('leaves the term open when another nested item still owns the separator', () => {
   const html = carveToHtml('- * a.  :: t\n  : a\n   - sibling\n   tail\n')
-  expect(html).toContain('<dt>t\n: a\n- sibling\ntail</dt>')
-  expect(html.match(/<ul>/g)).toHaveLength(2)
+  expect(html).toContain('<dt>t\n: a</dt>')
+  expect(html).toContain('<li>sibling\ntail</li>')
 })
 
 it('ends a deeper item at a below-column term marker', () => {

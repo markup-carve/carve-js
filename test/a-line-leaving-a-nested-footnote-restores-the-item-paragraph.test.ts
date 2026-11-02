@@ -8,7 +8,7 @@ it('an open nested footnote takes the item paragraph follower', () => {
 
 it('an open nested footnote ends at a flush-left fence, which runs to the end', () => {
   const source = '* [ ] task\n  1. ordered\n    - a\n      [^n]: note\n       q  \n```\ncode\n       ```\n'
-  expect(carveToHtml(source)).toBe("<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"task\"> task\n    <ol>\n      <li>ordered\n- a</li>\n    </ol>\n  </li>\n</ul>\n<pre><code>code\n       ```\n</code></pre>")
+  expect(carveToHtml(source)).toBe('<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="task"> task\n    <ol>\n      <li>ordered</li>\n    </ol>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<pre><code>code\n       ```\n</code></pre>')
 })
 
 it('does not restore the item paragraph while its nested note stays open', () => {

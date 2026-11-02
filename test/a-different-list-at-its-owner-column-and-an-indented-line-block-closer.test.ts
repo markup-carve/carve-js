@@ -7,7 +7,7 @@ describe('an item at its owner column starts a list whatever its axes', () => {
     ['- a\n1. b\n   > q\n', '<ul>\n  <li>a</li>\n</ul>\n<ol>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>'],
     ['1. p\n- ::: note\n  :::\n', '<ol>\n  <li>p</li>\n</ol>\n<ul>\n  <li>\n    <aside class="admonition note" aria-label="Note">\n\n    </aside>\n  </li>\n</ul>'],
     // Right of the owner column, a different list still folds as text (carve#4545).
-    ['  1. a\n - b\n   > q\n', '<ol>\n  <li>a\n- b</li>\n</ol>\n<blockquote><p>q</p></blockquote>'],
+    ['  1. a\n - b\n   > q\n', '<ol>\n  <li>a</li>\n</ol>\n<ul>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>'],
   ])('%j', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })

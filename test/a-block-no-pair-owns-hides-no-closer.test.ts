@@ -14,7 +14,7 @@ describe('a block after a marker that closes no pair is text to a combined token
   })
 
   it('still hides a closer in a closed comment', () => {
-    expect(html('/*{%a*/%} b*/')).toBe('<p><strong><em> b</em></strong></p>')
+    expect(html('/*{%a*/%} b*/')).toBe('<p><em>* b*</em></p>')
   })
 })
 

@@ -8,6 +8,7 @@ import {
   crossrefBodyCanEnd,
   type CrossrefMemo,
   RE_AUTOLINK_STICKY,
+  verbatimSpanEnd,
 } from './parse-brackets.js'
 import { inlineOpaqueEnds, RE_INLINE_ATTR, RE_RAW_INLINE } from './parse-inline-opaque.js'
 import { trimStructural } from '../parse-prepass-core.js'
@@ -24,8 +25,27 @@ export const RE_FOOTNOTE_REF = /^\[\^([^\]\r\n]+)\]/
 
 // extension_name = identifier = (letter|'_'){letter|digit|'_'|'-'}
 // (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
-// The content ends at the first UNESCAPED `]` (`extension_content`, PART 3).
-export const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[((?:\\[\s\S]|[^\]\\])*)\]/
+export const RE_EXTENSION_OPEN = /^:([a-zA-Z_][\w-]*)\[/
+
+// For each `[`, the `]` an extension opened there closes at: the one at bracket
+// depth zero, or the first unescaped one when the `[` is unbalanced (carve#4513).
+export function extensionCloses(text: string): Int32Array {
+  const close = new Int32Array(text.length + 1).fill(-1)
+  const open: number[] = []
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\\') i++
+    else if (text[i] === '[') open.push(i)
+    else if (text[i] === ']' && open.length) close[open.pop()!] = i
+  }
+  const escaped = new Uint8Array(text.length + 1)
+  for (let i = 0; i < text.length; i++) if (text[i] === '\\') escaped[++i] = 1
+  let unclosed = -1
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === ']' && !escaped[i]) unclosed = i
+    if (text[i] === '[' && close[i] === -1) close[i] = unclosed
+  }
+  return close
+}
 
 /**
  * The format a raw inline's `{=format}` tail can name.
@@ -271,6 +291,45 @@ export const QUOTE_LETTER_RUN = /\p{L}+/uy
 const LEADING_COMMENTS = /^(?:\{%(?:(?!%\})[\s\S])*%\})+/
 export const leadingCommentsEnd = (text: string): number => LEADING_COMMENTS.exec(text)?.[0].length ?? 0
 
+// A braced comment counts as nothing for every flank test (carve#4719), so these
+// step over the comments adjacent to `at`.
+let commentSpans: { text: string; ends: Map<number, number>; opens: Map<number, number> } | undefined
+function commentSpansOf(text: string) {
+  if (commentSpans?.text === text) return commentSpans
+  const ends = new Map<number, number>()
+  const opens = new Map<number, number>()
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === '\\') i++
+    else if (c === '`') {
+      const span = verbatimSpanEnd(text, i)
+      if (!span.closed) break
+      i = span.end - 1
+    } else if (c === '{' && text[i + 1] === '%' && !extendsGrapheme(text, i + 2)) {
+      const close = text.indexOf('%}', i + 2)
+      if (close === -1) break
+      ends.set(i, close + 2)
+      opens.set(close + 2, i)
+      i = close + 1
+    }
+  }
+  return commentSpans = { text, ends, opens }
+}
+export const flankIndexAfter = (text: string, at: number): number => {
+  if (text[at] !== '{' || text[at + 1] !== '%') return at
+  const { ends } = commentSpansOf(text)
+  let i = at
+  for (let end = ends.get(i); end !== undefined; end = ends.get(i)) i = end
+  return i
+}
+export const flankIndexBefore = (text: string, at: number): number => {
+  if (text[at - 1] !== '}' || text[at - 2] !== '%') return at
+  const { opens } = commentSpansOf(text)
+  let i = at
+  for (let open = opens.get(i); open !== undefined; open = opens.get(i)) i = open
+  return i
+}
+
 export const ELISION_WORDS = new Set(['tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould', 'em', 'cause', 'til', 'n', 'bout'])
 
 // A hard break and an escaped space read as the flank character they render, not as their backslash (PART 3).
@@ -493,8 +552,11 @@ export interface EmphasisMemo {
   crossref?: CrossrefMemo
 }
 
-const combinedCloserAt = (text: string, at: number): boolean =>
-  at > 0 && !isCarveWhitespace(text[at - 1]) && !extendsGrapheme(text, at + 2) && !wordAfter(text, at + 2)
+const combinedCloserAt = (text: string, at: number): boolean => {
+  const before = flankIndexBefore(text, at)
+  const after = flankIndexAfter(text, at + 2)
+  return before > 0 && !isCarveWhitespace(text[before - 1]) && !extendsGrapheme(text, after) && !wordAfter(text, after)
+}
 
 // `bracedEnd` gives the exclusive end of a forced span or editorial frame
 // opening at a `{`, or -1, as the parser pairs it.

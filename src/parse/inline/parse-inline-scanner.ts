@@ -1,3 +1,4 @@
+import { flankIndexBefore } from './parse-inline-core.js'
 import type {
   inlineScannerHelpers,
   BracketClose,
@@ -163,6 +164,7 @@ interface InlineScan {
   // Caption number placeholder: only the first bare `#` in a caption becomes one.
   captionNumberEmitted: boolean
   emphasisNoClose: EmphasisMemo | undefined
+  extensionCloses?: Int32Array
   // The delimiter stack's unpaired open entries at this level: the last one's
   // position, and the kinds held (E3), so a `_` or `/` guard counts only
   // where it stands as one (carve#3973 X1).
@@ -262,7 +264,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     RE_BRACED_EN_DASH,
     RE_CROSSREF,
     RE_ESCAPABLE_PUNCTUATION,
-    RE_EXTENSION,
+    RE_EXTENSION_OPEN,
+    extensionCloses,
     RE_FOOTNOTE_REF,
     RE_INLINE_ATTR,
     RE_MENTION,
@@ -860,9 +863,14 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   // Inline extension :type[content]{attrs}
   function scanInlineExtension(s: InlineScan, rest: string): boolean {
     const { text, i, session } = s
-    const m = s.rbracketSuf?.[i] ? RE_EXTENSION.exec(rest) : null
-    if (!m) return false
-    const attrsStart = i + m[0].length
+    const open = s.rbracketSuf?.[i] ? RE_EXTENSION_OPEN.exec(rest) : null
+    if (!open) return false
+    const closes = s.extensionCloses ??= extensionCloses(text)
+    const close = closes[i + open[0].length - 1]!
+    if (close === -1) return false
+    const contentStart = i + open[0].length
+    const m: string[] = [text.slice(i, close + 1), open[1]!, text.slice(contentStart, close)]
+    const attrsStart = i + m[0]!.length
     const attrs = text[attrsStart] === '{' && s.rbraceSuf?.[attrsStart] && !spanAttrProvablyInvalid(text, attrsStart, s.quoteEnd, s.valueEnd)
       ? RE_INLINE_ATTR.exec(text.slice(attrsStart)) : null
     if (attrs) { m[0] += attrs[0]; m[3] = attrs[1]! }
@@ -871,7 +879,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       type: 'inline_extension',
       name: m[1]!,
       content: session.scanInline(
-        m[2]!, session.shiftSource(s.source, text, i + m[0].indexOf('[') + 1), s.inFootnote,
+        m[2]!, session.shiftSource(s.source, text, contentStart), s.inFootnote,
         false, NO_OPEN_KINDS, true,
       ),
     }
@@ -883,7 +891,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     // markup-carve/carve#888. An invalid payload is not consumed - the
     // extension parses without attributes and the braces stay literal
     // text, exactly as the link and image tails already do.
-    let consumed = m[0].length
+    let consumed = m[0]!.length
     if (m[3] !== undefined) {
       if (isValidInlineAttrPayload(m[3])) ext.attrs = parseAttrs(m[3])
       else consumed -= m[3].length + 2
@@ -1124,7 +1132,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
 
   function scanEmphasis(s: InlineScan): boolean {
     const { text, i } = s
-    const guardOpen = s.openEntryAt === i - 1
+    const guardOpen = s.openEntryAt === flankIndexBefore(text, i) - 1
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
       s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0, guardOpen)
     if (!em) {
