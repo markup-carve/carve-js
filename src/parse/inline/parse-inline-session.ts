@@ -162,14 +162,15 @@ function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1
   return 1
 }
 
-// An entry of a kind in `kinds` that declines past `at` is still on the stack
-// there: no opener of that kind and no combined token forms (carve#4810).
+// An entry of a kind in `kinds` that declines at or past `at` is still on the
+// stack there: no opener of that kind and no combined token forms, and the
+// closer that declines it is text (carve#4810).
 function entryDeclinesPast(memo: EmphasisMemo, at: number, kinds: string): boolean {
   const declines = memo.declines
   if (declines === undefined) return false
   // The scan only moves forward, so an entry that declined behind it is done.
-  while (declines.length > 0 && declines.at(-1)!.at <= at) declines.pop()
-  return declines.some((entry) => entry.from <= at && entry.at > at && kinds.includes(entry.kind))
+  while (declines.length > 0 && declines.at(-1)!.at < at) declines.pop()
+  return declines.some((entry) => entry.from <= at && entry.at >= at && kinds.includes(entry.kind))
 }
 
 // Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
