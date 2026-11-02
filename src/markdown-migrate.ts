@@ -4386,9 +4386,11 @@ class ListMarkers {
     // The markers the line nests are respelled the way the leading one just
     // was. The kinds above stay the SOURCE characters, because whether the next
     // line is a sibling turns on the bullet the author wrote.
+    // A list interrupting a paragraph no item holds is set apart from it, as
+    // Carve reads a marker line under paragraph text as continuation.
     return {
       line: emitted.line,
-      separate: prev !== undefined && !same,
+      separate: prev !== undefined && !same || paragraphOpen && parent < 0 && prev === undefined,
       outer,
       shift,
     }
@@ -4828,6 +4830,16 @@ function restorePrefixedInlineRun(
     const nestedHeading = !insideFence && previousQuote !== null && previousQuote.marker !== '' &&
       previousQuote.marker === nestedQuote.marker && RE_CARVE_HEADING_OPENER.test(previousQuote.body) &&
       part.prefix === run[idx - 1]?.prefix && columnWidth(previousHeld!.marker) === columnWidth(marker)
+    // A list opening under a quoted paragraph no item holds (the quote run's
+    // writer does the same for a quote the run itself opens).
+    const quote = peelQuoteMarkers(part.text)
+    const quotedList = !insideFence && previousHeld !== undefined && quote.marker !== '' &&
+      columnWidth(part.prefix) === columnWidth(run[idx - 1]!.prefix) && previousHeld.marker === quote.marker &&
+      peelQuoteMarkers(run[idx - 1]!.text).marker === quote.marker && opensParagraph(previousHeld.body) &&
+      opensInterruptingItem(quote.body, true, 0)
+    if (quotedList) out.push(emitContainerLine('', 'blank', {
+      listDepth: 1, quoteDepth: quoteDepth(part.prefix + quote.marker), prefix: part.prefix + quote.marker, hosts: emissionHosts(part.prefix + quote.marker),
+    }).line)
     if (quotedHeading || nestedHeading) {
       const prefix = quotedHeading ? part.prefix + marker : part.prefix + kept + nestedQuote.marker
       out.push(emitContainerLine('', 'blank', {
@@ -5341,6 +5353,12 @@ function collectBlockquoteInlineRun(
         const under = item === null ? lastItem.get(prefix) : undefined
         const col: number = item !== null ? columnWidth(item.lead) : under !== undefined && indentColumns(text) >= under ? under : 0
         fence = { prefix, closer: new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`), col }
+      } else if (end > start && item === null && run.at(-1)?.prefix === prefix && !/^(?:[ \t]*>)*[ \t]*\t/.test(line) && indentColumns(text) >= (held ?? 0) + 4 &&
+        (!lazy && /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)/.test(run.at(-1)!.text) ||
+          /^ {0,3}=+[ \t]*$/.test(run.at(-1)!.text) && run.at(-2)?.prefix === prefix && underlinesParagraph(run.at(-2)!.text))) {
+        // Indented code may follow a heading or a thematic break without a
+        // blank line, a setext one included; the caller re-enters on it.
+        break
       } else if (end > start && interruptingHtmlBlock(text)) {
         // What the quote holds is measured with the marker stripped, so an
         // HTML block opening mid-quote ends the inline run and the caller
@@ -6853,6 +6871,14 @@ function quotedItemColumns(lines: readonly string[]): number[] {
 }
 
 /**
+ * Whether a `=` underline under this line makes it a setext heading. A `=` line
+ * above may itself have been an underline, so it does not count.
+ */
+function underlinesParagraph(text: string): boolean {
+  return text.trim() !== '' && !RE_MD_THEMATIC.test(text) && !/^ {0,3}(?:#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|=+[ \t]*$)/.test(text)
+}
+
+/**
  * Collect indented code a BLOCK QUOTE holds and re-emit it as a Carve fence
  * carrying the quote's own marker.
  *
@@ -6878,8 +6904,14 @@ function quotedIndentedCodeAt(
   if (!head || !RE_MD_INDENTED_CODE.test(head.text)) return null
 
   const previous = start > 0 ? blockquotePrefix(held(lines[start - 1]!)) : null
+  // A heading or thematic break above leaves no paragraph open either. Past an
+  // item's column a tab here is measured from the wrong column, so not there.
   const opensHere =
-    previous === null || previous.prefix !== head.prefix || previous.text.trim() === ''
+    previous === null || previous.prefix !== head.prefix || previous.text.trim() === '' ||
+    (contentCol === 0 || !/^(?:[ \t]*>)*[ \t]*\t/.test(lines[start]!)) &&
+    (RE_MD_THEMATIC.test(previous.text) || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(previous.text) ||
+      /^ {0,3}=+[ \t]*$/.test(previous.text) && start > 1 &&
+      blockquotePrefix(held(lines[start - 2]!))?.prefix === head.prefix && underlinesParagraph(blockquotePrefix(held(lines[start - 2]!))!.text))
   if (!opensHere) return null
 
   // A line left of that item's content is not the item's, whatever the item
