@@ -310,6 +310,11 @@ function invisibleFollowerLine(
   return null
 }
 
+// A caption past a note in a quote folds, so the quote reader must not end the quote at it (CARVE-P2-008).
+function recordLazyCaption(lazyCaptions: Set<number>, missedNote: boolean, rest: string, at: number): void {
+  if (missedNote && CAPTION.test(rest)) lazyCaptions.add(at)
+}
+
 /**
  * Rule A (carve#3885): every line is first matched against the open containers,
  * and an opener past its owner's content column opens there, measured from its
@@ -322,7 +327,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -348,6 +353,7 @@ export function ownLines(
   const skippedComments = new Map<number, string>()
   const skippedNotes = new Set<number>()
   const payloadLines = new Set<number>()
+  const lazyCaptions = new Set<number>()
   const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
@@ -493,6 +499,7 @@ export function ownLines(
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
+      recordLazyCaption(lazyCaptions, missedNote, m.rest, at)
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
       leadLazy(owner, releasedSeparator)
       finish()
@@ -869,7 +876,7 @@ export function ownLines(
       m = { col: m.col, rest }
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0 }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0 }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
