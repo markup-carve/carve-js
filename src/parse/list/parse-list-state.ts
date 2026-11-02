@@ -262,17 +262,24 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return true
   }
 
+  function holdsLineBlock(frame: ItemLazyState | null | undefined): boolean {
+    for (; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
+      if (frame.literalColon !== undefined) return true
+    return false
+  }
+
   /** A line a descendant marker owns while its frame sits in a literal colon container. */
   function descendantLiteralColon(line: LazyLine): boolean {
     const { content, state, facts } = line
-    if (!state.deepest?.literalColon || state.ownedAuthored || state.ownedColumn < 0 ||
+    if (!holdsLineBlock(state.deepest) || state.ownedAuthored || state.ownedColumn < 0 ||
         indentColumns(content, state.ownedColumn) < state.ownedColumn) return false
     const offset = state.ownedColumn
-    const inner = state.deepest
+    const inner = state.deepest!
     trackItemLazyState(
       sliceColumns(content, offset, true), inner,
       true, () => false,
-      {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
+      {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true,
+        ...(facts?.payloadFenceCloser ? {payloadFenceCloser: facts.payloadFenceCloser} : {})},
       (width, extra = 0) => line.hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
     // A line block's open paragraph takes lazy text at every depth (PART 0 S4).
@@ -714,6 +721,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       frame.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(nestedContent) ? nestedFence[2]! : nestedFence[1]!) }
       frame.lazyFoldable = false
       state.lazyFoldable = false
+    }
+    // A chained marker (`- - ::: |`) opens a frame per marker, so the line block
+    // reads its columns at its own depth (carve#4661).
+    if (RE_LINE_BLOCK_OPEN.test(nestedContent.slice(walkMarkerOwnerPrefix(nestedContent))) && colonFenceOpenerLen(nestedContent) === null) {
+      const chained = beginLine(nestedContent, frame, true, () => true, undefined, undefined, undefined, undefined, false)
+      chained.run = 0
+      nestedMarkerLine(chained)
     }
     return frame
   }

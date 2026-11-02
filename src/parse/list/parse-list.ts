@@ -1185,6 +1185,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A span opened on a child's marker line, held until a line below the child's column ends the child.
     let childSpan: { run: number; column: number; state: ItemLazyState['opaque'] } | undefined
     let childMarkerSpan = false
+    const reachesDescendantLineBlock = (line: string): boolean => {
+      let frame: ItemLazyState = lazyState
+      for (let text = line; frame.deepest && frame.ownedColumn >= 0 && !frame.ownedAuthored;) {
+        if (indentColumns(text, frame.ownedColumn) < frame.ownedColumn) return false
+        text = sliceColumns(text, frame.ownedColumn, true)
+        frame = frame.deepest
+        if (frame.literalColon !== undefined) return true
+      }
+      return false
+    }
     const trackDescendantOpaque = (
       line: string,
       opener: string,
@@ -1258,6 +1268,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
+      // A child line block reads its own payload fence: it opens only with a closer ahead.
+      if (reachesDescendantLineBlock(line)) return
       const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
       const base = opener === line.trimStart()
         ? indentColumns(line)
