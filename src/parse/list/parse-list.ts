@@ -3133,10 +3133,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let descriptionOwner: { column: number, line: number, body: boolean } | undefined
     const definitionAtDescriptionBody = (index: number): boolean => {
       const text = nested[index]!
-      const rest = text.replace(/^[ \t]+/, '')
-      const column = indentColumns(text)
+      const rest = text.trimStart()
       // A footnote definition there opens a frame, so it is not one of them.
-      if (column === 0 || RE_FOOTNOTE_DEF.test(rest) || !(isLinkDefLine(rest) || RE_ABBR_DEF.test(rest))) return false
+      if (rest === text || !/^[[*]/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || !(isLinkDefLine(rest) || RE_ABBR_DEF.test(rest))) return false
+      const column = indentColumns(text)
       if (descriptionOwner?.column === column && descriptionOwner.line < index) return descriptionOwner.body
       let k = index - 1
       while (k >= 0 && (isBlankLine(nested[k]!) || indentColumns(nested[k]!) >= column)) k--
