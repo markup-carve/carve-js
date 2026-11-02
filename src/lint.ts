@@ -115,6 +115,7 @@ export interface LintWarning {
 }
 
 interface Positioned {
+  type?: string
   pos?: {
     startLine: number
     endLine?: number
@@ -1668,6 +1669,8 @@ function collectContainedPlacementMarkers(
  *  leading `(^|\s)` keeps a valid inline span like `[t]{.c}` (brace abuts `]`,
  *  no space) from matching. */
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
+const HEADING_CLOSING_HASHES = /^(.*\S[ \t]+)(#+)[ \t\r]*$/
+const SETEXT_UNDERLINE = /^((?:[ \t]*>)*[ \t]*)(-{3,}|={3,})[ \t\r]*$/
 // The legacy `raw FORMAT` spelling recovers as language `raw` (carve#4849).
 function recoveredCodeFenceMessage(run: string, language: string, view: string): string {
   const generic = 'The code fence keeps its language and drops invalid opener metadata. Use a quoted title and optional [label] in that order.'
@@ -1691,7 +1694,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const FENCE_RUN = /^(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX_>\/!?-]\] +)?/
-const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,}|-(?: -){2,}|\*(?: \*){2,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -3230,6 +3233,64 @@ function collectSilentFailures(
       `Trailing "${m[2]}" on a heading is literal text in Carve, not an attribute block. ` +
         `Move it to a "${m[2]}" line directly above the heading.`,
     )
+  }
+
+  // 2. Markdown habits that render differently with no error (carve#4814).
+  for (const h of headings) {
+    const ln = (h.pos as { endLine?: number } | undefined)?.endLine ?? h.pos?.startLine
+    if (!ln) continue
+    const children = (h as { children?: Array<{ type?: string; value?: string }> }).children
+    const last = children?.at(-1)
+    const run = /(\S?)[ \t]+#+$/.exec(last?.type === 'text' ? last.value ?? '' : '')
+    if (!run || !run[1] && children!.length < 2) continue
+    const m = HEADING_CLOSING_HASHES.exec(lines[ln - 1] ?? '')
+    if (!m) continue
+    push(ln, m.index + m[1]!.length + 1, m[2]!.length, 'heading-closing-hashes',
+      `The closing "${m[2]}" run is heading text in Carve, not a closing marker. Delete it.`)
+  }
+  const setextMessage = 'Carve has no underline heading: this run is not a heading underline. Write the heading with a leading "#" instead.'
+  for (const p of paragraphs) {
+    const start = p.pos?.startLine, end = (p.pos as { endLine?: number } | undefined)?.endLine
+    if (!start || !end) continue
+    for (let ln = start + 1; ln <= end; ln++) {
+      const m = SETEXT_UNDERLINE.exec(lines[ln - 1] ?? '')
+      if (m?.[2]!.startsWith('=')) push(ln, m.index + m[1]!.length + 1, m[2]!.length, 'setext-heading-underline', setextMessage)
+    }
+  }
+  const visitSiblings = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (let i = 1; i < value.length; i++) {
+        const prev = value[i - 1] as Positioned | undefined, node = value[i] as Positioned | undefined
+        if (prev?.type !== 'paragraph' || node?.type !== 'thematic_break') continue
+        const ln = node.pos?.startLine
+        const prevEnd = (prev.pos as { endLine?: number } | undefined)?.endLine
+        if (!ln || prevEnd !== ln - 1) continue
+        const m = SETEXT_UNDERLINE.exec(lines[ln - 1] ?? '')
+        if (m?.[2]!.startsWith('-')) push(ln, m.index + m[1]!.length + 1, m[2]!.length, 'setext-heading-underline', setextMessage)
+      }
+      for (const item of value) visitSiblings(item)
+      return
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== 'pos' && key !== 'attrs') visitSiblings(child)
+    }
+  }
+  visitSiblings(doc.children)
+  const top = doc.children as Positioned[]
+  // A paragraph written flush under a list, with no blank line, still reads as that list's text.
+  const followsList = (i: number): boolean => {
+    let j = i - 1
+    while (top[j]?.type === 'paragraph' && top[j]!.pos?.startLine === ((top[j - 1]?.pos as { endLine?: number } | undefined)?.endLine ?? -1) + 1) j--
+    return top[j]?.type === 'list'
+  }
+  for (let i = 0; i < top.length; i++) {
+    const node = top[i]!, ln = node.pos?.startLine
+    if (node.type !== 'paragraph' || !ln || ln < 2 || followsList(i)) continue
+    if ((lines[ln - 2] ?? '').trim() !== '') continue
+    const indent = /^ {4,}(?=\S)/.exec(lines[ln - 1] ?? '')
+    if (indent) push(ln, indent[0].length + 1, (lines[ln - 1] ?? '').length - indent[0].length, 'indented-code-block',
+      'Four-space indentation does not make a code block in Carve; this renders as a paragraph. Use a ``` fence.')
   }
 
   // 3. The pre-0.1.x tight blockquote spelling. `>` must be bare or followed

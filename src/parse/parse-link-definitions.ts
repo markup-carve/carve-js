@@ -338,7 +338,7 @@ export function createLinkDefinitionCollector(
       isColonFenceOpener(rawTrimmed) ||
       isBlockAttributeLine(rawTrimmed) ||
       (RE_ABBR_DEF.test(rawTrimmed) && v.rawQuoteDepth === 0 && listCols[0]?.inQuote === true) ||
-      /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
+      /^(-{3,}|\*{3,}|_{3,}|-(?: -){2,}|\*(?: \*){2,})$/.test(rawTrimmed)
     // SNAPSHOT FOR THE RETRACTION at the end of this loop body. This branch
     // cannot ask whether the marker folds into an open paragraph: that answer
     // is `paragraphReallyOpen`, and it is not computed until both column

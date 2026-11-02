@@ -16,6 +16,7 @@ const newRules = new Set([
   'list-marker-without-blank-line', 'unclosed-inline-emphasis', 'link-gap-before-destination',
   'markdown-italic-underline', 'heading-level-skip', 'bare-html-tag',
   'markdown-definition-paragraph', 'github-alert-marker', 'caption-looking-paragraph',
+  'setext-heading-underline', 'heading-closing-hashes', 'indented-code-block',
 ])
 
 describe('authoring acceptance suite', () => {
