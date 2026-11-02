@@ -1840,8 +1840,10 @@ export class ParseSession extends InlineParseSession {
   // False when the unmarked line ends the quote instead of continuing it.
   private takeLazyQuoteLine(q: QuoteCollect, ln: string): boolean {
     const { lexer, state } = q
+    const rootLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln
+    // A line that writes a `>` is inside the quote that marker reaches, not below this quote's column.
     const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
-      indentColumns(lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln) < q.quoteMarkerColumn
+      indentColumns(rootLine) < q.quoteMarkerColumn && !rootLine.trimStart().startsWith('>')
     if (this.takesUnmarkedCommentCloser(q, ln)) return true
     if (this.interruptsQuoteLazily(q, ln, lazyFootnote)) return false
     // A list marker interrupts the one-line paragraph a refused quoted note `+` forms (§10 I2).
