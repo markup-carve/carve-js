@@ -60,7 +60,7 @@ describe('a container ends at its last placed child', () => {
     expect(spanOf(source, 'list_item')).toEqual([0, 3])
     // The definition keeps the span it was written at, and the two no longer
     // overlap: offset 8 resolves to one node.
-    expect(spanOf(source, 'link_reference_definition')).toEqual([5, 14])
+    expect(spanOf(source, 'link_reference_definition')).toEqual([7, 14])
   })
 
   it('a block quote stops before a definition hoisted out of it', () => {

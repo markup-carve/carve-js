@@ -221,8 +221,19 @@ export function appendLinkReferenceDefinitions(
       lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
       lexer.lineStartColumn(def.line),
     )
-    // A definition on a note's opening line starts behind the note's marker.
-    if (def.lead !== undefined) {
+    // A definition is a leaf: it starts at its own `[`, past any container
+    // prefix or indentation, and ends at its line's end in the SOURCE, which a
+    // container's cut can make longer than the lexer line (carve#4952).
+    const text = lexer.lines[def.line] ?? ''
+    const bracket = text.indexOf(`[${def.rawLabel ?? key}]`, def.lead ?? 0)
+    if (bracket >= 0) {
+      const start = lexer.sourceBoundary(def.line, bracket)
+      const end = lexer.sourceBoundary(def.line, text.length)
+      node.pos.startColumn = start.column
+      node.pos.startOffset = start.offset
+      node.pos.endColumn = end.column
+      node.pos.endOffset = Math.min(end.offset, source.length)
+    } else if (def.lead !== undefined) {
       node.pos.startColumn! += def.lead
       node.pos.startOffset! += def.lead
     }
