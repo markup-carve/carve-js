@@ -1454,6 +1454,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let captionParagraphFollower = false
     let quoteLazyFramed = false
     let belowItemComment = false
+    // Lines that end a child's comment span by missing its owner, where a closer is ahead.
+    const spanEndingMisses = new Set<number>()
     let sourceDepth = 0
     let sourceMarkerColumn = 0
     let sourceEntry = ''
@@ -2028,6 +2030,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // Code, comment and established literal bodies keep their placement.
         // Lazy text in an ordinary colon body retains its paragraph frame.
         lazyState.opaque === null && lazyState.literalColon === undefined
+      if (lw < contentCol && spanEndingMisses.has(lexer.pos)) return 'stop'
       belowItemComment = lw < contentCol && RE_COMMENT_LINE.test(l.trimStart())
       const heldCommentSpan = belowItemComment && commentFenceRun(l.trimStart()) !== undefined &&
         bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
@@ -2350,7 +2353,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
               trackedContent = markerContent
               break
             }
-            if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) break
+            if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) {
+              // The closer ahead still opens the span: this line ends it (PART 0 S1)
+              // and is no lazy text of the item (carve#4770).
+              spanEndingMisses.add(at)
+              break
+            }
           }
         }
       }
