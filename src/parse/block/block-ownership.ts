@@ -372,6 +372,7 @@ export function ownLines(
       if (lineCuts.length) cuts.set(at, lineCuts)
     }
 
+    endAttachedColonAtSibling()
     let reached = 0
     let plus: Frame | null = null
     let quotes = 0
@@ -772,6 +773,24 @@ export function ownLines(
       apply(frame, col, form, canon + m.col)
     }
 
+    // A colon block a `+` attached to a description ends at that description's sibling (carve#4798).
+    function endAttachedColonAtSibling(): void {
+      const host = attachedHost?.at(-1)
+      if (host?.kind !== 'dd') return
+      if (top().kind !== 'colon' || frames.length !== attachedHost!.length) return
+      let line = m
+      for (const frame of frames) {
+        if (frame.kind !== 'quote') continue
+        if (!isQuoteLine(line.rest)) return
+        line = indentCols(quoteRest(line.rest))
+      }
+      if (line.col >= host.col || !(DD.test(line.rest) || DEFLIST_TERM.test(line.rest))) return
+      frames.length = attachedHost!.length - 1
+      top().last = 'dd'
+      top().para = false
+      attachedHost = null
+    }
+
     function reopenAttachedHost(host: Frame[]): Frame | null {
       const col = docColumn(lines[at]!, m.rest)
       const hostAt = host.findIndex((f, k) => k > 0 && f.docMarker === col &&
@@ -783,9 +802,11 @@ export function ownLines(
     }
 
     function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
+      // An attribute line leads the attached block, so the line after it still opens that block.
+      if (at > 0 && isAttrLine(trimEndSpaceTab(lines[at - 1]!.replace(/^(?:[ \t]*>[ \t]?)*[ \t]*/, '')))) return false
       // A blank after an item's attached block still lets a `+` reach that item (§17 L3, carve#4629).
       if (m.rest === '') return top().kind !== 'fence' && attachedHost?.at(-1)?.kind !== 'item'
-      return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item'
+      return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item' && !isAttrLine(trimEndSpaceTab(m.rest))
     }
 
     function lazyMarkerLineAttaches(form: Form): boolean {
