@@ -7751,7 +7751,8 @@ function commentSeparatedListStarts(source: readonly string[]): number[] {
         continue
       }
       if (comment) {
-        if (lineIndent === indent && marker.test(line)) starts.push(at)
+        // Any marker that is not indented code opens the next list.
+        if (lineIndent >= indent && lineIndent - indent <= 3 && marker.test(line)) starts.push(at)
         break
       }
       const lazy = !previousBlank && lineIndent < contentCol && !/^[ \t]*(?:[>#<]|`{3}|~{3}|[-*+][ \t]|\d{1,9}[.)][ \t])/.test(line)
