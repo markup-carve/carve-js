@@ -16,6 +16,7 @@ describe('a fence info word that already starts with language-', () => {
     ['other prefixes stay', '```xlanguage-js\nx\n```', '```xlanguage-js\nx\n```'],
     ['the prefix is case-sensitive', '```LANGUAGE-js\nx\n```', '```LANGUAGE-js\nx\n```'],
     ['inside a list item', '- ```language-js\n  x\n  ```', '- ```js\n  x\n  ```'],
+    ['a tilde fence in a quote inside a list item', '- > ~~~language-js\n  > x\n  > ~~~', '- > ```js\n  > x\n  > ```'],
   ])('%s', (_name, markdown, carve) => {
     expect(written(markdown)).toBe(carve)
   })
