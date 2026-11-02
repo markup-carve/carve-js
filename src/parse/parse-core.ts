@@ -585,6 +585,7 @@ export {
   collectLiteralColonFenceBody,
   colonFenceKind,
   commentBlockHasCloser,
+  commentCloserAhead,
   commentCloserInScope,
   commentLineContent,
   commentRunLines,

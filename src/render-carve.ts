@@ -4268,7 +4268,13 @@ class CarveRenderSession {
           // line, with the `+` on the line below it. The latch still goes up, so
           // the block under it lands at the marker column behind its own marker.
           if (parts.length === 0) parts.push(rendered)
-          else parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
+          // A comment line needs no `+`: at the item's column it stays in the item, and a `+` above it reads as text.
+          else if (previousAtMarkerColumn && b.type === 'comment') {
+            parts.push(rendered)
+            previousAtMarkerColumn = false
+            previousEmitted = b
+            return
+          } else parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
           previousAtMarkerColumn = true
           previousEmitted = b
           return
