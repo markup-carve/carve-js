@@ -17,23 +17,22 @@ describe('a definition marker below a nested term column', () => {
     expect(html).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<\/dd>\s*<dd>tail<\/dd>/)
   })
 
-  it('folds a later quote past the surviving body column into the term', () => {
-    const source = '- a\n  :: outer\n  :  detail\n       :: inner\n      :  tail\n      > quote\n'
-    const html = carveToHtml(source)
-    expect(html).toMatch(/<dt>inner\s+:  tail\s+&gt; quote<\/dt>/)
-    expect(html).not.toContain('<blockquote>')
+  // A block at the outer body's column opens in the outer description after the inner list (#3922, carve#3885).
+  it.each([
+    ['quote', '> quote', '<blockquote><p>quote</p></blockquote>'],
+    ['heading', '# H', '<h1 id="H">H</h1>'],
+    ['code fence', '```js\n      code\n      ```', '<pre><code class="language-js">code\n</code></pre>'],
+    ['table row', '| A | B |', '<table>\n<tbody>\n<tr><td>A</td><td>B</td></tr>\n</tbody>\n</table>'],
+    ['thematic break', '---', '<hr>'],
+    ['colon fence', '::: note\n      text\n      :::', '<aside class="admonition note" aria-label="Note">\n<p>text</p>\n</aside>'],
+  ])('opens a past-column %s in the outer description', (_name, tail, rendered) => {
+    const source = `- a\n  :: outer\n  :  detail\n       :: inner\n      :  tail\n      ${tail}\n`
+    expect(normalize(carveToHtml(source))).toContain(`<dt>inner</dt>\n<dd>tail</dd>\n</dl>\n${rendered}\n</dd>\n</dl>\n</li>`)
   })
 
-  it.each([
-    ['heading', '# H', '# H'],
-    ['code fence', '```js\n      code\n      ```', '<code>js\ncode\n</code>'],
-    ['table row', '| A | B |', '| A | B |'],
-    ['attribute', '{#x}', '{<span class="tag"><strong>#x</strong></span>}'],
-    ['thematic break', '---', '—'],
-    ['colon fence', '::: note\n      text\n      :::', '::: note\ntext\n:::'],
-  ])('folds a past-column %s into the open term', (_name, tail, rendered) => {
-    const source = `- a\n  :: outer\n  :  detail\n       :: inner\n      :  tail\n      ${tail}\n`
-    expect(normalize(carveToHtml(source))).toContain(`<dt>inner\n:  tail\n${rendered}</dt>`)
+  it('floats a past-column attribute to no block in the outer description', () => {
+    const source = '- a\n  :: outer\n  :  detail\n       :: inner\n      :  tail\n      {#x}\n'
+    expect(normalize(carveToHtml(source))).toContain('<dt>inner</dt>\n<dd>tail</dd>\n</dl>\n</dd>\n</dl>\n</li>')
   })
 
   it('lets a list marker end a term even past the surviving body column', () => {
