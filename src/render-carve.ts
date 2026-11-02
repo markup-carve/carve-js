@@ -644,12 +644,18 @@ function taskMarker(item: ListItem): string {
 /** Whether two adjacent blocks were written on consecutive source lines, with
  *  no blank line between them - true only for the bibliography definition,
  *  whose line-per-node shape is the one the parser splits out of a paragraph. */
-function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
-  if (previous.type !== 'citation_definition' || block.type !== 'citation_definition') return false
+function writtenAsOneRun(previous: BlockNode, block: BlockNode, descriptionBody = false): boolean {
+  // In a description, a blank between line comments counts toward the list's blank budget.
+  const lineComments = descriptionBody && isLineComment(previous) && isLineComment(block)
+  if (!lineComments && (previous.type !== 'citation_definition' || block.type !== 'citation_definition')) return false
   const before = previous.pos
   const after = block.pos
   if (!before || !after) return false
   return after.startLine === before.endLine + 1
+}
+
+function isLineComment(block: BlockNode): boolean {
+  return block.type === 'comment' && !block.block && block.delimited !== true
 }
 
 // CARVE-P11-073: a `%%` line that I1b reads as a region marker.
@@ -3464,7 +3470,7 @@ class CarveRenderSession {
             parts.length > 0 &&
             (heldNoteEnd !== undefined
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
-              : writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
+              : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0 && descriptionBody) {
