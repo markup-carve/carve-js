@@ -457,9 +457,17 @@ function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, desti
   } else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && st.lines[i + 1]?.trim() === '') {
     i++
   } else if (st.lines[i + 1]?.startsWith('    ') && st.lines[i + 1]!.trim() !== '') {
-    st.lines[i + 1] = st.lines[i + 1]!.replace(/^ {4}/, '')
-    if (st.referenceChunk && i + 1 >= st.referenceChunk.start && i + 1 <= st.referenceChunk.through) {
-      st.referenceChunk.offsets[i + 1 - st.referenceChunk.start]! += 4
+    const text = st.lines[i + 1]!.replace(/^ {4}/, '')
+    // Paragraph text the definition leaves behind; four columns in it opened
+    // nothing, so a marker it starts with stays literal.
+    if (opensBlock(text)) {
+      st.lines[i + 1] = text.trimStart().replace(/^(\d{1,9})(?=[.)])|^(?=[^\d])/, '$1\\')
+      st.referenceChunk = undefined
+    } else {
+      st.lines[i + 1] = text
+      if (st.referenceChunk && i + 1 >= st.referenceChunk.start && i + 1 <= st.referenceChunk.through) {
+        st.referenceChunk.offsets[i + 1 - st.referenceChunk.start]! += 4
+      }
     }
   }
   return { i, canStart: true }
@@ -499,6 +507,55 @@ function recordEmptyDestination(st: ReferenceExtraction, d: DefinitionLine, empt
   else if (quotePrefix !== '') keepLines(st, quotePrefix)
   else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && i + 1 < st.lines.length && st.lines[i + 1]!.trim() === '') i++
   return i
+}
+
+/**
+ * The text of the line below an empty-destination definition when it is the
+ * destination: in the definition's quote, or a lazy line (CommonMark 5.1).
+ */
+function destinationLineBody(following: string | undefined, quotePrefix: string, lineDepth: number): string | undefined {
+  if (following === undefined) return undefined
+  // A lazy line that may open an HTML block ends the quote instead.
+  const body = following.startsWith(quotePrefix) ? following.slice(quotePrefix.length)
+    : lineDepth > 0 && !/^ {0,3}(?:>|<(?![A-Za-z][A-Za-z0-9+.-]{1,31}:)[A-Za-z/!?])/.test(following) ? following : undefined
+  return body !== undefined && !opensBlock(body) && LINE_TITLE.test(body) ? body : undefined
+}
+
+/**
+ * A one-line definition the line reader takes as it is. Not one a title on the
+ * next line may continue (CommonMark 4.7): the full reader takes that.
+ */
+function isOrdinaryDefinitionLine(label: string, rest: string, next: string | undefined): boolean {
+  if (labelNeedsInline(label)) return false
+  return rest.trim() === '' || LINE_TITLE.test(rest) && !/^[ \t]*["'(]/.test(next ?? '')
+}
+
+/**
+ * A label that wraps inside a quote, read the way a top-level one is from the
+ * quote's own lines; its uses become inline links. The last line it takes, or
+ * null where no such definition starts at `i`.
+ */
+function readQuotedWrappedDefinition(st: ReferenceExtraction, i: number, lineDepth: number, content: string): number | null {
+  if (lineDepth === 0 || !/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)*$/.test(content)) return null
+  const held: string[] = []
+  for (let at = i; at < st.lines.length; at++) {
+    const own = /^((?: {0,3}>[ \t]?)*)/.exec(st.lines[at]!)![1]!
+    const body = st.lines[at]!.slice(own.length)
+    if ((own.match(/>/g) ?? []).length !== lineDepth || body.trim() === '') break
+    held.push(body)
+  }
+  const parsed = readMarkdownReferenceDefinition(held.join('\n'))
+  if (!parsed?.complex || parsed.target.startsWith('<>')) return null
+  const key = normalizeReferenceLabel(parsed.label)
+  if (!st.authoredDefinitions.has(key)) {
+    while (st.reservedReferences.has(st.nextSerial)) st.nextSerial++
+    const canonical = `carve-import-reference-${st.nextSerial++}`
+    st.inline.set(canonical, parsed.target)
+    st.sourceLabels.set(key, canonical)
+    st.defined.add(key)
+    st.authoredDefinitions.add(key)
+  }
+  return i + parsed.lines - 1
 }
 
 /**
@@ -665,7 +722,7 @@ export function extractReferenceDefinitions(
     }
     if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {
       const single = /^ {0,3}\[(?=[^\]]*[^\s\]])((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
-      const ordinary = single && !labelNeedsInline(single[1]!) && (single[2]!.trim() === '' || LINE_TITLE.test(single[2]!))
+      const ordinary = single && isOrdinaryDefinitionLine(single[1]!, single[2]!, lines[i + 1])
       const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
         const key = normalizeReferenceLabel(parsed.label)
@@ -687,6 +744,15 @@ export function extractReferenceDefinitions(
         canStart = false
         continue
       }
+    }
+    const wrapped = (canStart || lineDepth > depth) && !opensItem && listIndent === 0
+      ? readQuotedWrappedDefinition(st, i, lineDepth, content) : null
+    if (wrapped !== null) {
+      i = wrapped
+      if (!/^ {0,3}>/.test(lines[i + 1] ?? '')) keep(quotePrefix)
+      depth = lineDepth
+      canStart = true
+      continue
     }
     // A deeper quote opens a block; a shallower line is lazy continuation.
     // A label needs a non-whitespace character (CommonMark 4.7).
@@ -742,11 +808,11 @@ export function extractReferenceDefinitions(
       const continued: string[] = []
       let destination = definition[2]!
       const following = lines[i + 1]
-      if (trimReferenceWhitespace(destination) === '' && following !== undefined && following.startsWith(quotePrefix) &&
-          !opensBlock(following.slice(quotePrefix.length)) && LINE_TITLE.test(following.slice(quotePrefix.length))) {
-        continued.push(following)
+      const followingBody = destinationLineBody(following, quotePrefix, lineDepth)
+      if (trimReferenceWhitespace(destination) === '' && followingBody !== undefined) {
+        continued.push(following!)
         i++
-        destination = following.slice(quotePrefix.length)
+        destination = followingBody
       }
       const d: DefinitionLine = { line, i, label: definition[1]!, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, wrappedDestinationTitle }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
