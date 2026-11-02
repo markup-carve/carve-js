@@ -10,10 +10,10 @@ describe('empty table cell alignment after the span ruling', () => {
     expect(carveToHtml(source)).not.toMatch(/colspan|rowspan/)
   })
 
-  it('keeps a left column default through a delimiter row', () => {
+  it('keeps a left column default on a native empty header', () => {
     const html = '<table><tr><th style="text-align:left"></th></tr><tr><td style="text-align:left">a</td></tr></table>'
     const source = htmlToCarve(html, { mode: 'semantic' }).value
-    expect(source).toBe('| |\n|:---|\n| a |\n')
+    expect(source).toBe('|=< |\n| a |\n')
     expect(carveToCarve(source)).toBe(source)
     expect(carveToHtml(source)).toContain('<td style="text-align: left;">a</td>')
   })
@@ -25,10 +25,10 @@ describe('empty table cell alignment after the span ruling', () => {
     expect(result.report.diagnostics.map(item => item.code)).toContain('table-degraded')
   })
 
-  it('escapes lone span glyphs and keeps a Markdown empty left header', () => {
+  it('escapes lone span glyphs and writes a Markdown empty left header natively', () => {
     expect(htmlToCarve('<table><tr><td>&lt;</td><td>^</td></tr></table>').value).toBe('| \\< | \\^ |\n')
     const source = markdownToCarve('| | x |\n| :--- | --- |\n| a | b |')
-    expect(source).toBe('| | x |\n|:---|---|\n| a | b |')
+    expect(source).toBe('|=< |= x |\n| a | b |')
     expect(carveToCarve(source)).toBe(source + '\n')
   })
 })

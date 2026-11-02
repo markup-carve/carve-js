@@ -4668,10 +4668,12 @@ class CarveRenderSession {
         ? this.renderInlines(cell.children ?? [], ctx)
         : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
       const empty = trimCellPadding(content) === ''
-      const writtenAlign = empty && align === '<' ? '' : align
+      const kind = cell.header && markHeader ? '=' : ''
+      // `|=< |` is an empty left-aligned header; only an unmarked `|< |` reads as a span.
+      const writtenAlign = empty && align === '<' && !kind ? '' : align
       const writtenValign = empty && valign === '^' ? '' : valign
       const writtenInherited = !writtenAlign && writtenValign ? '?' : ''
-      const prefix = `${cell.header && markHeader ? '=' : ''}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
+      const prefix = `${kind}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
       const paddedContent = !cell.header && content.startsWith('\\= ') ? content.slice(1) : content
       return padCell(prefix, escapeSpanMarkerPayload(paddedContent, prefix))
     } finally {
