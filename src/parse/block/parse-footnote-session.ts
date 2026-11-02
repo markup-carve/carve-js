@@ -1,19 +1,29 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
 const payloadMisses = new WeakMap<Lexer, Map<string, { from: number; maxRun: number }>>()
-// Whether the first visible line a `+` attaches, past attribute and definition lines, is a list marker.
-function attachedLeadIsList(lexer: Lexer): boolean {
+// Whether the first visible line a `+` attaches, past attribute, definition and comment lines, is a list marker.
+export function attachedLeadIsList(lexer: Lexer): boolean {
   let k = 0
-  for (let ln = lexer.peek(); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
+  // A paragraph of only braced comments is skipped as a `%%` line is; a marker ends it (carve#4799, carve#4890).
+  const skipCommentParagraph = (): void => {
+    const end = commentOnlyParagraphEnd((index) => lexer.peek(index), k, true)
+    if (end !== -1) k = end
+  }
+  skipCommentParagraph()
+  for (let ln = lexer.peek(k); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
     isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
     RE_COMMENT_LINE.test(ln.trimStart()) ||
     // A note's lazy text is part of it.
-    (k > 0 && RE_FOOTNOTE_DEF.test(lexer.peek(k - 1)!.trimStart()) && !isListMarkerLine(ln.trimStart()))); ln = lexer.peek(++k));
+    (k > 0 && RE_FOOTNOTE_DEF.test(lexer.peek(k - 1)!.trimStart()) && !isListMarkerLine(ln.trimStart()))); ln = lexer.peek(k)) {
+    k++
+    skipCommentParagraph()
+  }
   const lead = lexer.peek(k)
   return lead === undefined || isListMarkerLine(lead.trimStart())
 }

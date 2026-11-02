@@ -1,0 +1,34 @@
+[
+  {
+    "source": "- +\n{% c %}\n- b\n",
+    "html": "<ul><li>+\n</li><li>b</li></ul>"
+  },
+  {
+    "source": "1. +\n{% c %}\n2. b\n",
+    "html": "<ol><li>+\n</li><li>b</li></ol>"
+  },
+  {
+    "source": "> - +\n> {% c %}\n> - b\n",
+    "html": "<blockquote><ul><li>+\n</li><li>b</li></ul></blockquote>"
+  },
+  {
+    "source": "- a\n  - +\n  {% c %}\n  - b\n",
+    "html": "<ul><li>a\n    <ul><li>+\n</li><li>b</li></ul></li></ul>"
+  },
+  {
+    "source": "- +\n{% c %} {% d %}\n- b\n",
+    "html": "<ul><li>+\n </li><li>b</li></ul>"
+  },
+  {
+    "source": "- +\n{% c %}\nx\n",
+    "html": "<ul><li>\nx</li></ul>"
+  },
+  {
+    "source": ":: t\n: +\n{% c %}\n- b\n",
+    "html": "<dl><dt>t</dt><dd><ul><li>b</li></ul></dd></dl>"
+  },
+  {
+    "source": "[^n]: +\n{% c %}\n- b\n\n[^n]\n",
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><ul><li>b</li></ul><p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  }
+]
