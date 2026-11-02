@@ -875,7 +875,7 @@ export function createDefinitionListParser(
         // body ends at one of those, which is right for an opener and for the `%%`
         // line form; the other half of a span the body opened belongs to it, and
         // ending here split the pair so the payload reached the page.
-        if (commentFenceRun(below) !== undefined &&
+        if (RE_COMMENT_LINE.test(below) &&
             bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) {
           const lineIndex = lexer.pos
           // ONE COLUMN of the authored indentation is kept, as the list collector

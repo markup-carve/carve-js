@@ -228,6 +228,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     return nestedOpenMemo.open
   }
   const noteSpanScan = newCommentSpanScan()
+  let nestedNoteSpan: { run: number, column: number, state: object } | undefined
   const lazyState = verbatimOnlyLazyState()
   // A fence an attached block left open still holds its payload.
   const trackAttached = (attached: string[]): void => {
@@ -295,8 +296,14 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (behindMarker !== lead.trimStart() && opensCodeFence(behindMarker)) trackItemLazyState(behindMarker, lazyState)
     }
     trackLead(m[2]!)
-    const nestedBody = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]
-    if (nestedBody !== undefined) trackLead(nestedBody)
+    // A span on a nested note's marker line is that note's, so a line below its body ends it (PART 0 S1).
+    let column = m[0].length - m[2]!.length
+    for (let nested = RE_FOOTNOTE_DEF.exec(m[2]!); nested !== null; nested = RE_FOOTNOTE_DEF.exec(nested[2]!)) {
+      trackLead(nested[2]!)
+      const run = commentFenceRun(nested[2]!)
+      if (run !== undefined && lazyState.opaque?.kind === 'comment') nestedNoteSpan = { run, column, state: lazyState.opaque }
+      column += nested[0].length - nested[2]!.length
+    }
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   const belowColumnCommentFence = new Set<number>()
@@ -403,6 +410,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (content !== content.trimStart() && lazyState.opaque === null && commentFenceUntil <= lexer.pos)
         commentFenceUntil = matchedCommentFenceEnd(lexer) ?? commentFenceUntil
       if (lexer.pos < commentFenceUntil) belowColumnCommentFence.add(bodyLines.length)
+      if (nestedNoteSpan !== undefined && lazyState.opaque === nestedNoteSpan.state && content.trim() !== '' &&
+          indentColumns(content) < nestedNoteSpan.column && !RE_COMMENT_LINE.test(content)) {
+        lazyState.opaque = null
+        nestedNoteSpan = undefined
+      }
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       bodyLines.push(framedBelow ? LAZY_FRAME + content.trimStart() : content)
       // The tracker reads an overindented opener at its local zero.
@@ -430,7 +442,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // delimiter REACHING column two and did not at column zero or one, which is
       // the band this covers.
       pendingBlankRun.count === 0 &&
-      commentFenceRun(ln.replace(/^[ \t]+/, '')) !== undefined &&
+      RE_COMMENT_LINE.test(ln) &&
       bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))
     ) {
       // ONE COLUMN of the authored indentation is kept, as the list collector

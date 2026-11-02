@@ -139,9 +139,6 @@
     "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [11]": "carve-js#4276",
     "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [16]": "carve-js#4276"
   },
-  "a-wider-fence-is-no-closer-for-a-note-marker-line-span.test.ts": {
-    "a wider fence is no closer for a note marker-line span > a nested note on the marker line": "carve-js#4276"
-  },
   "corpus-canonical-form.test.ts": {
     "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "carve-js#4276"
   },
