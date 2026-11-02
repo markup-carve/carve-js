@@ -5380,7 +5380,8 @@ function collectBlockquoteInlineRun(
         // Indented code may follow a heading or a thematic break without a
         // blank line, a setext one included; the caller re-enters on it.
         break
-      } else if (end > start && (interruptingHtmlBlock(text) || item !== null && htmlBlockAt([inner], 0) !== null)) {
+      } else if (end > start && (interruptingHtmlBlock(text) || item !== null && quotedItemHtmlBlock(lines, end) !== null &&
+        !(/^ *(?!0*1[.)])\d/.test(item.lead) && run.at(-1)?.prefix === prefix && opensParagraph(run.at(-1)!.text)))) {
         // What the quote holds is measured with the marker stripped, so an
         // HTML block opening mid-quote ends the inline run and the caller
         // re-enters on that line as a block.
@@ -6902,6 +6903,30 @@ function htmlBlockAt(
 }
 
 /**
+ * An HTML block a quoted item's marker line opens, when it fills the rest of
+ * the item: the quote writer cannot carry later item lines after the fence.
+ */
+function quotedItemHtmlBlock(lines: readonly string[], start: number): { marker: string; block: HtmlBlockRun } | null {
+  const quoted = blockquotePrefix(stripOptionalQuoteIndent(lines[start]!))
+  if (quoted === null || RE_MD_THEMATIC.test(quoted.text)) return null
+  const item = RE_LIST_MARKER.exec(quoted.text)
+  if (item === null) return null
+  const column = itemContentColumn(item[0])
+  const readItemLine = (at: number): string | null => {
+    if (at === start) return ' '.repeat(columnWidth(item[0]) - column) + quoted.text.slice(item[0].length)
+    const line = lines[at]
+    if (line === undefined) return null
+    const parsed = blockquotePrefix(stripOptionalQuoteIndent(line))
+    if (parsed === null || parsed.prefix !== quoted.prefix ||
+      parsed.text.trim() !== '' && indentColumns(parsed.text) < column) return null
+    return parsed.text.trim() === '' ? '' : stripColumns(parsed.text, column)
+  }
+  const block = htmlBlockAt(lines, start, readItemLine)
+  const following = block === null ? null : readItemLine(block.end + 1)
+  return block !== null && (following === null || following.trim() === '') ? { marker: item[0], block } : null
+}
+
+/**
  * The same HTML-block condition, applied to what a CONTAINER holds.
  *
  * CommonMark opens an HTML block inside a block quote or a list item exactly as
@@ -6944,27 +6969,16 @@ function containerHtmlBlockAt(
   }
 
   if (quoted) {
-    const item = RE_MD_THEMATIC.test(quoted.text) ? null : RE_LIST_MARKER.exec(quoted.text)
+    const item = quotedItemHtmlBlock(lines, start)
     if (item !== null) {
-      const column = itemContentColumn(item[0])
-      const readItemLine = (at: number): string | null => {
-        if (at === start) return ' '.repeat(columnWidth(item[0]) - column) + quoted.text.slice(item[0].length)
-        const line = lines[at]
-        if (line === undefined) return null
-        const parsed = blockquotePrefix(stripLeadingQuoteIndent(line))
-        if (parsed === null || parsed.prefix !== quoted.prefix ||
-          parsed.text.trim() !== '' && indentColumns(parsed.text) < column) return null
-        return parsed.text.trim() === '' ? '' : stripColumns(parsed.text, column)
-      }
-      const block = htmlBlockAt(lines, start, readItemLine)
-      const following = block === null ? null : readItemLine(block.end + 1)
-      if (block !== null && (following === null || following.trim() === '')) {
+      const { block } = item
+      {
         let markers = quoteMarkers?.get(quoted.prefix)
         if (markers === undefined) {
           markers = new ListMarkers()
           quoteMarkers?.set(quoted.prefix, markers)
         }
-        const writtenMarker = RE_LIST_MARKER.exec(markers.write(quoted.text).line)?.[0] ?? item[0]
+        const writtenMarker = RE_LIST_MARKER.exec(markers.write(quoted.text).line)?.[0] ?? item.marker
         const pad = ' '.repeat(Math.min(3, indentColumns(block.lines[0]!)))
         const dedent = new RegExp(`^ {0,${pad.length}}`)
         return {
@@ -8567,6 +8581,10 @@ function writeHeldBlock(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
   // nested item whose content starts at column 4 it is an ordinary block.
   const contained = containerHtmlBlockAt(lines, i, listCols, quoteMarkers)
   if (contained) {
+    // An item interrupting a paragraph of its quote is set apart from it.
+    const above = i > 0 && contained.openerPrefix !== undefined ? blockquotePrefix(stripOptionalQuoteIndent(lines[i - 1]!)) : null
+    if (above !== null && above.text.trim() !== '' && (quotedItemColumns(lines)[i - 1] ?? 0) === 0 &&
+      contained.openerPrefix!.startsWith(above.prefix) && opensParagraph(above.text)) out.push(above.prefix.trimEnd())
     const converted = markdownHtmlBlock(contained.lines, st.sourceLine(i))
     const prefix = contained.prefix.includes('>') ? contained.prefix
       : ' '.repeat(Math.max(0, contentCol + listMarkers.shiftAt(contentCol)))

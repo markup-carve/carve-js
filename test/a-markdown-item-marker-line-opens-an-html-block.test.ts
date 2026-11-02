@@ -67,6 +67,16 @@ describe('a Markdown item marker line opens an HTML block', () => {
     expect(markdownToCarve('- > - <!-- c -->\nx\n')).toBe('- > - %% c\n\nx\n')
   })
 
+  it('leaves an ordered marker that cannot interrupt a quoted paragraph in it', () => {
+    expect(markdownToCarve('> hello\n> 2. <span>\n> world\n')).toBe('> hello\n> 2\\. `<span>`{=html}\n> world\n')
+  })
+
+  it('sets an item apart from the quoted paragraph it interrupts', () => {
+    const written = markdownToCarve('> hello\n> - <div>\n>   x\n')
+    expect(written).toBe('> hello\n>\n> - ```=html\n>   <div>\n>   x\n>   ```\n')
+    expect(carveToHtml(written)).toBe('<blockquote>\n  <p>hello</p>\n  <ul>\n    <li>\n      <div>\nx\n    </li>\n  </ul>\n</blockquote>')
+  })
+
   it('counts a tab after the content column as the columns it covers', () => {
     const written = markdownToCarve('- a\n\n  \t<div>\n')
     expect(written).toBe('{loose}\n- a\n\n  ```=html\n  <div>\n  ```\n')
