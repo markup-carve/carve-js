@@ -1295,9 +1295,11 @@ function escapeCarveConstructsSpelledLikeText(
  * the Carve writer uses for literal hyphens. A line that is only a thematic
  * break or a setext underline, alone or under its containers' markers, is
  * structure rather than text and keeps its hyphens. A table cell has no
- * block-structure role, so it does not take those exemptions.
+ * block-structure role, so it does not take those exemptions. A `...` run is
+ * escaped the same way, or it renders as an ellipsis.
  */
 function escapeTypographicDashes(input: string, table = false): string {
+  if (input.includes('...')) input = input.replace(/(?<!\\)\.{3,}/g, (run) => run.replace(/\./g, '\\.'))
   if (!input.includes('--')) return input
   return input
     .split('\n')

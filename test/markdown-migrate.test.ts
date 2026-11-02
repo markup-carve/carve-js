@@ -354,7 +354,7 @@ describe('markdownToCarve — prefixed multiline inline mapping', () => {
     ].join('\n')
     const carve = [
       '- /Back-links are mandated./ The anchor sits on the *per-key rendered',
-      '  item*, not on the `citation-group` element, ...',
+      '  item*, not on the `citation-group` element, \\.\\.\\.',
     ].join('\n')
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toContain('<em>Back-links are mandated.</em>')
