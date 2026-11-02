@@ -741,13 +741,13 @@ export function createLinkDefinitionCollector(
     return { openerCol, scopeCol, deIndented }
   }
 
-  // A fence-shaped marker line folded into an open footnote or description
-  // paragraph is that paragraph's text, not a fence opener.
+  // A fence-shaped marker line folded into a div's paragraph in a footnote or
+  // description body is that paragraph's text; elsewhere the marker opens a list (PART 0 S3, carve#4860).
   function markerFenceIsParagraphText(s: LinkDefScan, v: LineRead, lists: ListRead, para: ParagraphVerdict): boolean {
     const { rawTrimmed } = v
     const before = lists.listColsBeforeMarker
     return markerContentColumn(rawTrimmed) >= 0 && /^(?:`{3,}|~{3,})/.test(markerFreeContent(rawTrimmed)) &&
-      para.paraWasOpen &&
+      para.paraWasOpen && s.divs.length > 0 &&
       (s.inFootnoteBody || before?.at(-1)?.kind === 'description') &&
       !s.inlineBodyList && !before?.some((entry) => entry.kind === 'list')
   }

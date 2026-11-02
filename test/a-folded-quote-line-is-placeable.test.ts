@@ -57,29 +57,29 @@ describe('every node under a folded quote line carries a position', () => {
     }
   })
 
-  it('the containers reach the text they own', () => {
+  // carve#4860: the unmarked `- m` misses the quote and opens a list in the item.
+  it('the quote ends at its own line and the item list owns `m`', () => {
     const src = '- a\n  > - x\n  - m\n'
-    // The folded `- m` ends at offset 17; every container holding it must too.
-    // They stopped at 10, the end of line 2, before this.
     const quote = nodes(src).find((n) => n.type === 'block_quote')!
-    expect(quote.pos).toMatchObject({ startOffset: 6, endOffset: 17 })
-    const para = nodes(src).find((n) => n.type === 'paragraph' && n.pos!.startOffset === 10)!
-    expect(para.pos).toMatchObject({ startOffset: 10, endOffset: 17 })
+    expect(quote.pos).toMatchObject({ startOffset: 6, endOffset: 11 })
+    const lists = nodes(src).filter((n) => n.type === 'list')
+    expect(lists.at(-1)!.pos).toMatchObject({ startOffset: 14, endOffset: 17 })
   })
 
-  it('the folded marker text is the whole `- m`, marker included', () => {
+  it('the marker text is the item text `m`', () => {
     const src = '- a\n  > - x\n  - m\n'
     const texts = nodes(src).filter((n) => n.type === 'text')
-    expect(texts.map((n) => n.value)).toEqual(['a', 'x', '- m'])
-    expect(src.slice(texts[2]!.pos!.startOffset, texts[2]!.pos!.endOffset)).toBe('- m')
+    expect(texts.map((n) => n.value)).toEqual(['a', 'x', 'm'])
+    expect(src.slice(texts[2]!.pos!.startOffset, texts[2]!.pos!.endOffset)).toBe('m')
   })
 })
 
-describe('the rendered output does not move', () => {
+// carve#4860 moved the rendering: the marker opens a list in the item.
+describe('the rendered output', () => {
   it.each([
-    ['- a\n  > - x\n  - m\n', '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>'],
-    ['- > - x\n  - m\n', '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>x\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>'],
-    ['- a\n  > - x\n  p\n  - m\n', '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>'],
+    ['- a\n  > - x\n  - m\n', '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- > - x\n  - m\n', '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- a\n  > - x\n  p\n  - m\n', '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>'],
   ])('%j', (src, html) => {
     expect(carveToHtml(src)).toBe(html)
   })

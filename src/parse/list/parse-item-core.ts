@@ -1004,10 +1004,10 @@ export interface ItemLineFacts {
    * May a line at or past a nested marker's content column be classified in
    * that DESCENDANT's frame (`CARVE-P0-009`, markup-carve/carve#2884)?
    *
-   * The LIST ITEM host opts in. A description body does not: a flush-left fence
-   * line below a closed nested fence is clamped to one column there and stays
-   * the outer item's text, which is its own ruling (carve-js#2515, carve#1958)
-   * and is what the executable spec still writes.
+   * The LIST ITEM and footnote hosts opt in. A description body opts in only for
+   * a line at its content column, where a marker opens a sub-item (carve#4860); a
+   * line it takes lazily stays out, so a clamped fence line below a closed nested
+   * fence remains the outer item's text (carve-js#2515, carve#1958).
    */
   descendantFrames?: boolean | undefined
 }

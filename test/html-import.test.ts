@@ -421,7 +421,8 @@ describe('definition lists on import', () => {
   it('keeps block content in a definition', () => {
     const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
     // Bare-text `<li>`s import TIGHT (the ruled tight-li import).
-    expect(carve(html)).toBe(':: Modes\n: Three of them:\n\n  - safe\n  - semantic')
+    // A list in a description body needs no blank above it (PART 0 S3, carve#4860).
+    expect(carve(html)).toBe(':: Modes\n: Three of them:\n  - safe\n  - semantic')
     expect(carveToHtml(carve(html))).toContain('<ul>')
   })
 

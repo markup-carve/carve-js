@@ -15,7 +15,7 @@ const cases = [
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-12",
     "> :: t\n> :  d\n>    - ```\n>      x\nflush\n",
-    "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d\n- <code>\nx\nflush</code></dd>\n  </dl>\n</blockquote>\n"
+    "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <p>d</p>\n      <ul>\n        <li>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </dd>\n  </dl>\n</blockquote>\n<p>flush</p>\n"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-2",

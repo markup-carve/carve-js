@@ -38,9 +38,6 @@
   "ast-round-trip-preserves-source.test.ts": {
     "a document round-tripped through the AST > comes back as the same source": "#4034"
   },
-  "authoring-acceptance.test.ts": {
-    "authoring acceptance suite > unguided/12.crv": "markup-carve/carve#4881"
-  },
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },

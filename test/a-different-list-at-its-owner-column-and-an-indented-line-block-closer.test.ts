@@ -31,10 +31,10 @@ describe('the writer escapes only what the re-parse needs', () => {
   })
 })
 
-describe('a marker line folded into a description stays paragraph text', () => {
+describe('a marker line that misses a description closes it (carve#4860)', () => {
   it.each([
-    [':: t\n: d\n- {.k}\n- tail\n', '<dl>\n  <dt>t</dt>\n  <dd>d\n- {.k}\n- tail</dd>\n</dl>'],
-    [':: t\n: d\n- {.k}\ntail\n', '<dl>\n  <dt>t</dt>\n  <dd>d\n- {.k}\ntail</dd>\n</dl>'],
+    [':: t\n: d\n- {.k}\n- tail\n', '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<ul>\n  <li></li>\n  <li>tail</li>\n</ul>'],
+    [':: t\n: d\n- {.k}\ntail\n', '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<ul>\n  <li></li>\n</ul>\n<p>tail</p>'],
   ])('%j', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })

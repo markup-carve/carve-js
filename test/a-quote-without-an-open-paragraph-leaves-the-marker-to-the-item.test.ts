@@ -1,9 +1,11 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// A quoted note's open paragraph takes both lines lazily (carve#3885).
-it('folds the lines below a quoted note into the note', () => {
-  expect(carveToHtml('* k\n  > [^n]: note\n  q\n  - m\n\nr[^n]\n')).toContain('<p>note\nq\n- m<a href="#fnref1"')
+// A quoted note's open paragraph takes the prose lazily (carve#3885); the marker opens the item's list (carve#4860).
+it('folds prose below a quoted note into the note and leaves the marker to the item', () => {
+  const html = carveToHtml('* k\n  > [^n]: note\n  q\n  - m\n\nr[^n]\n')
+  expect(html).toContain('<p>note\nq<a href="#fnref1"')
+  expect(html).toContain('<li>m</li>')
 })
 
 it.each([

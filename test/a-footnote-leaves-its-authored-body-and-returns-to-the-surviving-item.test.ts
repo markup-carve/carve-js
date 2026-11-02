@@ -26,7 +26,8 @@ const cases = [
   },
   {
     source: '- 1. ordered\n    1. ordered\n      [^n]: note\n        1. ordered\n     q\n     1. ordered\n',
-    html: "<ul>\n  <li>\n    <ol>\n      <li>ordered</li>\n      <li>ordered</li>\n    </ol>\n  </li>\n</ul>",
+    // `1. ordered` below `q` opens a list in the item (PART 0 S3, carve#4860).
+    html: "<ul>\n  <li>\n    <ol>\n      <li>ordered</li>\n      <li>ordered</li>\n    </ol>\n    <ol>\n      <li>ordered</li>\n    </ol>\n  </li>\n</ul>",
   },
 ]
 

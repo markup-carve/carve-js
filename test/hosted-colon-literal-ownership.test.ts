@@ -120,7 +120,8 @@ for (const depth of [1, 2]) {
   })
   it(`retains an overindented bare colon run as line-block payload at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  a\n${quote}    :::\n${quote}  b\n- tail\n`
-    expect(parse(source).children).toHaveLength(1)
+    // The unmarked marker closes the quote that holds an item (PART 0 S3, carve#4860).
+    expect(parse(source).children).toHaveLength(2)
     const list = quotedList(source, depth)
     expect(list.items[0]!.children).toHaveLength(1)
     expect(list.items[0]!.children[0]!.type).toBe('line_block')

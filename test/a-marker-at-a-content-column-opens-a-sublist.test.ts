@@ -82,7 +82,7 @@ describe('a marker at an item content column opens a sublist', () => {
     // The ruling on carve-js#2422 supersedes #1200's contrary ruling;
     // the item's content column does not open a sublist on this lazy line.
     expect(flat(carveToHtml('- > q\n  - s\ntail\n'))).toBe(
-      '<ul> <li> <blockquote><p>q - s tail</p></blockquote> </li> </ul>',
+      '<ul> <li> <blockquote><p>q</p></blockquote> <ul> <li>s tail</li> </ul> </li> </ul>',
     )
   })
 

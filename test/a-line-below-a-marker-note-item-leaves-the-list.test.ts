@@ -48,12 +48,17 @@ below
   <hr>
   <ol>
     <li id="fn1">
-      <p>text
-- child<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+      <p>text</p>
+      <ul>
+        <li>child</li>
+      </ul>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
     <li id="fn2">
-      <p>inner
-- c2</p>
+      <p>inner</p>
+      <ul>
+        <li>c2</li>
+      </ul>
       <pre><code>one
 </code></pre>
       <ul>
@@ -102,8 +107,10 @@ more</p>
       <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
     <li id="fn2">
-      <p>inner
-- c2</p>
+      <p>inner</p>
+      <ul>
+        <li>c2</li>
+      </ul>
       <pre><code>code
 </code></pre>
       <p><a href="#fnref2" role="doc-backlink" aria-label="Back to reference">↩</a></p>

@@ -44,15 +44,19 @@ q</p></blockquote>
 it('opens an authored quote after folded list markers in an unquoted description', () => {
   expect(carveToHtml(':: m\n: l\n. d\n  * k\n    >\n')).toBe(`<dl>
   <dt>m</dt>
-  <dd>
-    <p>l
-. d
-* k</p>
-    <blockquote>
+  <dd>l</dd>
+</dl>
+<ol>
+  <li>d
+    <ul>
+      <li>k
+        <blockquote>
 
-    </blockquote>
-  </dd>
-</dl>`)
+        </blockquote>
+      </li>
+    </ul>
+  </li>
+</ol>`)
 })
 
 it('leaves a marked fence at its host column', () => {

@@ -1460,7 +1460,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let resumesMarkerDescriptionParagraph = false
     let lw = 0
     let sourceAfterNestedNote = false
-    let quoteParagraphMarker = false
     // A quote's lone `+` attaches the unmarked block after it, so its markers are the quote's (§17 L3).
     const quotePlus = { scanned: 0, held: false, afterQuote: false }
     const followsQuotePlus = (): boolean => {
@@ -2046,10 +2045,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // written to exercise exactly that state, so it is not carried here as a
       // condition that cannot fire.
       if (nested.length === 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) delete lazyState.literalColon
-      quoteParagraphMarker = false && pendingBlankRun.count === 0 && lw > baseIndent &&
-        !captionParagraphClaim && (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen) &&
-        isListMarkerLine(l) &&
-        !RE_BLOCKQUOTE.test(l.trimStart())
       // At or past the content column a marker ends the caption as it ends a paragraph (CARVE-P2-021, §24 C3).
       captionParagraphMarker = pendingBlankRun.count === 0 && lw > baseIndent && lw < contentCol && captionParagraphClaim &&
         isListMarkerLine(l)
@@ -2057,7 +2052,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         indentColumns(l, contentCol + 1) > contentCol &&
         lineOpensItemBlock(l.trimStart())
       quoteLazyFramed =
-        (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) || quoteParagraphMarker ||
+        (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) ||
           captionParagraphMarker || captionParagraphFollower) &&
         // Code, comment and established literal bodies keep their placement.
         // Lazy text in an ordinary colon body retains its paragraph frame.
@@ -2556,7 +2551,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const trackContentState = (l: string): void => {
       if (lazyState.quoteInner !== null && !insideOpenQuoteParagraph(lazyState) && authoredQuoteClaim === null &&
           !RE_BLOCKQUOTE.test(unindented) &&
-          !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && !quoteParagraphMarker) {
+          !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         lazyState.quoteInner = null
       }
       if (!skipConsumedCloser) trackItemLazyState(
@@ -2801,7 +2796,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
           (indentColumns(l, contentCol) > 0 || lazyState.inDefList === 'description' ||
             (opensCodeFence(l.trimStart()) && followsBelowColumnComment())))) &&
-        (quoteParagraphMarker || captionParagraphMarker || belowOpenDescription || (lw > baseIndent && lw < contentCol &&
+        (captionParagraphMarker || belowOpenDescription || (lw > baseIndent && lw < contentCol &&
           (lazyState.deepest?.lazyFoldable !== false || lazyState.inDefList === 'description' ||
             lazyState.deepest?.inDefList === 'description')) || !lazyContinuationEndsList(l, lexer) ||
           (leadBottomIsTerm && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
@@ -3322,6 +3317,34 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (authoredDescendantFenceBlanks > 0) restoreDescendantFenceBlanks(lexer, children, authoredDescendantFenceBlanks)
     trimStrayPlusFence(lexer, children, itemStartLineIndex)
 
+    // Once the note ends on a block-shaped line, the blank before the item's first paragraph
+    // separates the closed note run from it instead.
+    const noteRunPartsFrom = (paragraphStart: number): boolean => {
+      let noteEndLine = lexer.lineNumber(itemStartLineIndex)
+      let noteEndsOnBlock = false
+      let noteEndIndex = -1
+      for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
+        const source = nestedSourceLines[index] ?? ''
+        if (nestedLineNumbers[index]! >= paragraphStart || isBlankLine(nested[index] ?? '') ||
+            isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
+        noteEndLine = nestedLineNumbers[index]!
+        noteEndIndex = index
+        noteEndsOnBlock = lineOpensItemBlock(source.trimStart())
+        break
+      }
+      // A list that ends the note under its open paragraph keeps the blank the note's (PART 0 S3, carve#4860);
+      // a blank inside the note parts the item's blocks as it parts the note's.
+      const noteRun = nestedSourceLines.slice(0, noteEndIndex + 1).map((line) => (line ?? '').trimStart())
+      if (noteRun.some((line, index) => isBlankLine(nested[index] ?? '') || isBlankLine(line) || isQuoteBlankLine(line))) {
+        noteEndsOnBlock = true
+      } else if (isListMarkerLine(noteRun[noteEndIndex] ?? '')) {
+        const above = noteRun[noteEndIndex - 1]
+        noteEndsOnBlock = above !== undefined && lineOpensItemBlock(above) && !isListMarkerLine(above) &&
+          !RE_BLOCKQUOTE.test(above) && !RE_DEFLIST_DEF.test(above)
+      }
+      return noteEndsOnBlock && noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
+        session.hasAuthoredBlankBetween(lexer, noteEndLine, paragraphStart, opaqueBlankLines)
+    }
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
       // A note's body is the note's paragraph, never the item's own (L1).
@@ -3402,22 +3425,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
           authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
         // A lazy note paragraph owns the blank before the item's first child.
-        // Once the note ends on a block-shaped line, that blank separates the
-        // closed note run from the item's paragraph instead.
-        if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem) {
-          let noteEndLine = lexer.lineNumber(itemStartLineIndex)
-          let noteEndsOnBlock = false
-          for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
-            const source = nestedSourceLines[index] ?? ''
-            if (nestedLineNumbers[index]! >= span.start || isBlankLine(nested[index] ?? '') ||
-                isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
-            noteEndLine = nestedLineNumbers[index]!
-            noteEndsOnBlock = lineOpensItemBlock(source.trimStart())
-            break
-          }
-          if (noteEndsOnBlock && noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
-              session.hasAuthoredBlankBetween(lexer, noteEndLine, span.start, opaqueBlankLines)) loose = true
-        }
+        if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem &&
+            noteRunPartsFrom(span.start)) loose = true
         let previousVisibleEnd = previousVisibleSpan?.end
         const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
           previousVisibleBlock.children.some(block => block.type === 'paragraph' &&

@@ -604,6 +604,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return true
   }
 
+  // A block at or past an open description's body column is that body's, so a later marker there opens its list (PART 0 S3, carve#4860).
+  function inDescriptionBody(state: ItemLazyState, column: number): boolean {
+    return state.inDefList === 'description' && state.descriptionColumn !== undefined && column >= state.descriptionColumn
+  }
+
   // A block-attribute line renders nothing and opens nothing: it collects into
   // `pending` and floats forward to the next block (§15 A1/A2). So there is no
   // open paragraph for a following column-0 line to fold into, and PART 1 S4
@@ -687,10 +692,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.lazyFoldable = nested.leavesParagraphOpen
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
-    // A list in a description body stays in that body (PART 0 S3, carve#4860).
-    const inDescription = state.inDefList === 'description' && state.descriptionColumn !== undefined &&
-      (run ?? leadingWhitespace(content)) >= state.descriptionColumn
-    state.inDefList = inDescription ? 'description' : false
+    state.inDefList = inDescriptionBody(state, run ?? leadingWhitespace(content)) ? 'description' : false
     state.deepest = state.ownedColumn >= 0 ? nestedMarkerFrame(state, nested, (nestedTask ?? nestedBullet)!.at(-1)!) : null
     return true
   }

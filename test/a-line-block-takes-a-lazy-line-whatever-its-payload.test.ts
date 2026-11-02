@@ -86,10 +86,11 @@ for (const [name, host, indent] of [
   }
 }
 
-it('reads a quote-lazy list marker as line-block text after a shifted fence run', () => {
+// The unmarked marker closes the quote that holds an item (PART 0 S3, carve#4860).
+it('ends the quoted line block at an unmarked list marker after a shifted fence run', () => {
   const source = '> - ::: |\n>   a\n>     :::\n>   b\n- tail\n'
   expect(normalize(carveToHtml(source))).toBe(
-    '<blockquote><ul><li><div class="line-block"><p>a<br>&nbsp;&nbsp;:::<br>b<br>- tail</p></div></li></ul></blockquote>',
+    '<blockquote><ul><li><div class="line-block"><p>a<br>&nbsp;&nbsp;:::<br>b</p></div></li></ul></blockquote><ul><li>tail</li></ul>',
   )
 })
 

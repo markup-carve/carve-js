@@ -342,9 +342,12 @@ export function createDefinitionListParser(
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
+        // A marker at the body's column 0 opens a sub-item frame, as in a note body (PART 0 S3, carve#4860).
+        const framed = atContentColumn && !content.startsWith(LAZY_FRAME)
         trackItemLazyState(content, lazyState, atContentColumn, () => true, {
           terminatorFree: true,
           payloadFenceCloser: marker => payloadFenceHasCloser(lexer, marker),
+          ...(framed ? { whitespace: leadingWhitespace(content), descendantFrames: true } : {}),
         })
         seedMarkerLineBlock(content)
         if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
@@ -754,7 +757,8 @@ export function createDefinitionListParser(
         // a verbatim region open behind it; a line INSIDE one is payload and
         // decides nothing. A line past the column belongs to the open item.
         const wasVerbatim = lazyState.opaque !== null
-        const foldedMarker = lazyState.lazyFoldable && nestedItemColumn < 0 &&
+        // A marker opens a list in the body; only a div's paragraph keeps it as text (PART 0 S3, carve#4860).
+        const foldedMarker = lazyState.lazyFoldable && lazyState.divDepth > 0 && nestedItemColumn < 0 &&
           markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
         if (bodyReadsFlush && residual > 0 && !foldedMarker) authoredOpeners.add(bodyLines.length - 1)
         if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)

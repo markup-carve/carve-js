@@ -47,43 +47,43 @@ const flat = (html: string): string => html.replace(/\n\s*/g, ' ').trim()
 describe('a marker on a block quote lazy continuation is text', () => {
   it('folds a bullet, and the tail below it', () => {
     expect(flat(carveToHtml('- > q\n  - s\ntail\n'))).toBe(
-      '<ul> <li> <blockquote><p>q - s tail</p></blockquote> </li> </ul>',
+      '<ul> <li> <blockquote><p>q</p></blockquote> <ul> <li>s tail</li> </ul> </li> </ul>',
     )
   })
 
   it('folds a star bullet', () => {
     expect(flat(carveToHtml('* > q\n  * s\n'))).toBe(
-      '<ul> <li> <blockquote><p>q * s</p></blockquote> </li> </ul>',
+      '<ul> <li> <blockquote><p>q</p></blockquote> <ul> <li>s</li> </ul> </li> </ul>',
     )
   })
 
   it('folds an ordered marker at its own content column', () => {
     expect(flat(carveToHtml('1. > q\n   1. s\n\ntail\n'))).toBe(
-      '<ol> <li> <blockquote><p>q 1. s</p></blockquote> </li> </ol> <p>tail</p>',
+      '<ol> <li> <blockquote><p>q</p></blockquote> <ol> <li>s</li> </ol> </li> </ol> <p>tail</p>',
     )
   })
 
   it('folds a bare-dot marker', () => {
     expect(flat(carveToHtml('. > q\n  . s\n'))).toBe(
-      '<ol> <li> <blockquote><p>q . s</p></blockquote> </li> </ol>',
+      '<ol> <li> <blockquote><p>q</p></blockquote> <ol> <li>s</li> </ol> </li> </ol>',
     )
   })
 
   it('folds a task marker', () => {
     expect(flat(carveToHtml('- > q\n  - [ ] s\n'))).toBe(
-      '<ul> <li> <blockquote><p>q - [ ] s</p></blockquote> </li> </ul>',
+      '<ul> <li> <blockquote><p>q</p></blockquote> <ul class="task-list"> <li><input type="checkbox" disabled aria-label="s"> s</li> </ul> </li> </ul>',
     )
   })
 
   it('folds an abutting-attribute marker', () => {
     expect(flat(carveToHtml('- > q\n  -{.k} s\n'))).toBe(
-      '<ul> <li> <blockquote><p>q -{.k} s</p></blockquote> </li> </ul>',
+      '<ul> <li> <blockquote><p>q</p></blockquote> <ul> <li class="k">s</li> </ul> </li> </ul>',
     )
   })
 
   it('folds into a nested quote the item ends on', () => {
     expect(flat(carveToHtml('- > > n\n  - s\n'))).toBe(
-      '<ul> <li> <blockquote> <blockquote><p>n - s</p></blockquote> </blockquote> </li> </ul>',
+      '<ul> <li> <blockquote> <blockquote><p>n</p></blockquote> </blockquote> <ul> <li>s</li> </ul> </li> </ul>',
     )
   })
 

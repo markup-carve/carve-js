@@ -177,8 +177,9 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     trackItemLazyState(text, inner)
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
-    // A term in the description body ends its paragraph, not the description (carve#4861, carve-js#4243).
-    if (!term) state.inDefList = false
+    // A term in the description body ends its paragraph, not the description (carve#4861, carve-js#4243); any
+    // other frame is the body's block, so a marker below it still opens the body's list (PART 0 S3, carve#4860).
+    if (!term) state.inDefList = 'description'
     return true
   }
 

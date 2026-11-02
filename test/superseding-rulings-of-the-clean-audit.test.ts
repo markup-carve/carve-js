@@ -52,7 +52,7 @@ describe('a marker between an item\'s columns reads as at its marker column (car
     ['- a\n * b\n', '<ul>\n<li>a</li>\n</ul>\n<ul>\n<li>b</li>\n</ul>'],
     ['- a\n - b\n', '<ul>\n<li>a</li>\n<li>b</li>\n</ul>'],
     ['1. a\n a.  b\n', '<ol>\n<li>a</li>\n</ol>\n<ol type="a">\n<li>b</li>\n</ol>'],
-    [':: t\n: - para\n - li\n', '<dl>\n<dt>t</dt>\n<dd>\n<ul>\n<li>para\n- li</li>\n</ul>\n</dd>\n</dl>'],
+    [':: t\n: - para\n - li\n', '<dl>\n<dt>t</dt>\n<dd>\n<ul>\n<li>para</li>\n</ul>\n</dd>\n</dl>\n<ul>\n<li>li</li>\n</ul>'],
   ])('%j', (source, expected) => {
     expect(html(source)).toBe(expected)
   })
