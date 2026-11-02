@@ -16,8 +16,9 @@ The spec corpus lives in `spec/` as a submodule, and the conformance tests read
 it from there.
 
 The runtime requires Node 20 or newer. For development, use Node
-`^20.19.0 || ^22.13.0 || >=24`, as required by the lint toolchain. CI runs the
-current Node 20 and 22 releases; the browser jobs use Node 22.
+`^20.19.0 || ^22.13.0 || >=24`, as required by the lint toolchain. Pull
+requests run the corpus tests on Node 24; main pushes and the nightly run add
+Node 22, and Node 20 runs daily. The browser jobs use Node 22.
 
 ## Running the tests
 
