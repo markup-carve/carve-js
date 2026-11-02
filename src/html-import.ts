@@ -24,7 +24,7 @@ import { EXTENDER_LEADING_SPAN_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from
 import { LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { SourceUnspellableError } from './source/source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve, renderCarveForHtmlImport } from './render-carve.js'
-import { mergeAttrs, parse } from './parse.js'
+import { MAX_NESTING_DEPTH, mergeAttrs, parse } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
   LABEL_DEFAULTS,
@@ -364,6 +364,10 @@ function dropSpaceAfterHardBreak(nodes: InlineNode[], preserveTabs = false): Inl
  * its content through a trim that knows the difference, kept it. One class,
  * two answers, in one file.
  */
+function isLeaf(node: P5Node | undefined): boolean {
+  return node?.nodeName === '#text' || node?.nodeName === '#comment'
+}
+
 function isLayoutOnlyText(node: P5Node): boolean {
   return node.nodeName === '#text' && trimNonNbsp(domValue(node) ?? '') === ''
 }
@@ -969,7 +973,7 @@ class Importer {
     this.mode = options.mode ?? 'safe'
     this.adapter = options.adapter ?? 'generic'
     if (!ADAPTERS.has(this.adapter)) throw new TypeError(`Unknown HTML import adapter: ${this.adapter}`)
-    this.maxDepth = options.maxDepth ?? 128
+    this.maxDepth = options.maxDepth ?? MAX_NESTING_DEPTH
     this.maxNodes = options.maxNodes ?? 1_000_000
     this.report = new HtmlImportReportCollector(options.maxDiagnostics ?? 1_000, (node) => this.positionOf(node))
     this.footnotes = new FootnoteStage(this.footnoteContext())
@@ -1052,8 +1056,12 @@ class Importer {
     return doc
   }
 
-  private enter(depth: number): void {
-    if (depth > this.maxDepth) throw new HtmlImportLimitError('depth')
+  /**
+   * A text or comment leaf charges `maxNodes` but is no nesting level: a block
+   * holding 199 inline elements is the parser's cap of 200 (carve-js#4135).
+   */
+  private enter(depth: number, node?: P5Node): void {
+    if (depth > this.maxDepth && !isLeaf(node)) throw new HtmlImportLimitError('depth')
     if (++this.nodes > this.maxNodes) throw new HtmlImportLimitError('nodes')
   }
 
@@ -1584,7 +1592,7 @@ class Importer {
    */
   private chargeSubtree(node: P5Node, depth: number): void {
     for (const child of domChildren(node) ?? []) {
-      this.enter(depth + 1)
+      this.enter(depth + 1, child)
       this.chargeSubtree(child, depth + 1)
     }
   }
@@ -3940,7 +3948,7 @@ class Importer {
         continue
       }
       const child = frame.node
-      this.enter(frame.depth)
+      this.enter(frame.depth, child)
       if (child.nodeName === '#text') {
         runs[runs.length - 1] += domValue(child) ?? ''
         continue
@@ -3998,7 +4006,7 @@ class Importer {
   }
 
   private inline(node: P5Node, path: string, depth: number): InlineNode[] {
-    this.enter(depth)
+    this.enter(depth, node)
     // HTML's collapsible whitespace is the ASCII set, and `\s` is not it:
     // JavaScript counts U+00A0, U+202F and U+3000 among its whitespace, so
     // collapsing by `\s` rewrote a NO-BREAK SPACE into an ordinary one and
@@ -4617,7 +4625,7 @@ class Importer {
     while (pending.length) {
       const [current, currentDepth] = pending.pop()!
       for (const child of serializedChildren(current)) {
-        this.enter(currentDepth + 1)
+        this.enter(currentDepth + 1, child)
         pending.push([child, currentDepth + 1])
       }
     }

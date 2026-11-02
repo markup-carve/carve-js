@@ -56,8 +56,8 @@ describe('code span child markup losses', () => {
   it('charges template content against both limits', () => {
     const html = '<p><code><template><b>x</b></template>word</code></p>'
     expect(() => htmlToAst(html, { maxNodes: 5 })).toThrow()
-    expect(() => htmlToAst(html, { maxDepth: 4 })).toThrow()
-    expect(() => htmlToAst(html, { maxNodes: 6, maxDepth: 5 })).not.toThrow()
+    expect(() => htmlToAst(html, { maxDepth: 3 })).toThrow()
+    expect(() => htmlToAst(html, { maxNodes: 6, maxDepth: 4 })).not.toThrow()
   })
   it('keeps footnote-looking text inside code and names source elements', () => {
     const html = '<p><code>x<sup><a href="#fn1" role="doc-noteref">1</a></sup></code></p><section role="doc-endnotes"><ol><li id="fn1"><p>note</p></li></ol></section>'

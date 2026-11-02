@@ -22,9 +22,6 @@
   "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
     "does not claim a quote marker inside an inline code span": "#3921"
   },
-  "an-imported-source-is-a-writer-fixed-point.test.ts": {
-    "an imported source is a carve fmt fixed point > 882-attributed-bracket-spans-share-the-inline-cap: the imported source is what the writer emits": "#4135"
-  },
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
   },
