@@ -4127,6 +4127,8 @@ const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 
 /** A line opening with a list marker, padded with spaces or tabs. */
 const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
+/** A list marker, empty or not, or a footnote definition: neither is a lazy line. */
+const RE_OPENS_ITEM_OR_NOTE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|^ {0,3}\[\^(?:[^\[\]\\]|\\.)+\]:/
 const RE_SOURCE_ITEM = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))(?=[ \t]|$)([ \t]*)(.*)$/
 
 function sourceItem(line: string): { indent: string; bullet: string | undefined; number: string | undefined; delimiter: string | undefined; padding: string; content: string; marker: string } | null {
@@ -6276,6 +6278,16 @@ function collectItemFence(
   return { lines: out, end, verbatimFrom: 1 }
 }
 
+/** Whether a lazy line left of the item's content column joins the item's run. */
+function joinsItemLazily(line: string, lazyText: boolean, orderedText: boolean, quotedFence: RegExp | null): boolean {
+  return lazyText && !orderedText && quotedFence === null && !RE_OPENS_ITEM_OR_NOTE.test(line)
+}
+
+/** The pad of a lazy line of the innermost item, left of that item's column. */
+function lazyItemPad(indent: number, innerCol: number, contentCol: number, pad: string): string {
+  return indent < innerCol ? ' '.repeat(innerCol - contentCol) : pad
+}
+
 function collectListInlineRun(
   lines: readonly string[],
   start: number,
@@ -6377,7 +6389,9 @@ function collectListInlineRun(
     if (!lazyText && !continues) while (itemCols.length > 1 && itemCols.at(-1)! > indent) itemCols.pop()
 
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
-    if (indent < contentCol) { terminal = !lazyText; break }
+    // A lazy line of the item's paragraph joins the run, so spans and a
+    // setext underline pair across it as they do across an indented line.
+    if (indent < contentCol && !joinsItemLazily(line, lazyText, orderedText, quotedFence)) { terminal = !lazyText; break }
 
     // Star and underscore rules interrupt the paragraph; dashes may be setext.
     if (RE_MD_THEMATIC.test(text) && !/^[ \t]*-/.test(text)) break
@@ -6464,8 +6478,10 @@ function collectListInlineRun(
       run.push({ prefix, text: pad + quote + (asText ? escapeBlockOpener(body) : body), bareBody: body, source: end })
     } else if (continues && quote === null && !(lazyText && indent < itemCols.at(-1)!)) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true, bareBody: plain, source: end })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
-      // A lazy line of the quote the item holds, written with its marker.
-      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
+      // A lazy line of the quote the item holds, written with its marker, at
+      // the column of the innermost item, whose quote it continues.
+      const lazyPad = over < 4 ? lazyItemPad(indent, itemCols.at(-1)!, contentCol, pad) : pad
+      run.push({ prefix, text: lazyPad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
       run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, lazyQuote: true, nativeContinuationIndent: text.slice(0, text.length - text.trimStart().length), source: end })
