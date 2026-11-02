@@ -14,6 +14,13 @@
       "cases": [
         "notes-4dc51b5608ab"
       ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#4276",
+      "cause": "a %% line below the host's column ends an unclosed comment span, where the model keeps it transparent",
+      "cases": [
+        "roundtrip-29bf84d5501e"
+      ]
     }
   ]
 }

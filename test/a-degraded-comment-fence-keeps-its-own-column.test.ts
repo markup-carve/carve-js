@@ -40,14 +40,15 @@ const spans = (src: string): string[] =>
 
 describe('the span a degraded comment fence publishes is the fence', () => {
   it('the reported document [corpus 445]', () => {
+    // The unclosed span runs to the end of the document (carve#4907).
     const src = '- x\n%%%\ny\n'
     expect(commentsOf(src)[0]!.pos).toEqual({
       startLine: 2,
-      endLine: 2,
+      endLine: 3,
       startColumn: 1,
-      endColumn: 4,
+      endColumn: 2,
       startOffset: 4,
-      endOffset: 7,
+      endOffset: 9,
     })
   })
 
@@ -64,13 +65,13 @@ describe('the span a degraded comment fence publishes is the fence', () => {
   })
 
   it.each([
-    ['445', '- x\n%%%\ny\n', ['%%%']],
-    ['445-4, an ordered marker', '1. x\n%%%\ny\n', ['%%%']],
-    ['445-5, a wide marker', '-   x\n%%%\ny\n', ['%%%']],
-    ['445-6, a nested item', '- - x\n  %%%\n  y\n', ['%%%']],
-    ['445-7, width 4', '- x\n%%%%\ny\n', ['%%%%']],
-    ['445-8, two fences of different widths', '- x\n%%%\n%%%%\ny\n', ['%%%', '%%%%']],
-    ['445-10, a sibling marker below', '- x\n%%%\n- y\n', ['%%%']],
+    ['445', '- x\n%%%\ny\n', ['%%%\ny']],
+    ['445-4, an ordered marker', '1. x\n%%%\ny\n', ['%%%\ny']],
+    ['445-5, a wide marker', '-   x\n%%%\ny\n', ['%%%\ny']],
+    ['445-6, a nested item', '- - x\n  %%%\n  y\n', ['%%%\n  y']],
+    ['445-7, width 4', '- x\n%%%%\ny\n', ['%%%%\ny']],
+    ['445-8, two fences of different widths', '- x\n%%%\n%%%%\ny\n', ['%%%\n%%%%\ny']],
+    ['445-10, a sibling marker below', '- x\n%%%\n- y\n', ['%%%\n- y']],
   ])('%s', (_name, src, expected) => {
     expect(spans(src)).toEqual(expected)
   })

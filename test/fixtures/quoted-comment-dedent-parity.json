@@ -7,7 +7,7 @@
   {
     "id": "review-B",
     "source": "> - ::: |\n>   %%%\n>   %%%%\n>   y\n>   %%%%\n>   :::\n> c\n> %%%\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul><p>c</p></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote>"
   },
   {
     "id": "review-C",
@@ -17,17 +17,17 @@
   {
     "id": "review-D",
     "source": "> > - ::: |\n> >   %%%\n> >   :::\n> c\n> %%%\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul></blockquote><p>c</p></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote></blockquote>"
   },
   {
     "id": "review-E",
     "source": "> - ::: |\n>   %%%\n>   :::\nc\n> %%%\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul></blockquote><p>c</p><blockquote></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote>"
   },
   {
     "id": "review-F",
     "source": "- ::: |\n  %%%\n  :::\n  :::bad\nc\n%%%\n- tail\n",
-    "html": "<ul><li><div class=\"line-block\"><p></p></div>\n    :::bad\n  </li></ul><p>c</p><ul><li>tail</li></ul>"
+    "html": "<ul><li><div class=\"line-block\"></div></li></ul><p>c</p>"
   },
   {
     "id": "review-G",
@@ -47,12 +47,12 @@
   {
     "id": "comment-dedent-tail",
     "source": "> - ::: |\n>   %%%\n>   :::\n>   :::bad\n> c\n> %%%\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div>\n      :::bad\n    </li></ul><p>c</p></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "review3-0",
     "source": "- item\n  ::: |\n  %%% unclosed\n  :::\n",
-    "html": "<ul><li>item\n    <div class=\"line-block\"><p></p></div></li></ul>"
+    "html": "<ul><li>item\n    <div class=\"line-block\"></div></li></ul>"
   },
   {
     "id": "review3-1",
@@ -62,6 +62,6 @@
   {
     "id": "review3-2",
     "source": "> > - ::: |\n> >   %%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p></p></div>\n        :::bad\n      </li></ul><p>c</p></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote></blockquote><ul><li>tail</li></ul>"
   }
 ]

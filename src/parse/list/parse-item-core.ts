@@ -367,19 +367,13 @@ export function isInvisibleLine(line: string, whitespace?: number): boolean {
  */
 export function commentBlockSpans(lines: string[]): boolean[] {
   const hidden = new Array<boolean>(lines.length).fill(false)
-  // The last line carrying each run width, so an opener that cannot close is
-  // refuted in O(1). Scanning to the end instead costs one suffix read per
-  // unterminated opener, which is the ladder carve#2542 measured.
+  // The last line carrying each run width: an opener past it runs to the end (PART 9 §28) without a scan.
   const lastAt = new Map<number, number>()
-  let canClose = false
   for (let k = 0; k < lines.length; k++) {
     const run = commentFenceRun(lines[k]!)
-    if (run !== undefined) {
-      if (lastAt.has(run)) canClose = true
-      lastAt.set(run, k)
-    }
+    if (run !== undefined) lastAt.set(run, k)
   }
-  if (!canClose) return hidden
+  if (lastAt.size === 0) return hidden
   let verbatimClose: RegExp | null = null
   for (let k = 0; k < lines.length; k++) {
     const line = lines[k]!
@@ -389,7 +383,10 @@ export function commentBlockSpans(lines: string[]): boolean[] {
     }
     const run = commentFenceRun(line)
     if (run !== undefined) {
-      if ((lastAt.get(run) ?? -1) <= k) continue
+      if ((lastAt.get(run) ?? -1) <= k) {
+        for (let j = k; j < lines.length; j++) hidden[j] = true
+        break
+      }
       // EXACT length closes; a shorter run inside a wider block is payload.
       let close = k + 1
       while (commentFenceRun(lines[close]!) !== run) close++

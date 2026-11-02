@@ -913,7 +913,7 @@
   },
   {
     "source": "- [^a]: a\n\n  body\n\nx[^a]\n",
-    "carve": "[^a]: a\n\n- %%%%\n  body\n\nx[^a]\n"
+    "carve": "[^a]: a\n\n- %%\n  body\n\nx[^a]\n"
   },
   {
     "source": "> [^a]: a\n>\n>  ```\n>  > opaque\n>  ```\n>\n> x[^a]\n",
@@ -5029,19 +5029,19 @@
   },
   {
     "source": "- [^n]:\n\n  body\n\nx[^n]\n",
-    "carve": "[^n]: %%%%\n\n- %%%%\n  body\n\nx[^n]\n"
+    "carve": "[^n]: %%\n\n- %%\n  body\n\nx[^n]\n"
   },
   {
     "source": "- [^n]:\n   body\n\nx[^n]\n",
-    "carve": "[^n]: %%%%\n  body\n\n- %%%%\n\nx[^n]\n"
+    "carve": "[^n]: %%\n  body\n\n- %%\n\nx[^n]\n"
   },
   {
     "source": "- > [^n]:\n  > body\n\nx[^n]\n",
-    "carve": "[^n]: %%%%\n\n- > %%%%\n  >\n  > body\n\n\nx[^n]\n"
+    "carve": "[^n]: %%\n\n- > %%\n  >\n  > body\n\n\nx[^n]\n"
   },
   {
     "source": "- > [^n]:\n  >  body\n\nx[^n]\n",
-    "carve": "[^n]: %%%%\n  body\n\n- > %%%%\n  >\n\nx[^n]\n"
+    "carve": "[^n]: %%\n  body\n\n- > %%\n  >\n\nx[^n]\n"
   },
   {
     "source": "p\n- [^n]: note\n\nx\n",
@@ -5145,15 +5145,15 @@
   },
   {
     "source": "- a\n- [^n]: note\n\n  body\n\nx[^n]\n",
-    "carve": "[^n]: note\n\n- a\n- %%%%\n  body\n\nx[^n]\n"
+    "carve": "[^n]: note\n\n- a\n- %%\n  body\n\nx[^n]\n"
   },
   {
     "source": "- a\n\n- [^n]: note\n\n  body\n\nx[^n]\n",
-    "carve": "[^n]: note\n\n- a\n\n- %%%%\n  body\n\nx[^n]\n"
+    "carve": "[^n]: note\n\n- a\n\n- %%\n  body\n\nx[^n]\n"
   },
   {
     "source": "- > [^a]: x\n  >\n  > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > [^a]: x\n  >\n  >  second para\n\nSee[^a]\n",
@@ -5173,11 +5173,11 @@
   },
   {
     "source": "- >  [^a]: x\n  >\n  > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >  [^a]: x\n  >\n  >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >  [^a]: x\n  >\n  >   second para\n\nSee[^a]\n",
@@ -5193,15 +5193,15 @@
   },
   {
     "source": "- >   [^a]: x\n  >\n  > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >   [^a]: x\n  >\n  >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >   [^a]: x\n  >\n  >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >   [^a]: x\n  >\n  >    second para\n\nSee[^a]\n",
@@ -5213,19 +5213,19 @@
   },
   {
     "source": "- >    [^a]: x\n  >\n  > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >    [^a]: x\n  >\n  >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >    [^a]: x\n  >\n  >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >    [^a]: x\n  >\n  >    second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > %%%%\n  >    second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > %%\n  >    second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- >    [^a]: x\n  >\n  >     second para\n\nSee[^a]\n",
@@ -5233,7 +5233,7 @@
   },
   {
     "source": "- > > [^a]: x\n  > >\n  > > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > > [^a]: x\n  > >\n  > >  second para\n\nSee[^a]\n",
@@ -5253,11 +5253,11 @@
   },
   {
     "source": "- > >  [^a]: x\n  > >\n  > > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >  [^a]: x\n  > >\n  > >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >  [^a]: x\n  > >\n  > >   second para\n\nSee[^a]\n",
@@ -5273,15 +5273,15 @@
   },
   {
     "source": "- > >   [^a]: x\n  > >\n  > > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >   [^a]: x\n  > >\n  > >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >   [^a]: x\n  > >\n  > >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >   [^a]: x\n  > >\n  > >    second para\n\nSee[^a]\n",
@@ -5293,19 +5293,19 @@
   },
   {
     "source": "- > >    [^a]: x\n  > >\n  > > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >    [^a]: x\n  > >\n  > >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >    [^a]: x\n  > >\n  > >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >    [^a]: x\n  > >\n  > >    second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n- > > %%%%\n  > >    second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n- > > %%\n  > >    second para\n\n\nSee[^a]\n"
   },
   {
     "source": "- > >    [^a]: x\n  > >\n  > >     second para\n\nSee[^a]\n",
@@ -5393,7 +5393,7 @@
   },
   {
     "source": "> - > [^a]: x\n>   >\n>   > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - > [^a]: x\n>   >\n>   >  second para\n\nSee[^a]\n",
@@ -5413,11 +5413,11 @@
   },
   {
     "source": "> - >  [^a]: x\n>   >\n>   > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >  [^a]: x\n>   >\n>   >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >  [^a]: x\n>   >\n>   >   second para\n\nSee[^a]\n",
@@ -5433,15 +5433,15 @@
   },
   {
     "source": "> - >   [^a]: x\n>   >\n>   > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >   [^a]: x\n>   >\n>   >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >   [^a]: x\n>   >\n>   >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >   [^a]: x\n>   >\n>   >    second para\n\nSee[^a]\n",
@@ -5453,19 +5453,19 @@
   },
   {
     "source": "> - >    [^a]: x\n>   >\n>   > second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   > second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   > second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >    [^a]: x\n>   >\n>   >  second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >  second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >  second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >    [^a]: x\n>   >\n>   >   second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >   second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >   second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >    [^a]: x\n>   >\n>   >    second para\n\nSee[^a]\n",
-    "carve": "[^a]: x\n\n> - > %%%%\n>   >    second para\n\n\nSee[^a]\n"
+    "carve": "[^a]: x\n\n> - > %%\n>   >    second para\n\n\nSee[^a]\n"
   },
   {
     "source": "> - >    [^a]: x\n>   >\n>   >     second para\n\nSee[^a]\n",

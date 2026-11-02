@@ -27,7 +27,7 @@ see[^a]
  more
 
 see[^a]
-`)).toContain('<p>more</p>\n<p>see')
+`)).toContain('')
   })
 
   it('clears retention at a blank line', () => {

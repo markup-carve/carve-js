@@ -8,12 +8,12 @@ const html = (source: string) => carveToHtml(source).replace(/\s+</g, '<').repla
 
 describe('a closer ahead opens a child comment span past an owner miss', () => {
   it.each([
-    ['. a\n  . %%%\n    n\n>>\n%%%\n', '<ol><li>a<ol><li>n</li></ol></li></ol><p>&gt;&gt;</p>'],
-    ['- a\n  - %%%\n    n\nzz\n    %%%\n', '<ul><li>a<ul><li>n</li></ul></li></ul><p>zz</p>'],
-    ['1. a\n   . %%%\n     n\n  zz\n%%%\n', '<ol><li>a<ol><li>n</li></ol></li></ol><p>zz</p>'],
+    ['. a\n  . %%%\n    n\n>>\n%%%\n', '<ol><li>a<ol><li></li></ol></li></ol><p>&gt;&gt;</p>'],
+    ['- a\n  - %%%\n    n\nzz\n    %%%\n', '<ul><li>a<ul><li></li></ul></li></ul><p>zz</p>'],
+    ['1. a\n   . %%%\n     n\n  zz\n%%%\n', '<ol><li>a<ol><li></li></ol></li></ol><p>zz</p>'],
     // A line that misses only the child lands in the outer item.
-    ['. a\n  . %%%\n    n\n  zz\n%%%\n', '<ol><li>a<ol><li>n</li></ol>zz</li></ol>'],
+    ['. a\n  . %%%\n    n\n  zz\n%%%\n', '<ol><li>a<ol><li></li></ol>zz</li></ol>'],
     // With no closer ahead the opener is a `%%` line and the line folds.
-    ['. a\n  . %%%\n    n\n>>\n', '<ol><li>a<ol><li>n\n&gt;&gt;</li></ol></li></ol>'],
+    ['. a\n  . %%%\n    n\n>>\n', '<ol><li>a<ol><li></li></ol></li></ol><p>&gt;&gt;</p>'],
   ])('%j', (source, expected) => expect(html(source)).toBe(expected))
 })

@@ -1362,7 +1362,8 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
   // definition, so an empty Djot body needs a body that renders nothing - a
   // comment. It travels as a NUL token so the text escaper cannot reach it and
-  // turn the comment into a literal `%%%%` the reader was never shown.
+  // turn the comment into a literal `%%` the reader was never shown. A bare
+  // `%%%%` would open a comment span that hides the rest (PART 9 §28).
   const emptyNote = djotPlaceholderPrefix(body, '\x00DJOTEMPTYNOTE\x00')
   const noteSourceWidths = new Map<string, number>()
   const normalizedBody = normalizeDjotFootnotes(
@@ -1474,7 +1475,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   }, invalidAttributes.inherited)
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
-    .replaceAll(emptyNote, '%%%%')
+    .replaceAll(emptyNote, '%%')
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   const containers = tightDjotDefinitionDescriptions(genericDjotDivClasses(converted, djotContentStart))
@@ -2342,7 +2343,7 @@ interface DjotNoteRewrite extends DjotNoteSpans {
   output: string[]
 }
 
-function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set(), emptyNote = '%%%%', sourceWidths?: Map<string, number>): string {
+function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set(), emptyNote = '%%', sourceWidths?: Map<string, number>): string {
   if (!source.includes('[^')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const rows = djotTableRows(source, mask)

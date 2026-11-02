@@ -17,17 +17,17 @@
   {
     "name": "reader scope 2, quote depth 0",
     "source": "- ::: |\n  %%%\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "name": "reader scope 2, quote depth 1",
     "source": "> - ::: |\n>   %%%\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p><br>\nTAILX</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "name": "reader scope 2, quote depth 2",
     "source": "> > - ::: |\n> >   %%%\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p><br>\nTAILX</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "name": "reader scope 3, quote depth 0",

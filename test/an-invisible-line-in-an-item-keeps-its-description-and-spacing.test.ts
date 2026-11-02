@@ -32,7 +32,9 @@ describe('an invisible line inside an item description closes no description', (
 // carve-js#4227: an invisible line admits no block, so the blank after it separates (CARVE-P9-013 L1b).
 describe('an invisible line after a fence leaves the blank after it a separator', () => {
   it.each([
-    ['a degraded comment opener', '- :: term\n  : payload\n    ~~~\n  %%%\n\n  text\n', looseAfterDescription],
+    // An unclosed `%%%` hides the rest of the item (carve#4907).
+    ['an unclosed comment opener', '- :: term\n  : payload\n    ~~~\n  %%%\n\n  text\n',
+      '<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>'],
     ['a closed comment span', '- :: term\n  : payload\n    ~~~\n  %%%\n  x\n  %%%\n\n  text\n', looseAfterDescription],
     ['a link definition', '- :: term\n  : payload\n    ~~~\n  [x]: /u\n\n  text\n', looseAfterDescription],
     ['a footnote definition', '- :: term\n  : payload\n    ~~~\n  [^n]: note\n\n  text\n', looseAfterDescription],

@@ -10,7 +10,7 @@ const cases = [
   {
     "name": "list item, below column, %%%",
     "source": "- x\n %%%\n z\n",
-    "html": "<ul>\n  <li>x</li>\n</ul>\n<p>z</p>"
+    "html": "<ul>\n  <li>x</li>\n</ul>"
   },
   {
     "name": "list item, at column, %% c",
@@ -40,7 +40,7 @@ const cases = [
   {
     "name": "description body, below column, %%%",
     "source": ":: t\n:  x\n  %%%\n z\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>"
   },
   {
     "name": "description body, at column, %% c",
@@ -70,7 +70,7 @@ const cases = [
   {
     "name": "footnote body, below column, %%%",
     "source": "[^a]: x\n %%%\n z\n\nsee[^a]\n",
-    "html": "<p>z</p>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>x<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": ""
   },
   {
     "name": "footnote body, at column, %% c",

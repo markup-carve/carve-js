@@ -90,12 +90,12 @@ const cases = [
   [
     "code payload",
     "- a\n  ```\n  - %%%\n  hidden\n  ```\n%%%\ntail\n",
-    "<ul>\n  <li>a\n    <pre><code>- %%%\nhidden\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>\n"
+    "<ul>\n  <li>a\n    <pre><code>- %%%\nhidden\n</code></pre>\n  </li>\n</ul>\n"
   ],
   [
     "below-column payload",
     "- a\n  - %%%\n  visible\n%%%\ntail\n",
-    "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n    visible\n    tail\n  </li>\n</ul>\n"
+    "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n    visible\n  </li>\n</ul>\n"
   ]
 ]
 

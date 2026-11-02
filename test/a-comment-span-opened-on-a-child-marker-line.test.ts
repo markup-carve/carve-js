@@ -34,7 +34,7 @@ describe('a comment span opened on a child marker line', () => {
     [
       'a fence the outer item opens after the child ends keeps its own lines',
       '1. - %%%\n    ```\n    z\n%%%\nx\n',
-      '<ol>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n    <pre><code>z\n</code></pre>\n  </li>\n</ol>\n<p>x</p>',
+      '<ol>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n    <pre><code>z\n</code></pre>\n  </li>\n</ol>',
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)

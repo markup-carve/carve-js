@@ -503,7 +503,7 @@ export function commentCloserLookup(lines: readonly string[], stripQuotes = true
       if (at[mid]! <= index) lo = mid + 1
       else hi = mid
     }
-    return lo < at.length ? at[lo]! : -1
+    return lo < at.length ? at[lo]! : lines.length
   }
 }
 
@@ -707,13 +707,16 @@ export function coveredNoteComment(lexer: Lexer, line: string, floor: number): n
   if (!RE_COMMENT_LINE.test(text)) return -1
   const run = commentFenceRun(text)
   if (run === undefined) return lexer.pos
+  // An unclosed span ends at the last line before one that leaves the note (PART 0 S1, PART 9 §28).
+  let last = lexer.pos
   for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
     const candidate = lexer.lineAt(at)!
     if (isBlankLine(candidate)) continue
-    if (indentColumns(candidate, floor) < floor) return -1
+    if (indentColumns(candidate, floor) < floor) return last
     if (commentFenceRun(candidate.replace(/^[ \t]+/, '')) === run) return at
+    last = at
   }
-  return -1
+  return last
 }
 
 // CARVE-P2-017's AT band: a non-list, non-fence block opener at or past a

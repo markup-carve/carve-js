@@ -64,11 +64,6 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
     // splits no stanza (CARVE-P9-047). An opener may be indented up to 3 spaces;
     // the closer may be indented and matches on exact run length.
     const commentRun = (text: string): number | undefined => RE_VERSE_COMMENT_RUN.exec(stripLazyFrame(text))?.[1]!.length
-    const lastCloser = new Map<number, number>()
-    body.forEach(({ text }, index) => {
-      const run = commentRun(text)
-      if (run !== undefined) lastCloser.set(run, index)
-    })
     let leading: Comment[] = []
     for (let bodyIndex = 0; bodyIndex < body.length; bodyIndex++) {
       const { text, lineIndex } = body[bodyIndex]!
@@ -76,14 +71,15 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const ln = lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) ? line.trimStart() : line
       const opener = RE_VERSE_COMMENT_OPEN.exec(ln)
       const run = opener?.[1]!.length
-      if (run !== undefined && (lastCloser.get(run) ?? -1) > bodyIndex) {
+      if (run !== undefined) {
+        // An unclosed span runs to the end of the line block (PART 9 §28).
         let closer = bodyIndex + 1
-        while (commentRun(body[closer]!.text) !== run) closer++
+        while (closer < body.length && commentRun(body[closer]!.text) !== run) closer++
         const tail = trimNonNbsp(opener![2]!)
         const content = [...(tail === '' ? [] : [tail]), ...body.slice(bodyIndex + 1, closer).map((line) => stripLazyFrame(line.text))]
         const comment: Comment = { type: 'comment', block: true, content: content.join('\n') }
         if (lexer.hasDocumentOffsets) {
-          const end = body[closer]!.lineIndex
+          const end = body[Math.min(closer, body.length - 1)]!.lineIndex
           const endLength = lexer.lineAt(end)?.length ?? 0
           // A leaf begins at its markup, not at the indent before `%%%` (carve#1928).
           const markup = lexer.sourceBoundary(lineIndex, (lexer.lineAt(lineIndex) ?? '').search(/[^ \t]|$/))

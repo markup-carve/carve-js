@@ -141,7 +141,8 @@ describe("a comment-only line in a line block is removed before any inline run",
 
     // `%%%` is a comment whose content is `%`, and joins the opener rather than
     // being separated from it (PART 11 §2).
-    expect(carveToCarve('::: |\na\n%%%\nb\n:::\n')).toBe('::: |\na\n%%%\nb\n:::\n')
+    // An unclosed `%%%` hides the rest, the closer included, so the writer closes it (carve#4907).
+    expect(carveToCarve('::: |\na\n%%%\nb\n:::\n')).toBe('::: |\na\n%%%\nb\n:::\n%%%\n:::\n')
   })
 
   it('keeps a last-line comment under a boundary the author spelled with `\\`', () => {

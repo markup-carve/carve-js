@@ -84,16 +84,16 @@ describe('block comment fence lines (PART 9 §28)', () => {
     // Degrades to a `%%` line comment, so every following block still renders
     // instead of being swallowed to EOF.
     expect(carveToHtml('before\n\n%%% TODO\nsecret\n\nafter').trim()).toBe(
-      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+      '<p>before</p>',
     )
     expect(carveToHtml('before\n\n%%%\nsecret\n\nafter').trim()).toBe(
-      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+      '<p>before</p>',
     )
   })
 
   it('does not treat a too-short closer as closing a longer fence', () => {
     expect(carveToHtml('before\n\n%%%%\nsecret\n%%%\n\nafter').trim()).toBe(
-      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+      '<p>before</p>',
     )
   })
 

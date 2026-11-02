@@ -161,7 +161,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
 
     expect(html('> %%% TODO\n> secret\nlazy\n')).toBe(bare)
     expect(html('>  %%%\n> secret\nlazy\n')).toBe(bare)
-    expect(bare).toBe('<blockquote><p>secret lazy</p></blockquote>')
+    expect(bare).toBe('<blockquote> </blockquote> <p>lazy</p>')
   })
 
   it('CONTROL: a TERMINATED fence still opens one', () => {
@@ -175,12 +175,12 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
 
   it('CONTROL: the closer must match the width exactly', () => {
     // A `%%%%` line does not close a `%%%` opener (§28 matches on EXACT
-    // length), so this document has no closer for either width and both
-    // degrade - which is the un-opened answer, not the opened one.
-    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).not.toBe(
+    // length). The unclosed span still hides `secret` and leaves no paragraph,
+    // so both spellings end the quote (carve#4907).
+    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).toBe(
       html('> %%%\n> secret\n> %%%\nlazy\n'),
     )
-    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).toContain('secret')
+    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).not.toContain('secret')
   })
 
   it('does not take a fence one level DEEPER as its closer', () => {
@@ -189,7 +189,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // reads that line as a nested block quote. Both unterminated openers degrade
     // to line comments, and each closes the paragraph in its own quote frame.
     expect(html('> %%%\n> secret\n> > %%%\nlazy\n')).toBe(
-      '<blockquote> <p>secret</p> <blockquote> </blockquote> </blockquote> <p>lazy</p>',
+      '<blockquote> </blockquote> <p>lazy</p>',
     )
   })
 
@@ -200,7 +200,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // non-quoted line cannot belong to the quote here anyway - a lazy
     // continuation is collected only while a paragraph is open, and inside a
     // comment none is.
-    expect(html('> %%%\n> secret\nlazy\n\n%%%\n')).toContain('<p>secret lazy</p>')
+    expect(html('> %%%\n> secret\nlazy\n\n%%%\n')).toContain('<blockquote> </blockquote> <p>lazy</p>')
   })
 
   it('does not resume the scan past an unquoted line', () => {
@@ -209,7 +209,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // line - which is the only way to tell "stop here" from "ignore this line
     // and keep looking". Found by building the mutant and diffing its output.
     expect(html('> %%%\n> secret\nlazy\n\n> %%%\n')).toBe(
-      '<blockquote><p>secret lazy</p></blockquote> <blockquote> </blockquote>',
+      '<blockquote> </blockquote> <p>lazy</p> <blockquote> </blockquote>',
     )
   })
 
@@ -219,8 +219,8 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     const wider = html('> %%%\n> secret\n> %%%%\nlazy\n')
     const narrower = html('> %%%%\n> secret\n> %%%\nlazy\n')
 
-    expect(wider).toBe('<blockquote><p>secret</p></blockquote> <p>lazy</p>')
-    expect(narrower).toBe('<blockquote><p>secret</p></blockquote> <p>lazy</p>')
+    expect(wider).toBe('<blockquote> </blockquote> <p>lazy</p>')
+    expect(narrower).toBe('<blockquote> </blockquote> <p>lazy</p>')
     // The CONTROL: an exact-width fence really does close, and the lazy line
     // then ends the quote.
     expect(html('> %%%\n> secret\n> %%%\nlazy\n')).toBe('<blockquote> </blockquote> <p>lazy</p>')
@@ -236,6 +236,6 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // The block parser DOES look ahead, so the same fence degrades properly
     // outside a container. This is the row that shows the gap is the tracker's
     // and not the rule's.
-    expect(html('%%% TODO\nsecret\n\nafter\n')).toBe('<p>secret</p> <p>after</p>')
+    expect(html('%%% TODO\nsecret\n\nafter\n')).toBe('')
   })
 })

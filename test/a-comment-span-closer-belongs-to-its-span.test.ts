@@ -73,17 +73,17 @@ describe("a comment span's closer belongs to its span", () => {
     [
       'a marker-line fence makes the payload opaque',
       ':: t\n:  head\n\n   - ```\n   %%%\n   p\n%%%\n\n   tail\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>p</p>\n  </dd>\n</dl>\n<p>tail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>',
     ],
     [
       'the checkbox goes with the marker',
       ':: t\n:  head\n\n   - [ ] ```\n   %%%\n   p\n%%%\n\n   tail\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul class="task-list">\n      <li><input type="checkbox" disabled> \n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>p</p>\n  </dd>\n</dl>\n<p>tail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul class="task-list">\n      <li><input type="checkbox" disabled> \n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>',
     ],
     [
       'an abutting attribute comes off with the marker',
       ':: t\n:  head\n\n   -{.x} ```\n   %%%\n   p\n%%%\n\n   tail\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li class="x">\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>p</p>\n  </dd>\n</dl>\n<p>tail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li class="x">\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>',
     ],
     [
       'mid-paragraph the marker opens a list as after a blank (carve#4860)',

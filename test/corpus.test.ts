@@ -1486,6 +1486,10 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
 const behindSpec = new Map<string, string>([
+  // The %%% F1 port leaves these, carve-js#4276: a %% line below the host's column ends the span here.
+  ["556-a-closed-block-leaves-no-frame-for-the-line-below-14", "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<p>x</p>"],
+  ["824-a-closerless-comment-fence-opens-no-span-in-a-body", "<dl>\n  <dt>t</dt>\n  <dd>head</dd>\n</dl>\n<p>tail</p>"],
+  ["824-a-closerless-comment-fence-opens-no-span-in-a-body-2", "<p>tail</p>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>head<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

@@ -72,7 +72,9 @@ describe('the written spelling', () => {
   // grade the same run differently. Inline there is no fence to collide with,
   // so carve#581 joins; at block level there is, so this arm separates.
   it('separates the marker from the content at block level', () => {
-    expect(renderCarve(parse('%%%\n'))).toBe('%% %\n')
+    // A bare `%%%` is an unclosed span now, written closed (carve#4907).
+    expect(renderCarve(parse('%%%\n'))).toBe('%%%\n\n%%%\n')
+    expect(renderCarve(parse('%% %\n'))).toBe('%% %\n')
   })
 
   it('joins the marker to the content inline, inside a line block', () => {
@@ -94,7 +96,7 @@ describe('why the separator cannot be dropped', () => {
   // spelled with and without the separator. Only the separated spelling still
   // has the paragraph.
   it('the separated spelling publishes the paragraph between the comments', () => {
-    expect(carveToHtml('%%%\nx\n%% %\n')).toBe('<p>x</p>')
+    expect(carveToHtml('%%%\nx\n%% %\n')).toBe('')
   })
 
   it('the joined spelling pairs into a fence and hides it', () => {
@@ -102,10 +104,10 @@ describe('why the separator cannot be dropped', () => {
   })
 
   it('so the writer never emits the joined spelling for that document', () => {
-    expect(renderCarve(parse('%%%\nx\n%% %\n'))).not.toContain('\n%%%\n')
+    expect(renderCarve(parse('%%%\nx\n%% %\n'))).toBe('%%%\nx\n%% %\n%%%\n')
   })
 
   it('and the document survives the round trip', () => {
-    expect(carveToHtml(renderCarve(parse('%%%\nx\n%% %\n')))).toBe('<p>x</p>')
+    expect(carveToHtml(renderCarve(parse('%%%\nx\n%% %\n')))).toBe('')
   })
 })

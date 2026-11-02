@@ -17,11 +17,12 @@ describe('nested literal comments release payload to the enclosing item', () => 
 
   it.each(cases.filter(({ id }) => repaired.has(id)))('$id releases the payload after an at-column literal comment', ({ source }) => {
     const document = parse(source)
-    expect(document.children).toHaveLength(source.startsWith('>') ? 1 : 4)
+    expect(document.children).toHaveLength(source.startsWith('>') ? 1 : 3)
     const container = document.children[0]!
     expect(container.type).toBe(source.startsWith('>') ? 'block_quote' : 'list')
     const siblings = container.type === 'block_quote' ? container.children : document.children
-    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph', 'comment', 'div'])
+    // The second `%%%` opens an unclosed span that hides the line block's closer (carve#4907).
+    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph', 'comment'])
     const list = container.type === 'block_quote' ? container.children[0]! : container
     expect(list.type).toBe('list')
     if (list.type !== 'list') throw new Error('expected outer list')

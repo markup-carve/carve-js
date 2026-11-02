@@ -11,7 +11,7 @@ describe('a blank after an invisible item lead', () => {
     ['a one-line note lead', '- [^n]: note\n\n  Body.\n- x\n', '<ul>\n  <li>Body.</li>\n  <li>x</li>\n</ul>'],
     ['a task comment lead', '- [ ] %% c\n\n  Body.\n- [ ] x\n',
       '<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="Body."> Body.</li>\n  <li><input type="checkbox" disabled aria-label="x"> x</li>\n</ul>'],
-    ['a comment span lead', '1. %%% x %%%\n\n   Body.\n2. x\n', '<ol>\n  <li>Body.</li>\n  <li>x</li>\n</ol>'],
+    ['a comment span lead', '1. %%% x %%%\n\n   Body.\n2. x\n', '<ol>\n  <li></li>\n  <li>x</li>\n</ol>'],
   ])('keeps the list tight: %s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })

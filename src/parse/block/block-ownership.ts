@@ -304,7 +304,7 @@ export function ownLines(
   const frames: Frame[] = [{ kind: 'doc', col: 0, canon: 0, cut: 0, para: false, last: null }]
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
-  let runs: { widest: Record<string, number[]>; lastComment: Map<number, number> } | null = null
+  let runs: { widest: Record<string, number[]> } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
   let nextVisible = -1
@@ -484,6 +484,17 @@ export function ownLines(
     const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
+    // A comment closer below its host's column still closes the span (PART 9 §28).
+    const closesBelowColumn = (): boolean => {
+      if (inner.kind !== 'fence' || inner.family !== 'comment' || !missed || inner.span || m.rest === '' || !inner.closes!(m.rest, m.col)) return false
+      frames.pop()
+      top().last = 'block'
+      lead(frames[reached]!.col)
+      finish()
+      if (trace) emit(at, 'S1', ownerPath(), 'CARVE-P0-005', 'closer', { cell: 'B-comment-end' })
+      return true
+    }
+    if (closesBelowColumn()) continue
     if (inner.kind === 'fence' && !missed) {
       readPayload(inner)
       continue
@@ -597,7 +608,7 @@ export function ownLines(
         const f = RE_FENCE.test(m.rest) || RE_RAW_FENCE.test(m.rest) ? /^(`{3,}|~{3,})/.exec(m.rest)![1]! : null
         const comment = COMMENT_FENCE.exec(m.rest)
         if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
-        else if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > at) inner.span = comment[1]!
+        else if (comment) inner.span = comment[1]!
       }
       if (inner.lineBlock) inner.para = m.rest !== '' && !COMMENT_FENCE.test(m.rest)
       finish()
@@ -971,7 +982,7 @@ export function ownLines(
         continue
       }
       const comment = COMMENT_FENCE.exec(rest)
-      if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > k) {
+      if (comment) {
         const opener = k
         for (k++; k < lines.length; k++) {
           let closer = indentCols(lines[k]!)
@@ -982,9 +993,10 @@ export function ownLines(
           }
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
         }
-        for (let line = opener; line <= k; line++) { comments.push(line); fenced.add(line) }
+        // An unclosed span runs to the end of the document (PART 9 §28).
+        for (let line = opener; line <= Math.min(k, lines.length - 1); line++) { comments.push(line); fenced.add(line) }
         fences.set(opener, k)
-        closers.add(k)
+        if (k < lines.length) closers.add(k)
         continue
       }
       if (COMMENT_LINE.test(rest)) { comments.push(k); continue }
@@ -1026,12 +1038,12 @@ export function ownLines(
 
   function commentSpanEnd(text: string, k: number): number {
     const comment = COMMENT_FENCE.exec(text)
-    if (!comment || (closerRuns().lastComment.get(comment[1]!.length) ?? -1) <= k) return -1
+    if (!comment) return -1
     for (let j = k + 1; j < lines.length; j++) {
       const close = COMMENT_FENCE.exec(trimEndSpaceTab(lines[j]!).replace(/^[ \t>]*/, ''))
       if (close && close[1]!.length === comment[1]!.length) return j
     }
-    return -1
+    return lines.length - 1
   }
 
   // How deep the next visible line reaches through the indentation frames below `from`.
@@ -1157,7 +1169,7 @@ export function ownLines(
     if (comment) {
       const run = comment[1]!.length
       const closes = (r: string): boolean => COMMENT_FENCE.exec(r)?.[1]!.length === run
-      if ((closerRuns().lastComment.get(run) ?? -1) > at) return { kind: 'fence', family: 'comment', interrupts: true, closes }
+      return { kind: 'fence', family: 'comment', interrupts: true, closes }
     }
     if (COMMENT_LINE.test(rest)) return { kind: 'leaf', interrupts: true }
     const note = NOTE_HEAD.exec(rest)
@@ -1234,7 +1246,7 @@ export function ownLines(
   function closerRuns(): NonNullable<typeof runs> {
     if (runs) return runs
     const widest = { '`': new Array<number>(lines.length + 1).fill(0), '~': new Array<number>(lines.length + 1).fill(0) }
-    runs = { widest, lastComment: new Map() }
+    runs = { widest }
     for (let j = lines.length - 1; j >= 0; j--) {
       const rest = quotedRest(lines[j]!)
       widest['`'][j] = widest['`'][j + 1]!
@@ -1244,8 +1256,6 @@ export function ownLines(
         const ch = c[1]![0] as '`' | '~'
         widest[ch][j] = Math.max(widest[ch][j]!, c[1]!.length)
       }
-      const comment = COMMENT_FENCE.exec(rest)
-      if (comment && !runs.lastComment.has(comment[1]!.length)) runs.lastComment.set(comment[1]!.length, j)
     }
     return runs
   }

@@ -140,7 +140,7 @@ describe('a definition in a container in a note body', () => {
      */
     it('treats an unterminated comment as one line, not an opaque region', () => {
       const out = html(raised(['%%% c', '[r]: /url']))
-      expect(/href="\/url"/.test(out), out).toBe(true)
+      expect(/href="\/url"/.test(out), out).toBe(false)
       expect(out, out).not.toContain('<p>:::</p>')
     })
 

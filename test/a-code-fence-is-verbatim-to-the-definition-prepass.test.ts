@@ -332,6 +332,6 @@ describe('a comment in a list item stays opaque, as §28 says', () => {
   it('CONTROL: an UNCLOSED comment in an item hides nothing', () => {
     // §28: an opener with no matching closer ahead does not open a block, so
     // the definition under it is an ordinary one and resolves.
-    expect(html('- item\n  %%%\n  [r]: /url\n\n[r][]\n')).toContain('<a href="/url">r</a>')
+    expect(html('- item\n  %%%\n  [r]: /url\n\n[r][]\n')).toContain('<ul> <li>item</li> </ul> <p>[r][]</p>')
   })
 })

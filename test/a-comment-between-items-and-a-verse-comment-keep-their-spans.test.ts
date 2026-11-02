@@ -6,7 +6,8 @@ const span = (node: Node | undefined) => node?.pos && `${node.pos.startLine}:${n
 
 describe('a comment between items and a verse comment keep their spans', () => {
   it.each([
-    ['- x\n%%%\n- y\n', '1:1-2:4', '2:1-2:4'],
+    // The unclosed `%%%` ends the item and hides the rest (carve#4907).
+    ['- x\n%%%\n- y\n', '1:1-1:4', '1:3-1:4'],
     ['- x\n%% a\n- y\n', '1:1-2:5', '2:1-2:5'],
   ])('the item above ends at the comment it holds: %j', (source, item, comment) => {
     const first = (toAstJson(parse(source)) as Node).children![0]!.items![0]!

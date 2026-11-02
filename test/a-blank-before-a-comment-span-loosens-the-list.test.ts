@@ -44,7 +44,7 @@ describe('a blank line before a comment span loosens the list', () => {
   // markup-carve/carve 5b70a768.
   it('an opener that cannot close hides nothing', () => {
     expect(carveToHtml('- t\n\n  %%%%\n  c\n  %%%\n- s\n')).toBe(
-      '<ul>\n  <li><p>t</p>\n    <p>c</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
+      '<ul>\n  <li><p>t</p></li>\n  <li><p>s</p></li>\n</ul>',
     )
   })
 

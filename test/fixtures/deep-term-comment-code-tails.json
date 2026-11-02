@@ -662,102 +662,102 @@
   {
     "id": "term-comment-break-controls-72",
     "source": "- :: term\n     %%%\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-73",
     "source": "- :: term\n     %%%\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-74",
     "source": "- :: term\n     %%%\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-75",
     "source": "- :: term\n     %%%\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-78",
     "source": "- :: term\n     %%%\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-79",
     "source": "- :: term\n     %%%\n\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-80",
     "source": "- :: term\n     %%%\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-81",
     "source": "- :: term\n     %%%\n\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-84",
     "source": "- :: term\n     %%%\n  paragraph\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-86",
     "source": "- :: term\n     %%%\n  paragraph\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-90",
     "source": "- :: term\n     %%%\n    paragraph\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-91",
     "source": "- :: term\n     %%%\n    paragraph\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-92",
     "source": "- :: term\n     %%%\n    paragraph\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-93",
     "source": "- :: term\n     %%%\n    paragraph\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl>\n    paragraph\n    <pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-96",
     "source": "- :: term\n     %%%\n  # heading\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-97",
     "source": "- :: term\n     %%%\n  # heading\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-98",
     "source": "- :: term\n     %%%\n  # heading\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-99",
     "source": "- :: term\n     %%%\n  # heading\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-102",
     "source": "- :: term\n     %%%\n  : description\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-104",
     "source": "- :: term\n     %%%\n  : description\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>"
+    "html": "<ul><li><dl><dt>term</dt></dl></li></ul><p>after</p>"
   },
   {
     "id": "term-comment-break-controls-108",
@@ -1062,102 +1062,102 @@
   {
     "id": "term-comment-break-controls-216",
     "source": "> - :: term\n>      %%%\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-217",
     "source": "> - :: term\n>      %%%\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-218",
     "source": "> - :: term\n>      %%%\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-219",
     "source": "> - :: term\n>      %%%\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-222",
     "source": "> - :: term\n>      %%%\n> \n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-223",
     "source": "> - :: term\n>      %%%\n> \n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-224",
     "source": "> - :: term\n>      %%%\n> \n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-225",
     "source": "> - :: term\n>      %%%\n> \n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-228",
     "source": "> - :: term\n>      %%%\n>   paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-230",
     "source": "> - :: term\n>      %%%\n>   paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-234",
     "source": "> - :: term\n>      %%%\n>     paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-235",
     "source": "> - :: term\n>      %%%\n>     paragraph\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-236",
     "source": "> - :: term\n>      %%%\n>     paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-237",
     "source": "> - :: term\n>      %%%\n>     paragraph\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-240",
     "source": "> - :: term\n>      %%%\n>   # heading\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-241",
     "source": "> - :: term\n>      %%%\n>   # heading\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-242",
     "source": "> - :: term\n>      %%%\n>   # heading\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-243",
     "source": "> - :: term\n>      %%%\n>   # heading\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-246",
     "source": "> - :: term\n>      %%%\n>   : description\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-248",
     "source": "> - :: term\n>      %%%\n>   : description\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-252",
@@ -1462,102 +1462,102 @@
   {
     "id": "term-comment-break-controls-360",
     "source": "> > - :: term\n> >      %%%\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-361",
     "source": "> > - :: term\n> >      %%%\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-362",
     "source": "> > - :: term\n> >      %%%\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-363",
     "source": "> > - :: term\n> >      %%%\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-366",
     "source": "> > - :: term\n> >      %%%\n> > \n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-367",
     "source": "> > - :: term\n> >      %%%\n> > \n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-368",
     "source": "> > - :: term\n> >      %%%\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-369",
     "source": "> > - :: term\n> >      %%%\n> > \n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-372",
     "source": "> > - :: term\n> >      %%%\n> >   paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-374",
     "source": "> > - :: term\n> >      %%%\n> >   paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-378",
     "source": "> > - :: term\n> >      %%%\n> >     paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-379",
     "source": "> > - :: term\n> >      %%%\n> >     paragraph\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-380",
     "source": "> > - :: term\n> >      %%%\n> >     paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-381",
     "source": "> > - :: term\n> >      %%%\n> >     paragraph\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-384",
     "source": "> > - :: term\n> >      %%%\n> >   # heading\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-385",
     "source": "> > - :: term\n> >      %%%\n> >   # heading\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-386",
     "source": "> > - :: term\n> >      %%%\n> >   # heading\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-387",
     "source": "> > - :: term\n> >      %%%\n> >   # heading\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-390",
     "source": "> > - :: term\n> >      %%%\n> >   : description\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-392",
     "source": "> > - :: term\n> >      %%%\n> >   : description\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt><dd>description</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-396",

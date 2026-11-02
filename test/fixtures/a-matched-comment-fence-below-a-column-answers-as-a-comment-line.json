@@ -87,12 +87,12 @@
   {
     "id": "row-18",
     "source": ":: t\n: ::: note\n%%%\nx\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "row-19",
     "source": ":: t\n: ::: note\n%%%\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "row-20",
@@ -142,11 +142,11 @@
   {
     "id": "row-29",
     "source": "[^c]: para\n %%%\n   %%%\n %%%\ntail\n\n[^c]\n",
-    "html": "<p>tail</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>para<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": ""
   },
   {
     "id": "row-30",
     "source": "[^c]: para\n %%%\n   %%%\n x\n %%%\ntail\n\n[^c]\n",
-    "html": "<p>x</p>\n<p>tail</p>\n<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>para<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p>x</p>"
   }
 ]

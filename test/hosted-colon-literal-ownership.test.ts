@@ -102,8 +102,10 @@ for (const depth of [1, 2]) for (const payload of ['x', '%%%', '```', '- marker'
     expect(parse(source).children).toHaveLength(2)
     const list = quotedList(source, depth)
     expect(list.items).toHaveLength(1)
-    expect(list.items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph', 'div'])
-    expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
+    // An unclosed `%%%` hides the rest of the line block (carve#4907).
+    const hidden = payload === '%%%'
+    expect(list.items[0]!.children.map(node => node.type)).toEqual(hidden ? ['line_block'] : ['line_block', 'paragraph', 'div'])
+    if (!hidden) expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
     expect(carveToHtml(source)).toContain('<li>tail</li>')
   })
 }
@@ -205,7 +207,9 @@ for (const quote of ['> ', '> > ']) {
     const list = quotedList(source, depth)
     expect(list.items).toHaveLength(2)
     expect(list.items[0]!.children.map(node => node.type)).toEqual(['line_block'])
-    expect(carveToHtml(source)).toContain('para\nlazy')
+    // The second item's unclosed `%%%` hides `para`, and `lazy` ends the quote (carve#4907).
+    expect(carveToHtml(source)).not.toContain('para')
+    expect(carveToHtml(source)).toContain('<p>lazy</p>')
   })
   it(`accepts a real code-span closer at the line-block host base, depth ${depth}`, () => {
     const source = `${quote}- a\n${quote}    ::: |\n${quote}    \`\`\`\n${quote}    :::\n${quote}  \`\`\`\n${quote}  :::\n${quote}  para\nlazy\n`

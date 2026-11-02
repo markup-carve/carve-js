@@ -119,7 +119,7 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'CONTROL: a comment-shaped payload line does not stop the real closer',
       "- a\n  - b\n\n    ```\n    %%%\n    ```\n    %%%\n    q\nx\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>%%%\n</code></pre>\n        q\nx\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>%%%\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
     ],
     [
       'CONTROL: the run at the outer item column closes nothing and stays there',

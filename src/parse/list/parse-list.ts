@@ -2374,24 +2374,26 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       trackedContent = (markerNoteFirstText || continuedMarkerNoteText) && !RE_COLON_RUN.test(dedented.trimStart())
         ? 'text' : dedented
       markerNoteFirstText = false
-      if (isMarker && lazyState.opaque === null) {
+      // In a line block a marker is verse text, so it opens no span.
+      if (isMarker && lazyState.opaque === null && lazyState.literalColon === undefined) {
         const markerContent = markerFreeContent(dedented)
         const run = commentFenceRun(markerContent)
-        if (run !== undefined && (itemQuoteDepth > 0 ? commentBlockHasCloser : commentCloserAhead)(lexer, run)) {
+        if (run !== undefined) {
           const hostColumn = contentCol + markerContentColumn(dedented)
-          for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
+          let at = lexer.pos + 1
+          for (; at < lexer.lineCount; at++) {
             const line = lexer.lineAt(at)!
-            if (commentFenceRun(line) === run) {
-              trackedContent = markerContent
-              childMarkerSpan = true
-              break
-            }
+            if (commentFenceRun(line) === run) break
             if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) {
-              // The closer ahead still opens the span: this line ends it (PART 0 S1)
-              // and is no lazy text of the item (carve#4770).
+              // This line ends the span (PART 0 S1) and is no lazy text of the item (carve#4770).
               spanEndingMisses.add(at)
               break
             }
+          }
+          // A closer, or no closer at all: the span runs to it or to the end (PART 9 §28).
+          if (!spanEndingMisses.has(at)) {
+            trackedContent = markerContent
+            childMarkerSpan = true
           }
         }
       }
@@ -3520,6 +3522,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
       let end = k
       if (fence) {
+        // An unclosed span runs to the end of the list's lines (PART 9 §28).
+        end = lexer.lineCount - 1
         for (let j = k + 1; lexer.peek(j - lexer.pos) !== undefined; j++) {
           if (RE_COMMENT_BLOCK.exec(lexer.peek(j - lexer.pos)!.trimStart())?.[1] === fence) {
             end = j

@@ -6,27 +6,27 @@ const cases = [
   {
     name: 'heading',
     source: '- a\n  %%%\n   # heading\n',
-    html: '<ul><li>a\n    <h1 id="heading">heading</h1></li></ul>',
+    html: '<ul><li>a</li></ul>',
   },
   {
     name: 'heading after a marker-line term',
     source: '- :: term\n  %%%\n   # heading\n',
-    html: '<ul><li><dl><dt>term</dt></dl><h1 id="heading">heading</h1></li></ul>',
+    html: '<ul><li><dl><dt>term</dt></dl></li></ul>',
   },
   {
     name: 'quoted heading after a marker-line term',
     source: '> - :: term\n>   %%%\n>    # heading\n',
-    html: '<blockquote><ul><li><dl><dt>term</dt></dl><h1 id="heading">heading</h1></li></ul></blockquote>',
+    html: '<blockquote><ul><li><dl><dt>term</dt></dl></li></ul></blockquote>',
   },
   {
     name: 'thematic break after a four-percent fence',
     source: '- a\n  %%%%\n   ---\n',
-    html: '<ul><li>a\n    <hr></li></ul>',
+    html: '<ul><li>a</li></ul>',
   },
   {
     name: 'code fence',
     source: '- a\n  %%%\n   ```\n   code\n   ```\n',
-    html: '<ul><li>a\n    <pre><code>code\n</code></pre></li></ul>',
+    html: '<ul><li>a</li></ul>',
   },
   {
     name: 'matched comment pair hides its payload',
