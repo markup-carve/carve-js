@@ -1,5 +1,5 @@
 import { bodyEndsInOpenCodeFence, verbatimOnlyLazyState } from './parse-block-boundaries.js'
-import { LAZY_FRAME as LEAD_TAB_FRAME } from '../parse-prepass-core.js'
+import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
   DefinitionList,
@@ -56,6 +56,11 @@ function advanceToEntry(
     if (isBlankLine(line)) {
       blanks++
       next++
+      continue
+    }
+    const paragraphEnd = commentOnlyParagraphEnd((index) => lexer.lineAt(index), next)
+    if (paragraphEnd !== -1) {
+      next = paragraphEnd
       continue
     }
     const abbr = lexer.atDocumentLevel ? RE_ABBR_DEF.exec(line) : null

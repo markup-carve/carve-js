@@ -4,6 +4,7 @@ import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
 import { CAPTION_COMMENT_ONLY } from './parse-quote-core.js'
 import {
+  commentOnlyParagraphEnd,
   isColonFenceOpener,
   isLinkDefLine,
   isTableRow,
@@ -904,6 +905,12 @@ export function ownLines(
       if (col !== marker) return decide(col < marker ? 'left' : 'right')
       const rest = trimEndSpaceTab(n.rest)
       if (isAttrLine(rest)) continue
+      // A paragraph of only braced comments is skipped as a `%%` line is (carve#4799).
+      const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k)
+      if (paragraphEnd !== -1) {
+        k = paragraphEnd - 1
+        continue
+      }
       const comment = COMMENT_FENCE.exec(rest)
       if (comment && (closerRuns().lastComment.get(comment[1]!.length) ?? -1) > k) {
         const opener = k
@@ -944,6 +951,17 @@ export function ownLines(
       if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return decide('sibling')
       return decide(null)
     }
+  }
+
+  // A line's text inside `quotes` quote prefixes, or undefined where one is missing.
+  function restInQuotes(index: number, quotes: number): string | undefined {
+    if (lines[index] === undefined) return undefined
+    let n = indentCols(lines[index])
+    for (let q = 0; q < quotes; q++) {
+      if (!isQuoteLine(n.rest)) return undefined
+      n = indentCols(quoteRest(n.rest))
+    }
+    return n.rest
   }
 
   function openerKind(form: Form, rest: string): string | undefined {
