@@ -7828,7 +7828,7 @@ function commentSeparatedListStarts(source: readonly string[]): number[] {
       if (prefixes[at] !== prefixes[item]) return null
       if (line.trim() === '') { previousBlank = true; continue }
       const lineIndent = indentColumns(line)
-      const end = !fenced.has(at) && lineIndent >= indent && lineIndent < contentCol ? commentBlockEnd(lines, at) : null
+      const end = !fenced.has(at) && lineIndent < contentCol ? commentBlockEnd(lines, at) : null
       if (end !== null) {
         comment = true
         previousBlank = false
@@ -7849,7 +7849,12 @@ function commentSeparatedListStarts(source: readonly string[]): number[] {
 function fencedLines(lines: readonly string[]): Set<number> {
   const fenced = new Set<number>()
   let open: string | null = null
+  let inComment = false
   for (const [at, line] of lines.entries()) {
+    if (open === null && (inComment || line.includes('<!--'))) {
+      inComment = !line.slice(inComment ? 0 : line.indexOf('<!--') + 4).includes('-->')
+      continue
+    }
     const run = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line)
     if (open !== null) {
       fenced.add(at)
