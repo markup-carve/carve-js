@@ -4129,6 +4129,7 @@ const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
 /** A list marker, empty or not, or a footnote definition: neither is a lazy line. */
 const RE_OPENS_ITEM_OR_NOTE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|^ {0,3}\[\^(?:[^\[\]\\]|\\.)+\]:/
+const RE_EMPTY_MARKER = /^(?:[-*+]|\d{1,9}[.)])[ \t]*$/
 const RE_SOURCE_ITEM = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))(?=[ \t]|$)([ \t]*)(.*)$/
 
 function sourceItem(line: string): { indent: string; bullet: string | undefined; number: string | undefined; delimiter: string | undefined; padding: string; content: string; marker: string } | null {
@@ -4140,9 +4141,8 @@ function nestedEmptyPlusItem(line: string): string {
   const outer = sourceItem(line)
   if (outer === null || columnWidth(outer.indent + outer.marker + outer.padding) - columnWidth(outer.indent + outer.marker) > 4) return line
   const inner = sourceItem(outer.content)
-  return inner?.marker === '+' && inner.content.trim() === ''
-    ? outer.indent + outer.marker + outer.padding + inner.indent + '- {empty}'
-    : line
+  if (inner === null || inner.content.trim() !== '') return line
+  return outer.indent + outer.marker + outer.padding + inner.indent + (inner.marker === '+' ? '-' : inner.marker) + ' {empty}'
 }
 
 /** Whether a source marker may open an item at this paragraph's column. */
@@ -6279,8 +6279,16 @@ function collectItemFence(
 }
 
 /** Whether a lazy line left of the item's content column joins the item's run. */
-function joinsItemLazily(line: string, lazyText: boolean, orderedText: boolean, quotedFence: RegExp | null): boolean {
-  return lazyText && !orderedText && quotedFence === null && !RE_OPENS_ITEM_OR_NOTE.test(line)
+function joinsItemLazily(line: string, lazyText: boolean, orderedText: boolean, quotedFence: RegExp | null, run: readonly PrefixedInlineLine[]): boolean {
+  // A setext underline the run took ended its paragraph.
+  const underlined = run.length > 1 && RE_MD_SETEXT_UNDERLINE.test(run.at(-1)!.text.trim())
+  return lazyText && !orderedText && !underlined && quotedFence === null && !RE_OPENS_ITEM_OR_NOTE.test(line)
+}
+
+/** The line above the next one of an item run; a bare marker on the first line is an empty nested item, no paragraph. */
+function runLineAbove(run: readonly PrefixedInlineLine[], firstText: string): string {
+  if (run.length > 1) return run.at(-1)!.text
+  return RE_EMPTY_MARKER.test(firstText.trim()) ? '' : firstText
 }
 
 /** The pad of a lazy line of the innermost item, left of that item's column. */
@@ -6359,7 +6367,7 @@ function collectListInlineRun(
     if (quotedFence !== null && indent >= contentCol && blockquotePrefix(stripColumns(line, contentCol)) === null) break
     // The indent past the content column is written as the spaces it covers.
     const text = ' '.repeat(Math.max(0, indent - contentCol)) + line.replace(/^[ \t]+/, '')
-    const above = run.length === 1 ? firstText : run.at(-1)!.text
+    const above = runLineAbove(run, firstText)
     const aboveRow = quotedTable.advance(run, firstText)
     // An ordered marker other than 1 cannot interrupt the paragraph of the
     // innermost item holding it (CommonMark 5.2), unless it continues an
@@ -6391,7 +6399,7 @@ function collectListInlineRun(
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
     // A lazy line of the item's paragraph joins the run, so spans and a
     // setext underline pair across it as they do across an indented line.
-    if (indent < contentCol && !joinsItemLazily(line, lazyText, orderedText, quotedFence)) { terminal = !lazyText; break }
+    if (indent < contentCol && !joinsItemLazily(line, lazyText, orderedText, quotedFence, run)) { terminal = !lazyText; break }
 
     // Star and underscore rules interrupt the paragraph; dashes may be setext.
     if (RE_MD_THEMATIC.test(text) && !/^[ \t]*-/.test(text)) break
@@ -6555,6 +6563,39 @@ function collectListItemLead(
  * Write a list item's collected paragraph run, as the quote the marker line
  * holds when that quote opens a fence.
  */
+/**
+ * Give an empty item a quote the list item holds a temporary body, as
+ * `quoteEmptyItems` does for a quote at document level: the bare marker is
+ * no paragraph text unless a paragraph of the same quote is open above it.
+ */
+function closesFence(line: RegExpExecArray, fence: string): boolean {
+  return line[2]![0] === fence[0] && line[2]!.length >= fence.length && line[3]!.trim() === ''
+}
+
+function heldQuoteEmptyItems(run: PrefixedInlineLine[], token: string): PrefixedInlineLine[] {
+  let fence: string | null = null
+  const emptied = new Set<number>()
+  return run.map((part, index) => {
+    const quote = blockquotePrefix(part.text.trimStart())
+    const opener = quote === null ? null : RE_MD_FENCE_LINE.exec(quote.text)
+    if (fence !== null) {
+      if (quote === null || opener !== null && closesFence(opener, fence)) fence = null
+      return part
+    }
+    if (opener && fenceRunIsAFence(opener[2]!, opener[3]!)) {
+      fence = opener[2]!
+      return part
+    }
+    const empty = quote === null ? null : /^((?:[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*(?:[-*+]|\d{1,9}[.)]))[ \t]*$/.exec(quote.text)
+    if (quote === null || empty === null || part.continued) return part
+    const above = index > 0 ? blockquotePrefix(run[index - 1]!.text.trimStart()) : null
+    if (above !== null && above.prefix === quote.prefix && opensParagraph(above.text) && !emptied.has(index - 1)) return part
+    emptied.add(index)
+    const pad = part.text.slice(0, part.text.length - part.text.trimStart().length)
+    return { ...part, text: `${pad}${quote.prefix}${empty[1]} ${token}` }
+  })
+}
+
 function writeListInlineRun(
   lines: readonly string[],
   run: PrefixedInlineLine[],
@@ -6584,7 +6625,10 @@ function writeListInlineRun(
       return { lines: quoteLines.map((line, at) => (at === 0 ? markerText : ' '.repeat(contentCol)) + line), end }
     }
   }
-  const written = restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect, terminal)
+  let emptyToken = '\uE0FC'
+  while (run.some(part => part.text.includes(emptyToken))) emptyToken += '\uE0FC'
+  const written = restorePrefixedInlineRun(foldContainerSetext(heldQuoteEmptyItems(run, emptyToken), dialect), dialect, terminal)
+    .map(line => line.replaceAll(emptyToken, '{empty}'))
   if (!terminal && / {2,}$/.test(run.at(-1)?.text ?? '') && written.length > 0) {
     written[written.length - 1] += '\\'
   }
@@ -7385,7 +7429,8 @@ function leavesItemParagraph(run: { lines: string[]; verbatimFrom?: number }): b
   let last = run.lines.at(-1)!
   const own = RE_LIST_MARKER.exec(last)
   if (run.lines.length === 1 && own) last = last.slice(nestedItemsOnLine(last, own[0].length).at(-1)?.end ?? own[0].length)
-  return opensParagraph(last)
+  // A bare marker there is an empty nested item.
+  return opensParagraph(last) && !(run.lines.length === 1 && own !== null && RE_EMPTY_MARKER.test(last.trim()))
 }
 
 /**
@@ -8245,6 +8290,8 @@ function trackListItems(st: MarkdownConversion, ln: MarkdownLine, i: number): vo
         listCols.pop()
         ln.leftItems = noLazy
       }
+      // An empty item takes no lazy line, so what leaves it is set apart.
+      if (ln.leftItems && RE_EMPTY_ITEM_PLACEHOLDER.test(out.at(-1) ?? '')) out.push('')
     }
     if (ln.trimmed !== '' && !ln.marker) listMarkers.end(listCols.length ? listCols[listCols.length - 1]! : 0)
     // A line left of an item whose last block was a fence ends the item's
