@@ -1373,6 +1373,24 @@ export function lineOpensBlock(line: string): boolean {
   }
 }
 
+// A paragraph of only braced comments renders nothing, so a list reads it as it
+// reads a `%%` line (carve#4799). Returns the index past its last line, or -1.
+// A list marker interrupts only in an item, so it keeps the paragraph visible.
+// A `%%` tail ends at its line, so text on the next line stays visible.
+const RE_COMMENT_ONLY_PARAGRAPH = new RegExp(String.raw`^(?:\{%(?![\p{Mn}\p{Mc}\p{Me}\u{FE00}-\u{FE0F}\u{200D}])(?:(?!%\})[\s\S])*%\}|[ \t\n\r]|(?<= )%%[^\n\r]*)*$`, 'u')
+export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number): number {
+  if (!(lineAt(k) ?? '').trimStart().startsWith('{%')) return -1
+  let end = k + 1
+  for (let line = lineAt(end); line !== undefined && !isBlankLine(line); line = lineAt(++end)) {
+    const rest = line.trimStart()
+    if (isListMarkerLine(rest)) return -1
+    if (lineOpensBlock(rest) || RE_COMMENT_LINE.test(rest)) break
+  }
+  const para: string[] = []
+  for (let j = k; j < end; j++) para.push(lineAt(j)!)
+  return RE_COMMENT_ONLY_PARAGRAPH.test(para.join('\n')) ? end : -1
+}
+
 /**
  * A line whose only shape is a LIST MARKER - the four spellings an item opens
  * with. Kept apart from `lineOpensBlock`, which answers for every opener.

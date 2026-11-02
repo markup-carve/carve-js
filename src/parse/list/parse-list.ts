@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
-import { RE_COMMENT_BLOCK } from '../parse-prepass-core.js'
+import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
@@ -3116,8 +3116,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (invisibleNested(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
         const opener = wrappedAttributeOpener(k)
-        if (opener < 0) break
-        k = opener
+        if (opener >= 0) {
+          k = opener
+          continue
+        }
+        // So is a paragraph of only braced comments (carve#4799).
+        let start = k
+        while (start > 0 && !isBlankLine(nested[start - 1]!)) start--
+        if (commentOnlyParagraphEnd((index) => nested[index], start) !== k + 1) break
+        k = start
       }
       return false
     }
@@ -3406,20 +3413,25 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   // that closed the item above does not end the list (carve#3885).
   function invisibleBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
     const line = lexer.peek()
+    const lineAt = (index: number) => lexer.lineAt(index)
     if (line === undefined || !(RE_COMMENT_LINE.test(line) || isLinkDefLine(line) ||
-      (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)))) return
+      (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)) || commentOnlyParagraphEnd(lineAt, lexer.pos) !== -1)) return
     // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
     let blanks = 0
     for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) blanks++
     let k = lexer.pos
-    for (let at = lexer.peek(k - lexer.pos); at !== undefined &&
-      (isBlankLine(at) || RE_COMMENT_LINE.test(at) || isLinkDefLine(at) ||
-        (lexer.atDocumentLevel && RE_ABBR_DEF.test(at))); at = lexer.peek(k - lexer.pos)) {
+    for (let at = lexer.peek(k - lexer.pos); at !== undefined; at = lexer.peek(k - lexer.pos)) {
       if (isBlankLine(at)) {
         blanks++
         k++
         continue
       }
+      const paragraphEnd = commentOnlyParagraphEnd(lineAt, k)
+      if (paragraphEnd !== -1) {
+        k = paragraphEnd
+        continue
+      }
+      if (!(RE_COMMENT_LINE.test(at) || isLinkDefLine(at) || (lexer.atDocumentLevel && RE_ABBR_DEF.test(at)))) break
       const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
       let end = k
       if (fence) {
