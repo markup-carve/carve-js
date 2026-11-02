@@ -399,6 +399,7 @@ export class ParseSession extends InlineParseSession {
   private skipParagraphInlines = false
   private skipPositionDrop = false
   private skippedAbbreviationLines = new Set<number>()
+  private skippedCommentFences = new Map<number, { closer: number; content: string }>()
 
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
@@ -456,6 +457,8 @@ export class ParseSession extends InlineParseSession {
     lexer.applyOwnership(ownership)
     this.skippedAbbreviationLines = new Set([...ownership.skippedAbbreviations.keys()]
       .filter((index) => !ownership.separatingAbbreviations.has(index)).map((index) => lexer.lineNumber(index)))
+    this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
+      [lexer.lineNumber(index), { closer: lexer.lineNumber(closer), content }]))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -873,6 +876,12 @@ export class ParseSession extends InlineParseSession {
       const l = lexer.consume()
       // The stand-in for an abbreviation definition a `+` skipped; the document holds its node.
       if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
+      // A comment fence a `+` skipped, whose lines read as `%%` stand-ins.
+      const fence = l === '%%' ? this.skippedCommentFences.get(lexer.lineNumber(lexer.pos - 1)) : undefined
+      if (fence !== undefined) {
+        while (lexer.lineNumber(lexer.pos - 1) < fence.closer) lexer.consume()
+        return { type: 'comment', block: true, content: fence.content }
+      }
       // ONE separator character, and it is `whitespace` - a space or a tab
       // (markup-carve/carve#977, PART 7). This read `/^\s/`, the host language's
       // class, so a `%%<VT>note` line had its vertical tab eaten as the

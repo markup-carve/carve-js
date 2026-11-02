@@ -65,6 +65,7 @@ export interface InlineScannerSession {
     text: string,
     end: number,
   ): void
+  inheritedDeclines(text: string): EmphasisMemo['declines']
   matchEmphasis(
     text: string,
     i: number,
@@ -1134,7 +1135,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     const { text, i } = s
     const guardOpen = s.openEntryAt === flankIndexBefore(text, i) - 1
     const em = s.session.matchEmphasis(text, i, s.source, s.inFootnote,
-      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0, guardOpen)
+      s.emphasisNoClose ??= { ...newEmphasisMemo(), noteBody: s.inFootnote, declines: s.session.inheritedDeclines(text) }, s.bracketRuns.at(-1)?.close ?? text.length, s.bracketRuns.length > 0, guardOpen)
     if (!em) {
       const ch = text[i]!
       if (!s.openEntryKinds.includes(ch) && s.session.bareOpenerStands(text, i, guardOpen)) {

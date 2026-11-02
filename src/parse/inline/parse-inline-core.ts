@@ -536,6 +536,8 @@ export interface EmphasisMemo {
   // Per delimiter, scan positions known to reach no closer. Not a single bound:
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
+  // Walks that declined at a closer for an inner word delimiter: start to closer.
+  declines?: Array<{ from: number; at: number; kind: string }> | undefined
   lastBrace: number
   lastCritic?: number
   boldItalic?: { closers: number[]; minimumOwners: number[]; width: number }

@@ -154,12 +154,22 @@ function bareCloserDecision(text: string, at: number, delim: string): -1 | 0 | 1
   if (prev === undefined || isCarveWhitespace(prev)) return 0
   const nextAt = flankIndexAfter(text, at + 1)
   const next = text[nextAt]
-  // An inner word delimiter declines the entire bare candidate (carve#4810).
+  // An inner word delimiter closes nothing; the closer that follows declines (carve#4810).
   if (wordBefore(text, beforeAt) && next && wordAfter(text, nextAt)) return -1
   if (next && wordAfter(text, nextAt)) return 0
   if (extendsGrapheme(text, nextAt)) return 0
   if (delim === '=' && comparisonEquals(text, at)) return 0
   return 1
+}
+
+// An entry of a kind in `kinds` that declines past `at` is still on the stack
+// there: no opener of that kind and no combined token forms (carve#4810).
+function entryDeclinesPast(memo: EmphasisMemo, at: number, kinds: string): boolean {
+  const declines = memo.declines
+  if (declines === undefined) return false
+  // The scan only moves forward, so an entry that declined behind it is done.
+  while (declines.length > 0 && declines.at(-1)!.at <= at) declines.pop()
+  return declines.some((entry) => entry.from <= at && entry.at > at && kinds.includes(entry.kind))
 }
 
 // Whether the bare delimiter at `at` opens. Behind a `_` or `/` it is
@@ -953,6 +963,8 @@ export class InlineParseSession {
   // it, so a `*` at its end starts a `*/` closer token (carve#4042).
   private tailSlash = false
   private combinedShapeCache = new Map<string, Array<[number, number]>>()
+  // Entries that decline inside the bare span just formed: its content reads them as held.
+  private heldDeclines: { text: string; declines: NonNullable<EmphasisMemo['declines']> } | undefined
 
   /** `openKinds` with `delim` added. */
   private withOpenKind(delim: string): ReadonlySet<string> {
@@ -1105,6 +1117,7 @@ export class InlineParseSession {
       inlineCommentEnd: this.inlineCommentEnd.bind(this),
       extendPosTo: this.extendPosTo.bind(this),
       matchEmphasis: this.matchEmphasis.bind(this),
+      inheritedDeclines: this.inheritedDeclines.bind(this),
       bareOpenerStands: this.bareOpenerStands.bind(this),
       pairView: this.pairView.bind(this),
       plainInlineWord: this.plainInlineWord.bind(this),
@@ -1175,7 +1188,7 @@ export class InlineParseSession {
     const c = text[i]!
 
     // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
-    if (c === '/' && text[i + 1] === '*') {
+    if (c === '/' && text[i + 1] === '*' && !entryDeclinesPast(noClose, i, '/*')) {
       const start = i + 2
       const close = this.combinedTokenClose(text, i, noClose, guardOpen)
       if (close !== undefined && close + 2 <= end) {
@@ -1209,19 +1222,26 @@ export class InlineParseSession {
       if (c === delim) {
         // CARVE-P3-013 and PART 9 §9: flanking, word boundary, no doubled
         // delimiter, E3, `=>`, and the `_` / `/` guard.
-        if (!this.bareOpenerStands(text, i, guardOpen)) continue
+        if (!this.bareOpenerStands(text, i, guardOpen) || entryDeclinesPast(noClose, i, delim)) continue
         // Find closer that's not preceded by space
         const close = this.cachedFindEmphasisClose(text, i + 1, delim, noClose, end)
         if (close !== -1) {
           const inner = text.slice(i + 1, close)
-          return {
-            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanBareEmphasis(inner, this.shiftSource(source, text, i + 1), inFootnote, this.withOpenKind(delim), delim === '/') },
-            end: close + 1,
-          }
+          this.heldDeclines = noClose.declines === undefined ? undefined : { text: inner, declines: noClose.declines.filter((entry) => entry.from <= i && entry.at > i).map((entry) => ({ ...entry, from: 0, at: entry.at - i - 1 })) }
+          const children = this.plainInlineWord(text, i + 1, close, source) ?? this.scanBareEmphasis(inner, this.shiftSource(source, text, i + 1), inFootnote, this.withOpenKind(delim), delim === '/')
+          this.heldDeclines = undefined
+          return { node: { type, children }, end: close + 1 }
         }
       }
     }
     return null
+  }
+
+  private inheritedDeclines(text: string): EmphasisMemo['declines'] {
+    const held = this.heldDeclines
+    if (held?.text !== text) return undefined
+    this.heldDeclines = undefined
+    return held.declines.length > 0 ? held.declines : undefined
   }
 
   private scanBareEmphasis(inner: string, source: InlineSource, inFootnote: boolean, kinds: ReadonlySet<string>, tailSlash = false): InlineNode[] {
@@ -1527,6 +1547,7 @@ export class InlineParseSession {
     // Openers of a kind already held (E3): text, so they guard what follows.
     let held: Set<number> | undefined
     let entries: Set<string> | undefined
+    let holdsOwnDelimiter = false
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
@@ -1670,8 +1691,12 @@ export class InlineParseSession {
       }
       if (ch === delim) {
         const decision = bareCloserDecision(text, j, delim)
-        if (decision < 0) return -1
-        if (decision > 0) return j
+        if (decision < 0) holdsOwnDelimiter = true
+        if (decision > 0) {
+          if (!holdsOwnDelimiter) return j
+          ;(memo.declines ??= []).push({ from, at: j, kind: delim })
+          return -1
+        }
       }
     }
     return -1
