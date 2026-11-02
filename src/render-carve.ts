@@ -4239,6 +4239,12 @@ class CarveRenderSession {
           previousEmitted = b
           return
         }
+        // A `+` attaches no comment: at the content column it closes nothing (CARVE-P9-013).
+        if (b.type === 'comment' && previousAtMarkerColumn && !this.itemNeedsIndentedBlocks(ctx)) {
+          parts.push(rendered)
+          previousEmitted = b
+          return
+        }
         if (
           previousAtMarkerColumn ||
           (next !== undefined && adjacentBlocksMerge(b, next)) ||

@@ -172,7 +172,7 @@
   {
     "id": "row-35",
     "source": "- - para\n%% c\n  ```\n      ```\nx\n",
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n  </li>\n</ul>\n<pre><code>    ```\nx\n</code></pre>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>para</li>\n    </ul>\n    <pre><code>    ```\n</code></pre>\n  </li>\n</ul>\n<p>x</p>"
   },
   {
     "id": "row-36",

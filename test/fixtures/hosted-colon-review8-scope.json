@@ -712,12 +712,12 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-003",
     "source": "> - :::\n>     - ::: in\n>   %%%\n>       ::: box\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <ul>\n          <li>\n            <div class=\"in\">\n\n            </div>\n          </li>\n        </ul>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <ul>\n          <li>\n            <div class=\"in\">\n              <div class=\"box\">\n\n              </div>\n            </div>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-004",
     "source": "> - :::\n>     - ::: in\n>   %%%\n>       ::: box\n- tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <ul>\n          <li>\n            <div class=\"in\">\n\n            </div>\n          </li>\n        </ul>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div>\n        <ul>\n          <li>\n            <div class=\"in\">\n              <div class=\"box\">\n\n              </div>\n            </div>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-005",
@@ -787,7 +787,7 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-009",
     "source": "- ::: |\n  ::::\n  :::\n    :::\n%%%\n   - ::: in\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::</p>\n    </div>\n    <div>\n\n    </div>\n  </li>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::</p>\n    </div>\n    <div>\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c04-marker-payload-frame-010",
@@ -827,7 +827,7 @@
   {
     "id": "review8-c02-below-column-comment-043",
     "source": "- :::: box\n  - ::: in\n%%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n    </div>\n  </li>\n</ul>\n<pre><code>    ```\nTAILX\n</code></pre>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n      <pre><code>    ```\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review8-older-o03-overindented-fence-colon-004",
@@ -892,7 +892,7 @@
   {
     "id": "review8-c01-authored-div-base-049",
     "source": "- :::: box\n      %% c\n%%%\n    :::\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<div>\n\n</div>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-010",
@@ -1087,12 +1087,12 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-017",
     "source": "> 1. a\n>      ::: box\n>     - m\n>      %% c\n>       ::: box\nTAILX\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n      <div class=\"box\">\n        <ul>\n          <li>m</li>\n        </ul>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </li>\n  </ol>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ol>\n    <li>a\n      <div class=\"box\">\n        <ul>\n          <li>m\n            <div class=\"box\">\n\n            </div>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ol>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-018",
     "source": "> 1. a\n>      ::: box\n>     - m\n>      %% c\n>       ::: box\n- tail\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n      <div class=\"box\">\n        <ul>\n          <li>m</li>\n        </ul>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </li>\n  </ol>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote>\n  <ol>\n    <li>a\n      <div class=\"box\">\n        <ul>\n          <li>m\n            <div class=\"box\">\n\n            </div>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ol>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review8-c01-authored-div-base-064",

@@ -34,14 +34,14 @@ describe('invisible followers of a continuation marker', () => {
     )
   })
 
-  it('lets an abbreviation release an indented line from a description', () => {
+  it('keeps an indented line past an abbreviation in a description', () => {
     expect(carveToHtml(':: t\n: +\n*[A]: b\n  text')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>+</dd>\n</dl>\n<p>text</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>+</p>\n    <p>text</p>\n  </dd>\n</dl>',
     )
   })
 
-  it('lets an abbreviation release an indented line from a footnote', () => {
-    expect(carveToHtml('[^f]: +\n*[A]: b\n  text\n\nr[^f]')).toContain('<p>text</p>\n<p>r')
+  it('keeps an indented line past an abbreviation in a footnote', () => {
+    expect(carveToHtml('[^f]: +\n*[A]: b\n  text\n\nr[^f]')).toContain('<p>+</p>\n      <p>text')
   })
 
   it('reads the next visible block past a footnote definition', () => {

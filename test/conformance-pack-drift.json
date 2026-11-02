@@ -11,13 +11,6 @@
     },
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the notes family",
-      "cases": [
-        "notes-ff9482aa03ba"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the ownership family",
       "cases": [
         "ownership-19a15d4c0b00"

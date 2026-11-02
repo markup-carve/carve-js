@@ -465,9 +465,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // blocks pulled by a separate + at their own source columns.
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
     // and a definition there interrupts it as it does any paragraph (PART 0 S4), unless a folded fence holds it.
-    if (attached.length > 1 && !lineOpensBlock(sliceColumns(attached[0]!, localBlockColumn, true))) {
+    const cutAtItemColumn = (lines: string[], lineNumbers: number[], blockColumn: number): void => {
+      if (lines.length <= 1 || lineOpensBlock(sliceColumns(lines[0]!, blockColumn, true))) return
       let fenceRun: string | undefined
-      const cut = attached.findIndex((line, index) => {
+      const cut = lines.findIndex((line, index) => {
         const text = line.trimStart()
         const inFence = fenceRun !== undefined
         if (fenceRun !== undefined) {
@@ -479,11 +480,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text)))
       })
       if (cut > 0) {
-        lexer.pos -= attached.length - cut
-        attached.length = cut
-        attachedLineNumbers.length = cut
+        lexer.pos -= lines.length - cut
+        lines.length = cut
+        lineNumbers.length = cut
       }
     }
+    cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn)
     for (let index = 0; index < attached.length; index++) {
       attached[index] = sliceColumns(attached[index]!, localBlockColumn, true)
     }
@@ -506,6 +508,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // boundary set, and a second marker that attaches nothing ends the run
       // either way (markup-carve/carve#1814).
       if (more.lines.length === 0) break
+      cutAtItemColumn(more.lines, more.lineNumbers, indentColumns(more.lines[0]!))
       // A marker at its host column ends an open fence (§17 L4, carve#4354).
       const opener = attached.find(line => line.trim() !== '' && !isBlockAttributeLine(line.trimStart()))?.trimStart()
       const run = opener !== undefined && opensCodeFence(opener) ? /^(`{3,}|~{3,})/.exec(opener)?.[1] : undefined

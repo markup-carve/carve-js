@@ -122,10 +122,6 @@
   "formatter-parity-regressions.test.ts": {
     "normalizes a constructed carriage return before guarding a quote line": "#3921"
   },
-  "hosted-colon-literal-ownership.test.ts": {
-    "review7-c07-open-fence-tail-owner-13": "#3922",
-    "review7-c07-open-fence-tail-owner-14": "#3922"
-  },
   "inline-fence-paragraph-resume.test.ts": {
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
     "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
