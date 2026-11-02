@@ -1049,6 +1049,15 @@ function needsABlankLineAbove(
   return aSubListAlreadyOpened && LEAVES_A_PARAGRAPH_OPEN.has(previousEmitted.type)
 }
 
+/** The width of the marker `renderList` writes for this item, glued attributes included. */
+function writtenMarkerWidth(list: List, item: ListItem): number {
+  const attrs = renderAttrs(item.attrs).length
+  if (!list.ordered) return attrs + (item.checked === undefined ? 2 : 3 + taskMarker(item).length)
+  if (list.bareMarker === true) return attrs + 2
+  const number = orderedMarker((list.start ?? 1) + list.items.indexOf(item), list.olType)
+  return attrs + number.length + (list.delim !== ')' && list.olType !== undefined ? 3 : 2)
+}
+
 export function orderedMarker(n: number, type: List['olType']): string {
   switch (type) {
     case 'a':
@@ -4027,10 +4036,12 @@ class CarveRenderSession {
   private listFootnoteAfter(before: BlockNode, after: BlockNode | undefined, ctx: CarveContext): string | undefined {
     if (before.type !== 'list') return undefined
     const item = before.items.at(-1)
-    const contentColumn = item?.children[0]?.pos?.startColumn
+    const firstColumn = item?.children[0]?.pos?.startColumn
     const from = before.pos?.endLine
     const to = after === undefined ? this.listNoteLimit : after.pos?.startLine
-    if (contentColumn === undefined || item?.pos?.startColumn === undefined || from === undefined || to === undefined) return undefined
+    if (firstColumn === undefined || item?.pos?.startColumn === undefined || from === undefined || to === undefined) return undefined
+    // A first-block `+` puts the body below the content column, which still lies past the item's marker.
+    const contentColumn = Math.max(firstColumn, item.pos.startColumn + writtenMarkerWidth(before, item))
     const definitions: string[] = []
     for (const [line, label] of this.footnoteDefsByLine) {
       const pos = ownValue(this.documentFootnoteDefPos, label)
