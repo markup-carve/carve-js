@@ -3,13 +3,6 @@
   "entries": [
     {
       "ticket": "markup-carve/carve-js#3948",
-      "cause": "untriaged day-one drift in the lazy family",
-      "cases": [
-        "lazy-10bd0503f93b"
-      ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [
         "notes-4dc51b5608ab"
