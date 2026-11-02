@@ -1671,6 +1671,18 @@ function collectContainedPlacementMarkers(
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 const HEADING_CLOSING_HASHES = /^(.*\S[ \t]+)(#+)[ \t\r]*$/
 const SETEXT_UNDERLINE = /^((?:[ \t]*>)*[ \t]*)(-{3,}|={3,})[ \t\r]*$/
+// `/(\S?)[ \t]+#+$/` without the rescan of the space run from every start (carve-js#4266):
+// the non-space before the run, '' when there is none, undefined when the text has no run.
+function charBeforeClosingHashes(text: string): string | undefined {
+  let h = text.length
+  while (h > 0 && text[h - 1] === '#') h--
+  if (h === text.length) return undefined
+  let w = h
+  while (w > 0 && (text[w - 1] === ' ' || text[w - 1] === '\t')) w--
+  if (w === h) return undefined
+  const prev = text[w - 1]
+  return prev !== undefined && /\S/.test(prev) ? prev : ''
+}
 // The legacy `raw FORMAT` spelling recovers as language `raw` (carve#4849).
 function recoveredCodeFenceMessage(run: string, language: string, view: string): string {
   const generic = 'The code fence keeps its language and drops invalid opener metadata. Use a quoted title and optional [label] in that order.'
@@ -3246,8 +3258,8 @@ function collectSilentFailures(
     if (!ln) continue
     const children = (h as { children?: Array<{ type?: string; value?: string }> }).children
     const last = children?.at(-1)
-    const run = /(\S?)[ \t]+#+$/.exec(last?.type === 'text' ? last.value ?? '' : '')
-    if (!run || !run[1] && children!.length < 2) continue
+    const before = charBeforeClosingHashes(last?.type === 'text' ? last.value ?? '' : '')
+    if (before === undefined || !before && children!.length < 2) continue
     const m = HEADING_CLOSING_HASHES.exec(lines[ln - 1] ?? '')
     if (!m) continue
     push(ln, m.index + m[1]!.length + 1, m[2]!.length, 'heading-closing-hashes',
