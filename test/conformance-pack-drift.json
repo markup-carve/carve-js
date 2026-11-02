@@ -41,30 +41,19 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#4811",
-      "cause": "letter or roman dot markers need two spaces after the marker; engine follows current spec ahead of this pin",
-      "cases": [
-        "attributes-26b1700c816a",
-        "attributes-598027ed4800",
-        "attributes-7821c695246b",
-        "attributes-a4b7751c4295",
-        "attributes-b13a601b659e",
-        "attributes-b5be44e0e3e6",
-        "attributes-b82665ca49d4",
-        "attributes-ce5424571331",
-        "attributes-e06761438664",
-        "attributes-eb06611ecd8d"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve#4810",
       "cause": "bare same-kind word delimiters follow the current spec ahead of this pin",
       "cases": [
-        "inline-97a7245ea9b9",
-        "combined-7d04c2a8fbb9",
-        "combined-8a09e2d68fb4",
-        "combined-aff46d1219c3",
-        "attributes-4a9626ec0fde"
+        "combined-8a09e2d68fb4"
+      ]
+    },
+    {
+      "ticket": "markup-carve/carve-js#3948",
+      "cause": "a lazy marker line without the quote prefix past a quote: the model ends the item or keeps the prefix as text",
+      "cases": [
+        "lazy-679190d42655",
+        "lazy-e94649399f1c",
+        "ownership-a83a55ed37d6"
       ]
     },
     {

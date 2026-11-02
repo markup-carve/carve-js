@@ -26,7 +26,7 @@ describe('an escaped bracket is extension content', () => {
     [':foo[a\\]b] c\n', '<p><span class="ext-foo">a]b</span> c</p>'],
     [':foo[\\]]\n', '<p><span class="ext-foo">]</span></p>'],
     [':foo[a\\\\]b]\n', '<p><span class="ext-foo">a\\</span>b]</p>'],
-    [':foo[a [b] c]\n', '<p><span class="ext-foo">a [b</span> c]</p>'],
+    [':foo[a [b] c]\n', '<p><span class="ext-foo">a [b] c</span></p>'],
   ])('%j', (source, expected) => {
     expect(html(source)).toBe(expected)
   })

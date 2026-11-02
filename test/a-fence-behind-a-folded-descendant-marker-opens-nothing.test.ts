@@ -1,27 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// A marker inside a descendant item's marker width folds into its paragraph as
-// text, so the fence behind it opens nothing and a column-0 line continues the
-// same paragraph (carve#4371).
+// A marker inside a descendant item's marker width reads as at its marker column
+// (carve#4545), so the fence behind it opens and a column-0 line leaves the list.
 const nested = (outer: string, fold: string, payload: string): string => {
   const pad = ' '.repeat(outer.length)
   return `${outer}- a\n${pad}  - y\n${pad}   ${fold}${payload}\nz\n`
 }
 
-describe('a fence behind a folded descendant marker opens nothing (carve#4371)', () => {
+describe('a fence behind a marker in a descendant item\'s marker width opens', () => {
   for (const outer of ['1. ', '- ', 'a) ', '- [ ] ']) {
     for (const payload of ['~~~', '```', '~~~~ js']) {
       it(`${JSON.stringify(outer)} outer, ${payload} payload`, () => {
         const html = carveToHtml(nested(outer, '1. ', payload))
-        expect(html).not.toContain('<p>z</p>')
-        expect(html).toMatch(/<li>y\n1\.[^]*z[^]*?<\/li>\n *<\/ul>/)
+        expect(html).toContain('<li>y</li>')
+        expect(html).toContain('<pre><code')
       })
     }
   }
 
   it('renders the reported shape', () => {
-    expect(carveToHtml('1. - a\n     - y\n      1. ~~~\nz\n')).toContain('<li>y\n1. ~~~\nz</li>')
+    expect(carveToHtml('1. - a\n     - y\n      1. ~~~\nz\n')).toContain('<li>y</li>')
   })
 
   it('still ends the paragraph after a folded heading', () => {

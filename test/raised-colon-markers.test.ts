@@ -13,6 +13,8 @@ describe('raised colon containers own their paragraph markers (carve#2474)', () 
   }
   const atColumnOne: Record<string, string> = {
     '- second': '<ul>\n  <li>head\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n  <li>second</li>\n</ul>',
+    '1. second': '<ul>\n  <li>head\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<ol>\n  <li>second</li>\n</ol>',
+    '- [x] second': '<ul>\n  <li>head\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled aria-label="second"> second</li>\n</ul>',
   }
   for (const marker of ['- second', '1. second', '- [x] second']) {
     for (const column of [1, 2, 4, 6, 8]) {

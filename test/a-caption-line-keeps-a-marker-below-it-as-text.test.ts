@@ -7,8 +7,8 @@ describe('a marker line below a caret line', () => {
     expect(carveToHtml('^ p\n- x\n  > q\n')).toBe('<p>^ p\n- x</p>\n<blockquote><p>q</p></blockquote>')
   })
 
-  it('folds a below-column marker into an item paragraph that starts with a caret', () => {
-    expect(carveToHtml('- ^ c\n 1. x\n')).toBe('<ul>\n  <li>^ c\n1. x</li>\n</ul>')
+  it('opens a list at a below-column marker after an item paragraph that starts with a caret', () => {
+    expect(carveToHtml('- ^ c\n 1. x\n')).toBe('<ul>\n  <li>^ c</li>\n</ul>\n<ol>\n  <li>x</li>\n</ol>')
   })
 
   it.each([

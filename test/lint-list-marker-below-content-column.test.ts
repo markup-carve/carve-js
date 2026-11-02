@@ -31,12 +31,12 @@ describe('list-marker-below-content-column vectors', () => {
     expect(findings(source as string)).toMatchObject([{ line, column }])
   })
 
-  it.each(['10. c\n\n   `a\n   - d`\n', '10. c\n\n   %% x\n   - d\n', '1. a\n\n 2. b\n'])
+  it.each(['10. c\n\n   `a\n   - d`\n', '10. c\n\n   %% x\n   - d\n'])
     ('ignores an after-blank line that is no detached list', source => {
       expect(findings(source)).toEqual([])
     })
 
-  it.each(['10. c\n\t- d\n', '> 10. c\n> \t- d\n', '10. c\n   `a\n   - d`\n', 'x[^a]\n\n[^a]: note\n   - d\n', ':: term\n: description\n   - d\n'])
+  it.each(['10. c\n\t- d\n', '> 10. c\n> \t- d\n', 'x[^a]\n\n[^a]: note\n   - d\n', ':: term\n: description\n   - d\n'])
     ('ignores a line outside the item content-column gap', source => {
       expect(findings(source)).toEqual([])
     })

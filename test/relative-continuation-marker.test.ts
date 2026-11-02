@@ -197,7 +197,7 @@ describe('relative continuation marker columns', () => {
 
   it('keeps a tabbed marker with its open nested list item', () => {
     const html = carveToHtml('1. ordered\n  1. ordered\n    - a\n      * [ ] task\n\t+  \n    :  detail\n')
-    expect(html).toContain('task\n+\n:  detail</li>')
+    expect(html).toContain('<li><input type="checkbox" disabled aria-label="task"> task</li>\n    </ul>\n    :  detail\n')
   })
 
   it('keeps an unprefixed marker after lazy quote text in its description', () => {

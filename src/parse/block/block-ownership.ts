@@ -1,7 +1,6 @@
 import { isValidAttrPayload } from '../../extension/attribute-parser.js'
 import { trimEndSpaceTab } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
-import { olKindMatches, olKindOf } from '../list/parse-item-core.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
 import { CAPTION_COMMENT_ONLY } from './parse-quote-core.js'
 import {
@@ -65,8 +64,6 @@ interface Frame {
   opened?: number
   family?: 'code' | 'comment' | 'div'
   axes?: string | undefined
-  task?: boolean | undefined
-  token?: string | undefined
   run?: number | undefined
   closes?: ((rest: string, col: number) => boolean) | undefined
   termCut?: number
@@ -98,8 +95,6 @@ interface Form {
   width?: number
   head?: number
   axes?: string
-  task?: boolean
-  token?: string | undefined
   lineBlock?: boolean
   family?: 'code' | 'comment' | 'div'
   table?: boolean
@@ -184,30 +179,17 @@ function orderedTokenValid(token: string): boolean {
   return /^[ivxlcdm]+$/.test(token.toLowerCase()) || /^[a-z]$/i.test(token)
 }
 
-interface MarkerAxes {
-  axes?: string | undefined
-  task?: boolean | undefined
-  token?: string | undefined
-}
-
-// PART 9 §11 N1: bullet character or ordered delimiter, plain or task, and the ordered type (the N3 tie-break included).
-function sameListAxes(list: MarkerAxes, head: MarkerAxes): boolean {
-  if (list.axes !== head.axes || list.task !== head.task) return false
-  return list.token === undefined || head.token === undefined ||
-    olKindMatches(head.token, olKindOf(list.token, head.token))
-}
-
-function matchMarker(rest: string): { width: number; head: number; axes: string; task: boolean; token?: string } | null {
+function matchMarker(rest: string): { width: number; head: number; axes: string } | null {
   const line = trimEndSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
-    if (m[4] !== undefined) return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: true }
-    return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]!, task: false }
+    if (m[4] !== undefined) return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]! }
+    return { width: 1 + m[3]!.length, head: m[0].length, axes: m[1]! }
   }
   m = ORDERED.exec(line)
   if (m && orderedTokenValid(m[1]!) && gluedAttrsValid(m[3]) &&
       !(m[2] === '.' && /^[A-Za-z]+$/.test(m[1]!) && m[4]!.length < 2)) {
-    return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]!, task: false, token: m[1]! }
+    return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]! }
   }
   return null
 }
@@ -625,18 +607,11 @@ export function ownLines(
     }
 
     function foldsLazily(form: Form, missedNote: boolean): boolean {
-      const next = frames[reached + 1]
+      const next = frames[reached + 1]!.kind
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
-        // An item at its owner's own column starts a list, whatever its axes.
-        !(form.kind === 'item' && next?.kind === 'item' && (sameListAxes(next, form) || m.col <= frames[reached]!.col)) &&
-        !(missedNote && form.kind === 'item' && opensBesideMissedItem(form))
-    }
-
-    // Past a missed item a marker opens, unless it stands between a missed item's marker and content
-    // columns and differs on any axis: that one is text of the open paragraph (carve#4545).
-    function opensBesideMissedItem(form: Form): boolean {
-      const items = frames.slice(reached + 1).filter((f) => f.kind === 'item')
-      return items.length > 0 && !items.some((f) => m.col > f.markerCol! && m.col < f.col && !sameListAxes(f, form))
+        // A marker past a missed item reads as at its owner's column: a sibling or a new list (carve#4545).
+        // Past a description, or past a quote with no note in it, it stays lazy text.
+        !(form.kind === 'item' && next !== 'dd' && (next !== 'quote' || missedNote) && frames.slice(reached + 1).some((f) => f.kind === 'item'))
     }
 
     function attachesParagraph(host: Frame, form: Form): boolean {
@@ -720,7 +695,7 @@ export function ownLines(
       }
       if (form.kind === 'item' || form.kind === 'note' || form.kind === 'dd') {
         const frame: Frame = { kind: form.kind, col: col + form.width!, canon: canon + form.width!,
-          cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes, task: form.task, token: form.token,
+          cut: col - canon, para: false, last: null, markerCol: col, markerCanon: canon, axes: form.axes,
           docMarker: docColumn(lines[at]!, src), line: at }
         // A sibling keeps its list's column and shift.
         const first = owner === frames[reached] && sibling?.kind === form.kind && sibling.axes === form.axes ? sibling : frame
@@ -1065,7 +1040,7 @@ export function ownLines(
     const marker = matchMarker(rest)
     // §10 I2: under an open paragraph a marker opens only in a list item. A term is not such a paragraph.
     if (marker && owner.para && owner.kind !== 'item' && owner.last !== 'term') return { kind: 'text', interrupts: false }
-    if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes, task: marker.task, token: marker.token }
+    if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)
     if (dd && (owner.last === 'term' || owner.last === 'dd')) {

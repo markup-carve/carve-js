@@ -1557,8 +1557,7 @@ export function lintCarve(
   // The source-line rules skip a COMMENT body as well as a verbatim one. A
   // comment is discarded text - it reaches no output at all - so a report that
   // some construct inside it silently degraded is describing something that was
-  // never going to render. `table-marker-run-padding` and
-  // `fence-delimiter-indentation` both had this false positive.
+  // never going to render. `table-marker-run-padding` had this false positive.
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   for (let i = 1; i < sourceLines.length; i++) {
@@ -1668,7 +1667,6 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // A fenced-code delimiter (opener or closer) with leading whitespace. A Carve
 // fence is column-exact, so an indented delimiter the parser did not fold into
 // a verbatim region is a silent degradation.
-const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 const FENCE_RUN = /^(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX_>\/!?-]\] +)?/
@@ -1693,6 +1691,7 @@ interface LintItemColumn {
   legacyAttributeColumn?: number
   markerLineDeepestColumn?: number
   quoteDepth: number
+  list: unknown
   paragraphLines: Set<number>
   textStarts: Set<string>
 }
@@ -1997,6 +1996,7 @@ function collectListItemIndentWarnings(
   const blankSince = (item: LintItemColumn, index: number): boolean =>
     lines.slice(item.endLine, index).every((between) => blockView(between, item.quoteDepth).rest.trim() === '')
   const items: LintItemColumn[] = []
+  const listOfItem = new Map<object, unknown>()
   const descriptions: Array<{ startLine: number; endLine: number; contentColumn: number }> = []
   const blockRuns = new Map<string, Array<{ first: number; column: number }>>()
   const commentLines = collectCommentLines(doc, true)
@@ -2028,6 +2028,7 @@ function collectListItemIndentWarnings(
         blockRuns.set(key, runs)
       }
     }
+    if (node.type === 'list') for (const item of (node as unknown as { items: object[] }).items) listOfItem.set(item, node)
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
     if (!pos) return
@@ -2057,6 +2058,7 @@ function collectListItemIndentWarnings(
       })
     }
     items.push({
+      list: listOfItem.get(node),
       startLine: pos.startLine,
       endLine: pos.endLine ?? pos.startLine,
       baseColumn,
@@ -2106,22 +2108,24 @@ function collectListItemIndentWarnings(
     if (termFoldLines.has(lineNo)) continue
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
-    if (!containing && index > 0 && !_unrendered.has(lineNo) && LINT_MARKER_SHAPED.test(authored.rest) &&
-        blockView(lines[index - 1]!, owner?.quoteDepth ?? 0).rest.trim() === '') {
+    if (!_unrendered.has(lineNo) && LINT_MARKER_SHAPED.test(authored.rest)) {
       const opened = items.filter((item) => item.startLine === lineNo)
         .sort((a, b) => a.baseColumn - b.baseColumn)[0]
-      const host = opened && items.filter((item) =>
-        item.startLine < lineNo && item.quoteDepth === opened.quoteDepth &&
-        item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn &&
-        blankSince(item, index))
+      const inGap = (item: LintItemColumn) => opened !== undefined && item.startLine < lineNo &&
+        item.quoteDepth === opened.quoteDepth && item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn
+      // A sibling measures against any earlier item of its list, the nearest one named (carve#4835).
+      const sibling = items.filter((item) => inGap(item) && item.list === opened!.list).at(-1)
+      const host = sibling ?? items.filter((item) => inGap(item) && item.endLine < lineNo && blankSince(item, index))
         .sort((a, b) => b.contentColumn - a.contentColumn)[0]
       if (host) {
         const start = (starts[index] ?? 0) + authored.chars
+        const afterBlank = index > 0 && blockView(lines[index - 1]!, host.quoteDepth).rest.trim() === ''
+        const reading = sibling ? 'so it is a sibling item, not a nested one' : 'so it starts a separate list instead of nesting'
         out.push({
           line: lineNo,
           column: Array.from(lines[index]!.slice(0, authored.chars)).length + 1,
           rule: 'list-marker-below-content-column',
-          message: `This list marker starts at column ${authored.column} after a blank line, below the content column ${host.contentColumn} of the list item above, so it starts a separate list instead of nesting. Indent it to column ${host.contentColumn} to nest it under the item, or start it at column ${host.baseColumn} to put it at the item's own level.`,
+          message: `This list marker starts at column ${authored.column}${afterBlank ? ' after a blank line' : ''}, below the content column ${host.contentColumn} of the list item above, ${reading}. Indent it to column ${host.contentColumn} to nest it under the item, or start it at column ${host.baseColumn} to put it at the item's own level.`,
           start,
           end: start + (LINT_MARKER_SHAPED.exec(authored.rest)?.[0].length ?? 1),
         })
@@ -3294,50 +3298,7 @@ function collectSilentFailures(
   // 4b. A fence-shaped line the parser read as paragraph text: its info string
   //     fails code_fence_info, so the INVALID-FENCE FALLBACK (CARVE-P2-005)
   //     turned the would-be block into an inline code span or plain text.
-  const fallbackLines = collectFenceOpenerFallbacks(lines, lineStart, paragraphs, verbatimLines, out)
-
-  // 5. An indented fenced-code OPENER. A Carve fence is column-exact - it sits
-  //    at its container's content column (column 0 at the top level), like every
-  //    other block opener. An indented run of backticks/tildes therefore does
-  //    NOT open a code block; the opener degrades to a paragraph (its run
-  //    becomes an inline code span) and the body to plain text. Lines inside a
-  //    real verbatim region are skipped, so a fence legitimately opened at a
-  //    list item's content column, and an indented ``` shown as sample text
-  //    inside a code block, are both left alone.
-  //    SCOPE: this deliberately catches OPENERS only. An indented delimiter
-  //    INSIDE an open fence is structurally identical whether it is a
-  //    mis-indented closer or valid indented sample text (an indented ``` is a
-  //    supported way to show a fence inside a fence), so the linter cannot tell
-  //    intent and must not flag it - that would false-positive on the sample-
-  //    text feature. A mis-indented closer is also loud (the fence runs on
-  //    visibly), unlike the silent opener case this rule targets.
-  for (let i = 0; i < lines.length; i++) {
-    if (verbatimLines.has(i + 1)) continue
-    if (listIndentLines.has(i + 1)) continue
-    const m = INDENTED_FENCE.exec(lines[i]!)
-    if (!m) continue
-    // a legacy `raw FORMAT` fence is already reported by rule 2; do not
-    // double-flag the same line for its indentation.
-    if (LEGACY_RAW_FENCE.test(lines[i]!)) continue
-    // Rule 4b owns an opener whose info string fails: de-indenting would not open it.
-    if (fallbackLines.has(i + 1)) continue
-    const fence = m[2]!
-    // Skip an inline code span: a same-line closing run of the fence char (>=
-    // the opening length) makes `  ```x```` verbatim text, not a mis-indented
-    // fence delimiter -- de-indenting it would not open a code block either.
-    if (lines[i]!.slice(m[1]!.length + fence.length).includes(fence)) continue
-    push(
-      i + 1,
-      m[1]!.length + 1,
-      fence.length,
-      'fence-delimiter-indentation',
-      `This ${fence[0] === '`' ? 'backtick' : 'tilde'} fence is indented; a Carve ` +
-        `fenced-code delimiter is column-exact and must sit at its container's content ` +
-        `column (column 0 at the top level). Indented, it does not open a code block - the ` +
-        `run renders as inline code and the body as plain text. Move it to column 0, or to ` +
-        `the enclosing list item's content column.`,
-    )
-  }
+  collectFenceOpenerFallbacks(lines, lineStart, paragraphs, verbatimLines, out)
 
   collectTableCellMarkerWarnings(lines, verbatimLines, push)
 

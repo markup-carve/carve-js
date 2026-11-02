@@ -212,12 +212,12 @@
   {
     "id": "js-24-1",
     "source": "1. :: t\n   : para\n - li\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n- li</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<ul>\n  <li>li</li>\n</ul>"
   },
   {
     "id": "js-24-2",
     "source": "1. :: t\n   : para\n  - li\n",
-    "html": "<ol>\n<li>\n<dl>\n<dt>t</dt>\n<dd>para\n- li</dd>\n</dl>\n</li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>para</dd>\n    </dl>\n  </li>\n</ol>\n<ul>\n  <li>li</li>\n</ul>"
   },
   {
     "id": "js-24-3",

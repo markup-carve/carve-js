@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 // A marker between a missed item's marker and content columns that differs on
-// any axis is text of the open paragraph, here the note's (carve#4545, carve#4614).
-describe('a marker in a note item\'s marker window folds into the note (carve#4614)', () => {
+// any axis opens a list of its own (carve#4545), past the note too.
+describe('a marker in a note item\'s marker window opens a list', () => {
   const cases = [
     ['bullet item', '- [^q]: note\n * child\n\nr[^q]\n', '* child'],
     ['ordered item', '1. [^q]: n\n  * c\n\nr[^q]\n', '* c'],
@@ -14,8 +14,8 @@ describe('a marker in a note item\'s marker window folds into the note (carve#46
   for (const [name, source, text] of cases) {
     it(name, () => {
       const html = carveToHtml(source)
-      expect(html).toContain(`\n${text}<a href="#fnref1"`)
-      expect(html).not.toContain('<li>c')
+      expect(html).toContain(`<li>${text.slice(2)}</li>`)
+      expect(html).not.toContain(`\n${text}<a href="#fnref1"`)
     })
   }
 

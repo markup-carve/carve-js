@@ -7,8 +7,8 @@ describe('a block after a plus-attached paragraph decides later ownership', () =
     expect(carveToHtml('- a\n+\nq\n  # h\nnext\n')).toBe(expected)
   })
 
-  it('folds a marker below the item column into an open child paragraph', () => {
-    const expected = '<ol>\n  <li>a\n    q\n    <ul>\n      <li>c\n- end</li>\n    </ul>\n  </li>\n</ol>'
+  it('opens a list at a marker below the item column after an open child paragraph', () => {
+    const expected = '<ol>\n  <li>a\n    q\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ol>\n<ul>\n  <li>end</li>\n</ul>'
     expect(carveToHtml('1. a\n+\nq\n   - c\n  - end\n')).toBe(expected)
   })
 
