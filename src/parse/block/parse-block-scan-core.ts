@@ -974,9 +974,13 @@ export function consumeOpaqueColonFenceBodySpan(
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
       const commentClose = RE_COMMENT_BLOCK_ANY.exec(innerText)
+      const closes = commentClose !== null && commentClose[1]!.length === fence
+      // Any other lazy line misses the span's owner and ends the span (PART 0 S1).
+      const number = lexer.lineNumber(innerLineIndex)
+      if (!closes && literalOwnerLine !== undefined && (lexer.itemLazyLines.has(number) || lexer.quoteLazyLines.has(number))) break
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
-      if (commentClose !== null && commentClose[1]!.length === fence) break
+      if (closes) break
     }
     return true
   }

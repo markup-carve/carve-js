@@ -417,10 +417,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       }
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       bodyLines.push(framedBelow ? LAZY_FRAME + content.trimStart() : content)
-      // The tracker reads an overindented opener at its local zero.
+      // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
-        ? content : trackedFootnoteContent(content)
+        ? content : lazyState.literalColon !== undefined ? content : trackedFootnoteContent(content)
       trackItemLazyState(tracked, lazyState, true, (run) => commentBlockHasCloser(lexer, run),
         framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false,
           payloadFenceCloser: marker => payloadCloserInBody(lexer, marker, bodyColumn) })

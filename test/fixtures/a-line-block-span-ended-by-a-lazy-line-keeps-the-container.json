@@ -1,0 +1,46 @@
+[
+  {
+    "source": ":: t\n: ::: |\n  x\n  %%%\nb\n  :::\n",
+    "html": "<dl><dt>t</dt><dd><div class=\"line-block\"><p>x<br>\nb</p></div></dd></dl>"
+  },
+  {
+    "source": ":: t\n: ::: |\n  x\n  %%%\nb\nc\n  :::\n",
+    "html": "<dl><dt>t</dt><dd><div class=\"line-block\"><p>x<br>\nb<br>\nc</p></div></dd></dl>"
+  },
+  {
+    "source": ":: t\n: ::: |\n  x\n  %%%\n  y\nb\n  :::\n",
+    "html": "<dl><dt>t</dt><dd><div class=\"line-block\"><p>x<br>\nb</p></div></dd></dl>"
+  },
+  {
+    "source": ":: t\n: ::: |\n  x\n  %%%%\n%%%\n  :::\nc\n",
+    "html": "<dl><dt>t</dt><dd><div class=\"line-block\"><p>x</p></div></dd></dl><p>c</p>"
+  },
+  {
+    "source": ":: t\n: ::: |\n  %%%\nb\n",
+    "html": "<dl><dt>t</dt><dd><div class=\"line-block\"></div></dd></dl><p>b</p>"
+  },
+  {
+    "source": "- ::: |\n  x\n  %%%\nb\n  :::\nc\n",
+    "html": "<ul><li><div class=\"line-block\"><p>x<br>\nb</p></div></li></ul><p>c</p>"
+  },
+  {
+    "source": "> ::: |\n> x\n> %%%\nb\n> :::\nc\n",
+    "html": "<blockquote><div class=\"line-block\"><p>x<br>\nb</p></div><p>c</p></blockquote>"
+  },
+  {
+    "source": "- a\n  - ::: |\n    x\n    %%%\nb\n    :::\nc\n",
+    "html": "<ul><li>a\n    <ul><li><div class=\"line-block\"><p>x<br>\nb</p></div></li></ul></li></ul><p>c</p>"
+  },
+  {
+    "source": "- ::: |\n  x\n  %%%\n%%%\n  :::\n",
+    "html": "<ul><li><div class=\"line-block\"><p>x</p></div></li></ul>"
+  },
+  {
+    "source": "[^n]: ::: |\n    x\n    :::\nc\n\n[^n]\n",
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><div class=\"line-block\"><p>&nbsp;&nbsp;x<br>\n&nbsp;&nbsp;:::<br>\nc</p></div><p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  },
+  {
+    "source": "[^n]: ::: |\n    x\n    %%%\nb\n    :::\nc\n\n[^n]\n",
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><div class=\"line-block\"><p>&nbsp;&nbsp;x<br>\nb<br>\n&nbsp;&nbsp;:::<br>\nc</p></div><p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  }
+]

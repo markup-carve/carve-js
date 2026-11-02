@@ -274,6 +274,21 @@ export function insideOpenFence(state: ItemLazyState): boolean {
   return state.opaque !== null || state.divDepth > 0
 }
 
+/** Whether a line block is open on this frame or a descendant frame. */
+export function holdsLineBlock(state: ItemLazyState | null | undefined): boolean {
+  for (let frame = state; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
+    if (frame.literalColon !== undefined) return true
+  return false
+}
+
+/** Whether this frame's own line block holds a stanza a lazy line folds into, across a `%%%` span (carve#4956). */
+export function verseStanzaOpen(state: ItemLazyState): boolean {
+  const open = state.literalColon
+  if (!open) return false
+  if (open.opaque) return open.opaque.belowBaseCloses && open.spanFoldable === true
+  return state.lazyFoldable
+}
+
 const RE_BODY_HOST_MARKER = /^(?::[ \t]+|\[\^[^\]]+\]:[ \t]+)/
 
 /** Whether a collected host body ends inside a code fence, on any marker line of the stack (carve#4047). */
