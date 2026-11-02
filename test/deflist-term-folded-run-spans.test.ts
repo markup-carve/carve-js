@@ -25,6 +25,10 @@ import { carveToHtml, parse, toAstJson } from '../src/index.js'
  *
  * Measured as the SLICE the span selects rather than as a pair of numbers: a
  * span that is merely present proves nothing.
+ *
+ * Since carve#4861 a term is one line, so nothing folds into it: the run ends
+ * with the term's line and the next line starts a paragraph. The rows below pin
+ * that reading.
  */
 
 interface Placed {
@@ -85,8 +89,10 @@ describe('an unclosed verbatim run folded into a definition term', () => {
 
   it('ends its span after the last codepoint it owns', () => {
     expect(inlines(TICKET)).toEqual([
-      { type: 'code', value: 'a\nb', slice: '`a\nb' },
-      { type: 'text', value: 'd', slice: 'd' },
+      { type: 'code', value: 'a', slice: '`a' },
+      { type: 'text', value: 'b', slice: 'b' },
+      { type: 'soft_break', value: undefined, slice: ' \n' },
+      { type: 'text', value: ':  d', slice: ':  d' },
     ])
   })
 
@@ -95,11 +101,11 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // columns are counted in CODEPOINTS on this line.
     expect(codePos(TICKET)).toEqual({
       startLine: 1,
-      endLine: 2,
+      endLine: 1,
       startColumn: 4,
-      endColumn: 2,
+      endColumn: 6,
       startOffset: 3,
-      endOffset: 7,
+      endOffset: 5,
     })
   })
 
@@ -117,8 +123,8 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // reports the same [3,10) here.
     expect(inlines(':: `a\nb \nc\n:  d\n')[0]).toEqual({
       type: 'code',
-      value: 'a\nb\nc',
-      slice: '`a\nb \nc',
+      value: 'a',
+      slice: '`a',
     })
   })
 
@@ -127,8 +133,8 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // was off by the same column.
     expect(inlines(':: $`a\nb \n:  d\n')[0]).toEqual({
       type: 'math',
-      value: 'a\nb',
-      slice: '$`a\nb',
+      value: 'a',
+      slice: '$`a',
     })
   })
 
@@ -137,9 +143,9 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // `<dt>a\nb </dt>` here where both other engines publish `<dt>a\nb</dt>`.
     expect(inlines(':: a\nb \n:  d\n')).toEqual([
       { type: 'text', value: 'a', slice: 'a' },
-      { type: 'soft_break', value: undefined, slice: '\n' },
       { type: 'text', value: 'b', slice: 'b' },
-      { type: 'text', value: 'd', slice: 'd' },
+      { type: 'soft_break', value: undefined, slice: ' \n' },
+      { type: 'text', value: ':  d', slice: ':  d' },
     ])
   })
 
@@ -159,7 +165,7 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     }
     const term = list.items.find((item) => item.type === 'definition_term')
 
-    expect(term?.pos && TICKET.slice(term.pos.startOffset, term.pos.endOffset)).toBe(':: `a\nb')
+    expect(term?.pos && TICKET.slice(term.pos.startOffset, term.pos.endOffset)).toBe(':: `a')
   })
 
   it('CONTROL: no renderer can see this', () => {
@@ -168,7 +174,7 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     // span was wrong, and it is byte-identical to the document without the
     // space. An assertion on rendered output cannot fail on carve-js#1145.
     expect(carveToHtml(TICKET)).toBe(carveToHtml(':: `a\nb\n:  d\n'))
-    expect(carveToHtml(TICKET)).toContain('<dt><code>a\nb</code></dt>')
+    expect(carveToHtml(TICKET)).toContain('<dt><code>a</code></dt>')
   })
 
   it('CONTROL: a term with no folded line was already right', () => {

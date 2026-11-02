@@ -6,11 +6,11 @@ const html = (source: string): string => renderHtml(parse(source))
 
 const cases = [
   ['outer bullet marker', '- :: t\n:  head\n\n     a\n', '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<p>:  head</p>\n<p>a</p>'],
-  ['below bullet marker', '- :: t\n :  head\n', '<ul>\n  <li>\n    <dl>\n      <dt>t\n:  head</dt>\n    </dl>\n  </li>\n</ul>'],
+  ['below bullet marker', '- :: t\n :  head\n', '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<p>:  head</p>'],
   ['bullet content column', '- :: t\n  :  head\n', '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>head</dd>\n    </dl>\n  </li>\n</ul>'],
   ['outer ordered marker', '1. :: t\n:  head\n', '<ol>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ol>\n<p>:  head</p>'],
   ['outer quoted marker', '> - :: t\n> :  head\n', '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n  <p>:  head</p>\n</blockquote>'],
-  ['below quoted marker', '> - :: t\n>  :  head\n', '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n:  head</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>'],
+  ['below quoted marker', '> - :: t\n>  :  head\n', '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n  <p>:  head</p>\n</blockquote>'],
   ['quoted content column', '> - :: t\n>   :  head\n', '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>head</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>'],
 ] as const
 

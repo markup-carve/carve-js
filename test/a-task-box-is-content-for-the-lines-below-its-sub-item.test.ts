@@ -44,7 +44,7 @@ describe('a task box before a sub-item or below an outer item', () => {
 
   it('reads a deep term below a blank after a lazy separator without running away', () => {
     expect(h('* [ ] * :: t\n : d\n\n         :: u\n')).toBe(
-      '<ul class="task-list">\n  <li><input type="checkbox" disabled> \n    <ul>\n      <li>\n        <dl>\n          <dt>t\n: d</dt>\n          <dt>u</dt>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul class="task-list">\n  <li><input type="checkbox" disabled> \n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>: d</p>\n<dl>\n  <dt>u</dt>\n</dl>',
     )
   })
 })

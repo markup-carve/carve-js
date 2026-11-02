@@ -9,7 +9,7 @@ describe('a separator at a task item content column leaves a deeper marker-line 
   })
 
   it('keeps a separator one column beyond the task content column in the term', () => {
-    expect(carveToHtml('- * [ ] * :: t\n     : d\n')).toContain('<dt>t\n: d</dt>')
+    expect(carveToHtml('- * [ ] * :: t\n     : d\n')).toContain('<dt>t</dt>')
   })
 
   it('uses the authored column under a quote prefix', () => {

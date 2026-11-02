@@ -7,9 +7,10 @@ describe('the writer keeps a term caret line and a code include caption gap', ()
     '- [ ] - [ ] :: t\n      ^ ap\n     ^ cap\n',
     '- :: t\n^ ap\n',
     '> - :: t\n> ^ ap\n',
-  ])('escapes a caret that would end the term: %j', (src) => {
+  ])('keeps a caret line after a term through the writer: %j', (src) => {
+    // A term is one line (carve#4861), so the caret line is no term text to escape.
     const out = carveToCarve(src)
-    expect(out).toMatch(/\\\^ ap/)
+    expect(out).toMatch(/\n(?:> )?\^ ap\n/)
     expect(carveToHtml(out)).toBe(carveToHtml(src))
     expect(carveToCarve(out)).toBe(out)
   })

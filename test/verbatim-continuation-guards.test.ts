@@ -74,7 +74,7 @@ it.each(['raw_inline', 'literal_inline', 'math'] as const)('reports the actual %
     expect.fail('expected a source refusal')
   } catch (error) {
     expect(error).toBeInstanceOf(SourceUnspellableError)
-    expect(error).toMatchObject({ nodeType: type, reason: 'a block marker on a continuation line ends the definition term' })
+    expect(error).toMatchObject({ nodeType: type, reason: 'a definition term is one line, so its value cannot hold a line break' })
   }
 })
 

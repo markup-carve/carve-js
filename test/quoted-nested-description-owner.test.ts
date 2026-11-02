@@ -24,7 +24,7 @@ it('keeps plain text as the inner description paragraph', () => {
 
 it('opens a task list in an outer description held by a quoted list', () => {
   expect(normalized(carveToHtml('> - a0\n>   :: T\n>   : D\n>     :: t\n>     : d\n>      * [ ] b\n'))).toBe(
-    '<blockquote>\n<ul>\n<li>a0\n<dl>\n<dt>T</dt>\n<dd>\n<p>D</p>\n<dl>\n<dt>t</dt>\n<dd>d</dd>\n</dl>\n<ul class="task-list">\n<li><input type="checkbox" disabled aria-label="b"> b</li>\n</ul>\n</dd>\n</dl>\n</li>\n</ul>\n</blockquote>',
+    '<blockquote>\n<ul>\n<li>a0\n<dl>\n<dt>T</dt>\n<dd>\n<p>D</p>\n<dl>\n<dt>t</dt>\n<dd>d</dd>\n</dl>\n</dd>\n</dl>\n<ul class="task-list">\n<li><input type="checkbox" disabled aria-label="b"> b</li>\n</ul>\n</li>\n</ul>\n</blockquote>',
   )
 })
 

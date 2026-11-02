@@ -31,7 +31,7 @@ describe('a definition separator below its list column', () => {
 
   it('folds a below-column separator into an open term', () => {
     expect(carveToHtml('- item\n  :: term\n :  def\n')).toBe(
-      '<ul>\n  <li>item\n    <dl>\n      <dt>term\n:  def</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>item\n    <dl>\n      <dt>term</dt>\n    </dl>\n  </li>\n</ul>\n<p>:  def</p>',
     )
     expect(carveToHtml('- a\n  :: m\n :: n\n')).toBe(
       '<ul>\n  <li>a\n    <dl>\n      <dt>m</dt>\n    </dl>\n  </li>\n</ul>\n<dl>\n  <dt>n</dt>\n</dl>',

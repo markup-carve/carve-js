@@ -5,14 +5,13 @@ import { carveToHtml } from '../src/index.js'
 
 const NUL = String.fromCharCode(0)
 
-const TERM_FOLD = (payload: string) =>
-  '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n' +
-  payload +
-  '\ntail</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>'
 
 describe('a quote-lazy line reaches no content column inside a quoted item', () => {
-  it('folds plain prose with no residual indent', () => {
-    expect(carveToHtml('> - :: t\n    plain\ntail\n')).toBe(TERM_FOLD('plain'))
+  // A term is one line (carve#4861), so the unmarked line starts a paragraph after the quote.
+  it('reads plain prose as a paragraph with no residual indent', () => {
+    expect(carveToHtml('> - :: t\n    plain\ntail\n')).toBe(
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>plain\ntail</p>',
+    )
   })
 
   it('ends the term before a list marker', () => {
@@ -71,7 +70,7 @@ describe('unmarked entry-shaped lines leave a quoted term', () => {
 
   it('folds a second term marker', () => {
     expect(carveToHtml('> - :: t\n    :: t2\ntail\n')).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>t2\ntail</dt>\n</dl>",
+      "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<dl>\n  <dt>t2</dt>\n</dl>\n<p>tail</p>",
     )
   })
 

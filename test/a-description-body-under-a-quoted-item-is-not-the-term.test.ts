@@ -124,7 +124,7 @@ describe('a non-description payload at the same column', () => {
 
   it('plain prose folds into the term with no residual indent', () => {
     expect(carveToHtml('> - :: t\n    plain\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\nplain</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>plain</p>',
     )
   })
 })

@@ -7,6 +7,6 @@ describe('caret line after a definition term', () => {
   })
 
   it('keeps an ordinary line in the term', () => {
-    expect(carveToHtml(':: term\nplain\n')).toBe('<dl>\n  <dt>term\nplain</dt>\n</dl>')
+    expect(carveToHtml(':: term\nplain\n')).toBe('<dl>\n  <dt>term</dt>\n</dl>\n<p>plain</p>')
   })
 })

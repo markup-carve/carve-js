@@ -100,10 +100,10 @@ describe('a definition below a bullet whose item holds a def list', () => {
 
   // A marker-line term uses the item's content column for its separator.
   it('keeps a below-content description marker in the term', () => {
-    expect(carveToHtml('- :: t\n : d\n')).toContain('<dt>t\n: d</dt>')
+    expect(carveToHtml('- :: t\n : d\n')).toContain('<dt>t</dt>')
   })
 
   it('still strips a wrapped term continuation to its dt', () => {
-    expect(carveToHtml('- one\n\n  :: term\n wrapped\n')).toContain('<dt>term\nwrapped</dt>')
+    expect(carveToHtml('- one\n\n  :: term\n wrapped\n')).toContain('<dt>term</dt>')
   })
 })

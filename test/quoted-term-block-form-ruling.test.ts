@@ -21,6 +21,6 @@ it('removes residual source indent when a separator leaves a quoted term', () =>
 
 it('keeps plain text as a quoted term continuation', () => {
   expect(carveToHtml('> - :: t\n plain\n')).toBe(
-    '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\nplain</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+    '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>\n<p>plain</p>',
   )
 })

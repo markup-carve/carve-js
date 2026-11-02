@@ -1,102 +1,102 @@
 [
   {
     "source": "- - - :: t\n   : a\n    :: sibling\n    tail\n",
-    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t\n: a</dt>\n            </dl>\n          </li>\n        </ul>\n        <dl>\n          <dt>sibling\ntail</dt>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "- - :: t\n : a\n :: sibling\n tail\n",
-    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t\n: a</dt>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<dl>\n  <dt>sibling\ntail</dt>\n</dl>"
+    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>: a</p>\n<dl>\n  <dt>sibling</dt>\n</dl>\n<p>tail</p>"
   },
   {
     "source": ":: host\n: body\n  - - :: t\n   : a\n    :: sibling\n    :: another\n    TAIL\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n- - :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another\nTAIL</dt>\n    </dl>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n- - :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n* * :: t\n : a\n    :: sibling\n    tail\n:::\n",
-    "expected": "<div class=\"box\">\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t\n: a</dt>\n            <dt>sibling\ntail</dt>\n          </dl>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</div>"
+    "expected": "<div class=\"box\">\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>: a</p>\n  <dl>\n    <dt>sibling</dt>\n  </dl>\n  <p>tail</p>\n</div>"
   },
   {
     "source": "> > . . :: t\n> >  : a\n> >      :: sibling\n> >      :: another\n> >      TAIL\n",
-    "expected": "<blockquote>\n  <blockquote>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <dl>\n              <dt>t\n: a</dt>\n              <dt>sibling</dt>\n              <dt>another\nTAIL</dt>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </blockquote>\n</blockquote>"
+    "expected": "<blockquote>\n  <blockquote>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ol>\n    <p>: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "source": "> > 1. 1. :: t\n> >   : a\n> >    :: sibling\n> >    tail\n",
-    "expected": "<blockquote>\n  <blockquote>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <dl>\n              <dt>t\n: a</dt>\n            </dl>\n          </li>\n        </ol>\n        <dl>\n          <dt>sibling\ntail</dt>\n        </dl>\n      </li>\n    </ol>\n  </blockquote>\n</blockquote>"
+    "expected": "<blockquote>\n  <blockquote>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ol>\n    <p>: a</p>\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    <p>tail</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "source": "> 12. 12. :: t\n>    : a\n>      :: sibling\n>      :: another\n>      TAIL\n",
-    "expected": "<blockquote>\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <dl>\n            <dt>t\n: a</dt>\n          </dl>\n        </li>\n      </ol>\n      <dl>\n        <dt>sibling</dt>\n        <dt>another\nTAIL</dt>\n      </dl>\n    </li>\n  </ol>\n</blockquote>"
+    "expected": "<blockquote>\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <dl>\n            <dt>t</dt>\n          </dl>\n        </li>\n      </ol>\n    </li>\n  </ol>\n  <p>: a</p>\n  <dl>\n    <dt>sibling</dt>\n    <dt>another</dt>\n  </dl>\n  <p>TAIL</p>\n</blockquote>"
   },
   {
     "source": "- - - :: t\n   : a\n       :: sibling\n       tail\n",
-    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t\n: a\n :: sibling\n tail</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "* * * :: t\n   : a\n   :: sibling\n   :: another\n   TAIL\n",
-    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t\n: a</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another\nTAIL</dt>\n    </dl>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    : a\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    TAIL\n  </li>\n</ul>"
   },
   {
     "source": ":: host\n: body\n  * * * :: t\n     : a\n       :: sibling\n       tail\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n* * * :: t\n: a</p>\n    <dl>\n      <dt>sibling\ntail</dt>\n    </dl>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n* * * :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    <p>tail</p>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n. . . :: t\n   : a\n      :: sibling\n      :: another\n      TAIL\n:::\n",
-    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <dl>\n                <dt>t\n: a</dt>\n                <dt>sibling</dt>\n                <dt>another\nTAIL</dt>\n              </dl>\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
+    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <dl>\n                <dt>t</dt>\n              </dl>\n            </li>\n          </ol>\n        </li>\n      </ol>\n      : a\n      <dl>\n        <dt>sibling</dt>\n        <dt>another</dt>\n      </dl>\n      TAIL\n    </li>\n  </ol>\n</div>"
   },
   {
     "source": "::: box\n1. 1. 1. :: t\n     : a\n     :: sibling\n     tail\n:::\n",
-    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <dl>\n                <dt>t\n: a</dt>\n              </dl>\n            </li>\n          </ol>\n        </li>\n      </ol>\n      <dl>\n        <dt>sibling\ntail</dt>\n      </dl>\n    </li>\n  </ol>\n</div>"
+    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <dl>\n                <dt>t</dt>\n              </dl>\n            </li>\n          </ol>\n        </li>\n      </ol>\n      : a\n      <dl>\n        <dt>sibling</dt>\n      </dl>\n      tail\n    </li>\n  </ol>\n</div>"
   },
   {
     "source": "> > 12. 12. 12. :: t\n> >        : a\n> >         :: sibling\n> >         :: another\n> >         TAIL\n",
-    "expected": "<blockquote>\n  <blockquote>\n    <ol start=\"12\">\n      <li>\n        <ol start=\"12\">\n          <li>\n            <ol start=\"12\">\n              <li>\n                <dl>\n                  <dt>t\n: a</dt>\n                </dl>\n              </li>\n            </ol>\n            <dl>\n              <dt>sibling</dt>\n              <dt>another\nTAIL</dt>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </blockquote>\n</blockquote>"
+    "expected": "<blockquote>\n  <blockquote>\n    <ol start=\"12\">\n      <li>\n        <ol start=\"12\">\n          <li>\n            <ol start=\"12\">\n              <li>\n                <dl>\n                  <dt>t</dt>\n                </dl>\n              </li>\n            </ol>\n          </li>\n        </ol>\n        : a\n        <dl>\n          <dt>sibling</dt>\n          <dt>another</dt>\n        </dl>\n        TAIL\n      </li>\n    </ol>\n  </blockquote>\n</blockquote>"
   },
   {
     "source": "> - - - - :: t\n>      : a\n>         :: sibling\n>         tail\n",
-    "expected": "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <ul>\n            <li>\n              <ul>\n                <li>\n                  <dl>\n                    <dt>t\n: a</dt>\n                    <dt>sibling\ntail</dt>\n                  </dl>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "expected": "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <ul>\n            <li>\n              <ul>\n                <li>\n                  <dl>\n                    <dt>t</dt>\n                  </dl>\n                </li>\n              </ul>\n            </li>\n          </ul>\n          : a\n          <dl>\n            <dt>sibling</dt>\n          </dl>\n          tail\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "source": "* * * * :: t\n     : a\n         :: sibling\n         :: another\n         TAIL\n",
-    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ul>\n              <li>\n                <dl>\n                  <dt>t\n: a\n :: sibling\n :: another\n TAIL</dt>\n                </dl>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ul>\n              <li>\n                <dl>\n                  <dt>t</dt>\n                </dl>\n              </li>\n            </ul>\n          </li>\n        </ul>\n        : a\n        <dl>\n          <dt>sibling</dt>\n          <dt>another</dt>\n        </dl>\n        TAIL\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "source": ". . . . :: t\n     : a\n      :: sibling\n      tail\n",
-    "expected": "<ol>\n  <li>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <dl>\n                  <dt>t\n: a</dt>\n                </dl>\n              </li>\n            </ol>\n            <dl>\n              <dt>sibling\ntail</dt>\n            </dl>\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </li>\n</ol>"
+    "expected": "<ol>\n  <li>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <dl>\n                  <dt>t</dt>\n                </dl>\n              </li>\n            </ol>\n          </li>\n        </ol>\n        : a\n        <dl>\n          <dt>sibling</dt>\n        </dl>\n        tail\n      </li>\n    </ol>\n  </li>\n</ol>"
   },
   {
     "source": ":: host\n: body\n  . . . . :: t\n       : a\n         :: sibling\n         :: another\n         TAIL\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n. . . . :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another\nTAIL</dt>\n    </dl>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n. . . . :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n1. 1. 1. 1. :: t\n        : a\n            :: sibling\n            tail\n:::\n",
-    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <ol>\n                <li>\n                  <dl>\n                    <dt>t\n: a</dt>\n                    <dt>sibling\ntail</dt>\n                  </dl>\n                </li>\n              </ol>\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
+    "expected": "<div class=\"box\">\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <ol>\n                <li>\n                  <dl>\n                    <dt>t</dt>\n                  </dl>\n                </li>\n              </ol>\n            </li>\n          </ol>\n          : a\n          <dl>\n            <dt>sibling</dt>\n          </dl>\n          tail\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
   },
   {
     "source": "::: box\n12. 12. 12. 12. :: t\n           : a\n           :: sibling\n           :: another\n           TAIL\n:::\n",
-    "expected": "<div class=\"box\">\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <ol start=\"12\">\n            <li>\n              <ol start=\"12\">\n                <li>\n                  <dl>\n                    <dt>t\n: a</dt>\n                  </dl>\n                </li>\n              </ol>\n            </li>\n          </ol>\n          <dl>\n            <dt>sibling</dt>\n            <dt>another\nTAIL</dt>\n          </dl>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
+    "expected": "<div class=\"box\">\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <ol start=\"12\">\n            <li>\n              <ol start=\"12\">\n                <li>\n                  <dl>\n                    <dt>t</dt>\n                  </dl>\n                </li>\n              </ol>\n            </li>\n          </ol>\n          : a\n          <dl>\n            <dt>sibling</dt>\n            <dt>another</dt>\n          </dl>\n          TAIL\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
   },
   {
     "source": "> > - - - - - :: t\n> >        : a\n> >          :: sibling\n> >          tail\n",
-    "expected": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ul>\n              <li>\n                <ul>\n                  <li>\n                    <ul>\n                      <li>\n                        <dl>\n                          <dt>t\n: a</dt>\n                        </dl>\n                      </li>\n                    </ul>\n                    <dl>\n                      <dt>sibling\ntail</dt>\n                    </dl>\n                  </li>\n                </ul>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "expected": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ul>\n              <li>\n                <ul>\n                  <li>\n                    <ul>\n                      <li>\n                        <dl>\n                          <dt>t</dt>\n                        </dl>\n                      </li>\n                    </ul>\n                  </li>\n                </ul>\n                : a\n                <dl>\n                  <dt>sibling</dt>\n                </dl>\n                tail\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "source": "> * * * * * :: t\n>        : a\n>           :: sibling\n>           :: another\n>           TAIL\n",
-    "expected": "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <ul>\n            <li>\n              <ul>\n                <li>\n                  <ul>\n                    <li>\n                      <dl>\n                        <dt>t\n: a</dt>\n                        <dt>sibling</dt>\n                        <dt>another\nTAIL</dt>\n                      </dl>\n                    </li>\n                  </ul>\n                </li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "expected": "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <ul>\n            <li>\n              <ul>\n                <li>\n                  <ul>\n                    <li>\n                      <dl>\n                        <dt>t</dt>\n                      </dl>\n                    </li>\n                  </ul>\n                </li>\n              </ul>\n              : a\n              <dl>\n                <dt>sibling</dt>\n                <dt>another</dt>\n              </dl>\n              TAIL\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "source": "> . . . . . :: t\n>        : a\n>        :: sibling\n>        tail\n",
-    "expected": "<blockquote>\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <ol>\n                <li>\n                  <ol>\n                    <li>\n                      <dl>\n                        <dt>t\n: a</dt>\n                      </dl>\n                    </li>\n                  </ol>\n                </li>\n              </ol>\n              <dl>\n                <dt>sibling\ntail</dt>\n              </dl>\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</blockquote>"
+    "expected": "<blockquote>\n  <ol>\n    <li>\n      <ol>\n        <li>\n          <ol>\n            <li>\n              <ol>\n                <li>\n                  <ol>\n                    <li>\n                      <dl>\n                        <dt>t</dt>\n                      </dl>\n                    </li>\n                  </ol>\n                </li>\n              </ol>\n              : a\n              <dl>\n                <dt>sibling</dt>\n              </dl>\n              tail\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</blockquote>"
   },
   {
     "source": "1. 1. 1. 1. 1. :: t\n           : a\n            :: sibling\n            :: another\n            TAIL\n",
-    "expected": "<ol>\n  <li>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <ol>\n                  <li>\n                    <dl>\n                      <dt>t\n: a</dt>\n                    </dl>\n                  </li>\n                </ol>\n                <dl>\n                  <dt>sibling</dt>\n                  <dt>another\nTAIL</dt>\n                </dl>\n              </li>\n            </ol>\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </li>\n</ol>"
+    "expected": "<ol>\n  <li>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <ol>\n                  <li>\n                    <dl>\n                      <dt>t</dt>\n                    </dl>\n                  </li>\n                </ol>\n              </li>\n            </ol>\n            : a\n            <dl>\n              <dt>sibling</dt>\n              <dt>another</dt>\n            </dl>\n            TAIL\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </li>\n</ol>"
   },
   {
     "source": ":: host\n: body\n  1. 1. 1. 1. 1. :: t\n             : a\n                :: sibling\n                tail\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n1. 1. 1. 1. 1. :: t\n: a</p>\n    <dl>\n      <dt>sibling\ntail</dt>\n    </dl>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n1. 1. 1. 1. 1. :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    <p>tail</p>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n12. 12. 12. 12. 12. :: t\n               : a\n                   :: sibling\n                   :: another\n                   TAIL\n:::\n",
-    "expected": "<div class=\"box\">\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <ol start=\"12\">\n            <li>\n              <ol start=\"12\">\n                <li>\n                  <ol start=\"12\">\n                    <li>\n                      <dl>\n                        <dt>t\n: a</dt>\n                      </dl>\n                    </li>\n                  </ol>\n                  <dl>\n                    <dt>sibling</dt>\n                    <dt>another\nTAIL</dt>\n                  </dl>\n                </li>\n              </ol>\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
+    "expected": "<div class=\"box\">\n  <ol start=\"12\">\n    <li>\n      <ol start=\"12\">\n        <li>\n          <ol start=\"12\">\n            <li>\n              <ol start=\"12\">\n                <li>\n                  <ol start=\"12\">\n                    <li>\n                      <dl>\n                        <dt>t</dt>\n                      </dl>\n                    </li>\n                  </ol>\n                </li>\n              </ol>\n              : a\n              <dl>\n                <dt>sibling</dt>\n                <dt>another</dt>\n              </dl>\n              TAIL\n            </li>\n          </ol>\n        </li>\n      </ol>\n    </li>\n  </ol>\n</div>"
   }
 ]

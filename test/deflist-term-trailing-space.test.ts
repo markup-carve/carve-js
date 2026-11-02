@@ -36,28 +36,29 @@ describe('a definition term', () => {
     expect(carveToHtml(':: t\n:  d\n')).toContain('<dt>t</dt>')
   })
 
-  it('drops it on a folded continuation line too', () => {
-    expect(carveToHtml(':: one\ntwo \n:  d\n')).toContain('<dt>one\ntwo</dt>')
+  // A term is one line (carve#4861), so the line after it is a paragraph that drops its run too.
+  it('drops it on the line after the term too', () => {
+    expect(carveToHtml(':: one\ntwo \n:  d\n')).toContain('<dt>one</dt>\n</dl>\n<p>two\n:  d</p>')
   })
 
-  it('drops it on an INTERIOR folded line, not only the last', () => {
-    expect(carveToHtml(':: one\ntwo \nthree\n:  d\n')).toContain('<dt>one\ntwo\nthree</dt>')
+  it('drops it on an INTERIOR line, not only the last', () => {
+    expect(carveToHtml(':: one\ntwo \nthree\n:  d\n')).toContain('<p>two\nthree\n:  d</p>')
   })
 
-  it('drops a continuation line trailing tab', () => {
-    expect(carveToHtml(':: one\ntwo\t\n:  d\n')).toContain('<dt>one\ntwo</dt>')
+  it('drops a following line trailing tab', () => {
+    expect(carveToHtml(':: one\ntwo\t\n:  d\n')).toContain('<p>two\n:  d</p>')
   })
 
-  it('keeps a trailing NBSP on a continuation line, dropping only the space after it', () => {
+  it('keeps a trailing NBSP on a following line, dropping only the space after it', () => {
     // PART 1: whitespace is a space or a tab. Everything else is content, on a
     // folded line as much as on the marker line (carve#926).
-    expect(carveToHtml(':: one\ntwo\u00a0 \n:  d\n')).toContain('<dt>one\ntwo&nbsp;</dt>')
+    expect(carveToHtml(':: one\ntwo\u00a0 \n:  d\n')).toContain('<p>two&nbsp;\n:  d</p>')
   })
 
-  it('reads a continuation line ending in a backslash-space as a hard break', () => {
+  it('reads a following line ending in a backslash-space as a hard break', () => {
     // The strip runs BEFORE escape resolution (carve#1027), so the `\` the run
     // leaves behind is in the last column and breaks the line. carve-js read
     // the escaped space and published a no-break space instead.
-    expect(carveToHtml(':: one\ntwo\\ \n:  d\n')).toContain('<dt>one\ntwo<br>\n</dt>')
+    expect(carveToHtml(':: one\ntwo\\ \n:  d\n')).toContain('<p>two<br>\n:  d</p>')
   })
 })

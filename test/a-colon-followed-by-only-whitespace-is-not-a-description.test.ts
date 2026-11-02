@@ -6,7 +6,7 @@ import { carveToHtml, parse } from '../src/index.js'
  * line carrying nothing but whitespace opens no description
  * (markup-carve/carve#1830).
  *
- * It is a plain line under the open term, which folds it as a soft break, and
+ * It is a plain line, so after a term it starts a paragraph (carve#4861), and
  * the line's own trailing whitespace run is dropped. That makes all four
  * whitespace spellings identical to the bare `:` line rather than merely
  * similar.
@@ -23,14 +23,14 @@ import { carveToHtml, parse } from '../src/index.js'
  *    definition term or description is dropped, over both space and tab.
  */
 describe('a colon followed by only whitespace is not a description', () => {
-  const FOLDED = '<dl>\n  <dt>t\n:</dt>\n</dl>\n<p>flush</p>'
+  const FOLDED = '<dl>\n  <dt>t</dt>\n</dl>\n<p>:</p>\n<p>flush</p>'
 
   it.each([
     ['one space', ':: t\n: \n\nflush\n'],
     ['two spaces', ':: t\n:  \n\nflush\n'],
     ['three spaces', ':: t\n:   \n\nflush\n'],
     ['a tab', ':: t\n:\t\n\nflush\n'],
-  ])('folds a colon plus %s into the term', (_name, source) => {
+  ])('starts a paragraph with a colon plus %s after the term', (_name, source) => {
     expect(carveToHtml(source)).toBe(FOLDED)
   })
 
@@ -66,14 +66,15 @@ describe('a colon followed by only whitespace is not a description', () => {
     ['three spaces', ':: t\n:   \n'],
     ['a tab', ':: t\n:\t\n'],
     ['nothing', ':: t\n:\n'],
-  ])('folds a colon plus %s as text that is exactly the colon', (_name, source) => {
-    const list = parse(source).children[0]!
-    expect(list.type).toBe('definition_list')
+  ])('reads a colon plus %s as a paragraph that is exactly the colon', (_name, source) => {
+    const [list, paragraph] = parse(source).children
+    expect(list!.type).toBe('definition_list')
     const term = (list as { items: Array<{ terms: Array<Array<{ type: string; value?: string }>> }> })
       .items[0]!.terms[0]!
-    expect(term.map((node) => node.type)).toEqual(['text', 'soft_break', 'text'])
-    expect(term[0]!.value).toBe('t')
-    expect(term[2]!.value).toBe(':')
+    expect(term.map((node) => node.value)).toEqual(['t'])
+    expect(paragraph!.type).toBe('paragraph')
+    const text = (paragraph as { children: Array<{ type: string; value?: string }> }).children
+    expect(text.map((node) => [node.type, node.value])).toEqual([['text', ':']])
   })
 
   /**
@@ -90,14 +91,14 @@ describe('a colon followed by only whitespace is not a description', () => {
     expect(carveToHtml(': \n\nflush\n')).toBe('<p>:</p>\n<p>flush</p>')
   })
 
-  // The term marker plus whitespace folds the same way, like a bare `::`
+  // The term marker plus whitespace reads the same way, like a bare `::`
   // (#1891).
-  it('folds a content-less TERM marker into the term', () => {
-    expect(carveToHtml(':: t\n:: \n\nflush\n')).toBe('<dl>\n  <dt>t\n::</dt>\n</dl>\n<p>flush</p>')
-    expect(carveToHtml(':: t\n::  \n\nflush\n')).toBe('<dl>\n  <dt>t\n::</dt>\n</dl>\n<p>flush</p>')
+  it('starts a paragraph with a content-less TERM marker after the term', () => {
+    expect(carveToHtml(':: t\n:: \n\nflush\n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>::</p>\n<p>flush</p>')
+    expect(carveToHtml(':: t\n::  \n\nflush\n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>::</p>\n<p>flush</p>')
   })
 
-  it('folds a bare double colon into the term, as before', () => {
-    expect(carveToHtml(':: t\n::\n\nflush\n')).toBe('<dl>\n  <dt>t\n::</dt>\n</dl>\n<p>flush</p>')
+  it('starts a paragraph with a bare double colon after the term', () => {
+    expect(carveToHtml(':: t\n::\n\nflush\n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>::</p>\n<p>flush</p>')
   })
 })

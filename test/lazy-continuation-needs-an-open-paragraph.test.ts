@@ -22,7 +22,7 @@ describe('lazy continuation into a block quote', () => {
 
   it('folds after a definition term', () => {
     expect(squash(carveToHtml('> :: t\n~\n'))).toBe(
-      '<blockquote> <dl> <dt>t ~</dt> </dl> </blockquote>',
+      '<blockquote> <dl> <dt>t</dt> </dl> </blockquote> <p>~</p>',
     )
   })
 

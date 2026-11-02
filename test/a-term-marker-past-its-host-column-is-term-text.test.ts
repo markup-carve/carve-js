@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 it('opens a second term on a marker past the list content column', () => {
   expect(carveToHtml('* k\n\n   :: m\n  l\n    :: m\n')).toBe(
-    '<ul>\n  <li>k\n    <dl>\n      <dt>m\nl</dt>\n      <dt>m</dt>\n    </dl>\n  </li>\n</ul>',
+    '<ul>\n  <li>k\n    <dl>\n      <dt>m</dt>\n    </dl>\n    l\n    <dl>\n      <dt>m</dt>\n    </dl>\n  </li>\n</ul>',
   )
 })
 

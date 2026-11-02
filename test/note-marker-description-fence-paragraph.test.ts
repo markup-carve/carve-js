@@ -18,5 +18,7 @@ it('releases the containing list when its note description starts a fence', () =
 
 it('keeps a surrounding description owner for a marker below the note column', () => {
   const html = carveToHtml(':: outer\n: [^0]: :: t\n  : ```\nz\n\n[^0]\n')
-  expect(html).toContain('<dt>t\n: <code>\nz</code></dt>')
+  // A term is one line (carve#4861), so the separator below the note is the outer body's text.
+  expect(html).toContain('<dd>: <code>\nz</code></dd>')
+  expect(html).toContain('<dt>t</dt>')
 })

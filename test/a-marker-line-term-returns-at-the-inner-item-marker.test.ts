@@ -11,13 +11,14 @@ it.each([
 ])('returns a separator at the inner marker column to the outer item in %s', (_name, source) => {
   const html = compact(source)
   expect(html).toContain('<dt>t</dt>')
-  expect(html).not.toContain('<dt>t\n: a</dt>')
   expect(html).not.toContain('<dd>a</dd>')
   expect(html).toMatch(/<\/dl>\n<\/li>\n<\/ol>\n: a|<\/dl>\n<\/li>\n<\/ul>\n: a/)
   expect(html).toContain('<li>b</li>')
 })
 
-it('keeps separators between the marker and content columns in the term', () => {
-  expect(compact('1. 1. :: t\n    : a\n')).toContain('<dt>t\n: a</dt>')
-  expect(compact('- - 1. :: t\n     : a\n')).toContain('<dt>t\n: a</dt>')
+// A term is one line (carve#4861), so such a separator is text after it.
+it('reads separators between the marker and content columns as text after the term', () => {
+  expect(compact('1. 1. :: t\n    : a\n')).toContain('<dt>t</dt>')
+  expect(compact('- - 1. :: t\n     : a\n')).toContain('<dt>t</dt>')
+  expect(compact('1. 1. :: t\n    : a\n')).not.toContain('<dd>')
 })

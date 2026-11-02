@@ -455,7 +455,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     }
     delete state.termAfterComment
     // A heading, table, rule, definition or comment on the `: ` marker opens no paragraph (carve#4305).
-    state.lazyFoldable = isTerm ||
+    // A term is one line and leaves no paragraph (carve#4861).
+    state.lazyFoldable = !isTerm &&
       colonBlockOpenerRun(description![2]!) === null && bottomBlockLeavesParagraphOpen(description![2]!)
     return true
   }

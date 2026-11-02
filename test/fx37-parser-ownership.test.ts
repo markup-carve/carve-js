@@ -21,10 +21,10 @@ describe('parser ownership across nested marker bodies', () => {
   it('drops only the residual source indent from a later term tail', () => {
     for (const marker of ['-', '*']) {
       const html = carveToHtml(`${marker} * :: t\n  : a\n    :: sibling\n    tail\n`)
-      expect(html).toContain('<dt>sibling\ntail</dt>')
+      expect(html).toContain('<dt>sibling</dt>')
     }
     const task = carveToHtml('* [ ] - :: t\n       : a\n       :: sibling\n       tail\n')
-    expect(task).toContain('<dt>sibling\ntail</dt>')
+    expect(task).toContain('<dt>sibling</dt>')
   })
 
   it('ends a nested item claim after a wrapped attribute closes', () => {

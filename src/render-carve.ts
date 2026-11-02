@@ -1940,6 +1940,11 @@ export function trimHeadingText(text: string): string {
   return trimEndNonNbsp(text.replace(/^ +/, ''))
 }
 
+// Text for a one-line leaf: each break becomes a space, dropping a hard break's backslash.
+function singleLineText(text: string): string {
+  return text.replace(/(\\*)\n[ \t]*/g, (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ')
+}
+
 function cleanEscapedText(node: Text): string {
   return node.value
 }
@@ -3561,12 +3566,7 @@ class CarveRenderSession {
         // Only an ODD run of backslashes before the newline is a hard break's
         // marker; an even run is literal backslashes that happen to end the line,
         // and dropping one there would eat the escape and swallow the space.
-        const text = trimHeadingText(
-          trimHeadingText(this.renderInlines(node.children, ctx)).replace(
-            /(\\*)\n[ \t]*/g,
-            (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
-          ),
-        )
+        const text = trimHeadingText(singleLineText(trimHeadingText(this.renderInlines(node.children, ctx))))
         // A generated id that a fresh parse would re-derive is not written back:
         // it is a resolution result, not the author's source (carve-js#741). One
         // the parse would NOT re-derive - an ingested tree whose text was edited -
@@ -4321,38 +4321,23 @@ class CarveRenderSession {
   }
 
   /**
-   * A term's inlines, with each comment that sits on its own line (a soft break
-   * before it) spelled one column past the term's, where it stays in the term
-   * (carve#2411). A line comment keeps its separator before a `%`, or it would
-   * re-read as a comment fence.
+   * A term's line, then each comment the parse kept with it (a comment line
+   * between the term and its description) on a line of its own.
    */
-  private renderTermInlines(term: InlineNode[], ctx: CarveContext): string {
-    const lines: string[] = []
-    let run: InlineNode[] = []
-    for (let i = 0; i < term.length; i++) {
-      const node = term[i]!
-      const previous = term[i - 1]
-      const own = node.type === 'comment' && !node.delimited && previous !== undefined &&
-        (previous.type === 'soft_break' ||
-          node.pos?.startLine !== undefined && previous.pos?.endLine !== undefined &&
+  private renderTerm(term: InlineNode[], ctx: CarveContext): string {
+    const inline: InlineNode[] = []
+    const comments: string[] = []
+    for (const node of term) {
+      const previous = inline.at(-1)
+      const ownLine = node.type === 'comment' && !node.delimited && previous !== undefined &&
+        (previous.type === 'soft_break' || node.pos?.startLine !== undefined && previous.pos?.endLine !== undefined &&
           node.pos.startLine > previous.pos.endLine)
-      if (!own) {
-        run.push(node)
-        continue
-      }
-      if (previous?.type === 'soft_break') run.pop()
-      if (run.length > 0 || lines.length === 0) lines.push(this.renderInlines(run, ctx))
-      run = []
-      const comment = node as Comment
-      lines.push(
-        comment.block
-          ? this.renderBlockComment(comment.content).split('\n').map((line, index, all) => index === 0 || index === all.length - 1 ? ` ${line}` : line).join('\n')
-          : comment.content === '' ? ' %%' : ` %% ${comment.content}`,
-      )
-      if (term[i + 1]?.type === 'soft_break') i++
+      if (ownLine) {
+        if (previous.type === 'soft_break') inline.pop()
+        comments.push(node.block ? this.renderBlockComment(node.content) : node.content === '' ? '%%' : `%% ${node.content}`)
+      } else if (comments.length === 0 || node.type !== 'soft_break') inline.push(node)
     }
-    if (run.length > 0) lines.push(this.renderInlines(run, ctx))
-    return lines.join('\n')
+    return [`:: ${singleLineText(this.renderInlines(inline, ctx))}`, ...comments].join('\n')
   }
 
   private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
@@ -4361,15 +4346,14 @@ class CarveRenderSession {
     // never end up sharing one: the list writes back with the grouping it
     // parsed from.
     for (const item of items) {
+      // A term is one line like a heading (carve#4861), so a break collapses to a space.
       for (const term of item.terms) {
-        // A term keeps each continuation line's indent, so a verbatim span in
-        // one can hold a line that starts with whitespace (carve#2411).
-        const outer = this.termKeepsLineIndent
-        this.termKeepsLineIndent = true
+        const outer = this.inTerm
+        this.inTerm = true
         try {
-          out.push(`:: ${this.renderTermInlines(term, ctx)}`)
+          out.push(this.renderTerm(term, ctx))
         } finally {
-          this.termKeepsLineIndent = outer
+          this.inTerm = outer
         }
       }
       item.definitions.forEach((def, index) => {
@@ -5097,7 +5081,7 @@ class CarveRenderSession {
         }
         if (node.type === 'soft_break') {
           // A `^ ` line at a term's content column ends the term (carve-js#4135 row 856).
-          captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption || this.termKeepsLineIndent
+          captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
           firstLine = false
           lineNodeCount = 0
           lineHostsCaption = false
@@ -5511,14 +5495,14 @@ class CarveRenderSession {
    * Why NO Carve source reproduces this verbatim value, or `undefined` when one
    * does (carve-js#1344).
    */
-  private termKeepsLineIndent = false
+  private inTerm = false
   private inCaption = false
 
   private unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
     if (/[ \t][\r\n]/.test(content)) {
       return 'a line of the value ends in whitespace, which the block layer strips'
     }
-    if (!this.termKeepsLineIndent && !this.inCaption && /[\r\n][ \t]/.test(content)) {
+    if (!this.inCaption && /[\r\n][ \t]/.test(content)) {
       return 'a line of the value starts with whitespace, which the block layer strips'
     }
     if (needsPad && /[\r\n]$/.test(content)) {
@@ -5541,14 +5525,14 @@ class CarveRenderSession {
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
     const payload = node.type === 'code' ? node.value : 'content' in node && typeof node.content === 'string' ? node.content : undefined
+    if (this.inTerm && payload !== undefined && /[\r\n]/.test(payload)) {
+      throw new SourceUnspellableError(nodeType, 'a definition term is one line, so its value cannot hold a line break', node)
+    }
     const guards = payload === undefined ? 0 : this.verbatimSpelling(nodeType, payload) % 4
     // A blank value line has no spelling at all and stays the known carve-out it was.
     if (payload !== undefined && ctx.lineBlockDepth === 0 && payload.includes('\n') && !/\n[ \t]*(?:\n|$)/.test(payload)) this.multiLineVerbatim.set(verbatimPayloadKey(nodeType, payload), node)
-    const listed = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
+    const listed = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
     const marker = guards === 1 || guards === 3 ? /\n(?=[^\n])/g : listed
-    if (this.termKeepsLineIndent && listed.test(written)) {
-      throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
-    }
     if (ctx.lineBlockDepth > 0 || guards === 2 || !written.includes('\n') || !marker.test(written)) return written
     marker.lastIndex = 0
     const ownsDescriptionColumn = this.descriptionParagraph && nodeType === 'code' && /^`{3,}\n/.test(written)

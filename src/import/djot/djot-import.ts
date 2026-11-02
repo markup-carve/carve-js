@@ -409,6 +409,8 @@ function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth
   return convertRootDefinitionLists(source, emptyTerm)
 }
 
+const JOINED_TERM_LINE = '\u0000joined-term-line'
+
 function convertRootDefinitionLists(source: string, emptyTerm: string): string {
   const lines = source.split('\n')
   const sourceMask = maskDjotCodeAndDestinations(source)
@@ -491,12 +493,9 @@ function convertRootDefinitionLists(source: string, emptyTerm: string): string {
         while (stack.length && stack.at(-1)!.source >= indent) pop()
         if (!stack.length) continue
       } else {
-        stack.at(-1)!.termEnd = i
-        if (visible && marker && indent > stack.at(-1)!.source && /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation)) {
-          lines[i] = continuation.replace(/^([-*+])/, '\\$1').replace(/^([0-9A-Za-z]+)([.)])(?=[ \t])/, '$1\\$2').replace(/^\(/, '\\(')
-          continue
-        }
-        if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] )/.test(continuation)) lines[i] = visible ? (!marker ? continuation.replace(/^([ivxlcdmIVXLCDM]+)([.)])(?=[ \t])/, '$1\\$2') : continuation).replace(/^:(?=[ \t]|$)/, '\\:') : continuation
+        // A Carve term is one line (carve#4861), so a wrapped Djot term joins its line.
+        lines[stack.at(-1)!.termEnd] += ' ' + continuation
+        lines[i] = JOINED_TERM_LINE
         continue
       }
     }
@@ -512,7 +511,7 @@ function convertRootDefinitionLists(source: string, emptyTerm: string): string {
     context.body = true
   }
   while (stack.length) pop()
-  return lines.join('\n')
+  return lines.filter(line => line !== JOINED_TERM_LINE).join('\n')
 }
 
 function normalizeDjotDivOpeners(source: string): string {

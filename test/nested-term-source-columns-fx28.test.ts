@@ -26,6 +26,7 @@ describe('nested term source columns', () => {
 
   it('opens a list below a description column after a nested term', () => {
     const source = ':: outer\n:  detail\n   :: inner\n  - item\n'
-    expect(carveToHtml(source)).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<ul>\s*<li>item<\/li>/)
+    // A list below the description column leaves the description (carve#4861 reads the term as one line).
+    expect(carveToHtml(source)).toMatch(/<dt>inner<\/dt>\s*<\/dl>\s*<\/dd>\s*<\/dl>\s*<ul>\s*<li>item<\/li>/)
   })
 })
