@@ -534,7 +534,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { content, state, facts } = line
     const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)
     if (!line.atContentColumn || !RE_INVISIBLE_BLOCK_LEAD.test(invisibleContent) ||
-        !(RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))) return false
+        !(RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(invisibleContent))) return false
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
