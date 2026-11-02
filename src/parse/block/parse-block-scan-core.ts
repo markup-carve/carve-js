@@ -79,6 +79,8 @@ export interface ParseOptions {
   onUnclosedContainer?: (container: UnclosedContainer) => void
   onUnclosedCodeFence?: (fence: UnclosedCodeFence) => void
   onRefusedContinuationMarker?: (marker: RefusedContinuationMarker) => void
+  /** An inline comment in a paragraph dropped for holding only comments; the tree keeps no node for it. */
+  onDroppedComment?: (comment: Comment) => void
   /** Reports a block opener PART 0 S3 opened past its owner's content column. */
   onOverindentedOpener?: (opener: OverindentedOpenerReport) => void
   /** Reports a recognized container whose malformed metadata was dropped. */

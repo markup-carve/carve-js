@@ -75,7 +75,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './extension/bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
-import type { Attrs, BlockNode, CodeBlock, DefinitionList, Document, FigureGroup, Heading, InlineNode, Table, TableRow } from './ast.js'
+import type { Attrs, BlockNode, CodeBlock, Comment, DefinitionList, Document, FigureGroup, Heading, InlineNode, Table, TableRow } from './ast.js'
 import { delimitedRecordLocations, delimitedRecordWidths, parseDelimitedRows } from './table/delimited-table.js'
 import { expandIncludes, type IncludeResolver, type IncludeSite } from './includes.js'
 import { inspectColonFences } from './parse/block/colon-fences.js'
@@ -949,6 +949,7 @@ export function lintCarve(
   const unclosedContainers: UnclosedContainer[] = []
   const unclosedCodeFences: UnclosedCodeFence[] = []
   const refusedContinuationMarkers: RefusedContinuationMarker[] = []
+  const droppedComments: Comment[] = []
   const overindentedOpeners: OverindentedOpenerReport[] = []
   const invalidContainerMetadata: UnclosedContainer[] = []
   const danglingBlockAttributes: DanglingBlockAttributes[] = []
@@ -957,6 +958,7 @@ export function lintCarve(
     onUnclosedContainer: (container) => unclosedContainers.push(container),
     onUnclosedCodeFence: (fence) => unclosedCodeFences.push(fence),
     onRefusedContinuationMarker: (marker) => refusedContinuationMarkers.push(marker),
+    onDroppedComment: (comment) => droppedComments.push(comment),
     onOverindentedOpener: (opener) => overindentedOpeners.push(opener),
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
@@ -1160,16 +1162,24 @@ export function lintCarve(
   // constructs that vanish; an ordinary note in the same file is not one of
   // them, and the file's second `{% endif %}` is (carve validation.md).
   const templateTag = /^(?:raw|endraw|endif|endfor|endblock|if\s+.+|for\s+.+|block\s+.+)$/s
-  walkDocument(doc, (node) => {
+  const seenTemplateTags = new Set<string>()
+  const reportTemplateTag = (node: Record<string, unknown>): void => {
     if (node.type !== 'comment' || node.delimited !== true) return
     if (typeof node.content !== 'string' || !templateTag.test(node.content.trim())) return
+    const at = locate(node as unknown as Positioned, toUtf16)
+    // A probe of the same lines reports a dropped comment again.
+    const key = `${at.line}:${at.column}`
+    if (seenTemplateTags.has(key)) return
+    seenTemplateTags.add(key)
     out.push({
-      ...locate(node as Positioned, toUtf16),
+      ...at,
       rule: 'braced-comment-in-a-template-source',
       message:
         'This braced comment is a template tag. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
     })
-  })
+  }
+  for (const comment of droppedComments) reportTemplateTag(comment as unknown as Record<string, unknown>)
+  walkDocument(doc, reportTemplateTag)
 
   // A `::: >` opener written at the column of the quote ABOVE it is a block
   // opener, so it ends that quote and starts a sibling one - the ordinary
