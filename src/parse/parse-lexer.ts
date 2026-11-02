@@ -156,7 +156,7 @@ export class Lexer {
   private ownershipLeadsByLine?: Map<number, number>
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, letters, refusedPlus, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean }): void {
+  applyOwnership({ lines, cuts, letters, refusedPlus, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
     this.skippedAbbreviations = skippedAbbreviations
     this.separatingAbbreviations = separatingAbbreviations
     for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
@@ -166,7 +166,7 @@ export class Lexer {
         column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
         kind: o.kind, owner: o.owner, contentColumn: o.contentColumn, authoredColumn: o.column })
     }
-    if (!cuts.size && letters === null && skippedAbbreviations.size === 0 && !skippedComments) return
+    if (!cuts.size && letters === null && skippedAbbreviations.size === 0 && !skippedComments && !rewritten) return
     const offsets = this.sourceOffsetMap ?? this.lineOffsets.slice()
     for (const [index, lineCuts] of cuts) {
       if (lineCuts[0]!.at === 0) {

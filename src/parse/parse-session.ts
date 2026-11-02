@@ -1505,10 +1505,17 @@ export class ParseSession extends InlineParseSession {
       : Math.max(0, quoteMarkerOffset)
     const localQuoteDepth = quotePrefixDepth(lexer.lineAt(firstLineIndex) ?? '')
     const localQuoteOffset = lexer.hasDocumentOffsets ? lexer.rootFrameColumn(firstLineIndex) : -1
-    const physicalQuoteColumn = localQuoteOffset >= 0
+    const authoredQuoteColumn = localQuoteOffset >= 0
       ? sourceColumnAt(quoteRootLine, localQuoteOffset)
       : Math.max(quoteMarkerColumn,
         sourceColumn(quoteRootLine, Math.max(0, quotePrefixDepth(quoteRootLine) - localQuoteDepth)))
+    // The walk writes a quote nested behind the note's first quote at the body's
+    // canonical column, so its `+` line stands there too (carve#4702).
+    const noteQuoteColumn = lexer.hostBody === 'footnote' && noteLead !== null
+      ? sourceColumnAt(quoteRootLine, noteLead[0].length - 1) : -1
+    const physicalQuoteColumn = noteQuoteColumn >= 0 && authoredQuoteColumn > noteQuoteColumn
+      ? authoredQuoteColumn - noteQuoteColumn + noteLead![1]!.length + FOOTNOTE_BODY_COLUMN
+      : authoredQuoteColumn
     return {
       lexer,
       firstLineIndex,
