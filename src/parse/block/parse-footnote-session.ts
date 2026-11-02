@@ -1,11 +1,23 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
-import { FOOTNOTE_BODY_COLUMN, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
 const payloadMisses = new WeakMap<Lexer, Map<string, { from: number; maxRun: number }>>()
+// Whether the first visible line a `+` attaches, past attribute and definition lines, is a list marker.
+function attachedLeadIsList(lexer: Lexer): boolean {
+  let k = 0
+  for (let ln = lexer.peek(); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
+    isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
+    RE_COMMENT_LINE.test(ln.trimStart()) ||
+    // A note's lazy text is part of it.
+    (k > 0 && RE_FOOTNOTE_DEF.test(lexer.peek(k - 1)!.trimStart()) && !isListMarkerLine(ln.trimStart()))); ln = lexer.peek(++k));
+  const lead = lexer.peek(k)
+  return lead === undefined || isListMarkerLine(lead.trimStart())
+}
+
 function payloadCloserInBody(lexer: Lexer, marker: string, bodyColumn: number): boolean {
   let misses = payloadMisses.get(lexer)
   if (misses === undefined) payloadMisses.set(lexer, misses = new Map())
@@ -252,11 +264,14 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
       const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
+      const visibleLeadIsList = attachedLeadIsList(lexer)
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
-          (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)),
+          (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
+          // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
+          (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
         0, true, true,
       )
       firstBlockAttached = true
@@ -323,6 +338,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // Check one line early so this branch does not claim the following line
       // before measuring the attached block's extent.
       let attachedCodeCloser: RegExp | undefined
+      const attachedList = attachedLeadIsList(lexer)
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
@@ -332,7 +348,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
             return false
           }
           if (opensCodeFence(a)) attachedCodeCloser = fenceCloseRe(/^(`{3,}|~{3,})/.exec(a)![1]!)
-          return RE_FOOTNOTE_DEF.test(a)
+          return RE_FOOTNOTE_DEF.test(a) || (!attachedList && isListMarkerLine(a.trimStart()))
         },
         0,
         true,
@@ -426,6 +442,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       lexer.consume()
+    } else if (isListMarkerLine(ln.trimStart()) &&
+        !bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) {
+      // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
+      return 'stop'
     } else if (lazyState.opaque === null && RE_COMMENT_LINE.test(ln.trimStart())) {
       // A comment below the body's column closes the body (carve#3885).
       return 'stop'
@@ -489,6 +509,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
+    // A marker body opens a list at its column 0 as an item does (PART 0 S3, carve#4860).
+    sub.markerOpensSublist = true
     sub.hostBody = 'footnote'
     sub.hostBodyRoot = 'footnote'
     const body = bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : hooks.parseBlocks(sub, 0)

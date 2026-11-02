@@ -38,26 +38,11 @@
   "ast-round-trip-preserves-source.test.ts": {
     "a document round-tripped through the AST > comes back as the same source": "#4034"
   },
-  "authoring-acceptance.test.ts": {
-    "authoring acceptance suite > unguided/12.crv": "markup-carve/carve#4881"
-  },
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },
   "comment-payload-columns.test.ts": {
     "comment payload columns (carve#2535) > 'two spans'": "#3921"
-  },
-  "continued-marker-note-code.test.ts": {
-    "keeps continued marker-note and list CODE ownership: marker-note-199": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-200": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-201": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-202": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-317": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-318": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-319": "#3922",
-    "keeps continued marker-note and list CODE ownership: marker-note-320": "#3922",
-    "keeps continued marker-note and list CODE ownership: review-J-inner-note": "#3922",
-    "keeps continued marker-note and list CODE ownership: review-K-first:[^m]: x": "#3922"
   },
   "corpus.test.ts": {
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
@@ -108,14 +93,6 @@
   "inline-fence-paragraph-resume.test.ts": {
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
     "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
-  },
-  "later-marker-note-continuation.test.ts": {
-    "keeps a later marker in the continued note paragraph: later-12": "#3922",
-    "keeps a later marker in the continued note paragraph: later-14": "#3922",
-    "keeps a later marker in the continued note paragraph: later-172": "#3922",
-    "keeps a later marker in the continued note paragraph: later-174": "#3922",
-    "keeps a later marker in the continued note paragraph: later-214": "#3922",
-    "keeps a later marker in the continued note paragraph: later-54": "#3922"
   },
   "lint-corpus-parity.test.ts": {
     "lint corpus parity > reports the box a code fence swallows the closer of: 581": "#3921",
@@ -168,75 +145,14 @@
     "nested literal comments release payload to the enclosing item > 'dedent-8' retains the native ownership": "#3922",
     "nested literal comments release payload to the enclosing item > 'dedent-9' retains the native ownership": "#3922"
   },
-  "nested-marker-note-closer.test.ts": {
-    "preserves paragraph ownership after nested note CODE: after-closer-10": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-101": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-104": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-106": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-2": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-34": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-37": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-40": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-42": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-5": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-66": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-69": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-74": "#3922",
-    "preserves paragraph ownership after nested note CODE: after-closer-98": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-108": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-110": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-12": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-120": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-122": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-132": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-134": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-14": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-204": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-206": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-216": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-218": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-228": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-230": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-24": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-26": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-300": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-302": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-312": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-314": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-324": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-326": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-36": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-38": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-745": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-756": "#3921",
-    "preserves paragraph ownership after nested note CODE: nested-closer-757": "#3921",
-    "preserves paragraph ownership after nested note CODE: nested-closer-789": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-804": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-819": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-836": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-851": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-866": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-883": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-898": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-913": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-930": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-945": "#3922",
-    "preserves paragraph ownership after nested note CODE: nested-closer-960": "#3922"
-  },
   "quoted-colon-remaining-parity.test.ts": {
     "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
   },
   "quoted-comment-host-columns.test.ts": {
-    "quoted comments retain stored host columns > '00-second-literal-depth1-width3-paired' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '01-second-literal-depth1-width3-unpai…' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '02-second-literal-depth1-width4-paired' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '03-second-literal-depth1-width4-unpai…' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '04-second-literal-depth2-width3-paired' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '05-second-literal-depth2-width3-unpai…' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '06-second-literal-depth2-width4-paired' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > 'nested-colon-depth1-code' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922"
+    "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922"
   },
   "relative-continuation-marker.test.ts": {
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"

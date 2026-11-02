@@ -19,8 +19,11 @@ it('keeps the continued note and CODE in their source spans', () => {
   expect(list.type).toBe('list')
   if (list.type !== 'list') throw new Error('Expected list')
   expect(list.items[0]!.children).toEqual([])
+  // `- child` opens a list in the note (PART 0 S3, carve#4860).
   expect(ast.footnoteDefs?.n).toMatchObject([{
-    type: 'paragraph', children: [{ type: 'text', value: 'text' }, { type: 'soft_break' }, { type: 'text', value: '- child' }],
+    type: 'paragraph', children: [{ type: 'text', value: 'text' }],
+  }, {
+    type: 'list', items: [{ children: [{ type: 'paragraph', children: [{ type: 'text', value: 'child' }] }] }],
   }, {
     type: 'code_block', content: 'code\n',
     pos: { startLine: 3, endLine: 5, startOffset: 29, endOffset: 49 },
@@ -52,25 +55,26 @@ it('bounds repeated continued marker-note collection', () => {
   }
 })
 
-it('opens closed authored CODE inside a marker-note paragraph after folded list text', () => {
+// The note's list item holds the CODE written at its content column (PART 0 S3, carve#4860).
+it('opens closed authored CODE in the note list item at its content column', () => {
   const ast = parse('- [^n]: text\n    - child\n      ```\n      code\n      ```\nafter [^n]\n')
   const list = ast.children[0]!
   if (list.type !== 'list') throw new Error('Expected list')
   expect(list.items[0]!.children).toEqual([])
   expect(ast.footnoteDefs?.n).toHaveLength(2)
   expect(ast.footnoteDefs?.n).toMatchObject([
-    { type: 'paragraph', children: [{ type: 'text', value: 'text' }, { type: 'soft_break' }, { type: 'text', value: '- child' }] },
-    { type: 'code_block', content: 'code\n' },
+    { type: 'paragraph', children: [{ type: 'text', value: 'text' }] },
+    { type: 'list', items: [{ children: [{ type: 'paragraph' }, { type: 'code_block', content: 'code\n' }] }] },
   ])
   expect(ast.children).toHaveLength(2)
   expect(ast.children[1]).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: 'after ' }, { type: 'footnote_ref', label: 'n' }] })
 })
 
-it('opens an unclosed authored fence in the marker note after its paragraph', () => {
+it('opens an unclosed authored fence in the note list item', () => {
   const ast = parse('- [^n]: text\n    - child\n      ```\n      code\nafter [^n]\n')
   expect(ast.footnoteDefs?.n).toHaveLength(2)
   expect(ast.footnoteDefs?.n?.[0]?.type).toBe('paragraph')
-  expect(ast.footnoteDefs?.n?.[1]).toMatchObject({ type: 'code_block', content: 'code\n' })
+  expect(ast.footnoteDefs?.n?.[1]).toMatchObject({ type: 'list', items: [{ children: [{ type: 'paragraph' }, { type: 'code_block', content: 'code\n' }] }] })
 })
 
 it('keeps closed CODE in a child item after a comment-led marker note', () => {

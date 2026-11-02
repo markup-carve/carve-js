@@ -3470,7 +3470,9 @@ class CarveRenderSession {
             parts.length > 0 &&
             (heldNoteEnd !== undefined
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
-              : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
+              : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
+                // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
+                (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list'))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0 && descriptionBody) {
@@ -4159,8 +4161,10 @@ class CarveRenderSession {
           const blocks = ownValue(this.documentFootnoteDefs, label)
           if (blocks === undefined) continue
           this.footnotesWrittenInPlace.add(label)
-          const written = this.renderOneFootnoteDef(label, blocks, ctx)
-          return written
+          // A note on a task's marker line sits past the box, and its body column with it.
+          const markerLineShift = this.pendingMarkerLineShift
+          this.pendingMarkerLineShift = 0
+          return this.shiftContinuationLines(this.renderOneFootnoteDef(label, blocks, ctx), markerLineShift)
         }
       }
     }
@@ -4420,7 +4424,14 @@ class CarveRenderSession {
         try {
           this.indentedHostDepth++
           try {
-            const body = atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true))
+            const outerBody = this.markerBodyBlocks
+            this.markerBodyBlocks = def
+            let body: string
+            try {
+              body = atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true))
+            } finally {
+              this.markerBodyBlocks = outerBody
+            }
             written = body.startsWith('\t') ? trimEndNonNbsp(body) : trimNonNbsp(body)
           } finally {
             this.indentedHostDepth--
@@ -4736,8 +4747,14 @@ class CarveRenderSession {
     this.indentedHostDepth++
     let rawBody: string
     try {
-      rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
-        .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
+      const outerBody = this.markerBodyBlocks
+      this.markerBodyBlocks = blocks
+      try {
+        rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+          .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
+      } finally {
+        this.markerBodyBlocks = outerBody
+      }
     } finally {
       this.indentedHostDepth--
     }
@@ -5975,6 +5992,8 @@ class CarveRenderSession {
 
   /** Footnote definitions live in a root map, not in `children`, so these are
    *  tracked by LABEL rather than by node identity. */
+  // The block run of the footnote or description body being written, whose list needs no blank above it.
+  private markerBodyBlocks: BlockNode[] | undefined
   private footnoteDefsByLine = new Map<number, string>()
   private listNoteLimit = Infinity
   private documentFootnoteDefPos: Document['footnoteDefPos']

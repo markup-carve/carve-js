@@ -16,7 +16,8 @@ describe("the Markdown target keeps a list's tightness", () => {
     const source = '- a\n  > - x\n  - m\n'
     const { markdown, list, html } = readBack(source)
 
-    expect(markdown).toBe('- a\n  > - x\n  >   \\- m\n')
+    // `- m` opens the item's list rather than folding into the quote (PART 0 S3, carve#4860).
+    expect(markdown).toBe('- a\n  > - x\n  - m\n')
     expect(list).toMatchObject({ type: 'list', tight: true })
     expect(html).toBe(renderHtml(parse(source)))
   })

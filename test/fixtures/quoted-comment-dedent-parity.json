@@ -57,7 +57,7 @@
   {
     "id": "review3-1",
     "source": "> - ::: |\n>   a\n>   :::\n>   :::bad\n> c\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"><p>a</p></div>\n      :::bad\nc\n- tail\n    </li></ul></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>a</p></div>\n      :::bad\nc\n    </li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "review3-2",

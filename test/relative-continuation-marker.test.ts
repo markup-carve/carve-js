@@ -144,14 +144,14 @@ describe('relative continuation marker columns', () => {
   })
 
   it.each([
-    ['> > - a\n>   +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+\n- b</li></ul></blockquote></blockquote>'],
+    ['> > - a\n>   +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+</li></ul></blockquote><ul><li>b</li></ul></blockquote>'],
     ['1. ordered\n  > > quote\n+  \n- item\n', '<ol><li>ordered</li></ol><blockquote><blockquote><p>quote\n+\n- item</p></blockquote></blockquote>'],
   ])('folds a refused marker like ordinary text in %s', (input, expected) => {
     expect(carveToHtml(input).replace(/>\s+</g, '><').replace(/\n\s*/g, '\n').trim()).toBe(expected)
   })
 
   it.each([
-    ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+\n- b</li></ul></blockquote></blockquote>'],
+    ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+</li></ul></blockquote><ul><li>b</li></ul></blockquote>'],
     ['> > - [ ] a\n> +\n> tail', '<blockquote><blockquote><ul class="task-list"><li><input type="checkbox" disabled aria-label="a"> a</li></ul><p>tail</p></blockquote></blockquote>'],
     ['- a\n  > q\n+\n- b\n', '<ul><li>a\n<blockquote><p>q\n+</p></blockquote></li><li>b</li></ul>'],
     ['- a\n  > q\n  +\n  - b\n', '<ul><li>a\n<blockquote><p>q</p><ul><li>b</li></ul></blockquote></li></ul>'],

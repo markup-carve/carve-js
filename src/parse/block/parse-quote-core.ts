@@ -362,28 +362,23 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   const { host, column, text } = q
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
   const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
-  // A marker below an ancestor's content column can remain paragraph text.
-  // Retain its existing fence host instead of inventing a sibling item.
-  const structuralMarker = host.markers.some((marker, i) => host.kinds[i] === 'item' &&
-    column <= marker && column >= host.columns[i]!)
-  const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
-    host.markers.length > 0 && column > host.markers[0]! &&
-    !structuralMarker && column < host.columns.at(-1)!
+  // A marker that misses a marker body closes it (PART 0 S3, carve#4860), so only text is a lazy item line.
   const lazyItem = paragraph && !host.kinds.includes('note') && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
-    (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
+    markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 &&
+    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody || open.markerBody === true)
   while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) popQuoteHost(host)
   const colons = host.colons ??= []
   while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
   const insideItem = host.kinds.at(-1) === 'item'
+  const insideBody = insideItem || host.kinds.at(-1) === 'note' || host.kinds.at(-1) === 'description'
   let inner = text
   let at = column
   let blockStart = false
   for (;;) {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
-      if (lazyMarker && lazyItem) break
-      if (paragraph && !blockStart && !insideItem && !sibling && !leftOfOutermost) break
+      if (paragraph && !blockStart && !insideBody && !sibling && !leftOfOutermost) break
       host.initialMarkerColumn ??= at
       host.markers.push(at)
       const attrs = extractItemAttr(inner)

@@ -21,8 +21,9 @@ for (const [name, host, column] of [
           else expect(note).toContain('\nbelow')
           expect(document).not.toContain('c2')
           expect(document).not.toContain('<pre>')
-          expect(note).toContain('<p>inner\n' + marker)
-          expect(note).not.toContain('<ul>')
+          // The marker opens a list in the note body (carve#4860).
+          expect(note).toContain('<p>inner</p>')
+          expect(note).toMatch(/<[uo]l/)
           if (code) expect(note).toContain('<pre><code>x\n</code></pre>')
         })
       }
@@ -30,9 +31,9 @@ for (const [name, host, column] of [
   }
 }
 
-it('keeps a below-column marker in an open note paragraph', () => {
+it('closes the note at a marker below its body column (carve#4860)', () => {
   const source = ['- a', '  [^b]: inner', '   - c2', 'below', '', '[^b]'].join('\n')
   const [document, note] = carveToHtml(source).split('<section role="doc-endnotes"')
-  expect(document).toContain('<li>a</li>')
-  expect(note).toContain('<p>inner\n- c2\nbelow<a ')
+  expect(document).toContain('<li>c2\nbelow</li>')
+  expect(note).toContain('<p>inner<a ')
 })

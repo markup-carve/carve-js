@@ -7,9 +7,10 @@ describe('parser ownership across nested marker bodies', () => {
     expect(html).toContain('<li>+\nx</li>')
   })
 
-  it('folds a nested item below a footnote into the note (corpus 454-4)', () => {
+  // A marker below the note body column closes the note (PART 0 S3, carve#4860).
+  it('opens the item list at a marker below a footnote (corpus 454-4)', () => {
     const html = carveToHtml('- body\n\n  [^g]: n\n   - item\n\nafter\n')
-    expect(html).toContain('<li>body</li>')
+    expect(html).toContain('<li>body\n    <ul>\n      <li>item</li>')
     expect(html).toContain('<p>after</p>')
   })
 
@@ -50,9 +51,10 @@ describe('parser ownership across nested marker bodies', () => {
     expect(html).not.toContain('<p>+</p>')
   })
 
-  it('folds a below-floor marker into a description-hosted note', () => {
+  // The marker opens a list in the description body below the note (PART 0 S3, carve#4860).
+  it('opens a list in the description at a marker below its note', () => {
     const html = carveToHtml('- q\n  :: t\n  :  [^f]: note\n     - nested\n  after\n')
-    expect(html).toContain('<dd></dd>')
+    expect(html).toContain('<dd>\n        <ul>\n          <li>nested\nafter</li>')
   })
 
 })

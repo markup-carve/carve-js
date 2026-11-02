@@ -16,7 +16,8 @@ it.each([
   ['> - para\n>   [^f]: n\n>     more\ntail\n', quotedList],
   ['> :: t\n> : d\n>   [^f]: n\ntail\n', '<blockquote><dl><dt>t</dt><dd>d</dd></dl></blockquote>'],
   ['> - a\n>   - para\n>     [^f]: n\ntail\n', '<blockquote><ul><li>a <ul><li>para</li></ul></li></ul></blockquote>'],
-  ['> - para\n>   [^f]: n\n- tail\n', quotedList],
+  // A marker misses the note and closes it (PART 0 S3, carve#4860).
+  ['> - para\n>   [^f]: n\n- tail\n', `${quotedList}<ul><li>tail</li></ul>`],
   ['> - para\n>   [^f]: n\n  tail\n', quotedList],
   ['- > - para\n  >   [^f]: n\ntail\n', `<ul><li>${quotedList}</li></ul>`],
   ['- > - para\n  >   [^f]: n\n  tail\n', `<ul><li>${quotedList}</li></ul>`],

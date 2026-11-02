@@ -34,14 +34,17 @@ it('opens a past-column term in an unreleased nested term', () => {
   expect(html).toContain('<dt>sibling</dt>')
 })
 
-it('folds an item-column marker into a preceding footnote', () => {
+// An item-column marker misses the note and opens the item's list (PART 0 S3, carve#4860).
+it('opens the item list at an item-column marker below a footnote', () => {
   const html = carveToHtml('- outer\n  - see[^n]\n    [^n]: a\n    - li\nx\n')
-  expect(html).toContain('<p>a\n- li\nx<a ')
+  expect(html).toContain('<li>li\nx</li>')
+  expect(html).toContain('<p>a<a ')
 })
 
-it('folds a quoted item-column marker into a preceding footnote', () => {
+it('opens the item list at a quoted item-column marker below a footnote', () => {
   const html = carveToHtml('> - outer\n>   - see[^n]\n>     [^n]: a\n>     - li\nx\n')
-  expect(html).toContain('<p>a\n- li\nx<a ')
+  expect(html).toContain('<li>li\nx</li>')
+  expect(html).toContain('<p>a<a ')
 })
 
 it('restores a sibling item paragraph claim after a footnote', () => {

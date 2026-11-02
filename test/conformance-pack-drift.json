@@ -14,15 +14,6 @@
       "cases": [
         "notes-4dc51b5608ab"
       ]
-    },
-    {
-      "ticket": "markup-carve/carve-js#3948",
-      "cause": "a lazy marker line without the quote prefix past a quote: the model ends the item or keeps the prefix as text",
-      "cases": [
-        "lazy-679190d42655",
-        "lazy-e94649399f1c",
-        "ownership-a83a55ed37d6"
-      ]
     }
   ]
 }

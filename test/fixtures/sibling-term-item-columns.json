@@ -9,7 +9,7 @@
   },
   {
     "source": ":: host\n: body\n  - - :: t\n   : a\n    :: sibling\n    :: another\n    TAIL\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n- - :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body</p>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <dl>\n              <dt>t</dt>\n            </dl>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <p>: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n* * :: t\n : a\n    :: sibling\n    tail\n:::\n",
@@ -37,7 +37,7 @@
   },
   {
     "source": ":: host\n: body\n  * * * :: t\n     : a\n       :: sibling\n       tail\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n* * * :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    <p>tail</p>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body</p>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <ul>\n              <li>\n                <dl>\n                  <dt>t</dt>\n                </dl>\n              </li>\n            </ul>\n          </li>\n        </ul>\n        : a\n        <dl>\n          <dt>sibling</dt>\n        </dl>\n        tail\n      </li>\n    </ul>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n. . . :: t\n   : a\n      :: sibling\n      :: another\n      TAIL\n:::\n",
@@ -65,7 +65,7 @@
   },
   {
     "source": ":: host\n: body\n  . . . . :: t\n       : a\n         :: sibling\n         :: another\n         TAIL\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n. . . . :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n      <dt>another</dt>\n    </dl>\n    <p>TAIL</p>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body</p>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <ol>\n                  <li>\n                    <dl>\n                      <dt>t</dt>\n                    </dl>\n                  </li>\n                </ol>\n              </li>\n            </ol>\n            : a\n            <dl>\n              <dt>sibling</dt>\n              <dt>another</dt>\n            </dl>\n            TAIL\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n1. 1. 1. 1. :: t\n        : a\n            :: sibling\n            tail\n:::\n",
@@ -93,7 +93,7 @@
   },
   {
     "source": ":: host\n: body\n  1. 1. 1. 1. 1. :: t\n             : a\n                :: sibling\n                tail\n",
-    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body\n1. 1. 1. 1. 1. :: t\n: a</p>\n    <dl>\n      <dt>sibling</dt>\n    </dl>\n    <p>tail</p>\n  </dd>\n</dl>"
+    "expected": "<dl>\n  <dt>host</dt>\n  <dd>\n    <p>body</p>\n    <ol>\n      <li>\n        <ol>\n          <li>\n            <ol>\n              <li>\n                <ol>\n                  <li>\n                    <ol>\n                      <li>\n                        <dl>\n                          <dt>t</dt>\n                        </dl>\n                      </li>\n                    </ol>\n                  </li>\n                </ol>\n                : a\n                <dl>\n                  <dt>sibling</dt>\n                </dl>\n                tail\n              </li>\n            </ol>\n          </li>\n        </ol>\n      </li>\n    </ol>\n  </dd>\n</dl>"
   },
   {
     "source": "::: box\n12. 12. 12. 12. 12. :: t\n               : a\n                   :: sibling\n                   :: another\n                   TAIL\n:::\n",

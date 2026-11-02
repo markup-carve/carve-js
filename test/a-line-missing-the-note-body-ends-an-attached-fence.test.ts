@@ -25,9 +25,10 @@ for (const [name, lead, intro] of [
   })
 }
 
+// The column-0 marker misses the note and closes it (PART 0 S3, carve#4860).
 it('keeps a degraded comment fence a line comment in an attached block', () => {
   expect(normalize(carveToHtml('[^f]: n\n+\n%%%\na\n\n  b\n- x\n\nx[^f]\n'))).toBe(normalize(
-    `${ref}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n</p><p>a</p>` +
-      '<p>b - x<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>',
+    `<ul><li>x</li></ul>${ref}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n</p><p>a</p>` +
+      '<p>b<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>',
   ))
 })

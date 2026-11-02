@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 describe('nested marker-line footnote paragraphs', () => {
   it.each([
-    ['+', '+'], ['- x', '- x'],
+    ['+', '+'],
   ])('keeps a below-column %s line in the deepest open paragraph', (line, rendered) => {
       const source = `[^c]: [^d]: para\n        more\n ${line}\n\nSee[^c][^d]\n`
       const html = carveToHtml(source)
@@ -13,6 +13,8 @@ describe('nested marker-line footnote paragraphs', () => {
   it.each([
     ['# H', '<h1>H</h1>'], ['---', '<hr>\n<p>See'], ['> q', '<blockquote><p>q</p></blockquote>'],
     ['| a |', '<tr><td>a</td></tr>'], [':: term', '<dt>term</dt>'],
+    // A marker that misses a marker body closes it (PART 0 S3, carve#4860).
+    ['- x', '<ul>\n  <li>x</li>\n</ul>'],
   ])('releases a below-column %s line from the deepest open paragraph', (line, rendered) => {
       const source = `[^c]: [^d]: para\n        more\n ${line}\n\nSee[^c][^d]\n`
       const html = carveToHtml(source)

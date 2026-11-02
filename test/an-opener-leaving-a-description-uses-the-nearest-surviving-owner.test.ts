@@ -17,7 +17,7 @@ const cases = [
   {
     "name": "term below an inner item opens in its description",
     "source": "- h0\n  :: t\n  : d\n    [^n]: note\n    - a\n     :: u\n     :  e\n",
-    "expected": "<ul>\n<li>h0\n<dl>\n<dt>t</dt>\n<dd>\n<p>d</p>\n<dl>\n<dt>u</dt>\n<dd>e</dd>\n</dl>\n</dd>\n</dl>\n</li>\n</ul>"
+    "expected": "<ul>\n<li>h0\n<dl>\n<dt>t</dt>\n<dd>\n<p>d</p>\n<ul>\n<li>a</li>\n</ul>\n<dl>\n<dt>u</dt>\n<dd>e</dd>\n</dl>\n</dd>\n</dl>\n</li>\n</ul>"
   },
   {
     "name": "quote opener returns to the quoted item",
@@ -37,7 +37,7 @@ const cases = [
   {
     "name": "row 8 returns to its surviving owner",
     "source": "- a\n :: term\n  :  detail\n    :: term\n    :  detail\n      [^n]: note\n       q\n1. ordered\n",
-    "expected": "<ul>\n<li>a</li>\n</ul>\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n<dt>term</dt>\n<dd>detail</dd>\n</dl>"
+    "expected": "<ul>\n<li>a</li>\n</ul>\n<dl>\n<dt>term</dt>\n<dd>detail</dd>\n<dt>term</dt>\n<dd>detail</dd>\n</dl>\n<ol>\n<li>ordered</li>\n</ol>"
   },
   {
     "name": "row 9 returns to its surviving owner",

@@ -37,9 +37,10 @@ describe('a block attached by a continuation marker ends at its boundary', () =>
     expect(html('> +\n``` x\n')).toBe('<blockquote><pre><code class="language-x"></code></pre></blockquote>')
   })
 
-  it('folds a list line into a quoted note refused plus (#3973)', () => {
+  // The marker misses the note and closes it (PART 0 S3, carve#4860).
+  it('ends a quoted note refused plus at a list line (#3973)', () => {
     const out = html('> [^b]: +\n- after\n\nr[^b]\n')
-    expect(out.startsWith('<blockquote></blockquote><p>r')).toBe(true)
-    expect(out).toContain('<p>+\n- after<a href="#fnref1"')
+    expect(out.startsWith('<blockquote></blockquote><ul><li>after</li></ul><p>r')).toBe(true)
+    expect(out).toContain('<p>+<a href="#fnref1"')
   })
 })

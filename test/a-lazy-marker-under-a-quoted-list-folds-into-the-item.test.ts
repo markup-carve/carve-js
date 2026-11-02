@@ -46,49 +46,49 @@ import { carveToHtml } from '../src/index.js'
 describe('a lazy marker under a quoted list folds into the open item', () => {
   it('folds a bullet, and the tail below it', () => {
     expect(carveToHtml('> - a\n- m\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n- m\ntail</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ul>\n  <li>m\ntail</li>\n</ul>',
     )
   })
 
   it('folds an ordered marker', () => {
     expect(carveToHtml('> - a\n1. m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n1. m</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ol>\n  <li>m</li>\n</ol>',
     )
   })
 
   it('folds a task marker', () => {
     expect(carveToHtml('> - a\n- [ ] m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n- [ ] m</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="m"> m</li>\n</ul>',
     )
   })
 
   it('folds an abutting-attribute marker', () => {
     expect(carveToHtml('> - a\n-{.k} m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n-{.k} m</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ul>\n  <li class="k">m</li>\n</ul>',
     )
   })
 
   it('folds under an ORDERED quoted list too', () => {
     expect(carveToHtml('> 1. a\n- m\n')).toBe(
-      '<blockquote>\n  <ol>\n    <li>a\n- m</li>\n  </ol>\n</blockquote>',
+      '<blockquote>\n  <ol>\n    <li>a</li>\n  </ol>\n</blockquote>\n<ul>\n  <li>m</li>\n</ul>',
     )
   })
 
   it('folds AT the quoted item content column, where a sublist used to open', () => {
     expect(carveToHtml('> - a\n  - m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n- m</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ul>\n  <li>m</li>\n</ul>',
     )
   })
 
   it('folds PAST the quoted item content column', () => {
     expect(carveToHtml('> - a\n    - m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n- m</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<ul>\n  <li>m</li>\n</ul>',
     )
   })
 
   it('folds into the list inside a NESTED quote', () => {
     expect(carveToHtml('> > - a\n- m\n')).toBe(
-      '<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n- m</li>\n    </ul>\n  </blockquote>\n</blockquote>',
+      '<blockquote>\n  <blockquote>\n    <ul>\n      <li>a</li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>m</li>\n</ul>',
     )
   })
 })
@@ -128,31 +128,31 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
   // The answers are the executable spec's, at spec main `1a50d213`.
   it('a quote below the item lead', () => {
     expect(carveToHtml('- a\n  > - x\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   it('one quote deeper', () => {
     expect(carveToHtml('- a\n  > > - x\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <blockquote>\n        <ul>\n          <li>x\n- m</li>\n        </ul>\n      </blockquote>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote>\n      <blockquote>\n        <ul>\n          <li>x</li>\n        </ul>\n      </blockquote>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   it('a quote ON the item lead - the marker-lead spelling', () => {
     expect(carveToHtml('- > - a\n  - m\n')).toBe(
-      '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>a\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>a</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   it('two items deep, at the inner item content column', () => {
     expect(carveToHtml('- - > - a\n    - m\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <ul>\n            <li>a\n- m</li>\n          </ul>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <ul>\n            <li>a</li>\n          </ul>\n        </blockquote>\n        <ul>\n          <li>m</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   it('prose between them folds too - the quote survives its own lazy line', () => {
     expect(carveToHtml('- a\n  > - x\n  p\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
@@ -166,7 +166,7 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
 
   it('control: the paragraph twin, which already folded', () => {
     expect(carveToHtml('- a\n  > q\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote><p>q\n- m</p></blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote><p>q</p></blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 

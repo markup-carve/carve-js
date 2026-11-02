@@ -92,10 +92,7 @@ it.each([
   expect(() => renderCarve(withCode(host, '', value))).toThrow(SourceUnspellableError)
 })
 
-it.each(['a\n- b', 'a\n- b\nc'])('writes a marker line in a quoted item lazily, without its quote marker: %j', value => {
-  const document = withCode('quotedItem', '', value)
-  const written = renderCarve(document)
-  expect(written).toMatch(/^- b/m)
-  expect(carveToHtml(written)).toBe(renderHtml(document))
-  expect(carveToCarve(written)).toBe(written)
+// §7h after carve#4860: a marker opens a list in an item, a quote inside one included.
+it.each(['a\n- b', 'a\n- b\nc'])('refuses a marker line in a quoted item: %j', value => {
+  expect(() => renderCarve(withCode('quotedItem', '', value))).toThrow(SourceUnspellableError)
 })
