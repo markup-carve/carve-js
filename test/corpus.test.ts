@@ -67,6 +67,8 @@ const IMPLEMENTED = new Set([
   'opaque-reference-and-inline-bounds',
   'the-deepest-quoted-paragraph-takes-a-lazy-line-across-missed-prefixes',
   'visible-footnote-headings',
+  'an-own-line-plus-reaches-a-marker-line-quote-at-its-authored-column',
+  'an-indented-quote-prefix-keeps-an-invisible-plus-follower-in-its-host',
   'a-nested-item-whose-plus-is-refused-releases-the-next-root-block',
   'compact-single-paragraph-quote',
   'consecutive-continuation-markers-in-a-div-hosted-quote',

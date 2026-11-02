@@ -59,6 +59,9 @@ interface Frame {
   // Document column of the marker and the line that opened the frame.
   docMarker?: number
   line?: number
+  // A quote's marker and content start past the enclosing quote prefix, in document columns.
+  viewMarker?: number
+  viewEnd?: number
   // The line a fence or colon body opened on, for trace owner paths only.
   opened?: number
   family?: 'code' | 'comment' | 'div'
@@ -287,7 +290,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }> } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -318,6 +321,8 @@ export function ownLines(
   const payloadLines = new Set<number>()
   const lazyCaptions = new Set<number>()
   const overindented: OverindentedOpener[] = []
+  // A line the walk rewrote without removing anything, so it records no cut.
+  let rewritten = false
 
   for (let at = start; at < lines.length; at++) {
     const invisible = invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, skippedComments, skippedNotes)
@@ -327,6 +332,8 @@ export function ownLines(
     }
     let src = lines[at]!
     let out = ''
+    // Where the innermost quote prefix taken so far ends, in document columns.
+    let viewDoc = 0
     let m = indentCols(src)
     const lineCuts: OwnershipCut[] = []
     // `spaces` writes a leading tab as the columns it reaches, so a term and its body read alike in both spellings.
@@ -342,6 +349,10 @@ export function ownLines(
       }
       src = m.rest
     }
+    // A quote opened on another marker line keeps that line's authored marker column.
+    const standsAtMarker = (f: Frame): boolean => f.kind === 'quote'
+      ? docColumn(lines[at]!, m.rest) - viewDoc === f.viewMarker
+      : m.col === f.markerCol && m.col < f.col
     const take = (count: number): void => {
       out += src.slice(0, count)
       src = src.slice(count)
@@ -384,9 +395,8 @@ export function ownLines(
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
-      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && m.col === f.markerCol &&
-          (f.kind === 'quote' || m.col < f.col)) {
-        const reason = refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind)
+      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f)) {
+        const reason = refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out)
         if (reason === null) {
           plus = f
           break
@@ -394,10 +404,26 @@ export function ownLines(
         refuse(reason, f.kind)
       }
       if (f.kind === 'quote') {
+        // An own-line `+` at a descendant quote's authored marker column reaches that
+        // quote without repeating the intervening quote markers (carve#4702).
+        if (CONT_MARKER.test(m.rest) && reachesDescendantQuote(k, at, docColumn(lines[at]!, m.rest))) {
+          const written = ' '.repeat(frames[k - 1]!.canon) + '> '
+          out += written
+          // Written over the line's own indentation, so its columns still map to the source.
+          if (src.startsWith(' '.repeat(written.length))) {
+            src = src.slice(written.length)
+            m = indentCols(src)
+            rewritten = true
+          }
+          viewDoc = f.viewEnd!
+          quotes++
+          continue
+        }
         if (!isQuoteLine(m.rest)) break
         quotes++
         lead(frames[k - 1]!.canon)
         take(src.length - quoteRest(src).length)
+        viewDoc = docColumn(lines[at]!, src)
         m = indentCols(src)
         stripped = null
         frameReach = false
@@ -672,9 +698,10 @@ export function ownLines(
       }
       if (form.kind === 'quote') {
         const quote: Frame = { kind: 'quote', col: 0, canon: 0, cut: 0, para: false, last: null, markerCol: col, markerCanon: canon,
-          docMarker: docColumn(lines[at]!, src), line: at }
+          docMarker: docColumn(lines[at]!, src), viewMarker: docColumn(lines[at]!, src) - viewDoc, line: at }
         frames.push(quote)
         take(src.length - quoteRest(src).length)
+        viewDoc = quote.viewEnd = docColumn(lines[at]!, src)
         m = indentCols(src)
         content(quote, 0, 0)
         return
@@ -849,7 +876,7 @@ export function ownLines(
       m = { col: m.col, rest }
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
@@ -858,7 +885,18 @@ export function ownLines(
 
   // The one attach rule (carve#4409): the next line stands at `marker` through the
   // host's `quotes` prefixes and is not the host's sibling. The host decides nothing else.
-  function refusal(at: number, marker: number, quotes: number, host: Frame['kind']): RefusedPlus['reason'] | null {
+  function reachesDescendantQuote(k: number, at: number, column: number): boolean {
+    for (let c = k + 1; c < frames.length; c++) {
+      const child = frames[c]!
+      if (child.kind !== 'quote' || child.docMarker !== column) continue
+      const quotes = frames.slice(0, c).filter((f) => f.kind === 'quote').length
+      if (refusal(at, column, quotes, 'quote') === null) return true
+    }
+    return false
+  }
+
+  // `quoteLead` is the `+` line's written quote prefix, which its skipped followers share.
+  function refusal(at: number, marker: number, quotes: number, host: Frame['kind'], quoteLead?: string): RefusedPlus['reason'] | null {
     // An attribute run leads the attached block, so the block after it decides (carve#4278, carve#4447).
     const skippedAbbr: Array<[number, string, string]> = []
     const comments: number[] = []
@@ -880,6 +918,10 @@ export function ownLines(
           const body = quoteRest(measured.rest)
           prefix += rest.slice(0, rest.length - body.length)
           rest = body
+        }
+        if (quoteLead !== undefined && quotes > 0 && quoteLead.length < prefix.length) {
+          cuts.set(index, [{ at: 0, removed: prefix.length - quoteLead.length }])
+          prefix = quoteLead
         }
         if (reason !== null && !isLinkDefLine(rest.trimStart()) &&
             !FOOTNOTE_DEF.test(rest.trimStart()) && !RE_ABBR_DEF.test(rest.trimStart())) continue
