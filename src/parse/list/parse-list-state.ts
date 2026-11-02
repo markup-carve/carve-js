@@ -1,6 +1,7 @@
 import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../parse.js'
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
 import { isListMarkerLine } from '../parse-prepass-core.js'
+import { holdsLineBlock } from '../block/parse-block-boundaries.js'
 import type { listStateHelpers } from '../../parse.js'
 import { createRunPhases, endsOnBlock, type CommentCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
@@ -199,13 +200,18 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   /** A below-column comment span held by an open colon container closes on its run. */
   function belowColumnCommentClose(line: LazyLine): boolean {
     const { content, state } = line
-    if (!line.atContentColumn && state.literalColon?.opaque?.belowBaseCloses &&
-        commentFenceRun(content.trimStart()) === state.literalColon.opaque.run) {
+    const run = commentFenceRun(content.trimStart())
+    if (!line.atContentColumn && state.literalColon?.opaque?.belowBaseCloses && run === state.literalColon.opaque.run) {
       delete state.literalColon.opaque
       return endsOnBlock(state)
     }
+    if (!line.atContentColumn && run === undefined && content.trim() !== '') {
+      // Any other text line below the column misses every span owner from here down and ends the span (PART 0 S1).
+      for (let frame: ItemLazyState | null | undefined = state; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
+        if (frame.literalColon?.opaque?.belowBaseCloses) delete frame.literalColon.opaque
+    }
     if (state.authoredColon?.belowComment !== undefined) {
-      if (commentFenceRun(content.trimStart()) === state.authoredColon.belowComment) delete state.authoredColon.belowComment
+      if (run === state.authoredColon.belowComment) delete state.authoredColon.belowComment
       state.inDefList = false
       return true
     }
@@ -265,12 +271,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false
     return true
-  }
-
-  function holdsLineBlock(frame: ItemLazyState | null | undefined): boolean {
-    for (; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
-      if (frame.literalColon !== undefined) return true
-    return false
   }
 
   /** A line a descendant marker owns while its frame sits in a literal colon container. */

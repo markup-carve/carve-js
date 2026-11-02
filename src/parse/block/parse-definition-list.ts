@@ -1,4 +1,4 @@
-import { bodyEndsInOpenCodeFence, verbatimOnlyLazyState } from './parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
@@ -882,6 +882,9 @@ export function createDefinitionListParser(
           // keeps it, so the body's own parse cannot read a delimiter written below
           // the column back as an authored column-0 one. A delimiter already AT
           // column 0 keeps it (markup-carve/carve-js#1623).
+          // A run that does not close the line block's span misses its owner, so no later line folds through it (PART 0 S1).
+          const verse = lazyState.literalColon
+          if (verse?.opaque?.belowBaseCloses && commentFenceRun(below) !== verse.opaque.run) verse.spanFoldable = false
           bodyLines.push(atDocumentColumn ? ln : ' ' + below)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -992,7 +995,9 @@ export function createDefinitionListParser(
         if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below)) return 'stop'
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
+        // A span in verse leaves nothing, so the stanza it interrupted still takes the line (carve#4956).
         if (indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
+            !verseStanzaOpen(lazyState) &&
             bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) return 'stop'
         const atDocumentColumn = below === ln
         const original = sourceLineAt(lexer, lexer.pos, ln)
