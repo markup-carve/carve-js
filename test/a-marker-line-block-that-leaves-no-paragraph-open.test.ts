@@ -57,7 +57,7 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     // the item. Reading the column-0 lines as the comment's body published an
     // empty item and DELETED them.
     expect(carveToHtml('- %%%\nc\n%%%\ntail\n')).toBe(
-      '<ul>\n  <li></li>\n</ul>\n<p>c</p>\n<p>tail</p>',
+      '<ul>\n  <li></li>\n</ul>\n<p>c</p>',
     )
   })
 

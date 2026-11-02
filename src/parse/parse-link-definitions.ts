@@ -50,6 +50,8 @@ type LinkDefScan = {
   fence: PrepassFence | null
   verseLines: boolean[] | undefined
   commentFence: number | null
+  /** The line where the open span's container ends it under PART 0 S1. */
+  commentFenceEnd: number
   commentScopeMemo: CommentScopeMemo
   divs: PrepassDiv[]
   listCols: ListColumn[]
@@ -114,8 +116,7 @@ export function createLinkDefinitionCollector(
     RE_FOOTNOTE_DEF,
     RE_RAW_FENCE,
     RE_TASK,
-    commentBlockHasCloser,
-    commentCloserInScope,
+    commentSpanScopeEnd,
     commentFenceRun,
     composeContainerPrefix,
     containerQuoteDepth,
@@ -507,6 +508,7 @@ export function createLinkDefinitionCollector(
   function commentFenceTakesLine(s: LinkDefScan, v: LineRead, composed: Composed, contentCol: number): boolean {
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
+    if (s.commentFence !== null && v.idx >= s.commentFenceEnd) s.commentFence = null
     if (s.commentFence !== null) {
       const close = RE_COMMENT_BLOCK_ANY.exec(v.line)
       if (close && close[1]!.length === s.commentFence) s.commentFence = null
@@ -515,20 +517,17 @@ export function createLinkDefinitionCollector(
     }
     const open = RE_COMMENT_BLOCK_ANY.exec(v.line)
     if (open === null) return false
-    // Under §5, an opener hides definitions only when its closer is in the same
-    // container. Document-level fences use the raw line index; nested fences
-    // use the stripped container view. Attached blocks start at the `+`
-    // marker column, which can differ from the item content column.
+    // A span runs to its closer or to the first line that leaves its container (PART 0 S1).
+    // Attached blocks start at the `+` marker column, which can differ from the item content column.
     const commentScope: PrepassScope = {
       // A description marker hides its quote from the raw count; the walk peeled it.
       quoteDepth: Math.max(v.rawQuoteDepth, composed.peeled.filter((one) => one.quote).length),
       contentCol: s.plusColumn ?? contentCol,
     }
     const atDocumentLevel = commentScope.quoteDepth === 0 && commentScope.contentCol === 0
-    const opensRegion = atDocumentLevel
-      ? commentBlockHasCloser(s.lexer, open[1]!.length, v.idx)
-      : commentCloserInScope(s.lexer, open[1]!.length, v.idx, commentScope, s.commentScopeMemo)
-    if (!opensRegion) return false
+    s.commentFenceEnd = atDocumentLevel
+      ? s.lexer.lineCount
+      : commentSpanScopeEnd(s.lexer, v.idx, commentScope, s.commentScopeMemo)
     s.commentFence = open[1]!.length
     s.paraState = 'no'
     return true
@@ -947,9 +946,7 @@ export function createLinkDefinitionCollector(
   // A comment on a note's opening line closes before any line leaves the
   // containers on that line: no paragraph carries one past them. A refuted walk
   // refutes every same-shaped opener before its stop, which keeps a run of them linear.
-  function noteLeadCommentCloses(s: LinkDefScan, from: number, width: number, scope: PrepassScope, bodyCol: number): boolean {
-    const key = `${width}|${scope.quoteDepth}|${scope.contentCol}|${bodyCol}`
-    if (s.noteLeadCommentRefuted?.key === key && from < s.noteLeadCommentRefuted.stop) return false
+  function noteLeadSpanEnd(s: LinkDefScan, from: number, scope: PrepassScope, bodyCol: number): number {
     let i = from + 1
     for (; i < s.lexer.lineCount; i++) {
       const raw = s.lexer.lineAt(i)!
@@ -958,10 +955,8 @@ export function createLinkDefinitionCollector(
       if (isBlankLine(raw)) continue
       if (indentColumns(raw.replace(/^(?:>(?: |$))+/, ''), scope.contentCol) < scope.contentCol ||
           indentColumns(held, bodyCol) < bodyCol) break
-      if (RE_COMMENT_BLOCK_ANY.exec(held.trimStart())?.[1]!.length === width) return true
     }
-    s.noteLeadCommentRefuted = { key, stop: i }
-    return false
+    return i
   }
 
   // The note's opening line holds its first block: a definition registers from
@@ -986,10 +981,9 @@ export function createLinkDefinitionCollector(
     const comment = RE_COMMENT_BLOCK_ANY.exec(lead)
     if (comment !== null) {
       const width = comment[1]!.length
-      if (commentCloserInScope(s.lexer, width, v.idx, scope, s.commentScopeMemo) && noteLeadCommentCloses(s, v.idx, width, scope, bodyCol)) {
-        s.commentFence = width
-        s.paraState = 'no'
-      }
+      s.commentFence = width
+      s.commentFenceEnd = noteLeadSpanEnd(s, v.idx, scope, bodyCol)
+      s.paraState = 'no'
       return
     }
     const opened = RE_FENCE.exec(lead)?.[2] ?? RE_RAW_FENCE.exec(lead)?.[1]
@@ -1054,6 +1048,7 @@ export function createLinkDefinitionCollector(
       // link table (carve-js#634). The footnote path already treats a comment as
       // opaque; this one did not.
       commentFence: null,
+      commentFenceEnd: 0,
       // The boundary scan `commentCloserInScope` shares between the openers of one
       // container. See `CommentScopeMemo`.
       commentScopeMemo: new Map(),

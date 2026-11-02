@@ -99,7 +99,7 @@ describe('an unmatched comment fence below the content column ends the item', ()
     ['a line comment at the column', ['  %% k', '%%%']],
     ['a run that closed before it', ['  %%%%', '  x', '  %%%%', '%%%']],
   ])('%s', (_name, body) => {
-    expect(read(lines('- a', ...body, '  x'))).toBe('<ul><li>a\nx\n</li></ul>')
+    expect(read(lines('- a', ...body, '  x'))).toBe('<ul><li>a</li></ul>')
   })
 
   it('keeps a run that closes the span the item holds', () => {

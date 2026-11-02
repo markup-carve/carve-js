@@ -111,7 +111,7 @@ describe('a list marker at the content column inside an open comment fence', () 
     // and the block parser does exactly that. A guard that ignored the closer
     // would swallow the marker here.
     expect(carveToHtml('- %%%\n  - x\n').trim()).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li></li>\n</ul>',
     )
   })
 

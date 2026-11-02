@@ -13,7 +13,7 @@ describe('a comment payload below a description column', () => {
             ' '.repeat(below) + 'z\n' +
             ' '.repeat(closer) + '%%%\n   \n   tail\n'
           expect(carveToHtml(source)).toBe(
-            '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>desc</p>\n    <p>p</p>\n  </dd>\n</dl>\n<p>z</p>\n<p>tail</p>',
+            '<dl>\n  <dt>term</dt>\n  <dd>desc</dd>\n</dl>\n<p>z</p>',
           )
         })
       }
@@ -36,7 +36,7 @@ describe('a comment payload below a description column', () => {
 
   it('folds plain text after an unterminated comment opener', () => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n   p\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>p\nz</p>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>z</p>',
     )
   })
 
@@ -51,7 +51,7 @@ describe('a comment payload below a description column', () => {
 
   it('ends the body when the unfinished span ends on a heading', () => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n   # h\nz\n   %%%\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <h1 id="h">h</h1>\n  </dd>\n</dl>\n<p>z</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>z</p>',
     )
   })
 
@@ -79,15 +79,15 @@ describe('a comment payload below a description column', () => {
     ['```', '<pre><code></code></pre>'],
     ['~~~', '<pre><code></code></pre>'],
     ['``` =html', ''],
-  ])('lets an unclosed %s interrupt the payload prose', (fence, block) => {
+  ])('hides an unclosed %s in the payload, and z ends the span (carve#4907)', (fence, _block) => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n   p\n   ' + fence + '\nz\n   %%%\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>p</p>\n    ' + block + '\n  </dd>\n</dl>\n<p>z</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>z</p>',
     )
   })
 
   it('keeps the list-item boundary at a below-column payload line', () => {
     expect(carveToHtml('- d\n\n  %%%\n  p\nz\n  %%%\n')).toBe(
-      '<ul>\n  <li>d\n    p\n  </li>\n</ul>\n<p>z</p>',
+      '<ul>\n  <li>d</li>\n</ul>\n<p>z</p>',
     )
   })
 

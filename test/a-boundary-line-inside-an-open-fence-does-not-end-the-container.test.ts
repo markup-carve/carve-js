@@ -224,7 +224,7 @@ describe('a boundary line inside an open fence does not end the container', () =
       // `%%%` is still a fenced block and its blank still must not loosen.
       // Raised by codex review on this change.
       expect(html(doc('- x', '  %%%', '  ```', '  a', '', '  b', '  ```'))).toBe(
-        '<ul><li>x <pre><code>a b </code></pre></li></ul>',
+        '<ul><li>x</li></ul>',
       )
     })
   })

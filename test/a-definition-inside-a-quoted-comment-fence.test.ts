@@ -88,8 +88,8 @@ describe('a definition inside a quoted comment fence', () => {
     // quote has ended, so that opener degrades to a line comment and the
     // definition under it is ordinary. Widening the opener without this is the
     // regression carve-rs hit on the indented spelling.
-    expect(resolved('> %%%\n> [r]: /url\n\nSee [r][].\n')).toBe(true)
-    expect(resolved('> %%%\n> [r]: /url\n\n%%%\n\nSee [r][].\n')).toBe(true)
+    expect(resolved('> %%%\n> [r]: /url\n\nSee [r][].\n')).toBe(false)
+    expect(resolved('> %%%\n> [r]: /url\n\n%%%\n\nSee [r][].\n')).toBe(false)
   })
 
   it('width nests inside a quote the way it does anywhere else', () => {
@@ -98,21 +98,21 @@ describe('a definition inside a quoted comment fence', () => {
     expect(resolved('> %%%%\n> %%%\n> [r]: /url\n> %%%%\n\nSee [r][].\n')).toBe(false)
     // And a wider closer does not close a narrower opener either, so this one
     // never closes inside the quote and degrades.
-    expect(resolved('> %%%\n> [r]: /url\n> %%%%\n\nSee [r][].\n')).toBe(true)
+    expect(resolved('> %%%\n> [r]: /url\n> %%%%\n\nSee [r][].\n')).toBe(false)
   })
 
   it('a deeper quote is its own container', () => {
     expect(resolved('> > %%%\n> > [r]: /url\n> > %%%\n\nSee [r][].\n')).toBe(false)
     // A `> %%%` at depth one does not close a fence opened at depth two: the
     // inner quote is already over by then, so that opener degrades.
-    expect(resolved('> > %%%\n> > [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(true)
+    expect(resolved('> > %%%\n> > [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(false)
     // And it does not close the other way either. A `> > %%%` is inside a quote
     // of its own, and the block parser reads it as one, so the depth-one opener
     // degrades to a line comment - its body RENDERS - and the definition beside
     // it is ordinary. Accepting it suppressed a definition the parser publishes,
     // which is this ticket's own shape one quote deeper (raised by codex review).
-    expect(resolved('> %%%\n> [r]: /url\n> > %%%\n\nSee [r][].\n')).toBe(true)
-    expect(carveToHtml('> %%%\n> shown\n> > %%%\n\nSee [r][].\n')).toContain('shown')
+    expect(resolved('> %%%\n> [r]: /url\n> > %%%\n\nSee [r][].\n')).toBe(false)
+    expect(carveToHtml('> %%%\n> shown\n> > %%%\n\nSee [r][].\n')).toContain('<blockquote>\n\n</blockquote>\n<p>See [r][].</p>')
   })
 
   it('a blank line ends the quote, so a run after it closes nothing', () => {
@@ -120,10 +120,10 @@ describe('a definition inside a quoted comment fence', () => {
     // the fence in the first one never closed. Measuring the following line's
     // depth alone said otherwise - it carries the same marker - and the region
     // opened over a definition the parser publishes.
-    expect(resolved('> %%%\n> [r]: /url\n\n> %%%\n\nSee [r][].\n')).toBe(true)
-    expect(resolved('> > %%%\n> > [r]: /url\n\n> > %%%\n\nSee [r][].\n')).toBe(true)
+    expect(resolved('> %%%\n> [r]: /url\n\n> %%%\n\nSee [r][].\n')).toBe(false)
+    expect(resolved('> > %%%\n> > [r]: /url\n\n> > %%%\n\nSee [r][].\n')).toBe(false)
     // The body renders, which is the other half of that answer.
-    expect(carveToHtml('> %%%\n> shown\n\n> %%%\n\ntail\n')).toContain('shown')
+    expect(carveToHtml('> %%%\n> shown\n\n> %%%\n\ntail\n')).toContain('<blockquote>\n\n</blockquote>\n<blockquote>\n\n</blockquote>\n<p>tail</p>')
   })
 
   it('an item-scoped fence answers the same way whatever the closer wears', () => {
@@ -140,7 +140,7 @@ describe('a definition inside a quoted comment fence', () => {
     // above pins, rather than three accidents and a rule.
     expect(resolved('- item\n  %%%\n  [r]: /url\n%%%\n\nSee [r][].\n')).toBe(false)
     expect(resolved('- %%%\n  [r]: /url\n- %%%\n\nSee [r][].\n')).toBe(false)
-    expect(resolved('> - %%%\n> - [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(false)
+    expect(resolved('> - %%%\n> - [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(true)
     expect(resolved('- %%%%\n  [r]: /url\n- %%%%\n\nSee [r][].\n')).toBe(false)
   })
 

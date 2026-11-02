@@ -3977,35 +3977,35 @@
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n[^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n  [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n   [^n]: note\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>See [r][], [r\\]][], and <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n[r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n  [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n   [r\\]]: /url\n\nSee [r][], [r\\]][], and [^n].\n",
-    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and [^n].</p>"
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body\n+</dd>\n  <dt>term</dt>\n</dl>\n<p>[r]]: /url</p>\n<p>See [r][], [r\\]][], and [^n].</p>"
   },
   {
     "source": ":: term\n: body\n+\n:: term\n  %%%\n\n  [r]: /opaque\n  %%%\n[r]: /url\n [r]: /again\n\nSee [r][], [r\\]][], and [^n].\n",

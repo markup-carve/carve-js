@@ -32,7 +32,7 @@
   {
     "id": "literal-comment-span-shift0",
     "source": "- a\n  ::: |\n  %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-comment-line-shift0",
@@ -117,7 +117,7 @@
   {
     "id": "literal-comment-span-shift1",
     "source": "- a\n  ::: |\n   %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-comment-line-shift1",
@@ -202,7 +202,7 @@
   {
     "id": "literal-comment-span-shift2",
     "source": "- a\n  ::: |\n    %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-comment-line-shift2",
@@ -287,7 +287,7 @@
   {
     "id": "literal-comment-span-shift4",
     "source": "- a\n  ::: |\n      %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-comment-line-shift4",

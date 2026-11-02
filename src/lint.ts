@@ -1077,6 +1077,9 @@ export function lintCarve(
   const sourceOffset = (line: number, column: number): number =>
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
   pushUnclosedCodeFences(unclosedCodeFences, sourceLines, lineOffsets, sourceOffset, out)
+  const commentBlocks: Comment[] = [...droppedComments]
+  walkDocument(doc, (node) => { if (node.type === 'comment') commentBlocks.push(node as unknown as Comment) })
+  pushUnclosedCommentFences(commentBlocks, sourceLines, sourceOffset, out)
   walkDocument(doc, (node) => {
     const code = node.type === 'code_block' ||
       (node.type === 'figure' && (node as { target?: { type?: string } }).target?.type === 'code_block')
@@ -2568,6 +2571,31 @@ function pushUnclosedCodeFences(
         : `it ends at the end of its container on line ${fence.endLine}`
     out.push({ line: fence.line, column, start, end: start + fence.marker.length,
       rule: 'unclosed-code-fence', message: `The ${fence.marker} fence opened here has no closing fence; ${ending}. Add a closing ${fence.marker} where the code should stop.` })
+  }
+}
+
+/** One `unclosed-comment-fence` finding per `%%%` block comment whose last line is not its closer (PART 9 §28). */
+function pushUnclosedCommentFences(
+  comments: readonly Comment[],
+  sourceLines: readonly string[],
+  sourceOffset: (line: number, column: number) => number,
+  out: LintWarning[],
+): void {
+  const seen = new Set<string>()
+  for (const comment of comments) {
+    const at = (comment as Positioned).pos
+    if (!comment.block || at?.startColumn === undefined || at.endLine === undefined) continue
+    const pos = { startLine: at.startLine, startColumn: at.startColumn, endLine: at.endLine }
+    const opener = /^%{3,}/.exec([...sourceLines[pos.startLine - 1] ?? ''].slice(pos.startColumn - 1).join(''))?.[0]
+    const key = `${pos.startLine}:${pos.startColumn}`
+    if (!opener || seen.has(key)) continue
+    seen.add(key)
+    const last = (sourceLines[pos.endLine - 1] ?? '').replace(/^[ \t>]*/, '')
+    if (pos.endLine > pos.startLine && /^%+/.exec(last)?.[0] === opener) continue
+    const tail = sourceLines.slice(pos.endLine).some(line => line.trim() !== '')
+    const start = sourceOffset(pos.startLine, pos.startColumn)
+    out.push({ line: pos.startLine, column: pos.startColumn, start, end: start + opener.length, rule: 'unclosed-comment-fence',
+      message: `The ${opener} comment fence opened here has no closing fence and hides everything to the end of ${tail ? 'its container' : 'the document'}. Add a closing ${opener} where the comment should stop.` })
   }
 }
 

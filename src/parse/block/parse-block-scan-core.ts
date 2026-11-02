@@ -2,22 +2,16 @@ import { type Comment, GENERATED_CONTENT_KINDS, type InlineNode } from '../../as
 import { type CarveExtension } from '../../extension.js'
 import { type AsciiHeadingIdMode } from '../../heading/heading-ids.js'
 import { visitInlineChildren } from '../inline/inline-children.js'
-import { LiteralCommentClosers } from './literal-comment-closers.js'
 import { indentColumns, isBlankLine, layoutWork, Lexer } from '../parse-lexer.js'
 import {
   containerQuoteDepth,
   extractItemAttr,
   FENCE_TRAILING_WS,
-  isContinuationMarker,
-  isListMarkerLine,
   leadingWhitespace,
   type PrepassScope,
   RE_ADMONITION_CLOSE,
   RE_ADMONITION_OPEN,
-  RE_BLOCKQUOTE,
-  RE_COMMENT_LINE,
   RE_FENCE,
-  LAZY_FRAME,
   RE_HARDBREAKS_OPEN,
   RE_LINE_BLOCK_OPEN,
   RE_ORDERED,
@@ -25,7 +19,6 @@ import {
   RE_RAW_FENCE,
   RE_TASK,
   RE_UNORDERED,
-  stripContainerPrefixes,
   stripLazyFrame,
 } from '../parse-prepass-core.js'
 import {
@@ -33,7 +26,6 @@ import {
   commentFenceRun,
   fenceCloseRe,
   payloadFenceHasCloser,
-  quotePrefixLength,
   RE_COMMENT_BLOCK_ANY,
   RE_FENCE_CLOSER,
 } from './parse-quote-core.js'
@@ -617,257 +609,49 @@ export function exactCloserPossible(last: Pick<ReadonlyMap<number, number>, 'get
  * that length, which for an unclosed fence is the opener - so the check could
  * only ever fail for an opener on line 0 (markup-carve/carve-js#1118).
  */
-export function commentBlockHasCloser(lexer: Lexer, fence: number, after: number = lexer.pos): boolean {
-  return exactCloserPossible(closerIndex(lexer).comment, fence, after)
+export function commentBlockHasCloser(_lexer: Lexer, _fence: number, _after?: number): boolean {
+  return true
 }
 
 /** PART 0 S1 asks for a closer ahead in the DOCUMENT, so a body also sees those past its hosts (carve#4770). */
-export function commentCloserAhead(lexer: Lexer, fence: number, after: number = lexer.pos): boolean {
-  if (commentBlockHasCloser(lexer, fence, after)) return true
-  // A framed line ahead is one a host already took as lazy text, so no span crosses it.
-  return hostCloserIndex(lexer).lastLazy <= after && commentCloserPastHost(lexer, fence)
-}
-
-function commentCloserPastHost(lexer: Lexer, fence: number): boolean {
-  for (let host = lexer.columnParent; host !== undefined; host = host.columnParent) {
-    if (commentBlockHasCloser(host, fence, host.pos - 1)) return true
-  }
-  return false
-}
-
-interface HostCloserIndex {
-  closers: Map<number, number[]>
-  nextBlank: Int32Array
-  lastLazy: number
-}
-
-const hostCloserIndexes = new WeakMap<Lexer, HostCloserIndex>()
-
-function hostCloserIndex(host: Lexer): HostCloserIndex {
-  let index = hostCloserIndexes.get(host)
-  if (index !== undefined) return index
-  const closers = new Map<number, number[]>()
-  const nextBlank = new Int32Array(host.lineCount + 1).fill(host.lineCount)
-  let lastLazy = -1
-  for (let i = host.lineCount - 1; i >= 0; i--) {
-    if (lastLazy < 0 && (host.lineAt(i)!.startsWith(LAZY_FRAME) || host.quoteLazyLines.has(host.lineNumber(i)))) lastLazy = i
-    const line = stripLazyFrame(host.lineAt(i)!)
-    nextBlank[i] = isBlankLine(line) ? i : nextBlank[i + 1]!
-    const run = commentFenceRun(line.replace(/^[ \t]+/, ''))
-    if (run === undefined) continue
-    const rows = closers.get(run)
-    if (rows === undefined) closers.set(run, [i])
-    else rows.push(i)
-  }
-  for (const rows of closers.values()) rows.reverse()
-  index = { closers, nextBlank, lastLazy }
-  hostCloserIndexes.set(host, index)
-  return index
-}
-
-/** As `commentCloserPastHost`, but a blank line past the host ends the search, as a quote's own search does. */
-function quotedCommentCloserPastHost(lexer: Lexer, fence: number): boolean {
-  for (let host = lexer.columnParent; host !== undefined; host = host.columnParent) {
-    const { closers, nextBlank } = hostCloserIndex(host)
-    // A host may end past a blank run it did not keep.
-    const from = host.pos > 0 && isBlankLine(stripLazyFrame(host.lineAt(host.pos - 1) ?? 'x')) ? host.pos - 1 : host.pos
-    const rows = closers.get(fence) ?? []
-    let lo = 0
-    for (let hi = rows.length; lo < hi;) {
-      const mid = (lo + hi) >> 1
-      if (rows[mid]! < from) lo = mid + 1
-      else hi = mid
-    }
-    if (lo < rows.length && rows[lo]! < nextBlank[from]!) return true
-    if (nextBlank[from]! < host.lineCount) return false
-  }
-  return false
-}
-
-/**
- * From a `%%%` opener at line `from`, is there a matching closer BEFORE THE
- * CONTAINER THE OPENER SITS IN ENDS?
- *
- * The definition prepass's own bound, and the reason it cannot use the
- * document-wide index: a fence inside a list item or a quote is bounded by that
- * container, so the closer has to arrive before the first non-blank line that
- * leaves it, with blank lines transparent (carve-js#1146). `scopeHoldsLine` is
- * the same container test the fence, verse and depth trackers in this pass
- * already share, so all four agree on what "still inside" means.
- *
- * THE SCOPE IS ASKED BEFORE THE CLOSER, which is the opposite of the order the
- * CODE fence uses a few hundred lines up - and the two orders are both right,
- * because the two fence kinds close differently. A code fence re-bases its
- * closer on the column it opened at, so a run written at column 0 for a fence
- * opened at an item's content column is its closer by construction and has to
- * be read before the container question. A comment fence has no such re-basing:
- *
- * ````
- * - item
- *   %%%
- *   [r]: /url
- * %%%
- * ````
- *
- * The column-0 run ENDS THE ITEM, so it is not inside the fence's container and
- * closes nothing; the opener degrades to a line comment and `[r]: /url` is an
- * ordinary definition. Reading the closer first opened a region over it and the
- * definition vanished. Verified against the executable spec oracle.
- *
- * A CLOSER IS WHATEVER THE LOOP THAT CONSUMES THE REGION WOULD CLOSE ON, i.e.
- * a `%` run of this width in the `stripContainerPrefixes` view - see
- * `commentRunLines`. Reading raw lines here instead looked like the smaller
- * change and was not: a quoted fence with a quoted closer, plus any raw run of
- * its width later in the document, passed the index and then found no closer in
- * scope, so a definition the author had commented out went live. The raw-line
- * question survives where it belongs, in the index that answers first.
- *
- * The scan is bounded by the container, so it is linear in that container
- * rather than in the document, and it is reached only for an opener that HAS a
- * container - a document-level opener keeps the O(1) index, where the
- * unbounded question is the correct one anyway.
- */
-export function commentCloserInScope(
-  lexer: Lexer,
-  fence: number,
-  from: number,
-  scope: PrepassScope,
-  memo: CommentScopeMemo,
-): boolean {
-  // THE LINE INDEX ANSWERS BEFORE THE CONTAINER IS WALKED. "No `%` run of this
-  // width anywhere ahead" refutes an opener outright, and that is the answer
-  // for every unterminated opener - so a document that is a run of them stays
-  // linear instead of paying a boundary scan each. This is the hot-path guard
-  // the RAW document-wide index used to provide one caller up; it has to live
-  // here now, because that index cannot see a `> %%%` and refuted the quoted
-  // spelling wrongly (markup-carve/carve#1341).
-  const at = commentRunLines(lexer).get(fence)
-  if (at === undefined) return false
-  // The first line of this width strictly after the opener. `at` is ascending,
-  // so a binary search answers it without walking the container - which is what
-  // keeps a run of openers inside one item linear rather than quadratic.
-  let lo = 0
-  let hi = at.length
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (at[mid]!.line <= from) lo = mid + 1
-    else hi = mid
-  }
-  if (lo >= at.length) return false
-  // ONLY A RUN AT THE OPENER'S OWN QUOTE DEPTH CLOSES IT, and the two
-  // directions fail for different reasons:
-  //
-  //   - a SHALLOWER run is the line that ENDED the opener's quote. `> > %%%`
-  //     is not closed by a `> %%%`, because the inner quote is over by then;
-  //   - a DEEPER run is inside a quote of its own, and the block parser reads
-  //     it as one. `> %%%` is not closed by a `> > %%%`: the opener degrades
-  //     to a line comment, its body RENDERS, and the definition beside it is
-  //     ordinary. Accepting it suppressed a definition the parser publishes,
-  //     which is the same two-halves-disagree shape this whole change is
-  //     about, one quote deeper.
-  //
-  // A non-matching run is skipped and the next one of this width is asked, so
-  // an opener is not refuted by a line that was never its closer. Bounded by
-  // the container the same way the boundary is: the walk stops at the first run
-  // past `end`, so it reads only runs written inside the opener's own scope.
-  const end = commentScopeEnd(lexer, from, scope, memo)
-  let i = lo
-  for (; i < at.length && at[i]!.line < end; i++) {
-    if (at[i]!.depth === scope.quoteDepth) return true
-  }
-
-  // Keep the existing single-closer reading across a sibling item. A second
-  // closer inside that sibling makes its marker an opener of its own instead.
-  const sibling = lexer.lineAt(end) ?? ''
-  if (i < at.length && at[i]!.line === end && at[i]!.depth === scope.quoteDepth &&
-      isListMarkerLine(sibling) && indentColumns(sibling, scope.contentCol) < scope.contentCol) {
-    const siblingEnd = commentScopeEnd(lexer, end, scope, memo)
-    for (let next = i + 1; next < at.length && at[next]!.line < siblingEnd; next++) {
-      if (at[next]!.depth === scope.quoteDepth) return false
-    }
-    return true
-  }
-
-  return false
-}
-
-/**
- * Every line carrying a `%` run, keyed by run length and ascending, WITH THE
- * QUOTE DEPTH THE RUN WAS WRITTEN AT.
- */
-export function commentRunLines(lexer: Lexer): Map<number, { line: number; depth: number }[]> {
-  if (lexer.commentRunLines !== undefined) return lexer.commentRunLines
-  const m = new Map<number, { line: number; depth: number }[]>()
-  for (let i = 0; i < lexer.lineCount; i++) {
-    const raw = lexer.lineAt(i)!
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lineAt(i - 1) ?? ''))
-    const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(raw, afterTerm))
-    if (c === null) continue
-    const entry = {
-      line: i,
-      // THE OPENER AND THE CLOSER ARE MEASURED THE SAME WAY, which is the whole
-      // point of naming this once: `- - > %%%` measured its own depth as 0 here
-      // while its closer `    > %%%` measured 1, so no run at the opener's depth
-      // existed and the region never opened (carve-js#1181).
-      depth: containerQuoteDepth(raw),
-    }
-    const at = m.get(c[1]!.length)
-    if (at !== undefined) at.push(entry)
-    else m.set(c[1]!.length, [entry])
-  }
-  lexer.commentRunLines = m
-
-  return m
+export function commentCloserAhead(_lexer: Lexer, _fence: number, _after?: number): boolean {
+  return true
 }
 
 /** Remember each container boundary across its comment openers. */
 export type CommentScopeMemo = Map<string, { from: number; end: number }>
 
 /**
- * The first line after `from` at which the opener's container is over.
+ * The first line after `from` that leaves the opener's container, which ends an
+ * open comment span under PART 0 S1 (a nonblank line that misses the owner, or
+ * the end of a quote at a blank). Memoized per container, so a run of spans in
+ * one container stays linear.
  */
-export function commentScopeEnd(
+export function commentSpanScopeEnd(
   lexer: Lexer,
   from: number,
   scope: PrepassScope,
   memo: CommentScopeMemo,
 ): number {
-  const key = `${scope.quoteDepth}|${scope.contentCol}`
+  // The ownership pass may have moved the opener's own line below the column; it reads at its own.
+  const strip = (raw: string) => raw.replace(/^(?:>(?: |$))+/, '')
+  const opener = strip(lexer.lineAt(from) ?? '')
+  const column = Math.min(scope.contentCol, Math.max(opener.indexOf('%'), 0))
+  const key = `${scope.quoteDepth}|${column}`
   const e = memo.get(key)
   if (e !== undefined && from >= e.from && from < e.end) return e.end
   let end = lexer.lineCount
   for (let i = from + 1; i < lexer.lineCount; i++) {
     const raw = lexer.lineAt(i)!
-    // The blank-line half first: it is two array reads, where the quote and
-    // column measurements below are regexes, and it rejects almost every line.
-    if (isBlankLine(raw)) continue
-    // A sibling marker closes an item without a separating blank line.
-    const siblingItem = scope.contentCol > 0 && isListMarkerLine(raw) &&
-      indentColumns(raw, scope.contentCol) < scope.contentCol
-    if (!siblingItem && !isBlankLine(lexer.lineAt(i - 1) ?? '')) continue
-    // AND A CONTINUATION MARKER IS NOT A DEPARTURE. `+` at column 0 after a
-    // blank line attaches the next block to the item rather than ending it
-    // (PART 17), so the fence is still inside its container and the closer
-    // below the marker is still its own. Taken as the boundary, the region
-    // never opened and the definition inside it went live while the comment
-    // body above it stayed invisible - the leak, one marker over.
-    if (isContinuationMarker(raw)) continue
-    // A QUOTED SCOPE IS OVER AT THE BLANK, whatever stands after it. A
-    // blockquote does not survive a blank line, so the next non-blank line
-    // opens a NEW one even when it carries the same markers - and a `%%%` run
-    // there belongs to that quote, not to the fence above.
-    if (scope.quoteDepth > 0) {
-      end = i
-      break
+    if (isBlankLine(raw)) {
+      if (scope.quoteDepth > 0) {
+        end = i
+        break
+      }
+      continue
     }
-    const depth = containerQuoteDepth(raw)
-    const view = raw.replace(/^(?:>(?: |$))+/, '')
-    if (
-      depth < scope.quoteDepth ||
-      // VISUAL COLUMNS, the way the parser measures reach: a tab is worth up to
-      // four. The cap keeps it O(the column) rather than O(the indentation run).
-      (scope.contentCol > 0 && indentColumns(view, scope.contentCol) < scope.contentCol)
-    ) {
+    if (containerQuoteDepth(raw) < scope.quoteDepth ||
+      (column > 0 && indentColumns(strip(raw), column) < column)) {
       end = i
       break
     }
@@ -880,91 +664,12 @@ export function commentScopeEnd(
 /**
  * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
  */
-export function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
-  let missed = false
-  for (let i = fromIndex + 1; i < lexer.lineCount; i++) {
-    const line = lexer.lineAt(i)!
-    if (isBlankLine(line)) return false
-    const quoted = RE_BLOCKQUOTE.exec(line)
-    // An open span tests its closer before ownership, so an unmarked closer still closes it (PART 0 S1, corpus 888).
-    // An unmarked line ends the span and the quote, and hides no closer (carve#4872).
-    if (!quoted) {
-      if (commentFenceRun(line) === fence) return true
-      missed = true
-      continue
-    }
-    if (missed && line[0] !== '>') continue
-    const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
-    if (run && run[1]!.length === fence) return true
-  }
-
-  return quotedCommentCloserPastHost(lexer, fence)
+export function quotedCommentHasCloser(_lexer: Lexer, _fence: number, _fromIndex: number): boolean {
+  return true
 }
 
-export function literalCommentHasCloser(lexer: Lexer, width: number, from: number, depth: number, floor: number): boolean {
-  const cache = lexer.literalCommentClosers ??= new Map()
-  let run = cache.get(depth)
-  if (run === undefined || from < run.start || from >= run.end) {
-    const start = depth < 0 ? 0 : from
-    let end = start
-    const columns: number[] = []
-    const widths: Array<number | undefined> = []
-    for (; end < lexer.lineCount; end++) {
-      const line = lexer.lineAt(end)!
-      let at = 0
-      for (let level = 0; level <= depth; level++) {
-        const prefix = quotePrefixLength(line, at, line.length)
-        if (prefix === 0) { at = -1; break }
-        at += prefix
-      }
-      if (at < 0) break
-      const content = line.slice(at)
-      columns.push(isBlankLine(content) || RE_COMMENT_LINE.test(content) ? Infinity : indentColumns(content))
-      widths.push(commentFenceRun(content))
-    }
-    run = { start, end, index: new LiteralCommentClosers(columns, widths) }
-    cache.set(depth, run)
-  }
-  if (run.index.hasCloser(width, from - run.start, floor)) return true
-  // The first line short of the depth is still tested as the span's closer (PART 0 S1, corpus 888).
-  const short = lexer.lineAt(run.end)
-  if (short !== undefined && run.index.reachesEnd(from - run.start, floor)) {
-    let at = 0
-    for (let prefix = quotePrefixLength(short, 0, short.length); prefix > 0; prefix = quotePrefixLength(short, at, short.length)) at += prefix
-    if (commentFenceRun(short.slice(at)) === width) return true
-  }
-  // A nonblank line that misses the quote closes the owner's comment before
-  // it can become lazy text. A quoted delimiter beyond that boundary still
-  // establishes that the opener was a span rather than a line comment.
-  if (!run.index.reachesEnd(from - run.start, floor)) return false
-  // The search past the quote is an unindented opener's (carve#4872).
-  const pastQuote = floor === 0 && indentColumns(quotedBody(lexer.lineAt(from)!, depth)) === 0
-  if (run.end >= lexer.lineCount) return pastQuote && quotedCommentCloserPastHost(lexer, width)
-  if (isBlankLine(lexer.lineAt(run.end)!)) return false
-  for (let i = run.end + 1; i < lexer.lineCount; i++) {
-    const line = lexer.lineAt(i)!
-    if (isBlankLine(line)) return false
-    let at = 0
-    for (let level = 0; level <= depth; level++) {
-      const prefix = line[at] === '>' || level > 0 ? quotePrefixLength(line, at, line.length) : 0
-      if (prefix === 0) { at = -1; break }
-      at += prefix
-    }
-    // An unmarked line hides no closer, and an unmarked closer closes (carve#4872).
-    if (at < 0) {
-      if (pastQuote && commentFenceRun(line.replace(/^[ \t]+/, '')) === width) return true
-      continue
-    }
-    const content = line.slice(at)
-    if (indentColumns(content) >= floor && commentFenceRun(content) === width) return true
-  }
-  return pastQuote && quotedCommentCloserPastHost(lexer, width)
-}
-
-function quotedBody(line: string, depth: number): string {
-  let at = 0
-  for (let level = 0; level <= depth; level++) at += quotePrefixLength(line, at, line.length)
-  return line.slice(at)
+export function literalCommentHasCloser(_lexer: Lexer, _width: number, _from: number, _depth: number, _floor: number): boolean {
+  return true
 }
 
 /**

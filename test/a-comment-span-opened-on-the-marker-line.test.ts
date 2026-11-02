@@ -59,7 +59,7 @@ describe('a comment span opened on the marker line', () => {
     [
       'an opener with no closer is one line comment and the rest is content',
       '- %%%\n  hidden\n',
-      '<ul>\n  <li>hidden</li>\n</ul>',
+      '<ul>\n  <li></li>\n</ul>',
     ],
     [
       'a span opened below the marker line was already read this way',

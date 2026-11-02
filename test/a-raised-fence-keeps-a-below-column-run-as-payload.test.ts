@@ -185,7 +185,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a degraded comment fence leaves the folded heading as text',
       '- item\n\n   :::\n   a\n   %%%\n   b\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <p>b</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
     ],
     [
       'an unclosed tilde fence leaves it as text too',

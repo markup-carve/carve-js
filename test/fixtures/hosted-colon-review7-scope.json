@@ -17,7 +17,7 @@
   {
     "id": "review7-c01-comment-shaped-verse-04",
     "source": "- ::: |\n  %%%%\n %% c\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-05",
@@ -42,7 +42,7 @@
   {
     "id": "review7-c01-comment-shaped-verse-09",
     "source": "- a\n  ::: |\n  %%%%\n %% c\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c01-comment-shaped-verse-10",
@@ -57,7 +57,7 @@
   {
     "id": "review7-c01-comment-shaped-verse-12",
     "source": "- a\n  ::: |\n    %%%%\n %% c\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%%</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-01",
@@ -342,12 +342,12 @@
   {
     "id": "review7-c07-open-fence-tail-owner-05",
     "source": "- a\n   :::\n %%%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-06",
     "source": "- a\n   :::\n %%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-07",
@@ -357,12 +357,12 @@
   {
     "id": "review7-c07-open-fence-tail-owner-08",
     "source": "- a\n    :::\n %%%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-09",
     "source": "- a\n    :::\n %%%\n- tail\n",
-    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-10",
@@ -382,12 +382,12 @@
   {
     "id": "review7-c07-open-fence-tail-owner-13",
     "source": "> - ::: box\n>   - m\n>   %%%\n>     ```\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>m\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>m</li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-14",
     "source": "> - ::: box\n>   - m\n>   %%%\n>     ~~~\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>m\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>m</li>\n        </ul>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-15",

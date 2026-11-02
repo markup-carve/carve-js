@@ -46,7 +46,8 @@ describe('a Djot table caption and an empty footnote body survive import', () =>
     [
       'an empty footnote body',
       '[^a]\n[^b]\n\n[^b]:\n',
-      '[^carve-djot-note-0]: %%%%\n\n[^carve-djot-note-0]\n[^b]\n\n[^b]: %%%%\n',
+      // An empty `%%` comment: a bare `%%%%` would open a span (carve#4907).
+      '[^carve-djot-note-0]: %%\n\n[^carve-djot-note-0]\n[^b]\n\n[^b]: %%\n',
     ],
     // CONTROLS. Each needs its escape, and a fix that stopped escaping would
     // satisfy the rows above while breaking one of these.

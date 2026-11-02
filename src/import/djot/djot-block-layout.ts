@@ -1200,7 +1200,7 @@ function finishLayout(I: LayoutInput, s: LayoutState): string {
   return rendered.join('\n')
 }
 
-export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string, onLiteralQuote?: (line: number, depth: number) => void): string {
+export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%', holdItemAttributes?: (attributes: string, block?: boolean) => string, onLiteralQuote?: (line: number, depth: number) => void): string {
   if (holdItemAttributes) {
     const prepared = deepQuotedItemAttributes(source, holdItemAttributes)
     if (prepared !== source) { source = prepared; rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false)) }

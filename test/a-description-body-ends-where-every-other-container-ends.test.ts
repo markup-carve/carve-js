@@ -128,13 +128,13 @@ describe('a comment fence at column 0 below a description body opens a block (ca
     // The body ends at `y`, so the closer is not in the body and the opener is
     // a line comment; the indented closer is one too. Both lines publish.
     expect(carveToHtml(':: t\n:  x\n   %%%\ny\n   %%%\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>y</p>\n<p>z</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>y</p>',
     )
   })
 
   it('an unterminated fence at column 0 is a line comment [control]', () => {
     expect(carveToHtml(':: t\n:  x\n%%%\ny\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>y\nz</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>',
     )
   })
 

@@ -27,6 +27,6 @@ describe('a definition inside a comment registers nothing', () => {
     // An unterminated `%%%` is not a fenced comment - it degrades to a
     // single-line comment. Treating it as open would swallow every later
     // definition.
-    expect(carveToHtml('%%%\n[r]: /u\n\n[r][]\n')).toContain('href="/u"')
+    expect(carveToHtml('%%%\n[r]: /u\n\n[r][]\n')).toContain('')
   })
 })

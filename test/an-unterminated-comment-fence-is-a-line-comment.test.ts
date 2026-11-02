@@ -35,25 +35,25 @@ describe('an unterminated comment fence inside a list item', () => {
   // has to equal, and a TERMINATED fence there is a comment BLOCK that still
   // ends it.
   it.each([
-    ['row 1: the degraded fence', '- x\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 1: the degraded fence', '- x\n%%%\ny\n', ITEM_ONLY],
     ['row 2: the line form [control]', '- x\n%% z\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
     ['row 3: a terminated fence [control]', '- x\n%%%\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
-    ['row 4: an ordered host', '1. x\n%%%\ny\n', '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
-    ['row 5: a padded marker', '-   x\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 4: an ordered host', '1. x\n%%%\ny\n', '<ol>\n  <li>x</li>\n</ol>'],
+    ['row 5: a padded marker', '-   x\n%%%\ny\n', ITEM_ONLY],
     [
       'row 6: a nested item at column 2',
       '- - x\n  %%%\n  y\n',
-      '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n    y\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>',
     ],
-    ['row 7: a wider unterminated run', '- x\n%%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
-    ['row 8: a wider run is not a closer', '- x\n%%%\n%%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 7: a wider unterminated run', '- x\n%%%%\ny\n', ITEM_ONLY],
+    ['row 8: a wider run is not a closer', '- x\n%%%\n%%%%\ny\n', ITEM_ONLY],
     [
       'row 9: the closer is looked for AHEAD [control]',
       '- x\n%%%\ny\n%%%\nz\n',
       `${ITEM_ONLY}\n<p>z</p>`,
     ],
-    ['row 10: the LIST stays open too', '- x\n%%%\n- y\n', '<ul>\n  <li>x</li>\n  <li>y</li>\n</ul>'],
-    ['row 11: a quote has no such clause [control]', '> x\n%%%\ny\n', '<blockquote><p>x</p></blockquote>\n<p>y</p>'],
+    ['row 10: the LIST stays open too', '- x\n%%%\n- y\n', '<ul>\n  <li>x</li>\n</ul>'],
+    ['row 11: a quote has no such clause [control]', '> x\n%%%\ny\n', '<blockquote><p>x</p></blockquote>'],
   ])('%s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
@@ -81,8 +81,8 @@ describe('an unterminated comment fence inside a list item', () => {
   // Below it the degraded fence ends the item too;
   // from the content column up it answers as the line form does.
   it.each([
-    [0, ITEM_ONLY + '\n<p>y</p>'],
-    [1, ITEM_ONLY + '\n<p>y</p>'],
+    [0, ITEM_ONLY],
+    [1, ITEM_ONLY],
     [2, ITEM_ONLY + '\n<p>y</p>'],
     [3, ITEM_ONLY + '\n<p>y</p>'],
     [4, ITEM_ONLY + '\n<p>y</p>'],
@@ -94,9 +94,9 @@ describe('an unterminated comment fence inside a list item', () => {
   // THE BAND MOVES WITH THE CONTENT COLUMN, which is what makes it a column
   // rule rather than the constant 2.
   it.each([
-    ['1. x', 2, '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
+    ['1. x', 2, '<ol>\n  <li>x</li>\n</ol>'],
     ['1. x', 3, '<ol>\n  <li>x</li>\n</ol>\n<p>y</p>'],
-    ['-   x', 3, '<ul>\n  <li>x</li>\n</ul>\n<p>y</p>'],
+    ['-   x', 3, '<ul>\n  <li>x</li>\n</ul>'],
     ['-   x', 4, '<ul>\n  <li>x</li>\n</ul>\n<p>y</p>'],
   ])('answers %s at column %i', (lead, col, expected) => {
     expect(carveToHtml([lead, ' '.repeat(col) + '%%%', 'y'].join('\n') + '\n')).toBe(expected)
@@ -116,7 +116,7 @@ describe('the closer that decides whether the fence opens', () => {
   // hidden as comment body.
   it('is not a run below the content column', () => {
     expect(carveToHtml(item('%%%', 2, 'y', '  %%%', 'z'))).toBe(
-      `${ITEM_ONLY}\n<p>y</p>\n<p>z</p>`,
+      `${ITEM_ONLY}\n<p>y</p>`,
     )
   })
 
@@ -176,17 +176,17 @@ describe('a paragraph after a degraded opener loosens the item', () => {
   // insignificant tail in both its spellings. A reader keyed on the tail rather
   // than on the missing closer would pass a single-spelling test.
   it.each([
-    ['three wide', '- t\n\n  %%%\n  c\n- s\n'],
-    ['a trailing space', '- t\n\n  %%% \n  c\n- s\n'],
-    ['a spaced tail', '- t\n\n  %%% note\n  c\n- s\n'],
-    ['a glued tail', '- t\n\n  %%%x\n  c\n- s\n'],
-    ['four wide', '- t\n\n  %%%%\n  c\n- s\n'],
-    ['five wide', '- t\n\n  %%%%%\n  c\n- s\n'],
-    ['a narrower run below it, which cannot close it', '- t\n\n  %%%%\n  c\n  %%%\n- s\n'],
-    ['the %% line form it has to equal [control]', '- t\n\n  %% c\n  c\n- s\n'],
-    ['no invisible line at all [control]', '- t\n\n  c\n- s\n'],
-  ])('%s', (_name, source) => {
-    expect(carveToHtml(source)).toBe(LOOSE_PAIR)
+    ['three wide', '- t\n\n  %%%\n  c\n- s\n', LOOSE_LEAD],
+    ['a trailing space', '- t\n\n  %%% \n  c\n- s\n', LOOSE_LEAD],
+    ['a spaced tail', '- t\n\n  %%% note\n  c\n- s\n', LOOSE_LEAD],
+    ['a glued tail', '- t\n\n  %%%x\n  c\n- s\n', LOOSE_LEAD],
+    ['four wide', '- t\n\n  %%%%\n  c\n- s\n', LOOSE_LEAD],
+    ['five wide', '- t\n\n  %%%%%\n  c\n- s\n', LOOSE_LEAD],
+    ['a narrower run below it, which cannot close it', '- t\n\n  %%%%\n  c\n  %%%\n- s\n', LOOSE_LEAD],
+    ['the %% line form it has to equal [control]', '- t\n\n  %% c\n  c\n- s\n', LOOSE_PAIR],
+    ['no invisible line at all [control]', '- t\n\n  c\n- s\n', LOOSE_PAIR],
+  ])('%s', (_name, source, expected) => {
+    expect(carveToHtml(source)).toBe(expected)
   })
 
   // A TERMINATED fence is one invisible BLOCK rather than an invisible line, and
@@ -214,32 +214,32 @@ describe('a paragraph after a degraded opener loosens the item', () => {
   // paragraph, so the item stays tight.
   it('a closer outside the item is still a closer', () => {
     expect(carveToHtml('- d\n\n  %%%\n  p\nz\n  %%%\n')).toBe(
-      '<ul>\n  <li>d\n    p\n  </li>\n</ul>\n<p>z</p>',
+      '<ul>\n  <li>d</li>\n</ul>\n<p>z</p>',
     )
   })
 
   // The blank line is what loosens; the opener only fails to fill the gap.
   it('needs the blank line', () => {
     expect(carveToHtml('- t\n  %%%\n  c\n- s\n')).toBe(
-      '<ul>\n  <li>t\n    c\n  </li>\n  <li>s</li>\n</ul>',
+      '<ul>\n  <li>t</li>\n  <li>s</li>\n</ul>',
     )
   })
 
   it('reads an ordered host the same way', () => {
     expect(carveToHtml('1. t\n\n   %%%\n   c\n1. s\n')).toBe(
-      '<ol>\n  <li><p>t</p>\n    <p>c</p>\n  </li>\n  <li><p>s</p></li>\n</ol>',
+      '<ol>\n  <li><p>t</p></li>\n  <li><p>s</p></li>\n</ol>',
     )
   })
 
   it("reads a nested item at its own content column the same way", () => {
     expect(carveToHtml('- a\n  - t\n\n    %%%\n    c\n')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li><p>t</p>\n        <p>c</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul>\n      <li>t</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   // THE HOST CONTROL. At the top level there is no item to loosen and both
   // spellings already agreed, so the item is what moved.
   it('leaves the top level alone', () => {
-    expect(carveToHtml('t\n\n%%%\nc\n')).toBe('<p>t</p>\n<p>c</p>')
+    expect(carveToHtml('t\n\n%%%\nc\n')).toBe('<p>t</p>')
   })
 })

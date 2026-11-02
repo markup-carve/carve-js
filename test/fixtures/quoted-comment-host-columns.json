@@ -4,27 +4,27 @@
     {
       "name": "00-second-literal-depth1-width3-paired",
       "source": "> - ::: |\n>   %%%\n>   :::\n>   :::bad\n> c\n> %%%\n> - ::: |\n>   %%%\n>   hidden\n>   %%%\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n      :::bad\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "01-second-literal-depth1-width3-unpaired",
       "source": "> - ::: |\n>   %%%\n>   :::\n>   :::bad\n> c\n> %%%\n> - ::: |\n>   %%%\n>   hidden\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n      :::bad\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "02-second-literal-depth1-width4-paired",
       "source": "> - ::: |\n>   %%%%\n>   :::\n>   :::bad\n> c\n> %%%%\n> - ::: |\n>   %%%%\n>   hidden\n>   %%%%\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n      :::bad\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "03-second-literal-depth1-width4-unpaired",
       "source": "> - ::: |\n>   %%%%\n>   :::\n>   :::bad\n> c\n> %%%%\n> - ::: |\n>   %%%%\n>   hidden\n>   :::\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n      :::bad\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>c</p>\n  <p>hidden</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "04-second-literal-depth2-width3-paired",
       "source": "> > - ::: |\n> >   %%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%\n> > - ::: |\n> >   %%%\n> >   hidden\n> >   %%%\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n        :::bad\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n    <p>:::</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "05-second-literal-depth2-width3-unpaired",
@@ -34,7 +34,7 @@
     {
       "name": "06-second-literal-depth2-width4-paired",
       "source": "> > - ::: |\n> >   %%%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%%\n> > - ::: |\n> >   %%%%\n> >   hidden\n> >   %%%%\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n        :::bad\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n    <p>:::</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "07-second-literal-depth2-width4-unpaired",

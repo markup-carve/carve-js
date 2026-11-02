@@ -73,7 +73,13 @@ for (const [name, host, indent] of [
         const detached = name === 'nested item' && payload === '%%%'
         const body = detached ? detachedBody : foldedBody
         const block = `<div class="line-block"><p>${body}</p></div>`
-        const html = detached
+        // An unclosed `%%%` leaves no paragraph, so `after` ends the span and its hosts (carve#4907).
+        const empty = '<div class="line-block"></div>'
+        const html = payload === '%%%'
+          ? name === 'nested item' ? `<ul><li>a<ul><li>b${empty}</li></ul></li></ul><p>after</p>`
+            : name === 'quoted item' ? `<blockquote><ul><li>a${empty}</li></ul></blockquote><p>after</p>`
+              : `<ul><li>a${empty}</li></ul><p>after</p>`
+          : detached
           ? `<ul><li>a<ul><li>b${block}</li></ul></li></ul><p>after</p>`
           : name === 'nested item'
             ? `<ul><li>a<ul><li>b${block}</li></ul></li></ul>`

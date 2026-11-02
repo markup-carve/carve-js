@@ -412,22 +412,22 @@
   {
     "id": "followon-d2-qfalse-ltrue-x-y",
     "source": "- a\n  - b\n    ::: |\n    %%%\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-x- %% d\n x",
     "source": "- a\n  - b\n    ::: |\n    %%%\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    ::: |\n    %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-# h- %% d\n x",
     "source": "- a\n  - b\n    ::: |\n    %%%\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d2-qtrue-lfalse-x-y",
@@ -452,22 +452,22 @@
   {
     "id": "followon-d2-qtrue-ltrue-x-y",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x\ny</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-x- %% d\n x",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  x\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x</p>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-x-y",
@@ -492,22 +492,22 @@
   {
     "id": "followon-d3-qfalse-ltrue-x-y",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-x- %% d\n x",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>y</p>\n</section>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-# h- %% d\n x",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n # h\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n  <p>x</p>\n</section>"
   },
   {
     "id": "followon-d3-qtrue-lfalse-x-y",
@@ -532,22 +532,22 @@
   {
     "id": "followon-d3-qtrue-ltrue-x-y",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x\ny</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x\ny</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-x- %% d\n x",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  x\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x</p>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>x</p>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>y</p>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-# h- %% d\n x",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  # h\n>  %% d\n>  x\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n  <p>x</p>\n</blockquote>"
   },
   {
     "id": "followon-explicit-32",

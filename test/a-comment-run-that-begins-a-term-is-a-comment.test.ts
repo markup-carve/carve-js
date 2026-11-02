@@ -20,10 +20,10 @@ import { carveToHtml } from '../src/index.js'
 
 describe('a comment run that begins a definition term is a comment', () => {
   it.each([
-    ['the closer at column 0', ':: %%%\n   hidden\n%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
-    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
+    ['the closer at column 0', ':: %%%\n   hidden\n%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>'],
+    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>'],
     ['no closer at all', ':: %%%\n   hidden\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden\ntail</p>'],
-    ['width 4', ':: %%%%\n   hidden\n%%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
+    ['width 4', ':: %%%%\n   hidden\n%%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>'],
     ['the line form', ':: %% x\n   hidden\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden\ntail</p>'],
     ['more than one space before the run', '::   %% b\n', '<dl>\n  <dt></dt>\n</dl>'],
     ['a run with no separator after it', ':: %%%b\n', '<dl>\n  <dt></dt>\n</dl>'],

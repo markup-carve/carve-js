@@ -17,7 +17,7 @@ describe('a %%% pair in a line block', () => {
   })
 
   it.each([
-    ['an opener with no closer is a comment line', '::: |\na\n%%%\nc\n:::\n', '<div class="line-block">\n  <p>a<br>\n<br>\nc</p>\n</div>'],
+    ['an opener with no closer is a comment line', '::: |\na\n%%%\nc\n:::\n', '<div class="line-block">\n  <p>a</p>\n</div>'],
     ['an opener indented up to three spaces is a comment', '::: |\n %%%\nx\n%%%\n:::\n', '<div class="line-block">\n\n</div>'],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
@@ -59,6 +59,6 @@ describe('a %%% pair in a line block', () => {
     const source = '::: |\n%%% t\n%%%%\n  %%%%\na\n:::\n'
     const once = carveToCarve(source)
     expect(strip(parse(once).children)).toEqual(strip(parse(source).children))
-    expect(carveToHtml(once)).toBe('<div class="line-block">\n  <p><br>\na</p>\n</div>')
+    expect(carveToHtml(once)).toBe('<div class="line-block">\n\n</div>')
   })
 })

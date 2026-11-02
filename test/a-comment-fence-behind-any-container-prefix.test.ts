@@ -118,15 +118,15 @@ describe('a comment fence behind any container prefix', () => {
     // boundary and suppress a definition the parser publishes - the opposite
     // error, and the worse direction (markup-carve/carve#1341).
     it('a DEEPER run does not close a shallower fence', () => {
-      expect(resolves('> %%%\n> [r]: /url\n> > %%%\n\nSee [r][].\n')).toBe(true)
+      expect(resolves('> %%%\n> [r]: /url\n> > %%%\n\nSee [r][].\n')).toBe(false)
     })
 
     it('a SHALLOWER run does not close a deeper fence', () => {
-      expect(resolves('> > %%%\n> > [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(true)
+      expect(resolves('> > %%%\n> > [r]: /url\n> %%%\n\nSee [r][].\n')).toBe(false)
     })
 
     it('a blank line ends the quote, so a later run is a different one', () => {
-      expect(resolves('> %%%\n> [r]: /url\n\n> %%%\n\nSee [r][].\n')).toBe(true)
+      expect(resolves('> %%%\n> [r]: /url\n\n> %%%\n\nSee [r][].\n')).toBe(false)
     })
 
     it('a matched depth still closes', () => {

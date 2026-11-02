@@ -67,10 +67,6 @@
     "keeps the definition term column after its comment: comment-term-claude-739": "#3922",
     "keeps the definition term column after its comment: comment-term-claude-755": "#3922"
   },
-  "definition-description-code-ownership.test.ts": {
-    "keeps description code and following blocks in their authored hosts: 'review-282'": "#3922",
-    "keeps description code and following blocks in their authored hosts: 'review-49'": "#3922"
-  },
   "djot-definition-boundaries.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
   },
@@ -123,35 +119,11 @@
   "nested-list-source-boundaries.test.ts": {
     "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
   },
-  "nested-literal-comment-dedent.test.ts": {
-    "nested literal comments release payload to the enclosing item > 'dedent-0' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-1' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-10' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-11' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-16' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-17' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-18' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-19' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-2' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-24' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-25' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-26' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-27' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-3' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-36' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-37' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-44' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-45' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-8' retains the native ownership": "#3922",
-    "nested literal comments release payload to the enclosing item > 'dedent-9' retains the native ownership": "#3922"
-  },
   "quoted-colon-remaining-parity.test.ts": {
     "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
   },
   "quoted-comment-host-columns.test.ts": {
-    "quoted comments retain stored host columns > '04-second-literal-depth2-width3-paired' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '05-second-literal-depth2-width3-unpai…' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '06-second-literal-depth2-width4-paired' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922"
   },
   "relative-continuation-marker.test.ts": {
@@ -162,5 +134,46 @@
   },
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
+  },
+  "a-below-base-fence-run-ends-containers-down-to-its-owner.test.ts": {
+    "a below-base fence run ends containers down to the owner its column selects > CONTROL: a comment-shaped payload line does not stop the real closer": "carve-js#4276"
+  },
+  "a-comment-below-an-empty-container-item-closes-without-a-claim.test.ts": {
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [2]": "carve-js#4276",
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [3]": "carve-js#4276",
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [8]": "carve-js#4276",
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [10]": "carve-js#4276",
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [11]": "carve-js#4276",
+    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [16]": "carve-js#4276"
+  },
+  "a-comment-span-closer-past-its-host.test.ts": {
+    "a comment closer past the host (carve#4770 ruling B) > finds no closer past a blank, an indented quote marker or a lazy line: \"> - %%%\\n>   n\\nzz\\n%%%\\n\"": "carve-js#4276"
+  },
+  "a-line-block-takes-a-lazy-line-whatever-its-payload.test.ts": {
+    "handles quoted item after \"%%%\", blank=false": "carve-js#4276",
+    "handles quoted item after \"%%%\", blank=true": "carve-js#4276"
+  },
+  "a-wider-fence-is-no-closer-for-a-note-marker-line-span.test.ts": {
+    "a wider fence is no closer for a note marker-line span > a nested note on the marker line": "carve-js#4276"
+  },
+  "corpus-canonical-form.test.ts": {
+    "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "carve-js#4276"
+  },
+  "corpus-render-fixtures.test.ts": {
+    "spec corpus non-HTML render fixtures > fmt: 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "carve-js#4276"
+  },
+  "fmt-keeps-a-comment-span-closed-below-its-host-column.test.ts": {
+    "fmt keeps a comment span whose closer sits below its host column > two spans in a list item writes a canonical span": "carve-js#4276"
+  },
+  "hosted-colon-literal-ownership.test.ts": {
+    "reader scope 2, quote depth 1": "carve-js#4276",
+    "reader scope 2, quote depth 2": "carve-js#4276",
+    "review8-c02-below-column-comment-037": "carve-js#4276"
+  },
+  "render-carve.test.ts": {
+    "renderCarve corpus > 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4: matches the spec's canonical form, which re-parses differently": "carve-js#4276",
+    "renderCarve corpus > 930-a-line-that-misses-a-nested-host-ends-it-when-a-comment-closer-lies-ahead-5: idempotent": "carve-js#4276",
+    "renderCarve corpus > 930-a-line-that-misses-a-nested-host-ends-it-when-a-comment-closer-lies-ahead-5: parses to the same tree": "carve-js#4276",
+    "renderCarve corpus > has no pinned canonical form that re-parses differently from its source": "carve-js#4276"
   }
 }

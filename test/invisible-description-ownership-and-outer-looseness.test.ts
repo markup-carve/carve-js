@@ -8,7 +8,7 @@ describe('invisible lines preserve description ownership (carve#4716)', () => {
     )
   })
 
-  it.each(['%% c', '%%%tail', '[r]: /u', '*[A]: b'])(
+  it.each(['%% c', '[r]: /u', '*[A]: b'])(
     'keeps a description at the term column after %s', invisible => {
       expect(carveToHtml(`:: t\n${invisible}\n : d\n`)).toBe(
         '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
@@ -16,7 +16,13 @@ describe('invisible lines preserve description ownership (carve#4716)', () => {
     },
   )
 
-  it.each(['%% c', '%%%tail', '[r]: /u', '*[A]: b'])(
+  // An unclosed `%%%` hides the rest of the document (carve#4907).
+  it('hides the description after %%%tail', () => {
+    expect(carveToHtml(':: t\n%%%tail\n : d\n')).toBe('<dl>\n  <dt>t</dt>\n</dl>')
+    expect(carveToHtml(':: t\n%%%tail\n:  > a\n   > b\n')).toBe('<dl>\n  <dt>t</dt>\n</dl>')
+  })
+
+  it.each(['%% c', '[r]: /u', '*[A]: b'])(
     'keeps a quote continuation in the description after %s', invisible => {
       expect(carveToHtml(`:: t\n${invisible}\n:  > a\n   > b\n`)).toBe(
         '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>a\nb</p></blockquote>\n  </dd>\n</dl>',

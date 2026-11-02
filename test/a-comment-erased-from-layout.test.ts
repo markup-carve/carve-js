@@ -39,10 +39,10 @@ describe('a comment span in a quote with an unmarked closer', () => {
   })
 
   it.each([
-    ['another width', '> %%%\n> secret\n%%%%\n', '<blockquote><p>secret</p></blockquote>'],
-    ['past a blank', '> %%%\n> secret\n\n%%%\n', '<blockquote><p>secret</p></blockquote>'],
-    ['past an unmarked line', '> %%%\n> secret\nfoo\n> %%%\n', '<blockquote><p>secret</p></blockquote><p>foo</p><blockquote></blockquote>'],
-    ['below the item', '- > %%%\n  > secret\n%%%\n', '<ul><li><blockquote><p>secret</p></blockquote></li></ul>'],
+    ['another width', '> %%%\n> secret\n%%%%\n', '<blockquote></blockquote>'],
+    ['past a blank', '> %%%\n> secret\n\n%%%\n', '<blockquote></blockquote>'],
+    ['past an unmarked line', '> %%%\n> secret\nfoo\n> %%%\n', '<blockquote></blockquote><p>foo</p><blockquote></blockquote>'],
+    ['below the item', '- > %%%\n  > secret\n%%%\n', '<ul><li><blockquote></blockquote></li></ul>'],
   ])('leaves the span unclosed: %s', (_name, source, html) => {
     expect(compact(source)).toBe(html)
   })

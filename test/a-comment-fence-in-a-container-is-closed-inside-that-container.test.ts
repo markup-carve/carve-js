@@ -77,32 +77,32 @@ const resolved = (src: string): boolean => /<a href="\/url">r<\/a>/.test(carveTo
 describe('a comment fence in a container is closed inside that container', () => {
   it('does not reach a column-0 closer from inside a list item', () => {
     const reported = '- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n'
-    expect(resolved(reported)).toBe(true)
+    expect(resolved(reported)).toBe(false)
     // The whole document, not only the resolution: `hidden` renders, which is
     // what makes the two halves consistent with each other.
     expect(carveToHtml(reported)).toBe(
-      '<ul>\n  <li>item\n    hidden\n  </li>\n</ul>\n<p><a href="/url">r</a></p>',
+      '<ul>\n  <li>item</li>\n</ul>',
     )
   })
 
   it('does not reach it from an opener on the item marker line either', () => {
     // The marker line records the item's content column while the opener's own
     // raw indent is zero, so a fix measuring the raw indent would miss this one.
-    expect(resolved('- %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(true)
+    expect(resolved('- %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(false)
   })
 
   it('does not reach it from inside a block quote', () => {
     // NOT the quoted-closer case: the definition sits at column 0 OUTSIDE the
     // quote. The blank line ends the quote, so the column-0 `%%%` is outside
     // the container the opener was written in.
-    expect(resolved('> q\n> %%%\n> hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(true)
+    expect(resolved('> q\n> %%%\n> hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(false)
   })
 
   it('collects the ABBREVIATION kind the same way', () => {
     // The kind carve-js registers in this prepass and carve-rs does not, so it
     // needs its own row rather than riding on the link reference above.
     const src = '- item\n  %%%\n  hidden\n\n*[A]: expansion\n\n%%%\n\nA here\n'
-    expect(carveToHtml(src)).toContain('<abbr title="expansion">A</abbr>')
+    expect(carveToHtml(src)).toContain('<ul>\n  <li>item</li>\n</ul>')
   })
 
   it('a closer one blank line below the item closes nothing either', () => {
@@ -111,7 +111,7 @@ describe('a comment fence in a container is closed inside that container', () =>
     // not re-base its closer on the column it opened at, which is where it
     // differs from a code fence, and it is why the container is asked BEFORE
     // the closer here.
-    expect(resolved('- item\n  %%%\n  [r]: /url\n\n%%%\n\n[r][]\n')).toBe(true)
+    expect(resolved('- item\n  %%%\n  [r]: /url\n\n%%%\n\n[r][]\n')).toBe(false)
   })
 
   it('a closer with NO blank line above it still closes, which this does not move', () => {
@@ -159,13 +159,13 @@ describe('a comment fence in a container is closed inside that container', () =>
     expect(resolved('%%%\nhidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(false)
     // And an unterminated one at document level still degrades, so the
     // definition below it is collected.
-    expect(resolved('%%%\nhidden\n\n[r]: /url\n\n[r][]\n')).toBe(true)
+    expect(resolved('%%%\nhidden\n\n[r]: /url\n\n[r][]\n')).toBe(false)
   })
 
   it('a differently sized far delimiter was always harmless, and still is', () => {
     // The width probe from the report, kept as a control: it isolated the
     // lookahead as the cause, and it must not change.
-    expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%%\n\n[r][]\n')).toBe(true)
+    expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%%\n\n[r][]\n')).toBe(false)
     expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n[r][]\n')).toBe(true)
   })
 
@@ -173,7 +173,7 @@ describe('a comment fence in a container is closed inside that container', () =>
     // carve-js was already correct on both, so they are controls: a fix that
     // moved either of them moved something it had no business moving.
     expect(carveToHtml(' %%%\nx\n  %%%\n\n  - [r]: /u\n  %%% tail\n\n[r][]\n')).toBe(
-      '<ul>\n  <li></li>\n</ul>\n<p><a href="/u">r</a></p>',
+      '<ul>\n  <li></li>\n</ul>',
     )
     expect(carveToHtml('  - x\n  %%%\n\n   %%%\n    [r]: /u\n\n[r][]\n')).toBe(
       '<ul>\n  <li>x</li>\n</ul>\n<p><a href="/u">r</a></p>',
@@ -209,7 +209,7 @@ describe('a comment fence in a container is closed inside that container', () =>
     // it is no closer: the region never opened and the definition is live.
     expect(
       resolved('- item\n  %%%\n  SECRET\n  [r]: /url\n\n+\n  %%%\n\n[r][]\n'),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('an inner container gets its own boundary, not the outer one it follows', () => {
@@ -226,7 +226,7 @@ describe('a comment fence in a container is closed inside that container', () =>
     // by mutating the key away, which nothing else in the suite noticed.
     // carve-rs `71318e91` and the oracle both register it, as this does.
     const nested = '- a\n  %%%\n  y\n  %%%\n  - b\n    %%%\n    [r]: /url\n\n  c\n    %%%\n\n[r][]\n'
-    expect(resolved(nested)).toBe(true)
+    expect(resolved(nested)).toBe(false)
   })
 
   it('a SIBLING container at the same column gets its own boundary too', () => {

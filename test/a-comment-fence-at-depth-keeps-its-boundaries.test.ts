@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 it('ends an unclosed item comment at the below-column document line', () => {
-  expect(carveToHtml('- b\n  %%%\n  p\nx\n  %%%\n').trim()).toBe('<ul>\n  <li>b\n    p\n  </li>\n</ul>\n<p>x</p>')
+  expect(carveToHtml('- b\n  %%%\n  p\nx\n  %%%\n').trim()).toBe('<ul>\n  <li>b</li>\n</ul>\n<p>x</p>')
 })
 
 // RE-SNAPSHOTTED at markup-carve/carve `3f97ff58` after markup-carve/carve#2527

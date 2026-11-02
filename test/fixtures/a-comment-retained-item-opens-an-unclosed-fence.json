@@ -177,7 +177,7 @@
   {
     "id": "row-36",
     "source": "- ::: in\n  x\n%%%\n```\n    ```\nT\n",
-    "html": "<ul>\n  <li>\n    <div class=\"in\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<pre><code>    ```\nT\n</code></pre>"
+    "html": "<ul>\n  <li>\n    <div class=\"in\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "row-37",

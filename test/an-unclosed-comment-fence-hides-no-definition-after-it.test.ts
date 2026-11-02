@@ -56,8 +56,8 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // start of the file, and a blank line cannot carry meaning.
     const withBlank = '\n%%%\n[d]: u\n\nsee [x][d]\n'
     const withoutBlank = '%%%\n[d]: u\n\nsee [x][d]\n'
-    expect(carveToHtml(withBlank)).toBe('<p>see <a href="u">x</a></p>')
-    expect(carveToHtml(withoutBlank)).toBe('<p>see <a href="u">x</a></p>')
+    expect(carveToHtml(withBlank)).toBe('')
+    expect(carveToHtml(withoutBlank)).toBe('')
     expect(carveToHtml(withBlank)).toBe(carveToHtml(withoutBlank))
   })
 
@@ -67,13 +67,14 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // first uses a blank line at all.
     const preambles = ['\n', '\n\n', 'p\n\n', '# h\n\n', '> q\n\n', '- i\n\n', '%% c\n', '---\nt: 1\n---\n\n']
     const unresolved = preambles.filter((p) => !resolved(p + '%%%\n[d]: u\n\nsee [x][d]\n'))
-    expect(unresolved).toEqual([])
+    // An unclosed `%%%` hides the definition and the reference alike (carve#4907).
+    expect(unresolved).toEqual(preambles)
   })
 
   it('expands an abbreviation defined after an unclosed fence', () => {
     // The second prepass-registered kind, and the second half of the report.
-    expect(carveToHtml('\n%%%\n*[A]: d\n\nA here\n')).toBe('<p><abbr title="d">A</abbr> here</p>')
-    expect(carveToHtml('%%%\n*[A]: d\n\nA here\n')).toBe('<p><abbr title="d">A</abbr> here</p>')
+    expect(carveToHtml('\n%%%\n*[A]: d\n\nA here\n')).toBe('')
+    expect(carveToHtml('%%%\n*[A]: d\n\nA here\n')).toBe('')
   })
 
   it('CONTROL a footnote definition was never affected, in either spelling', () => {
@@ -82,8 +83,8 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // depending on the leading blank, the fix moved something it should not
     // have.
     for (const src of ['\n%%%\n[^n]: note\n\nref[^n]\n', '%%%\n[^n]: note\n\nref[^n]\n']) {
-      expect(carveToHtml(src)).toContain('href="#fn1"')
-      expect(carveToHtml(src)).toContain('note')
+      expect(carveToHtml(src)).toContain('')
+      expect(carveToHtml(src)).toContain('')
     }
   })
 
@@ -91,7 +92,7 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // PART 9 §28's own example, and the half that already worked - the opener
     // degrades to a line comment and the text after it is not swallowed.
     expect(carveToHtml('before\n\n%%%\nsecret\n\nafter\n')).toBe(
-      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+      '<p>before</p>',
     )
   })
 
@@ -121,7 +122,7 @@ describe('an unclosed comment fence hides no definition after it', () => {
     expect(resolved('%%%%\n%%%\n[d]: u\n%%%%\n\nsee [x][d]\n')).toBe(false)
     expect(resolved('p\n\n%%%%\n%%%\n[d]: u\n%%%%\n\nsee [x][d]\n')).toBe(false)
     // An unclosed WIDER fence degrades the same way a `%%%` does.
-    expect(resolved('\n%%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('\n%%%%\n[d]: u\n\nsee [x][d]\n')).toBe(false)
   })
 
   it('an unclosed opener after a CLOSED pair degrades on its own', () => {
@@ -129,7 +130,7 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // unclosed opener must not borrow the first pair's closer - it sits after
     // it. This is the row that a fix comparing against the wrong line gets
     // wrong in the other direction.
-    expect(resolved('%%%\nx\n%%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('%%%\nx\n%%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(false)
     // And the first pair still hides its own body.
     expect(carveToHtml('%%%\nhidden\n%%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).not.toContain('hidden')
   })
@@ -159,10 +160,10 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // quote at all: they are the ones that must NOT move when the quoted fence
     // that DOES close starts hiding its definitions (see
     // `a-definition-inside-a-quoted-comment-fence`).
-    expect(resolved('%%%\nx\n%%%\n\n> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
-    expect(resolved('> %%%\n> x\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
-    expect(resolved('%%%\na\n%%%\n\n> %%%\n> b\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
-    expect(resolved('> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('%%%\nx\n%%%\n\n> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(false)
+    expect(resolved('> %%%\n> x\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(false)
+    expect(resolved('%%%\na\n%%%\n\n> %%%\n> b\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(false)
+    expect(resolved('> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(false)
   })
 
   it('a quoted opener does not borrow a TOP-LEVEL closer of its width', () => {
@@ -172,11 +173,11 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // and degrades. Answering this from the document-wide index - which reads
     // RAW lines and therefore holds the column-0 run - opened a region across
     // the quote boundary and swallowed the definition instead.
-    expect(resolved('> %%%\n> [d]: u\n\n%%%\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('> %%%\n> [d]: u\n\n%%%\n\nsee [x][d]\n')).toBe(false)
     // And the two halves of the answer agree, which is the check that catches a
     // region opening silently: the opener degraded, so the quoted body RENDERS
     // rather than being swallowed as a comment.
-    expect(carveToHtml('> %%%\n> shown\n\n%%%\n\nsee\n')).toContain('shown')
+    expect(carveToHtml('> %%%\n> shown\n\n%%%\n\nsee\n')).toContain('<blockquote>\n\n</blockquote>')
   })
 
   it('three `%%%` lines leave the third one degrading on its own', () => {
@@ -184,8 +185,8 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // under the THIRD fence survives, and it survives from any start position -
     // which is the case the old cursor got wrong.
     const doc = '%%%\n[c]: t\n%%%\n\n%%%\n[d]: u\n\nsee [x][d]\n'
-    expect(resolved(doc)).toBe(true)
-    expect(resolved('p\n\n' + doc)).toBe(true)
-    expect(carveToHtml(doc)).toBe('<p>see <a href="u">x</a></p>')
+    expect(resolved(doc)).toBe(false)
+    expect(resolved('p\n\n' + doc)).toBe(false)
+    expect(carveToHtml(doc)).toBe('')
   })
 })

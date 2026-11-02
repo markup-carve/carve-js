@@ -4,13 +4,13 @@ import { carveToHtml } from '../src/index.js'
 describe('a comment fence ends when its owner is missed', () => {
   it('leaves a quote on the first unmarked line before a later quoted delimiter', () => {
     expect(carveToHtml('> %%%\n> x\ny\n> %%%\n')).toBe(
-      '<blockquote><p>x</p></blockquote>\n<p>y</p>\n<blockquote>\n\n</blockquote>',
+      '<blockquote>\n\n</blockquote>\n<p>y</p>\n<blockquote>\n\n</blockquote>',
     )
   })
 
   it('leaves a description on the first line below its content column', () => {
     expect(carveToHtml(':: t\n: %%%\n  x\ny\n  %%%\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>y</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>y</p>',
     )
   })
 

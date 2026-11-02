@@ -2,12 +2,12 @@
   {
     "id": "row-1",
     "source": ":: t\n: ::: note\n%%%\nx\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>x</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "row-2",
     "source": ":: t\n: ::: note\n%%%\ntail\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>"
   },
   {
     "id": "row-3",
