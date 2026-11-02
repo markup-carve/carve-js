@@ -128,9 +128,6 @@
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
   },
-  "a-below-base-fence-run-ends-containers-down-to-its-owner.test.ts": {
-    "a below-base fence run ends containers down to the owner its column selects > CONTROL: a comment-shaped payload line does not stop the real closer": "carve-js#4276"
-  },
   "a-comment-below-an-empty-container-item-closes-without-a-claim.test.ts": {
     "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [2]": "carve-js#4276",
     "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [3]": "carve-js#4276",
