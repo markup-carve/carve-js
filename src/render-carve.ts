@@ -925,12 +925,6 @@ function nestedFenceTail(previous: BlockNode | null): 'plain' | 'task' | undefin
   return item?.checked === undefined ? 'plain' : 'task'
 }
 
-function isLiteralPlusParagraphOnly(children: readonly BlockNode[]): boolean {
-  const only = children.length === 1 ? children[0] : undefined
-  return only?.type === 'paragraph' && only.children.length === 1 &&
-    only.children[0]!.type === 'text' && only.children[0]!.value === '+'
-}
-
 function guardLeadingPlusBelowList(rendered: string, previous: BlockNode | null, inItem = false): string {
   const fence = inItem ? nestedFenceTail(previous) : undefined
   if (fence === 'task' && (rendered === '+' || rendered.startsWith('+\n'))) return `\\${rendered}`
@@ -1500,16 +1494,17 @@ export function hasInnerWordDelimiter(delim: string, content: string): boolean {
   return false
 }
 
-export function emphasisNeedsBraces(delim: string, content: string, prevChar: string, nextChar: string, forced = false, closeDelim = delim): boolean {
+export function emphasisNeedsBraces(delim: string, content: string, prevChar: string, nextChar: string, forced = false, closeDelim = delim, ownText = content): boolean {
   return forced ||
     neighborsForceBraces(delim, prevChar, nextChar) ||
-    hasInnerWordDelimiter(delim, content) ||
+    hasInnerWordDelimiter(delim, ownText) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
     // A bare opener may not be followed, nor a closer preceded, by `ws`
     // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
     // also puts the closer at the start of the next line (carve-js#1786).
     /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
+    ownText === '' || /^[ \t\r\n]|[ \t\r\n]$/.test(ownText) ||
     // A leading `*` would form the combined bold-italic opener.
     (delim === '/' && content.startsWith('*') && !extendsGrapheme(content, 1))
 }
@@ -1518,14 +1513,43 @@ export function renderForcedEmphasis(delim: string, content: string): string {
   return `{${delim}${content}${delim}}`
 }
 
+/**
+ * A span's text as the bare delimiter scan meets it: a link, code span or other
+ * atom is one token, so a delimiter in its destination is no word delimiter
+ * (PART 9 §9). A nested mark may be written bare, so its text still counts. An
+ * inline comment is invisible to the scan, so the guards see past it.
+ */
+function bareScanText(children: readonly InlineNode[]): string {
+  return children.map((child) => {
+    switch (child.type) {
+      case 'text': return child.value
+      case 'comment': return ''
+      case 'abbreviation': return child.abbr
+      case 'mention': return child.user
+      case 'tag': return child.name
+      case 'strong':
+      case 'emphasis':
+      case 'underline':
+      case 'strike':
+      case 'highlight':
+      case 'superscript':
+      case 'subscript':
+      case 'insert':
+      case 'delete': return bareScanText(child.children)
+      default: return '\0'
+    }
+  }).join('')
+}
+
 function renderEmphasis(
   delim: string,
   content: string,
   prevChar: string,
   nextChar: string,
+  children: readonly InlineNode[],
   closeDelim: string = delim,
 ): string {
-  const needsForced = emphasisNeedsBraces(delim, content, prevChar, nextChar, false, closeDelim)
+  const needsForced = emphasisNeedsBraces(delim, content, prevChar, nextChar, false, closeDelim, bareScanText(children))
   return needsForced
     ? `{${delim}${content}${closeDelim}}`
     : `${delim}${content}${closeDelim}`
@@ -4252,9 +4276,7 @@ class CarveRenderSession {
         if ((b.type === 'block_quote' || b.type === 'code_block') &&
             !separated && previousEmitted?.type === 'list') {
           const last = previousEmitted.items[previousEmitted.items.length - 1]
-          // A last item that is only a literal `+` would take the block at its marker column as
-          // a first-block continuation, so the block moves one column right too (CARVE-P11-042).
-          if (last !== undefined && (last.children.length === 0 || isLiteralPlusParagraphOnly(last.children))) {
+          if (last !== undefined && last.children.length === 0) {
             parts.push(rendered.split('\n').map(line => line ? ` ${line}` : line).join('\n'))
             previousEmitted = b
             return
@@ -5177,7 +5199,7 @@ class CarveRenderSession {
       const content = spelledContent(children)
       return content.endsWith(renderSession.sentinels[3]!) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
         ? renderForcedEmphasis(delim, content)
-        : renderEmphasis(delim, content, prevChar, nextChar)
+        : renderEmphasis(delim, content, prevChar, nextChar, children)
     }
     if (node.type === 'insert' || node.type === 'delete' || node.type === 'substitution') {
       renderSession.attributeEnclosures.push(node)
