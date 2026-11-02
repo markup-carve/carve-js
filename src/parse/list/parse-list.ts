@@ -1654,8 +1654,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // A line below the inline opener remains in its paragraph's
         // authored band. A line at the opener's own column starts a second
         // paragraph after the blank.
+        // An invisible line opens no block, so it admits none (CARVE-P9-013).
+        const lastBody = lastNonBlankPhysicalSource === undefined ? '' : sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()
+        const lastInvisible = RE_COMMENT_LINE.test(lastBody) || RE_ABBR_DEF.test(lastBody) || isLinkDefLine(lastBody) ||
+          RE_FOOTNOTE_DEF.test(lastBody) || commentOnlyParagraphEnd(index => index === 0 ? lastBody : undefined, 0) === 1
         const followingAdmittedBlock = lazyState.inDefList !== 'description' &&
-          lastNonBlankPhysicalSource !== undefined &&
+          lastNonBlankPhysicalSource !== undefined && !lastInvisible &&
           !(markerLineTerm && /^#{1,6}(?:[ \t]|$)/.test(sourceQuoteBody(lastNonBlankPhysicalSource))) &&
           (lineOpensBlock(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) ||
             RE_BLOCKQUOTE.test(lastNonBlankPhysicalSource.trimStart())) &&
@@ -3338,6 +3342,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         while (nestedListContentColumn !== undefined && /^[ \t>]*\{/.test(rootSource[attributeLine - 1] ?? '')) {
           if (sourceColumn(rootSource[attributeLine - 1]!) < nestedListContentColumn) nestedListContentColumn = undefined
           attributeLine--
+        }
+        // So has an invisible line below its column that left no child here (a definition, a braced comment).
+        if (nestedListContentColumn !== undefined && previousVisibleType === 'list' && previousVisibleSpan !== undefined) {
+          for (let lineNumber = previousVisibleSpan.end + 1; lineNumber < span.start; lineNumber++) {
+            const between = rootSource[lineNumber - 1] ?? ''
+            if (isBlankLine(between) || isQuoteBlankLine(between)) continue
+            if (sourceColumn(between) < nestedListContentColumn) nestedListContentColumn = undefined
+            break
+          }
         }
         const reachesNestedList = nestedListContentColumn !== undefined && rootLine !== undefined &&
           sourceColumn(rootLine) >= nestedListContentColumn

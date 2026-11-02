@@ -380,7 +380,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     } else {
       state.lazyFoldable = false
     }
-    state.inDefList = comment.term ? 'term' : false
+    state.inDefList = comment.term ? 'term' : comment.description ? 'description' : false
     return true
   }
 
@@ -497,7 +497,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { state } = line
     const commentRun = commentFenceRun(line.content)
     if (commentRun === undefined || !line.hasCommentCloser(commentRun)) return false
-    state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn }
+    state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn,
+      description: state.inDefList === 'description' }
     state.deepest = null
     return endsOnBlock(state)
   }
@@ -543,7 +544,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     else delete state.footnoteBodyColumn
     state.invisibleAtColumn = true
     state.commentAtColumn = false
-    if (note === null) return endsOnBlock(state)
+    if (note === null) {
+      // It closes no description: the next visible line picks the owner (CARVE-P9-013).
+      const description = state.inDefList === 'description'
+      endsOnBlock(state)
+      if (description) state.inDefList = 'description'
+      return true
+    }
     // A note's first block answers like any container's (carve#3885).
     const frame = verbatimOnlyLazyState()
     trackItemLazyState(note[2]!, frame, true, () => false)
