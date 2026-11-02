@@ -57,5 +57,6 @@ describe('carve#4812 HTML comment ruling', () => {
     for (const source of ['a <!-- x\nb %% --> c\n', 'a <!-- x %% y -->\n', 'a\n%% <!-- x -->\n']) {
       expect(rule(source), source).toEqual([])
     }
+    expect(lintCarve('a {% hidden\n| x\n%} b\n').map(w => w.rule)).not.toContain('table-shaped-paragraph')
   })
 })

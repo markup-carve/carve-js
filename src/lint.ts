@@ -3916,11 +3916,13 @@ function collectCommentLines(doc: Document, blocksOnly = false, keepTrailing = f
   const trailing = new Set<unknown>()
   walkDocument(doc, (node) => {
     if (keepTrailing && Array.isArray(node.children)) markTrailingComments(node.children, trailing)
-    if (node.type !== 'comment' || (blocksOnly && !node.block) || trailing.has(node)) return
+    if (node.type !== 'comment' || (blocksOnly && !node.block)) return
     const pos = (node as Positioned).pos
     if (!pos) return
     const end = (pos as { endLine?: number }).endLine ?? pos.startLine
-    for (let ln = pos.startLine; ln <= end; ln++) comments.add(ln)
+    // A trailing `{% %}` comment still hides the lines strictly inside it.
+    const [from, to] = trailing.has(node) ? [pos.startLine + 1, end - 1] : [pos.startLine, end]
+    for (let ln = from; ln <= to; ln++) comments.add(ln)
   })
   return comments
 }
