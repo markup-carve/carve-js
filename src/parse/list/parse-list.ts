@@ -504,6 +504,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
       const plusLineIndex = lexer.pos
       lexer.consume()
+      // Further `+` lines offer the same block; the last is a letter, and that block, only if refused (§17 L3).
+      let markers = 0
+      while (isContinuationMarker(lexer.peek(markers) ?? '')) markers++
+      const after = lexer.peek(markers)
+      const offered = after !== undefined && !isBlankLine(after) && !isItemAttachBoundary(after) &&
+        indentColumns(after) === indentColumns(lexer.lineAt(plusLineIndex) ?? '')
+      for (let k = offered ? markers : markers - 1; k > 0; k--) lexer.consume()
       const more = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false)
       // An empty result is the column gate's refusal as well as an exhausted
       // boundary set, and a second marker that attaches nothing ends the run

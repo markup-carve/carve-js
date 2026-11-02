@@ -5,8 +5,7 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the lazy family",
       "cases": [
-        "lazy-10bd0503f93b",
-        "lazy-541f9f3b620e"
+        "lazy-10bd0503f93b"
       ]
     },
     {
