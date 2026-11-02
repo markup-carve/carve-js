@@ -245,7 +245,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     while (follower !== undefined && !isBlankLine(follower)) {
       const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
       const atMarker = sourceColumn(source, noteQuoteDepth) === authoredMarkerColumn
-      if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
+      if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()) ||
+          RE_FOOTNOTE_DEF.test(follower.trimStart()))) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
       follower = lexer.lineAt(++followerIndex)
     }
