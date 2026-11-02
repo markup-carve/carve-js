@@ -45,6 +45,8 @@ const cases = readdirSync(corpusDir)
  *    verbatim.
  *  - `separatorWidths` records the authored GFM spelling. Canonical `fmt`
  *    writes native headers and deliberately drops that source-only field.
+ *  - `thematic_break.marker`, for the same reason: `fmt` writes every break
+ *    `***` (PART 11 §6, markup-carve/carve#4973).
  *
  * NOT INTO `attrs`. It holds named slots rather than nodes, and a `keyValues`
  * entry can be spelled `type`, `pos` or `srcByteLength` - descending would
@@ -73,6 +75,7 @@ function canonicalTree(value: unknown): unknown {
   delete src.srcByteLength
   delete src.pos
   delete src.separatorWidths
+  if (src.type === 'thematic_break') delete src.marker
   if (src.type === 'escaped_text') src.type = 'text'
 
   const out: Record<string, unknown> = {}

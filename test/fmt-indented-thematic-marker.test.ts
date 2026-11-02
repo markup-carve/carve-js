@@ -36,8 +36,8 @@ describe('an indented thematic marker', () => {
 
   it('still emits a real thematic break at column 0', () => {
     // The guard must not spread to actual thematic breaks.
-    expect(carveToCarve('---\n')).toBe('---\n')
+    expect(carveToCarve('---\n')).toBe('***\n')
     expect(carveToHtml(carveToCarve('---\n'))).toContain('<hr')
-    expect(carveToCarve('a\n\n---\n\nb\n')).toBe('a\n\n---\n\nb\n')
+    expect(carveToCarve('a\n\n---\n\nb\n')).toBe('a\n\n***\n\nb\n')
   })
 })

@@ -27,7 +27,7 @@ describe('a Markdown link or image with an empty destination', () => {
     ["a reference title on the next line", "[v][s]\n\n[s]: <>\n'next title'", "[v]( \"next title\")"],
     ["an indented title on the next line", "[v][s]\n\n[s]: <>\n    'code'", "[v]( \"code\")"],
     ["a definition before its reference leaves no blank line", "[r]: <>\n\n[r]", "[r][]\n\n[r]:"],
-    ["a definition after a thematic break", "---\n[r]: <>\n\n[r]", "---\n\n[r][]\n\n[r]:"],
+    ["a definition after a thematic break", "---\n[r]: <>\n\n[r]", "***\n\n[r][]\n\n[r]:"],
     ["a block quote interrupting a paragraph opens a definition", "text\n> [r]: <>\n\n[r]", "text\n\n>\n\n[r][]\n\n[r]:"],
     ["a definition in a block quote", "[r]\n\n> [r]: <>", "[r][]\n\n>\n\n[r]:"],
     ["a label holding a character reference", "[x][a&amp;b]\n\n[a&amp;b]: <>", "[x][a&b]\n\n[a&b]:"],

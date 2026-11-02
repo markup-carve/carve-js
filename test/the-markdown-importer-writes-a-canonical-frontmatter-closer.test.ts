@@ -73,7 +73,7 @@ describe('the Markdown importer writes a canonical frontmatter closer (markup-ca
   // closer must not reach into the body.
   it('does not touch a break in the body', () => {
     expect(markdownToCarve('---yaml\ntitle: Hi\n--- \nBody\n\n*** \n\nMore\n'))
-      .toBe('---yaml\ntitle: Hi\n---\n\nBody\n\n---\n\nMore\n')
+      .toBe('---yaml\ntitle: Hi\n---\n\nBody\n\n***\n\nMore\n')
   })
 
   // CONTROL. Detection is out of scope, and the rewrite must not start

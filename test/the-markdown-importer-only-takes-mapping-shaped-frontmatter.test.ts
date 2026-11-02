@@ -14,7 +14,7 @@ describe('the Markdown importer only takes mapping-shaped frontmatter (markup-ca
   it('leaves CommonMark example 96 as a break over two setext headings', () => {
     const md = '---\nFoo\n---\nBar\n---\nBaz\n'
     expect(synthesized(md)).toBe(false)
-    expect(value(md)).toBe('---\n\n## Foo\n\n## Bar\n\nBaz\n')
+    expect(value(md)).toBe('***\n\n## Foo\n\n## Bar\n\nBaz\n')
   })
 
   it('renders example 96 with the CommonMark meaning', () => {

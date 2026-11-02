@@ -412,7 +412,7 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
 
   // A rule on the marker line stays in its item and ends its paragraph.
   it('does not read a rule on an item line as nested items', () => {
-    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- ---', '', 'x'))
+    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- ***', '', 'x'))
   })
 
   it('reads a sibling after an item paragraph as GFM does', () => {
@@ -547,7 +547,7 @@ describe('a Markdown import keeps the blocks containers hold', () => {
     ['folds a nested item paragraph into its heading', '1. - x\n     y\n     ---\n', '1. - ## x y\n', null],
     ['folds a quoted item paragraph into its heading', '> - a\n> b\n>   ---\n', '> - ## a b\n', null],
     // An underline left of the item holding the paragraph is a thematic break.
-    ['does not reach across a nested item', '1. - x\n     y\n   ---\n', '1. - x\n     y\n   ---\n', '<ol>\n  <li>\n    <ul>\n      <li>x\ny</li>\n    </ul>\n    <hr>\n  </li>\n</ol>'],
+    ['does not reach across a nested item', '1. - x\n     y\n   ---\n', '1. - x\n     y\n   ***\n', '<ol>\n  <li>\n    <ul>\n      <li>x\ny</li>\n    </ul>\n    <hr>\n  </li>\n</ol>'],
     ['does not fold a quoted fence body', '> ```\n> a\n> ---\n> ```\n', '> ```\n> a\n> ---\n> ```\n', null],
     // A quote opening with indented code is code, under item text too.
     ['writes quoted indented code after an item line as code', '- x\n  y\n  >     code\n', '- x\n  y\n  > ```\n  > code\n  > ```\n', '<ul>\n  <li>x\ny\n    <blockquote>\n      <pre><code>code\n</code></pre>\n    </blockquote>\n  </li>\n</ul>'],

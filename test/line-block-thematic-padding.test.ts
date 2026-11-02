@@ -60,7 +60,7 @@ describe("line-block thematic-looking text", () => {
 
   it("preserves actual thematic breaks, indented or not", () => {
     for (const source of [" ---\n", "---\n"]) {
-      expect(carveToCarve(source)).toBe("---\n");
+      expect(carveToCarve(source)).toBe("***\n");
     }
   });
 });

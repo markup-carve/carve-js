@@ -61,7 +61,7 @@ import { normalizeRefLabel } from './label-key.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
-  /** Reproduce a recorded GFM separator row for source-preserving output. */
+  /** Reproduce recorded author spellings (a GFM separator row, a recorded non-default thematic-break marker) for source-preserving output. */
   preserveTableSeparators?: boolean
 }
 
@@ -3678,7 +3678,11 @@ class CarveRenderSession {
       case 'list':
         return withLooseAttrs(node, attrs, this.renderList(node, ctx), (body) => this.normalize(body))
       case 'thematic_break':
-        return withAttrs(thematicBreakSpelling(node.marker, this.thematicBreakMarker))
+        // PART 11 §6 (carve#4973): canonical output is `***`; source-preserving output keeps a RECORDED marker.
+        // An absent one carries no authored spelling (HTML import of a plain `<hr>`), so it stays canonical.
+        return withAttrs(this.preserveTableSeparators && node.marker !== undefined
+          ? thematicBreakSpelling(node.marker, this.thematicBreakMarker)
+          : '***')
       case 'table':
         return this.renderTableWithColumns(node, ctx)
       case 'directive': {

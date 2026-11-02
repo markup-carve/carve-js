@@ -21,7 +21,7 @@ describe('a lazy line after a quoted paragraph', () => {
   it.each([
     ['a heading', '> a\n# h', '> a\n\n# h'],
     ['a list item', '> a\n- l', '> a\n\n- l'],
-    ['a thematic break', '> a\n---', '> a\n\n---'],
+    ['a thematic break', '> a\n---', '> a\n\n***'],
     ['a fence', '> a\n```\nx\n```', '> a\n\n```\nx\n```'],
     ['a line after a quoted fence', '> ```\n> code\nb', '> ```\n> code\n> ```\n\nb'],
     ['a line after a quoted heading', '> # h\nb', '> # h\n\nb'],

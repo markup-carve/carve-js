@@ -29,13 +29,13 @@ describe('the Markdown importer respells a break that would open frontmatter (ma
     expect(carveToCarve(imported)).toBe(imported)
   })
 
-  it('keeps real frontmatter and leaves its later break spelled ---', () => {
+  it('keeps real frontmatter and writes its later break canonically', () => {
     const md = '---yaml\ntitle: Hi\n---\n\nBody\n\n***\n\nMore\n'
     expect(synthesized(md)).toBe(true)
-    expect(value(md)).toBe('---yaml\ntitle: Hi\n---\n\nBody\n\n---\n\nMore\n')
+    expect(value(md)).toBe('---yaml\ntitle: Hi\n---\n\nBody\n\n***\n\nMore\n')
   })
 
   it('leaves a break that is not at byte 0 alone', () => {
-    expect(value('> ***\n\n```\n---\n```\n')).toBe('> ---\n\n```\n---\n```\n')
+    expect(value('> ***\n\n```\n---\n```\n')).toBe('> ***\n\n```\n---\n```\n')
   })
 })

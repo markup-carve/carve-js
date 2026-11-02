@@ -155,7 +155,7 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     // `> ---\n> ---\n`, which the writer did not endorse: it was not a fixed
     // point of this engine's own formatter.
     const out = markdownToCarve('> ***\n> ---\n')
-    expect(out).toBe('> ---\n>\n> ---\n')
+    expect(out).toBe('> ***\n>\n> ***\n')
     expect(carveToCarve(out)).toBe(out)
     expect(carveToHtml(out)).toBe('<blockquote>\n  <hr>\n  <hr>\n</blockquote>')
   })
@@ -252,7 +252,7 @@ describe('markdownToCarve — setext controls that already held', () => {
 
   it('keeps a thematic break a quote holds', () => {
     // CommonMark reads: <blockquote>\n<hr />\n</blockquote>
-    expect(markdownToCarve('> ---\n')).toBe('> ---\n')
+    expect(markdownToCarve('> ---\n')).toBe('> ***\n')
   })
 })
 

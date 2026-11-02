@@ -125,7 +125,7 @@ describe('PART 11 §10j: a block that spells nothing keeps the list boundary', (
     // something, so they part the lists as they always did - and no boundary
     // is written, because none is needed.
     expect(lists({ type: 'thematic_break' })).toBe(2)
-    expect(written({ type: 'thematic_break' })).toContain('---')
+    expect(written({ type: 'thematic_break' })).toContain('***')
     expect(lists({ type: 'paragraph', children: [{ type: 'text', value: '\u00A0' }] })).toBe(2)
     expect(written({ type: 'paragraph', children: [{ type: 'text', value: '\u00A0' }] })).toContain('\u00A0')
   })
@@ -164,7 +164,7 @@ describe('an empty paragraph carrying attributes', () => {
 
   it('is silent without attributes, and keeps an <hr> attribute', () => {
     const result = htmlToCarve('<p>a</p><p></p><hr id="h">')
-    expect(result.value).toBe('a\n\n{#h}\n---\n')
+    expect(result.value).toBe('a\n\n{#h}\n***\n')
     expect(result.report.diagnostics).toEqual([])
   })
 })

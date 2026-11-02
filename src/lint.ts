@@ -3253,6 +3253,20 @@ function collectSilentFailures(
   }
   walkNotes(Object.values(doc.footnoteDefs ?? {}))
 
+  // carve#4973: `carve fmt` writes `***`, so every other spelling gets a hint.
+  walkDocument(doc, node => {
+    if (node.type !== 'thematic_break') return
+    const pos = node.pos as Positioned['pos'] | undefined
+    if (pos?.startOffset === undefined || pos.endOffset === undefined) return
+    const start = toUtf16(pos.startOffset)
+    const raw = source.slice(start, toUtf16(pos.endOffset)).trimEnd()
+    if (raw !== '***') out.push({
+      line: pos.startLine, column: pos.startColumn ?? 1, start, end: start + raw.length,
+      rule: 'thematic-break-spelling', severity: 'Hint',
+      message: `This thematic break is written "${raw}"; the canonical spelling is "***".`,
+    })
+  })
+
   const listItemLines = new Set<number>()
   walkDocument(doc, node => {
     if (node.type === 'list_item') {

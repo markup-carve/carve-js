@@ -13,7 +13,7 @@ describe('the Markdown importer takes a frontmatter opener only when padding end
     ['a vertical tab', '\v'],
   ])('keeps `---yaml` followed by %s as a paragraph, the character included', (_what, ch) => {
     const carve = markdownToCarve(`---yaml${ch}\na: 1\n\n---\n\nt\n`)
-    expect(carve).toBe(`\\-\\-\\-yaml${ch}\na: 1\n\n---\n\nt\n`)
+    expect(carve).toBe(`\\-\\-\\-yaml${ch}\na: 1\n\n***\n\nt\n`)
   })
 
   it('renders the form feed case the way the spec corpus does', () => {
