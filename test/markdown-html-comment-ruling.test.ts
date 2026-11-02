@@ -39,4 +39,24 @@ describe('carve#4812 HTML comment ruling', () => {
       expect(lintCarve(source).map(w => w.rule), source).not.toContain('html-comment-renders-as-text')
     }
   })
+
+  it('widens the fence past an indented or tailed comment fence line in the body', () => {
+    const markdown = '  <!--\n  line\n  %%%\n  more\n  -->\n'
+    expect(markdownToCarve(markdown)).toBe('%%%%\nline\n  %%%\n  more\n%%%%\n')
+    expect(carveToHtml(markdownToCarve(markdown))).toBe('')
+    const tailed = '<!--\nline\n%%% end\n\t%%%% x\nmore\n-->\n'
+    expect(markdownToCarve(tailed)).toBe('%%%%%\nline\n%%% end\n\t%%%% x\nmore\n%%%%%\n')
+    expect(carveToHtml(markdownToCarve(tailed))).toBe('')
+  })
+
+  it('reads the visible text before a trailing line comment on a closer line', () => {
+    const rule = (source: string) => lintCarve(source).filter(w => w.rule === 'html-comment-renders-as-text')
+    expect(rule('> <!-- a\n> b --> %% c\n')).toMatchObject([{ line: 1, column: 3 }])
+    expect(rule('text\n: <!-- a\n  b --> %% c\n')).toMatchObject([{ line: 2, column: 3 }])
+    expect(rule('x <!-- a --> %% c\n')).toMatchObject([{ line: 1, column: 3 }])
+    for (const source of ['a <!-- x\nb %% --> c\n', 'a <!-- x %% y -->\n', 'a\n%% <!-- x -->\n']) {
+      expect(rule(source), source).toEqual([])
+    }
+    expect(lintCarve('a {% hidden\n| x\n%} b\n').map(w => w.rule)).not.toContain('table-shaped-paragraph')
+  })
 })

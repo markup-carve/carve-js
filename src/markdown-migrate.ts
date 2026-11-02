@@ -879,7 +879,8 @@ function markdownHtmlBlock(lines: readonly string[], sourceLine?: number): strin
     ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
   if (!match[1]!.includes('\n')) return [body === '' ? '%%' : `%% ${body}`]
-  const width = Math.max(3, ...body.split('\n').map(line => /^%{3,}[ \t]*$/.test(line) ? line.trimEnd().length + 1 : 3))
+  // Any `%` run that opens a body line is a fence line (SS28), whatever its indent or tail.
+  const width = Math.max(3, ...body.split('\n').map(line => (/^[ \t]*(%{3,})/.exec(line)?.[1]?.length ?? 2) + 1))
   const fence = '%'.repeat(width)
   return [fence, ...body.split('\n'), fence]
 }
