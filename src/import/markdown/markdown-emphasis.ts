@@ -113,6 +113,43 @@ function scopeRunsToLinkLabels(source: string, runs: Run[], protectedSpans: read
   }
 }
 
+/**
+ * Keep pairs inside one block of a multi-line run. A blank line, a heading, a
+ * thematic break and a fence end the paragraph; a quote or list item opened
+ * mid-run keeps its lazy lines until the next block opens.
+ */
+function scopeRunsToBlocks(source: string, runs: Run[]): void {
+  const lineStarts = [0]
+  for (let at = source.indexOf('\n'); at >= 0; at = source.indexOf('\n', at + 1)) lineStarts.push(at + 1)
+  const segments: number[] = []
+  let segment = 0, quoted = false, single = false, fence = ''
+  for (let line = 0; line < lineStarts.length; line++) {
+    const text = source.slice(lineStarts[line], (lineStarts[line + 1] ?? source.length + 1) - 1)
+    if (fence) {
+      segments.push(segment)
+      if (new RegExp(`^ {0,3}${fence[0] === '`' ? '`' : '~'}{${fence.length},}[ \\t]*$`).test(text)) { fence = ''; single = true }
+      continue
+    }
+    const opensFence = /^ {0,3}(`{3,}(?!.*`)|~{3,})/.exec(text)
+    const blank = /^[ \t]*$/.test(text)
+    const singleLine = blank || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(text) || /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(text)
+    const opensQuote = /^ {0,3}>/.test(text)
+    const opensItem = /^ {0,3}(?:[-*+]|1[.)])[ \t]+\S/.test(text)
+    if (line > 0 && (singleLine || single || opensFence || opensItem || opensQuote && !quoted)) segment++
+    single = singleLine
+    quoted = opensQuote || quoted && !singleLine && !opensItem
+    if (opensFence) fence = opensFence[1]!
+    segments.push(segment)
+  }
+  if (segment === 0) return
+  const width = source.length + 2
+  let line = 0
+  for (const run of runs) {
+    while (line + 1 < lineStarts.length && lineStarts[line + 1]! <= run.start) line++
+    run.scope = run.scope + 1 + segments[line]! * width
+  }
+}
+
 /** Pair the delimiter runs as CommonMark's process-emphasis procedure does. */
 function pairDelimiterRuns(runs: Run[], onStep: (() => void) | undefined): { pairs: Map<number, Pair>; claimed: Set<number> } {
   const pairs = new Map<number, Pair>()
@@ -130,7 +167,8 @@ function pairDelimiterRuns(runs: Run[], onStep: (() => void) | undefined): { pai
     const closer = runs[c]!
     if (!closer.active || !closer.close) continue
     while (remaining(closer) > 0) {
-      const key = `${closer.scope}:${closer.char}:${closer.open}:${remaining(closer) % 3}`
+      // Rules 9 and 10 and the openers-bottom key read the runs' original lengths.
+      const key = `${closer.scope}:${closer.char}:${closer.open}:${(closer.end - closer.start) % 3}`
       const bottom = bottoms.get(key) ?? -1
       let o = closer.previous
       for (; o > bottom; o = runs[o]!.previous) {
@@ -140,7 +178,8 @@ function pairDelimiterRuns(runs: Run[], onStep: (() => void) | undefined): { pai
         if (opener.scope !== closer.scope) continue
         const a = remaining(opener), b = remaining(closer)
         if (opener.char === '~' && a !== b) continue
-        if (opener.char !== '~' && (opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue
+        const oa = opener.end - opener.start, ob = closer.end - closer.start
+        if (opener.char !== '~' && (opener.close || closer.open) && (oa + ob) % 3 === 0 && (oa % 3 !== 0 || ob % 3 !== 0)) continue
         break
       }
       if (o <= bottom) {
@@ -179,6 +218,63 @@ function literalRunEscapes(source: string, runs: readonly Run[], claimed: Readon
     }
   }
   return literalEscapes
+}
+
+/**
+ * The unpaired `*` and `_` runs Carve would pair. Carve reads each character:
+ * one opens before a non-space when no word character precedes its run, and
+ * closes after a non-space when no word character follows it. A written
+ * strong delimiter can partner a loose `*` either way. Partners are looked for
+ * on the run's own line, so a thematic break line never pairs with another.
+ */
+function looseRunEscapes(source: string, runs: readonly Run[], claimed: ReadonlySet<number>, pairs: ReadonlyMap<number, Pair>, neighbor: (index: number, left: boolean) => string): Set<number> {
+  const word = (s: string): boolean => /[\p{L}\p{N}]/u.test(s)
+  const candidates: { run?: Run; char: string; at: number; open: boolean; close: boolean }[] = []
+  for (const run of runs) {
+    if (run.char === '~' || claimed.has(run.start) || claimed.has(run.end - 1)) continue
+    const runBefore = neighbor(run.start - 1, true)
+    for (let i = run.start; i < run.end; i++) {
+      const before = i > run.start ? run.char : runBefore, after = i + 1 < run.end ? run.char : neighbor(run.end, false)
+      const open = !whitespace(after) && !word(runBefore), close = !whitespace(before) && !word(after)
+      if (open || close) candidates.push({ run, char: run.char, at: i, open, close })
+    }
+  }
+  for (const pair of pairs.values()) {
+    if (pair.kind === '*') candidates.push({ char: '*', at: pair.open, open: true, close: true }, { char: '*', at: pair.close, open: true, close: true })
+  }
+  // Per line and character: the last closer and first opener, each with the
+  // runner-up from another run, so every candidate is checked in constant time.
+  type Edge = { at: number; owner: unknown }
+  const lineOf = (at: number): number => {
+    let low = 0, high = newlines.length
+    while (low < high) { const mid = (low + high) >>> 1; if (newlines[mid]! < at) low = mid + 1; else high = mid }
+    return low
+  }
+  const newlines: number[] = []
+  for (let at = source.indexOf('\n'); at >= 0; at = source.indexOf('\n', at + 1)) newlines.push(at)
+  const closers = new Map<string, [Edge, Edge]>(), openers = new Map<string, [Edge, Edge]>()
+  const none = (at: number): Edge => ({ at, owner: null })
+  const keep = (map: Map<string, [Edge, Edge]>, key: string, edge: Edge, better: (a: number, b: number) => boolean, worst: number): void => {
+    const [best, other] = map.get(key) ?? [none(worst), none(worst)]
+    if (better(edge.at, best.at)) map.set(key, edge.owner === best.owner ? [edge, other] : [edge, best])
+    else if (edge.owner !== best.owner && better(edge.at, other.at)) map.set(key, [best, edge])
+    else map.set(key, [best, other])
+  }
+  const keyed = candidates.map((c, index) => ({ ...c, key: `${c.char}:${lineOf(c.at)}`, owner: c.run ?? index }))
+  for (const c of keyed) {
+    if (c.close) keep(closers, c.key, c, (a, b) => a > b, -1)
+    if (c.open) keep(openers, c.key, c, (a, b) => a < b, Infinity)
+  }
+  const pick = (edges: [Edge, Edge] | undefined, owner: unknown): Edge | undefined => edges && (edges[0].owner === owner ? edges[1] : edges[0])
+  const escapes = new Set<number>()
+  for (const c of keyed) {
+    if (!c.run) continue
+    const closer = pick(closers.get(c.key), c.owner), opener = pick(openers.get(c.key), c.owner)
+    const partner = c.open && closer !== undefined && closer.owner !== null && closer.at > c.at ||
+      c.close && opener !== undefined && opener.owner !== null && opener.at < c.at
+    if (partner) for (let i = c.run.start; i < c.run.end; i++) escapes.add(i)
+  }
+  return escapes
 }
 
 /** Only a singleton can open bare Carve strike; index possible closers once. */
@@ -249,7 +345,12 @@ function closingSpanNeedsBraces(ctx: BraceContext, frame: Frame, pair: Pair, fir
   // renderEmphasis braces delimiters beside word characters or literal openers.
   const wordBoundary = intraword || besideLiteral && (pair.kind === '*' || source[pair.open] === '_')
   // renderEmphasis braces content that starts with its delimiter or an italic strong opener.
-  const bodyBoundary = pair.kind === '/' && first === '*' || pair.kind === '*' &&
+  // A reference that decodes to a space or tab at the body's edge (later in the pass).
+  const body = source.slice(bodyStart, pair.close)
+  const trailingReference = /&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});$/.exec(body)
+  const referenceSpace = body.startsWith('&') && /^[ \t\r\n]/.test(leadingText(body)) ||
+    trailingReference !== null && /^[ \t\r\n]/.test(leadingText(trailingReference[0]))
+  const bodyBoundary = referenceSpace || pair.kind === '/' && first === '*' || pair.kind === '*' &&
     (source[pair.close - 2] === '\\' && source[pair.close - 1] === '*' || bodyValue.endsWith('\\*'))
   return emphasisNeedsBraces(pair.kind, first + last, beforeSpelled, afterSpelled,
     scopedBoundary || delimiterCollision || wordBoundary || bodyBoundary ||
@@ -261,6 +362,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
   const neighbor = (index: number, left: boolean): string => delimiterNeighbor(source, protectedSpans, edgeNeighbors, index, left)
   const runs = scanDelimiterRuns(source, strikethrough, extensionDelimiters, neighbor)
   if (strikethrough && source.includes('[')) scopeRunsToLinkLabels(source, runs, protectedSpans)
+  if (source.includes('\n')) scopeRunsToBlocks(source, runs)
   const { pairs, claimed } = pairDelimiterRuns(runs, onStep)
   if (plainText) {
     let text = ''
@@ -269,6 +371,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
   }
 
   const literalEscapes = literalRunEscapes(source, runs, claimed, extensionDelimiters)
+  const looseEscapes = looseRunEscapes(source, runs, claimed, pairs, neighbor)
   const tildeEscapes = strikethrough ? singletonTildeEscapes(source, claimed) : new Set<number>()
   const { bracketEnds, bracketStarts } = matchedBrackets(source)
   const output: string[] = []
@@ -329,7 +432,7 @@ export function markdownEmphasis(source: string, onFlatten: (reason?: 'extender'
         )
         if (ch === '~') frame.literalTilde = true
         const literalTilde = tildeEscapes.has(at)
-        const literal = literalEscapes.has(at) || crossesBracket || literalTilde || ((active.get('~') ?? 0) > 0 && /[*_]/.test(ch) && !claimed.has(at)) ? `\\${ch}` : ch
+        const literal = literalEscapes.has(at) || crossesBracket || literalTilde || looseEscapes.has(at) || ((active.get('~') ?? 0) > 0 && /[*_]/.test(ch) && !claimed.has(at)) ? `\\${ch}` : ch
         output.push(protectOutput !== undefined && /[*_~]/.test(ch) ? protectOutput(`\\${ch}`) : literal)
         record(ch, ch)
       }

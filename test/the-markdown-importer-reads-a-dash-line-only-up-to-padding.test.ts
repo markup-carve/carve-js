@@ -13,10 +13,9 @@ const NOT_PADDING = [
 describe('the Markdown importer reads a dash line only up to space and tab padding', () => {
   it('keeps the ticket repro as one paragraph, a rule and a paragraph', () => {
     const carve = markdownToCarve('---yaml\na: 1\n---\f\n...\n***\nu\n')
-    expect(carve).toBe('\\-\\-\\-yaml\na: 1\n\\-\\-\\-\f\n...\n\n---\n\nu\n')
+    expect(carve).toBe('\\-\\-\\-yaml\na: 1\n\\-\\-\\-\f\n\\.\\.\\.\n\n---\n\nu\n')
     // commonmark.js 0.31.2: <p>---yaml\na: 1\n---\f\n...</p>\n<hr />\n<p>u</p>
-    // The ellipsis is Carve's own typography on `...`, not part of this case.
-    expect(carveToHtml(carve)).toBe('<p>---yaml\na: 1\n---\f\n…</p>\n<hr>\n<p>u</p>')
+    expect(carveToHtml(carve)).toBe('<p>---yaml\na: 1\n---\f\n...</p>\n<hr>\n<p>u</p>')
   })
 
   it.each(NOT_PADDING)('closes no frontmatter on `---` followed by %s', (_what, ch) => {
