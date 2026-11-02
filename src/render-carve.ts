@@ -3373,6 +3373,18 @@ class CarveRenderSession {
           const footnote = this.listFootnoteAfter(previousBlock, block, ctx)
           if (footnote !== undefined) parts[parts.length - 1] += `\n${footnote}`
         }
+        // CARVE-P11-073 (c): in a quote or a note body, a note with a region marker
+        // below it is written between the siblings it stood between, keeping the
+        // marker's blank line or its absence (a).
+        let heldNoteEnd: number | undefined
+        if (item === undefined && previousBlock !== null && parts.length > 0) {
+          const note = this.markedNoteInGap(previousBlock, block, ctx)
+          if (note !== undefined) {
+            const adjacent = isRegionMarker(previousBlock) && previousBlock.pos?.endLine !== undefined && note.startLine === previousBlock.pos.endLine + 1
+            parts[parts.length - 1] += `${adjacent ? '\n' : '\n\n'}${note.text}`
+            heldNoteEnd = note.endLine
+          }
+        }
         ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
         let rendered = this.renderBlock(block, ctx)
         const codeCaptionGap = previousBlock ? codeIncludeCaptionGap(previousBlock, block) : null
@@ -3412,7 +3424,9 @@ class CarveRenderSession {
           if (
             previousBlock !== null &&
             parts.length > 0 &&
-            (writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
+            (heldNoteEnd !== undefined
+              ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
+              : writtenAsOneRun(previousBlock, block) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if (listSeparated && parts.length > 0 && descriptionBody) {
@@ -3953,6 +3967,37 @@ class CarveRenderSession {
     const written = labels.map(label => this.renderOneFootnoteDef(label, ownValue(this.documentFootnoteDefs, label)!, ctx))
     for (const label of labels) this.footnotesWrittenInPlace.add(label)
     return written.join('\n')
+  }
+
+  /** The definitions a region marker below holds between `before` and `after`, in source order. */
+  private markedNoteInGap(before: BlockNode, after: BlockNode, ctx: CarveContext): { text: string; startLine: number; endLine: number } | undefined {
+    const from = before.pos?.endLine
+    const to = after.pos?.startLine
+    if (from === undefined || to === undefined || to - from < 2 || !this.staysAboveAMarker(from + 1)) return undefined
+    const held: Array<{ start: number; end: number; write: () => string }> = []
+    // Line lookups over the gap only, so a whole pass stays linear in the lines.
+    for (let line = from + 1; line < to && this.staysAboveAMarker(line); line++) {
+      const label = this.footnoteDefsByLine.get(line)
+      const blocks = label === undefined ? undefined : ownValue(this.documentFootnoteDefs, label)
+      if (label !== undefined && blocks !== undefined && !this.footnotesWrittenInPlace.has(label)) {
+        held.push({ start: line, end: ownValue(this.documentFootnoteDefPos, label)?.endLine ?? line, write: () => {
+          this.footnotesWrittenInPlace.add(label)
+          return this.renderOneFootnoteDef(label, blocks, ctx)
+        } })
+      }
+      const node = this.definitionsByLine.get(line)
+      if (node !== undefined && !this.definitionsWrittenInPlace.has(node as unknown as object)) {
+        held.push({ start: line, end: node.pos?.endLine ?? line, write: () => {
+          const written = this.renderBlock(node, ctx)
+          this.definitionsWrittenInPlace.add(node as unknown as object)
+          return written
+        } })
+      }
+    }
+    if (held.length === 0) return undefined
+    // A blank line the author wrote between two of them stays.
+    const text = held.map((entry, k) => (k === 0 ? '' : entry.start === held[k - 1]!.end + 1 ? '\n' : '\n\n') + entry.write()).join('')
+    return { text, startLine: held[0]!.start, endLine: held.at(-1)!.end }
   }
 
   private listFootnoteAfter(before: BlockNode, after: BlockNode | undefined, ctx: CarveContext): string | undefined {
