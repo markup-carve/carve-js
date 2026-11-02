@@ -963,12 +963,21 @@ export function ownLines(
       for (const index of notes) skippedNotes.add(index)
       return reason
     }
+    // A quote prefix left of the container holding that quote carries nothing (carve#4396).
+    const floors: number[] = []
+    for (let f = 1, floor = 0; f < frames.length && floors.length < quotes; f++) {
+      if (frames[f]!.kind !== 'quote') floor = frames[f]!.col
+      else {
+        floors.push(floor)
+        floor = 0
+      }
+    }
     for (let k = at + 1; ; k++) {
       const next = lines[k]
       if (next === undefined) return decide('document')
       let n = indentCols(next)
       for (let q = 0; q < quotes; q++) {
-        if (!isQuoteLine(n.rest)) return decide('left')
+        if (!isQuoteLine(n.rest) || n.col < (floors[q] ?? 0)) return decide('left')
         n = indentCols(quoteRest(n.rest))
       }
       // A line of nothing but quote markers is blank at its own level (CARVE-P9-085).
