@@ -318,7 +318,6 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `duplicate-footnote-definition` | a repeated `[^label]: ...` definition; the parser keeps the first definition and ignores the later one |
 | `unused-footnote-definition` | a footnote definition that is never referenced; it is omitted from rendered output |
 | `heading-trailing-attribute` | a trailing `{#id}` / `{.class}` on a heading line; under heading-strict this is literal text, so the attributes never attach (put them on a `{…}` line *above* the heading) |
-| `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
 | `unattached-block-attribute` | a floating `{…}` block-attribute line that reaches no block, because the document or the container holding it ended first (PART 9 §15 A4). Nothing is emitted for it, so `> {.k}` on a quote's last line lands neither on the quote nor on anything after it. Move the line above the block it describes, or delete it |
 | `fence-opener-fallback` | a line that starts with a backtick or tilde fence but whose info string is not a language, an optional `"title"` and an optional `[label]` (for example `` ```js {.diff} `` or `` ```js title="x" ``); the fence does not open and the block renders as inline code or plain text. A trailing `{…}` belongs on its own line above the fence, and the message says so |
