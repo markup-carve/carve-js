@@ -556,10 +556,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   }
 
   // A sub-item on a task item's marker line stands past the box, at its own column.
-  function taskBoxLeadShift(head: ItemHead, content: string, terminatorFree: boolean): number {
+  // `boxColumn` is the box's column within the item, where its lines are sliced.
+  function taskBoxLeadShift(head: ItemHead, content: string, terminatorFree: boolean, boxColumn: number): number {
     if (unorderedMatch(content, terminatorFree) === null && orderedMatch(content, terminatorFree) === null &&
       taskMatch(content, terminatorFree) === null) return 0
-    return Math.max(0, head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength - 2)
+    return Math.max(0, head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength - boxColumn)
   }
 
   // So the lines below it are read from that sub-item's column. A line short of
@@ -989,7 +990,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { startLineIndex: itemStartLineIndex, line, terminatorFree, checked, taskState, leadOrigin } = head
     const itemAttrs = head.attr ? head.attr.attrs : undefined
     const { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth } = placement
-    const taskLeadShift = isTask ? taskBoxLeadShift(head, content, terminatorFree) : 0
+    const taskLeadShift = isTask ? taskBoxLeadShift(head, content, terminatorFree, contentCol - baseIndent) : 0
     const nested: string[] = []
     let commentPayloadCandidates: Map<number, string> | undefined
     const nestedLineNumbers: number[] = []

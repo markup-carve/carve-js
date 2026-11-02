@@ -59,6 +59,7 @@ const IMPLEMENTED = new Set([
   'invalid-body-row-metadata-leaves-one-table-body',
   'a-later-term-after-a-shifted-separator-opens-in-the-outer-item',
   'a-task-item-uses-the-ordered-item-column-rule',
+  'a-wide-gap-before-a-task-box-leaves-the-lazy-frame-out-of-a-term',
   'invalid-table-metadata-keeps-the-table',
   'lazy-quote-owners',
   'lint-directives-are-invisible-in-rendered-content',
