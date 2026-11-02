@@ -3167,8 +3167,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
           // Lines a still-open code fence holds are its payload, which is visible (§17 L1c).
+          // A comment span's payload opens no fence, but its lines still end one they miss.
           return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd &&
-            !bodyEndsInOpenCodeFence([content, ...nested])
+            !bodyEndsInOpenCodeFence([content, ...nested].map((line, index) =>
+              hiddenByComment[index] === true ? line.replace(/\S.*$/, '%%') : line))
         }
         if (invisibleNested(k) || definitionAtDescendantBody(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).

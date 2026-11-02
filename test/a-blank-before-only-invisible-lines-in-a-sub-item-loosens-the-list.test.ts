@@ -33,6 +33,13 @@ describe('a blank before only invisible lines in a sub-item body loosens the lis
     expect(flat(source)).toContain('<li>sub</li>')
   })
 
+  it.each([
+    '- a\n\n  %%%\n  ```\n  %%%\n- sub\n',
+    '- a\n  - b\n\n    %%%\n    ~~~\n    %%%\n- sub\n',
+  ])('loosens when the fence opener is comment payload: %j', (source) => {
+    expect(flat(source)).toContain('<li><p>sub</p></li>')
+  })
+
   it('loosens when a line below the fence column ends the fence', () => {
     expect(flat('- a\n  - ```\n    x\n\n   %% c\n- sub\n')).toContain('<li><p>sub</p></li>')
   })
