@@ -1571,7 +1571,7 @@ export function lintCarve(
   // some construct inside it silently degraded is describing something that was
   // never going to render. `table-marker-run-padding` had this false positive.
   const unrendered = new Set(verbatimLines)
-  for (const ln of collectCommentLines(doc)) unrendered.add(ln)
+  for (const ln of collectCommentLines(doc, false, true)) unrendered.add(ln)
   for (let i = 1; i < sourceLines.length; i++) {
     const atEnd = i + 1 >= sourceLines.length ||
       (i + 1 === sourceLines.length - 1 && sourceLines[i + 1] === '')
@@ -3169,6 +3169,11 @@ function collectSilentFailures(
       if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
         atomicSpans.push([pos.startOffset, pos.endOffset])
     }
+    if (node.type === 'comment' && !node.block) {
+      const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+      if (pos?.startOffset !== undefined && pos.endOffset !== undefined)
+        atomicSpans.push([toUtf16(pos.startOffset), toUtf16(pos.endOffset)])
+    }
     // A link destination or title may cross a soft wrap, which the per-line slot scan cannot see.
     if (node.type === 'link') {
       const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
@@ -3895,10 +3900,23 @@ function collectUnpublishedLines(
 }
 
 /** Line numbers covered by a comment node, which a host never sees. */
-function collectCommentLines(doc: Document, blocksOnly = false): Set<number> {
+// A `%%` comment after visible text on its line hides only itself, not the line.
+function markTrailingComments(children: readonly unknown[], trailing: Set<unknown>): void {
+  for (let i = 1; i < children.length; i++) {
+    const node = children[i] as Positioned & { type?: string; block?: boolean }
+    const previous = children[i - 1] as Positioned & { type?: string }
+    if (node?.type !== 'comment' || node.block || previous?.type === 'soft_break' || previous?.type === 'hard_break') continue
+    const previousEnd = (previous?.pos as { endLine?: number } | undefined)?.endLine ?? previous?.pos?.startLine
+    if (previousEnd !== undefined && previousEnd === node.pos?.startLine) trailing.add(node)
+  }
+}
+
+function collectCommentLines(doc: Document, blocksOnly = false, keepTrailing = false): Set<number> {
   const comments = new Set<number>()
+  const trailing = new Set<unknown>()
   walkDocument(doc, (node) => {
-    if (node.type !== 'comment' || (blocksOnly && !node.block)) return
+    if (keepTrailing && Array.isArray(node.children)) markTrailingComments(node.children, trailing)
+    if (node.type !== 'comment' || (blocksOnly && !node.block) || trailing.has(node)) return
     const pos = (node as Positioned).pos
     if (!pos) return
     const end = (pos as { endLine?: number }).endLine ?? pos.startLine
