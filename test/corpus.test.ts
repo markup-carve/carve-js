@@ -1223,6 +1223,9 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ['32-ordered-list-dialects', { reason: 'carve#4811', html: '<p>a. apple\nb. banana</p>' }],
   ['32-ordered-list-dialects-2', { reason: 'carve#4811', html: '<p>iv. four\nv. five\nvi. six</p>' }],
   ['90-list-item-attributes-3', { reason: 'carve#4811', html: '<p>a.{.c} An alpha item.</p>' }],
+  ['60-tag-requires-a-word-boundary-2', { reason: 'carve#4809', html: '<p>Issue #123 and <span class="tag"><strong>#v2</strong></span> here.</p>' }],
+  ['288-heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key-3', { reason: 'carve#4809', html: '<section id="a-65-b">\n  <h1>a &amp;#65; b</h1>\n  <p><a href="#a-65-b">a &amp;#65; b</a></p>\n</section>' }],
+  ['489-a-caption-s-placeholder-is-any-that-does-not-begin-a-tag-5', { reason: 'carve#4809', html: '<figure>\n  <img src="p.png" alt="p">\n  <figcaption>Figure #1 q</figcaption>\n</figure>' }],
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

@@ -66,6 +66,13 @@
         "combined-aff46d1219c3",
         "attributes-4a9626ec0fde"
       ]
+    },
+    {
+      "ticket": "markup-carve/carve#4809",
+      "cause": "a mention or tag name holds an ASCII letter; engine follows current spec ahead of this pin",
+      "cases": [
+        "ownership-a98e893f6197"
+      ]
     }
   ]
 }

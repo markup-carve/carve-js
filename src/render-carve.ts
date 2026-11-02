@@ -2302,7 +2302,7 @@ function escapeSymbolName(text: string): string {
  * spelling (ruling markup-carve/carve-php#2159).
  */
 function spellableName(name: string, nodeType: 'mention' | 'tag'): string {
-  if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/.test(name)) {
+  if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/.test(name) || !/[A-Za-z]/.test(name)) {
     throw new SourceUnspellableError(nodeType, `a ${nodeType} whose name the grammar rejects has no Carve source spelling`)
   }
   return name
