@@ -521,11 +521,23 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { state } = line
     const commentRun = commentFenceRun(line.content)
     if (commentRun === undefined || !line.hasCommentCloser(commentRun)) return false
+    if (descendantCodeHolds(line.content, state)) return false
     const column = line.atContentColumn ? indentColumns(line.content) : 0
     state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn,
       description: state.inDefList === 'description', ...(column > 0 ? { column } : {}) }
     state.deepest = null
     return endsOnBlock(state)
+  }
+
+  // A run a descendant's open code fence reaches is that fence's payload, not a span of this item.
+  function descendantCodeHolds(content: string, state: ItemLazyState): boolean {
+    let text = content
+    for (let frame = state; frame.deepest && frame.ownedColumn >= 0; frame = frame.deepest) {
+      if (indentColumns(text, frame.ownedColumn) < frame.ownedColumn) return false
+      text = sliceColumns(text, frame.ownedColumn, true)
+      if (frame.deepest.opaque?.kind === 'code') return true
+    }
+    return false
   }
 
   // A heading is a block and leaves no paragraph open. At the item's content
