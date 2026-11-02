@@ -29,6 +29,14 @@ describe('a Markdown comment that ends a list', () => {
     expect(markdownToCarve('- foo\n\n<!-- -->\n\n    code\n')).toBe('- foo\n\n%%\n\n```\ncode\n```\n')
   })
 
+  it('ends the inner list of a compact `- - a` item', () => {
+    expect(markdownToCarve('- - a\n\n  <!-- c -->\n\n  - b\n')).toBe('{loose}\n- - a\n\n  %% c\n\n\n\n  - b\n')
+  })
+
+  it('leaves the same lines in fenced code alone', () => {
+    expect(markdownToCarve('```\n- a\n<!-- c -->\n- b\n```\n')).toBe('```\n- a\n<!-- c -->\n- b\n```\n')
+  })
+
   it('stays in the item when it sits at the content column', () => {
     expect(carveToHtml(markdownToCarve('- a\n\n  <!-- c -->\n\n- b\n'))).toBe('<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>')
   })

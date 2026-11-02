@@ -7805,37 +7805,61 @@ function commentSeparatedListStarts(source: readonly string[]): number[] {
   const quotes = source.map(line => blockquotePrefix(stripOptionalQuoteIndent(line)))
   const prefixes = quotes.map(quote => quote?.prefix ?? '')
   const lines = source.map((line, at) => quotes[at]?.text ?? line)
+  const fenced = fencedLines(lines)
   const starts: number[] = []
   for (let item = 0; item < lines.length; item++) {
-    const opened = marker.exec(lines[item]!)
-    if (opened === null) continue
-    const indent = columnWidth(opened[1]!)
-    const contentCol = itemContentColumn(opened[0])
+    let consumed = 0
+    // `- - a` opens one list per marker, each with its own column.
+    for (let opened = fenced.has(item) ? null : marker.exec(lines[item]!); opened !== null; opened = marker.exec(lines[item]!.slice(consumed))) {
+      const indent = columnWidth(lines[item]!.slice(0, consumed + opened[1]!.length))
+      consumed += opened[0].length
+      const start = boundaryAfter(item, indent, itemContentColumn(lines[item]!.slice(0, consumed)))
+      if (start !== null) starts.push(start)
+      if (consumed >= lines[item]!.length) break
+    }
+  }
+  return starts
+
+  function boundaryAfter(item: number, indent: number, contentCol: number): number | null {
     let comment = false
     let previousBlank = false
     for (let at = item + 1; at < lines.length; at++) {
       const line = lines[at]!
-      if (prefixes[at] !== prefixes[item]) break
+      if (prefixes[at] !== prefixes[item]) return null
       if (line.trim() === '') { previousBlank = true; continue }
       const lineIndent = indentColumns(line)
-      const end = lineIndent >= indent && lineIndent < contentCol ? commentBlockEnd(lines, at) : null
+      const end = !fenced.has(at) && lineIndent >= indent && lineIndent < contentCol ? commentBlockEnd(lines, at) : null
       if (end !== null) {
         comment = true
         previousBlank = false
         at = end
         continue
       }
-      if (comment) {
-        // Any marker that is not indented code opens the next list.
-        if (lineIndent >= indent && lineIndent - indent <= 3 && marker.test(line)) starts.push(at)
-        break
-      }
-      const lazy = !previousBlank && lineIndent < contentCol && !/^[ \t]*(?:[>#<]|`{3}|~{3}|[-*+][ \t]|\d{1,9}[.)][ \t])/.test(line)
-      if (lineIndent < contentCol && !lazy) break
+      // Any marker that is not indented code opens the next list.
+      if (comment) return !fenced.has(at) && lineIndent >= indent && lineIndent - indent <= 3 && marker.test(line) ? at : null
+      const lazy = !previousBlank && !/^[ \t]*(?:[>#<]|`{3}|~{3}|[-*+][ \t]|\d{1,9}[.)][ \t])/.test(line)
+      if (lineIndent < contentCol && !lazy) return null
       previousBlank = false
     }
+    return null
   }
-  return starts
+}
+
+/** The lines a fenced code block holds, its fence lines included. */
+function fencedLines(lines: readonly string[]): Set<number> {
+  const fenced = new Set<number>()
+  let open: string | null = null
+  for (const [at, line] of lines.entries()) {
+    const run = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line)
+    if (open !== null) {
+      fenced.add(at)
+      if (run !== null && run[1]![0] === open[0] && run[1]!.length >= open.length && run[2]!.trim() === '') open = null
+    } else if (run !== null && (run[1]![0] === '~' || !run[2]!.includes('`'))) {
+      fenced.add(at)
+      open = run[1]!
+    }
+  }
+  return fenced
 }
 
 /** The last line of the comment-only HTML block opening at `at`, or null. */
