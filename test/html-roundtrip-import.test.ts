@@ -315,7 +315,7 @@ describe('a carrier that cannot be honored is not one', () => {
     // one input that reaches a reconstructed node past `maxDepth`.
     expect(() => htmlToAst(
       '<p>x</p><template data-carve-abbreviations><div><div>*[X]: e</div></div></template>',
-      { maxDepth: 1 },
+      { maxDepth: 0 },
     )).toThrow()
   })
 

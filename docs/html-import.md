@@ -38,6 +38,10 @@ out.
 `HtmlImportLimitError` with the limit that stopped it, rather than handing back
 part of a document.
 
+`maxDepth` defaults to 200, the parser's nesting cap, so the HTML of a paragraph
+nested to that cap imports back. It counts element levels; a text or comment
+node counts toward `maxNodes` (default 1,000,000) but adds no level.
+
 `maxDiagnostics` (default 1000) bounds the REPORT instead. The conversion still
 returns its Carve or its AST; the report carries the rows that fit, and its last
 row is replaced by a `diagnostics-truncated` row of `error` severity saying more

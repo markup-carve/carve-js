@@ -64,7 +64,7 @@ describe('an unsupported element unwraps in place', () => {
   })
 
   it('charges inline content inside a spliced wrapper at its real depth', () => {
-    expect(() => htmlToCarve('<x-a><hr><em><em>x</em></em></x-a>', { maxDepth: 3 })).toThrow(/depth limit/)
+    expect(() => htmlToCarve('<x-a><hr><em><em>x</em></em></x-a>', { maxDepth: 2 })).toThrow(/depth limit/)
   })
 
   it('still drops an empty one', () => {
