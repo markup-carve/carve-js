@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToAstJson } from '../src/index.js'
+import { carveToAstJson, carveToCarve } from '../src/index.js'
 
 // CARVE-P12-011: a comment after a description is that description's child, so the term ends on its own line.
 describe('a comment between descriptions stays out of the term', () => {
@@ -34,6 +34,16 @@ describe('a comment between descriptions stays out of the term', () => {
       walk(carveToAstJson(source))
       expect(spans.length).toBeGreaterThan(2)
       for (let i = 1; i < spans.length; i++) expect(spans[i]![0]).toBeGreaterThanOrEqual(spans[i - 1]![1])
+    })
+  }
+
+  for (const source of [
+    ':: t\n: d\n%% c\n: e\n',
+    ':: t\n: [r]: /u\n%% c\n: e\n',
+    ':: a\n: x\n%% c\n:: b\n: y\n',
+  ]) {
+    it(`writes ${JSON.stringify(source)} back unchanged`, () => {
+      expect(carveToCarve(source)).toBe(source)
     })
   }
 })

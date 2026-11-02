@@ -4345,7 +4345,86 @@ class CarveRenderSession {
     // Every entry writes its own description line, so consecutive `::` lines
     // never end up sharing one: the list writes back with the grouping it
     // parsed from.
-    for (const item of items) {
+    const writeDescription = (item: DefinitionItem, def: BlockNode[], index: number): void => {
+      // An EMPTY description whose line carries a hoisted definition is one the
+      // author wrote the definition on: write it back there. Without this the
+      // line came out as a bare `:`, which re-parses into the term above it -
+      // the failure markup-carve/carve#805 describes.
+      if (def.length === 0) {
+        const line = item.definitionLines?.[index]
+        const definition = line === undefined ? undefined : this.definitionsByLine.get(line)
+        if (definition !== undefined) {
+          // Render BEFORE marking it: the document-level arm returns '' for a
+          // node in this set, so marking first renders the line away.
+          const written = this.renderBlock(definition, ctx)
+          this.definitionsWrittenInPlace.add(definition as unknown as object)
+          out.push(`: ${written}`)
+          return
+        }
+        const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
+        const blocks = label === undefined ? undefined : ownValue(this.documentFootnoteDefs, label)
+        if (label !== undefined && blocks !== undefined) {
+          this.footnotesWrittenInPlace.add(label)
+          const written = this.renderOneFootnoteDef(label, blocks, ctx)
+          // A footnote body can be multi-line; its continuation lines carry the
+          // body's own two-column indent and sit under the description.
+          const [first, ...rest] = written.split('\n')
+          out.push(`: ${first}`)
+          for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
+          return
+        }
+      }
+      /*
+       * A DESCRIPTION THAT WRITES NOTHING TAKES THE SENTINEL `{empty}`
+       * (PART 11 §7b, markup-carve/carve#1827) - the same body the footnote
+       * definition one construct over is written with.
+       *
+       * THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
+       * empty". An HTML import, an ingested AST and `fmt` over parsed source
+       * arrive with a different tree for the same shape, and only the written
+       * result is common to them: a `<dd>` holding an invisible paragraph or a
+       * list with no items writes nothing too, and takes the sentinel alike.
+       *
+       * The sentinel needs no lookahead. It is empty whether a blank line
+       * follows it, a flush-left paragraph does, or nothing does.
+       *
+       * `: \{empty}` and `: {empty} x` are content, not sentinels - the first
+       * escapes the brace and the second is not a block-attribute line - so
+       * both keep writing their own text.
+       */
+      this.markDescriptionParagraphs(def)
+      if (def[0]?.type === 'paragraph') this.markerLineParagraphs.add(def[0])
+      const outerDescriptionBody = this.descriptionBody
+      this.descriptionBody = true
+      let written: string
+      try {
+        this.indentedHostDepth++
+        try {
+          const body = atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true))
+          written = body.startsWith('\t') ? trimEndNonNbsp(body) : trimNonNbsp(body)
+        } finally {
+          this.indentedHostDepth--
+        }
+        // The canonical form keeps a description's lone `+` escaped (corpus 436).
+        if (written.startsWith('+\n')) written = '\\' + written
+      } finally {
+        this.descriptionBody = outerDescriptionBody
+      }
+      if (written === '') {
+        out.push(`: ${EMPTY_BODY_SENTINEL}`)
+
+        return
+      }
+      const lines = written.split('\n')
+      out.push(`: ${lines.shift() ?? ''}`)
+      // A description nested in another one leaves the tag for the outermost.
+      const tag = this.markerColumnTag()
+      for (const line of lines) {
+        if (!line.startsWith(tag)) out.push(`${DEFINITION_BODY_INDENT}${line}`)
+        else out.push(outerDescriptionBody ? line : line.slice(tag.length))
+      }
+    }
+    for (const [itemIndex, item] of items.entries()) {
       // A term is one line like a heading (carve#4861), so a break collapses to a space.
       for (const term of item.terms) {
         const outer = this.inTerm
@@ -4356,84 +4435,13 @@ class CarveRenderSession {
           this.inTerm = outer
         }
       }
-      item.definitions.forEach((def, index) => {
-        // An EMPTY description whose line carries a hoisted definition is one the
-        // author wrote the definition on: write it back there. Without this the
-        // line came out as a bare `:`, which re-parses into the term above it -
-        // the failure markup-carve/carve#805 describes.
-        if (def.length === 0) {
-          const line = item.definitionLines?.[index]
-          const definition = line === undefined ? undefined : this.definitionsByLine.get(line)
-          if (definition !== undefined) {
-            // Render BEFORE marking it: the document-level arm returns '' for a
-            // node in this set, so marking first renders the line away.
-            const written = this.renderBlock(definition, ctx)
-            this.definitionsWrittenInPlace.add(definition as unknown as object)
-            out.push(`: ${written}`)
-            return
-          }
-          const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
-          const blocks = label === undefined ? undefined : ownValue(this.documentFootnoteDefs, label)
-          if (label !== undefined && blocks !== undefined) {
-            this.footnotesWrittenInPlace.add(label)
-            const written = this.renderOneFootnoteDef(label, blocks, ctx)
-            // A footnote body can be multi-line; its continuation lines carry the
-            // body's own two-column indent and sit under the description.
-            const [first, ...rest] = written.split('\n')
-            out.push(`: ${first}`)
-            for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
-            return
-          }
-        }
-        /*
-         * A DESCRIPTION THAT WRITES NOTHING TAKES THE SENTINEL `{empty}`
-         * (PART 11 §7b, markup-carve/carve#1827) - the same body the footnote
-         * definition one construct over is written with.
-         *
-         * THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
-         * empty". An HTML import, an ingested AST and `fmt` over parsed source
-         * arrive with a different tree for the same shape, and only the written
-         * result is common to them: a `<dd>` holding an invisible paragraph or a
-         * list with no items writes nothing too, and takes the sentinel alike.
-         *
-         * The sentinel needs no lookahead. It is empty whether a blank line
-         * follows it, a flush-left paragraph does, or nothing does.
-         *
-         * `: \{empty}` and `: {empty} x` are content, not sentinels - the first
-         * escapes the brace and the second is not a block-attribute line - so
-         * both keep writing their own text.
-         */
-        this.markDescriptionParagraphs(def)
-        if (def[0]?.type === 'paragraph') this.markerLineParagraphs.add(def[0])
-        const outerDescriptionBody = this.descriptionBody
-        this.descriptionBody = true
-        let written: string
-        try {
-          this.indentedHostDepth++
-          try {
-            const body = atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx, true))
-            written = body.startsWith('\t') ? trimEndNonNbsp(body) : trimNonNbsp(body)
-          } finally {
-            this.indentedHostDepth--
-          }
-          // The canonical form keeps a description's lone `+` escaped (corpus 436).
-          if (written.startsWith('+\n')) written = '\\' + written
-        } finally {
-          this.descriptionBody = outerDescriptionBody
-        }
-        if (written === '') {
-          out.push(`: ${EMPTY_BODY_SENTINEL}`)
-
-          return
-        }
-        const lines = written.split('\n')
-        out.push(`: ${lines.shift() ?? ''}`)
-        // A description nested in another one leaves the tag for the outermost.
-        const tag = this.markerColumnTag()
-        for (const line of lines) {
-          if (!line.startsWith(tag)) out.push(`${DEFINITION_BODY_INDENT}${line}`)
-          else out.push(outerDescriptionBody ? line : line.slice(tag.length))
-        }
+      item.definitions.forEach((authored, index) => {
+        // A comment the parser kept for the entry below is written at the list's column, before that entry.
+        const followed = itemIndex < items.length - 1 || index < item.definitions.length - 1
+        let cut = authored.length
+        while (followed && cut > 0 && authored[cut - 1]!.type === 'comment') cut--
+        writeDescription(item, authored.slice(0, cut), index)
+        for (const comment of authored.slice(cut)) out.push(this.renderBlock(comment, ctx))
       })
     }
     return out.join('\n')
