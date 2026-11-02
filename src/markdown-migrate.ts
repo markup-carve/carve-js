@@ -6279,8 +6279,16 @@ function collectItemFence(
 }
 
 /** Whether a lazy line left of the item's content column joins the item's run. */
-function joinsItemLazily(line: string, lazyText: boolean, orderedText: boolean, quotedFence: RegExp | null): boolean {
-  return lazyText && !orderedText && quotedFence === null && !RE_OPENS_ITEM_OR_NOTE.test(line)
+function joinsItemLazily(line: string, lazyText: boolean, orderedText: boolean, quotedFence: RegExp | null, run: readonly PrefixedInlineLine[]): boolean {
+  // A setext underline the run took ended its paragraph.
+  const underlined = run.length > 1 && RE_MD_SETEXT_UNDERLINE.test(run.at(-1)!.text.trim())
+  return lazyText && !orderedText && !underlined && quotedFence === null && !RE_OPENS_ITEM_OR_NOTE.test(line)
+}
+
+/** The line above the next one of an item run; a bare marker on the first line is an empty nested item, no paragraph. */
+function runLineAbove(run: readonly PrefixedInlineLine[], firstText: string): string {
+  if (run.length > 1) return run.at(-1)!.text
+  return RE_EMPTY_MARKER.test(firstText.trim()) ? '' : firstText
 }
 
 /** The pad of a lazy line of the innermost item, left of that item's column. */
@@ -6359,8 +6367,7 @@ function collectListInlineRun(
     if (quotedFence !== null && indent >= contentCol && blockquotePrefix(stripColumns(line, contentCol)) === null) break
     // The indent past the content column is written as the spaces it covers.
     const text = ' '.repeat(Math.max(0, indent - contentCol)) + line.replace(/^[ \t]+/, '')
-    // A bare marker on the first line is an empty nested item, no paragraph.
-    const above = run.length > 1 ? run.at(-1)!.text : RE_EMPTY_MARKER.test(firstText.trim()) ? '' : firstText
+    const above = runLineAbove(run, firstText)
     const aboveRow = quotedTable.advance(run, firstText)
     // An ordered marker other than 1 cannot interrupt the paragraph of the
     // innermost item holding it (CommonMark 5.2), unless it continues an
@@ -6392,7 +6399,7 @@ function collectListInlineRun(
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
     // A lazy line of the item's paragraph joins the run, so spans and a
     // setext underline pair across it as they do across an indented line.
-    if (indent < contentCol && !joinsItemLazily(line, lazyText, orderedText, quotedFence)) { terminal = !lazyText; break }
+    if (indent < contentCol && !joinsItemLazily(line, lazyText, orderedText, quotedFence, run)) { terminal = !lazyText; break }
 
     // Star and underscore rules interrupt the paragraph; dashes may be setext.
     if (RE_MD_THEMATIC.test(text) && !/^[ \t]*-/.test(text)) break

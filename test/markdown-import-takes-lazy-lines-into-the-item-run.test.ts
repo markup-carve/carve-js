@@ -32,3 +32,10 @@ it.each([
 ])('leaves an empty sibling marker out of the item: %j', (markdown, html) => {
   expect(carveToHtml(markdownToCarve(markdown))).toBe(html)
 })
+
+it.each([
+  ['- a\n  -\nx\n', '- ## a\n\nx\n'],
+  ['- a\n  ===\nx\n', '- # a\n\nx\n'],
+])('takes no lazy line after a setext underline the item holds: %j', (markdown, carve) => {
+  expect(markdownToCarve(markdown)).toBe(carve)
+})
