@@ -6,6 +6,8 @@ import { applyReferenceDefinition } from './reference-resolution.js'
 export interface LinkDef {
   /** Label spelling carried by the winning definition for canonical output. */
   rawLabel?: string
+  /** Columns between the line start and the definition, on a note's opening line. */
+  lead?: number
   /**
    * Zero-based index of the line the definition was written on. Kept so PART 12
    * §10's node can carry a `pos` and so the hoisted definitions come out in

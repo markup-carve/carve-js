@@ -910,7 +910,6 @@ export function classifyQuotedLine(
     return null
   }
   // Invisible definitions leave no leaf that can accept a following lazy line.
-  // Abbreviation definitions are recognized only at document level.
   // A footnote body's first block answers, as for every container (carve#3885).
   const note = RE_FOOTNOTE_DEF.exec(content)
   if (note) {
@@ -1526,12 +1525,12 @@ export function startsInterruptingBlock(
       // `+` is the list-continuation marker, never an interrupter.
       return false
     case '*':
-      // abbreviation definition (invisible, and only at document level - PART
-      // 12 §7), a thematic break, or a `*` bullet at a list item body's column 0
+      // abbreviation definition (invisible in every container, carve#4865), a
+      // thematic break, or a `*` bullet at a list item body's column 0
       // (§24 C3). Everywhere else a bullet/task does NOT interrupt
       // (symmetric, §10 I2).
       return (
-        (abbreviationArm && lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) ||
+        (abbreviationArm && RE_ABBR_DEF.test(ln)) ||
         RE_HR.test(ln) ||
         opensSublistHere(lexer, ln, i, sublistArm)
       )

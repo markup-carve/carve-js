@@ -221,10 +221,26 @@ export function appendLinkReferenceDefinitions(
       lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
       lexer.lineStartColumn(def.line),
     )
+    // A definition on a note's opening line starts behind the note's marker.
+    if (def.lead !== undefined) {
+      node.pos.startColumn! += def.lead
+      node.pos.startOffset! += def.lead
+    }
     authored.push(node)
   }
   authored.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   children.push(...authored)
+}
+
+/**
+ * An abbreviation definition written in a container is a child of the document (CARVE-P12-070,
+ * carve#4865). The document reader takes its own off the list, so what is left joins the
+ * `+`-skipped ones, which are placed after the block they stood among.
+ */
+export function hoistContainerAbbreviations(lexer: Lexer): void {
+  for (const [index, def] of lexer.collectedAbbreviations ?? []) {
+    (lexer.skippedAbbreviations ??= new Map()).set(index, def)
+  }
 }
 
 /**
@@ -252,8 +268,16 @@ export function insertSkippedAbbreviationDefinitions(
 
   function skippedAbbreviation([line, [abbr, expansion]]: [number, [string, string]]): AbbreviationDef {
     const node: AbbreviationDef = { type: 'abbreviation_def', abbr, expansion: dropTrailingWhitespace(expansion) }
-    node.pos = definitionLinePosition(sourceLines, lexer.sourceOffsetMap ?? lexer.lineOffsets, line, source.length,
+    const pos = definitionLinePosition(sourceLines, lexer.sourceOffsetMap ?? lexer.lineOffsets, line, source.length,
       lexer.lineStartColumn(line))
+    // A container's prefix is not part of the definition.
+    const lineStart = source.lastIndexOf('\n', pos.startOffset! - 1) + 1
+    const marker = source.indexOf(`*[${abbr}]:`, lineStart)
+    if (marker >= 0) {
+      pos.startColumn = marker - lineStart + 1
+      pos.startOffset = marker
+    }
+    node.pos = pos
     return node
   }
 }

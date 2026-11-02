@@ -3402,7 +3402,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const line = lexer.peek()
     const lineAt = (index: number) => lexer.lineAt(index)
     if (line === undefined || !(RE_COMMENT_LINE.test(line) || isLinkDefLine(line) ||
-      (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)) || commentOnlyParagraphEnd(lineAt, lexer.pos) !== -1)) return
+      RE_ABBR_DEF.test(line) || commentOnlyParagraphEnd(lineAt, lexer.pos) !== -1)) return
     // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
     let blanks = 0
     for (let k = -1; lexer.pos + k >= 0 && isBlankLine(lexer.peek(k) ?? 'x'); k--) blanks++
@@ -3418,7 +3418,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         k = paragraphEnd
         continue
       }
-      if (!(RE_COMMENT_LINE.test(at) || isLinkDefLine(at) || (lexer.atDocumentLevel && RE_ABBR_DEF.test(at)))) break
+      if (!(RE_COMMENT_LINE.test(at) || isLinkDefLine(at))) break
       const fence = RE_COMMENT_BLOCK.exec(at.trimStart())?.[1]
       let end = k
       if (fence) {

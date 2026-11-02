@@ -468,14 +468,9 @@ export function createLinkDefinitionCollector(
       s.term = null
       return false
     }
-    if (term && quotes === term.quotes && RE_ABBR_DEF.test(rest)) {
-      // A term keeps this spelling as text, so it registers no abbreviation.
-      s.paraState = 'yes'
-      return true
-    }
     if (term && quotes === term.quotes && col > term.col) {
       if (commentFenceRun(rest) !== undefined) return false
-      if (s.session.matchLinkDef(rest) !== null || RE_FOOTNOTE_DEF.test(rest.trimStart()))
+      if (s.session.matchLinkDef(rest) !== null || RE_ABBR_DEF.test(rest) || RE_FOOTNOTE_DEF.test(rest.trimStart()))
         s.lexer.declinedLinkDefLines.add(s.lexer.lineNumber(v.idx))
       s.paraState = 'yes'
       return true
@@ -788,27 +783,6 @@ export function createLinkDefinitionCollector(
     }
   }
 
-  // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
-  // HERE rather than by a scan of its own, because a scan of its own knew
-  // nothing about what is opaque: it registered a definition written inside a
-  // fenced code SAMPLE, so documenting the syntax changed the prose around it
-  // (carve#573).
-  // PART 12 §7 recognizes an abbreviation definition at document level.
-  // The carve#4412 ruling reads a line that misses every open frame there.
-  // Keep the raw spelling for a line with no list frame: indentation alone
-  // does not make a document-level definition. Quote and div frames retain
-  // their own text, and a plus-attached quote list retains its item.
-  function collectAbbreviation(s: LinkDefScan, raw: string): boolean {
-    const abbr =
-      s.divs.length === 0 && s.plusColumn === null && !s.inFootnoteBody &&
-      s.listCols.every(entry => indentColumns(raw) < entry.col)
-        ? RE_ABBR_DEF.exec(s.listCols.length > 0 ? raw.trimStart() : raw)
-        : null
-    if (!abbr) return false
-    s.lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
-    return true
-  }
-
   // The deepest list column the line is measured against, and the deepest one
   // it reached outside its innermost reached quote.
   function listColumnsReached(s: LinkDefScan, composed: Composed): { deepest: number | null; reachedOuter: number | null } {
@@ -906,7 +880,8 @@ export function createLinkDefinitionCollector(
     else if (isBlankLine(raw)) s.plusColumn = null
     // Container ownership below matters only for a definition candidate.
     const matched = s.session.matchLinkDef(v.line)
-    if (matched === null) return
+    const abbr = matched === null ? RE_ABBR_DEF.exec(v.line) : null
+    if (matched === null && abbr === null) return
     // An over-indented definition still reaches its note's written body column.
     const openColumn = s.inFootnoteBody ? s.noteColumns[s.noteColumns.length - 1]!.column : contentCol
     const atAnOpenContentColumn = reachesContentColumn(s, v, composed, openColumn)
@@ -937,6 +912,17 @@ export function createLinkDefinitionCollector(
       lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
       return
     }
+    registerDefinition(lexer, idx, matched, abbr)
+  }
+
+  // An abbreviation definition registers where a link definition would, with document scope (CARVE-P12-026).
+  function registerDefinition(lexer: Lexer, idx: number, matched: LinkDefMatch | null, abbr: RegExpExecArray | null, lead = 0): void {
+    if (abbr !== null) {
+      lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
+      ;(lexer.collectedAbbreviations ??= new Map()).set(idx, [abbr[1]!, abbr[2]!])
+      return
+    }
+    if (matched === null) return
     const def: LinkDef = { href: matched.href }
     if (matched.title !== undefined) def.title = unescapeAttrValue(matched.title)
     if (matched.attrText !== null) def.attrs = parseAttrs(matched.attrText)
@@ -945,6 +931,7 @@ export function createLinkDefinitionCollector(
     // writer. Implicit heading references remain a separate, looser path.
     def.line = idx
     def.rawLabel = matched.label
+    if (lead > 0) def.lead = lead
     lexer.linkDefs.set(normalizeRefLabel(matched.label), def)
   }
 
@@ -970,10 +957,27 @@ export function createLinkDefinitionCollector(
     const view = openerView(s, v, contentCol)
     if (fenceOpenerTakesLine(s, v, view, lists, para)) return
     trackNoteBody(s, v, composed, para.collectsNothing)
-    if (collectAbbreviation(s, v.raw)) return
     // A footnote def (`[^label]: body`) is parsed as a block in
     // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
-    if (RE_FOOTNOTE_DEF.test(v.line)) return
+    const note = RE_FOOTNOTE_DEF.exec(v.line)
+    if (note) {
+      // A definition on the note's opening line registers from the body it opens.
+      if (s.noteColumns.at(-1)?.openedAt === idx) {
+        let lead = note[2]!
+        for (let peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead); peel; peel = /^>[ \t]+/.exec(lead) ?? prepassMarker(lead)) {
+          lead = lead.slice(peel[0].length)
+        }
+        if (!RE_FOOTNOTE_DEF.test(lead)) registerDefinition(s.lexer, idx, s.session.matchLinkDef(lead), RE_ABBR_DEF.exec(lead), v.raw.length - lead.length)
+        // A fence the note opens on this line holds the lines below it until one misses the note.
+        const opened = RE_FENCE.exec(note[2]!)?.[2] ?? RE_RAW_FENCE.exec(note[2]!)?.[1]
+        if (opened) {
+          s.fence = { ch: opened[0]!, len: opened.length, contentCol: composed.column + 2, quoted: v.rawIsQuoted,
+            scope: { quoteDepth: v.rawQuoteDepth, contentCol: composed.column + 1 } }
+          s.paraState = 'no'
+        }
+      }
+      return
+    }
     collectLinkDef(s, v, composed, contentCol, para.collectsNothing)
   }
 
@@ -1004,16 +1008,12 @@ export function createLinkDefinitionCollector(
       // The boundary scan `commentCloserInScope` shares between the openers of one
       // container. See `CommentScopeMemo`.
       commentScopeMemo: new Map(),
-      // Div nesting depth, for the abbreviation branch below. A div is the one
-      // container that adds NO per-line prefix, so `raw` alone cannot tell a
-      // document-level definition from one written inside `:::`. Colon fences close
-      // on an exact length match (carve#455), which is what the stack records.
+      // Div nesting depth. A div is the one container that adds NO per-line
+      // prefix. Colon fences close on an exact length match (carve#455), which is
+      // what the stack records.
       //
-      // EACH ENTRY CARRIES THE CONTAINER IT WAS OPENED IN. The stack was
-      // document-wide, so a quoted `> :::` pushed onto it and nothing popped when
-      // the quote ended - leaving it non-empty for the rest of the document, and
-      // the abbreviation branch requires document level, so every abbreviation
-      // below a one-line quoted div stopped registering (carve-js#1139).
+      // EACH ENTRY CARRIES THE CONTAINER IT WAS OPENED IN. A quoted `> :::` pushed
+      // onto a document-wide stack would stay there after the quote ended (carve-js#1139).
       divs: [],
       // Track the enclosing list item's content column so a fenced-code delimiter
       // is tested at its container's content column (PART 2), not blindly at

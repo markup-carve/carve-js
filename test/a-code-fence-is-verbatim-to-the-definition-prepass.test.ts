@@ -92,16 +92,12 @@ describe('a structural line inside a code fence does not suppress what follows',
 })
 
 describe('the constructs still work where they are real structure', () => {
-  it('CONTROL: a real div DOES hold the abbreviation below document level', () => {
-    // The boundary the fix must not move. `:::` outside a fence is a div, and
-    // §7 recognizes an abbreviation definition only as a direct child of the
-    // document - so an unclosed div really does suppress the definition inside
-    // it. A change that simply stopped tracking divs would turn this row green
-    // in the wrong direction, so it is asserted literally.
+  it('CONTROL: a real div holds the abbreviation definition', () => {
+    // `:::` outside a fence is a div, and a definition in it registers (CARVE-P12-026).
     const source = ':::\n\n*[HTML]: HTM Lang\n\nHTML is fine.\n'
 
     expect(html(source)).toBe(
-      '<div> <p>*[HTML]: HTM Lang</p> <p>HTML is fine.</p> </div>',
+      '<div> <p><abbr title="HTM Lang">HTML</abbr> is fine.</p> </div>',
     )
   })
 

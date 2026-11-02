@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-/* The ruling on carve#4412 recognizes an abbreviation definition that misses
- * every content column. A line that still reaches an enclosing item remains
- * text in that item. */
+/* An abbreviation definition below a description's column defines (CARVE-P12-026).
+ * A line that still reaches an enclosing item defines there. */
 describe("an abbreviation definition below a description's column", () => {
   const html = (src: string): string => carveToHtml(src)
 
@@ -25,7 +24,7 @@ describe("an abbreviation definition below a description's column", () => {
   it('answers the same for the nested spelling it already answered', () => {
     // This line misses the description column but reaches the item's column.
     expect(html('- :: t\n  :  d\n   *[A]: a\n  tail\n')).toBe(
-      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d\n*[A]: a\ntail</dd>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n    tail\n  </li>\n</ul>',
     )
   })
 

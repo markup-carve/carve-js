@@ -13,7 +13,6 @@
       "ticket": "markup-carve/carve-js#3948",
       "cause": "untriaged day-one drift in the notes family",
       "cases": [
-        "notes-39d1eedf337b",
         "notes-ff9482aa03ba"
       ]
     },

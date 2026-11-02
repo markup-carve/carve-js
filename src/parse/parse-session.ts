@@ -65,6 +65,7 @@ import {
   accumulateAttrs,
   appendLinkReferenceDefinitions,
   insertSkippedAbbreviationDefinitions,
+  hoistContainerAbbreviations,
   attachBlockPos,
   blockQuoteParagraphClaimOpen,
   closeBlockQuoteParagraph,
@@ -370,7 +371,7 @@ export class ParseSession extends InlineParseSession {
   }
 
   private isLinkDefLine(line: string): boolean {
-    return this.matchLinkDef(line) !== null
+    return this.matchLinkDef(line) !== null || RE_ABBR_DEF.test(line)
   }
 
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
@@ -470,6 +471,7 @@ export class ParseSession extends InlineParseSession {
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
     const children = this.parseBlocks(lexer, 0)
+    hoistContainerAbbreviations(lexer)
     insertSkippedAbbreviationDefinitions(children, lexer, sourceLines, strippedBom ? '\ufeff' + source : source)
     appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }

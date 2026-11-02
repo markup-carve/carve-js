@@ -52,7 +52,7 @@ describe('a bare continuation marker at document level', () => {
   // Under the item, the same line misses every frame and defines.
   it('still attaches inside a quote', () => {
     expect(carveToHtml('> x\n+\n- A\n*[A]: b\n')).toBe(
-      '<blockquote>\n  <p>x</p>\n  <ul>\n    <li>A\n*[A]: b</li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <p>x</p>\n  <ul>\n    <li><abbr title="b">A</abbr></li>\n  </ul>\n</blockquote>',
     )
   })
 

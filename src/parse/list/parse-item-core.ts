@@ -178,6 +178,7 @@ export function deflistContentCol(separator: string): number {
 }
 
 export function parseAbbrDef(lexer: Lexer): AbbreviationDef {
+  lexer.collectedAbbreviations?.delete(lexer.pos)
   const line = lexer.consume()
   const m = RE_ABBR_DEF.exec(line)!
   // PART 2's NO TRAILING WHITESPACE rule applies to every non-verbatim
@@ -329,9 +330,6 @@ export function orderedContinues(line: string, kind: OlKind, delim: string, term
  * invisible too, but `lineOpensBlock` already claims its `%%%` opener, and
  * skipping past that opener would land the scan on the block's BODY - ordinary
  * text - and loosen the item on content the reader never sees.
- *
- * `RE_ABBR_DEF` is not in the set: a definition inside a container is no longer
- * recognized as one, so the line renders as text and is genuinely visible.
  */
 export function isInvisibleLine(line: string, whitespace?: number): boolean {
   const l = whitespace === undefined ? line.replace(/^[ \t]+/, '') : line.slice(whitespace)
@@ -469,7 +467,7 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_LINE_BLOCK_OPEN.test(line) ||
     RE_HARDBREAKS_OPEN.test(line) ||
     RE_QUOTE_BLOCK_OPEN.test(line) ||
-    (lexer.atDocumentLevel && RE_ABBR_DEF.test(line.trimStart())) ||
+    RE_ABBR_DEF.test(line.trimStart()) ||
     (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||

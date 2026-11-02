@@ -199,13 +199,9 @@ describe('a fence ends with the container that holds it', () => {
 
   it('CONTROL: a flush colon fence ends the item, so its scope is not the item', () => {
     // A flush `:::` under an unblanked item opens a SIBLING container - the
-    // parser renders the div next to the list, not inside it. Recording the
-    // item's content column on it made the scope release at the next blank
-    // line, and an abbreviation written INSIDE a visibly rendered div then
-    // registered and expanded, inside its own definition text (raised by codex
-    // review).
+    // parser renders the div next to the list, not inside it.
     expect(html('- item\n:::\n\n*[A]: expansion\n\nA\n:::\n')).toBe(
-      '<ul> <li>item</li> </ul> <div> <p>*[A]: expansion</p> <p>A</p> </div>',
+      '<ul> <li>item</li> </ul> <div> <p><abbr title="expansion">A</abbr></p> </div>',
     )
     // The verse tracker records a scope the same way and had the same hole.
     expect(html('- item\n::: |\n\n[r]: /url\n\n[r][]\n:::\n')).not.toContain('href="/url"')
@@ -343,14 +339,10 @@ describe('the depth stack and the verse region end with their container too', ()
     }
   })
 
-  it('CONTROL: a document-level div really does hold the definition below it', () => {
-    // The boundary that must not move. An unclosed `:::` at document level
-    // reaches the end of the document, so the definition inside it is not at
-    // document level and defines nothing - it renders as the text the author
-    // typed, which is PART 12 §7's own answer.
+  it('CONTROL: an unclosed div holds the definition below it, which still defines', () => {
     const source = ':::\n\n*[A]: expansion\n\nA here\n'
 
-    expect(html(source)).toBe('<div> <p>*[A]: expansion</p> <p>A here</p> </div>')
+    expect(html(source)).toBe('<div> <p><abbr title="expansion">A</abbr> here</p> </div>')
   })
 
   it('CONTROL: a doc-level verse region still hides what is written in it', () => {

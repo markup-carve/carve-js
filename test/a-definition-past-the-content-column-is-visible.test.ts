@@ -25,13 +25,9 @@ describe('a definition past the content column is visible', () => {
     expect(listTight(source)).toBe(true)
   })
 
-  /**
-   * The abbreviation shape already behaved: it is never recognized inside a
-   * container at any column, so it was always visible. Both mutations leave
-   * this passing, so it bounds the change rather than proving it.
-   */
-  it('an abbreviation definition is unchanged', () => {
-    expect(listTight('1. item\n\n    *[AB]: x\n')).toBe(false)
+  // An abbreviation definition is a definition in an item too (CARVE-P12-026), so the item stays tight.
+  it('an abbreviation definition keeps the item tight', () => {
+    expect(listTight('1. item\n\n    *[AB]: x\n')).toBe(true)
   })
 
   /**

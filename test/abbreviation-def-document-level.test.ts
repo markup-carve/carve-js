@@ -5,23 +5,9 @@ import { carveToHtml } from '../src/index.js'
 import type { BlockNode, Document } from '../src/ast.js'
 
 /**
- * PART 12 §7 recognizes `*[TERM]: expansion` at document level. Under the
- * carve#4412 ruling, a line that misses every container frame is read there.
- * A line that reaches a block quote, list item or div remains paragraph text.
- *
- * This replaces a rule that hoisted a container-authored definition to the
- * document. Hoisting was dropped for two reasons. It could not be represented:
- * once hoisted, an inert definition and a real one are the same wire shape, so
- * a consumer decoding the tree expanded what the parser did not, failing §6's
- * round trip on a document this engine produced. And it deleted the author's
- * line: `> *[HTML]: Hyper Text` rendered an EMPTY block quote, because the
- * definition was collected out of it and then rendered nothing.
- *
- * An abbreviation is the only definition kind with no marker at the use site -
- * a footnote needs `[^a]`, a reference link needs `[text][ref]` - so its reach
- * is every occurrence of the term in the document. A container is where quoted
- * material lives, and quoted material may not rewrite the quoting document.
- * (carve#708, carve-php#708, carve-php#631)
+ * CARVE-P12-026 (carve#4865): `*[TERM]: expansion` is a definition in every
+ * container, with document scope. It reads as a link reference definition does
+ * and hoists to the document as a node. Escape the line to show it.
  */
 
 const types = (blocks: readonly BlockNode[]): string[] => blocks.map((b) => b.type)
@@ -31,7 +17,7 @@ const abbrDefs = (doc: Document) =>
 
 const squash = (html: string) => html.replace(/\s+/g, ' ').trim()
 
-describe('an abbreviation definition is recognized at document level', () => {
+describe('an abbreviation definition is recognized in every container', () => {
   it('defines at document level', () => {
     const doc = parse('*[HTML]: HyperText\n\nThe HTML spec.\n')
     expect(types(doc.children)).toEqual(['abbreviation_def', 'paragraph'])
@@ -40,51 +26,46 @@ describe('an abbreviation definition is recognized at document level', () => {
     )
   })
 
-  it('is paragraph text inside a block quote, and expands nothing', () => {
+  it('defines inside a block quote and hoists to the document', () => {
     const doc = parse('> *[HTML]: HyperText\n\nThe HTML spec.\n')
-    expect(types(doc.children)).toEqual(['block_quote', 'paragraph'])
-    expect(abbrDefs(doc)).toEqual([])
+    expect(types(doc.children)).toEqual(['block_quote', 'abbreviation_def', 'paragraph'])
+    expect(abbrDefs(doc)[0]!.pos?.startLine).toBe(1)
     expect(squash(carveToHtml('> *[HTML]: HyperText\n\nThe HTML spec.\n'))).toBe(
-      '<blockquote><p>*[HTML]: HyperText</p></blockquote> <p>The HTML spec.</p>',
+      '<blockquote> </blockquote> <p>The <abbr title="HyperText">HTML</abbr> spec.</p>',
     )
   })
 
-  it('is paragraph text inside a list item', () => {
+  it('defines inside a list item', () => {
     expect(squash(carveToHtml('- *[HTML]: HyperText\n\nThe HTML spec.\n'))).toBe(
-      '<ul> <li>*[HTML]: HyperText</li> </ul> <p>The HTML spec.</p>',
+      '<ul> <li></li> </ul> <p>The <abbr title="HyperText">HTML</abbr> spec.</p>',
     )
   })
 
-  it('is paragraph text inside a div', () => {
+  it('defines inside a div', () => {
     const doc = parse(':::\n*[HTML]: HyperText\n\nbody\n:::\n')
-    expect(types(doc.children)).toEqual(['div'])
-    expect(abbrDefs(doc)).toEqual([])
+    expect(types(doc.children)).toEqual(['div', 'abbreviation_def'])
     expect(squash(carveToHtml(':::\n*[HTML]: HyperText\n\nbody\n:::\n\nThe HTML spec.\n'))).toBe(
-      '<div> <p>*[HTML]: HyperText</p> <p>body</p> </div> <p>The HTML spec.</p>',
+      '<div> <p>body</p> </div> <p>The <abbr title="HyperText">HTML</abbr> spec.</p>',
     )
   })
 
-  it('does not leave the container empty - the author keeps the line', () => {
-    // The concrete defect the old hoisting rule had: the quote rendered blank.
-    expect(squash(carveToHtml('> *[HTML]: HyperText\n'))).not.toBe('<blockquote> </blockquote>')
+  it('stays text when escaped', () => {
+    expect(squash(carveToHtml('> \\*[HTML]: HyperText\n'))).toBe('<blockquote><p>*[HTML]: HyperText</p></blockquote>')
   })
 })
 
-describe('the definition form is inert in a container for every purpose', () => {
-  it('holds an open paragraph, so a lazy line folds into it', () => {
-    // It claims to be paragraph text, so it must behave as paragraph text. The
-    // tab-separated fallback (`*[A]:<TAB>b`, not a definition because the
-    // separator must be a literal space) has always folded; these now agree.
-    expect(squash(carveToHtml('> *[A]: b\nc\n'))).toBe('<blockquote><p>*[A]: b c</p></blockquote>')
-    // Not squashed: the tab has to survive as a tab, or the comparison with
-    // the space-separated form above proves nothing.
+describe('the definition is invisible in a container for every purpose', () => {
+  it('leaves no open paragraph, so a line below it does not fold', () => {
+    expect(squash(carveToHtml('> *[A]: b\nc\n'))).toBe('<blockquote> </blockquote> <p>c</p>')
+    // Not squashed: `*[A]:<TAB>b` is no definition, since the separator must be a
+    // literal space, so it stays a paragraph the next line folds into.
     expect(carveToHtml('> *[A]:\tb\nc\n').trim()).toBe(
       '<blockquote><p>*[A]:\tb\nc</p></blockquote>',
     )
   })
 
-  it('does not interrupt an open paragraph inside a list item', () => {
-    expect(squash(carveToHtml('- x\n  *[A]: b\n'))).toBe('<ul> <li>x *[A]: b</li> </ul>')
+  it('interrupts an open paragraph inside a list item', () => {
+    expect(squash(carveToHtml('- x\n  *[A]: b\n'))).toBe('<ul> <li>x</li> </ul>')
   })
 
   it('defines after missing the item content column', () => {
@@ -110,14 +91,11 @@ describe('order independence is unchanged', () => {
 
 describe('the tree survives the round trip (PART 12 §6)', () => {
   it('a container-authored definition decodes to the same tree', () => {
-    // The reason hoisting was dropped: the decoded tree must expand exactly
-    // what the parsed tree expands. With the line held as text in its
-    // container, there is no shape for a consumer to misread.
     const src = '> *[HTML]: HyperText\n\nThe HTML spec.\n'
     const doc = parse(src)
     const round = fromAstJson(toAstJson(doc)) as Document
     expect(types(round.children)).toEqual(types(doc.children))
-    expect(abbrDefs(round)).toEqual([])
+    expect(abbrDefs(round)).toHaveLength(1)
   })
 
   it('a document-level definition round trips as a node', () => {

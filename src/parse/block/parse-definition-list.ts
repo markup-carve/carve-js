@@ -80,7 +80,6 @@ function advanceToEntry(
   if (blanks >= 3 || !entry.test(stripLazyFrame(lexer.lineAt(next) ?? ''))) return false
   for (const [line, abbr, expansion] of abbreviations) {
     lexer.skippedAbbreviations?.set(line, [abbr, expansion])
-    lexer.abbrDefs.set(abbr, expansion)
   }
   for (const node of session.parseInvisibleRun(lexer, next))
     if (node.type === 'comment') keepComment(node)
@@ -101,29 +100,6 @@ function abbreviationBridgesDescription(lexer: Lexer, helpers: typeof definition
     if (indentColumns(line) !== 0 || (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line))) return false
   }
   return false
-}
-
-function primeSiblingAbbreviations(lexer: Lexer, helpers: typeof definitionListHelpers): void {
-  if (!lexer.atDocumentLevel) return
-  const { RE_DEFLIST_TERM, RE_DEFLIST_DEF, RE_ABBR_DEF, RE_COMMENT_LINE, isLinkDefLine } = helpers
-  const abbreviations: Array<[string, string]> = []
-  let blanks = 0
-  for (let at = lexer.pos; at < lexer.lineCount; at++) {
-    const line = lexer.lineAt(at) ?? ''
-    if (isBlankLine(line)) {
-      blanks++
-      if (blanks >= 3) break
-      continue
-    }
-    if (RE_DEFLIST_TERM.test(line)) continue
-    if (RE_DEFLIST_DEF.test(line)) {
-      for (const [abbr, expansion] of abbreviations) lexer.abbrDefs.set(abbr, expansion)
-      break
-    }
-    const abbr = RE_ABBR_DEF.exec(line)
-    if (abbr) abbreviations.push([abbr[1]!, abbr[2]!])
-    else if (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line)) break
-  }
 }
 
 // CARVE-P2-010: a tab after the separator's spaces is content, so the body is paragraph text.
@@ -1254,7 +1230,6 @@ export function createDefinitionListParser(
       const line = stripLazyFrame(lexer.peek(n) ?? '')
       return lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker ? line.trimStart() : line
     }
-    primeSiblingAbbreviations(lexer, helpers)
     const entryColumn = (n = 0): number => {
       const index = lexer.pos + n
       const ownerColumn = lexer.returnedDescriptionOwnerColumns.get(lexer.lineNumber(index))
@@ -1371,7 +1346,7 @@ export function createDefinitionListParser(
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             ((!pastTermOwner || isListMarkerLine(nextEntry)) &&
-              endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
+              endsHeadingOrQuote(lexer))
           ))
             break
           // The term is the other place a framed line becomes text. The frame

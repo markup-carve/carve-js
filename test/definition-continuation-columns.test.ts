@@ -49,9 +49,9 @@ describe('definition continuations obey the enclosing item and definition column
     })
   }
 
-  it('keeps an abbreviation-shaped line as item prose because it is not a definition there', () => {
+  it('reads an abbreviation definition below the column as a definition, so the tail leaves the item', () => {
     for (const [, head, contentColumn] of heads) {
-      expect(tailIsInside(carveToHtml(source(head, contentColumn, '*[A]: expansion', 1)))).toBe(true)
+      expect(tailIsInside(carveToHtml(source(head, contentColumn, '*[A]: expansion', 1)))).toBe(false)
     }
   })
 })
