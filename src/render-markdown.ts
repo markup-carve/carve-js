@@ -801,8 +801,9 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
     let aboveRendered = ''
     for (const child of item.children) {
       let rendered = renderTracked(child, ctx)
-      // A star rule interrupts the preceding paragraph without a loose-list blank.
-      if (tight && child.type === 'thematic_break' && above?.type === 'paragraph') rendered = '***\n\n'
+      // A star rule interrupts the preceding paragraph, or ends the quote above
+      // (a lazy line cannot be an underline), without a loose-list blank.
+      if (tight && child.type === 'thematic_break' && (above?.type === 'paragraph' || above?.type === 'block_quote')) rendered = '***\n\n'
       // A blank between a tight item's blocks makes the item loose in
       // CommonMark, so drop the separator the block above left wherever the
       // child below opens a construct of its own under it.
