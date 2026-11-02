@@ -592,7 +592,7 @@ const RE_QUOTED_TITLE = /^(\s*)(["'])([\s\S]*)\2(\s*)$/
 function decodeEntitiesInTitle(rest: string, protectedSpans: readonly string[] = [], preserveSingleQuote = false): string {
   rest = rest.replace(RE_PROTECTED_SPAN_TOKEN, (token, index: string) => protectedSpans[Number(index)] ?? token)
   const decode = (value: string): string => value.replace(RE_MARKDOWN_ESCAPE_OR_ENTITY, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
-  const parenthesized = /^(\s*)\(([^()]*)\)(\s*)$/.exec(rest)
+  const parenthesized = /^(\s*)\(((?:[^()\\]|\\[\s\S])*)\)(\s*)$/.exec(rest)
   if (parenthesized) {
     const decoded = decode(parenthesized[2]!)
     return `${parenthesized[1]}"${escapeQuoted(decoded)}"${parenthesized[3]}`
@@ -2181,9 +2181,9 @@ function convertInline(
   protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^[\]]*\])*\])(${pointyDestination})`, 'g'))
   protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\\\n]|\\[^\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
-  protectDestinations(/(?<=\])()(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g)
+  protectDestinations(/(?<=\])()(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\\\n]|\\[^\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g)
 
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
@@ -3961,11 +3961,29 @@ function setextParagraphEnd(lines: readonly string[], index: number, contentCol:
   return underline[0] === '=' ? '#' : '##'
 }
 
-function startsTableHeader(lines: readonly string[], index: number): boolean {
+/**
+ * `measured` says the lines stand at their container's content column, so four
+ * columns of indent are code; the document-level pass cannot know that column
+ * and leaves the test to the writer, which does (`headsTable`).
+ */
+/**
+ * Whether `lines[index]` is four columns past `col` where no paragraph is open
+ * above it, so it opens indented code rather than continuing text.
+ */
+function opensIndentedCode(lines: readonly string[], index: number, col: number): boolean {
+  if (indentColumns(lines[index]!) - col < 4) return false
+  const above = index > 0 ? lines[index - 1]! : ''
+  return above.trim() === '' || indentColumns(above) - col >= 4 || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(above.trimStart())
+}
+
+function startsTableHeader(lines: readonly string[], index: number, measured = false): boolean {
   const trimmed = lines[index]!.trim()
   if (!trimmed.includes('|')) return false
+  if (measured && opensIndentedCode(lines, index, 0)) return false
   const next = index + 1 < lines.length ? lines[index + 1]!.trim() : ''
   if (!next.includes('-') || !RE_TABLE_DELIMITER.test(next)) return false
+  // `- | -` opens a list item, which interrupts the header's paragraph first.
+  if (/^-[ \t]/.test(next)) return false
   return splitTableRow(trimmed).length === splitTableRow(next).length
 }
 
@@ -3981,7 +3999,7 @@ function startsTableHeader(lines: readonly string[], index: number): boolean {
  * Only ever asked about a line inside a run a header opened, so it does not
  * have to decide what STARTS a table - `startsTableHeader` does that.
  */
-function continuesGfmTableBody(line: string): boolean {
+function continuesGfmTableBody(line: string, measured = true, headerCol = 0): boolean {
   const trimmed = line.trim()
   if (trimmed === '') return false
   if (/^\[\^((?:[^[\]\\]|\\.)+)\]:/.test(trimmed)) return false
@@ -3999,7 +4017,7 @@ function continuesGfmTableBody(line: string): boolean {
   // and reads what follows as a fresh block. Measured on the line as its own
   // container holds it, so an indented table is not four columns in - only a
   // line indented past its neighbours is.
-  if (RE_MD_INDENTED_CODE.test(line)) return false
+  if (measured ? RE_MD_INDENTED_CODE.test(line) : indentColumns(line) >= headerCol + 4) return false
 
   return !/^(?:[-*+]|\d+[.)])([ \t]|$)/.test(trimmed)
 }
@@ -4013,18 +4031,19 @@ function continuesGfmTableBody(line: string): boolean {
  * `false` for and Carve would still read as a row is a table the source did not
  * have (markup-carve/carve-js#1061). The caller escapes those.
  */
-function gfmTableRowLines(lines: readonly string[]): boolean[] {
+function gfmTableRowLines(lines: readonly string[], measured = true): boolean[] {
   const inTable = lines.map(() => false)
   let i = 0
   while (i < lines.length) {
-    if (!startsTableHeader(lines, i)) {
+    if (!startsTableHeader(lines, i, measured)) {
       i++
       continue
     }
     inTable[i] = true
     inTable[i + 1] = true
+    const headerCol = indentColumns(lines[i]!)
     i += 2
-    while (i < lines.length && continuesGfmTableBody(lines[i]!)) {
+    while (i < lines.length && continuesGfmTableBody(lines[i]!, measured, headerCol)) {
       inTable[i] = true
       i++
     }
@@ -5369,10 +5388,18 @@ function collectBlockquoteInlineRun(
         // the two a table, whose rows take no lazy line.
         continues = lazy && inner.trim() !== '' && indentColumns(text) >= (held ?? 0) + 4
         const row = isStandardTableRow(inner)
-        const delimiter = RE_TABLE_DELIMITER.test(inner.trim()) && inner.includes('-')
-        if (delimiter && !table.has(prefix) && run.at(-1)?.prefix === prefix && !run.at(-1)!.continued) table.add(prefix)
-        else if (!row) table.delete(prefix)
-        paragraph = inner.trim() !== '' && (quoteParagraphIsOpen(inner) || (row && !table.has(prefix)))
+        // Not on a line opening an item: that item is a container of its own.
+        const delimiter = item === null && RE_TABLE_DELIMITER.test(inner.trim()) && inner.includes('-') && !/^-[ \t]/.test(inner.trim())
+        // A body row needs no outer pipes (GFM 4.10), and no row is a paragraph.
+        const bodyRow = table.has(prefix) && continuesGfmTableBody(inner)
+        let tableLine = bodyRow
+        const above = run.at(-1)
+        if (delimiter && !table.has(prefix) && above?.prefix === prefix && !above.continued &&
+            startsTableHeader([above.text.slice(quotedItemLead(above.text)?.lead.length ?? 0), inner], 0)) {
+          table.add(prefix)
+          tableLine = true
+        } else if (!row && !bodyRow) table.delete(prefix)
+        paragraph = inner.trim() !== '' && !tableLine && (quoteParagraphIsOpen(inner) || (row && !table.has(prefix)))
       }
     }
     run.push(continues ? { ...parsed, continued: true, source: end } : { ...parsed, source: end })
@@ -5465,6 +5492,8 @@ function writeQuotedInlineRun(
 function quoteEmptyItems(run: readonly PrefixedInlineLine[], emptyToken: string): PrefixedInlineLine[] {
   let fence: { prefix: string; char: string; width: number } | null = null
   let previousEmptyItem = false
+  // A table row leaves no paragraph for the marker to stay inside.
+  const tableRows = quotedTableRows(run)
   return run.map((part, index) => {
     const acceptedPreviousEmptyItem = previousEmptyItem
     previousEmptyItem = false
@@ -5485,7 +5514,7 @@ function quoteEmptyItems(run: readonly PrefixedInlineLine[], emptyToken: string)
     const previousItem = previous !== undefined &&
       /^(?:[ \t]*)(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/.test(previous.text) &&
       (!/^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]*$/.test(previous.text) || acceptedPreviousEmptyItem)
-    if (previous?.prefix === part.prefix && quoteParagraphIsOpen(previous.text) && !previousItem) return part
+    if (previous?.prefix === part.prefix && quoteParagraphIsOpen(previous.text) && !previousItem && !tableRows[index - 1]) return part
     previousEmptyItem = true
     return { ...part, text: `${empty[1]} ${emptyToken}` }
   })
@@ -5918,7 +5947,7 @@ function lazyDeeperQuoteLine(prev: PrefixedInlineLine, part: PrefixedInlineLine,
   }
   const over = indentColumns(part.text) >= 4
   const trimmed = part.text.trimStart()
-  const paragraph = opensParagraph(held) || (!inTable && isStandardTableRow(held))
+  const paragraph = !inTable && (opensParagraph(held) || isStandardTableRow(held))
   const lazy =
     paragraph &&
     (over ||
@@ -6294,6 +6323,7 @@ function collectListInlineRun(
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: firstLineText, source: start }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
   const firstText = first.slice(nestedEnd)
+  const quotedTable = new QuotedTableTracker()
   let end = start + 1
   // Whether any line of the run so far opens a list inside a quote it holds.
   const quotesAnItem = (line: string): boolean => {
@@ -6318,6 +6348,7 @@ function collectListInlineRun(
     // The indent past the content column is written as the spaces it covers.
     const text = ' '.repeat(Math.max(0, indent - contentCol)) + line.replace(/^[ \t]+/, '')
     const above = run.length === 1 ? firstText : run.at(-1)!.text
+    const aboveRow = quotedTable.advance(run, firstText)
     // An ordered marker other than 1 cannot interrupt the paragraph of the
     // innermost item holding it (CommonMark 5.2), unless it continues an
     // ordered list the first line nests at its column.
@@ -6332,7 +6363,7 @@ function collectListInlineRun(
     // paragraph line does not.
     const lazyText =
       orderedText ||
-      ((opensParagraph(above) || openQuoteParagraph(above) !== null) &&
+      ((opensParagraph(above) || (!aboveRow && openQuoteParagraph(above) !== null)) &&
         !text.trimStart().startsWith('>') &&
         isParagraphRunLine([text.trimStart()], 0, 'text'))
     // The innermost item on the first line that holds this line.
@@ -6340,7 +6371,7 @@ function collectListInlineRun(
     for (const col of itemCols) if (col <= indent) base = col
     // Four columns past the content column a line under paragraph text only
     // continues it: indented code cannot interrupt a paragraph.
-    const quote = openQuoteParagraph(above)
+    const quote = aboveRow ? null : openQuoteParagraph(above)
     const continues = indent >= base + 4 && (opensParagraph(above) || quote !== null)
     // A continuation line keeps the paragraph, and so the items, it continues.
     if (!lazyText && !continues) while (itemCols.length > 1 && itemCols.at(-1)! > indent) itemCols.pop()
@@ -6548,6 +6579,34 @@ function writeListInlineRun(
  * The quote markers of `text` when it is a quote line whose paragraph is still
  * open for a lazy line, else null.
  */
+/**
+ * Follows, line by line as an item run grows, whether its last line is a row
+ * of a table the item's quote holds.
+ */
+class QuotedTableTracker {
+  private seen = 0
+  private prefix: string | null = null
+  private previous: string | null = null
+  private inTable = false
+
+  advance(run: readonly PrefixedInlineLine[], firstText: string): boolean {
+    for (; this.seen < run.length; this.seen++) {
+      const quote = blockquotePrefix((this.seen === 0 ? firstText : run[this.seen]!.text).trimStart())
+      if (quote === null || quote.prefix.trim() !== this.prefix) {
+        this.prefix = quote?.prefix.trim() ?? null
+        this.previous = null
+        this.inTable = false
+      }
+      if (quote === null) continue
+      this.inTable = this.inTable
+        ? continuesGfmTableBody(quote.text)
+        : this.previous !== null && startsTableHeader([this.previous, quote.text], 0, true)
+      this.previous = quote.text
+    }
+    return this.inTable
+  }
+}
+
 function openQuoteParagraph(text: string): string | null {
   const quote = blockquotePrefix(text.trimStart())
   return quote !== null && quote.text.trim() !== '' && quoteParagraphIsOpen(quote.text) ? quote.prefix : null
@@ -7297,11 +7356,11 @@ function opensParagraph(text: string): boolean {
 
 /**
  * Whether a collected list item ends in a table. The run writes every pipe row
- * that is text with its pipe escaped, so a line opening with one is a row.
+ * that is text with its pipe escaped, so a pipe row left is a table row.
  */
 function endsInTable(run: { lines: string[] }): boolean {
   const last = run.lines.at(-1)!.replace(RE_LIST_MARKER, '')
-  return last.trimStart().startsWith('|')
+  return isStandardTableRow(last)
 }
 
 /** Whether a collected list item ends in paragraph text. */
@@ -7797,7 +7856,7 @@ function emitParagraph(st: MarkdownConversion, body: string): string {
  */
 function headsTable(st: MarkdownConversion, at: number, col: number): boolean {
   const { lines } = st
-  if (!startsTableHeader(lines, at)) return false
+  if (!startsTableHeader(lines, at) || opensIndentedCode(lines, at, col)) return false
   const over = indentColumns(lines[at + 1]!) - col
   return over >= 0 && over < 4
 }
@@ -7831,6 +7890,9 @@ function continuesItemParagraph(st: MarkdownConversion, at: number, col: number)
   const pair = next !== undefined && indentColumns(next) >= col ? [held(line), held(next)] : [held(line)]
   // Four columns past its holder a line opens nothing, so it continues.
   if (line.trim() !== '' && indentColumns(pair[0]!) >= 4) return true
+  // Left of the item, an empty marker matches no container holding the
+  // paragraph, so it opens an item rather than continuing it.
+  if (indentColumns(line) < col && /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]*$/.test(line)) return false
   return isParagraphRunLine(pair, 0, 'text') || lazyPipeLine(st, at, col)
 }
 
@@ -7933,7 +7995,7 @@ function prepareMarkdownLine(st: MarkdownConversion, ln: MarkdownLine, i: number
     st.footnoteEnd = last
     listCols.length = 0
     listMarkers.leave(0)
-    const bodyTables = gfmTableRowLines(lines.slice(i, last))
+    const bodyTables = gfmTableRowLines(lines.slice(i, last), false)
     for (let at = i; at < last; at++) inGfmTable[at] = bodyTables[at - i]!
   }
   ln.leftEmptyItem = false
@@ -7966,7 +8028,7 @@ function prepareMarkdownLine(st: MarkdownConversion, ln: MarkdownLine, i: number
     const column = indentColumns(lines[i]!)
     let holder = 0
     for (const content of listCols) if (content <= column) holder = content
-    if (!ln.refusedItem && column - holder < 4 && (st.prevType !== 'text' || listMarkers.hasListAt(column))) {
+    if (!ln.refusedItem && column - holder < 4 && (st.prevType !== 'text' || st.inTableBody || listMarkers.hasListAt(column))) {
       lines[i] = lines[i]!.trimEnd() + ' +'
       emptyMarkerLines.add(i)
       if (lines[i + 1]?.trim() === '') st.emptyMarkerColumn = column
@@ -8439,8 +8501,9 @@ function writeTableLine(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
       // The next item of an open list is one, whatever its number.
       !listMarkers.hasListAt(indentColumns(line))
     )
-  // A header GFM would not take here leaves its rows as text.
-  if (inGfmTable[i] && startsTableHeader(lines, i) && !headsTable(st, i, contentCol)) {
+  // A header GFM would not take here leaves its rows as text, and so does a
+  // row whose header never opened a table (one read as indented code).
+  if (inGfmTable[i] && (startsTableHeader(lines, i) ? !headsTable(st, i, contentCol) : !st.inTableBody)) {
     for (let at = i; at < lines.length && inGfmTable[at]; at++) inGfmTable[at] = false
   }
   // GFM table header: a `| ... |` row immediately followed by a delimiter
@@ -8480,6 +8543,10 @@ function writeTableLine(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
 
   // A body row of the table above. Rebuilt rather than passed through, so its
   // padding matches the formatter's and a pipeless row stays in the table.
+  // Four columns past the container ends the table (GFM 4.10); the line is code.
+  if (st.inTableBody && inGfmTable[i] && indentColumns(line) - contentCol >= 4) {
+    for (let at = i; at < lines.length && inGfmTable[at]; at++) inGfmTable[at] = false
+  }
   if (st.inTableBody && inGfmTable[i] && trimmed !== '') {
     const row = writeTableRow(splitTableRow(trimmed), [], dialect, st.tableWidth)
     out.push(containerPad + row)
@@ -8995,7 +9062,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     fenceShift: 0,
     fenceAfterBlank: false,
     listCols: [],
-    inGfmTable: gfmTableRowLines(lines),
+    inGfmTable: gfmTableRowLines(lines, false),
     inTableBody: false,
     tableWidth: 0,
     listMarkers: new ListMarkers(),
@@ -9021,10 +9088,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const ln = blankMarkdownLine()
     prepareMarkdownLine(st, ln, i)
     trackListItems(st, ln, i)
-    i = writeItemContinuation(st, ln, i)
+    const held = writeItemContinuation(st, ln, i)
       ?? writeFenceLine(st, ln, i)
       ?? writeHeldBlock(st, ln, i)
-      ?? writeTableLine(st, ln, i)
+    // A block written ahead of the table branch ends the table above it.
+    if (held !== undefined) {
+      st.inTableBody = false
+      i = held
+      continue
+    }
+    i = writeTableLine(st, ln, i)
       ?? writeItemHeldLine(st, ln, i)
       ?? writeBreakLine(st, ln, i)
       ?? writeContainerOpener(st, ln, i)
