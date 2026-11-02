@@ -20,6 +20,7 @@ describe('a blank before only definitions in a description body loosens the list
     '- :: term\n  : payload\n\n    [r]: /u\n- sub\n',
     '- :: term\n  : payload\n\n    *[A]: x\n- sub\n',
     '> - :: term\n>   : payload\n>\n>     [r]: /u\n> - sub\n',
+    '- :: term\n  : \tpayload\n\n    [r]: /u\n- sub\n',
   ])('%j', (source) => {
     expect(flat(source)).toContain('<li><p>sub</p></li>')
   })

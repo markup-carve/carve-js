@@ -3140,7 +3140,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (descriptionOwner?.column === column && descriptionOwner.line < index) return descriptionOwner.body
       let k = index - 1
       while (k >= 0 && (isBlankLine(nested[k]!) || indentColumns(nested[k]!) >= column)) k--
-      const marker = k < 0 ? null : /^ *:( +)(?=[^ \t])/.exec(nested[k]!)
+      const marker = k < 0 ? null : /^ *:( +)(?=[^ ])(?=.*[^ \t])/.exec(nested[k]!)
       descriptionOwner = { column, line: k, body: marker !== null && marker[0].length === column }
       return descriptionOwner.body
     }
