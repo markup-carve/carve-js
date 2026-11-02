@@ -37,6 +37,7 @@ import {
   importedFootnoteLabel,
   plainAltText,
   referenceDestinationLabel,
+  unbalancedDestination,
   referenceInlineTarget,
   isEmptyDestinationReference,
   referenceSourceLabel,
@@ -1094,7 +1095,7 @@ function protectCodeSpans(s: string, repl: (span: string, offset: number) => str
     while (s[idx + n] === '`') n++
     return n
   }
-  const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
+  const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
   let out = ''
   let i = 0
   const opaqueEnd = opaqueHtmlScanner(s)
@@ -1360,7 +1361,7 @@ function escapeAttributeListsThatAttach(input: string): string {
  */
 function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect): (offset: number) => number | undefined {
   const opaque = opaqueHtmlScanner(source)
-  const angle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+  const angle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
   const math = /(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/y
   return offset => {
     if (dialect.math && source[offset] === '$') {
@@ -1624,7 +1625,7 @@ function convertInline(
       let masked = ''
       const opaqueEnd = opaqueHtmlScanner(line)
       for (let at = 0; at < line.length;) {
-        const autolink = line[at] === '<' ? /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/.exec(line.slice(at)) : null
+        const autolink = line[at] === '<' ? /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/.exec(line.slice(at)) : null
         const end = autolink ? at + autolink[0].length : line[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(line, at)?.end : undefined
         if (end === undefined) { masked += line[at++]; continue }
         scratch.push(line.slice(at, end))
@@ -1766,6 +1767,10 @@ function convertInline(
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
   // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
   line = line.replace(/\n([ \t]*)\[(?=[^^\]\n][^\]\n]*\]:)/g, '\n$1\\[')
+  // So is a first line whose label or destination Markdown rejects (`[ ]: x`, `[\]: x`, `[x]: (`).
+  line = line.replace(/^([ \t]*)\[(?=([^^\]\n][^\]\n]*)\]:(.*))/, (match, indent: string, label: string, rest: string) =>
+    (!/\S/.test(label) || /(?<!\\)(?:\\\\)*\\$/.test(label) || unbalancedDestination(rest))
+      && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined ? `${indent}\\[` : match)
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
@@ -1782,11 +1787,11 @@ function convertInline(
     ] }] }).replace(/\n$/, '')
     return table ? escapeTablePipes(written) : written
   }
-  const protectReferenceAutolinks = (value: string): string => value.replace(/<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/g, match => {
+  const protectReferenceAutolinks = (value: string): string => value.replace(/<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/g, match => {
     const body = match.slice(1, -1)
     return protect(writeLiteralAutolink(body, /^[A-Za-z][A-Za-z0-9+.-]{1,31}:/.test(body) ? '' : 'mailto:'))
   })
-  const writeLiteralReference = (value: string): string => value.split(/(\x00P\d+\x00|<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>)/).map(part => {
+  const writeLiteralReference = (value: string): string => value.split(/(\x00P\d+\x00|<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>)/).map(part => {
     if (part.startsWith('<') && part.endsWith('>')) return protectReferenceAutolinks(part)
     const token = /^\x00P(\d+)\x00$/.exec(part)
     if (token && /^(?:!?)`/.test(protectedSpans[Number(token[1])] ?? '')) return part
@@ -1813,7 +1818,7 @@ function convertInline(
   if (line.includes('[') && line.includes(']')) {
     const subject = line
     const opaque = opaqueHtmlScanner(subject)
-    const auto = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    const auto = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
     line = escapeInactiveMarkdownLinkBrackets(subject, value => protect(value, value.slice(1)),
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
         || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
@@ -1879,7 +1884,7 @@ function convertInline(
     if (label.includes('<') || label.includes('![') || label.includes('[^') || dialect.math && label.includes('$')) {
       const source = label
       const opaque = opaqueHtmlScanner(source)
-      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
       const bracketEnd = (open: number): number | undefined => {
         let depth = 0
         for (let at = open; at < source.length; at++) {
@@ -1968,7 +1973,7 @@ function convertInline(
 
   const activationSource = line
   const activationOpaque = opaqueHtmlScanner(activationSource)
-  const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+  const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
   const activeLinkBoundaries = new Set<number>()
   line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
@@ -2030,7 +2035,7 @@ function convertInline(
     let lineCursor = 0, lineNumber = 0
     const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
     let commentEnd = subject.indexOf('-->')
-    const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+    const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[^<>\s@]+@[^<>\s]+)>/y
     const replaceDestination = (match: string, label: string, dest: string, offset: number): string => {
       while (cursor < offset) {
         if (subject[cursor] === '<') {
@@ -2150,7 +2155,7 @@ function convertInline(
   // In a plain three-label chain, an unknown full-reference label can begin
   // the next link. Protect the resolved tail before the ordinary reference pass.
   let chainCursor = 0
-  const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+  const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[^<>\s@]+@[^<>\s]+)>/y
   const chainSubject = line
   line = line.replace(/(?<![\\\]])\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]/gu,
     (match, first: string, second: string, third: string, offset: number) => {
@@ -2194,7 +2199,7 @@ function convertInline(
   const footnoteSource = line
   let footnoteCursor = 0
   const footnoteOpaque = opaqueHtmlScanner(line)
-  const footnoteAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+  const footnoteAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*|[^<>\s@]+@[^<>\s]+)>/y
   line = line.replace(/\[\^([^[\]\n]+)\]/g, (match, label: string, offset: number) => {
     while (footnoteCursor < offset) {
       if (footnoteSource[footnoteCursor] === '<') {
@@ -2317,7 +2322,7 @@ function convertInline(
 
   const autolinkSubject = line
   let htmlCursor = 0
-  line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*/g, (match, offset: number) => {
+  line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x01-\x20]*/g, (match, offset: number) => {
     while (htmlCursor < offset) {
       const tag = autolinkSubject[htmlCursor] === '<' ? scanHtmlTag(autolinkSubject, htmlCursor, protectedSpans) : undefined
       htmlCursor = tag?.end ?? htmlCursor + 1
@@ -2332,7 +2337,7 @@ function convertInline(
 
   // Autolinks `<scheme:...>` and `<email>`: the URL/address is literal, so a
   // `_` or `*` inside it (e.g. /_v1_/) must not be rewritten as markup.
-  line = line.replace(/<([A-Za-z][A-Za-z0-9+.-]*):[^<>\s]*>/g, (match, scheme: string) => {
+  line = line.replace(/<([A-Za-z][A-Za-z0-9+.-]*):[^<>\x01-\x20]*>/g, (match, scheme: string) => {
     if (scheme.length < 2 || scheme.length > 32) return protect('\\<') + match.slice(1)
     let body = match.slice(1, -1)
     for (let pass = 0; pass < protectedSpans.length; pass++) {

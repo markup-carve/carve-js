@@ -347,7 +347,9 @@ export function escapePlainCarveInlineSyntax(
   }
 
   if (!bareHandled.includes('@')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g, out)
+    // A `_` the caller rewrites may become a `/` closer, which a mention may follow.
+    const mention = bareHandled.includes('_') ? /(?<![A-Za-z0-9])@(?=[A-Za-z0-9_-])/g : /(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g
+    out = escapeUnlessAlreadyEscaped(mention, out)
   }
 
   if (!bareHandled.includes(':')) {
