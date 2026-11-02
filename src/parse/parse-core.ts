@@ -276,6 +276,12 @@ export function insertSkippedAbbreviationDefinitions(
     if (marker >= 0) {
       pos.startColumn = marker - lineStart + 1
       pos.startOffset = marker
+      // The end is read from the source line too: a nested container hands over a partly stripped line.
+      let lineEnd = source.indexOf('\n', marker)
+      if (lineEnd < 0) lineEnd = source.length
+      if (source[lineEnd - 1] === '\r') lineEnd--
+      pos.endColumn = lineEnd - lineStart + 1
+      pos.endOffset = lineEnd
     }
     node.pos = pos
     return node
