@@ -54,7 +54,7 @@ describe('a footnote ends at its last placed child', () => {
     // siblings, and before the fix offsets 11..20 were inside both.
     const note = spanOf(corpus202, 'footnote')
     const definition = spanOf(corpus202, 'link_reference_definition')
-    expect(definition).toBe('  [r]: /u')
+    expect(definition).toBe('[r]: /u')
     expect(corpus202.indexOf(definition)).toBeGreaterThan(note.length)
   })
 
@@ -66,7 +66,7 @@ describe('a footnote ends at its last placed child', () => {
     // through that function and never picked up the END rule with it.
     const quote = '> note\n> [r]: /u\n\n[t][r]\n'
     expect(spanOf(quote, 'block_quote')).toBe('> note')
-    expect(spanOf(quote, 'link_reference_definition')).toBe('> [r]: /u')
+    expect(spanOf(quote, 'link_reference_definition')).toBe('[r]: /u')
   })
 
   it('still reaches over a definition its body continues past', () => {
