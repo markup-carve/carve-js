@@ -7,17 +7,6 @@
   "a-comment-below-a-sub-list-in-a-tight-item.test.ts": {
     "a comment below a sub-list in a tight item > is written where a re-parse reads it back into the OUTER item": "#3921"
   },
-  "a-definition-at-a-note-body-column-registers.test.ts": {
-    "a definition at a footnote body's column registers in the note: js-46-1": "#3922"
-  },
-  "a-definition-shaped-text-line-registers-nothing.test.ts": {
-    "a definition-shaped text line registers nothing: js-26-1": "#3922",
-    "a definition-shaped text line registers nothing: js-5-3": "#3922",
-    "a definition-shaped text line registers nothing: js-5-4": "#3922",
-    "a definition-shaped text line registers nothing: js-7-2": "#3922",
-    "a definition-shaped text line registers nothing: js-7-3": "#3922",
-    "a definition-shaped text line registers nothing: js-7-4": "#3922"
-  },
   "a-description-marker-must-reach-its-term-owner.test.ts": {
     "a definition marker below a nested term column > folds a later quote past the surviving body column into the term": "#3922",
     "a definition marker below a nested term column > folds a past-column attribute into the open term": "#3922",
@@ -248,9 +237,6 @@
     "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > 'nested-colon-depth1-code' matches the native ownership result": "#3922",
     "quoted comments retain stored host columns > 'nested-colon-depth2-code' matches the native ownership result": "#3922"
-  },
-  "quoted-link-definition-in-footnote.test.ts": {
-    "quoted link definitions in footnote bodies > keeps a marker-line quote paragraph open across its first continuation": "#3922"
   },
   "relative-continuation-marker.test.ts": {
     "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"

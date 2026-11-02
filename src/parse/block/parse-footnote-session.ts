@@ -284,7 +284,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (nestedBody !== undefined) trackLead(nestedBody)
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
-  let termTextContinuation = false
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   runIndentationContainer(
@@ -302,7 +301,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         !(pendingBlankRun.count === 0 && nestedParagraphStillOpen() &&
           !startsInterruptingBlock(lexer, ln, false, false, ln === ln.trimStart()))) return 'stop'
     if (admission.kind === 'blank') {
-      termTextContinuation = false
       trackItemLazyState('', lazyState)
       pendingBlankRun.add(ln, lexer.lineNumber(lexer.pos))
       lexer.consume()
@@ -389,14 +387,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (content !== content.trimStart() && lazyState.opaque === null && commentFenceUntil <= lexer.pos)
         commentFenceUntil = matchedCommentFenceEnd(lexer) ?? commentFenceUntil
       if (lexer.pos < commentFenceUntil) belowColumnCommentFence.add(bodyLines.length)
-      // Past the body column a definition is term text; at it, it registers (CARVE-P0-010).
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
-      bodyLines.push(framedBelow
-        ? LAZY_FRAME + content.trimStart() : termTextContinuation && RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && content !== content.trimStart() &&
-        (RE_FOOTNOTE_DEF.test(content.trimStart()) || isLinkDefLine(content.trimStart()))
-        ? LAZY_FRAME + content.trimStart() : content)
-      if (RE_DEFLIST_TERM.test(bodyLines[0] ?? '') && /^:[ \t]+/.test(content.trimStart()))
-        termTextContinuation = true
+      bodyLines.push(framedBelow ? LAZY_FRAME + content.trimStart() : content)
       // The tracker reads an overindented opener at its local zero.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
