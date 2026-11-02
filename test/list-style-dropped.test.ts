@@ -143,7 +143,7 @@ describe('list-style-dropped on the Markdown target', () => {
     const markdown = '- <!-- carve: a. -->\n  1. one\n  2. two\n- next\n'
     const result = migrateMarkdown(markdown)
     expect(result.report.diagnostics.map(row => row.code)).toContain('carrier-marker-dropped')
-    expect(result.value).toContain('- `<!-- carve: a. -->`{=html}')
+    expect(result.value).toContain('- ```=html\n  <!-- carve: a. -->\n  ```\n')
     expect(result.value).toContain('- next')
   })
 
