@@ -227,7 +227,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
     if (open.opaque) {
       const closedPayload = open.opaque.closes(text)
-      state.lazyFoldable = !open.opaque.belowBaseCloses && text !== ''
+      // A `%%%` span leaves nothing: the stanza it interrupted stays as it was (carve#4956).
+      state.lazyFoldable = open.opaque.belowBaseCloses ? open.spanFoldable === true : text !== ''
       if (closedPayload) delete open.opaque
       state.inDefList = false
       return true
@@ -239,9 +240,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     }
     const group = opaqueGroupCloser(text)
     const codeAtBase = opensCodeFence(text) && (column === 0 || column === open.column)
+    const spanFoldable = state.lazyFoldable
     if (group && (group.belowBaseCloses ? (line.hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
       opensCodeFence(text) && (column === 0 || column >= open.column) &&
-      (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true))) open.opaque = group
+      (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true))) {
+      open.opaque = group
+      if (group.belowBaseCloses) open.spanFoldable = spanFoldable
+    }
     if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0 &&
         (facts?.payloadFenceCloser?.(group.char.repeat(group.run)) ?? true)) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
@@ -253,8 +258,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       state.lazyFoldable = false
     } else {
       // A payload line opens no block, even when it looks like a definition.
-      state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
-        open.opaque?.belowBaseCloses !== true && text !== '' &&
+      state.lazyFoldable = open.opaque?.belowBaseCloses === true ? spanFoldable : text !== '' &&
         (close === null || close[1]!.length !== open.width ||
           (column > 0 && column !== open.column))
     }
@@ -272,6 +276,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   /** A line a descendant marker owns while its frame sits in a literal colon container. */
   function descendantLiteralColon(line: LazyLine): boolean {
     const { content, state, facts } = line
+    // A blank ends the descendant line block's stanza, which a later `%%%` span keeps closed (carve#4956).
+    if (isBlankLine(content) && holdsLineBlock(state.deepest)) {
+      for (let frame = state.deepest; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null) frame.lazyFoldable = false
+      return false
+    }
     if (!holdsLineBlock(state.deepest) || state.ownedAuthored || state.ownedColumn < 0 ||
         indentColumns(content, state.ownedColumn) < state.ownedColumn) return false
     const offset = state.ownedColumn
@@ -373,6 +382,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // `%%% end` closes one. It also matches on EXACT length, where this read
     // `>=`.
     const run = commentFenceRun(content)
+    // A line left of a nested owner's span misses that owner and ends the span (PART 0 S1).
+    if (comment.column !== undefined && run !== comment.length && line.atContentColumn && content.trim() !== '' &&
+        indentColumns(content) < comment.column) {
+      state.opaque = null
+      return false
+    }
     // THE FRAME IS NOT FED THESE LINES, so a span it opened would never close
     // and every later line would read as payload. Dropping it here hands the
     // next descendant-owned line a frame that starts where the span ended.
@@ -506,8 +521,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { state } = line
     const commentRun = commentFenceRun(line.content)
     if (commentRun === undefined || !line.hasCommentCloser(commentRun)) return false
+    const column = line.atContentColumn ? indentColumns(line.content) : 0
     state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn,
-      description: state.inDefList === 'description' }
+      description: state.inDefList === 'description', ...(column > 0 ? { column } : {}) }
     state.deepest = null
     return endsOnBlock(state)
   }

@@ -1826,7 +1826,8 @@ export class ParseSession extends InlineParseSession {
       level = level.mode.inner
       if (level.mode.kind === 'comment_fence') open = level.mode.length
     }
-    if (open !== width) return false
+    // A span in an item or note ends at the unmarked line, which is no closer of it.
+    if (open !== width || (level.mode.kind === 'comment_fence' && level.mode.hosted)) return false
     const { lexer } = q
     const lineIndex = lexer.pos
     lexer.consume()

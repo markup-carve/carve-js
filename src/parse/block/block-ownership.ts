@@ -595,6 +595,7 @@ export function ownLines(
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
       lead(lazyMissed ? 0 : Math.max(m.col - inner.cut, inner.canon))
+      const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
         if (c && c[1]![0] === inner.span[0] &&
@@ -610,7 +611,8 @@ export function ownLines(
         if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
         else if (comment) inner.span = comment[1]!
       }
-      if (inner.lineBlock) inner.para = m.rest !== '' && !COMMENT_FENCE.test(m.rest)
+      // A `%%%` span leaves nothing, so the stanza it interrupted stays as it was (carve#4956).
+      if (inner.lineBlock && !inComment && inner.span?.[0] !== '%') inner.para = m.rest !== ''
       finish()
       if (trace) emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
     }

@@ -172,7 +172,7 @@ export type BlockQuoteLazyMode =
   | { kind: 'closed' }
   | { kind: 'paragraph'; term?: boolean; itemParagraph?: boolean }
   | { kind: 'code_fence'; close: RegExp }
-  | { kind: 'comment_fence'; length: number }
+  | { kind: 'comment_fence'; length: number; hosted?: boolean }
   // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
   // end on a paragraph. PART 1 S4 is about the open STACK, and the block at the
   // bottom of it may be several quotes down: `> a` / `> > # H` / `tail` ends the
@@ -194,7 +194,7 @@ export interface QuoteFenceHosts {
    * where the opener sits and `floor` the host's own content column; the two
    * differ for an over-indented opener, and then a closer at either one ends it.
    */
-  fence: { marker: string; column: number; floor: number } | null
+  fence: { marker: string; column: number; floor: number; comment?: boolean; resume?: boolean } | null
   /** The column of the definition list a `: ` line at it continues. */
   definitionList?: number | undefined
   commentBoundary?: boolean
@@ -258,6 +258,19 @@ function trackHeldHostFence(q: QuoteHostLine): QuoteHostVerdict {
   const { host, column, text } = q
   const open = host.fence
   if (!open) return undefined
+  if (open.comment) {
+    // A comment closer at any column ends the span; any other line below its host ends it too (PART 0 S1, §28).
+    // A span in a line block leaves nothing, so the stanza it interrupted stays open (CARVE-P9-047).
+    const closes = commentFenceRun(text) === open.marker.length
+    if (open.resume) q.state.mode = { kind: 'paragraph' }
+    else closeBlockQuoteParagraph(q.state)
+    if (closes || text === '' || column >= open.floor) {
+      if (closes) host.fence = null
+      return true
+    }
+    host.fence = null
+    return undefined
+  }
   if (text !== '' && column < open.floor) {
     host.fence = null
     return undefined
@@ -297,6 +310,13 @@ function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
       state.mode = { kind: 'paragraph' }
     } else closeBlockQuoteParagraph(state)
     if (closedPayload) delete literal.opaque
+    return true
+  }
+  const commentRun = commentFenceRun(text)
+  if (commentRun !== undefined) {
+    const resume = blockQuoteParagraphOpen(state)
+    host.fence = { marker: '%'.repeat(commentRun), column, floor: literal.floor, comment: true, resume }
+    if (!resume) closeBlockQuoteParagraph(state)
     return true
   }
   const group = opaqueGroupCloser(text)
@@ -498,6 +518,13 @@ function trackHostCodeFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdic
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
+  // A span on a host's marker line is the host's block: it opens with no closer ahead (PART 9 §28).
+  const commentRun = blockStart && floor > 0 ? commentFenceRun(inner) : undefined
+  if (commentRun !== undefined) {
+    host.fence = { marker: '%'.repeat(commentRun), column: at, floor, comment: true }
+    closeBlockQuoteParagraph(state)
+    return true
+  }
   if (!marker || !(floor > 0 || (q.rejectedItemComment && at > 0 && !paragraph))) return undefined
   const colon = colons.at(-1)
   // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
@@ -981,7 +1008,7 @@ export function classifyQuotedLine(
   const commentRun = commentFenceRun(content)
   if (commentRun !== undefined) {
     if (hasLiteralCommentCloser(commentRun, 0)) {
-      state.mode = { kind: 'comment_fence', length: commentRun }
+      state.mode = { kind: 'comment_fence', length: commentRun, ...((state.hosts?.columns.at(-1) ?? 0) > 0 ? { hosted: true } : {}) }
     } else {
       closeBlockQuoteParagraph(state)
     }

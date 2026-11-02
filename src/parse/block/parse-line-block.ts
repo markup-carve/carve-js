@@ -72,14 +72,19 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const opener = RE_VERSE_COMMENT_OPEN.exec(ln)
       const run = opener?.[1]!.length
       if (run !== undefined) {
-        // An unclosed span runs to the end of the line block (PART 9 §28).
+        // An unclosed span runs to the end of the line block, or to a lazy line, which misses its owner (PART 0 S1, §28).
+        const lazy = (index: number): boolean => {
+          const number = lexer.lineNumber(body[index]!.lineIndex)
+          return lexer.itemLazyLines.has(number) || lexer.quoteLazyLines.has(number)
+        }
         let closer = bodyIndex + 1
-        while (closer < body.length && commentRun(body[closer]!.text) !== run) closer++
+        while (closer < body.length && commentRun(body[closer]!.text) !== run && !lazy(closer)) closer++
+        const missed = closer < body.length && commentRun(body[closer]!.text) !== run
         const tail = trimNonNbsp(opener![2]!)
         const content = [...(tail === '' ? [] : [tail]), ...body.slice(bodyIndex + 1, closer).map((line) => stripLazyFrame(line.text))]
         const comment: Comment = { type: 'comment', block: true, content: content.join('\n') }
         if (lexer.hasDocumentOffsets) {
-          const end = body[Math.min(closer, body.length - 1)]!.lineIndex
+          const end = body[Math.min(missed ? closer - 1 : closer, body.length - 1)]!.lineIndex
           const endLength = lexer.lineAt(end)?.length ?? 0
           // A leaf begins at its markup, not at the indent before `%%%` (carve#1928).
           const markup = lexer.sourceBoundary(lineIndex, (lexer.lineAt(lineIndex) ?? '').search(/[^ \t]|$/))
@@ -95,7 +100,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         const host = stanza.at(-1)
         if (host) (host.after ??= []).push(comment)
         else leading.push(comment)
-        bodyIndex = closer
+        bodyIndex = missed ? closer - 1 : closer
         continue
       }
       if (isBlankLine(ln)) {

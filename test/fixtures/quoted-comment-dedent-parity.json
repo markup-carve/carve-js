@@ -17,12 +17,12 @@
   {
     "id": "review-D",
     "source": "> > - ::: |\n> >   %%%\n> >   :::\n> c\n> %%%\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"></div></li></ul></blockquote><p>c</p></blockquote>"
   },
   {
     "id": "review-E",
     "source": "> - ::: |\n>   %%%\n>   :::\nc\n> %%%\n",
-    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul><p>c</p></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul></blockquote><p>c</p><blockquote></blockquote>"
   },
   {
     "id": "review-F",
