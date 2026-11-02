@@ -2089,8 +2089,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         definitionAuthored = false
         definitionBodyColumn = undefined
       }
+      // A term at the open description's body column is nested in that body, not a sibling entry.
       if (!quoteLazyFramed && lazyState.opaque === null &&
-          lazyState.inDefList === 'description' && RE_DEFLIST_TERM.test(sourceEntry))
+          lazyState.inDefList === 'description' && RE_DEFLIST_TERM.test(sourceEntry) &&
+          !(lazyState.descriptionColumn !== undefined && sourceMarkerColumn >= contentCol + lazyState.descriptionColumn))
         authoredTermColumn = sourceMarkerColumn
       if (!ancestorTermBand && !quoteLazyFramed && lazyState.opaque === null && RE_DEFLIST_TERM.test(sourceEntry) &&
           lw >= contentCol && (definitionHostColumn === undefined ||

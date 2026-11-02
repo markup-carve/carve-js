@@ -8,13 +8,6 @@
     "a comment below a sub-list in a tight item > is written where a re-parse reads it back into the OUTER item": "#3921"
   },
   "a-description-marker-must-reach-its-term-owner.test.ts": {
-    "a definition marker below a nested term column > folds a later quote past the surviving body column into the term": "#3922",
-    "a definition marker below a nested term column > folds a past-column attribute into the open term": "#3922",
-    "a definition marker below a nested term column > folds a past-column code fence into the open term": "#3922",
-    "a definition marker below a nested term column > folds a past-column colon fence into the open term": "#3922",
-    "a definition marker below a nested term column > folds a past-column heading into the open term": "#3922",
-    "a definition marker below a nested term column > folds a past-column table row into the open term": "#3922",
-    "a definition marker below a nested term column > folds a past-column thematic break into the open term": "#3922",
     "a definition marker below a nested term column > lets a list marker end a term even past the surviving body column": "#3921"
   },
   "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
