@@ -61,7 +61,7 @@ describe('a bare-dot ordered item measures abbreviation definitions by column', 
 
   it('is the same inside a nested list', () => {
     expect(carveToHtml('- a\n  . x\n  *[A]: d\n\nA here\n')).toBe(
-      '<ul>\n  <li>a\n    <ol>\n      <li>x\n*[A]: d</li>\n    </ol>\n  </li>\n</ul>\n<p>A here</p>',
+      '<ul>\n  <li>a\n    <ol>\n      <li>x</li>\n    </ol>\n  </li>\n</ul>\n<p>' + ABBR + ' here</p>',
     )
   })
 

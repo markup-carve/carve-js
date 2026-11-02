@@ -385,11 +385,11 @@ export function sourceColumn(line: string, quoteLevels = Infinity): number {
  * the most expensive predicate in the tracker - putting it on the path of every
  * ordinary prose line makes each one pay for that predicate.
  *
- * A strict superset, so it decides nothing: both definition forms open with `[`
- * after optional indentation and a comment with `%`, and `splitTrailingAttrBlock`
+ * A strict superset, so it decides nothing: the link and footnote forms open with
+ * `[` after optional indentation, an abbreviation with `*` and a comment with `%`, and `splitTrailingAttrBlock`
  * only removes a TRAILING block, so it cannot change the leading character.
  */
-export const RE_INVISIBLE_BLOCK_LEAD = /^[ \t]*[%[]/
+export const RE_INVISIBLE_BLOCK_LEAD = /^[ \t]*[%[*]/
 
 /**
  * The length of the backtick run a cell's source ends INSIDE, or 0 when it ends

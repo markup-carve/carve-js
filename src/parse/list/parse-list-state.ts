@@ -528,9 +528,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   // renders is not a parameter (markup-carve/carve#1364): the paragraph above it
   // is over, so a column-0 line below reaches no container. The quote's tracker
   // has closed on the definitions all along; this one never did.
-  //
-  // No RE_ABBR_DEF: PART 12 §7 recognizes an abbreviation definition only as a
-  // direct child of the document, so inside an item the line IS a paragraph.
   function invisibleLine(line: LazyLine): boolean {
     const { content, state, facts } = line
     const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)

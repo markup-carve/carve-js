@@ -326,8 +326,9 @@ export function matchLinkDef(line: string): LinkDefMatch | null {
   return { label: m[1]!, href, title: m[3] ?? m[4], attrText }
 }
 
+/** A one-line link or abbreviation definition; every container reads them alike (CARVE-P9-013, carve#4865). */
 export function isLinkDefLine(line: string): boolean {
-  return matchLinkDef(line) !== null
+  return matchLinkDef(line) !== null || RE_ABBR_DEF.test(line)
 }
 
 /**

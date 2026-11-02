@@ -281,12 +281,13 @@ export class Lexer {
   unclosedContainerKeys: Set<string> | undefined
   abbrDefs: Map<string, string>
   skippedAbbreviations?: Map<number, [string, string]>
+  /** Every abbreviation definition the prepass registered, by line index. */
+  collectedAbbreviations?: Map<number, [string, string]>
   separatingAbbreviations?: Set<number>
   /**
-   * True only for the lexer over the whole document. PART 12 §7 recognizes an
-   * abbreviation definition ONLY at document level: inside a block quote, list
-   * item or div the line is ordinary paragraph text. Sub-lexers leave this
-   * false, which is what makes a container-authored `*[X]: y` inert.
+   * True only for the lexer over the whole document, where an abbreviation
+   * definition stands as a node in place. A sub-lexer consumes the line and the
+   * definition hoists from the prepass record (CARVE-P12-070).
    */
   atDocumentLevel = false
   linkDefs: Map<string, LinkDef>

@@ -12,9 +12,9 @@ describe('a definition that misses every frame', () => {
     }
   })
 
-  it('stays text at the item content column', () => {
+  it('defines at the item content column too', () => {
     expect(carveToHtml('- n\n  *[A]: b' + use)).toBe(
-      '<ul>\n  <li>n\n*[A]: b</li>\n</ul>\n<p>A</p>',
+      '<ul>\n  <li>n</li>\n</ul>\n<p><abbr title="b">A</abbr></p>',
     )
   })
 
@@ -23,7 +23,7 @@ describe('a definition that misses every frame', () => {
     expect(carveToHtml('[^f]: n\n*[A]: b' + use)).toContain('<p><abbr title="b">A</abbr></p>')
   })
 
-  it('keeps an abbreviation in a list attached inside a quote as text', () => {
-    expect(carveToHtml('> x\n+\n- A\n*[A]: b\n')).toContain('<li>A\n*[A]: b</li>')
+  it('defines from a list attached inside a quote', () => {
+    expect(carveToHtml('> x\n+\n- A\n*[A]: b\n')).toContain('<li><abbr title="b">A</abbr></li>')
   })
 })

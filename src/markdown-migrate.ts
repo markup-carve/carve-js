@@ -1273,7 +1273,8 @@ function escapeCarveConstructsSpelledLikeText(
     // `*[HTML]: HyperText` defines an abbreviation: the definition line
     // disappears from the render and every later `HTML` becomes an `<abbr>`.
     // Carve wants the space after the colon, so `*[A]:x` is already literal.
-    out = out.replace(/^(?=\*\[[^\]\n]+\]:[ \t])/gm, '\\')
+    // It defines in every container (CARVE-P12-026), so the escape reaches behind their prefixes.
+    out = out.replace(/^((?:[ \t]*(?:>[ \t]?|(?:[-+*]|\d+[.)])[ \t]+))*[ \t]*)(?=\*\[[^\]\n]+\]:[ \t])/gm, '$1\\')
   }
 
   if (!dialect.fencedDivs) {

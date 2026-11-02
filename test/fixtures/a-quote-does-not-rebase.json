@@ -2,7 +2,7 @@
   {
     "id": "corpus-615-7",
     "source": ":: t\n: d\n  - para\n    *[A]: b\nx\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n- para\n*[A]: b\nx</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n- para</dd>\n</dl>\n<p>x</p>"
   },
   {
     "id": "corpus-615-8",

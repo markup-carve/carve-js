@@ -24,8 +24,8 @@ describe('invisible lines between siblings (carve#4716)', () => {
     )
   })
 
-  it('keeps a container-local abbreviation line as text', () => {
-    expect(carveToHtml('> :: t\n> *[X]: expansion\n> : d\n')).toContain('<dt>t\n*[X]: expansion</dt>')
+  it('reads a container-local abbreviation line as an invisible definition', () => {
+    expect(carveToHtml('> :: t\n> *[X]: expansion\n> : d\n')).toContain('<dt>t</dt>\n    <dd>d</dd>')
   })
 })
 

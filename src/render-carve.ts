@@ -4040,8 +4040,8 @@ class CarveRenderSession {
       // CARVE-P11-079 (a): the note is collected unless a region marker below fixes it, or
       // a line below its body column needs the note's own column (corpus 228, 637).
       if (!this.staysAboveAMarker(line) && !bodyLineBelowColumn(blocks, pos.startColumn + 2)) continue
-      const written = this.renderOneFootnoteDef(label, blocks, ctx)
       this.footnotesWrittenInPlace.add(label)
+      const written = this.renderOneFootnoteDef(label, blocks, ctx)
       const offset = ' '.repeat(Math.max(0, contentColumn - item.pos.startColumn))
       const paragraph = blocks.length === 1 && blocks[0]?.type === 'paragraph'
       definitions.push(written.split('\n').map((text, index) =>
@@ -4141,8 +4141,8 @@ class CarveRenderSession {
           if (line < from || line > to || this.footnotesWrittenInPlace.has(label)) continue
           const blocks = ownValue(this.documentFootnoteDefs, label)
           if (blocks === undefined) continue
-          const written = this.renderOneFootnoteDef(label, blocks, ctx)
           this.footnotesWrittenInPlace.add(label)
+          const written = this.renderOneFootnoteDef(label, blocks, ctx)
           return written
         }
       }
@@ -4368,8 +4368,8 @@ class CarveRenderSession {
           const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
           const blocks = label === undefined ? undefined : ownValue(this.documentFootnoteDefs, label)
           if (label !== undefined && blocks !== undefined) {
-            const written = this.renderOneFootnoteDef(label, blocks, ctx)
             this.footnotesWrittenInPlace.add(label)
+            const written = this.renderOneFootnoteDef(label, blocks, ctx)
             // A footnote body can be multi-line; its continuation lines carry the
             // body's own two-column indent and sit under the description.
             const [first, ...rest] = written.split('\n')
