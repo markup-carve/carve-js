@@ -326,9 +326,12 @@ export function matchLinkDef(line: string): LinkDefMatch | null {
   return { label: m[1]!, href, title: m[3] ?? m[4], attrText }
 }
 
-/** A one-line link or abbreviation definition; every container reads them alike (CARVE-P9-013, carve#4865). */
+/**
+ * A one-line link or abbreviation definition; every container reads them alike (CARVE-P9-013, carve#4865).
+ * `[^f]: x` also fits the link production, but it is a footnote definition, which opens a frame (§10 I5).
+ */
 export function isLinkDefLine(line: string): boolean {
-  return matchLinkDef(line) !== null || RE_ABBR_DEF.test(line)
+  return (matchLinkDef(line) !== null && !RE_FOOTNOTE_DEF.test(line.trimStart())) || RE_ABBR_DEF.test(line)
 }
 
 /**
@@ -1373,15 +1376,18 @@ export function lineOpensBlock(line: string): boolean {
 
 // A paragraph of only braced comments renders nothing, so a list reads it as it
 // reads a `%%` line (carve#4799). Returns the index past its last line, or -1.
-// A list marker interrupts only in an item, so it keeps the paragraph visible.
+// A list marker interrupts only in an item body (`markerEnds`), so elsewhere it keeps the paragraph visible.
 // A `%%` tail ends at its line, so text on the next line stays visible.
 const RE_COMMENT_ONLY_PARAGRAPH = new RegExp(String.raw`^(?:\{%(?![\p{Mn}\p{Mc}\p{Me}\u{FE00}-\u{FE0F}\u{200D}])(?:(?!%\})[\s\S])*%\}|[ \t\n\r]|(?<= )%%[^\n\r]*)*$`, 'u')
-export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number): number {
+export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number, markerEnds = false): number {
   if (!(lineAt(k) ?? '').trimStart().startsWith('{%')) return -1
   let end = k + 1
   for (let line = lineAt(end); line !== undefined && !isBlankLine(line); line = lineAt(++end)) {
     const rest = line.trimStart()
-    if (isListMarkerLine(rest)) return -1
+    if (isListMarkerLine(rest)) {
+      if (markerEnds) break
+      return -1
+    }
     if (lineOpensBlock(rest) || RE_COMMENT_LINE.test(rest)) break
   }
   const para: string[] = []
