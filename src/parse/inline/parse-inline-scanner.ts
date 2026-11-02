@@ -297,6 +297,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   } = helpers
   const RE_MENTION_AT = new RegExp(RE_MENTION.source.slice(1), 'y')
   const RE_TAG_AT = new RegExp(RE_TAG.source.slice(1), 'y')
+  const RE_NAME_LETTER = /[A-Za-z]/
 
   // A trailing `{...}` on a link or image tail. An invalid payload (`{2=v}`)
   // is literal (§14), and an empty-attr `{…}` is literal too -- neither is
@@ -1100,7 +1101,7 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     if (i !== 0 && /[A-Za-z0-9_]/.test(text[i - 1]!)) return false
     RE_MENTION_AT.lastIndex = i
     const m = RE_MENTION_AT.exec(text)
-    if (!m) return false
+    if (!m || !RE_NAME_LETTER.test(m[1]!)) return false
     return emitAtCursor(s, { type: 'mention', user: m[1]! } as Mention, m[0].length)
   }
 
@@ -1109,6 +1110,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     RE_TAG_AT.lastIndex = i
     const m = RE_TAG_AT.exec(text)
     const tagBoundary = i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)
+    // A name holds an ASCII letter (carve#4809); `#1` is neither a tag nor a caption placeholder.
+    if (m && !RE_NAME_LETTER.test(m[1]!)) return false
     if (m && tagBoundary) return emitAtCursor(s, { type: 'tag', name: m[1]! } as Tag, m[0].length)
     // Bare `#` (not a tag) in a caption = number placeholder, first only.
     // `\#` never reaches here (the escape branch consumes it as literal).
