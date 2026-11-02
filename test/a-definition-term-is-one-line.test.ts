@@ -57,4 +57,6 @@ it('keeps a nested term and its description in a description inside an item', ()
 
 it('imports a wrapped Djot term onto its one line', () => {
   expect(djotToCarve(': term\n  continuation')).toBe('{loose}\n:: term continuation\n:  %%')
+  // A hard break at the wrap collapses to a space, as the writer spells a break in a term.
+  expect(djotToCarve(': a\\\n  b')).toBe('{loose}\n:: a b\n:  %%')
 })
