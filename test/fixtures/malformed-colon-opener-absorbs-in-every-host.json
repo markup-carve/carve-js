@@ -2,47 +2,47 @@
   {
     "id": "description-over-indented",
     "source": ":: t\n: m\n   :::e\n  :::\nl\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>m\n:::e\n:::\nl</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>m\n:::e</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p>l</p>"
   },
   {
     "id": "description-over-indented-two",
     "source": ":: t\n: m\n    :::e\n  :::\nl\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>m\n:::e\n:::\nl</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>m\n:::e</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p>l</p>"
   },
   {
     "id": "description-marker-line",
     "source": ":: t\n: :::e\n  :::\nl\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>:::e\n:::\nl</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>:::e</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p>l</p>"
   },
   {
     "id": "description-marker-line-wider",
     "source": ":: t\n: ::::e x\n  :::\nl\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>::::e x\n:::\nl</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>::::e x</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p>l</p>"
   },
   {
     "id": "description-marker-line-div",
     "source": ":: t\n: :::\n  m\n  :::e\n  ::::\nl\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <div>\n      <p>m\n:::e\n::::\nl</p>\n    </div>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <div>\n      <p>m\n:::e</p>\n      <div>\n\n      </div>\n    </div>\n  </dd>\n</dl>\n<p>l</p>"
   },
   {
     "id": "quote-over-indented",
     "source": "> m\n>  :::e\n> :::\nl\n",
-    "html": "<blockquote><p>m\n:::e\n:::\nl</p></blockquote>"
+    "html": "<blockquote>\n  <p>m\n:::e</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>l</p>"
   },
   {
     "id": "quote-over-indented-wider",
     "source": "> m\n>   ::::e\n> :::\nl\n",
-    "html": "<blockquote><p>m\n::::e\n:::\nl</p></blockquote>"
+    "html": "<blockquote>\n  <p>m\n::::e</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>l</p>"
   },
   {
     "id": "nested-marker-line",
     "source": "- - :::e\n    :::\nl\n",
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>:::e\n:::\nl</li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li>:::e\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>l</p>"
   },
   {
     "id": "nested-ordered-marker-line",
     "source": "- 1. ::::e\n     :::\nl\n",
-    "html": "<ul>\n  <li>\n    <ol>\n      <li>::::e\n:::\nl</li>\n    </ol>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <ol>\n      <li>::::e\n        <div>\n\n        </div>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>l</p>"
   },
   {
     "id": "nested-marker-line-closer-at-outer-column",

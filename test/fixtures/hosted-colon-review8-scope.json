@@ -257,7 +257,7 @@
   {
     "id": "review8-older-o01-overindented-verse-005",
     "source": "- a\n    ::: |\n   ::::\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-006",
@@ -342,7 +342,7 @@
   {
     "id": "review8-older-o01-overindented-verse-008",
     "source": "- m\n      ::: |\n   ::::\nTAILX\n",
-    "html": "<ul>\n  <li>m\n    <div class=\"line-block\">\n      <p>&nbsp;::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>m\n    <div class=\"line-block\">\n      <p>::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o03-overindented-fence-colon-001",
@@ -377,7 +377,7 @@
   {
     "id": "review8-older-o01-overindented-verse-009",
     "source": "- a\n      ::: |\n    ::::\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>::::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c02-below-column-comment-011",
@@ -732,7 +732,7 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-007",
     "source": "- a\n  :::bad\n  :::\n    ::: |\nTAILX\n",
-    "html": "<ul>\n  <li>a\n:::bad\n:::\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n:::bad\n    <div>\n      <div class=\"line-block\">\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review8-c02-below-column-comment-042",
@@ -992,12 +992,12 @@
   {
     "id": "review8-c01-authored-div-base-060",
     "source": "- a\n    ::::\n    :::bad\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div>\n      <p>:::bad\n:::\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div>\n      <p>:::bad</p>\n      <div>\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review8-older-o02-nested-overindented-boxes-001",
     "source": "- x\n     :::bad\n        :::\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>x\n:::bad\n:::\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>x\n:::bad\n    <div>\n      <div class=\"box\">\n\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review8-c02-below-column-comment-046",
@@ -1007,7 +1007,7 @@
   {
     "id": "review8-c01-authored-div-base-061",
     "source": "> - a\n>     ::::\n>     :::bad\n>     :::\n- tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div>\n        <p>:::bad\n:::\n- tail</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div>\n        <p>:::bad</p>\n        <div>\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
   },
   {
     "id": "review8-c02-below-column-comment-047",

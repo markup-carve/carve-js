@@ -87,8 +87,9 @@ it('migrates authored malformed metadata rather than its masked tokens', () => {
     expect(carveToHtml(migrated)).not.toContain('<div')
     expect(carveToHtml(migrated)).toBe(`<p>::: tip${metadata === '{.x}' ? '' : ' ' + (metadata === '"T" extra' ? '“T” extra' : metadata)}\nbody\n:::</p>`)
   }
+  // djot.js reads the rejected opener as a paragraph, so the last bare run opens an empty div.
   const source = '::: tip Bad X\n\n::: note\nx\n:::\n:::\n'
-  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<div class="note">\n  <p>x</p>\n</div>\n<p>:::</p>')
+  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<div class="note">\n  <p>x</p>\n</div>\n<div>\n\n</div>')
 })
 
 it('diagnoses metadata on a footnote marker line and blocks its format patch', () => {
@@ -109,11 +110,12 @@ l
 out
 :::
 `
+    // djot.js reads all six lines as one paragraph, so every colon line is escaped.
     const migrated = djotToCarve(source)
     expect(migrated).toBe(`\\::: tip Bad X
-${opener}
+\\${opener}
 l
-:::
+\\:::
 out
 \\:::
 `)

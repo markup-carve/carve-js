@@ -484,19 +484,6 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
   )
 }
 
-export function isLiteralColonFenceLine(line: string): boolean {
-  line = line.replace(/^[ \t]+/, '')
-  return (
-    /^:{3,}/.test(line) &&
-    !RE_ADMONITION_CLOSE.test(line) &&
-    !(RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) &&
-    !RE_DIV_OPEN.test(line) &&
-    !RE_LINE_BLOCK_OPEN.test(line) &&
-    !RE_HARDBREAKS_OPEN.test(line) &&
-    !RE_QUOTE_BLOCK_OPEN.test(line)
-  )
-}
-
 /**
  * A verbatim fence a DESCENDANT of a list item holds open, with its base.
  *

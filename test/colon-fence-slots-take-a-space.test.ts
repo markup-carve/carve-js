@@ -43,7 +43,9 @@ describe('the separator after the fence run is a literal space', () => {
 
       expect(tabbed).toContain(':::')
       expect(tabbed).not.toContain('<aside')
-      expect(tabbed).not.toContain('<div')
+      // The only div is the empty one the bare run below opens (carve#4863).
+      expect(tabbed).toContain('</p>\n<div>\n\n</div>')
+      expect(tabbed).not.toContain('<div class')
     })
 
     it(`a space there still opens it: ${label}`, () => {

@@ -28,11 +28,15 @@ it('pairs overindented runs in a quoted list line block', () => {
 &nbsp;&nbsp;</code></p>
       </div>
       :::bad
-:::
-- tail
+      <div>
+
+      </div>
     </li>
   </ul>
-</blockquote>`)
+</blockquote>
+<ul>
+  <li>tail</li>
+</ul>`)
 })
 
 it('leaves an unpaired overindented run in its line block', () => {
@@ -105,8 +109,8 @@ tail
   expect(carveToHtml(["1. ::: |", "       ~~~", "   :::", "     ~~~", "   :::", "   para", "tail", ''].join('\n'))).toBe("<ol>\n  <li>\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;~~~<br>\n:::<br>\n&nbsp;&nbsp;~~~</p>\n    </div>\n    para\ntail\n  </li>\n</ol>")
 })
 
- it("keeps the malformed-fence paragraph open after a quote line block", () => {
-  expect(carveToHtml(["> ::: |", ">  ```", "> :::", ">   ```", "> :::", "> :::bad", "> :::", "- tail", ''].join('\n'))).toBe("<blockquote>\n  <div class=\"line-block\">\n    <p>&nbsp;<code>\n:::\n&nbsp;&nbsp;</code></p>\n  </div>\n  <p>:::bad\n:::\n- tail</p>\n</blockquote>")
+ it("opens a div below the malformed fence after a quote line block (carve#4863)", () => {
+  expect(carveToHtml(["> ::: |", ">  ```", "> :::", ">   ```", "> :::", "> :::bad", "> :::", "- tail", ''].join('\n'))).toBe("<blockquote>\n  <div class=\"line-block\">\n    <p>&nbsp;<code>\n:::\n&nbsp;&nbsp;</code></p>\n  </div>\n  <p>:::bad</p>\n  <div>\n\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>")
 })
 
  it("pairs mixed-column runs inside a description line block", () => {

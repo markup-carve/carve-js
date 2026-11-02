@@ -25,8 +25,6 @@ export interface LazyLine {
   readonly authoredFenceWhitespace: number | undefined
   readonly authoredQuoteParagraphOpen: boolean
   readonly wasDescendantColumn: boolean
-  readonly wasAbsorbing: boolean
-  readonly wasOwnedAbsorbing: boolean
   readonly wasClosedColon: boolean
   readonly wasClosedLiteralComment: boolean
   readonly wasInTable: boolean
@@ -217,10 +215,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     if (!rebased && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
         (marker
           ? state.ownedMarker !== undefined && run > state.ownedMarker
-          : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
-      state.absorbingFence = line.wasAbsorbing
-      return true
-    }
+          : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) return true
     if (!state.ownedAuthored && RE_COMMENT_LINE.test(text)) {
       state.invisibleAtColumn = true
       state.commentAtColumn = true
@@ -264,8 +259,6 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       frameColumn: line.runColumns!,
       // The marker line's quote is the sub-item's first block, so its next line continues it.
       quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
-      // So is a malformed fence there, which absorbs the bare run below it.
-      absorbingFence: line.wasOwnedAbsorbing,
     })
     trackItemLazyState(
       dedented,
@@ -318,14 +311,13 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const overIndented = line.content.slice(line.run!)
     if (authoredFlushFence(line, overIndented)) return true
     const colon = colonFenceOpenerLen(overIndented)
-    if (colon !== null && !line.wasAbsorbing && !line.wasClosedColon) {
+    if (colon !== null && !line.wasClosedColon) {
       state.divDepth++
       if (RE_LINE_BLOCK_OPEN.test(overIndented)) state.literalColon = { width: colon, column: line.run! }
       else state.authoredColon = { width: colon, column: line.run!, depth: state.divDepth }
       return endsOnBlock(state)
     }
     if (colon === null && /^:{3,}/.test(overIndented)) {
-      state.absorbingFence = true
       state.lazyFoldable = true
       state.inDefList = false
       return true

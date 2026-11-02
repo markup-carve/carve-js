@@ -66,7 +66,7 @@ describe('a colon opener label closes on a balanced bracket', () => {
     expect(html('::: note [a ` b]\nbody\n:::\n')).toBe(
       '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>',
     )
-    expect(html('::: [a ` b]\nbody\n:::\n')).toBe('<p>::: [a <code> b]\nbody\n:::</code></p>')
+    expect(html('::: [a ` b]\nbody\n:::\n')).toBe('<p>::: [a <code> b]\nbody</code></p>\n<div>\n\n</div>')
   })
 
   // The two shapes the ticket names as unchanged. A run that closes before the

@@ -35,11 +35,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     RE_FENCE,
     RE_FIRST_BLOCK_MARKER,
     RE_FOOTNOTE_DEF,
-    RE_HARDBREAKS_OPEN,
     RE_HR,
     RE_LINE_BLOCK_OPEN,
     RE_ORDERED,
-    RE_QUOTE_BLOCK_OPEN,
     RE_RAW_FENCE,
     RE_TASK,
     RE_UNORDERED,
@@ -114,12 +112,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     verbatimOnlyLazyState,
     walkMarkerOwnerPrefix,
   } = helpers
-
-  /** A line that starts with a colon run and opens no colon block, so its paragraph absorbs the bare run below. */
-  function isMalformedColonLead(text: string): boolean {
-    return /^:{3,}/.test(text) && !RE_DIV_OPEN.test(text) && !RE_ADMONITION_OPEN.test(text) &&
-      !RE_LINE_BLOCK_OPEN.test(text) && !RE_HARDBREAKS_OPEN.test(text) && !RE_QUOTE_BLOCK_OPEN.test(text)
-  }
 
   function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
     physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
@@ -600,7 +592,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       invisibleAtColumn: false,
       commentAtColumn: false,
       inFootnoteBody: false,
-      absorbingFence: false,
       divDepth: 0,
       // The lead text opens a paragraph unless it is one of the shapes that
       // open nothing - PART 1 S4's one question, asked of the block the marker
@@ -1382,14 +1373,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A just-opened container leaves no paragraph for lazy text (CARVE-P0-016).
     if (leadColon !== null) lazyState.lazyFoldable = false
     if (leadColonAwaitingBody) lazyState.markerColonBody = true
-    // The lead line may itself be the malformed fence (`- :::note`), and then
-    // the paragraph it opens is already absorbing: the `:::` below it is text,
-    // not a closer for a block nothing opened (PART 9 §12, carve#891).
-    lazyState.absorbingFence = isMalformedColonLead(content)
-    // So may the sub-item a nested marker line opens (`- - :::note`); that is its frame's state, not this item's.
-    if (lazyState.ownedColumn >= 0 && content.includes(':::')) {
-      lazyState.ownedAbsorbing = isMalformedColonLead(markerLineBottomBlock(content, session.markerPrefixMemo(lexer, itemStartLineIndex)))
-    }
     // The marker-line definition did not pass through the body tracker.
     // Track its first paragraph continuation without opening a child list.
     let markerNoteBodyPending = RE_FOOTNOTE_DEF.test(content)
@@ -2338,7 +2321,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
         isListMarkerLine(dedented.trimStart())
       if (noteParagraphOpen && !followsBlank && (markerNoteFirstText || continuedMarkerNoteText) && isListMarkerLine(dedented.trimStart())) noteParagraphMarkers.add(nested.length - 1)
-      // An absorbed colon run keeps its spelling so the run below it stays text (CARVE-P9-016).
+      // A colon run keeps its spelling, so the tracker reads it as a colon line (carve#4863).
       trackedContent = (markerNoteFirstText || continuedMarkerNoteText) && !RE_COLON_RUN.test(dedented.trimStart())
         ? 'text' : dedented
       markerNoteFirstText = false
@@ -2457,7 +2440,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (leadColonAwaitingBody && /^:{3,}/.test(trackedContent) && colonFenceOpenerLen(trackedContent) === null) {
         lazyState.unrebasedColonBody = { width: leadColon! }
         leadColonAwaitingBody = false
-        // The div is open all the same, so its bare run is a closer, not absorbed text (carve#4397).
+        // The div is open all the same, so its bare run is a closer.
         if (RE_DIV_OPEN.test(content)) {
           lazyState.divDepth++
           lazyState.authoredColon = { width: leadColon!, column: 0, depth: lazyState.divDepth }
@@ -2496,7 +2479,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
       }
       foldedDescription = nestedOwnerColumn < 0 && lazyState.quoteInner === null && lazyState.lazyFoldable &&
-        !lazyState.absorbingFence && (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
+        (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
         lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
       // A consumed descendant closer must not reopen a paragraph in the item.
       skipConsumedCloser = closedDescendantFence || openedLaterNoteFence

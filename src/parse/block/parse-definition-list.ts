@@ -381,7 +381,6 @@ export function createDefinitionListParser(
         commentAtColumn: false,
         inFootnoteBody: false,
         quoteInner: null,
-        absorbingFence: false,
         divDepth: 0,
         lazyFoldable: false,
         inDefList: false,
@@ -598,8 +597,6 @@ export function createDefinitionListParser(
           // Its width decides which bare run closes it, as for one opened in the body.
           lazyState.divWidths = [colonFenceOpenerLen(first) ?? 3]
         }
-        // A malformed fence on the marker line absorbs the bare run below it, as an item's lead does.
-        lazyState.absorbingFence = /^:{3,}/.test(first) && !firstIsColonContainer
         if (RE_LINE_BLOCK_OPEN.test(first)) lazyState.literalColon = { width: colonFenceOpenerLen(first)!, column: 0 }
         if (RE_LINE_BLOCK_OPEN.test(markerLineBottomBlock(first))) {
           let { at, column } = quoteColumn(first)

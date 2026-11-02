@@ -664,7 +664,6 @@ export {
   firstBlockOpenerContent,
   insideOpenQuoteParagraph,
   isInvisibleLine,
-  isLiteralColonFenceLine,
   isPhysicalContinuationMarker,
   isRetainableLineComment,
   isStackedFirstBlockQuoteMarker,
