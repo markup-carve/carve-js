@@ -5436,7 +5436,7 @@ function canonicalItemHeldTildeFence(lines: string[]): string[] {
           const fence = canonicalFence(lines.slice(pending.at + 1, index).map((body) =>
             body.startsWith(pending!.prefix) ? body.slice(pending!.prefix.length) : body))
           const open = pending.opening
-          lines[pending.at] = open[1]! + open[2]! + open[3]! + open[4]! + fence + open[6]!
+          lines[pending.at] = open[1]! + open[2]! + open[3]! + open[4]! + fence + fenceInfo(open[6]!)
           lines[index] = pending.prefix + fence
           pending = null
         }
