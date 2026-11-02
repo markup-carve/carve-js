@@ -1,5 +1,7 @@
 import { maskLiteralDirectiveTokens, unmaskLiteralDirectiveTokens } from './literal-directive-mask.js'
-import { wordAfter, wordBefore } from './parse-inline-core.js'
+import { RE_SYMBOL, symbolOpensAt, wordAfter, wordBefore } from './parse-inline-core.js'
+import { RE_INLINE_ATTR } from './parse-inline-opaque.js'
+import { isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
 import type {
   AnchorRange,
   CarveExtension,
@@ -257,6 +259,31 @@ export class InlineParseSession {
         if (!critic && FORCED_TYPE[marker] === undefined) continue
         const close = critic ? this.criticPairEnd(text, at, `${marker}}` as '+}' | '-}') : this.bracedPairEnd(text, at, `${marker}}`)
         if (close !== -1) hosts.set(at, close)
+      }
+      // An attribute block belongs to the construct it is glued to, so an arrow in a value is no arrow.
+      const lastBrace = text.lastIndexOf('}')
+      const pastAttrs = (start: number): number => {
+        let end = start
+        while (text[end] === '{' && end < lastBrace) {
+          const attrs = RE_INLINE_ATTR.exec(text.slice(end))
+          if (attrs === null || attrs[1]!.trim() === '' || !isValidInlineAttrPayload(attrs[1]!)) break
+          end += attrs[0].length
+        }
+        return end
+      }
+      for (const [at, end] of hosts) hosts.set(at, pastAttrs(end))
+      const codeEnds = text.includes('`') ? backtickRunEnds(text) : undefined
+      for (let at = 0; at < text.length; at++) {
+        if (text[at] === '\\') at++
+        else if (text[at] === '`' && !hosts.has(at)) {
+          const end = codeEnds![at]!
+          if (end === -1) break
+          if (pastAttrs(end) !== end) hosts.set(at, pastAttrs(end))
+          at = end - 1
+        } else if (text[at] === ':' && !hosts.has(at) && symbolOpensAt(text, at)) {
+          const symbol = RE_SYMBOL.exec(text.slice(at))
+          if (symbol !== null && pastAttrs(at + symbol[0].length) !== at + symbol[0].length) hosts.set(at, pastAttrs(at + symbol[0].length))
+        }
       }
       labels.sort((a, b) => a[0] - b[0])
       this.substitutionScans = { scanner: new SubstitutionScanner(text, hosts), labels }
