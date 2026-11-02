@@ -271,15 +271,15 @@ export function insertSkippedAbbreviationDefinitions(
     const pos = definitionLinePosition(sourceLines, lexer.sourceOffsetMap ?? lexer.lineOffsets, line, source.length,
       lexer.lineStartColumn(line))
     // A container's prefix is not part of the definition.
-    const lineStart = source.lastIndexOf('\n', pos.startOffset! - 1) + 1
+    const lineStart = Math.max(source.lastIndexOf('\n', pos.startOffset! - 1), source.lastIndexOf('\r', pos.startOffset! - 1)) + 1
     const marker = source.indexOf(`*[${abbr}]:`, lineStart)
     if (marker >= 0) {
       pos.startColumn = marker - lineStart + 1
       pos.startOffset = marker
       // The end is read from the source line too: a nested container hands over a partly stripped line.
-      let lineEnd = source.indexOf('\n', marker)
-      if (lineEnd < 0) lineEnd = source.length
-      if (source[lineEnd - 1] === '\r') lineEnd--
+      const terminator = /[\r\n]/g
+      terminator.lastIndex = marker
+      const lineEnd = terminator.exec(source)?.index ?? source.length
       pos.endColumn = lineEnd - lineStart + 1
       pos.endOffset = lineEnd
     }
