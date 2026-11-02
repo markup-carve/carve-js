@@ -10,6 +10,7 @@ import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, ty
 import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence } from '../block/parse-block-boundaries.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
@@ -3165,7 +3166,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // never loosens. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
-          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
+          // Lines a still-open code fence holds are its payload, which is visible (§17 L1c).
+          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd &&
+            !bodyEndsInOpenCodeFence([content, ...nested])
         }
         if (invisibleNested(k) || definitionAtDescendantBody(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).

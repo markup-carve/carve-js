@@ -23,4 +23,17 @@ describe('a blank before only invisible lines in a sub-item body loosens the lis
   ])('stays tight when a visible line follows: %j', (source) => {
     expect(flat(source)).toContain('<li>sub</li>')
   })
+
+  it.each([
+    '- a\n  - ```\n    x\n\n    [r]: /u\n- sub\n',
+    '- a\n  - ~~~\n    x\n\n    %% c\n- sub\n',
+    '- a\n  - b\n\n    ```\n    x\n\n    *[A]: y\n- sub\n',
+    '- ```\n  x\n\n  [r]: /u\n- sub\n',
+  ])('stays tight when an open fence holds the lines after the blank: %j', (source) => {
+    expect(flat(source)).toContain('<li>sub</li>')
+  })
+
+  it('loosens when a line below the fence column ends the fence', () => {
+    expect(flat('- a\n  - ```\n    x\n\n   %% c\n- sub\n')).toContain('<li><p>sub</p></li>')
+  })
 })
