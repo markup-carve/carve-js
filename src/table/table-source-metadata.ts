@@ -135,8 +135,9 @@ export function preservesTableColumns(table: Table, attrs: Attrs | undefined): b
 export function tableNeedsDelimiterHeader(table: Table): boolean {
   const first = table.rows[0]
   if (!first?.cells.length || !first.cells.every(cell => cell.header)) return false
-  const firstSpan = first.cells.findIndex(cell => cell.span !== undefined)
-  return firstSpan >= 0 && !(firstSpan >= 1 && first.cells.slice(firstSpan).every(cell => cell.span === 'colspan'))
+  // carve#4974 ruling A: only an orphan placeholder or a placeholder carrying an
+  // alignment lacks a native spelling that keeps the tree.
+  return first.cells.some((cell, i) => cell.span === 'rowspan' || (cell.span === 'colspan' && (i === 0 || cell.align !== undefined)))
 }
 
 /** Write recorded dash counts and header alignment colons ([CARVE-P11-066]).

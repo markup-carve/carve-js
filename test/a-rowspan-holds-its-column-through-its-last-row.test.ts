@@ -109,7 +109,7 @@ describe('a rowspan holds its column through its last row', () => {
 
     const html = '<table><thead><tr><th colspan="3" style="text-align:center">H</th><th style="text-align:left">K</th></tr></thead>'
       + '<tbody><tr><td style="text-align:center">p</td><td style="text-align:center">q</td><td style="text-align:right">s</td><td style="text-align:left">t</td></tr></tbody></table>'
-    expect(carve(html)).toBe('| H | < | < | K |\n|:---:|---|---|:---|\n| p |~ q |> s | t |\n')
+    expect(carve(html)).toBe('|=~ H | < | < |=< K |\n| p |~ q |> s | t |\n')
     const rendered = back(html)
     for (const [cell, css] of [['p', 'center'], ['q', 'center'], ['s', 'right'], ['t', 'left']] as const) {
       expect(rendered).toContain(`<td style="text-align: ${css};">${cell}</td>`)
