@@ -1160,6 +1160,47 @@ function protectCodeSpans(s: string, repl: (span: string, offset: number) => str
   return out
 }
 
+/**
+ * For each line, the inline span it starts inside: a code span, which the
+ * inline stage joins onto one line, or raw HTML, which keeps the line as it
+ * stands. Either way a block-opener escape there would be span content.
+ */
+function lineStartSpans(lines: readonly string[]): ('code' | 'html' | undefined)[] {
+  const inside: ('code' | 'html' | undefined)[] = lines.map(() => undefined)
+  if (lines.length < 2 || !lines.some(line => line.includes('`') || line.includes('<'))) return inside
+  const starts: number[] = []
+  let at = 0
+  for (const line of lines) { starts.push(at); at += line.length + 1 }
+  const mark = (from: number, to: number, kind: 'code' | 'html'): void => {
+    starts.forEach((start, index) => { if (start > from && start < to) inside[index] = kind })
+  }
+  const masked = protectCodeSpans(lines.join('\n'), (span, offset) => {
+    if (/^`{1,2}(?!`)/.test(span) && span.includes('\n')) mark(offset, offset + span.length, 'code')
+    return span.replace(/[^\n]/g, ' ')
+  })
+  const opaqueEnd = opaqueHtmlScanner(masked)
+  for (let i = 0; i < masked.length; i++) {
+    if (masked[i] === '\\') { i++; continue }
+    if (masked[i] !== '<') continue
+    const end = opaqueEnd(i) ?? scanHtmlTag(masked, i)?.end
+    if (end === undefined) continue
+    mark(i, end, 'html')
+    i = end - 1
+  }
+  return inside
+}
+
+/** Whether Carve reads LINES, each at column 0, as a single paragraph. */
+function continuesOneParagraph(lines: string): boolean {
+  try {
+    const document = parse(lines.split('\n').map(line => line.trimStart()).join('\n') + '\n')
+    return document.children.length === 1 && document.children[0]!.type === 'paragraph'
+  } catch (error) {
+    if (error instanceof SourceUnspellableError) return false
+    throw error
+  }
+}
+
 /** Convert inline Markdown formatting in non-code text to Carve. */
 /**
  * Markdown constructs that exist only in a wider flavour than CommonMark+GFM.
@@ -8756,7 +8797,7 @@ function writeParagraphLine(st: MarkdownConversion, ln: MarkdownLine, i: number)
       bare.push(next)
       end++
     }
-    // A setext underline under the paragraph, after the run or after the
+        // A setext underline under the paragraph, after the run or after the
     // line the run stopped at, makes the whole paragraph the heading.
     let heading = run.length > 1 && end < lines.length ? setextParagraphEnd(lines, end - 1, contentCol, true) : null
     if (heading === null && end + 1 < lines.length) {
@@ -8790,22 +8831,33 @@ function writeParagraphLine(st: MarkdownConversion, ln: MarkdownLine, i: number)
       return i
     }
     if (run.length > 1) {
+      // A line inside an inline span carries no opener to escape: in a code
+      // span it joins the line above, whose line ending reads as a space.
+      const spans = lineStartSpans(bare)
       // A line of the run left of the item's content column is lazy.
       const inItem = listCols.length > 0 && indentColumns(ln.line) >= contentCol
-      out.push(
-        keepPipeRowsLiteral(
-          convertInline(
-            run
-              .map((text) =>
-                inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
-              )
-              .join('\n'),
-            dialect, false, false, undefined, true, false, true, undefined, true, false,
-            listCols.length === 0 && !/^[ \t]*>/.test(ln.line),
-            listCols.length === 0 && !/^[ \t]*>/.test(ln.line),
-          ),
-        ),
+      const convert = (rawHtml: boolean): string => convertInline(
+        run
+          .map((text, index) =>
+            spans[index] === 'code' ? ` ${bare[index]!.trimStart()}`
+            : rawHtml && spans[index] === 'html' ? `\n${bare[index]!}`
+            : (index > 0 ? '\n' : '') + (inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text),
+          )
+          .join(''),
+        dialect, false, false, undefined, true, false, true, undefined, true, false,
+        listCols.length === 0 && !/^[ \t]*>/.test(ln.line),
+        listCols.length === 0 && !/^[ \t]*>/.test(ln.line),
       )
+      // Raw HTML keeps its line, which the writer moves to column 0, so it
+      // goes unescaped only where it still continues the paragraph there.
+      const rawHtml = listCols.length === 0 && spans.includes('html')
+      const lossCount = importLosses.length
+      let converted = convert(rawHtml)
+      if (rawHtml && !continuesOneParagraph(converted)) {
+        importLosses.length = lossCount
+        converted = convert(false)
+      }
+      out.push(keepPipeRowsLiteral(converted))
       st.itemParagraph = inItem
       i = end - 1
       st.prevType = 'text'
