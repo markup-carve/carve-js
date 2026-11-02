@@ -422,11 +422,23 @@ export function createDefinitionListParser(
         /^\+[ \t]*$/.test(a) ||
         RE_DEFLIST_TERM.test(a) ||
         RE_DEFLIST_DEF.test(a)
+      // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
+      const attachedBoundary = (): ((a: string) => boolean) => {
+        let k = 0
+        for (let ln = lexer.peek(); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
+          isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
+          RE_COMMENT_LINE.test(ln.trimStart()) ||
+          // A note's lazy text is part of it.
+          (k > 0 && RE_FOOTNOTE_DEF.test(lexer.peek(k - 1)!.trimStart()) && !isListMarkerLine(ln.trimStart()))); ln = lexer.peek(++k));
+        const lead = lexer.peek(k)
+        if (lead === undefined || isListMarkerLine(lead.trimStart())) return isDefBodyBoundary
+        return (a) => isDefBodyBoundary(a) || isListMarkerLine(a.trimStart())
+      }
       // First-block form (`:  +`, mirroring the list `- +`): when the sole
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
-        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true, true)
+        const firstBlock = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
@@ -491,7 +503,7 @@ export function createDefinitionListParser(
         }
       }
       if (firstBlockOpenerContent(first) && !isContinuationMarker(first)) {
-        const attached = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary, 0, true, true)
+        const attached = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
         // An intervening line still reaches the description after this pull
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
@@ -517,7 +529,7 @@ export function createDefinitionListParser(
           lexer.consume()
           const { lines: attached, lineNumbers: attachedLineNumbers } = parseSession.collectAttachedBlock(
             lexer,
-            isDefBodyBoundary,
+            attachedBoundary(),
             0,
             true,
           )
@@ -972,6 +984,8 @@ export function createDefinitionListParser(
             entryColumn() > listColumn &&
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
+        // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
+        if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below)) return 'stop'
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
         if (indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
@@ -1085,6 +1099,8 @@ export function createDefinitionListParser(
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
+      // A marker body opens a list at its column 0 as an item does (PART 0 S3, carve#4860).
+      sub.markerOpensSublist = true
       sub.hostBodyRoot = 'description'
       sub.hostSourceContentColumn = bodySourceColumn
       return bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)

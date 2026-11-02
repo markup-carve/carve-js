@@ -16,7 +16,7 @@ describe('a description releases below-column openers to its item', () => {
 
   it('keeps the authored bases of sibling lists', () => {
     expect(carveToHtml('* [ ] task\n  :: term\n  :  detail\n    :: term\n    :  detail\n      - a\n     +  \n\n     - item\n')).toBe(
-      '<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="task"> task\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n    <ul>\n      <li>a\n+</li>\n    </ul>\n    <ul>\n      <li>item</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="task"> task\n    <dl>\n      <dt>term</dt>\n      <dd>detail</dd>\n      <dt>term</dt>\n      <dd>detail</dd>\n    </dl>\n    <ul>\n      <li><p>a\n+</p></li>\n      <li><p>item</p></li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 })

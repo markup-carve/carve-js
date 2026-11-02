@@ -1735,10 +1735,21 @@ export class ParseSession extends InlineParseSession {
     return true
   }
 
+  private quoteHoldsMarkerBody(q: QuoteCollect): boolean {
+    this.trackUntrackedQuoteLines(q)
+    for (let level: BlockQuoteLazyState | undefined = q.state; level; level = level.mode.kind === 'quote' ? level.mode.inner : undefined) {
+      if (level.hosts?.kinds.some((kind) => kind === 'item' || kind === 'note' || kind === 'description')) return true
+    }
+    return false
+  }
+
   // An unmarked line that cannot be the quote's lazy text ends the quote.
   private interruptsQuoteLazily(q: QuoteCollect, ln: string, lazyFootnote: boolean): boolean {
     const { lexer, quoteTermContinuation, quoteMarkerColumn } = q
     return isBlankLine(ln) ||
+      // A marker in a marker body, or one that misses a body in this quote, opens a list (PART 0 S3, carve#4860).
+      (!ln.startsWith(LAZY_FRAME) && isListMarkerLine(ln) && !isContinuationMarker(stripLazyFrame(q.inner.at(-1) ?? '').trim()) &&
+        (lexer.markerOpensSublist || this.quoteHoldsMarkerBody(q))) ||
       (lexer.hostBody === 'list' && !lazyFootnote && leadingWhitespace(ln) >= FOOTNOTE_BODY_COLUMN && RE_FOOTNOTE_DEF.test(ln.trimStart())) ||
       (RE_CAPTION.test(ln) && !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))) ||
       colonFenceShapeEndsLazyContinuation(ln) ||

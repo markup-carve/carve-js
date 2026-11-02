@@ -7,6 +7,7 @@ import {
 import { indentColumns, isBlankLine, Lexer, sliceColumns } from '../parse-lexer.js'
 import { createListStateTracker } from '../list/parse-list-state.js'
 import {
+  RE_ABBR_DEF,
   extractItemAttr,
   isBlockAttributeLine,
   isLinkDefLine,
@@ -772,6 +773,7 @@ export function lineOpensItemBlock(line: string): boolean {
 
 export const listStateHelpers = {
   FOOTNOTE_BODY_COLUMN,
+  RE_ABBR_DEF,
   RE_ADMONITION_CLOSE,
   RE_ADMONITION_OPEN,
   RE_BLOCKQUOTE,

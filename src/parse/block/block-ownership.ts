@@ -45,6 +45,8 @@ export interface TraceRecord {
   plus?: number
 }
 
+const BODY_FRAME = new Set(['item', 'dd', 'note'])
+
 interface Frame {
   kind: 'doc' | 'quote' | 'item' | 'note' | 'dd' | 'fence' | 'colon'
   /** A quote a marker-line `+` of an item or description took as its block. */
@@ -502,7 +504,7 @@ export function ownLines(
     const missedFrames = frames.slice(reached + 1)
     const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
       !missedFrames.some((f) => f.kind === 'note')
-    if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
+    if (missed && !captionsQuote && foldsLazily(form, owner)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
@@ -631,12 +633,10 @@ export function ownLines(
         (owner.kind === 'quote' || top().kind === 'item' && owner.kind !== 'item' && owner.kind !== 'dd')
     }
 
-    function foldsLazily(form: Form, missedNote: boolean): boolean {
-      const next = frames[reached + 1]!.kind
+    function foldsLazily(form: Form, owner: Frame): boolean {
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
-        // A marker past a missed item reads as at its owner's column: a sibling or a new list (carve#4545).
-        // Past a description, or past a quote with no note in it, it stays lazy text.
-        !(form.kind === 'item' && next !== 'dd' && (next !== 'quote' || missedNote) && frames.slice(reached + 1).some((f) => f.kind === 'item'))
+        // A marker that a marker body owns, or that misses one, opens a list (PART 0 S3, carve#4860).
+        !(form.kind === 'item' && (BODY_FRAME.has(owner.kind) || frames.slice(reached + 1).some((f) => BODY_FRAME.has(f.kind) || f.firstBlockQuote)))
     }
 
     function attachesParagraph(host: Frame, form: Form): boolean {
@@ -1162,8 +1162,8 @@ export function ownLines(
       return { kind: 'leaf', interrupts: true, table: true }
     }
     const marker = matchMarker(rest)
-    // §10 I2: under an open paragraph a marker opens only in a list item.
-    if (marker && owner.para && owner.kind !== 'item') return { kind: 'text', interrupts: false }
+    // §10 I2: under an open paragraph a marker opens only in a marker body (carve#4860).
+    if (marker && owner.para && !BODY_FRAME.has(owner.kind)) return { kind: 'text', interrupts: false }
     if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)

@@ -196,7 +196,7 @@ describe('an empty unterminated container ends at a flush-left line', () => {
 
   it("bullet past the column", () => {
     expect(carveToHtml(":: term\n:  definition\n    - m\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>definition\n- m\ntail</dd>\n</dl>",
+      '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <ul>\n      <li>m\ntail</li>\n    </ul>\n  </dd>\n</dl>',
     )
   })
 

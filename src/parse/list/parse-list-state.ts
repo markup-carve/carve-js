@@ -7,6 +7,7 @@ import { createRunPhases, endsOnBlock, type CommentCloser, type LazyLine, type L
 export function createListStateTracker(helpers: typeof listStateHelpers) {
   const {
     FOOTNOTE_BODY_COLUMN,
+    RE_ABBR_DEF,
     RE_ADMONITION_CLOSE,
     RE_ADMONITION_OPEN,
     RE_BLOCKQUOTE,
@@ -541,7 +542,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { content, state, facts } = line
     const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)
     if (!line.atContentColumn || !RE_INVISIBLE_BLOCK_LEAD.test(invisibleContent) ||
-        !(RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(invisibleContent))) return false
+        !(RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(invisibleContent) ||
+          RE_ABBR_DEF.test(invisibleContent.trimStart()))) return false
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
@@ -685,7 +687,10 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.lazyFoldable = nested.leavesParagraphOpen
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
-    state.inDefList = false
+    // A list in a description body stays in that body (PART 0 S3, carve#4860).
+    const inDescription = state.inDefList === 'description' && state.descriptionColumn !== undefined &&
+      (run ?? leadingWhitespace(content)) >= state.descriptionColumn
+    state.inDefList = inDescription ? 'description' : false
     state.deepest = state.ownedColumn >= 0 ? nestedMarkerFrame(state, nested, (nestedTask ?? nestedBullet)!.at(-1)!) : null
     return true
   }

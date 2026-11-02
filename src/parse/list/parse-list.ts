@@ -1461,6 +1461,23 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let lw = 0
     let sourceAfterNestedNote = false
     let quoteParagraphMarker = false
+    // A quote's lone `+` attaches the unmarked block after it, so its markers are the quote's (§17 L3).
+    const quotePlus = { scanned: 0, held: false, afterQuote: false }
+    const followsQuotePlus = (): boolean => {
+      if (quotePlus.scanned === 0) {
+        quotePlus.afterQuote = /^[ \t]*>/.test(content)
+        quotePlus.held = /^[ \t]*(?:>[ \t]*)+\+[ \t]*$/.test(content)
+      }
+      for (; quotePlus.scanned < nested.length; quotePlus.scanned++) {
+        const line = stripLazyFrame(nested[quotePlus.scanned]!)
+        const quoted = /^[ \t]*>/.test(line)
+        if (isBlankLine(line)) quotePlus.held = false
+        else if (quoted) quotePlus.held = /^[ \t]*(?:>[ \t]*)+\+[ \t]*$/.test(line)
+        else if (quotePlus.afterQuote && isContinuationMarker(line.trim())) quotePlus.held = true
+        quotePlus.afterQuote = quoted
+      }
+      return quotePlus.held
+    }
     let captionParagraphMarker = false
     let captionParagraphFollower = false
     let quoteLazyFramed = false
@@ -2029,7 +2046,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // written to exercise exactly that state, so it is not carried here as a
       // condition that cannot fire.
       if (nested.length === 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) delete lazyState.literalColon
-      quoteParagraphMarker = pendingBlankRun.count === 0 && lw > baseIndent &&
+      quoteParagraphMarker = false && pendingBlankRun.count === 0 && lw > baseIndent &&
         !captionParagraphClaim && (insideOpenQuoteParagraph(lazyState) || authoredQuoteParagraphOpen) &&
         isListMarkerLine(l) &&
         !RE_BLOCKQUOTE.test(l.trimStart())
@@ -2226,7 +2243,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !(lazyState.inFootnoteBody && nestedNoteBodyColumn !== undefined &&
           indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
         !insideOpenFence(lazyState) &&
-        !insideOpenQuoteParagraph(lazyState) &&
+        // A marker in the item opens a list under a quote's paragraph too (PART 0 S3, carve#4860).
+        !(insideOpenQuoteParagraph(lazyState) && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) &&
+        !followsQuotePlus() &&
         // A marker at an open description's body column is the description's block.
         !(lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined &&
           indentColumns(placed, lazyState.descriptionColumn) >= lazyState.descriptionColumn) &&
@@ -3574,3 +3593,4 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   }
 
 }
+
