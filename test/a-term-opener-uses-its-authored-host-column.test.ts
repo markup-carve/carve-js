@@ -10,9 +10,9 @@ it('returns a later quote to the surviving term host', () => {
   )
 })
 
-it('ends an inner item at its marker column while a term is open', () => {
+it('ends an inner item at its marker column after its term, keeping the separators in the outer item', () => {
   expect(normalized('- - a\n    :: m\n  : l\n  : l\n')).toBe(
-    '<ul>\n<li>\n<ul>\n<li>a\n<dl>\n<dt>m</dt>\n</dl>\n</li>\n</ul>\n</li>\n</ul>\n<p>: l\n: l</p>',
+    '<ul>\n<li>\n<ul>\n<li>a\n<dl>\n<dt>m</dt>\n</dl>\n</li>\n</ul>\n: l\n: l\n</li>\n</ul>',
   )
 })
 

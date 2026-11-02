@@ -436,8 +436,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
 // Track definition terms and lists opened by the line's body.
 function trackHostDefinitions(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
   const { host, column } = q
-  const { inner, at, blockStart } = b
-  if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
+  const { inner, at } = b
   if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
   else if (host.definitionList !== undefined && column <= host.definitionList &&
     host.kinds.at(-1) !== 'description') host.definitionList = undefined
