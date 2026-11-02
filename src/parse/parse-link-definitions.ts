@@ -59,7 +59,7 @@ type LinkDefScan = {
   prevBlank: boolean
   afterPreviousTerm: boolean
   inFootnoteBody: boolean
-  noteColumns: Array<{ column: number; quotes: number; termText: boolean; openedAt: number; quotedLeadParagraph: boolean }>
+  noteColumns: Array<{ column: number; quotes: number; openedAt: number }>
   inlineBodyList: boolean
   plusColumn: number | null
   paraState: 'no' | 'yes' | 'ask'
@@ -404,10 +404,6 @@ export function createLinkDefinitionCollector(
       (!isBlankLine(raw) && composed.column < noteColumns[noteColumns.length - 1]!.column ||
         rawQuoteDepth < noteColumns[noteColumns.length - 1]!.quotes)) noteColumns.pop()
     s.inFootnoteBody = noteColumns.length > 0
-    if (isBlankLine(raw) && s.inFootnoteBody) noteColumns[noteColumns.length - 1]!.termText = false
-    if (s.inFootnoteBody && /^[ \t]*:[ \t]+/.test(raw) &&
-        indentColumns(raw) > noteColumns[noteColumns.length - 1]!.column)
-      noteColumns[noteColumns.length - 1]!.termText = true
   }
 
   function trackComposedColumns(s: LinkDefScan, v: LineRead, startsBlock: boolean): Composed {
@@ -793,12 +789,7 @@ export function createLinkDefinitionCollector(
         (!collectsNothing || (!composed.peeled.some((one) => !one.quote) &&
           leadingWhitespace(raw.slice(composed.column)) === 0)) &&
         !s.lexer.declinedLinkDefLines.has(s.lexer.lineNumber(v.idx))) {
-      // A term on the marker line has no content column (CARVE-P2-028).
-      const lead = RE_FOOTNOTE_DEF.exec(line)![2]!
-      const quotedLead = /^>[ \t]+(.+)$/.exec(lead)?.[1]
-      s.noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: v.rawQuoteDepth,
-        termText: RE_DEFLIST_TERM.test(lead), openedAt: v.idx,
-        quotedLeadParagraph: quotedLead !== undefined && !prepassOpensBlock(quotedLead, false) })
+      s.noteColumns.push({ column: composed.column + FOOTNOTE_BODY_COLUMN, quotes: v.rawQuoteDepth, openedAt: v.idx })
       s.inFootnoteBody = true
     }
   }
@@ -879,16 +870,14 @@ export function createLinkDefinitionCollector(
     return composed.column >= openColumn
   }
 
-  function noteBodyDeclines(s: LinkDefScan, v: LineRead, composed: Composed, openColumn: number, collectsNothing: boolean): boolean {
+  function noteBodyDeclines(s: LinkDefScan, v: LineRead, composed: Composed): boolean {
     if (!s.inFootnoteBody) return false
     const note = s.noteColumns[s.noteColumns.length - 1]!
     // The quote marker may sit past the note's body floor. Its raw indent is
     // not the definition's indent; the composed column check above owns that.
-    // A definition-shaped line folded into an open quote paragraph stays text.
-    return (note.termText && composed.column > openColumn) ||
-      (note.quotedLeadParagraph && v.idx === note.openedAt + 1 && v.rawQuoteDepth > note.quotes) ||
-      (collectsNothing && v.rawQuoteDepth > note.quotes) ||
-      (v.rawQuoteDepth > note.quotes && /^[ \t]/.test(v.kept) && !composed.peeled.some((one) => !one.quote))
+    // A definition interrupts a quote's or a description's paragraph here as
+    // anywhere else (PART 0 S4).
+    return (v.rawQuoteDepth > note.quotes && /^[ \t]/.test(v.kept) && !composed.peeled.some((one) => !one.quote))
   }
 
   function collectLinkDef(
@@ -921,7 +910,7 @@ export function createLinkDefinitionCollector(
     // is visible text and cannot also define a reference.
     const declines =
       notAtContentColumn ||
-      noteBodyDeclines(s, v, composed, openColumn, collectsNothing) ||
+      noteBodyDeclines(s, v, composed) ||
       (collectsNothing && composed.peeled.some((one) => !one.quote))
     // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
     // reading the line as something other than a definition; the block parser

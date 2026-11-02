@@ -12,17 +12,24 @@ describe('quoted link definitions in footnote bodies', () => {
     })
   }
 
-  it('keeps a definition-shaped line in an open quote paragraph', () => {
+  // A definition interrupts an open quote paragraph in a note as anywhere else (carve-js#3922 ruling).
+  it('registers a definition below an open quote paragraph', () => {
     const html = carveToHtml('[^n]: a\n  > prose\n  > [r]: /x\n[x][r] [^n]\n')
-    expect(html).toContain('[x][r]')
-    expect(html).toContain('[r]: /x')
+    expect(html).toContain('<a href="/x">x</a>')
+    expect(html).not.toContain('[r]: /x')
   })
 
-  it('keeps a marker-line quote paragraph open across its first continuation', () => {
+  it('registers a definition below a marker-line quote paragraph', () => {
     for (const spacer of ['\n', '\n\n']) {
       const html = carveToHtml(`[r][] [^c]${spacer}[^c]: > para\n      > [r]: /u\n`)
-      expect(html).toContain('[r][]')
-      expect(html).toContain('&gt; [r]: /u')
+      expect(html).toContain('<a href="/u">r</a>')
+      expect(html).toContain('<blockquote><p>para</p></blockquote>')
     }
+  })
+
+  it('registers a definition below a marker-line term\'s description', () => {
+    const html = carveToHtml('[r][] [^c]\n\n[^c]: :: t\n  : para\n    [r]: /u\n')
+    expect(html).toContain('<a href="/u">r</a>')
+    expect(html).toContain('<dd>para</dd>')
   })
 })
