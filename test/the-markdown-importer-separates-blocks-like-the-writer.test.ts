@@ -17,14 +17,14 @@ const cases: [what: string, markdown: string, expected: string][] = [
   [
     'real frontmatter and a later break',
     '---\ntitle: Hi\n---\nBody\n***\nMore\n',
-    '---yaml\ntitle: Hi\n---\n\nBody\n\n---\n\nMore\n',
+    '---yaml\ntitle: Hi\n---\n\nBody\n\n***\n\nMore\n',
   ],
 
   // CONTROLS, not claims. carve-php filed the same symptom at a thematic break
   // (carve-php#2989); this importer already writes that separator on both
   // sides at the top level, and these pin it so the frontmatter change cannot
   // take it away.
-  ['a break under a paragraph', 'a\n***\nb\n', 'a\n\n---\n\nb\n'],
+  ['a break under a paragraph', 'a\n***\nb\n', 'a\n\n***\n\nb\n'],
   ['a break under a list', '---\n- one\n- two\n---\nBody\n', '***\n\n- one\n- two\n\n***\n\nBody\n'],
 ]
 

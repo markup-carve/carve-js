@@ -102,7 +102,7 @@ describe('a thematic run on a continuation line keeps its escape', () => {
   it('leaves a thematic break that really does open a block alone', () => {
     // Three columns in it interrupts the paragraph, so it is a rule and not a
     // continuation line at all.
-    expect(markdownToCarve('foo\n   ***\n')).toBe('foo\n\n---\n')
+    expect(markdownToCarve('foo\n   ***\n')).toBe('foo\n\n***\n')
   })
 
   it('builds the four columns as bytes, not as a pasted literal', () => {

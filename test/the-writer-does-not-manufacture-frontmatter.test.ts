@@ -34,7 +34,7 @@ function roundTrips(src: string): boolean {
 
 describe('the Carve writer does not manufacture a frontmatter block', () => {
   it('different authored markers need no frontmatter fallback', () => {
-    expect(carveToCarve('***\n\n---\n')).toBe('***\n\n---\n')
+    expect(carveToCarve('***\n\n---\n')).toBe('***\n\n***\n')
     expect(carveToHtml('***\n\n---\n')).toBe('<hr>\n<hr>')
     expect(roundTrips('***\n\n---\n')).toBe(true)
   })
@@ -53,9 +53,9 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     }
   })
 
-  it('CONTROL: a leading break with no later break keeps its authored marker', () => {
+  it('CONTROL: a leading break with no later break is written canonically', () => {
     expect(carveToCarve('***\n\npara\n')).toBe('***\n\npara\n')
-    expect(carveToCarve('---\n\npara\n')).toBe('---\n\npara\n')
+    expect(carveToCarve('---\n\npara\n')).toBe('***\n\npara\n')
   })
 
   it('CONTROL: real frontmatter is still written as frontmatter', () => {
@@ -72,14 +72,11 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
   })
 
   it('a hoisted footnote definition promoting a `---yaml`-shaped PARAGRAPH', () => {
-    // The head cannot be respelled as a BREAK - it is the paragraph's own text
-    // - so it is escaped instead, which is what carve#1443 changed here: the
-    // run is now literal `---` rather than an em dash, and a bare `---yaml` at
-    // byte 0 would open frontmatter. Escaping the head is enough on its own, so
-    // the closer keeps the `---` the author wrote.
+    // The closer is a break, written `***` (markup-carve/carve#4973), so the
+    // paragraph's `---yaml` head at byte 0 has no closer and needs no escape.
     const src = '[^a]: n\n\n---yaml\nk: v\n---\n'
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toBe('\\-\\-\\-yaml\nk: v\n\n---\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n***\n\n[^a]: n\n')
   })
 
   it('CONTROL: an abbreviation definition is not hoisted, and never was', () => {

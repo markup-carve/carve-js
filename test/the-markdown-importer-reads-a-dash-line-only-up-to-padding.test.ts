@@ -13,14 +13,14 @@ const NOT_PADDING = [
 describe('the Markdown importer reads a dash line only up to space and tab padding', () => {
   it('keeps the ticket repro as one paragraph, a rule and a paragraph', () => {
     const carve = markdownToCarve('---yaml\na: 1\n---\f\n...\n***\nu\n')
-    expect(carve).toBe('\\-\\-\\-yaml\na: 1\n\\-\\-\\-\f\n\\.\\.\\.\n\n---\n\nu\n')
+    expect(carve).toBe('\\-\\-\\-yaml\na: 1\n\\-\\-\\-\f\n\\.\\.\\.\n\n***\n\nu\n')
     // commonmark.js 0.31.2: <p>---yaml\na: 1\n---\f\n...</p>\n<hr />\n<p>u</p>
     expect(carveToHtml(carve)).toBe('<p>---yaml\na: 1\n---\f\n...</p>\n<hr>\n<p>u</p>')
   })
 
   it.each(NOT_PADDING)('closes no frontmatter on `---` followed by %s', (_what, ch) => {
     expect(markdownToCarve(`---yaml\na: 1\n---${ch}\n\nt\n`)).toBe(`\\-\\-\\-yaml\na: 1\n\\-\\-\\-${ch}\n\nt\n`)
-    expect(markdownToCarve(`---\na: 1\n---${ch}\nb\n`)).toBe(`---\n\na: 1\n\\-\\-\\-${ch}\nb\n`)
+    expect(markdownToCarve(`---\na: 1\n---${ch}\nb\n`)).toBe(`***\n\na: 1\n\\-\\-\\-${ch}\nb\n`)
   })
 
   it.each(NOT_PADDING)('reads no setext underline in `---` or `===` followed by %s', (_what, ch) => {
@@ -66,7 +66,7 @@ describe('the Markdown importer reads a dash line only up to space and tab paddi
     ['a closer padded with spaces and tabs', '---yaml\na: 1\n--- \t\n\nt\n', '---yaml\na: 1\n---\n\nt\n'],
     ['a setext h2 underline padded with a tab', 'a\n--- \t\n', '## a\n'],
     ['a setext h1 underline padded with spaces', 'a\n===  \n', '# a\n'],
-    ['a thematic break padded with a tab', 'a\n\n* * *\t\n', 'a\n\n---\n'],
+    ['a thematic break padded with a tab', 'a\n\n* * *\t\n', 'a\n\n***\n'],
     ['a code fence closer padded with spaces', '```\nx\n```  \ny\n', '```\nx\n```\n\ny\n'],
   ])('still reads %s', (_what, md, carve) => {
     expect(markdownToCarve(md)).toBe(carve)

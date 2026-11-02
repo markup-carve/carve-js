@@ -4,9 +4,11 @@ import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 function withoutPos(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutPos)
   if (value === null || typeof value !== 'object') return value
+  // fmt writes every break `***` (PART 11 §6, markup-carve/carve#4973).
+  const isBreak = (value as { type?: unknown }).type === 'thematic_break'
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => key !== 'pos' && key !== 'srcByteLength')
+      .filter(([key]) => key !== 'pos' && key !== 'srcByteLength' && !(isBreak && key === 'marker'))
       .map(([key, child]) => [key, withoutPos(child)]),
   )
 }
@@ -45,7 +47,7 @@ describe('guarded em dashes in item and description paragraphs', () => {
       expect(withoutPos(parse(formatted))).toEqual(withoutPos(parse(source)))
       if (name === 'heading followed by a loose paragraph') {
         // Under rule A (carve#3885) the `---` at column 3 is a thematic break after the list.
-        expect(formatted).toBe('1. ## Foo\n\n   Foo\n\n---\n')
+        expect(formatted).toBe('1. ## Foo\n\n   Foo\n\n***\n')
       }
     })
   }

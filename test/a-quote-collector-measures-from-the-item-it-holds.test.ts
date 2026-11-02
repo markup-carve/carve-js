@@ -31,12 +31,12 @@ const cases: Array<[string, string, string]> = [
     // carve-js#1946 case 3: fmt sets a block leaving the item apart from it.
     'a rule leaving a quoted item is set apart from the list',
     lines('> - beta', '> ---'),
-    lines('> - beta', '>', '> ---'),
+    lines('> - beta', '>', '> ***'),
   ],
   [
     'and with a lazy line in between',
     lines('> - beta', '> gamma', '> ---'),
-    lines('> - beta', '>' + sp(3) + 'gamma', '>', '> ---'),
+    lines('> - beta', '>' + sp(3) + 'gamma', '>', '> ***'),
   ],
   [
     // carve-js#1947 case 1: `quotedIndentedCodeAt` measured from the quote's
@@ -130,7 +130,7 @@ describe('the item column stops where the item does', () => {
     // for the code below to be measured from.
     // cmark-gfm: <blockquote><hr /><pre><code>alpha.
     expect(markdownToCarve(lines('> - ---', '>', '>' + sp(5) + 'alpha'))).toBe(
-      lines('> ---', '>', '> ```', '> alpha', '> ```'),
+      lines('> ***', '>', '> ```', '> alpha', '> ```'),
     )
   })
 

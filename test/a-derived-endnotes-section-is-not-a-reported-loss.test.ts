@@ -49,7 +49,7 @@ describe('a derived endnotes section is not a reported loss', () => {
     // and lost the `<p>` the imported tree recorded. The engine is ahead of the
     // pinned fixture until the next bump; `html-import-conformance.test.ts`
     // carries the matching AHEAD_OF_PIN entry.
-    expect(htmlToCarve(DERIVED).value).toBe('---\n\n{loose}\n1. Note text.\n')
+    expect(htmlToCarve(DERIVED).value).toBe('***\n\n{loose}\n1. Note text.\n')
   })
 
   it('keeps the note text on the page', () => {

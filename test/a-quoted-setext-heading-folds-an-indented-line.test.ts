@@ -94,7 +94,7 @@ describe('a quoted setext heading folds an indented continuation line', () => {
     // sets a heading apart from the block under it (carve-js#2642). The render
     // asserted below is the same either way.
     const out = markdownToCarve(`> foo\n> ${sp(3)}# bar\n> ---\n`)
-    expect(out).toBe('> foo\n>\n> # bar\n>\n> ---\n')
+    expect(out).toBe('> foo\n>\n> # bar\n>\n> ***\n')
     expect(carveToHtml(out)).toMatch(/<h1[^>]*>bar<\/h1>/)
     expect(carveToHtml(out)).toContain('<hr>')
   })

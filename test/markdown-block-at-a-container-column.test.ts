@@ -83,7 +83,7 @@ describe('a block at its container content column', () => {
       expect(carveToHtml(quote)).toContain('<blockquote>')
 
       const rule = markdownToCarve(lines('- a', '  - b', '', sp(4) + '***'))
-      expect(rule).toBe(lines('- a', '  {loose}', '  - b', '', sp(4) + '---'))
+      expect(rule).toBe(lines('- a', '  {loose}', '  - b', '', sp(4) + '***'))
       expect(carveToHtml(rule)).toContain('<hr>')
     })
   })
@@ -133,7 +133,7 @@ describe('a block at its container content column', () => {
   describe('the remaining block branches', () => {
     it('writes a thematic break at the items column', () => {
       const carve = markdownToCarve(lines('- item', '', sp(2) + '***'))
-      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '---'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '***'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<hr>/)
     })
 
@@ -197,7 +197,7 @@ describe('a block at its container content column', () => {
       // a list marker it opened a content column of 2 and padded the rule out
       // to it.
       for (const rule of ['* * *', '- - -', '_ _ _', '***', '___']) {
-        expect(markdownToCarve(rule)).toBe('---')
+        expect(markdownToCarve(rule)).toBe('***')
       }
     })
 

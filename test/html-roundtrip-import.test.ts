@@ -153,7 +153,8 @@ describe('each carrier reconstructs its own node', () => {
   it('data-char restores the break character', () => {
     expect(back('***\n')).toBe('***\n')
     expect(back('___\n')).toBe('___\n')
-    expect(back('---\n')).toBe('---\n')
+    // `-` carries no `data-char`, so the import writes the canonical `***` (markup-carve/carve#4973).
+    expect(back('---\n')).toBe('***\n')
   })
 
   it('data-carve-explicit-id keeps an authored id and leaves a generated one', () => {
@@ -262,7 +263,7 @@ describe('a carrier that cannot be honored is not one', () => {
   it.each([
     ['a marker outside the enumeration', '<ul data-marker="Z"><li>a</li></ul>', '- a\n'],
     ['an ordered marker on a bullet list', '<ul data-marker=")"><li>a</li></ul>', '- a\n'],
-    ['a break character outside the enumeration', '<hr data-char="Z">', '---\n'],
+    ['a break character outside the enumeration', '<hr data-char="Z">', '***\n'],
     ['a malformed reference label', '<p><a href="/u" data-carve-ref="a]b">t</a></p>', '[t](/u)\n'],
     ['an empty reference label', '<p><a href="/u" data-carve-ref="">t</a></p>', '[t](/u)\n'],
     ['a multi-character escape', '<p><span data-carve-escaped>abc</span></p>', 'abc\n'],
@@ -524,7 +525,7 @@ describe('reconstruction is not a trust decision (§13b)', () => {
     // §13a reserves an ENUMERATION, not a prefix pattern: a name under the
     // prefix that the inventory does not list is the author's attribute here
     // and stays one, rather than being eaten as protocol.
-    expect(htmlToCarve('<hr data-carve-invented="1">').value).toBe('{data-carve-invented=1}\n---\n')
+    expect(htmlToCarve('<hr data-carve-invented="1">').value).toBe('{data-carve-invented=1}\n***\n')
     // `data-marker` and `data-char` have no prefixed form at all (ruling 3),
     // so this is an author's attribute and not a second spelling of one.
     expect(htmlToCarve('<ul data-djot-marker="*"><li>a</li></ul>').value).toBe('{data-djot-marker=*}\n- a\n')

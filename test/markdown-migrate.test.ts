@@ -555,7 +555,7 @@ describe('markdownToCarve — GFM tables', () => {
 describe('markdownToCarve — thematic breaks', () => {
   it('normalizes every Markdown thematic-break form to canonical ---', () => {
     for (const md of ['* * *', '- - -', '_ _ _', '***', '___', '---', '----', ' ***', '  ---']) {
-      expect(conv(md)).toBe('---')
+      expect(conv(md)).toBe('***')
     }
   })
 
@@ -566,7 +566,7 @@ describe('markdownToCarve — thematic breaks', () => {
   })
 
   it('keeps the rule as its own block between paragraphs', () => {
-    expect(conv('text\n\n* * *\n\nmore')).toBe('text\n\n---\n\nmore')
+    expect(conv('text\n\n* * *\n\nmore')).toBe('text\n\n***\n\nmore')
   })
 
   it('a contiguous --- underline stays a setext heading, not a rule', () => {
@@ -597,10 +597,10 @@ describe('markdownToCarve — thematic breaks', () => {
   })
 
   it('normalizes a thematic break wrapped in blockquote markers', () => {
-    expect(conv('> * * *')).toBe('> ---')
-    expect(conv('> > _ _ _')).toBe('> > ---')
+    expect(conv('> * * *')).toBe('> ***')
+    expect(conv('> > _ _ _')).toBe('> > ***')
     // Markdown allows up to 3 spaces before the blockquote marker.
-    expect(conv('  > * * *')).toBe('> ---')
+    expect(conv('  > * * *')).toBe('> ***')
     expect(carveToHtml(conv('> * * *'))).toBe('<blockquote>\n  <hr>\n</blockquote>')
     expect(carveToHtml(conv('> a\n> ***\n> b'))).toBe(
       '<blockquote>\n  <p>a</p>\n  <hr>\n  <p>b</p>\n</blockquote>',
