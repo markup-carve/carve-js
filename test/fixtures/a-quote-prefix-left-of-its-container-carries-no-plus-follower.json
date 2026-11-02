@@ -1,0 +1,30 @@
+[
+  {
+    "source": ":: t\n: > 1. +\n>   x\n",
+    "html": "<dl><dt>t</dt><dd><blockquote><ol><li>+</li></ol></blockquote></dd></dl><blockquote><p>x</p></blockquote>"
+  },
+  {
+    "source": ":: t\n: > - +\n>   x\n> y\n",
+    "html": "<dl><dt>t</dt><dd><blockquote><ul><li>+</li></ul></blockquote></dd></dl><blockquote><p>x\ny</p></blockquote>"
+  },
+  {
+    "source": ":: t\n: > 1. +\n  >   x\n",
+    "html": "<dl><dt>t</dt><dd><blockquote><ol><li>+\nx</li></ol></blockquote></dd></dl>"
+  },
+  {
+    "source": "- > 1. +\n>   x\n",
+    "html": "<ul><li><blockquote><ol><li>+</li></ol></blockquote></li></ul><blockquote><p>x</p></blockquote>"
+  },
+  {
+    "source": "> - +\n> x\n",
+    "html": "<blockquote><ul><li>x</li></ul></blockquote>"
+  },
+  {
+    "source": "[^n]: > 1. +\n  >     x\n\n[^n]\n",
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><blockquote><ol><li>x</li></ol></blockquote><p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  },
+  {
+    "source": "[^n]: > 1. +\n>     x\n\n[^n]\n",
+    "html": "<blockquote><p>x</p></blockquote><p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><blockquote><ol><li>+</li></ol></blockquote><p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  }
+]
