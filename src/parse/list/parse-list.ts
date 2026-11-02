@@ -49,6 +49,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
+    commentCloserAhead,
     commentBlockSpans,
     commentFenceRun,
     coveredNoteComment,
@@ -1176,6 +1177,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let childLeadComment = false
     // A span opened on a child's marker line, held until a line below the child's column ends the child.
     let childSpan: { run: number; column: number; state: ItemLazyState['opaque'] } | undefined
+    let childMarkerSpan = false
     const trackDescendantOpaque = (
       line: string,
       opener: string,
@@ -1339,7 +1341,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
     // tracker has to know the comment is open before it reads the next line.
     const leadCommentRun = leadFence ? undefined : commentFenceRun(content)
-    const leadComment = leadCommentRun !== undefined && (commentFenceRun(lexer.peek() ?? '') === leadCommentRun || commentBlockHasCloser(lexer, leadCommentRun))
+    const leadComment = leadCommentRun !== undefined && (commentFenceRun(lexer.peek() ?? '') === leadCommentRun || commentCloserAhead(lexer, leadCommentRun))
       ? leadCommentRun : undefined
     if (leadComment !== undefined) {
       lazyState.opaque = { kind: 'comment', length: leadComment, paragraphBefore: lazyState.lazyFoldable, atColumn: false }
@@ -1365,7 +1367,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // The child's span is a held span to this item too, so its closer below
       // both columns closes it instead of ending the item (CARVE-P0-005).
       const childRun = childLeadComment ? commentFenceRun(bottom)! : undefined
-      if (childRun !== undefined && markerFreeContent(content) === bottom && commentBlockHasCloser(lexer, childRun)) {
+      if (childRun !== undefined && markerFreeContent(content) === bottom && commentCloserAhead(lexer, childRun)) {
         itemSpanScan.opaque = { comment: true, char: '%', run: childRun }
         itemSpanScan.atBlockStart = false
         lazyState.opaque = { kind: 'comment', length: childRun, paragraphBefore: false, atColumn: false }
@@ -2334,12 +2336,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (isMarker && lazyState.opaque === null) {
         const markerContent = markerFreeContent(dedented)
         const run = commentFenceRun(markerContent)
-        if (run !== undefined && commentBlockHasCloser(lexer, run)) {
+        if (run !== undefined && (itemQuoteDepth > 0 ? commentBlockHasCloser : commentCloserAhead)(lexer, run)) {
           const hostColumn = contentCol + markerContentColumn(dedented)
           for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
             const line = lexer.lineAt(at)!
             if (commentFenceRun(line) === run) {
               trackedContent = markerContent
+              childMarkerSpan = true
               break
             }
             if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) {
@@ -2960,6 +2963,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const decision = admitContinuationMarker(l) ?? stopsBeforeBody(l) ?? readQuoteFacts(l) ??
         readDefinitionSource(l) ?? readDefinitionBand(l)
       if (decision !== undefined) return decision
+      // A blank reaches every frame, so no line missed the span's owner: the closer is the span's (carve#4889).
+      if (lw < contentCol && pendingBlankRun.count > 0 && lazyState.opaque?.kind === 'comment' && !childMarkerSpan &&
+          lazyState.opaque !== childSpan?.state && commentFenceRun(l.trimStart()) === lazyState.opaque.length) {
+        for (let k = 0; k < pendingBlankRun.lines.length; k++) {
+          nestedSourceLines.push(pendingBlankRun.lines[k])
+          nested.push(sliceColumns(pendingBlankRun.lines[k] ?? '', contentCol, true))
+          nestedLineNumbers.push(pendingBlankRun.lineNumbers[k]!)
+          trackItemLazyState('', lazyState)
+        }
+        pendingBlankRun.clear()
+        pendingNoteComments = new Set()
+      }
       if (lw >= contentCol && !captionLeafOpen(l) && !ancestorTermBand &&
         !(enclosingLazy && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term')) &&
         !belowOpenDescription && !belowDefinitionEntry && !quoteLazyFramed &&

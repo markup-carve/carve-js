@@ -17,6 +17,7 @@ import {
   RE_BLOCKQUOTE,
   RE_COMMENT_LINE,
   RE_FENCE,
+  LAZY_FRAME,
   RE_HARDBREAKS_OPEN,
   RE_LINE_BLOCK_OPEN,
   RE_ORDERED,
@@ -620,6 +621,69 @@ export function commentBlockHasCloser(lexer: Lexer, fence: number, after: number
   return exactCloserPossible(closerIndex(lexer).comment, fence, after)
 }
 
+/** PART 0 S1 asks for a closer ahead in the DOCUMENT, so a body also sees those past its hosts (carve#4770). */
+export function commentCloserAhead(lexer: Lexer, fence: number, after: number = lexer.pos): boolean {
+  if (commentBlockHasCloser(lexer, fence, after)) return true
+  // A framed line ahead is one a host already took as lazy text, so no span crosses it.
+  return hostCloserIndex(lexer).lastLazy <= after && commentCloserPastHost(lexer, fence)
+}
+
+function commentCloserPastHost(lexer: Lexer, fence: number): boolean {
+  for (let host = lexer.columnParent; host !== undefined; host = host.columnParent) {
+    if (commentBlockHasCloser(host, fence, host.pos - 1)) return true
+  }
+  return false
+}
+
+interface HostCloserIndex {
+  closers: Map<number, number[]>
+  nextBlank: Int32Array
+  lastLazy: number
+}
+
+const hostCloserIndexes = new WeakMap<Lexer, HostCloserIndex>()
+
+function hostCloserIndex(host: Lexer): HostCloserIndex {
+  let index = hostCloserIndexes.get(host)
+  if (index !== undefined) return index
+  const closers = new Map<number, number[]>()
+  const nextBlank = new Int32Array(host.lineCount + 1).fill(host.lineCount)
+  let lastLazy = -1
+  for (let i = host.lineCount - 1; i >= 0; i--) {
+    if (lastLazy < 0 && (host.lineAt(i)!.startsWith(LAZY_FRAME) || host.quoteLazyLines.has(host.lineNumber(i)))) lastLazy = i
+    const line = stripLazyFrame(host.lineAt(i)!)
+    nextBlank[i] = isBlankLine(line) ? i : nextBlank[i + 1]!
+    const run = commentFenceRun(line.replace(/^[ \t]+/, ''))
+    if (run === undefined) continue
+    const rows = closers.get(run)
+    if (rows === undefined) closers.set(run, [i])
+    else rows.push(i)
+  }
+  for (const rows of closers.values()) rows.reverse()
+  index = { closers, nextBlank, lastLazy }
+  hostCloserIndexes.set(host, index)
+  return index
+}
+
+/** As `commentCloserPastHost`, but a blank line past the host ends the search, as a quote's own search does. */
+function quotedCommentCloserPastHost(lexer: Lexer, fence: number): boolean {
+  for (let host = lexer.columnParent; host !== undefined; host = host.columnParent) {
+    const { closers, nextBlank } = hostCloserIndex(host)
+    // A host may end past a blank run it did not keep.
+    const from = host.pos > 0 && isBlankLine(stripLazyFrame(host.lineAt(host.pos - 1) ?? 'x')) ? host.pos - 1 : host.pos
+    const rows = closers.get(fence) ?? []
+    let lo = 0
+    for (let hi = rows.length; lo < hi;) {
+      const mid = (lo + hi) >> 1
+      if (rows[mid]! < from) lo = mid + 1
+      else hi = mid
+    }
+    if (lo < rows.length && rows[lo]! < nextBlank[from]!) return true
+    if (nextBlank[from]! < host.lineCount) return false
+  }
+  return false
+}
+
 /**
  * From a `%%%` opener at line `from`, is there a matching closer BEFORE THE
  * CONTAINER THE OPENER SITS IN ENDS?
@@ -817,17 +881,24 @@ export function commentScopeEnd(
  * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
  */
 export function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
+  let missed = false
   for (let i = fromIndex + 1; i < lexer.lineCount; i++) {
     const line = lexer.lineAt(i)!
     if (isBlankLine(line)) return false
     const quoted = RE_BLOCKQUOTE.exec(line)
     // An open span tests its closer before ownership, so an unmarked closer still closes it (PART 0 S1, corpus 888).
-    if (!quoted) return commentFenceRun(line) === fence
+    // An unmarked line ends the span and the quote, and hides no closer (carve#4872).
+    if (!quoted) {
+      if (commentFenceRun(line) === fence) return true
+      missed = true
+      continue
+    }
+    if (missed && line[0] !== '>') continue
     const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
     if (run && run[1]!.length === fence) return true
   }
 
-  return false
+  return quotedCommentCloserPastHost(lexer, fence)
 }
 
 export function literalCommentHasCloser(lexer: Lexer, width: number, from: number, depth: number, floor: number): boolean {
@@ -865,22 +936,35 @@ export function literalCommentHasCloser(lexer: Lexer, width: number, from: numbe
   // A nonblank line that misses the quote closes the owner's comment before
   // it can become lazy text. A quoted delimiter beyond that boundary still
   // establishes that the opener was a span rather than a line comment.
-  if (run.end >= lexer.lineCount || isBlankLine(lexer.lineAt(run.end)!) ||
-      !run.index.reachesEnd(from - run.start, floor)) return false
+  if (!run.index.reachesEnd(from - run.start, floor)) return false
+  // The search past the quote is an unindented opener's (carve#4872).
+  const pastQuote = floor === 0 && indentColumns(quotedBody(lexer.lineAt(from)!, depth)) === 0
+  if (run.end >= lexer.lineCount) return pastQuote && quotedCommentCloserPastHost(lexer, width)
+  if (isBlankLine(lexer.lineAt(run.end)!)) return false
   for (let i = run.end + 1; i < lexer.lineCount; i++) {
     const line = lexer.lineAt(i)!
-    if (isBlankLine(line)) break
+    if (isBlankLine(line)) return false
     let at = 0
     for (let level = 0; level <= depth; level++) {
-      const prefix = quotePrefixLength(line, at, line.length)
+      const prefix = line[at] === '>' || level > 0 ? quotePrefixLength(line, at, line.length) : 0
       if (prefix === 0) { at = -1; break }
       at += prefix
     }
-    if (at < 0) continue
+    // An unmarked line hides no closer, and an unmarked closer closes (carve#4872).
+    if (at < 0) {
+      if (pastQuote && commentFenceRun(line.replace(/^[ \t]+/, '')) === width) return true
+      continue
+    }
     const content = line.slice(at)
     if (indentColumns(content) >= floor && commentFenceRun(content) === width) return true
   }
-  return false
+  return pastQuote && quotedCommentCloserPastHost(lexer, width)
+}
+
+function quotedBody(line: string, depth: number): string {
+  let at = 0
+  for (let level = 0; level <= depth; level++) at += quotePrefixLength(line, at, line.length)
+  return line.slice(at)
 }
 
 /**

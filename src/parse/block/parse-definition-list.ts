@@ -223,6 +223,7 @@ export function createDefinitionListParser(
     colonFenceOpenerLen,
     colonFenceShapeEndsLazyContinuation,
     commentBlockHasCloser,
+    commentCloserAhead,
     commentFenceRun,
     commentLineContent,
     deflistContentCol,
@@ -961,7 +962,7 @@ export function createDefinitionListParser(
         // line form; the other half of a span the body opened belongs to it, and
         // ending here split the pair so the payload reached the page.
         if (commentFenceRun(below) !== undefined &&
-            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentBlockHasCloser(lexer, run, lexer.pos - 1))) {
+            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) {
           const lineIndex = lexer.pos
           // ONE COLUMN of the authored indentation is kept, as the list collector
           // keeps it, so the body's own parse cannot read a delimiter written below
@@ -1076,7 +1077,7 @@ export function createDefinitionListParser(
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
         if (indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
-            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentBlockHasCloser(lexer, run, lexer.pos - 1))) return 'stop'
+            bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) return 'stop'
         const atDocumentColumn = below === ln
         const original = sourceLineAt(lexer, lexer.pos, ln)
         if (descriptionTermOwnerReached(lazyState.inDefList === 'term', below,
