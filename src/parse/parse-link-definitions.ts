@@ -31,6 +31,7 @@ type PrepassFence = {
   contentCol: number
   quoted: boolean
   scope: PrepassScope
+  onNoteLine?: boolean
 }
 
 type PrepassDiv = {
@@ -209,6 +210,11 @@ export function createLinkDefinitionCollector(
   function fenceHoldsLine(s: LinkDefScan, v: LineRead): boolean {
     const { fence } = s
     if (!fence) return false
+    // A delimiter that left the note opens its own fence, it does not close this one.
+    if (fence.onNoteLine && !isBlankLine(v.raw) && !scopeHoldsLine(fence.scope, v.raw, v.rawQuoteDepth, v.unquoted)) {
+      s.fence = null
+      return false
+    }
     // A line under an open fence is VERBATIM CONTENT, not prose, so no
     // paragraph is open on the line below it - including the closer's own.
     s.paraState = 'no'
@@ -749,16 +755,23 @@ export function createLinkDefinitionCollector(
     // against opaque passthrough content. That is carve-js#634's failure with a
     // different opener. The two lazy-continuation sites already read both
     // patterns; this prepass was the one place that read only one.
-    const open = RE_FENCE.exec(view.deIndented)
-    const rawOpen = open ? null : RE_RAW_FENCE.exec(view.deIndented)
+    // A fence on a note's marker line holds the body below it, at the note's body column.
+    const noteLead = RE_FOOTNOTE_DEF.exec(view.deIndented)?.[2]
+    const opener = noteLead ?? view.deIndented
+    const open = RE_FENCE.exec(opener)
+    const rawOpen = open ? null : RE_RAW_FENCE.exec(opener)
     const run = open ? open[2]! : rawOpen?.[1]
     if (!run || markerFenceIsParagraphText(s, v, lists, para)) return false
+    // A marker that folds into an open paragraph has no note behind it.
+    if (noteLead !== undefined && para.paraWasOpen && markerContentColumn(v.rawTrimmed) >= 0 && !lists.listColsBeforeMarker?.length) return false
+    const noteColumn = noteLead === undefined ? 0 : view.openerCol + FOOTNOTE_BODY_COLUMN
     s.fence = {
       ch: run[0]!,
       len: run.length,
-      contentCol: view.openerCol,
+      contentCol: noteColumn || view.openerCol,
       quoted: v.rawIsQuoted,
-      scope: { quoteDepth: v.rawQuoteDepth, contentCol: view.scopeCol },
+      scope: { quoteDepth: v.rawQuoteDepth, contentCol: noteColumn || view.scopeCol },
+      onNoteLine: noteLead !== undefined,
     }
     s.paraState = 'no'
     return true
@@ -955,7 +968,10 @@ export function createLinkDefinitionCollector(
     const para = paragraphVerdict(s, v, composed, lists, inFootnoteBodyAbove)
     if (quoteAtWrongColumn(s, v.raw)) return
     const view = openerView(s, v, contentCol)
-    if (fenceOpenerTakesLine(s, v, view, lists, para)) return
+    if (fenceOpenerTakesLine(s, v, view, lists, para)) {
+      if (s.fence?.onNoteLine) trackNoteBody(s, v, composed, para.collectsNothing)
+      return
+    }
     trackNoteBody(s, v, composed, para.collectsNothing)
     // A footnote def (`[^label]: body`) is parsed as a block in
     // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
