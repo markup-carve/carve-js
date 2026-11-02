@@ -1186,7 +1186,11 @@ export function createDefinitionListParser(
         // readability, matching djot. The blank is a separator only - it does not
         // end the entry when a `:  ` definition follows.
         if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers,
-          parseSession, comment => { terms.at(-1)?.push(comment) })) break
+          parseSession, comment => {
+            // A skipped comment stays with the entry before it, so spans keep source order.
+            if (definitions.length) definitions.at(-1)!.push(comment)
+            else terms.at(-1)?.push(comment)
+          })) break
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
