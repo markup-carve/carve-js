@@ -109,6 +109,8 @@ const COLON_CLOSER = /^(:{3,})[ \t]*$/
 const PURE_FENCE = /^(`{3,}|~{3,})[ \t]*$/
 const COMMENT_FENCE = /^(%{3,})(.*)$/
 const COMMENT_LINE = /^[ \t]*%%/
+// CARVE-P11-073: a region marker below a list closes every item.
+const REGION_MARKER = /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/
 const NOTE_HEAD = /^\[\^[^\]]+\]: +/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
@@ -282,9 +284,11 @@ function firstBlockTraceRoute(
 }
 
 function invisibleFollowerLine(
-  at: number, lines: string[], abbreviations: Map<number, [string, string]>,
+  at: number, movedSpanEnd: number, lines: string[], abbreviations: Map<number, [string, string]>,
   separatingAbbreviations: Set<number>, comments: Map<number, string>, notes: Set<number>,
 ): string | null {
+  // A moved `%%%` span's body stays its payload.
+  if (at <= movedSpanEnd) return null
   if (abbreviations.has(at)) return separatingAbbreviations.has(at) ? '' : '%%'
   if (comments.has(at)) return comments.get(at)!
   if (notes.has(at)) return lines[at]!
@@ -321,6 +325,8 @@ export function ownLines(
   let runs: { widest: Record<string, number[]>; lastComment: Map<number, number> } | null = null
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
+  let nextVisible = -1
+  let movedSpanEnd = -1
   // Stand-ins for a refused `+` and a folded marker: readers meet a plain letter, the AST gets the character back.
   let letters: string[] | null = null
   // The frames of the host a `+` last attached through. The attached block stands outside
@@ -339,7 +345,7 @@ export function ownLines(
   const overindented: OverindentedOpener[] = []
 
   for (let at = start; at < lines.length; at++) {
-    const invisible = invisibleFollowerLine(at, lines, skippedAbbreviations, separatingAbbreviations, skippedComments, skippedNotes)
+    const invisible = invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, skippedComments, skippedNotes)
     if (invisible !== null) {
       result.push(invisible)
       continue
@@ -368,6 +374,28 @@ export function ownLines(
     const finish = (): void => {
       result.push(out + src)
       if (lineCuts.length) cuts.set(at, lineCuts)
+    }
+
+    // A comment or one-line definition closes no indentation frame: the next
+    // visible line picks the owner (CARVE-P9-013).
+    const standInvisibleLine = (from: number, atPlus: boolean): number => {
+      const standAt = (col: number): void => {
+        lineCuts.push({ at: out.length, removed: src.length - m.rest.length - col })
+        src = ' '.repeat(col) + m.rest
+        m = indentCols(src)
+      }
+      if (at <= movedSpanEnd) {
+        // The rest of a matched `%%%` span moves with its opener.
+        standAt(top().col)
+        return frames.length - 1
+      }
+      if (atPlus || from === frames.length - 1 || top().kind === 'fence' || !transparentLine(m.rest, at)) return from
+      // A line that misses an open fence's owner ends that fence first (S1), so it is read where it stands.
+      const deeper = nextVisibleReach(at, from)
+      if (deeper === from) return from
+      standAt(frames[deeper]!.col)
+      movedSpanEnd = commentSpanEnd(trimEndSpaceTab(m.rest), at)
+      return deeper
     }
 
     endAttachedColonAtSibling()
@@ -419,6 +447,7 @@ export function ownLines(
       src = ' '.repeat(stripped) + m.rest
       m = indentCols(src)
     }
+    reached = standInvisibleLine(reached, plus !== null)
     if (!plus && attachedHost && CONT_MARKER.test(m.rest)) plus = reopenAttachedHost(attachedHost)
     if (plus) {
       // S2: a lone `+` at a marker column (CARVE-P9-067).
@@ -985,6 +1014,53 @@ export function ownLines(
       if (host === 'dd' && (DD.test(rest) || DEFLIST_TERM.test(rest))) return decide('sibling')
       return decide(null)
     }
+  }
+
+  function transparentLine(rest: string, k: number): boolean {
+    const text = trimEndSpaceTab(rest)
+    if (REGION_MARKER.test(text) || FOOTNOTE_DEF.test(text)) return false
+    return commentSpanEnd(text, k) !== -1 || COMMENT_LINE.test(text) || isLinkDefLine(text) || RE_ABBR_DEF.test(text)
+  }
+
+  function commentSpanEnd(text: string, k: number): number {
+    const comment = COMMENT_FENCE.exec(text)
+    if (!comment || (closerRuns().lastComment.get(comment[1]!.length) ?? -1) <= k) return -1
+    for (let j = k + 1; j < lines.length; j++) {
+      const close = COMMENT_FENCE.exec(trimEndSpaceTab(lines[j]!).replace(/^[ \t>]*/, ''))
+      if (close && close[1]!.length === comment[1]!.length) return j
+    }
+    return -1
+  }
+
+  // How deep the next visible line reaches through the indentation frames below `from`.
+  function nextVisibleReach(at: number, from: number): number {
+    const unquoted = (line: string): string => indentCols(line.replace(/^[ \t>]*(?=>)>? ?/, '')).rest
+    if (nextVisible <= at) {
+      const own = commentSpanEnd(trimEndSpaceTab(unquoted(lines[at]!)), at)
+      nextVisible = (own === -1 ? at : own) + 1
+      for (; nextVisible < lines.length; nextVisible++) {
+        const text = trimEndSpaceTab(unquoted(lines[nextVisible]!))
+        if (text === '') continue
+        const span = commentSpanEnd(text, nextVisible)
+        if (span !== -1) nextVisible = span
+        else if (!transparentLine(text, nextVisible)) break
+      }
+    }
+    if (nextVisible >= lines.length) return from
+    let depth = 0
+    for (let k = 1; k <= from; k++) if (frames[k]!.kind === 'quote') depth++
+    let next = indentCols(lines[nextVisible]!)
+    for (let q = 0; q < depth; q++) {
+      if (!isQuoteLine(next.rest)) return from
+      next = indentCols(quoteRest(next.rest))
+    }
+    let deepest = from
+    for (let k = from + 1; k < frames.length; k++) {
+      const frame = frames[k]!
+      if ((frame.kind !== 'item' && frame.kind !== 'dd' && frame.kind !== 'note') || next.col < frame.col) break
+      deepest = k
+    }
+    return deepest
   }
 
   // A line's text inside `quotes` quote prefixes, or undefined where one is missing.

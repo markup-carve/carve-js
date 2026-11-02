@@ -2,12 +2,12 @@
   {
     "id": "audit-0",
     "source": "> - ::: box\n>   a\n> %% note\n>   :::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-1",
     "source": "> - ::: box\n>   a\n>  %% note\n>   :::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-2",
@@ -72,12 +72,12 @@
   {
     "id": "audit-14",
     "source": "> - :::: box\n>   a\n> %% note\n>   ::::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-15",
     "source": "> - :::: box\n>   a\n>  %% note\n>   ::::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-16",
@@ -142,12 +142,12 @@
   {
     "id": "audit-28",
     "source": "> - ::::: box\n>   a\n> %% note\n>   :::::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-29",
     "source": "> - ::::: box\n>   a\n>  %% note\n>   :::::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-30",
@@ -212,12 +212,12 @@
   {
     "id": "audit-42",
     "source": "> > - ::: box\n> >   a\n> > %% note\n> >   :::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-43",
     "source": "> > - ::: box\n> >   a\n> >  %% note\n> >   :::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-44",
@@ -282,12 +282,12 @@
   {
     "id": "audit-56",
     "source": "> > - :::: box\n> >   a\n> > %% note\n> >   ::::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-57",
     "source": "> > - :::: box\n> >   a\n> >  %% note\n> >   ::::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-58",
@@ -352,12 +352,12 @@
   {
     "id": "audit-70",
     "source": "> > - ::::: box\n> >   a\n> > %% note\n> >   :::::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-71",
     "source": "> > - ::::: box\n> >   a\n> >  %% note\n> >   :::::\n- tail\n",
-    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-72",
@@ -422,12 +422,12 @@
   {
     "id": "audit-84",
     "source": "> > > - ::: box\n> > >   a\n> > > %% note\n> > >   :::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-85",
     "source": "> > > - ::: box\n> > >   a\n> > >  %% note\n> > >   :::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-86",
@@ -492,12 +492,12 @@
   {
     "id": "audit-98",
     "source": "> > > - :::: box\n> > >   a\n> > > %% note\n> > >   ::::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-99",
     "source": "> > > - :::: box\n> > >   a\n> > >  %% note\n> > >   ::::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-100",
@@ -562,12 +562,12 @@
   {
     "id": "audit-112",
     "source": "> > > - ::::: box\n> > >   a\n> > > %% note\n> > >   :::::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-113",
     "source": "> > > - ::::: box\n> > >   a\n> > >  %% note\n> > >   :::::\n- tail\n",
-    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul><div></div></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"box\"><p>a</p></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-114",

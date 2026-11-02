@@ -8,16 +8,16 @@ const note = (body: string) => '<section role="doc-endnotes" aria-label="Footnot
 const ref = '<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
 
 // carve-js#4015: with no exact-width closer ahead, the opener is one line comment (CARVE-P9-053),
-// so the wider run below the column is a comment that closes the body (CARVE-P9-052).
-it('closes a description on a wider comment run below a closerless opener', () => {
+// so the wider run below the column is a comment that closes nothing (carve#4862).
+it('keeps a description past a wider comment run below a closerless opener', () => {
   expect(normalize(carveToHtml(':: t\n: head\n\n  %%%\n%%%%%\n  tail\n'))).toBe(normalize(
-    '<dl><dt>t</dt><dd>head</dd></dl><p>tail</p>',
+    '<dl><dt>t</dt><dd><p>head</p><p>tail</p></dd></dl>',
   ))
 })
 
-it('closes a note body on a wider comment run below a closerless opener', () => {
+it('keeps a note body past a wider comment run below a closerless opener', () => {
   expect(normalize(carveToHtml('[^f]: head\n  %%%%\n%%%%%%\n  tail\n\nx[^f]\n'))).toBe(normalize(
-    `<p>tail</p>${ref}${note('<p>head')}`,
+    `${ref}${note('<p>head</p><p>tail')}`,
   ))
 })
 

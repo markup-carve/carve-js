@@ -4,23 +4,23 @@ import { carveToHtml } from '../src/index.js'
 const cases = [
   {
     "source": "- ::: box\n  :::\n %% c\n  text\n",
-    "html": "<ul><li><div class=\"box\"></div></li></ul><p>text</p>"
+    "html": "<ul><li><div class=\"box\"></div>\n    text\n  </li></ul>"
   },
   {
     "source": "- # h\n %% c\n  text\n",
-    "html": "<ul><li><h1 id=\"h\">h</h1></li></ul><p>text</p>"
+    "html": "<ul><li><h1 id=\"h\">h</h1>\n    text\n  </li></ul>"
   },
   {
     "source": "- ```\n  x\n  ```\n %% c\n  text\n",
-    "html": "<ul><li><pre><code>x\n</code></pre></li></ul><p>text</p>"
+    "html": "<ul><li><pre><code>x\n</code></pre>\n    text\n  </li></ul>"
   },
   {
     "source": "- a\n %% c\n  text\n",
-    "html": "<ul><li>a</li></ul><p>text</p>"
+    "html": "<ul><li>a\n    text\n  </li></ul>"
   },
   {
     "source": "- a\n\n %% c\n  text\n",
-    "html": "<ul><li>a</li></ul><p>text</p>"
+    "html": "<ul><li><p>a</p><p>text</p></li></ul>"
   },
   {
     "source": "- outer\n  - para\n\n  text\n\n    ```\n",
@@ -36,23 +36,23 @@ const cases = [
   },
   {
     "source": "- ::: box\n  :::\n%% c\n  text\n",
-    "html": "<ul><li><div class=\"box\"></div></li></ul><p>text</p>"
+    "html": "<ul><li><div class=\"box\"></div>\n    text\n  </li></ul>"
   },
   {
     "source": "- # h\n%% c\n  text\n",
-    "html": "<ul><li><h1 id=\"h\">h</h1></li></ul><p>text</p>"
+    "html": "<ul><li><h1 id=\"h\">h</h1>\n    text\n  </li></ul>"
   },
   {
     "source": "- ```\n  x\n  ```\n%% c\n  text\n",
-    "html": "<ul><li><pre><code>x\n</code></pre></li></ul><p>text</p>"
+    "html": "<ul><li><pre><code>x\n</code></pre>\n    text\n  </li></ul>"
   },
   {
     "source": "- a\n%% c\n  text\n",
-    "html": "<ul><li>a</li></ul><p>text</p>"
+    "html": "<ul><li>a\n    text\n  </li></ul>"
   },
   {
     "source": "- a\n\n%% c\n  text\n",
-    "html": "<ul><li>a</li></ul><p>text</p>"
+    "html": "<ul><li><p>a</p><p>text</p></li></ul>"
   },
   {
     "source": "- outer\n  - para\n\n  text\n\n    ~~~\n",

@@ -46,7 +46,7 @@ function advanceToEntry(
   lexer: Lexer, entry: RegExp, helpers: typeof definitionListHelpers,
   session: DefinitionListSession, keepComment: (comment: Comment) => void,
 ): boolean {
-  const { RE_ABBR_DEF, RE_COMMENT_LINE, RE_COMMENT_BLOCK_ANY, isLinkDefLine,
+  const { RE_ABBR_DEF, RE_COMMENT_LINE, RE_COMMENT_BLOCK_ANY, RE_FOOTNOTE_DEF, isLinkDefLine,
     commentBlockHasCloser, stripLazyFrame } = helpers
   let next = lexer.pos
   let blanks = 0
@@ -65,7 +65,8 @@ function advanceToEntry(
     }
     const abbr = lexer.atDocumentLevel ? RE_ABBR_DEF.exec(line) : null
     if (abbr) abbreviations.push([next, abbr[1]!, abbr[2]!])
-    else if (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line)) break
+    // A footnote definition opens a frame, so it ends the list (CARVE-P9-013).
+    else if (RE_FOOTNOTE_DEF.test(line) || (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line))) break
     const fence = RE_COMMENT_BLOCK_ANY.exec(line)?.[1]
     if (fence && commentBlockHasCloser(lexer, fence.length, next)) {
       for (let at = next + 1; at < lexer.lineCount; at++) {
