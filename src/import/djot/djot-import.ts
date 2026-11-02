@@ -566,9 +566,19 @@ function widenLetterDotChain(lines: string[], masked: string[], i: number): void
   }
 }
 
+const quoteDepth = (line: string): number => (/^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].match(/>/g) ?? []).length
+
 function convertDjotBlockMarkers(source: string): string {
   const lines = source.split('\n')
-  const masked = maskDjotCodeAndDestinations(source).split('\n')
+  const mask = maskDjotCodeAndDestinations(source)
+  const masked = mask.split('\n')
+  // A line that continues a Djot paragraph is text, so its marker spelling stays as written.
+  // An earlier pass writes `{loose}` or a held attribute only above a block start; read it as a blank.
+  const scanned = source.replace(/^([ \t>]*)(?:\{[^\n]*\}|\x00[^\n]*\x00)[ \t]*$/gm, (line, prefix: string) => prefix + ' '.repeat(line.length - prefix.length))
+  const starts = /[A-Za-z]\. |\([0-9A-Za-z]+\)/.test(source)
+    ? new Set(djotInlineBoundaries(scanned, maskDjotCodeAndDestinations(scanned), true)) : undefined
+  const lineStarts: number[] = []
+  for (let i = 0, at = 0; i < lines.length; at += lines[i]!.length + 1, i++) lineStarts.push(at)
   const containers: { width: number; invalid: boolean }[] = []
   const nested: boolean[] = []
   const ancestors: { columns: number; marker: boolean }[] = []
@@ -589,9 +599,11 @@ function convertDjotBlockMarkers(source: string): string {
     if ((masked[i] ?? '').trim() === '') continue
     const contentAt = /^[ \t]*/.exec(lines[i]!)![0].length
     if (masked[i]![contentAt] !== lines[i]![contentAt]) continue
+    // The layout pass escapes a `>` that continues a paragraph, so a deeper quote opens a block.
+    const continuesParagraph = starts !== undefined && !starts.has(lineStarts[i]!) && quoteDepth(masked[i]!) <= quoteDepth(masked[i - 1] ?? '')
     // Djot takes one space after a letter-dot marker and Carve two (carve#4811), at every
     // marker of the line's chain (`- a. x`, `J. R. x`). Djot puts no attributes on a marker.
-    widenLetterDotChain(lines, masked, i)
+    if (!continuesParagraph) widenLetterDotChain(lines, masked, i)
     let view = lines[i]!
     const prefix =
       /^(?:[ \t]*> ?|[ \t]*(?:(?:[-*+]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-zA-Z])[.)]|\([0-9A-Za-z]+\)) +(?:\[[ xX]\] +)?|: |\[\^[^\]\r\n]+\]: +))/
@@ -621,7 +633,7 @@ function convertDjotBlockMarkers(source: string): string {
       }
     }
     const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,}))\)([ \t]+\S.*)$/.exec(masked[i]!)
-    if (enclosed) {
+    if (enclosed && !continuesParagraph) {
       const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,}))\)([ \t]+\S.*)$/.exec(lines[i]!)
       if (authored)
         lines[i] = `${authored[1]}${enclosed[1] === '' && nested[i] ? authored[2] : ''}${authored[3]}.${authored[4]}`
