@@ -2269,17 +2269,21 @@ function convertInline(
     if (reference.startsWith('^')) return protect(match, match)
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
-    const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
+    const written = reference || (!/\]/.test(preceding) ? preceding : undefined)
+    const label = written === undefined ? undefined : withoutQuoteMarkers(written)
     const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label)
       || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) : undefined
     const sourceLabel = referenceSourceLabel(reference, protectedSpans)
     if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
+    // A label written back differently from its source (a literal backslash) only matches as source text.
+    const authoredLabel = label === undefined ? undefined : referenceSourceLabel(label, protectedSources)
+    if (authoredLabel !== undefined && referenceInlineTarget(authoredLabel, table) !== undefined) return referenceTail(authoredLabel, match)
     const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
     if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
       return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
     }
-    const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
+    const keepCollapsed = reference === '' && written === canonical && /^[\w\s-]+$/u.test(written ?? '')
     if (canonical === undefined || /[\[\]]/.test(canonical)) {
       const tablePipe = table && referenceSourceText(reference, protectedSpans).includes('|')
       if (sourceLabel !== undefined && !tablePipe) return protect(match, match)
@@ -2378,7 +2382,7 @@ function convertInline(
   const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans, protectedSources)
   let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
-  line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
+  line = line.replace(/(?<![!\\\]])\[([^[\]]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
     while (referenceUrlAt < referenceUrls.length && referenceUrls[referenceUrlAt]!.end <= offset) referenceUrlAt++
     const url = referenceUrls[referenceUrlAt]
     if (url && offset >= url.start && offset < url.end) return match
@@ -2395,7 +2399,7 @@ function convertInline(
     if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
-    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSources, table)
+    const destinationLabel = referenceDestinationLabel(withoutQuoteMarkers(label), decodeHtmlEntitiesRaw, protectedSources, table)
     if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
     if (/[\[\]]/.test(destinationLabel)) return match
     if (url && offset < url.start) {
@@ -2768,6 +2772,11 @@ function writeHtmlCodeMarkup(
 }
 
 /** Spell the backslashes between protected spans and native tags as the writer does. */
+/** A label wrapped inside a quote still carries the `>` markers of its continuation lines; they are not label text. */
+function withoutQuoteMarkers(label: string): string {
+  return label.includes('\n') ? label.replace(/\n {0,3}(?:>[ \t]?)+/g, '\n') : label
+}
+
 function respellTextBackslashes(line: string): string {
   let spelled = ''
   for (let at = 0; at < line.length;) {
@@ -6104,11 +6113,13 @@ function closeFence(out: string[], openerAt: number, pad: string, info: string, 
 function fenceInfo(rest: string, sourceLine?: number): string {
   const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
   rest = rest.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
-  const firstInfoWord = trimMatchingEdges(rest, (code) => code === 32 || code === 9).split(/[ \t]/, 1)[0] ?? ''
-  if (!firstInfoWord || /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord)) return firstInfoWord
+  const infoWord = trimMatchingEdges(rest, (code) => code === 32 || code === 9).split(/[ \t]/, 1)[0] ?? ''
+  // CommonMark 0.31 renders `language-js` as class `language-js`, not `language-language-js`.
+  const firstInfoWord = infoWord.startsWith('language-') ? infoWord.slice(9) : infoWord
+  if (!infoWord || firstInfoWord && /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord)) return firstInfoWord
   importLosses.push({
     code: 'structure-unspellable',
-    message: `Dropped code-block language ${JSON.stringify(firstInfoWord)}; Carve cannot spell this language token.`,
+    message: `Dropped code-block language ${JSON.stringify(infoWord)}; Carve cannot spell this language token.`,
     ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
   return ''
@@ -6645,7 +6656,7 @@ function htmlBlockAt(
 
   if (trimmed.startsWith('<!--')) return collectUntil(/-->/, false)
   if (/^<\?/.test(trimmed)) return collectUntil(/\?>/, false)
-  if (/^<![A-Z]/.test(trimmed)) return collectUntil(/>/, false)
+  if (/^<![A-Za-z]/.test(trimmed)) return collectUntil(/>/, false)
   if (trimmed.startsWith('<![CDATA[')) return collectUntil(/\]\]>/, false)
 
   const raw = /^<([A-Za-z][A-Za-z0-9-]*)(?=[ \t>]|$)/.exec(trimmed)
