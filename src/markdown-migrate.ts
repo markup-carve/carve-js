@@ -7774,7 +7774,63 @@ function referenceSeparatedListStarts(
     }
     previous = at
   }
+  for (const at of commentSeparatedListStarts(kept)) starts.add(at)
   return starts
+}
+
+/**
+ * List items a comment-only HTML block parts from the list above (carve#4917).
+ * In Markdown the comment ends the list when it stands left of the item's
+ * content column; a Carve comment does not, so the importer writes the list
+ * boundary before the next list.
+ */
+function commentSeparatedListStarts(source: readonly string[]): number[] {
+  const marker = /^([ \t]*)([-*+]|\d{1,9}[.)])(?:[ \t]+|$)/
+  const quotes = source.map(line => blockquotePrefix(stripOptionalQuoteIndent(line)))
+  const prefixes = quotes.map(quote => quote?.prefix ?? '')
+  const lines = source.map((line, at) => quotes[at]?.text ?? line)
+  const starts: number[] = []
+  for (let item = 0; item < lines.length; item++) {
+    const opened = marker.exec(lines[item]!)
+    if (opened === null) continue
+    const indent = columnWidth(opened[1]!)
+    const contentCol = itemContentColumn(opened[0])
+    let comment = false
+    let previousBlank = false
+    for (let at = item + 1; at < lines.length; at++) {
+      const line = lines[at]!
+      if (prefixes[at] !== prefixes[item]) break
+      if (line.trim() === '') { previousBlank = true; continue }
+      const lineIndent = indentColumns(line)
+      const end = lineIndent >= indent && lineIndent < contentCol ? commentBlockEnd(lines, at) : null
+      if (end !== null) {
+        comment = true
+        previousBlank = false
+        at = end
+        continue
+      }
+      if (comment) {
+        // Any marker that is not indented code opens the next list.
+        if (lineIndent >= indent && lineIndent - indent <= 3 && marker.test(line)) starts.push(at)
+        break
+      }
+      const lazy = !previousBlank && lineIndent < contentCol && !/^[ \t]*(?:[>#<]|`{3}|~{3}|[-*+][ \t]|\d{1,9}[.)][ \t])/.test(line)
+      if (lineIndent < contentCol && !lazy) break
+      previousBlank = false
+    }
+  }
+  return starts
+}
+
+/** The last line of the comment-only HTML block opening at `at`, or null. */
+function commentBlockEnd(lines: readonly string[], at: number): number | null {
+  if (!/^ {0,3}<!--/.test(lines[at]!.replace(/^[ \t]*(?= {0,3}<)/, ''))) return null
+  for (let end = at; end < lines.length; end++) {
+    if (!lines[end]!.includes('-->') || end === at && lines[at]!.indexOf('-->') < lines[at]!.indexOf('<!--') + 4) continue
+    const match = /^[ \t]*<!--([\s\S]*?)-->[ \t]*$/.exec(lines.slice(at, end + 1).join('\n'))
+    return match && !match[1]!.includes('<!--') && !match[1]!.includes('-->') && !/^[ \t]*<!-- carve:/.test(lines[at]!) ? end : null
+  }
+  return null
 }
 
 /** What the phases of one source line hand each other. */
@@ -8405,6 +8461,16 @@ function writeHeldBlock(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
       }).line)
     }
     i = contained.end
+    if (contained.prefix.includes('>')) {
+      let next = i + 1
+      while (next < lines.length && /^[ \t>]*$/.test(lines[next]!)) next++
+      if (st.referenceSeparatedLists.has(next)) {
+        const blank = contained.prefix.slice(0, contained.prefix.lastIndexOf('>') + 1)
+        for (let k = 0; k < 3; k++) out.push(blank)
+        const quote = blockquotePrefix(stripOptionalQuoteIndent(lines[next]!))
+        if (quote) quoteMarkers.get(quote.prefix)?.end(indentColumns(quote.text))
+      }
+    }
     if (markdown.endsWith('\n') && i >= lines.length - 2) st.terminalHtmlBlock = true
     st.prevType = contained.prefix.trimStart().startsWith('>') ? 'block_quote' : 'list'
     return i
