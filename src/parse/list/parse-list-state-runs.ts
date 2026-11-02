@@ -165,8 +165,9 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     if (!state.descriptionHasTerm || state.descriptionColumn === undefined ||
         run === undefined || runColumns === undefined || runColumns < state.descriptionColumn) return false
     const text = content.slice(run)
+    const term = RE_DEFLIST_TERM.test(text)
     // A deeper authored run can still belong to the description's inline fence paragraph.
-    if (!(RE_HEADING.test(text) || RE_DEFLIST_TERM.test(text) || RE_HR.test(text) || isTableRow(text) ||
+    if (!(RE_HEADING.test(text) || term || RE_HR.test(text) || isTableRow(text) ||
         (isBlockAttributeLine(text) && !(state.ownedAuthored && state.ownedColumn > state.descriptionColumn)) ||
         colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text))) return false
     state.ownedColumn = state.descriptionColumn
@@ -176,7 +177,8 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     trackItemLazyState(text, inner)
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
-    state.inDefList = false
+    // A term in the description body ends its paragraph, not the description (carve#4861, carve-js#4243).
+    if (!term) state.inDefList = false
     return true
   }
 
