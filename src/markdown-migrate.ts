@@ -8582,8 +8582,9 @@ function writeHeldBlock(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
   const contained = containerHtmlBlockAt(lines, i, listCols, quoteMarkers)
   if (contained) {
     // An item interrupting a paragraph of its quote is set apart from it.
-    const above = i > 0 && contained.openerPrefix !== undefined ? blockquotePrefix(stripOptionalQuoteIndent(lines[i - 1]!)) : null
-    if (above !== null && above.text.trim() !== '' && (quotedItemColumns(lines)[i - 1] ?? 0) === 0 &&
+    const written = out.at(-1)
+    const above = contained.openerPrefix !== undefined && written !== undefined ? blockquotePrefix(written) : null
+    if (above !== null && above.text.trim() !== '' && indentColumns(above.text) === 0 && !RE_ITEM_LINE.test(above.text) &&
       contained.openerPrefix!.startsWith(above.prefix) && opensParagraph(above.text)) out.push(above.prefix.trimEnd())
     const converted = markdownHtmlBlock(contained.lines, st.sourceLine(i))
     const prefix = contained.prefix.includes('>') ? contained.prefix

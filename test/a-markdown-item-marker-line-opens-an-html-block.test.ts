@@ -77,6 +77,10 @@ describe('a Markdown item marker line opens an HTML block', () => {
     expect(carveToHtml(written)).toBe('<blockquote>\n  <p>hello</p>\n  <ul>\n    <li>\n      <div>\nx\n    </li>\n  </ul>\n</blockquote>')
   })
 
+  it('sets an item apart from a quoted paragraph a lazy line continued', () => {
+    expect(markdownToCarve('> hello\nlazy\n> - <div>\n')).toBe('> hello\n> lazy\n>\n> - ```=html\n>   <div>\n>   ```\n')
+  })
+
   it('counts a tab after the content column as the columns it covers', () => {
     const written = markdownToCarve('- a\n\n  \t<div>\n')
     expect(written).toBe('{loose}\n- a\n\n  ```=html\n  <div>\n  ```\n')
