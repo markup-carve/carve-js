@@ -70,8 +70,10 @@ for (const depth of [1, 2]) {
     })
     it(`admits a descendant line block with paired ${run} at depth ${depth}`, () => {
       const source = `${quote}- ::: box\n${quote}  - ::: |\n${quote}    ${run}\n${quote}    :::\n${quote}    ${run}\n${quote}    :::\n${quote}    :::bad\n${quote}    :::\n- tail\n`
-      expect(parse(source).children).toHaveLength(1)
-      expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+      // The bare run below `:::bad` opens a div, so `- tail` is a list of its own (carve#4863).
+      expect(parse(source).children).toHaveLength(2)
+      expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
+      expect(carveToHtml(source)).toContain('<li>tail</li>')
       expect(carveToHtml(source)).toContain('class="line-block"')
     })
   }
@@ -97,11 +99,12 @@ for (const depth of [1, 2]) for (const payload of ['x', '%%%', '```', '- marker'
   it(`keeps literal ${payload} from changing the malformed paragraph owner at depth ${depth}`, () => {
     const quote = '> '.repeat(depth)
     const source = `${quote}- ::: |\n${quote}  ${payload}\n${quote}  :::\n${quote}  :::bad\n${quote}  :::\n- tail\n`
-    expect(parse(source).children).toHaveLength(1)
+    expect(parse(source).children).toHaveLength(2)
     const list = quotedList(source, depth)
     expect(list.items).toHaveLength(1)
-    expect(list.items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph'])
-    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+    expect(list.items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph', 'div'])
+    expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
+    expect(carveToHtml(source)).toContain('<li>tail</li>')
   })
 }
 
@@ -160,10 +163,11 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```', '~~~']) {
   const quote = '> '.repeat(depth)
   it(`retains the malformed paragraph after a closed ${fence} span at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  ${fence}\n${quote}  :::\n${quote}  ${fence}\n${quote}  :::\n${quote}  :::bad\n${quote}  :::\n- tail\n`
-    expect(parse(source).children).toHaveLength(1)
+    expect(parse(source).children).toHaveLength(2)
     expect(quotedList(source, depth).items).toHaveLength(1)
-    expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph'])
-    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+    expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph', 'div'])
+    expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
+    expect(carveToHtml(source)).toContain('<li>tail</li>')
   })
   it(`keeps the lazy tail in verse after a closed ${fence} span at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  ${fence}\n${quote}  :::\n${quote}  ${fence}\n${quote}  x\ntail\n`
@@ -179,8 +183,9 @@ for (const mode of ['box', '|']) for (const closer of [2, 4]) for (const quote o
   it(`restores malformed paragraph ownership after ${mode} at closer ${closer}, quote ${quote}`, () => {
     const tail = quote === '' ? 'tail' : '- tail'
     const source = `${quote}- a\n${quote}    ::: ${mode}\n${quote}    x\n${quote}${' '.repeat(closer)}:::\n${quote}  :::bad\n${quote}  :::\n${tail}\n`
-    expect(parse(source).children).toHaveLength(1)
-    expect(carveToHtml(source)).toContain(`:::bad\n:::\n${tail}`)
+    expect(parse(source).children).toHaveLength(2)
+    expect(carveToHtml(source)).toMatch(/:::bad\n\s*<div>\n\n\s*<\/div>/)
+    expect(carveToHtml(source)).toContain(quote === '' ? '<p>tail</p>' : '<li>tail</li>')
   })
 }
 

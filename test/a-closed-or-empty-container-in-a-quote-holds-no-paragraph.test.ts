@@ -99,12 +99,12 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
-  it('CONTROL an ABSORBED colon fence keeps the quoted paragraph open across prose', () => {
+  it('CONTROL a bare run below a malformed opener opens a div and ends the quoted paragraph', () => {
     // Corpus 260. `:::note` fails §12's opener test (a type word needs a
-    // space), so it is paragraph text and the paragraph then absorbs the bare
-    // run below it - across the prose line in between.
+    // space), so it is paragraph text; it leaves no state, and the bare run
+    // below it opens a div (carve#4863).
     expect(html('> quote\n> :::note\n> body\n> :::\ntail\n')).toBe(
-      '<blockquote><p>quote\n:::note\nbody\n:::\ntail</p></blockquote>',
+      '<blockquote>\n  <p>quote\n:::note\nbody</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -126,44 +126,34 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
-  it('counts the open containers, so a malformed fence INSIDE one does not arm absorption', () => {
-    // The bare run below a CLOSED container is that container's sibling, not
-    // absorbed text, and only a divDepth counter tells the two apart: with the
-    // closer branch gone the run reads as another OPENER, the depth never
-    // returns to 0, and the malformed `:::note` two lines down stops arming
-    // absorption. The TOP LEVEL is the arbiter here and gives this same answer.
+  it('counts the open containers, so the bare run below a closed one is a sibling opener', () => {
+    // The TOP LEVEL is the arbiter here and gives this same answer.
     const quoted = '> ::: note\n> body\n> :::\n> :::note\n> x\n> :::\ntail\n'
     expect(html(quoted)).toBe(
-      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>body</p>\n  </aside>\n  <p>:::note\nx\n:::\ntail</p>\n</blockquote>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>body</p>\n  </aside>\n  <p>:::note\nx</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>tail</p>',
     )
     expect(html('::: note\nbody\n:::\n:::note\nx\n:::\ntail\n')).toBe(
-      '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>\n<p>:::note\nx\n:::\ntail</p>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>\n<p>:::note\nx</p>\n<div>\n  <p>tail</p>\n</div>',
     )
   })
 
-  it('closes a container only on an EXACT bare-run width, so a shorter run stays absorbable text', () => {
+  it('closes a container only on an EXACT bare-run width, so a shorter run opens a nested one', () => {
     // `collectColonFenceBody` matches a closer on the EXACT opener width, so
     // inside a `::::` container a bare `:::` is a NESTED OPENER, not the
-    // closer - and after a malformed `:::note` above it, §12 absorption takes
-    // it as text and the paragraph stays open. A plain open-container COUNT
-    // read it as the closer and ended the quote. The top level and the list
-    // item both fold here, and now so does the quote.
+    // closer, after a malformed `:::note` as well (carve#4863).
     const source = (prefix: string) =>
       [':::: outer', ':::note', 'x', ':::'].map(prefix ? (l) => prefix + l : (l) => l).join('\n') +
       '\ntail\n'
     expect(html(source(''))).toBe(
-      '<div class="outer">\n  <p>:::note\nx\n:::\ntail</p>\n</div>',
+      '<div class="outer">\n  <p>:::note\nx</p>\n  <div>\n    <p>tail</p>\n  </div>\n</div>',
     )
     expect(html(source('> '))).toBe(
-      '<blockquote>\n  <div class="outer">\n    <p>:::note\nx\n:::\ntail</p>\n  </div>\n</blockquote>',
+      '<blockquote>\n  <div class="outer">\n    <p>:::note\nx</p>\n    <div>\n\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
 
-  it('takes a bare run at the container width as the CLOSER even while absorption is armed', () => {
-    // The closer branch has to be tested BEFORE the absorb branch, or a run
-    // that closes the container is absorbed as text instead and the quote runs
-    // on. Both branches leave no open paragraph on their own, so this is the
-    // one shape that tells them apart. The top level answers the same way.
+  it('takes a bare run at the container width as the CLOSER after a malformed opener', () => {
+    // The top level answers the same way.
     expect(html('> ::: note\n> :::x\n> :::\ntail\n')).toBe(
       '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>:::x</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
@@ -172,22 +162,20 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
-  it('does not close a container on a LONGER bare run, which stays absorbable text', () => {
-    // `>=` is the CODE fence's closer rule, not the colon fence's, and it
-    // passes every shape above. A `::::` inside a `:::` container is not its
-    // closer, so §12 absorption takes it and the paragraph stays open.
+  it('does not close a container on a LONGER bare run, which opens a nested one', () => {
+    // `>=` is the CODE fence's closer rule, not the colon fence's. A `::::`
+    // inside a `:::` container is not its closer.
     expect(html('> ::: note\n> :::x\n> ::::\ntail\n')).toBe(
-      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>:::x\n::::\ntail</p>\n  </aside>\n</blockquote>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>:::x</p>\n    <div>\n\n    </div>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
     expect(html('::: note\n:::x\n::::\ntail\n')).toBe(
-      '<aside class="admonition note" aria-label="Note">\n  <p>:::x\n::::\ntail</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>:::x</p>\n  <div>\n    <p>tail</p>\n  </div>\n</aside>',
     )
   })
 
-  it('CONTROL a shorter bare run with no absorption above it still opens a nested container', () => {
-    // The control on the width rule: without the malformed fence there is
-    // nothing to absorb, so the shorter run opens an EMPTY nested container -
-    // which holds no paragraph, so the quote still ends.
+  it('CONTROL a shorter bare run with no malformed opener above it opens a nested container', () => {
+    // The shorter run opens an EMPTY nested container, which holds no
+    // paragraph, so the quote still ends.
     expect(html('> :::: outer\n> x\n> :::\ntail\n')).toBe(
       '<blockquote>\n  <div class="outer">\n    <p>x</p>\n    <div>\n\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
     )

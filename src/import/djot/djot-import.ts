@@ -591,7 +591,8 @@ function convertDjotBlockMarkers(source: string): string {
       const top = containers.at(-1)
       const close = /^:{3,}[ \t]*$/.test(content) && top?.width === width
       const invalid = close ? containers.pop()!.invalid : hasInvalidContainerMetadata(content)
-      if (!close && width !== null) containers.push({ width, invalid })
+      // A rejected opener is paragraph text in Djot, so it opens nothing a later run could close.
+      if (!close && width !== null && !invalid) containers.push({ width, invalid })
       if (invalid) {
         lines[i] = lines[i]!.slice(0, container[1]!.length) + '\\' + lines[i]!.slice(container[1]!.length)
       }

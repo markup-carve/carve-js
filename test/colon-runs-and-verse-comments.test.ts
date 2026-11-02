@@ -3,14 +3,14 @@ import { carveToHtml } from '../src/index.js'
 
 const compact = (source: string): string => carveToHtml(source).replace(/>\s+</g, '><').trim()
 
-// CARVE-P9-016, carve#4550: a paragraph holding an invalid opener absorbs a bare run of another width.
+// A bare run of another width opens a nested div, after an invalid opener too (carve#4863).
 describe('a div closes only on a run of its own width', () => {
   it.each([
-    ['a wider run', ':::\n:::e\n::::\nq\n:::\nafter\n', '<div><p>:::e\n::::\nq</p></div><p>after</p>'],
-    ['text before the invalid opener', ':::\nx\n:::e\n::::\n:::\nafter\n', '<div><p>x\n:::e\n::::</p></div><p>after</p>'],
-    ['a wider div', '::::\n:::e\n:::\nq\n::::\nafter\n', '<div><p>:::e\n:::\nq</p></div><p>after</p>'],
+    ['a wider run', ':::\n:::e\n::::\nq\n:::\nafter\n', '<div><p>:::e</p><div><p>q</p><div><p>after</p></div></div></div>'],
+    ['text before the invalid opener', ':::\nx\n:::e\n::::\n:::\nafter\n', '<div><p>x\n:::e</p><div><div><p>after</p></div></div></div>'],
+    ['a wider div', '::::\n:::e\n:::\nq\n::::\nafter\n', '<div><p>:::e</p><div><p>q</p><div><p>after</p></div></div></div>'],
     ['a valid paragraph still lets the run open', ':::\nx\n::::\nq\n::::\n:::\nafter\n', '<div><p>x</p><div><p>q</p></div></div><p>after</p>'],
-    ['a blank ends the absorbing paragraph', ':::\n:::e\n\n::::\nq\n::::\n:::\nafter\n', '<div><p>:::e</p><div><p>q</p></div></div><p>after</p>'],
+    ['a blank before the run', ':::\n:::e\n\n::::\nq\n::::\n:::\nafter\n', '<div><p>:::e</p><div><p>q</p></div></div><p>after</p>'],
   ])('%s', (_name, source, html) => {
     expect(compact(source)).toBe(html)
   })

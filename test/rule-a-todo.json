@@ -2,7 +2,6 @@
   "a-closed-colon-in-a-quoted-item-ends-its-continuation.test.ts": {
     "closed colon fences in quoted items (carve#2925) > ends ownership after a lazy body and later marked colon boundaries": "#3922",
     "closed colon fences in quoted items (carve#2925) > ends the quote at an unprefixed link definition": "#3922",
-    "closed colon fences in quoted items (carve#2925) > keeps a malformed note body from creating a quoted paragraph claim": "#3921",
     "closed colon fences in quoted items (carve#2925) > releases an unmarked line from the inner quote into its outer item": "#3922"
   },
   "a-comment-below-a-sub-list-in-a-tight-item.test.ts": {
@@ -50,6 +49,9 @@
   "ast-round-trip-preserves-source.test.ts": {
     "a document round-tripped through the AST > comes back as the same source": "#4034"
   },
+  "authoring-acceptance.test.ts": {
+    "authoring acceptance suite > unguided/12.crv": "markup-carve/carve#4881"
+  },
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },
@@ -67,13 +69,6 @@
     "keeps continued marker-note and list CODE ownership: marker-note-320": "#3922",
     "keeps continued marker-note and list CODE ownership: review-J-inner-note": "#3922",
     "keeps continued marker-note and list CODE ownership: review-K-first:[^m]: x": "#3922"
-  },
-  "corpus-render-fixtures.test.ts": {
-    "spec corpus non-HTML render fixtures > md: 103-a-heading-marker-opens-at-an-indented-top-level-column": "#3921",
-    "spec corpus non-HTML render fixtures > md: 103-a-heading-marker-opens-at-an-indented-top-level-column-2": "#3921",
-    "spec corpus non-HTML render fixtures > md: 159-indented-reference-and-footnote-definitions-register-2": "#3921",
-    "spec corpus non-HTML render fixtures > md: 184-a-definition-below-every-content-column-ends-the-item-and-registers": "#3921",
-    "spec corpus non-HTML render fixtures > md: 422-a-recognized-opener-in-a-body-needs-no-blank-line-above-it-6": "#3921"
   },
   "corpus.test.ts": {
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
@@ -129,10 +124,7 @@
   },
   "hosted-colon-literal-ownership.test.ts": {
     "review7-c07-open-fence-tail-owner-13": "#3922",
-    "review7-c07-open-fence-tail-owner-14": "#3922",
-    "review8-older-o01-overindented-verse-005": "#3922",
-    "review8-older-o01-overindented-verse-008": "#3922",
-    "review8-older-o01-overindented-verse-009": "#3922"
+    "review7-c07-open-fence-tail-owner-14": "#3922"
   },
   "inline-fence-paragraph-resume.test.ts": {
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",

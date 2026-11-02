@@ -53,8 +53,6 @@ interface Frame {
   canon: number
   cut: number
   para: boolean
-  // The open paragraph's own lines absorbed an invalid colon opener (CARVE-P9-016).
-  absorbs?: boolean
   last: string | null
   markerCol?: number
   markerCanon?: number
@@ -498,7 +496,6 @@ export function ownLines(
     if (lonePlus && attachesParagraph(lonePlus, form)) {
       lead(lonePlus.markerCanon!)
       finish()
-      lonePlus.absorbs = absorbsColon(m.rest)
       lonePlus.para = true
       lonePlus.last = 'para'
       if (trace) emit(at, 'S5', ownerPath(), 'CARVE-P0-024', 'text', { plus: at })
@@ -663,7 +660,6 @@ export function ownLines(
       const attached = plusFollower && owner.termShift !== undefined && owner.last === 'dd'
       const cut = term ? owner.termCut! : attached ? owner.termShift! : Math.max(owner.cut, owner.closedList?.shift ?? 0)
       lead(owner.para || !closedColumn || plusFollower ? Math.max(m.col - cut, owner.canon) : owner.canon, term)
-      owner.absorbs = (owner.para && owner.absorbs) || absorbsColon(m.rest)
       owner.para = true
       if (!term) owner.last = 'para'
     }
@@ -756,7 +752,6 @@ export function ownLines(
           }
         }
         lead(m.col)
-        frame.absorbs = absorbsColon(m.rest)
         frame.para = frame.plus !== at
         frame.last = 'para'
         return
@@ -1052,11 +1047,6 @@ export function ownLines(
     return col
   }
 
-  function absorbsColon(rest: string): boolean {
-    const trimmed = trimEndSpaceTab(rest)
-    return COLON_FENCE.test(trimmed) && !isColonFenceOpener(trimmed)
-  }
-
   function classify(rest: string, owner: Frame, at: number, col: number): Form {
     rest = trimEndSpaceTab(rest)
     if (rest === '') return { kind: 'blank', interrupts: true }
@@ -1071,13 +1061,10 @@ export function ownLines(
     }
     if (colon && isColonFenceOpener(rest)) {
       const run = colon[1]!.length
-      // A bare `:::` interrupts unless the paragraph's own lines absorbed an invalid opener (§10 I4).
-      const interrupts = !COLON_CLOSER.test(rest) || !(owner === top() && owner.para && owner.absorbs)
-      if (owner.para && !interrupts) return { kind: 'text', interrupts: false }
       if (RE_LINE_BLOCK_OPEN.test(rest)) {
-        return { kind: 'fence', family: 'div', interrupts, lineBlock: true, closes: (r, closerCol) => closerCol <= col && COLON_CLOSER.exec(r)?.[1]!.length === run }
+        return { kind: 'fence', family: 'div', interrupts: true, lineBlock: true, closes: (r, closerCol) => closerCol <= col && COLON_CLOSER.exec(r)?.[1]!.length === run }
       }
-      return { kind: 'colon', run, interrupts }
+      return { kind: 'colon', run, interrupts: true }
     }
     if (RE_FENCE.test(rest) || RE_RAW_FENCE.test(rest)) {
       const run = /^(`{3,}|~{3,})/.exec(rest)![1]!

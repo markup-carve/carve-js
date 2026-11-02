@@ -60,8 +60,8 @@ describe('differential audit regressions', () => {
     )
   })
 
-  it('absorbs a bare colon run after an indented malformed opener', () => {
-    expect(carveToHtml(' :::e\n:::\n')).toBe('<p>:::e\n:::</p>')
+  it('opens a div at a bare colon run after an indented malformed opener (carve#4863)', () => {
+    expect(carveToHtml(' :::e\n:::\n')).toBe('<p>:::e</p>\n<div>\n\n</div>')
   })
 
   it('anchors a line-block hard break to the source line when tabs expand', () => {

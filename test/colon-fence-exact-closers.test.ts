@@ -60,7 +60,7 @@ describe('colon fences with exact-length closers', () => {
   })
 
   it('does not parse an admonition type glued to the fence', () => {
-    expect(h(':::note\ncontent\n:::')).toBe('<p>:::note\ncontent\n:::</p>')
+    expect(h(':::note\ncontent\n:::')).toBe('<p>:::note\ncontent</p>\n<div>\n\n</div>')
     expect(h(':::note\ncontent')).toBe('<p>:::note\ncontent</p>')
   })
 

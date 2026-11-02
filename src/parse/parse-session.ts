@@ -97,7 +97,6 @@ import {
   isFigureGroupOpener,
   isLinkDefLine,
   isListMarkerLine,
-  isLiteralColonFenceLine,
   isStackedFirstBlockQuoteMarker,
   quotedNoteFirstBlockMarker,
   isTableRow,
@@ -2336,7 +2335,6 @@ export class ParseSession extends InlineParseSession {
     let captionAtContentColumn = false
     let mathCaptionChecked = false
     let imageCaptionChecked = false
-    let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     let secondLineLazy = false
     // A code include at block start owns exactly its source line. This is
@@ -2393,8 +2391,7 @@ export class ParseSession extends InlineParseSession {
           this.isLinkDefLine(stripLazyFrame(ln))) ||
           startsInterruptingBlock(lexer) ||
           (lexer.hostedFootnoteLines.has(lexer.lineNumber(lexer.pos)) &&
-            !ln.startsWith(LAZY_FRAME) && RE_FOOTNOTE_DEF.test(ln.trimStart()))) &&
-        !(RE_ADMONITION_CLOSE.test(ln) && holdsLiteralColonFence)
+            !ln.startsWith(LAZY_FRAME) && RE_FOOTNOTE_DEF.test(ln.trimStart())))
       )
         break
       if (lines.length === 1 && (ln.startsWith(LAZY_FRAME) || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))
@@ -2404,7 +2401,6 @@ export class ParseSession extends InlineParseSession {
       // where a framed line becomes text, so it comes off here.
       const received = stripLazyFrame(ln)
       lines.push(received)
-      holdsLiteralColonFence ||= isLiteralColonFenceLine(received)
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first

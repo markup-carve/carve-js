@@ -23,11 +23,12 @@ describe('generic divs', () => {
 
   it('an inline-attribute opener is not a div (strict djot)', () => {
     // `::: {…}` / `:::{…}` on the fence line is a paragraph, not a div (its
-    // inline content is then parsed as prose).
+    // inline content is then parsed as prose). The bare run below it opens an
+    // empty div of its own (carve#4863).
     for (const src of ['::: {.x #y}', ':::{.x junk}']) {
       const html = h(`${src}\nz\n:::`)
       expect(html.startsWith('<p>')).toBe(true)
-      expect(html).not.toContain('<div')
+      expect(html).toContain('</p>\n<div>\n\n</div>')
     }
   })
 

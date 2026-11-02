@@ -23,12 +23,6 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *    has to be deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  ['adjacent-definition-lists', {
-    reason: 'carve#4759 gives adjacent description lists a three-blank source boundary',
-    carve: ":: a\n: x\n\n\n\n:: b\n: y\n\np\n\n:: c\n: z\n\n\n\n{.k}\n:: d\n: w\n",
-    ast: {"type":"document","children":[{"type":"definition_list","items":[{"type":"definition_term","children":[{"type":"text","value":"a"}]},{"type":"definition_description","children":[{"type":"paragraph","children":[{"type":"text","value":"x"}]}]}]},{"type":"definition_list","items":[{"type":"definition_term","children":[{"type":"text","value":"b"}]},{"type":"definition_description","children":[{"type":"paragraph","children":[{"type":"text","value":"y"}]}]}]},{"type":"paragraph","children":[{"type":"text","value":"p"}]},{"type":"definition_list","items":[{"type":"definition_term","children":[{"type":"text","value":"c"}]},{"type":"definition_description","children":[{"type":"paragraph","children":[{"type":"text","value":"z"}]}]}]},{"type":"definition_list","items":[{"type":"definition_term","children":[{"type":"text","value":"d"}]},{"type":"definition_description","children":[{"type":"paragraph","children":[{"type":"text","value":"w"}]}]}],"attrs":{"classes":["k"]}}]},
-    report: {"mode":"safe","adapter":"generic","diagnostics":[]},
-  }],
 ])
 
 /**

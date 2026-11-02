@@ -170,7 +170,7 @@ export function colonFenceOpenerLen(line: string): number | null {
 
 export type BlockQuoteLazyMode =
   | { kind: 'closed' }
-  | { kind: 'paragraph'; absorbingFence: boolean; term?: boolean; itemParagraph?: boolean }
+  | { kind: 'paragraph'; term?: boolean; itemParagraph?: boolean }
   | { kind: 'code_fence'; close: RegExp }
   | { kind: 'comment_fence'; length: number }
   // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
@@ -294,7 +294,7 @@ function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
   if (literal.opaque) {
     const closedPayload = literal.opaque.closes(text)
     if (text !== '') {
-      state.mode = { kind: 'paragraph', absorbingFence: false }
+      state.mode = { kind: 'paragraph' }
     } else closeBlockQuoteParagraph(state)
     if (closedPayload) delete literal.opaque
     return true
@@ -309,7 +309,7 @@ function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
   }
   // Line-block payload is inline content, whatever its block shape.
   if (host.colons?.at(-1) === literal && text !== '') {
-    state.mode = { kind: 'paragraph', absorbingFence: false }
+    state.mode = { kind: 'paragraph' }
   } else closeBlockQuoteParagraph(state)
   return true
 }
@@ -444,7 +444,7 @@ function trackHostDefinitions(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerd
   return undefined
 }
 
-// Colon fences inside a host: close, absorb as paragraph text, or open one.
+// Colon fences inside a host: close, read as paragraph text, or open one.
 function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdict {
   const { host, state } = q
   const { inner, at, blockStart, colons, floor } = b
@@ -461,7 +461,11 @@ function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdi
       closeBlockQuoteParagraph(state)
       return true
     }
-    return false
+    if (at <= open.column) return false
+    // Past the open div's column the run opens a div in its own owner (§10 I4).
+    colons.push({ width: bare[1]!.length, column: at, floor, awaitingBody: blockStart, literal: false, markerBody: blockStart })
+    closeBlockQuoteParagraph(state)
+    return true
   }
   if (open) open.awaitingBody = false
   if (open?.literal) {
@@ -476,17 +480,16 @@ function trackHostColonFence(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerdi
       return true
     }
     if (width === null && /^(:{3,})/.exec(inner)?.[1]?.length === open.width) {
-      state.mode = { kind: 'paragraph', absorbingFence: true }
+      state.mode = { kind: 'paragraph' }
       return true
     }
     return false
   }
-  const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
-  if (absorbedBare || (width === null && /^:{3,}/.test(inner))) {
-    state.mode = { kind: 'paragraph', absorbingFence: true }
+  if (width === null && /^:{3,}/.test(inner)) {
+    state.mode = { kind: 'paragraph' }
     return true
   }
-  if (width !== null && !absorbedBare) {
+  if (width !== null) {
     colons.push({ width, column: at, floor, awaitingBody: blockStart,
       literal: RE_LINE_BLOCK_OPEN.test(inner), markerBody: blockStart })
     closeBlockQuoteParagraph(state)
@@ -593,7 +596,7 @@ export function trackQuoteHostFence(
   if (held !== undefined) return held
   const paragraph = blockQuoteParagraphOpen(state)
   if (continuesAfterComment(q)) {
-    state.mode = { kind: 'paragraph', absorbingFence: false }
+    state.mode = { kind: 'paragraph' }
     return true
   }
   const b = openQuoteHosts(q, paragraph)
@@ -607,7 +610,6 @@ export function trackQuoteHostFence(
   }
   const defined = trackHostDefinitions(q, b)
   if (defined !== undefined) return defined
-  if (b.blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
   const colonFence = b.floor > 0 ? trackHostColonFence(q, b) : undefined
   if (colonFence !== undefined) return colonFence
   openRootLineBlock(b)
@@ -833,7 +835,6 @@ export function classifyQuotedLine(
     return null
   }
   if (atColumn && trackQuoteHostFence(content, state, fenceOpens, terminatorFree, hasLiteralCommentCloser, wasInTable, payloadCloser)) return null
-  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
   const wasItemParagraph = state.mode.kind === 'paragraph' && state.mode.itemParagraph === true
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
@@ -905,7 +906,7 @@ export function classifyQuotedLine(
   // A term accepts lazy text under PART 0 and CARVE-P2-028, including
   // inside a quote (markup-carve/carve-js#2860).
   if (RE_DEFLIST_TERM.test(content)) {
-    state.mode = { kind: 'paragraph', absorbingFence: false, term: true }
+    state.mode = { kind: 'paragraph', term: true }
     return null
   }
   // Invisible definitions leave no leaf that can accept a following lazy line.
@@ -924,8 +925,7 @@ export function classifyQuotedLine(
   // The colon-fence arm below is `trackItemLazyState`'s, restated for the quote:
   // one construct answering S4 two ways depending on the container kind is the
   // defect markup-carve/carve#920 names, so the two trackers keep the same
-  // model - open containers, a bare run reading as the innermost one's CLOSER,
-  // and the §12 absorption rule for a malformed opener.
+  // model - open containers and a bare run reading as the innermost one's CLOSER.
   //
   // A bare run at the innermost container's EXACT width is that container's
   // closer, and a CLOSED container holds no open paragraph. Nothing tracked the
@@ -933,8 +933,7 @@ export function classifyQuotedLine(
   // left the tracker believing the quote's paragraph was still open and kept
   // `tail` inside it.
   const bareFenceRun = /^(:{3,})[ \t]*$/.exec(content)
-  const bareFence = bareFenceRun !== null
-  if (bareFence && bareFenceRun![1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
+  if (bareFenceRun !== null && bareFenceRun[1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
     state.colonWidths.pop()
     closeBlockQuoteParagraph(state)
     return null
@@ -946,17 +945,6 @@ export function classifyQuotedLine(
     RE_HARDBREAKS_OPEN.test(content) ||
     RE_QUOTE_BLOCK_OPEN.test(content)
   ) {
-    // ...unless the paragraph above already absorbed a MALFORMED fence and this
-    // line is a bare run, in which case §12 takes it as text too and the
-    // paragraph stays open. Corpus 260 pins that shape inside a quote.
-    //
-    // Reaching here with a bare run already proves it is NOT the innermost
-    // container's closer - that branch returned above - so absorption applies
-    // inside a container as readily as at the quote's own level.
-    if (wasAbsorbing && bareFence) {
-      state.mode = { kind: 'paragraph', absorbingFence: true }
-      return null
-    }
     // A colon-fence OPENER is structural and needs no closer ahead ("colon-fence
     // containers open immediately and auto-close at EOF"), so it interrupts an
     // open quoted paragraph and leaves an EMPTY container holding none either.
@@ -965,16 +953,16 @@ export function classifyQuotedLine(
     return null
   }
   // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
-  // (`:::note` fails §12's opener test - a type word needs a space), and from
-  // here the paragraph absorbs the next bare fence-shaped line as well.
+  // (`:::note` fails §12's opener test - a type word needs a space) and leaves
+  // no state (carve#4863).
   if (/^[ \t]*:{3,}/.test(content)) {
     if (state.mode.kind === 'quote' && continuesParagraph()) {
       let inner = state.mode.inner
       while (inner.mode.kind === 'quote') inner = inner.mode.inner
-      inner.mode = { kind: 'paragraph', absorbingFence: true }
+      inner.mode = { kind: 'paragraph' }
       return null
     }
-    state.mode = { kind: 'paragraph', absorbingFence: true }
+    state.mode = { kind: 'paragraph' }
     return null
   }
   // A code or raw fence opener interrupts an open paragraph whether or not it
@@ -1031,13 +1019,7 @@ export function classifyQuotedLine(
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
   // paragraph that a following list marker or plain text folds into.
-  //
-  // And it CONTINUES the paragraph, so absorption survives it: `:::note` /
-  // `body` / `:::` is one paragraph at the top level, and dropping the flag on
-  // the prose line in between made the bare run open a real div here instead
-  // (corpus 260). Absorption ends where the paragraph does, and every branch
-  // that ends one returns above this point.
-  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing,
+  state.mode = { kind: 'paragraph',
     ...(wasTerm ? { term: true } : {}),
     ...((wasItemParagraph || (isListMarkerLine(content) && !blockQuoteParagraphOpen(state))) ? { itemParagraph: true } : {}) }
 

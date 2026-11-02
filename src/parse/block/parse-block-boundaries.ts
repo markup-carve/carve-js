@@ -183,17 +183,6 @@ export interface ItemLazyState {
   // of registering a second one, and the quoted-item arm below has to tell the
   // two apart (markup-carve/carve-js#1606).
   inDefList: DefListOpening
-  // Whether the item's open paragraph has absorbed a MALFORMED colon fence and
-  // is therefore taking the next fence-shaped line as text too (PART 9 §12,
-  // "a colon-fence line that fails the opener test leaves the paragraph
-  // expecting a closer"). The block layer has implemented that rule at top
-  // level for a long time; this tracker did not, so it read the trailing `:::`
-  // of `- item` / `  :::note` / `  body` / `  :::` as a div opener and closed
-  // the item, where PART 1 S4 folds the following flush-left line into the
-  // paragraph that was never interrupted (carve#891).
-  absorbingFence: boolean
-  /** The sub-item a nested marker line opened holds a malformed colon fence; read by its first line only. */
-  ownedAbsorbing?: boolean
   /** Reads a literal line block's marker-shaped payload, which opens no block. */
   literalLayout?: boolean
   // Fed by a definition body's collector rather than a list item's.
@@ -208,11 +197,9 @@ export interface ItemLazyState {
   closedColonBody?: boolean
   closedLiteralComment?: boolean
   // How many colon-fence containers the item's own content currently holds
-  // open. A bare `:::` with one open is that container's CLOSER, not an opener
-  // and not absorbable text - which is why a malformed fence INSIDE an open
-  // container arms nothing: the closer below it still has a container to close.
+  // open. A bare `:::` with one open is that container's CLOSER, not an opener.
   divDepth: number
-  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; absorbing?: boolean; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   divWidths?: number[]
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
@@ -324,7 +311,6 @@ export function verbatimOnlyLazyState(): ItemLazyState {
     invisibleAtColumn: false,
     commentAtColumn: false,
     inFootnoteBody: false,
-    absorbingFence: false,
     divDepth: 0,
     lazyFoldable: false,
     inTable: false,

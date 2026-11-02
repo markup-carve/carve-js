@@ -82,7 +82,7 @@
   {
     "name": "malformed colon text absorbs a later bare fence",
     "source": "> > a\n> a\n> > :::bad\n> > :::\ny\n",
-    "html": "<blockquote>\n  <blockquote><p>a\na\n:::bad\n:::\ny</p></blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\na\n:::bad</p>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<p>y</p>"
   },
   {
     "name": "closer lookup after a shallower lazy line",

@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 describe('closed colon fences in quoted items (carve#2925)', () => {
-  it('keeps malformed descendant fences in their absorbing paragraph', () => {
+  it('opens a div below a malformed descendant fence (carve#4863)', () => {
     const source = '- a\n  - b\n    - c\n      :::note\n      :::\ntail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['list'])
-    expect(carveToHtml(source)).toContain('c\n:::note\n:::\ntail</li>')
+    expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
+    expect(carveToHtml(source)).toContain('c\n:::note\n            <div>\n\n            </div>\n          </li>')
   })
   for (const tail of ['tail', '- tail']) {
     it(`ends a single item's fence at a sibling marker before ${tail}`, () => {
@@ -168,8 +168,8 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
 
   it('forgets a marker-line candidate when a sibling item replaces its host', () => {
     const source = '> - ::: box\n> - prose\n>   :::bad\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
-    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(carveToHtml(source)).toContain('<li>prose\n:::bad\n      <div>\n\n      </div>\n    </li>')
   })
 
   it('forgets a candidate after its item dedents into quoted prose', () => {
@@ -186,10 +186,10 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
-  it('absorbs bare fences after a malformed marker-line opener', () => {
+  it('opens a div below a malformed marker-line opener (carve#4863)', () => {
     const source = '> - :::bad\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
-    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(carveToHtml(source)).toContain('<li>:::bad\n      <div>\n\n      </div>\n    </li>')
   })
 
   for (const prefix of ['> - next\n>   ', '>   - next\n>     ']) {
@@ -244,8 +244,8 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
   for (const opener of ['|']) {
     it(`keeps colon-shaped literal ${JSON.stringify(opener)} payload out of the candidate stack`, () => {
       const source = `> - ::: ${opener}\n>   :::: box\n>   :::\n>   :::bad\n>   :::\n- tail\n`
-      expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
-      expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+      expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+      expect(carveToHtml(source)).toContain(':::bad\n      <div>\n\n      </div>\n    </li>')
       expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
     })
   }

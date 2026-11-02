@@ -116,7 +116,7 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     // unmarked middle line can still lazily continue that quoted paragraph,
     // and the final glued-looking closer is literal because no container opened.
     expect(html('> :::note\nbody\n> :::')).toBe(
-      '<blockquote><p>:::note\nbody\n:::</p></blockquote>',
+      '<blockquote>\n  <p>:::note\nbody</p>\n  <div>\n\n  </div>\n</blockquote>',
     )
   })
 
@@ -129,7 +129,7 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
 
   it('still folds a lazy line after glued `:::note` paragraph text', () => {
     expect(html('> :::note\n> para\nlazy\n> :::')).toBe(
-      '<blockquote><p>:::note\npara\nlazy\n:::</p></blockquote>',
+      '<blockquote>\n  <p>:::note\npara\nlazy</p>\n  <div>\n\n  </div>\n</blockquote>',
     )
   })
 })

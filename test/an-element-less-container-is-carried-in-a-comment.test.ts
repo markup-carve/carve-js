@@ -189,7 +189,8 @@ describe('an element-less container is carried in a comment', () => {
    * written as a pipe table.
    */
   for (const [name, carve] of [
-    ['an attributes-only opener', '::: {.warning}\nx\n:::\n'],
+    // No bare run below it: that run would open an empty div of its own (carve#4863).
+    ['an attributes-only opener', '::: {.warning}\nx\n'],
     ['a list table', '{header-rows=1}\n::: list-table\n- - A\n  - B\n- - one\n  - x\n:::\n'],
   ] as const) {
     it(`${name} takes no marker`, () => {

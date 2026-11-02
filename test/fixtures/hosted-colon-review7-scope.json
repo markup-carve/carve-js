@@ -312,7 +312,7 @@
   {
     "id": "review7-c06-malformed-verse-lead-tail-01",
     "source": "- ::: |\n  :::bad\n  :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>:::bad</p>\n    </div>\n    TAILX\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>:::bad</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c06-malformed-verse-lead-tail-02",
@@ -372,12 +372,12 @@
   {
     "id": "review7-c07-open-fence-tail-owner-11",
     "source": "> - ::: box\n>     :::bad\n>   ::::\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad\n::::</p>\n      </div>\n    </li>\n  </ul>\n  <p>TAILX</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad</p>\n        <div>\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-12",
     "source": "> - ::: box\n>      :::bad\n>   ::::\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad\n::::</p>\n      </div>\n    </li>\n  </ul>\n  <p>TAILX</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad</p>\n        <div>\n\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-13",

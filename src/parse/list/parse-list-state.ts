@@ -38,12 +38,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     leadingWhitespace,
     markerLineQuoteState,
     markerLineState,
-    markerPrefixLength,
     opaqueGroupCloser,
     opensCodeFence,
     orderedMatch,
-    prefixWalkBound,
-    quotedLineText,
     taskMatch,
     trackBlockQuoteLazyState,
     trackWrappedAttributeRun,
@@ -60,12 +57,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return raw ? fenceCloseRe(raw[1]!) : null
   }
 
-  // Absorption belongs to ONE open paragraph, so it ends wherever that
-  // paragraph does. Clearing it here and re-arming it only in the two branches
-  // that continue the same paragraph is what keeps a heading, a table or a code
-  // fence between the malformed fence and a later bare `:::` from leaving the
-  // flag set: at the top level those end the paragraph and the later fence
-  // opens a real div, and this tracker has to give the same answer.
   function beginLine(
     content: string,
     state: ItemLazyState,
@@ -79,17 +70,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   ): LazyLine {
     delete state.retainedMarker
     const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
-    const wasAbsorbing = state.absorbingFence
-    state.absorbingFence = false
-    const wasOwnedAbsorbing = state.ownedAbsorbing === true
-    delete state.ownedAbsorbing
     const wasClosedColon = state.closedColonBody === true
     const wasClosedLiteralComment = state.closedLiteralComment === true
     delete state.closedColonBody
     delete state.closedLiteralComment
     if (state.unrebasedColonBody && RE_ADMONITION_CLOSE.exec(content)?.[1]?.length === state.unrebasedColonBody.width) delete state.unrebasedColonBody
-    // Carried the same way the absorption is, and for the same reason: every
-    // other block ends the table, so only the two row branches re-arm it.
+    // Every other block ends the table, so only the two row branches re-arm it.
     const wasInTable = state.inTable
     state.inTable = false
     // The quote the item ended on is dropped by every line that is not more of
@@ -109,7 +95,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return {
       content, state, atContentColumn, hasCommentCloser, facts, hasLiteralCommentCloser,
       authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen,
-      wasDescendantColumn, wasAbsorbing, wasOwnedAbsorbing, wasClosedColon,
+      wasDescendantColumn, wasClosedColon,
       wasClosedLiteralComment, wasInTable, wasQuote, quoteOwnerColumn, wasInvisibleAtColumn,
       wasBelowComment, wasCommentAtColumn,
       run: undefined, runColumns: undefined, readFlush: false, readDescendant: false,
@@ -263,16 +249,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       delete state.literalColon
       state.divDepth = Math.max(0, state.divDepth - 1)
       state.closedColonBody = true
-      state.lazyFoldable = open.absorbing === true
+      state.lazyFoldable = false
     } else {
-      const marked = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, facts?.terminatorFree ?? false) !== null
-      if (marked) open.absorbing = false
-      if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
       // A payload line opens no block, even when it looks like a definition.
       state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
         open.opaque?.belowBaseCloses !== true && text !== '' &&
         (close === null || close[1]!.length !== open.width ||
-          (column > 0 && column !== open.column) || open.absorbing === true)
+          (column > 0 && column !== open.column))
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false
@@ -448,9 +431,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
     // between a term and its definition), so leave inDefList unchanged.
     state.lazyFoldable = false
-    // The paragraph that was absorbing fences ends here, so the next
-    // fence-shaped line is an opener again.
-    state.absorbingFence = false
     if (state.deepest) delete state.deepest.closedColonBody
     return true
   }
@@ -640,43 +620,17 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       RE_HARDBREAKS_OPEN.test(content) ||
       RE_QUOTE_BLOCK_OPEN.test(content)
     ) {
-      // ...unless the paragraph above it already absorbed a malformed fence AND
-      // this line is a BARE run, in which case §12 takes it as text too and the
-      // paragraph stays open. Not width-tagged: after a malformed `:::note` a
-      // following `::::` is absorbed as readily as a `:::`.
-      //
-      // ONLY A BARE RUN. A line that opens something of its own - `::: note`,
-      // `::: |`, `::: [label]` - interrupts the absorbing paragraph exactly as it
-      // does at the top level, which is where this rule is already implemented
-      // and where it was measured: `:::note` over `::: note` is a paragraph plus
-      // an admonition in all three engines, while `:::note` over `:::` is one
-      // paragraph in all three.
-      if (line.wasAbsorbing && bareFence) {
-        state.absorbingFence = true
-        state.lazyFoldable = true
-        return true
-      }
       if (state.divDepth === (state.divWidths?.length ?? 0)) (state.divWidths ??= []).push(colonFenceOpenerLen(content)!)
       state.divDepth++
       if (RE_LINE_BLOCK_OPEN.test(content)) state.literalColon = {width: colonFenceOpenerLen(content)!, column: indentColumns(content)}
-      // A valid opener ENDS the absorbing paragraph, so the bare fence that
-      // closes the block it opens is that block's closer rather than more
-      // absorbed text - and a closed block leaves no open paragraph.
       return endsOnBlock(state)
     }
-    // A fence-shaped line that is NOT a valid opener is ordinary paragraph text,
-    // and from here the paragraph absorbs the next fence-shaped line as well.
-    // `:::note` fails §12's opener test because a type word must be separated
-    // from the fence by a space; `::: note` passes it and takes the branch above.
-    // PART 0 S3: an over-indented malformed opener absorbs too, except inside an open container (hosted-colon-review7-scope pins that).
+    // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
+    // and leaves no state (carve#4863): `:::note` fails §12's opener test because
+    // a type word must be separated from the fence by a space.
     if (!/^:{3,}/.test(content) && !(state.divDepth === 0 && /^[ \t]+:{3,}/.test(content))) return false
     // A line folded into a child quote's paragraph is that quote's text, not the item's (carve#4525).
     if (line.wasQuote !== null && blockQuoteParagraphOpen(line.wasQuote)) return false
-    // ...but only at the item's own level. Inside an open container the line is
-    // ordinary body text and the container's closer below it is still a closer,
-    // so arming here would swallow it and hold the paragraph open past the
-    // block's end.
-    state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined || state.divWidths?.length === state.divDepth
     state.lazyFoldable = !(line.wasClosedColon && line.wasClosedLiteralComment)
     state.inDefList = false
     return true
@@ -698,15 +652,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const nestedBullet = nestedTask ? null
       : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
     if (!nestedTask && !nestedBullet) return false
-    if (state.authoredColon !== undefined && state.divDepth > state.authoredColon.depth && state.lazyFoldable) {
-      state.absorbingFence = line.wasAbsorbing
-      return true
-    }
-    if (!line.atContentColumn && state.deepest != null && state.lazyFoldable) {
-      state.absorbingFence = line.wasAbsorbing
-      return true
-    }
-    state.absorbingFence = false
+    if (state.authoredColon !== undefined && state.divDepth > state.authoredColon.depth && state.lazyFoldable) return true
+    if (!line.atContentColumn && state.deepest != null && state.lazyFoldable) return true
     // `markerContentColumn`'s arithmetic off the match already in hand, since
     // calling it would run the three matchers a second time per nesting level
     // and measure the leading run again - both of which `container-tail-work`
@@ -733,8 +680,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
 
   // THE FRAME THIS MARKER OPENS, seeded with what the marker itself holds.
   // Starting it empty would say no paragraph is open in the sub-item, and
-  // that is what decides whether a fence written in it INTERRUPTS or is
-  // absorbed (section 10 I4).
+  // that is what decides whether a fence written in it INTERRUPTS (section 10 I4).
   function nestedMarkerFrame(
     state: ItemLazyState,
     nested: ReturnType<typeof markerLineState>,
@@ -768,11 +714,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
 
   // Everything else (plain prose, div body text) leaves an open paragraph the
   // dedented line can continue. Prose folds into a def body, so an open def list
-  // stays open (inDefList unchanged) - and it is the SAME paragraph, so an
-  // absorption already under way survives it.
+  // stays open (inDefList unchanged).
   function prose(line: LazyLine): boolean {
     const { state, wasQuote } = line
-    state.absorbingFence = line.wasAbsorbing
     state.lazyFoldable = true
     // A quote's lazy line retains its paragraph claim. A closed quote retains
     // it only while a descendant still owns the line; otherwise a quoted note

@@ -6,6 +6,9 @@ import { continuesParagraph } from './djot-attributes.js'
 import { djotTableRows } from '../../djot-migrate.js'
 import { backtickRunEnds } from '../../parse/inline/backtick-run-index.js'
 
+// Djot opens a div only on a bare run or a run and one class word; any other colon line is paragraph text.
+const DJOT_DIV_LINE = /^(:{3,})(?:[ \t]+[A-Za-z0-9_-]+)?[ \t]*$/
+
 function djotListKind(marker: string): string {
   const label = /[0-9A-Za-z]+/.exec(marker)?.[0]
   if (!label) return marker
@@ -543,9 +546,9 @@ function writeNoteHead(I: LayoutInput, s: LayoutState, L: LayoutLine, noteHead: 
     s.out.push(currentNoteHead[1] + emptyNote + '\n  ' + writtenBody)
   } else s.out.push(currentNoteHead[1] + writtenBody)
   const content = inlineQuote.body
-  const inlineDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(content)
+  const inlineDiv = DJOT_DIV_LINE.exec(content)
   if (inlineDiv) s.divs.push({ width: inlineDiv[1]!.length, prefix: ' '.repeat(context.target + context.content) + inlineQuote.prefix, depth: s.depth, start: lineOffsets[n]!, ...(child ? { itemColumn: context.column + 1 } : {}) })
-  s.paragraph = !rows[n] && content !== '' && !content.startsWith(emptyNote) && !/^(?:#{1,6}(?:[ \t]|$)|:{3,}|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(content) && !/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(content)
+  s.paragraph = !rows[n] && content !== '' && !content.startsWith(emptyNote) && !/^(?:#{1,6}(?:[ \t]|$)|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(content) && !DJOT_DIV_LINE.test(content) && !/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(content)
   s.headingMarker = /^(#{1,6})(?:[ \t]|$)/.exec(content)?.[1] ?? ''
   s.blank = !s.paragraph
   break
@@ -750,7 +753,7 @@ function writeQuoteOwnedLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: B
       setEmbedded(s, { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }, s.embeddedOwners.filter(owner => owner.depth < quoteDepth).concat({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }))
     }
     s.out.push(wholeAttributes && !s.paragraph && s.embeddedListOwner?.depth !== quoteDepth ? quoteForCarve(I, s, L) + text : originalForCarve(I, s, L))
-    s.paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text)) || /^\[[^\]\n]*\]:/.test(visible) || (!s.paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
+    s.paragraph = !(row || fences[n] !== original || /^#{1,6}(?:[ \t]|$)/.test(visible) || (/^:{3,}/.test(visible) && DJOT_DIV_LINE.test(text)) || (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text)) || /^\[[^\]\n]*\]:/.test(visible) || (!s.paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
     s.blank = false
     return true
   }
@@ -942,7 +945,7 @@ function writeListItemLine(I: LayoutInput, s: LayoutState, L: LayoutLine, B: Blo
   s.headingMarker = itemHeading?.[1] ?? ''
   const task = item[1] !== undefined && item[0].length === 3 && item[0][1] === ' ' && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
   const itemBody = task ? body.slice(task[0].length) : body
-  const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
+  const itemDiv = DJOT_DIV_LINE.exec(itemBody)
   if (itemDiv)
     s.divs.push({
       width: itemDiv[1]!.length,
@@ -1067,7 +1070,7 @@ function writeTextContent(I: LayoutInput, s: LayoutState, L: LayoutLine, B: Bloc
   const reference = /^\[[^\]\n]*\]:/.test(visible)
   const block =
     (heading && heading[1] !== s.headingMarker) ||
-    div ||
+    div || visible.startsWith(':::') ||
     (rule && (!visible.includes('*') || !visible.includes('-'))) ||
     visible.startsWith('>') ||
     visible.startsWith('|')
@@ -1145,7 +1148,7 @@ function writeBlockLine(I: LayoutInput, s: LayoutState, L: LayoutLine, blockInde
     s.blank = false
     return
   }
-  const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(L.visible)
+  const div = DJOT_DIV_LINE.test(L.text) ? /^(:{3,})(?:[ \t]+.*)?$/.exec(L.visible) : null
   if (div && closeDivLine(I, s, L, div)) return
   const rule = (/^(?:[*-][ \t]*){3,}$/.test(L.visible) && /^(?:[*-][ \t]*){3,}$/.test(L.text))
   if (B.item && !rule) {
