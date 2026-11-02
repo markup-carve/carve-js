@@ -1082,13 +1082,14 @@ export function lintCarve(
     if (!line) return
     const physical = sourceLines[line - 1] ?? ''
     const view = stripContainerPrefixesKeepIndent(physical).trimStart()
-    if (!recoveredCodeFence(view)) return
+    const recovered = recoveredCodeFence(view)
+    if (!recovered) return
     const start = lineOffsets[line - 1]! + physical.length - view.length
     out.push({
       line,
       column: physical.length - view.length + 1,
       rule: 'fence-title-syntax',
-      message: 'The code fence keeps its language and drops invalid opener metadata. Use a quoted title and optional [label] in that order.',
+      message: recoveredCodeFenceMessage(recovered[2]!, recovered[3]!, view),
       start,
       end: lineOffsets[line - 1]! + physical.length,
     })
@@ -1657,6 +1658,16 @@ function collectContainedPlacementMarkers(
  *  leading `(^|\s)` keeps a valid inline span like `[t]{.c}` (brace abuts `]`,
  *  no space) from matching. */
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
+// The legacy `raw FORMAT` spelling recovers as language `raw` (carve#4849).
+function recoveredCodeFenceMessage(run: string, language: string, view: string): string {
+  const generic = 'The code fence keeps its language and drops invalid opener metadata. Use a quoted title and optional [label] in that order.'
+  if (language !== 'raw') return generic
+  const format = /^\s+([\p{L}_][\p{L}\p{N}_-]*)(?=\s|$)/u.exec(view.slice(view.indexOf(language) + language.length))
+  if (!format) return generic
+  return `"${run}raw ${format[1]}" is not a raw block: the code fence keeps its language raw and drops "${format[1]}". ` +
+    `Write "${run}=${format[1]}" to pass the content through to ${format[1]}.`
+}
+
 /** A fenced block whose info string is the legacy `raw FORMAT` form. */
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
 
@@ -3208,23 +3219,6 @@ function collectSilentFailures(
       'heading-trailing-attribute',
       `Trailing "${m[2]}" on a heading is literal text in Carve, not an attribute block. ` +
         `Move it to a "${m[2]}" line directly above the heading.`,
-    )
-  }
-
-  // 2. Legacy `raw FORMAT` fence: never opens, and desyncs later fences.
-  for (let i = 0; i < lines.length; i++) {
-    if (verbatimLines.has(i + 1)) continue
-    const view = stripContainerPrefixesKeepIndent(lines[i]!)
-    const prefix = lines[i]!.length - view.length
-    const m = LEGACY_RAW_FENCE.exec(view)
-    if (!m) continue
-    push(
-      i + 1,
-      prefix + m[1]!.length + 1,
-      view.length - m[1]!.length,
-      'raw-block-syntax',
-      `"${m[2]}raw ${m[3]}" is not a Carve raw block; it fails to open and desyncs the ` +
-        `document's fences. Use "${m[2]}=${m[3]}" to pass content through to ${m[3]}.`,
     )
   }
 

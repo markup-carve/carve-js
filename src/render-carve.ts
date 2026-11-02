@@ -65,6 +65,14 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   preserveTableSeparators?: boolean
 }
 
+// A body line below the body column that directly follows the line above it; the writer keeps it there.
+function bodyLineBelowColumn(blocks: BlockNode[], bodyColumn: number): boolean {
+  return hasLineBelowBody(blocks, bodyColumn) || blocks.some((block, index) => {
+    const above = blocks[index - 1]?.pos?.endLine
+    return above !== undefined && block.pos?.startLine === above + 1 && (block.pos.startColumn ?? bodyColumn) < bodyColumn
+  })
+}
+
 function hasLineBelowBody(blocks: BlockNode[], bodyColumn: number): boolean {
   const only = blocks[0]
   if (blocks.length !== 1 || only?.type !== 'paragraph') return false
@@ -3960,8 +3968,9 @@ class CarveRenderSession {
       if (line <= from || line >= to || pos?.startColumn === undefined || pos.startColumn < contentColumn || this.footnotesWrittenInPlace.has(label)) continue
       const blocks = ownValue(this.documentFootnoteDefs, label)
       if (blocks === undefined) continue
-      // Past the column only a note with a line below its body stays: that line needs the note's own column (corpus 637).
-      if (pos.startColumn > contentColumn && !hasLineBelowBody(blocks, pos.startColumn + 2)) continue
+      // CARVE-P11-079 (a): the note is collected unless a region marker below fixes it, or
+      // a line below its body column needs the note's own column (corpus 228, 637).
+      if (!this.staysAboveAMarker(line) && !bodyLineBelowColumn(blocks, pos.startColumn + 2)) continue
       const written = this.renderOneFootnoteDef(label, blocks, ctx)
       this.footnotesWrittenInPlace.add(label)
       const offset = ' '.repeat(Math.max(0, contentColumn - item.pos.startColumn))
