@@ -806,6 +806,8 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
+const RE_AUTOLINK = /(?<!\\)((?:\\\\)*)<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x00-\x20]*|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/g
+
 /** CommonMark's alt text: the description's content with its markup removed. */
 export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string, sources: readonly string[] = placeholders): string {
   let previous: string
@@ -849,6 +851,9 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
     }
     label = written + label.slice(cursor)
   } while (label !== previous)
+  // An autolink flattens to its text and a backslash hard break to its line
+  // ending (CommonMark §6.4).
+  label = label.replace(RE_AUTOLINK, '$1$2').replace(/(?<!\\)((?:\\\\)*)\\\n/g, '$1\n')
   return markdownEmphasis(label, undefined, undefined, placeholders, true, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
     const span = placeholders[Number(index)] ?? ''
     const code = /^(`+)([\s\S]*)\1$/.exec(span)
