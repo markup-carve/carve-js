@@ -977,7 +977,11 @@ export function ownLines(
         const opener = k
         for (k++; k < lines.length; k++) {
           let closer = indentCols(lines[k]!)
-          for (let q = 0; q < quotes && isQuoteLine(closer.rest); q++) closer = indentCols(quoteRest(closer.rest))
+          for (let q = 0; q < quotes; q++) {
+            // A line that leaves the quote ends the span and the host (CARVE-P0-005), so nothing attaches.
+            if (!isQuoteLine(closer.rest)) return decide('left')
+            closer = indentCols(quoteRest(closer.rest))
+          }
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
         }
         for (let line = opener; line <= k; line++) { comments.push(line); fenced.add(line) }
