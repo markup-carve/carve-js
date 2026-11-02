@@ -7848,6 +7848,7 @@ function commentSeparatedListStarts(source: readonly string[]): number[] {
 /** The lines a fenced code block holds, its fence lines included. */
 function fencedLines(lines: readonly string[]): Set<number> {
   const fenced = new Set<number>()
+  const itemCols: number[] = []
   let open: string | null = null
   let inComment = false
   for (const [at, line] of lines.entries()) {
@@ -7856,10 +7857,17 @@ function fencedLines(lines: readonly string[]): Set<number> {
       continue
     }
     const run = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line)
+    const item = open === null ? /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)/.exec(line) : null
+    if (item !== null) {
+      while (itemCols.length > 0 && itemCols.at(-1)! > indentColumns(line)) itemCols.pop()
+      itemCols.push(itemContentColumn(item[0]))
+    }
+    // Four columns past the item it stands in, a backtick line is indented code.
+    const base = itemCols.filter(col => col <= indentColumns(line)).at(-1) ?? 0
     if (open !== null) {
       fenced.add(at)
       if (run !== null && run[1]![0] === open[0] && run[1]!.length >= open.length && run[2]!.trim() === '') open = null
-    } else if (run !== null && (run[1]![0] === '~' || !run[2]!.includes('`'))) {
+    } else if (run !== null && indentColumns(line) - base < 4 && (run[1]![0] === '~' || !run[2]!.includes('`'))) {
       fenced.add(at)
       open = run[1]!
     }
@@ -8706,6 +8714,7 @@ function writeItemHeldLine(st: MarkdownConversion, ln: MarkdownLine, i: number):
   if (st.prevType === 'list' && ln.indent >= 1 && listCols.length > (isList ? 1 : 0)) {
     if (isList) {
       reportOrderedTask(line, sourceLine(i))
+      writeListBoundary(st, line, i)
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const item = sourceItem(line)
       const kind = item?.bullet ?? item?.delimiter ?? ''
@@ -8858,6 +8867,18 @@ function writeBreakLine(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
   return undefined
 }
 
+/** The list boundary before a list a reference definition or a comment parted from the one above. */
+function writeListBoundary(st: MarkdownConversion, line: string, i: number): void {
+  if (!st.referenceSeparatedLists.has(i)) return
+  st.listMarkers.end(indentColumns(line))
+  let blanks = 0
+  for (let at = st.out.length - 1; at >= 0 && st.out[at] === ''; at--) blanks++
+  while (blanks++ < 3) {
+    st.hardBlanks.add(st.out.length)
+    st.out.push('')
+  }
+}
+
 /**
  * Set a heading, quote or list apart from the block above it and write it.
  * The index to resume at, or undefined.
@@ -8879,15 +8900,7 @@ function writeContainerOpener(st: MarkdownConversion, ln: MarkdownLine, i: numbe
   const listSibling = siblingMarker !== null &&
     listMarkers.continues(columnWidth(siblingMarker[1]!), siblingMarker[2] ?? siblingMarker[3]!)
   if (isTopLevelList && st.prevType !== 'blank' && !listSibling) out.push('')
-  if (isList && st.referenceSeparatedLists.has(i)) {
-    listMarkers.end(indentColumns(line))
-    let blanks = 0
-    for (let at = out.length - 1; at >= 0 && out[at] === ''; at--) blanks++
-    while (blanks++ < 3) {
-      st.hardBlanks.add(out.length)
-      out.push('')
-    }
-  }
+  if (isList) writeListBoundary(st, line, i)
 
   // Carve recognizes `#` headings and `>` blockquotes at their container's
   // content column, but Markdown allows 1-3 further spaces of indent — dedent
