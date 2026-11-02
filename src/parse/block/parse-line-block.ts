@@ -73,9 +73,11 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const run = opener?.[1]!.length
       if (run !== undefined) {
         // An unclosed span runs to the end of the line block, or to a lazy line, which misses its owner (PART 0 S1, §28).
+        // A comment line is column-exempt, so it stays in the span (PART 0 S1).
         const lazy = (index: number): boolean => {
           const number = lexer.lineNumber(body[index]!.lineIndex)
-          return lexer.itemLazyLines.has(number) || lexer.quoteLazyLines.has(number)
+          return (lexer.itemLazyLines.has(number) || lexer.quoteLazyLines.has(number)) &&
+            !stripLazyFrame(body[index]!.text).trimStart().startsWith('%%')
         }
         let closer = bodyIndex + 1
         while (closer < body.length && commentRun(body[closer]!.text) !== run && !lazy(closer)) closer++

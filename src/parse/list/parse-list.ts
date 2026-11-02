@@ -2059,8 +2059,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lazyState.opaque === null && lazyState.literalColon === undefined
       if (lw < contentCol && spanEndingMisses.has(lexer.pos)) return 'stop'
       belowItemComment = lw < contentCol && RE_COMMENT_LINE.test(l.trimStart())
-      const heldCommentSpan = belowItemComment && commentFenceRun(l.trimStart()) !== undefined &&
-        bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
+      // Comment lines are column-exempt, so every one stays in a span the item holds (PART 0 S1, corpus 824).
+      const heldCommentSpan = belowItemComment && bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
       if (belowItemComment && !heldCommentSpan) return 'stop'
       return undefined
     }
@@ -2840,7 +2840,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // because the tracker reads each line at the item's dedent and its
         // opener test refuses an indented run - so a span a descendant holds is
         // invisible to it (`bodyHoldsOpenCommentSpan`).
-        (commentFenceRun(l.replace(/^[ \t]+/, '')) !== undefined &&
+        (RE_COMMENT_LINE.test(l) &&
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)) ||
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
