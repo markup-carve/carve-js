@@ -113,7 +113,7 @@ export type DefListOpening = false | 'term' | 'description'
 
 export type ItemOpaqueState =
   | { kind: 'code'; close: RegExp; column?: number }
-  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean; term?: boolean; description?: boolean }
+  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean; term?: boolean; description?: boolean; column?: number }
 
 export interface ItemLazyState {
   retainedMarker?: boolean
@@ -202,7 +202,7 @@ export interface ItemLazyState {
   // How many colon-fence containers the item's own content currently holds
   // open. A bare `:::` with one open is that container's CLOSER, not an opener.
   divDepth: number
-  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; belowComment?: number; spanFoldable?: boolean }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   divWidths?: number[]
   // The lines so far of a `{…}` block-attribute block that has not closed yet,

@@ -1,0 +1,54 @@
+[
+  {
+    "source": "> - %%%\n>   n\nzz\n",
+    "html": "<blockquote><ul><li></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ::: |\n>   %%%\nTAILX\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"></div></li></ul></blockquote><p>TAILX</p>"
+  },
+  {
+    "source": "> - a\n>   ::: |\n>   %%%\nafter\n",
+    "html": "<blockquote><ul><li>a\n      <div class=\"line-block\"></div></li></ul></blockquote><p>after</p>"
+  },
+  {
+    "source": "> - a\n>   %%%\n>   body\n%%%\ntail\n",
+    "html": "<blockquote><ul><li>a</li></ul></blockquote>"
+  },
+  {
+    "source": "- - a\n    %%%\n    body\n  x\ntail\n",
+    "html": "<ul><li><ul><li>a</li></ul>\n    x\ntail\n  </li></ul>"
+  },
+  {
+    "source": "- - a\n\n    %%%\n  x\ntail\n",
+    "html": "<ul><li><ul><li>a</li></ul>\n    x\ntail\n  </li></ul>"
+  },
+  {
+    "source": "- a\n  - ::: |\n    x\n    %%%\nb\n",
+    "html": "<ul><li>a\n    <ul><li><div class=\"line-block\"><p>x<br>\nb</p></div></li></ul></li></ul>"
+  },
+  {
+    "source": "- ::: |\n  x\n  %%%\n  y\n  %%%\nb\n",
+    "html": "<ul><li><div class=\"line-block\"><p>x<br>\nb</p></div></li></ul>"
+  },
+  {
+    "source": "- ::: |\n  x\n\n  %%%\nb\n",
+    "html": "<ul><li><div class=\"line-block\"><p>x</p></div></li></ul><p>b</p>"
+  },
+  {
+    "source": "> ::: |\n> a\n> %%%\nzz\n",
+    "html": "<blockquote><div class=\"line-block\"><p>a<br>\nzz</p></div></blockquote>"
+  },
+  {
+    "source": "> - ::: |\n>   a\n>   %%%\n>   q\n> zz\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>a<br>\nzz</p></div></li></ul></blockquote>"
+  },
+  {
+    "source": "- - ::: |\n    x\n\n    %%%\nzz\n",
+    "html": "<ul><li><ul><li><div class=\"line-block\"><p>x</p></div></li></ul></li></ul><p>zz</p>"
+  },
+  {
+    "source": "- - ::: |\n    x\n    %%%\nzz\n",
+    "html": "<ul><li><ul><li><div class=\"line-block\"><p>x<br>\nzz</p></div></li></ul></li></ul>"
+  }
+]
