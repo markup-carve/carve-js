@@ -48,13 +48,13 @@ const covered = (source: string, type: string, nth = 0): string => {
 }
 
 describe('a definition term ends at its content', () => {
-  it('drops the trailing run on a folded continuation line', () => {
-    // The ticket's shape: the second line of the term ends in one space, and
-    // the verbatim run inside it ends one codepoint earlier than the term did.
+  it('ends the term and its run at the term line', () => {
+    // The ticket's shape. A term is one line (carve#4861), so the run ends with
+    // the term's line and the next line starts a paragraph.
     const source = ':: `a\nb \n:  d\n'
-    expect(spans(source, 'definition_term')[0]).toMatchObject({ startOffset: 0, endOffset: 7 })
-    expect(covered(source, 'definition_term')).toBe(':: `a\nb')
-    expect(covered(source, 'code')).toBe('`a\nb')
+    expect(spans(source, 'definition_term')[0]).toMatchObject({ startOffset: 0, endOffset: 5 })
+    expect(covered(source, 'definition_term')).toBe(':: `a')
+    expect(covered(source, 'code')).toBe('`a')
   })
 
   it('drops the trailing run on a single-line term too', () => {
@@ -77,7 +77,7 @@ describe('a definition term ends at its content', () => {
 
   it('is unchanged where the line carries no trailing run', () => {
     expect(covered(':: a\n:  d\n', 'definition_term')).toBe(':: a')
-    expect(covered(':: a\nb\n:  d\n', 'definition_term')).toBe(':: a\nb')
+    expect(covered(':: a\nb\n:  d\n', 'definition_term')).toBe(':: a')
   })
 
   it('lets the list end where the term does when the term is its last child', () => {

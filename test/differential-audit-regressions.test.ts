@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 describe('differential audit regressions', () => {
-  it('keeps a content-less marker line as term continuation content', () => {
+  it('keeps a content-less marker line as paragraph content after a term', () => {
     // The marker is content because nothing follows it - a `* ` with a payload
-    // opens a list and ends the term instead. Its separator space is trailing
-    // whitespace like any other, dropped on a folded line as on the marker line
+    // opens a list instead. A term is one line (carve#4861), so the line is a
+    // paragraph, and its separator space is trailing whitespace like any other
     // (markup-carve/carve-js#1145).
-    expect(carveToHtml(':: t\n* \n')).toContain('<dt>t\n*</dt>')
-    expect(carveToHtml(':: t\n- \n')).toContain('<dt>t\n-</dt>')
-    expect(carveToHtml(':: t\n. \n')).toContain('<dt>t\n.</dt>')
-    expect(carveToHtml(':: t\n] \n')).toContain('<dt>t\n]</dt>')
+    expect(carveToHtml(':: t\n* \n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>*</p>')
+    expect(carveToHtml(':: t\n- \n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>-</p>')
+    expect(carveToHtml(':: t\n. \n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>.</p>')
+    expect(carveToHtml(':: t\n] \n')).toBe('<dl>\n  <dt>t</dt>\n</dl>\n<p>]</p>')
     expect(carveToHtml(':: . \n')).toContain('<dt>.</dt>')
-    // The marker still has to be content-less to fold in at all.
+    // The marker still has to be content-less to stay text.
     expect(carveToHtml(':: t\n* x\n')).toContain('<li>x</li>')
   })
 

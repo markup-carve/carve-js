@@ -52,19 +52,19 @@ describe('a definition list is a first-class block opener that interrupts (carve
   // item it folds into the open term (markup-carve/carve#3451, CARVE-P2-017).
   it('an under-indented `:  def` folds into the open term', () => {
     expect(html('- one\n  :: t\n :  d')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>t\n:  d</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<p>:  d</p>',
     )
   })
 
   it('an under-indented `:  def` folds inside an ordered item too', () => {
     expect(html('1. one\n   :: t\n  :  d')).toBe(
-      '<ol>\n  <li>one\n    <dl>\n      <dt>t\n:  d</dt>\n    </dl>\n  </li>\n</ol>',
+      '<ol>\n  <li>one\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ol>\n<p>:  d</p>',
     )
   })
 
   it('multiple under-indented `:  def` lines all fold into the open term', () => {
     expect(html('- one\n  :: t\n :  d\n :  d2')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>t\n:  d\n:  d2</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<p>:  d\n:  d2</p>',
     )
   })
 })

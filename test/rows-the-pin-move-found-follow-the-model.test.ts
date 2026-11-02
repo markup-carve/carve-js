@@ -37,7 +37,7 @@ describe('rows the pin move found follow the model', () => {
     ['> t\n+\n:: t\n: ```\n\nx\n', '<blockquote>\n  <p>t</p>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <pre><code></code></pre>\n    </dd>\n  </dl>\n</blockquote>\n<p>x</p>'],
     ['> > +\n> >\n', '<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>'],
     ['- a\n+\n# h\n\n+\n# h\n', '<ul>\n  <li>a\n    <h1 id="h">h</h1>\n    <h1 id="h-2">h</h1>\n  </li>\n</ul>'],
-    ['- > :: t\n : a\n  > q\n', '<ul>\n  <li>\n    <blockquote>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </blockquote>\n    : a\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>'],
+    ['- > :: t\n : a\n  > q\n', '<ul>\n  <li>\n    <blockquote>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </blockquote>\n  </li>\n</ul>\n<p>: a</p>\n<blockquote><p>q</p></blockquote>'],
   ]
   for (const [source, html] of SHAPES) {
     it(JSON.stringify(source), () => {

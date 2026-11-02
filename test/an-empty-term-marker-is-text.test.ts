@@ -53,14 +53,15 @@ describe('an empty term marker is text', () => {
 
   const term: [string, string, string][] = [
     [
-      'in a term\'s continuation',
+      'after a term',
       ':: t\n:: \n: a\n',
-      '<dl>\n  <dt>t\n::</dt>\n  <dd>a</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n</dl>\n<p>::\n: a</p>',
     ],
   ]
 
   for (const [name, source, expected] of term) {
-    it(`folds into the term: ${name}`, () => {
+    // A term is one line (carve#4861), so the marker line starts a paragraph.
+    it(`starts a paragraph after the term: ${name}`, () => {
       expect(carveToHtml(source).trim()).toBe(expected)
     })
   }
@@ -75,9 +76,9 @@ describe('an empty term marker is text', () => {
       '<dl>\n  <dt>t</dt>\n  <dd>a\n::\nc</dd>\n</dl>',
     ],
     [
-      'a bare marker folds into the term',
+      'a bare marker after a term starts a paragraph (carve#4861)',
       ':: t\n::\n: a\n',
-      '<dl>\n  <dt>t\n::</dt>\n  <dd>a</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n</dl>\n<p>::\n: a</p>',
     ],
     [
       'an empty marker at document level is text',

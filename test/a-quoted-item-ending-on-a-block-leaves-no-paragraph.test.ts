@@ -80,11 +80,12 @@ ${lastBlock}
   <ul>
     <li>
       <dl>
-        <dt>t\ntail</dt>
+        <dt>t</dt>
       </dl>
     </li>
   </ul>
-</blockquote>`],
+</blockquote>
+<p>tail</p>`],
     [['>     # h'], `<blockquote>
   <ul>
     <li>

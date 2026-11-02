@@ -20,11 +20,11 @@ import { carveToHtml } from '../src/index.js'
 
 describe('a comment run that begins a definition term is a comment', () => {
   it.each([
-    ['the closer at column 0', ':: %%%\n   hidden\n%%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
-    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
-    ['no closer at all', ':: %%%\n   hidden\ntail\n', '<dl>\n  <dt>\n   hidden\ntail</dt>\n</dl>'],
-    ['width 4', ':: %%%%\n   hidden\n%%%%\ntail\n', '<dl>\n  <dt>\n   hidden</dt>\n</dl>\n<p>tail</p>'],
-    ['the line form', ':: %% x\n   hidden\ntail\n', '<dl>\n  <dt>\n   hidden\ntail</dt>\n</dl>'],
+    ['the closer at column 0', ':: %%%\n   hidden\n%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
+    ['the closer on the term line', ':: %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
+    ['no closer at all', ':: %%%\n   hidden\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden\ntail</p>'],
+    ['width 4', ':: %%%%\n   hidden\n%%%%\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden</p>\n<p>tail</p>'],
+    ['the line form', ':: %% x\n   hidden\ntail\n', '<dl>\n  <dt></dt>\n</dl>\n<p>hidden\ntail</p>'],
     ['more than one space before the run', '::   %% b\n', '<dl>\n  <dt></dt>\n</dl>'],
     ['a run with no separator after it', ':: %%%b\n', '<dl>\n  <dt></dt>\n</dl>'],
     ['a run of five', ':: %%%%%\n', '<dl>\n  <dt></dt>\n</dl>'],
@@ -53,7 +53,7 @@ describe('a comment run that begins a definition term is a comment', () => {
     ['an escaped run', ':: \\%% b\n', '<dl>\n  <dt>%% b</dt>\n</dl>'],
     ['a braced comment on the term line', ':: a {% c %} b\n', '<dl>\n  <dt>a  b</dt>\n</dl>'],
     ['a fence written below an ordinary term', ':: t\n   %%%\n   hidden\n   %%%\ntail\n', '<dl>\n  <dt>t</dt>\n</dl>\n<p>tail</p>'],
-    ['an ordinary term with a folded line', ':: t\n   hidden\ntail\n', '<dl>\n  <dt>t\n   hidden\ntail</dt>\n</dl>'],
+    ['an ordinary term with a folded line', ':: t\n   hidden\ntail\n', '<dl>\n  <dt>t</dt>\n</dl>\n<p>hidden\ntail</p>'],
   ])('leaves %s where it was', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })

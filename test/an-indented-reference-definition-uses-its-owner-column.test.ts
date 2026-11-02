@@ -8,7 +8,8 @@ it.each([
   ['after a nested note', '[^f]: outer\n   [^g]: mid\n  [r]: /url\n\nSee [r][].\n'],
   ['after a note description', '[^f]: b\n* \n  :: t\n  : d\n   [r]: /url\n\nSee [r][].\n'],
   ['after a note caption', '- a\n  [^f]: t\n[^f]: a\n^ cap\n     [r]: /url\n\nSee [r][].\n'],
-  ['inside a description item', ':: t\n     ``\n:  - a\n     [r]: /url\n     ```\n\nSee [r][].\n'],
+  // A term is one line (carve#4861), so the row no longer wraps the term into a code span.
+  ['inside a description item', ':: t\n:  - a\n     [r]: /url\n\nSee [r][].\n'],
 ])('registers an indented reference definition in %s', (_label, source) => {
   expect(carveToHtml(source, { positions: true })).toContain('See <a href="/url">r</a>.')
 })

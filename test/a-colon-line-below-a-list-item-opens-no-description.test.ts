@@ -20,8 +20,8 @@ it('still opens a term at the item content column after a lazy colon line', () =
 })
 
 it('drops the lazy indent of a quoted term continuation', () => {
-  expect(carveToHtml('> - x\n>     :: t\n>  zq\n')).toContain('<dt>t\nzq</dt>')
-  expect(carveToHtml('> - x\n> : e\n>     :: t\n>  : zq\n')).toContain('<dt>t\n: zq</dt>')
+  expect(carveToHtml('> - x\n>     :: t\n>  zq\n')).toContain('<dt>t</dt>')
+  expect(carveToHtml('> - x\n> : e\n>     :: t\n>  : zq\n')).toContain('<dt>t</dt>')
 })
 
 it('anchors the stripped continuation at its text', () => {

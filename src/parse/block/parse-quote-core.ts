@@ -903,10 +903,9 @@ export function classifyQuotedLine(
 
     return { text: quoted, state: inner }
   }
-  // A term accepts lazy text under PART 0 and CARVE-P2-028, including
-  // inside a quote (markup-carve/carve-js#2860).
+  // A term is one line and leaves no paragraph (carve#4861).
   if (RE_DEFLIST_TERM.test(content)) {
-    state.mode = { kind: 'paragraph', term: true }
+    closeBlockQuoteParagraph(state)
     return null
   }
   // Invisible definitions leave no leaf that can accept a following lazy line.
@@ -1350,6 +1349,8 @@ export function bottomBlockLeavesParagraphOpen(rest: string): boolean {
   if (rest.startsWith(' ') || rest.startsWith('\t')) return true
   if (RE_HEADING.test(rest)) return false
   if (RE_HR.test(rest)) return false
+  // A term is one line, like a heading (carve#4861).
+  if (RE_DEFLIST_TERM.test(rest)) return false
   if (isTableRow(rest)) return false
   // Both comment spellings: `%%` renders nothing, and `%%%` opens a fence whose
   // body is taken from the content column and nowhere else, so neither leaves a

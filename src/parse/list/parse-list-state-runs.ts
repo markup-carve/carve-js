@@ -81,6 +81,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     FOOTNOTE_BODY_COLUMN,
     RE_BLOCKQUOTE,
     RE_COMMENT_LINE,
+    RE_DEFLIST_TERM,
     RE_FENCE,
     RE_FOOTNOTE_DEF,
     RE_HEADING,
@@ -165,7 +166,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
         run === undefined || runColumns === undefined || runColumns < state.descriptionColumn) return false
     const text = content.slice(run)
     // A deeper authored run can still belong to the description's inline fence paragraph.
-    if (!(RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) ||
+    if (!(RE_HEADING.test(text) || RE_DEFLIST_TERM.test(text) || RE_HR.test(text) || isTableRow(text) ||
         (isBlockAttributeLine(text) && !(state.ownedAuthored && state.ownedColumn > state.descriptionColumn)) ||
         colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text))) return false
     state.ownedColumn = state.descriptionColumn

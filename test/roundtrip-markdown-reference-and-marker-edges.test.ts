@@ -34,7 +34,7 @@ describe('roundtrip Markdown: marker bytes (CARVE-P11-063)', () => {
   })
 
   it('reads a payload spanning lines behind a block quote', () => {
-    const source = '> :: A term that\n> wraps here\n> : its definition\n'
+    const source = '> :: A term that\n>\n> wraps here\n> : its definition\n'
     expect(back(source)).toBe(source)
   })
 })

@@ -65,7 +65,6 @@ interface Frame {
   axes?: string | undefined
   run?: number | undefined
   closes?: ((rest: string, col: number) => boolean) | undefined
-  termCut?: number
   lineBlock?: boolean | undefined
   span?: string | null
   // The line of the last table row read in this frame: a `+` row below it is a row, and lint groups by it.
@@ -193,30 +192,6 @@ function matchMarker(rest: string): { width: number; head: number; axes: string 
     return { width: m[1]!.length + 1 + m[4]!.length, head: m[0].length, axes: m[2]! }
   }
   return null
-}
-
-function termRefusesLazyLine(term: Frame, marker: boolean, rest: string, missed: Frame[]): boolean {
-  if (term.last !== 'term') return false
-  return marker ? missed.some((frame) => frame.kind === 'quote' || frame.kind === 'note')
-    : DD.test(rest) && missed.some((frame) => frame.kind === 'quote')
-}
-
-// A separator that ends a quote's term, where a container around the quote also missed it, is that
-// container's lazy text (carve#4432). Closes the quote frames and reports whether it applied.
-function releaseSeparatorPastQuote(frames: Frame[], marker: boolean, missed: Frame[]): boolean {
-  if (marker || missed[0]!.kind === 'quote' || missed.some((frame) => frame.kind === 'note')) return false
-  frames.length = frames.map((frame) => frame.kind).lastIndexOf('quote')
-  const owner = frames[frames.length - 1]!
-  owner.para = true
-  owner.last = 'para'
-  return true
-}
-
-function retireTermAtQuoteSeparator(frames: Frame[], owner: Frame, rest: string): void {
-  if (frames[frames.length - 1]?.last !== 'term' || !DD.test(rest) || owner.kind !== 'quote') return
-  frames[frames.length - 1]!.last = 'para'
-  owner.para = true
-  owner.last = 'para'
 }
 
 // Frames inside a quote a marker-line `+` took leave the body's column to its host (CARVE-P9-067, carve#4385).
@@ -501,22 +476,15 @@ export function ownLines(
     const missedFrames = frames.slice(reached + 1)
     const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
       !missedFrames.some((f) => f.kind === 'note')
-    // A term takes plain lazy text, but a marker or description separator that
-    // misses its quote or note is read by the surviving owner (carve#4300).
-    const marker = matchMarker(m.rest)
-    const refuses = termRefusesLazyLine(top(), marker !== null, m.rest, missedFrames)
-    const releasedSeparator = refuses && releaseSeparatorPastQuote(frames, marker !== null, missedFrames)
-    const termRefuses = refuses !== releasedSeparator
-    if (missed && !captionsQuote && !termRefuses && foldsLazily(form, missedNote)) {
+    if (missed && !captionsQuote && foldsLazily(form, missedNote)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
       if ((missedNote || foldsPastDescription(owner)) && form.kind === 'item' && !plusFollower) spellMarkerAsLetter()
       recordLazyCaption(lazyCaptions, missedNote, m.rest, at)
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
-      leadLazy(owner, releasedSeparator)
+      leadLazy(owner)
       finish()
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
-      retireTermAtQuoteSeparator(frames, owner, m.rest)
       continue
     }
     // A paragraph a `+` attaches at an item's marker column stays in the item (§17 L3),
@@ -562,7 +530,7 @@ export function ownLines(
       top().para = false
       top().last = 'block'
     } else if (form.kind === 'text') {
-      applyText(owner, closedColumn, plusFollower, termRefuses)
+      applyText(owner, closedColumn, plusFollower)
     } else if (plusLanding !== null) {
       lead(plusLanding)
       apply(owner, m.col, form, plusLanding)
@@ -615,12 +583,7 @@ export function ownLines(
     }
 
     // S4: a lazy line is written short of the frame it missed.
-    function leadLazy(owner: Frame, released: boolean): void {
-      // A released separator stands at its owner's column, so no reader takes it back into the term.
-      if (released) {
-        lead(owner.canon)
-        return
-      }
+    function leadLazy(owner: Frame): void {
       const next = frames[reached + 1]!
       const limit = next.kind === 'quote' ? Infinity : next.canon - 1
       // A line at or past a missed list's column moves with that list, until one left of it
@@ -675,22 +638,14 @@ export function ownLines(
       }
     }
 
-    function applyText(owner: Frame, closedColumn: boolean, plusFollower: boolean, releasedTerm = false): void {
-      if (releasedTerm) {
-        lead(owner.canon)
-        owner.para = true
-        owner.last = 'para'
-        return
-      }
+    function applyText(owner: Frame, closedColumn: boolean, plusFollower: boolean): void {
       // A new paragraph starts at the owner's column, never inside a frame it did not reach.
-      // A term's continuation moves with the term, so a later `:` body still follows it.
-      const term = owner.para && owner.last === 'term'
-      // So does the block a `+` attaches to a description.
+      // The block a `+` attaches to a description moves with its term.
       const attached = plusFollower && owner.termShift !== undefined && owner.last === 'dd'
-      const cut = term ? owner.termCut! : attached ? owner.termShift! : Math.max(owner.cut, owner.closedList?.shift ?? 0)
-      lead(owner.para || !closedColumn || plusFollower ? Math.max(m.col - cut, owner.canon) : owner.canon, term)
+      const cut = attached ? owner.termShift! : Math.max(owner.cut, owner.closedList?.shift ?? 0)
+      lead(owner.para || !closedColumn || plusFollower ? Math.max(m.col - cut, owner.canon) : owner.canon)
       owner.para = true
-      if (!term) owner.last = 'para'
+      owner.last = 'para'
     }
 
     // `col` is where the opener starts in the source, `canon` where it lands.
@@ -708,11 +663,7 @@ export function ownLines(
       if (!invisibleLeaf) owner.last = form.kind
       owner.tableLine = form.table ? at : undefined
       if (form.attrLines) attrRest = { left: form.attrLines, cut: col - canon }
-      if (form.kind === 'term') {
-        owner.para = true
-        owner.termCut = col - canon
-        owner.termShift = col - owner.canon
-      }
+      if (form.kind === 'term') owner.termShift = col - owner.canon
       if (form.kind === 'dd') owner.ddShift = col - owner.canon
       if (form.kind === 'fence' || form.kind === 'colon') {
         frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut: col - canon,
@@ -1169,8 +1120,8 @@ export function ownLines(
       return { kind: 'leaf', interrupts: true, table: true }
     }
     const marker = matchMarker(rest)
-    // §10 I2: under an open paragraph a marker opens only in a list item. A term is not such a paragraph.
-    if (marker && owner.para && owner.kind !== 'item' && owner.last !== 'term') return { kind: 'text', interrupts: false }
+    // §10 I2: under an open paragraph a marker opens only in a list item.
+    if (marker && owner.para && owner.kind !== 'item') return { kind: 'text', interrupts: false }
     if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)

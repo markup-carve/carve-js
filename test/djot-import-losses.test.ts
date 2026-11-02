@@ -65,8 +65,9 @@ it('keeps source positions across frontmatter, folded headings, removed attribut
   )
 })
 
-it('dedents a lazy definition term continuation', () => {
-  expect(djotToCarve(': apple\n fruit\n\n  Body\n\n: orange\n')).toContain(':: apple\nfruit\n')
+it('joins a lazy definition term continuation onto the term line', () => {
+  // A Carve term is one line (carve#4861).
+  expect(djotToCarve(': apple\n fruit\n\n  Body\n\n: orange\n')).toContain(':: apple fruit\n')
 })
 
 it.each(['***', '*-*-*', '# h', '> q', '- li', '1. li', '```\nc\n```', '| t |', '::: d\nin\n:::'])(

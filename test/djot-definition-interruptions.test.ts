@@ -18,10 +18,15 @@ function shape(html: string): unknown[] {
   return result
 }
 
+const termCodeAcrossLines = (source: string) => /`term >\r?\n/.test(source)
+
 test('Djot definition block interruptions preserve Native structure', () => {
   for (const row of controls) {
     const result = migrateDjot(row.source)
-    expect(shape(carveToHtml(result.value)), row.source).toEqual(shape(row.html))
+    // A Carve term is one line (carve#4861): a code span across a Djot term's lines keeps its text, not the break.
+    const termBreak = (html: string) => termCodeAcrossLines(row.source)
+      ? html.replace(/<code>([^<]*)<\/code>/g, (_match, code: string) => `<code>${code.replace(/\s+/g, ' ')}</code>`) : html
+    expect(shape(termBreak(carveToHtml(result.value))), row.source).toEqual(shape(termBreak(row.html)))
     expect(result.report.diagnostics.filter(d => /empty definition|definition item with an empty term/i.test(d.message)), row.source).toEqual([])
   }
 })

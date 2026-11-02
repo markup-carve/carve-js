@@ -188,7 +188,10 @@ test('task hooks remain ordinary output without preservation export', () => {
   for (const state of ['x', '-', '_', '>', '?']) assert.ok(htmlAttributes(html).some((attr) => attr.name === 'data-task-state' && attr.value === state), state)
 })
 
-for (const fixture of fixtures.markdownExportImport) test(`shared Markdown export: ${fixture.id}`, () => {
+// The spec fixture still pins a two-line term carrier, which carve#4861 retired (markup-carve/carve#4898).
+const staleSharedFixtures = new Set(['definition-list-wrapped-term'])
+
+for (const fixture of fixtures.markdownExportImport) (staleSharedFixtures.has(fixture.id) ? test.skip : test)(`shared Markdown export: ${fixture.id}`, () => {
   assertProjection(parse(fixture.source), fixture.expectedNodes)
   const ordinary = carveToMarkdown(fixture.source)
   assert.equal(carveToMarkdown(fixture.source, { roundtrip: false }), ordinary)

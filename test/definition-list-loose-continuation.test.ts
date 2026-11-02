@@ -103,7 +103,7 @@ describe('footnote definitions accept the `+` pull-left continuation', () => {
 describe('terms fold continuation lines like a heading (no data loss)', () => {
   it('a wrapped term line folds into the term and keeps the definition', () => {
     expect(html(':: Term that\nwraps\n:  def')).toBe(
-      '<dl>\n  <dt>Term that\nwraps</dt>\n  <dd>def</dd>\n</dl>',
+      '<dl>\n  <dt>Term that</dt>\n</dl>\n<p>wraps\n:  def</p>',
     )
   })
 
@@ -119,27 +119,23 @@ describe('terms fold continuation lines like a heading (no data loss)', () => {
     )
   })
 
-  // A term nested inside a list item whose continuation line sits BELOW the
-  // item content column is a lazy continuation: its leading whitespace is
-  // stripped before it folds into the <dt>, exactly as a lazy paragraph
-  // continuation is stripped. Matches carve-php / carve-rs / the spec oracle.
-  it('a below-content-column wrapped term line folds with its leading space stripped', () => {
-    // `- ` opens content column 2; `:: term` is the term; ` wrapped` at column
-    // 1 is below the content column, so its leading space is removed.
+  // A term is one line (carve#4861): a line below the item's content column
+  // after a nested term misses the item and starts a paragraph after the list.
+  it('a below-content-column line after a nested term leaves the item', () => {
     expect(html('- one\n  :: term\n wrapped')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term</dt>\n    </dl>\n  </li>\n</ul>\n<p>wrapped</p>',
     )
   })
 
-  it('a flush-left (column 0) wrapped term line folds identically', () => {
+  it('a flush-left (column 0) line after a nested term leaves the item identically', () => {
     expect(html('- one\n  :: term\nwrapped')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term</dt>\n    </dl>\n  </li>\n</ul>\n<p>wrapped</p>',
     )
   })
 
   it('a second below-column term continuation is also stripped', () => {
     expect(html('- one\n  :: term\n  more\n wrapped')).toBe(
-      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nmore\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term</dt>\n    </dl>\n    more\nwrapped\n  </li>\n</ul>',
     )
   })
 })

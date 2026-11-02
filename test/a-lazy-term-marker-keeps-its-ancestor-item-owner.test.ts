@@ -8,6 +8,6 @@ it.each([
 ])('closes the open term at a sibling marker: %j', (source) => {
   const html = carveToHtml(source)
   expect(html.match(/<dt>/g)).toHaveLength(2)
-  expect(html).toContain('<dt>t\n: a</dt>')
-  expect(html).toContain('<dt>sibling\ntail</dt>')
+  expect(html).toContain('<dt>t</dt>')
+  expect(html).toContain('<dt>sibling</dt>')
 })

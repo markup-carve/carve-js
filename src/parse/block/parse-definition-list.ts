@@ -37,10 +37,6 @@ import type { LinkDef } from '../inline/inline-resolution.js'
 
 // A phase's answer for one admitted line, or `undefined` to ask the next phase.
 type DescriptionVerdict = 'continue' | 'stop' | undefined
-type TermFenceState = {
-  active: { marker: string; column: number } | null
-  closesOnLine: boolean
-}
 
 function advanceToEntry(
   lexer: Lexer, entry: RegExp, helpers: typeof definitionListHelpers,
@@ -87,22 +83,6 @@ function advanceToEntry(
   return true
 }
 
-function abbreviationBridgesDescription(lexer: Lexer, helpers: typeof definitionListHelpers): boolean {
-  if (!lexer.atDocumentLevel) return false
-  const { RE_COMMENT_LINE, RE_DEFLIST_DEF, isLinkDefLine } = helpers
-  let blanks = 0
-  for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
-    const line = lexer.lineAt(at) ?? ''
-    if (isBlankLine(line)) {
-      if (++blanks >= 3) return false
-      continue
-    }
-    if (RE_DEFLIST_DEF.test(line)) return true
-    if (indentColumns(line) !== 0 || (!RE_COMMENT_LINE.test(line) && !isLinkDefLine(line))) return false
-  }
-  return false
-}
-
 // CARVE-P2-010: a tab after the separator's spaces is content, so the body is paragraph text.
 const descriptionLead = (body: string): string => body.startsWith('\t') ? LEAD_TAB_FRAME + body : body
 
@@ -112,25 +92,6 @@ function descriptionTermOwnerReached(
 ): boolean {
   return openTerm && !DEFINITION_MARKER.test(opener) && !TERM_MARKER.test(opener) &&
     opensBlock(opener) && sourceColumn <= Math.max(0, ownerColumn)
-}
-
-function nestedTermOwnerReached(
-  hostBody: string | null, opener: string, sourceColumn: number, termColumn: number,
-  listColumn: number, opensBlock: (line: string) => boolean,
-): boolean {
-  return hostBody === 'description' && !DEFINITION_MARKER.test(opener) && !TERM_MARKER.test(opener) &&
-    sourceColumn <= termColumn - listColumn && opensBlock(opener)
-}
-
-function termBoundaryReached(
-  leavesTerm: boolean, hostBody: string | null, opener: string, sourceColumn: number,
-  termColumn: number, listColumn: number, hostContentColumn: number,
-  opensBlock: (line: string) => boolean,
-): boolean {
-  return leavesTerm ||
-    (hostBody === 'description' && sourceColumn <= hostContentColumn &&
-      (DEFINITION_MARKER.test(opener.trimStart()) || TERM_MARKER.test(opener.trimStart()))) ||
-    nestedTermOwnerReached(hostBody, opener, sourceColumn, termColumn, listColumn, opensBlock)
 }
 
 function hasAttachedBlockOrMarker(
@@ -143,34 +104,9 @@ function sourceLineAt(lexer: Lexer, index: number, fallback: string): string {
   return (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
 }
 
-function isItemLazyLine(lexer: Lexer): boolean {
-  return lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
-}
-
-function isMarkerLineTermText(lexer: Lexer, line: string, column: number, termColumn: number): boolean {
-  return lexer.definitionLeadFromItemMarker && !lexer.hostTaskMarker && lexer.hostMarkerColumn !== undefined &&
-    DEFINITION_MARKER.test(line) && column >= lexer.hostMarkerColumn && column < termColumn
-}
-
 function isBelowColumnListAfterTerm(state: ItemLazyState, atDocumentColumn: boolean, line: string,
   isListMarker: (line: string) => boolean): boolean {
   return state.inDefList === 'term' && state.opaque === null && !atDocumentColumn && isListMarker(line)
-}
-
-function isPastTermEntry(lexer: Lexer, source: string, entry: string, termColumn: number,
-  markerTermText: boolean, entryLeadColumn: (line: string) => number): boolean {
-  return !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-    (TERM_MARKER.test(entry) || DEFINITION_MARKER.test(entry)) &&
-    (entryLeadColumn(source) > termColumn || markerTermText)
-}
-
-function restoresDescriptionTermIndent(lexer: Lexer, sourceColumn: number): boolean {
-  return lexer.hostBody === 'description' && sourceColumn > (lexer.hostSourceContentColumn ?? 0)
-}
-
-function dropsTermIndent(lexer: Lexer, sourceColumn: number, termColumn: number, retains: boolean): boolean {
-  return !retains && (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
-    lexer.hostBody === 'list' && sourceColumn === termColumn)
 }
 
 type DefinitionListSession = {
@@ -209,7 +145,6 @@ export function createDefinitionListParser(
     RE_ABBR_DEF,
     RE_BLOCKQUOTE,
     RE_CAPTION,
-    RE_COMMENT_BLOCK_ANY,
     RE_COMMENT_LINE,
     RE_DEFLIST_DEF,
     RE_DEFLIST_TERM,
@@ -225,11 +160,9 @@ export function createDefinitionListParser(
     commentBlockHasCloser,
     commentCloserAhead,
     commentFenceRun,
-    commentLineContent,
     deflistContentCol,
     descriptionLeadFenceScans,
     dropTrailingWhitespace,
-    endsHeadingOrQuote,
     fenceCloseRe,
     insideOpenFence,
     insideOpenQuoteParagraph,
@@ -251,7 +184,6 @@ export function createDefinitionListParser(
     nestedSubLexer,
     newCommentSpanScan,
     opensCodeFence,
-    parseCommentBlock,
     quotePrefixDepth,
     restoreVerbatimBlanks,
     sourceColumn,
@@ -280,40 +212,6 @@ export function createDefinitionListParser(
     let body = 0
     for (let end = sourceQuotePrefixEnd(line, 0); end >= 0; end = sourceQuotePrefixEnd(line, end)) body = end
     return entryColumnAt(line, body + leadingWhitespace(line.slice(body)))
-  }
-  const inFoldedTermFence = (
-    state: TermFenceState, line: string, entry: string,
-    column: number, pastOwner: boolean,
-  ): boolean => {
-    if (state.closesOnLine) {
-      state.active = null
-      state.closesOnLine = false
-    }
-    if (state.active !== null) {
-      state.closesOnLine = column === state.active.column &&
-        fenceCloseRe(state.active.marker).test(entry.trimStart())
-      return true
-    }
-    if (!pastOwner) return false
-    const opener = RE_FENCE.exec(line) ?? RE_RAW_FENCE.exec(line)
-    if (opener === null) return false
-    const marker = RE_FENCE.test(line) ? opener[2] : opener[1]
-    if (marker === undefined) return false
-    state.active = { marker, column }
-    return true
-  }
-  const termOwnerColumn = (lexer: Lexer, listColumn: number): number =>
-    lexer.hostBody === 'description' ? lexer.hostSourceContentColumn ?? listColumn : Infinity
-  const termContinuationSourceColumn = (source: string, entry: string): number =>
-    sourceColumn(source, quotePrefixDepth(source) - Number(RE_BLOCKQUOTE.test(entry.trimStart())))
-  const missingTermIndent = (source: number, term: number, host: number, retained: number): number =>
-    Math.max(0, source - (source < term ? host : term) - retained)
-  const commentLeavesTerm = (lexer: Lexer, next: string, termColumn: number): boolean => {
-    const authored = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
-    const visible = stripLazyFrame(next).trimStart()
-    // A list retains its below-column comment with the item holding this term.
-    return lexer.hostBody !== 'list' && RE_COMMENT_LINE.test(visible) && commentFenceRun(visible) === undefined &&
-      sourceColumn(authored) < termColumn
   }
   const definitionEntryFloor = (lexer: Lexer, returned: boolean, termColumn: number): number => {
     if (lexer.definitionLeadFromItemMarker) return lexer.hostContentColumn
@@ -1268,189 +1166,14 @@ export function createDefinitionListParser(
         currentTermSourceColumn = termColumn
         currentTermReturned = lexer.returnedDescriptionOwnerColumns.has(lexer.lineNumber(termLineIndex))
         lexer.consume()
-        // A term is multi-line like a heading: a following plain line folds into
-        // it with a soft break, instead of ending the list and stranding the
-        // definition. A blank line, a new marker (`::` / `:  `), or a block
-        // opener ends the term.
-        // Each line drops its own trailing layout below, once the fold is
-        // complete. In particular, the separator on a content-less marker-shaped
-        // continuation (`* `, `. `) is content here.
-        // A comment past the container column stays a comment and does not end
-        // the term (carve#2411). Like a paragraph, the term's inline content
-        // never reaches across it, so each run of lines between comments is
-        // scanned on its own. `lines` holds the source index of each line of a
-        // run; the first run starts on the term's own line.
-        type TermPart = { lines: number[]; text: string } | Comment
-        const parts: TermPart[] = [{ lines: [termLineIndex], text: t[1]! }]
-        const strippedIndent = new Map<number, number>()
-        const termFence: TermFenceState = { active: null, closesOnLine: false }
-        while (!lexer.eof()) {
-          const next = lexer.peek()!
-          if (commentLeavesTerm(lexer, next, termColumn) ||
-              (lexer.atDocumentLevel && RE_ABBR_DEF.test(next) && entryLeadColumn(next) <= termColumn &&
-                abbreviationBridgesDescription(lexer, helpers))) break
-          if (/^[ \t]+%%/.test(next)) {
-            const first = lexer.pos
-            const fence = RE_COMMENT_BLOCK_ANY.exec(next)
-            const comment: Comment =
-              fence && commentBlockHasCloser(lexer, fence[1]!.length)
-                ? parseCommentBlock(lexer)
-                : { type: 'comment', block: false, content: commentLineContent(lexer.consume()) }
-            const span = lexer.hasDocumentOffsets ? lineRange(lexer, first, lexer.pos - 1) : undefined
-            if (span) {
-              // A LEAF BEGINS AT ITS MARKUP (carve#1928). `lineRange` starts at the
-              // line, and here that is the term's indent, which places nothing -
-              // the shift `attachBlockPos` applies on the ordinary comment path.
-              const lead = leadingWhitespace(next)
-              span.startColumn = (span.startColumn ?? 1) + lead
-              span.startOffset = (span.startOffset ?? 0) + lead
-              comment.pos = span
-            }
-            parts.push(comment)
-            continue
-          }
-          // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
-          // because a framed heading is the term's text rather than a block.
-          const nextEntry = peekEntry()
-          const belowList = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
-            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-            (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry)) &&
-            entryColumn() < listColumn &&
-            (authoredList || entryColumn() < lexer.hostContentColumn)
-          const nextSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? next
-          const nextSourceColumn = termContinuationSourceColumn(nextSource, nextEntry)
-          const pastTermOwner = nextSourceColumn > termOwnerColumn(lexer, listColumn)
-          const foldedFenceLine = inFoldedTermFence(termFence, next, nextEntry,
-            nextSourceColumn, pastTermOwner)
-          // A separator between the item's content column and an over-indented term's column is term text.
-          const separatorBelowTerm = lexer.hostBody === 'list' && !lexer.definitionLeadFromItemMarker &&
-            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && RE_DEFLIST_DEF.test(nextEntry) &&
-            termColumn > lexer.hostContentColumn && nextSourceColumn < termColumn &&
-            nextSourceColumn >= lexer.hostContentColumn
-          const leavesTerm = authoredList && belowList && entryColumn() >= lexer.hostContentColumn && !separatorBelowTerm
-          const markerTermText = isMarkerLineTermText(lexer, nextEntry, entryColumn(), termColumn)
-          const nextPastTerm = isPastTermEntry(lexer, nextSource, nextEntry, termColumn,
-            markerTermText, entryLeadColumn)
-          // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
-          // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
-          // interruption from a fence with no closer ahead so an OPEN PARAGRAPH
-          // keeps it as text. A term is not a paragraph: the oracle ends the term
-          // and hands the document the fence, as it already does under a heading.
-          // The test is column-0 anchored, so an indented fence still folds in.
-          if (!foldedFenceLine && (
-            isBlankLine(next) ||
-            RE_CAPTION.test(next) ||
-            termBoundaryReached(leavesTerm, lexer.hostBody, nextEntry, nextSourceColumn,
-              termColumn, listColumn, lexer.hostSourceContentColumn ?? 0, lineOpensItemBlock) ||
-            (!belowList && !nextPastTerm && !separatorBelowTerm && !markerTermText &&
-              !isItemLazyLine(lexer) &&
-              !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-              (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
-            opensCodeFence(next) ||
-            ((!pastTermOwner || isListMarkerLine(nextEntry)) &&
-              endsHeadingOrQuote(lexer))
-          ))
-            break
-          // The term is the other place a framed line becomes text. The frame
-          // kept the opener tests above from claiming it; it comes off before
-          // the fold, exactly as the oracle unframes here.
-          let continuation = lexer.hostBodyRoot === 'description' &&
-            isBlockAttributeLine(next.trimStart())
-              ? stripLazyFrame(next).trimStart()
-              : stripLazyFrame(next)
-          if (separatorBelowTerm) {
-            const stripped = continuation.replace(/^[ \t]+/, '')
-            strippedIndent.set(lexer.pos, continuation.length - stripped.length)
-            continuation = stripped
-          }
-          const retainsTermIndent = nextPastTerm || lexer.definitionLeadFromItemMarker &&
-            !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) && nextSourceColumn > termColumn
-          if (retainsTermIndent && lexer.hostBody === 'list') {
-            const sourceIndent = entryLeadColumn(nextSource) - termColumn
-            const retainedIndent = indentColumns(continuation)
-            if (sourceIndent > retainedIndent)
-              continuation = ' '.repeat(sourceIndent - retainedIndent) + continuation
-          }
-          if (restoresDescriptionTermIndent(lexer, nextSourceColumn)) {
-            continuation = ' '.repeat(missingTermIndent(nextSourceColumn, termColumn,
-              lexer.hostSourceContentColumn ?? 0, indentColumns(continuation))) + continuation
-          }
-          // A line below the item's content column keeps none of its indent in the term.
-          if (dropsTermIndent(lexer, nextSourceColumn, termColumn, retainsTermIndent)) {
-            const stripped = continuation.replace(/^[ \t]+/, '')
-            strippedIndent.set(lexer.pos, continuation.length - stripped.length)
-            continuation = stripped
-          }
-          const last = parts[parts.length - 1]!
-          if ('lines' in last) {
-            last.text += '\n' + continuation
-            last.lines.push(lexer.pos)
-          } else {
-            parts.push({ lines: [lexer.pos], text: continuation })
-          }
-          lexer.consume()
-        }
-        // `t` was matched against the UNFRAMED line, so the index comes from
-        // that same string: the frame is not in the author's source and must
-        // not be counted into the offset. This corrects arithmetic rather than
-        // output - a framed line only ever reaches an item body sub-lexer, which
-        // is unanchored and publishes no positions, so no document of the 13790
-        // swept moves. It is here so the two halves read the same string.
+        // A term is one line, like a heading (carve#4861).
         const termStart = stripLazyFrame(lexer.lineAt(termLineIndex)!).indexOf(t[1]!)
-        // A continuation line folds in whole, indent included, and the scanner
-        // strips that indent when it builds the text node - so a single base
-        // offset drifts by the indent on every line after the first. Each line
-        // gets its own origin instead (#441): the term's own line starts after its
-        // `::` marker, a continuation line at its left edge.
-        const anchorOf = (source: number) => {
-          const shift = source === termLineIndex ? termStart : strippedIndent.get(source) ?? 0
-          return {
-            offset: lexer.lineOffset(source) + shift,
-            column: lexer.lineStartColumn(source) + shift,
-            line: lexer.lineNumber(source),
-          }
-        }
-        const termInlines: InlineNode[] = []
-        const partBoundaryBreaks: number[] = []
-        parts.forEach((part, index) => {
-          // Preserve each source line boundary, including either side of a comment.
-          if (index > 0) {
-            partBoundaryBreaks.push(termInlines.length)
-            termInlines.push({ type: 'soft_break' })
-          }
-          if (!('lines' in part)) {
-            termInlines.push(part)
-            return
-          }
-          const origin = anchorOf(part.lines[0]!)
-          termInlines.push(
-            ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
-              anchored: lexer.hasDocumentOffsets,
-              baseOffset: origin.offset,
-              startLine: origin.line,
-              startColumn: origin.column,
-              ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
-            }),
-          )
-        })
-        // A part-boundary break is placed once both its neighbours exist: from the
-        // preceding sibling's end to the following sibling's start, the span the
-        // fold's own in-part breaks already publish (carve#2469).
-        for (const i of partBoundaryBreaks) {
-          const prev = termInlines[i - 1]?.pos
-          const next = termInlines[i + 1]?.pos
-          if (prev && next) {
-            termInlines[i]!.pos = {
-              startLine: prev.endLine,
-              endLine: next.startLine,
-              ...(prev.endOffset !== undefined ? { startOffset: prev.endOffset } : {}),
-              ...(next.startOffset !== undefined ? { endOffset: next.startOffset } : {}),
-              ...(prev.endColumn !== undefined ? { startColumn: prev.endColumn } : {}),
-              ...(next.startColumn !== undefined ? { endColumn: next.startColumn } : {}),
-            }
-          }
-        }
-        terms.push(termInlines)
+        terms.push(parseSession.parseInline(dropTrailingWhitespace(t[1]!), lexer.abbrDefs, lexer.linkDefs, {
+          anchored: lexer.hasDocumentOffsets,
+          baseOffset: lexer.lineOffset(termLineIndex) + termStart,
+          startLine: lexer.lineNumber(termLineIndex),
+          startColumn: lexer.lineStartColumn(termLineIndex) + termStart,
+        }))
         termSpans.push(
           lexer.hasDocumentOffsets
             ? markerRange(lexer, termLineIndex, lexer.pos - 1)

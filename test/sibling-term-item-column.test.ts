@@ -9,7 +9,8 @@ describe('sibling terms after a nested marker-line term', () => {
     '> - - - :: t\n>    : a\n>     :: sibling\n>     tail\n',
   ])('keeps the sibling in the item whose content column it reaches', source => {
     const html = carveToHtml(source)
-    expect(html).toMatch(/<\/dl>\s*<\/li>\s*<\/ul>\s*<dl>\s*<dt>sibling/)
+    // A term is one line (carve#4861), so `: a` is text in the outer item.
+    expect(html).toMatch(/<\/dl>\s*<\/li>\s*<\/ul>\s*<\/li>\s*<\/ul>\s*: a\s*<dl>\s*<dt>sibling/)
   })
 })
 

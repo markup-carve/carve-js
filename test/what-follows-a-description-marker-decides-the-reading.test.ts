@@ -21,20 +21,20 @@ const read = (body: string): string => flat(carveToHtml(`:: t\n${body}\nx\n`))
  * one moved unnoticed, which is why the table exists.
  */
 describe('what follows a description marker decides the reading', () => {
-  const FOLDS = '<dl> <dt>t : x</dt> </dl>'
+  const PLAIN = '<dl> <dt>t</dt> </dl> <p>: x</p>'
 
   it.each([
-    // No separator at all: not a marker, so the line folds.
-    ['nothing after the colon', ':', FOLDS],
-    ['a tab, no space', ':\t', FOLDS],
-    ['a tab then a space', ':\t ', FOLDS],
-    // A separator, and nothing after it: no content, so the line folds.
-    ['one space', ': ', FOLDS],
-    ['two spaces', ':  ', FOLDS],
-    ['three spaces', ':   ', FOLDS],
+    // No separator at all: not a marker, so the line is a paragraph after the term.
+    ['nothing after the colon', ':', PLAIN],
+    ['a tab, no space', ':\t', PLAIN],
+    ['a tab then a space', ':\t ', PLAIN],
+    // A separator, and nothing after it: no content, so the line is a paragraph after the term.
+    ['one space', ': ', PLAIN],
+    ['two spaces', ':  ', PLAIN],
+    ['three spaces', ':   ', PLAIN],
     // A separator, then a lone TAB: trailing whitespace, not content, so the
-    // line folds like the rows above (markup-carve/carve#1836).
-    ['a space then a tab', ': \t', FOLDS],
+    // line reads like the rows above (markup-carve/carve#1836).
+    ['a space then a tab', ': \t', PLAIN],
     // A separator and content: the description opens.
     ['a space then text', ': y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
     ['two spaces then text', ':  y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],

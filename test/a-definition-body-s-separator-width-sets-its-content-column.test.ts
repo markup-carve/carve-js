@@ -77,7 +77,7 @@ describe("a definition body's separator width sets its content column", () => {
 
   it('reads a colon line below a folding term as the body (424-7)', () => {
     expect(flat(carveToHtml(':: term\nwrapped on\n: definition\n'))).toBe(
-      '<dl> <dt>term wrapped on</dt> <dd>definition</dd> </dl>',
+      '<dl> <dt>term</dt> </dl> <p>wrapped on : definition</p>',
     )
   })
 
@@ -116,7 +116,7 @@ describe("a definition body's separator width sets its content column", () => {
   it('reads a marker line of nothing but spaces as content-less at every width', () => {
     for (const width of [1, 2, 3, 4]) {
       expect(flat(carveToHtml(`:: t\n:${' '.repeat(width)}\nx\n`)), `width ${width}`).toBe(
-        '<dl> <dt>t : x</dt> </dl>',
+        '<dl> <dt>t</dt> </dl> <p>: x</p>',
       )
     }
   })

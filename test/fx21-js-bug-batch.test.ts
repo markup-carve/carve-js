@@ -17,7 +17,7 @@ describe('container ownership across source columns', () => {
   })
 
   it('keeps a marker-line term open through a lazy definition-shaped line', () => {
-    expect(carveToHtml('- - :: t\n: a\n')).toContain('<dt>t\n: a</dt>')
+    expect(carveToHtml('- - :: t\n: a\n')).toContain('<dt>t</dt>')
   })
 
   it('splits a description paragraph before a second consecutive plus', () => {

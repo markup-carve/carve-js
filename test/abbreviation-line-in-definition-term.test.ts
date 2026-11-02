@@ -9,6 +9,6 @@ describe('abbreviation-shaped line in a definition term', () => {
   })
 
   it('keeps a plain continuation in the term', () => {
-    expect(carveToHtml(':: term\nplain\n')).toBe('<dl>\n  <dt>term\nplain</dt>\n</dl>')
+    expect(carveToHtml(':: term\nplain\n')).toBe('<dl>\n  <dt>term</dt>\n</dl>\n<p>plain</p>')
   })
 })
