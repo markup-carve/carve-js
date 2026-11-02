@@ -39,11 +39,19 @@ describe('thematic break', () => {
     expect(html('---   ')).toBe('<hr>')
   })
 
-  it('rejects internal spaces — a spaced form is NOT a break', () => {
-    // `* * *` / `- - -` are (nested) lists, `_ _ _` is a paragraph (grammar §262).
-    expect(html('* * *')).toBe('<ul>\n  <li>\n    <ul>\n      <li>*</li>\n    </ul>\n  </li>\n</ul>')
-    expect(html('- - -')).toBe('<ul>\n  <li>\n    <ul>\n      <li>-</li>\n    </ul>\n  </li>\n</ul>')
+  it('accepts single spaces in a `*` or `-` run only (carve#4814)', () => {
+    expect(html('* * *')).toBe('<hr>')
+    expect(html('- - -')).toBe('<hr>')
+    expect(html('* * * *  ')).toBe('<hr>')
+    expect(html('*  *  *')).toBe('<ul>\n  <li>\n    <ul>\n      <li>*</li>\n    </ul>\n  </li>\n</ul>')
     expect(html('_ _ _')).toBe('<p>_ _ _</p>')
+  })
+
+  it('tests a spaced run before a list marker below a list (carve#4880)', () => {
+    expect(html('- x\n- - -')).toBe('<ul>\n  <li>x</li>\n</ul>\n<hr>')
+    expect(html('- x\n* * *')).toBe('<ul>\n  <li>x</li>\n</ul>\n<hr>')
+    expect(html('- x\n\n- - -')).toBe('<ul>\n  <li>x</li>\n</ul>\n<hr>')
+    expect(html('- - x\n  - - -')).toBe('<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n    <hr>\n  </li>\n</ul>')
   })
 
   it('accepts a leading indent', () => {

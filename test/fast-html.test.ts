@@ -218,7 +218,8 @@ describe('borrowed HTML layout', () => {
     // The newer spec pin adds 108-security-hardening-12 to the accepted set.
     // Corpus 617 adds an unmarked CSV fence that stays on the code path.
     // The Unicode headings in corpus 15-5 and 119 take the borrowed route.
-    expect(accepted).toBe(78)
+    // Spaced thematic breaks (carve#4814) add corpus 132 and 132-5.
+    expect(accepted).toBe(80)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',

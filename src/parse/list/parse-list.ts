@@ -200,6 +200,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   /** Is `line` a marker that continues this list at its base column (§11)? */
   function isSiblingMarker(shape: ListShape, line: string): boolean {
     return indentColumns(line, shape.baseIndent + 1) === shape.baseIndent &&
+      !RE_HR.test(line.trimStart()) &&
       matchListMarker(line, shape.isTask, shape.isOrdered) !== null &&
       (shape.isOrdered
         ? orderedContinues(line, shape.orderedKind, shape.orderedDelim)
@@ -222,6 +223,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // below; a stray leading blank just ends the list.
     if (isBlankLine(line)) return null
     if (indentColumns(line, baseIndent + 1) !== baseIndent) return null
+    // The thematic break is tested before a list marker, so `- - -` ends the list (carve#4814).
+    if (RE_HR.test(line.trimStart())) return null
     // Strip an abutting `{...}` attribute block off the marker so the bare
     // marker regexes match; remember its attributes to attach to the <li>.
     const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
@@ -3173,6 +3176,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (nextLine === undefined) return false
       const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
       return indentColumns(nextLine, baseIndent + 1) === baseIndent &&
+        !RE_HR.test(nextLine.trimStart()) &&
         matchListMarker(nextStripped, isTask, isOrdered) !== null &&
         (isOrdered
           ? orderedContinues(nextStripped, orderedKind, orderedDelim)

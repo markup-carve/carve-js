@@ -20,15 +20,12 @@ import { RE_INLINE_ATTR } from './inline/parse-inline-opaque.js'
 export const RE_HEADING =
   /^(#{1,6}) +((?=[ \t]*[^ \t\n\r])(?:[ \t]+(?=[^ \t])|[^ \t])+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
 
-// Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
-// (`---`, `***`, `___`, `----`), followed only by optional trailing
-// whitespace and end of line (grammar §262 thematic_break). No leading
-// indent and no internal spaces: a spaced/indented `* * *` / ` ***` is NOT a
-// break and falls through to normal parsing (list / paragraph). The chars
-// must all match, so a mixed `-*-` is not a break. Matches the executable-
-// spec oracle `/^(-{3,}|\*{3,}|_{3,})[ \t]*$/`. Tested against the RAW line
-// (NOT trimStructural), so leading whitespace correctly disqualifies it.
-export const RE_HR = /^([-*_])\1{2,}[ \t]*$/
+// Thematic break: a COL-0 line of 3+ identical `-`, `*`, or `_`, followed only
+// by optional trailing whitespace (grammar thematic_break). `-` and `*` runs may
+// also be spaced by single spaces (`* * *`, `- - -`, carve#4814); a wider gap,
+// a leading indent or a mixed run is not a break. Matches the spec model's
+// `HR`. Tested against the RAW line, so leading whitespace disqualifies it.
+export const RE_HR = /^(?:([-*_])\1{2,}|-(?: -){2,}|\*(?: \*){2,})[ \t]*$/
 
 export const FENCE_TRAILING_WS = '[ \\t]*$'
 

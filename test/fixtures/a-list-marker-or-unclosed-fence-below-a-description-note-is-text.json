@@ -52,7 +52,7 @@
   {
     "id": "row-11",
     "source": ":: t\n: ::: note\n  para\n* * *\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para\n* * *</p>\n    </aside>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>para</p>\n    </aside>\n  </dd>\n</dl>\n<hr>"
   },
   {
     "id": "row-12",

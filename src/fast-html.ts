@@ -289,15 +289,15 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       if (stats) accept(stats, 'codeFences', i, close + 1)
       i = close + 1; wrote = true; continue
     }
-    if (line.startsWith('- ')) {
-      const rendered = renderList(lines, i, 0, depth, defs, opts, out, stats)
-      if (!rendered) return undefined
-      i = rendered.next; wrote = true; continue
-    }
     if (thematicBreak(line)) {
       out.push(indent(depth), '<hr>')
       if (stats) accept(stats, 'thematicBreaks', i, i + 1)
       i++; wrote = true; continue
+    }
+    if (line.startsWith('- ')) {
+      const rendered = renderList(lines, i, 0, depth, defs, opts, out, stats)
+      if (!rendered) return undefined
+      i = rendered.next; wrote = true; continue
     }
     if (decimalListItem(line)) {
       const rendered = renderOrderedList(lines, i, depth, defs, opts, out, stats)
@@ -538,7 +538,7 @@ function blockish(text: string): boolean {
   return /^(?:\s|#|\* |\+ |- |>|\||\{|:::|```|~~~|\.{1,9} |[A-Za-z0-9]+[.)] )/.test(text) || /^(?:---+|\*\*\*+)$/.test(text)
 }
 function thematicBreak(line: string): boolean {
-  return /^(?:-{3,}|\*{3,}|_{3,})$/.test(line)
+  return /^(?:-{3,}|\*{3,}|_{3,}|-(?: -){2,}|\*(?: \*){2,})$/.test(line)
 }
 function fenceOpen(line: string): { char: string; len: number } | undefined {
   const match = /^(`{3,}|~{3,})/.exec(line)

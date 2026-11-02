@@ -1222,10 +1222,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
-// carve#4814 (spaced thematic breaks) is not ported yet.
 const behindSpec = new Map<string, string>([
-  ['132-thematic-break-requires-contiguous-markers', '<ul>\n  <li>\n    <ul>\n      <li>*</li>\n    </ul>\n  </li>\n</ul>'],
-  ['132-thematic-break-requires-contiguous-markers-5', '<ul>\n  <li>\n    <ul>\n      <li>-</li>\n    </ul>\n  </li>\n</ul>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
