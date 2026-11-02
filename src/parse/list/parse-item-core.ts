@@ -729,7 +729,7 @@ export function fencedBlockEnd(scan: AttachedScan): number {
           offset = opaque
           continue
         }
-        if (isListMarkerLine(line) && scan.boundary(line)) {
+        if ((isListMarkerLine(line) || deflistMarkerLine(line)) && scan.boundary(line)) {
           end = scan.base + offset
           break
         }
