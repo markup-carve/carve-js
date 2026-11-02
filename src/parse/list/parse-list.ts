@@ -2440,7 +2440,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           : trimmed
         const opener = opensCodeFence(bottom) ? bottom : trimmed
         const indented = opener !== dedented
-        const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined && !lazyState.literalLayout &&
+        const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
+          // A line that misses the descendant holding the line block is read outside it (carve#4966).
+          !(lazyState.literalLayout && indentColumns(dedented) >= lazyState.ownedColumn) &&
           !noteFenceOpen(lazyState) &&
           (lazyState.quoteInner === null || !blockQuoteParagraphOpen(lazyState.quoteInner)) &&
           opensCodeFence(opener)
