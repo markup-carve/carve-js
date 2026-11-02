@@ -3338,6 +3338,7 @@ class CarveRenderSession {
   private renderBlocks(blocks: BlockNode[], ctx: CarveContext, item?: ListItem, descriptionBody = false): string {
     if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     ctx.blockDepth++
+    const enclosingNoteLimit = this.listNoteLimit
     const previousHost = ctx.afterCaptionHost
     const previousParagraphStart = ctx.paragraphStartsAfterCaptionHost
     ctx.afterCaptionHost = false
@@ -3349,7 +3350,8 @@ class CarveRenderSession {
       let previousBlock: BlockNode | null = null
       let previousDescriptionList = false
       let previousMoved = false
-      for (const block of blocks) {
+      for (const [index, block] of blocks.entries()) {
+        this.listNoteLimit = blocks[index + 1]?.pos?.startLine ?? enclosingNoteLimit
         // A collected definition between two description lists is the boundary
         // that kept them separate in this tree. Write it at that boundary before
         // the document-level pass moves it out of its host.
@@ -3426,11 +3428,13 @@ class CarveRenderSession {
         }
       }
       if (item === undefined && previousBlock !== null && parts.length > 0) {
+        this.listNoteLimit = enclosingNoteLimit
         const footnote = this.listFootnoteAfter(previousBlock, undefined, ctx)
         if (footnote !== undefined) parts[parts.length - 1] += `\n${footnote}`
       }
       return parts.join('\n\n')
     } finally {
+      this.listNoteLimit = enclosingNoteLimit
       ctx.afterCaptionHost = previousHost
       ctx.paragraphStartsAfterCaptionHost = previousParagraphStart
       ctx.blockDepth--
@@ -3946,7 +3950,7 @@ class CarveRenderSession {
     const item = before.items.at(-1)
     const contentColumn = item?.children[0]?.pos?.startColumn
     const from = before.pos?.endLine
-    const to = after === undefined ? Infinity : after.pos?.startLine
+    const to = after === undefined ? this.listNoteLimit : after.pos?.startLine
     if (contentColumn === undefined || item?.pos?.startColumn === undefined || from === undefined || to === undefined) return undefined
     const definitions: string[] = []
     for (const [line, label] of this.footnoteDefsByLine) {
@@ -4615,7 +4619,12 @@ class CarveRenderSession {
    * THE TARGET KEEPS ITS OWN ATTRIBUTES (ruling markup-carve/carve#1721).
    */
   private renderFigure(node: Figure, ctx: CarveContext): string {
-    const target = node.target.type === 'image' ? renderImage(node.target) : this.renderBlock(node.target, ctx)
+    if (node.target.type === 'image') return `${renderImage(node.target)}${this.captionLine(node.caption, ctx)}`
+    const enclosingNoteLimit = this.listNoteLimit
+    // A note below the caption stays below it: above it, the caption reads as note text.
+    this.listNoteLimit = Math.min(enclosingNoteLimit, node.pos?.endLine ?? Infinity)
+    const target = this.renderBlock(node.target, ctx)
+    this.listNoteLimit = enclosingNoteLimit
     return `${target}${this.captionLine(node.caption, ctx)}`
   }
 
@@ -5866,6 +5875,7 @@ class CarveRenderSession {
   /** Footnote definitions live in a root map, not in `children`, so these are
    *  tracked by LABEL rather than by node identity. */
   private footnoteDefsByLine = new Map<number, string>()
+  private listNoteLimit = Infinity
   private documentFootnoteDefPos: Document['footnoteDefPos']
 
   private footnotesWrittenInPlace = new Set<string>()
