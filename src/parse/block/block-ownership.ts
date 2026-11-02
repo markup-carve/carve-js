@@ -67,6 +67,8 @@ interface Frame {
   // The line a fence or colon body opened on, for trace owner paths only.
   opened?: number
   family?: 'code' | 'comment' | 'div'
+  // The owner's last block a `%%%` span in an entry restores at its closer.
+  entryLast?: string | undefined
   axes?: string | undefined
   run?: number | undefined
   closes?: ((rest: string, col: number) => boolean) | undefined
@@ -588,7 +590,7 @@ export function ownLines(
             (inner.span[0] === '%' ? c[1]!.length === inner.span.length : c[1]!.length >= inner.span.length)) inner.span = null
       } else if (m.rest !== '' && inner.closes!(m.rest, m.col)) {
         frames.pop()
-        top().last = 'block'
+        top().last = inner.entryLast ?? 'block'
         payloadForm = 'closer'
       } else if (inner.lineBlock) {
         // A span in a line-block payload pairs past the column too (carve-php#3137).
@@ -686,14 +688,17 @@ export function ownLines(
       owner.para = form.caption === true
       const invisibleLeaf = form.kind === 'leaf' &&
         (COMMENT_LINE.test(m.rest) || isLinkDefLine(m.rest) || RE_ABBR_DEF.test(m.rest))
-      if (!invisibleLeaf) owner.last = form.kind
+      // A matched `%%%` span in an entry closes neither term nor description (CARVE-P9-013, carve#4901).
+      const spanInEntry = form.family === 'comment' && (owner.last === 'term' || owner.last === 'dd')
+      if (!invisibleLeaf && !spanInEntry) owner.last = form.kind
       owner.tableLine = form.table ? at : undefined
       if (form.attrLines) attrRest = { left: form.attrLines, cut: col - canon }
       if (form.kind === 'term') owner.termShift = col - owner.canon
       if (form.kind === 'dd') owner.ddShift = col - owner.canon
       if (form.kind === 'fence' || form.kind === 'colon') {
         frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut: col - canon,
-          closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null })
+          closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null,
+          entryLast: spanInEntry ? owner.last! : undefined })
         return
       }
       if (form.kind === 'quote') {
