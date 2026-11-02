@@ -1185,8 +1185,9 @@ export function createDefinitionListParser(
         // separated from its term (or a previous definition) by a blank line for
         // readability, matching djot. The blank is a separator only - it does not
         // end the entry when a `:  ` definition follows.
+        // A comment after a description stays in it, so the term's span never reaches past that description.
         if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers,
-          parseSession, comment => { terms.at(-1)?.push(comment) })) break
+          parseSession, comment => { (definitions.at(-1) ?? terms.at(-1))?.push(comment) })) break
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
