@@ -1020,7 +1020,10 @@ export function createDefinitionListParser(
         if (commentVerdict !== undefined) return commentVerdict
         const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
           RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol
-        if (foldsLazyLine(ln, below, atDocumentColumn, belowLeadColon, quoteFootnoteBelowBody)) return foldLazyLine(ln, below, atDocumentColumn)
+        // A separator the item framed still opens the description of the body's last term.
+        const termSeparator = lazyState.inDefList === 'term' && lazyState.opaque === null && ln.startsWith(LAZY_FRAME) &&
+          RE_DEFLIST_DEF.test(stripLazyFrame(ln).trimStart())
+        if (termSeparator || foldsLazyLine(ln, below, atDocumentColumn, belowLeadColon, quoteFootnoteBelowBody)) return foldLazyLine(ln, below, atDocumentColumn)
         return 'stop'
       }
       // A definition continues like a list item (PART 9 \u00a717):

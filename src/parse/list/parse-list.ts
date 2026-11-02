@@ -2119,8 +2119,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A marker-line note's body takes a description at its own column below a deeper term.
       const atMarkerNoteBody = markerNoteItem && sourceDescription !== null && sourceDepth === itemQuoteDepth &&
         sourceMarkerColumn >= lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent + FOOTNOTE_BODY_COLUMN
+      // A separator after a nested item's term misses that term and is read in this item (carve#4861).
+      const missesNestedTerm = sourceDescription !== null && lazyState.inDefList === false &&
+        lazyState.deepest?.inDefList === 'term'
       belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
-        definitionHostColumn !== undefined &&
+        !missesNestedTerm && definitionHostColumn !== undefined &&
         (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
         ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
           (markerLineTerm && lazyState.inDefList === 'description' &&
