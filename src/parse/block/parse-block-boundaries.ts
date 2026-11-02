@@ -112,7 +112,7 @@ export type DefListOpening = false | 'term' | 'description'
 
 export type ItemOpaqueState =
   | { kind: 'code'; close: RegExp; column?: number }
-  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean; term?: boolean }
+  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean; term?: boolean; description?: boolean }
 
 export interface ItemLazyState {
   retainedMarker?: boolean
