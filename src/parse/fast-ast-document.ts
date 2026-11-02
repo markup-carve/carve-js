@@ -16,12 +16,14 @@ class FastInlineSession extends InlineParseSession {
 
 const HEADING = /^(#{1,6})[ \t]+(.+)$/
 const BULLET = /^([-*]) (.+)$/
+// Every ordered marker the block parser may open, so the fast path declines it wherever it stands.
+const ORDERED_MARKER = /^(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|\.)[.)](?:\{| )/
 
 function unsupported(line: string): boolean {
   return line[0] === ' ' || line[0] === '\t' ||
     !(/^[A-Za-z0-9\u0080-\uFFFF]/.test(line) || line[0] === '(' || line[0] === '`' || line[0] === '[') ||
     line.startsWith('```') ||
-    /^(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|\.)[.)](?:\{| )/.test(line) ||
+    ORDERED_MARKER.test(line) ||
     /^\[[^\]]+\]:/.test(line) ||
     /^[-*_]{3,}$/.test(line)
 }
@@ -67,14 +69,14 @@ export function tryFastAstDocument(source: string): Document | undefined {
         const match = BULLET.exec(lines[i]!)
         if (!match || match[1] !== marker) break
         if (!/^[A-Za-z0-9\u0080-\uFFFF`]/.test(match[2]!) || match[2]!.startsWith('```') ||
-            /^(?:\d+[.)] |[A-Za-z][.)] )/.test(match[2]!)) return undefined
+            ORDERED_MARKER.test(match[2]!)) return undefined
         const content = [match[2]!]
         i++
         while (i < lines.length && lines[i]!.startsWith('  ') && lines[i]!.trim() !== '') {
           const continuation = lines[i]!
           if (continuation.startsWith('   ') || continuation.startsWith('  ```') ||
               !/^[A-Za-z0-9\u0080-\uFFFF\[(`]/.test(continuation.slice(2)) ||
-              /^  (?:[-*+] |\d+[.)] |[a-zA-Z][.)] |>|::|~|\|)/.test(continuation)) return undefined
+              /^  (?:[-*+] |>|::|~|\|)/.test(continuation) || ORDERED_MARKER.test(continuation.slice(2))) return undefined
           content.push(lines[i]!.slice(2))
           i++
         }
