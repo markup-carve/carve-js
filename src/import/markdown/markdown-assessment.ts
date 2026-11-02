@@ -199,7 +199,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (i < input.length) i++
         emit('fenced-code', n)
         if (info && !/^[A-Za-z0-9_+./-]+$/.test(info)) complete = false
-        html += `<pre><code${info ? ` class="language-${escape(info)}"` : ''}>${escape(body.join('\n') + (body.length ? '\n' : ''))}</code></pre>\n`; continue
+        html += `<pre><code${info ? ` class="${info.startsWith('language-') ? '' : 'language-'}${escape(info)}"` : ''}>${escape(body.join('\n') + (body.length ? '\n' : ''))}</code></pre>\n`; continue
       }
       if (/^ {4}/.test(line)) {
         const body: string[] = []

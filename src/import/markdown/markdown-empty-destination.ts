@@ -2,7 +2,7 @@ import { freeMarkerSerial } from '../../parse/list/marker-serial.js'
 import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { rawBracketRunCloses } from '../../parse.js'
 import { trimMatchingEdges } from '../../trim-non-nbsp.js'
-import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
+import { labelNeedsInline, readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
 /* Convert CommonMark empty destinations to native Carve links and images. */
 
 import { markdownEmphasis } from './markdown-emphasis.js'
@@ -652,7 +652,7 @@ export function extractReferenceDefinitions(
     }
     if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {
       const single = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
-      const ordinary = single && !/\\\]/.test(single[1]!) && (single[2]!.trim() === '' || LINE_TITLE.test(single[2]!))
+      const ordinary = single && !labelNeedsInline(single[1]!) && (single[2]!.trim() === '' || LINE_TITLE.test(single[2]!))
       const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
         const key = normalizeReferenceLabel(parsed.label)

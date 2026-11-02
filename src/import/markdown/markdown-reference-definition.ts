@@ -5,6 +5,14 @@ export interface MarkdownReferenceDefinition {
   complex: boolean
 }
 
+/**
+ * A label Carve cannot spell back as the same key: a line break, an escaped
+ * `]`, or a literal backslash (one not escaping ASCII punctuation).
+ */
+export function labelNeedsInline(label: string): boolean {
+  return /\n|^(?:[^\\]|\\[!-\/:-@\[-\\^-`{-~])*\\(?:\]|[^!-\/:-@\[-`{-~]|$)/.test(label)
+}
+
 /** Read a top-level reference definition before converting its inline text. */
 export function readMarkdownReferenceDefinition(source: string): MarkdownReferenceDefinition | null {
   const opener = /^ {0,3}\[/.exec(source)
@@ -54,7 +62,7 @@ export function readMarkdownReferenceDefinition(source: string): MarkdownReferen
     let end = destinationEnd
     while (/[ \t]/.test(source[end] ?? '\0')) end++
     if (end < source.length && source[end] !== '\n') return null
-    return { label, target: destination, lines: source.slice(0, end).split('\n').length, complex: /\n|\\\]/.test(label) }
+    return { label, target: destination, lines: source.slice(0, end).split('\n').length, complex: labelNeedsInline(label) }
   }
   let title: string | undefined
   let titleSource = ''
@@ -84,6 +92,6 @@ export function readMarkdownReferenceDefinition(source: string): MarkdownReferen
     label,
     target: destination + titleSource,
     lines: source.slice(0, at).split('\n').length,
-    complex: /\n|\\\]/.test(label) || (title !== undefined && title.includes('\n')),
+    complex: labelNeedsInline(label) || (title !== undefined && title.includes('\n')),
   }
 }
