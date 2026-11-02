@@ -3120,35 +3120,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A marker-line note's body runs like a nested definition's, opened by the
     // lead line; its blanks are the note's. A comment closes the note's
     // paragraph, so the run ends with it.
-    // A tail at a sub-item's content column is that sub-item's, and so is the blank before it (§17).
-    const tailInDescendant = (blank: number): boolean => {
-      const tail = nested[blank + 1]
-      if (tail === undefined) return false
-      const column = indentColumns(tail)
-      for (let k = blank - 1; k >= 0; k--) {
-        const ln = nested[k]!
-        if (isBlankLine(ln)) continue
-        const head = /^[ \t]*(?:[-*]|[0-9A-Za-z]+[.)]|\.) +/.exec(ln)
-        if (head && indentColumns(ln) < column) return column >= head[0].length
-        if (indentColumns(ln) === 0) return false
-      }
-      return false
-    }
-    // A definition at a description body's column is invisible there, as one at the item's column is (carve#4903).
+    // A definition at a description body's or sub-item's content column is invisible there, as one at the item's column is (carve#4903).
     // The tail is scanned upward, so the owner line found for a column serves every line below it.
-    let descriptionOwner: { column: number, line: number, body: boolean } | undefined
-    const definitionAtDescriptionBody = (index: number): boolean => {
+    let descendantOwner: { column: number, line: number, body: boolean } | undefined
+    const definitionAtDescendantBody = (index: number): boolean => {
       const text = nested[index]!
       const rest = text.trimStart()
       // A footnote definition there opens a frame, so it is not one of them.
       if (rest === text || !/^[[*]/.test(rest) || RE_FOOTNOTE_DEF.test(rest) || !(isLinkDefLine(rest) || RE_ABBR_DEF.test(rest))) return false
       const column = indentColumns(text)
-      if (descriptionOwner?.column === column && descriptionOwner.line < index) return descriptionOwner.body
+      if (descendantOwner?.column === column && descendantOwner.line < index) return descendantOwner.body
       let k = index - 1
       while (k >= 0 && (isBlankLine(nested[k]!) || indentColumns(nested[k]!) >= column)) k--
-      const marker = k < 0 ? null : /^ *:( +)(?=[^ ])(?=.*[^ \t])/.exec(nested[k]!)
-      descriptionOwner = { column, line: k, body: marker !== null && marker[0].length === column }
-      return descriptionOwner.body
+      const owner = k < 0 ? '' : nested[k]!
+      const marker = /^ *:( +)(?=[^ ])(?=.*[^ \t])/.exec(owner)
+      descendantOwner = { column, line: k, body: k >= 0 && (marker !== null ? marker[0].length === column : markerContentColumn(owner, terminatorFree) === column) }
+      return descendantOwner.body
     }
     const endsOnInvisibleTail = (): boolean => {
       let markerNoteRunEnd = -1
@@ -3178,9 +3165,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           // never loosens. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
-          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd && !tailInDescendant(k)
+          return k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
         }
-        if (invisibleNested(k) || definitionAtDescriptionBody(k)) continue
+        if (invisibleNested(k) || definitionAtDescendantBody(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
         const opener = wrappedAttributeOpener(k)
         if (opener >= 0) {
