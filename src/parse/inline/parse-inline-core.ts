@@ -284,6 +284,12 @@ export const wordBefore = (text: string, at: number): boolean => {
     && text.charCodeAt(last - 1) >= 0xd800 && text.charCodeAt(last - 1) <= 0xdbff ? last - 1 : last
   return wordAfter(text, start)
 }
+// A word character before `at`, with any grapheme extenders it carries (carve#4810 R2).
+export const wordBeforeGrapheme = (text: string, at: number): boolean => {
+  let p = at
+  while (p > 0 && extendsGrapheme(text, p - 1)) p--
+  return wordBefore(text, p)
+}
 
 export const QUOTE_LETTER_RUN = /\p{L}+/uy
 
