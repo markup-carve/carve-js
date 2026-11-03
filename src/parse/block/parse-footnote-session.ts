@@ -451,10 +451,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // `bodyHoldsOpenCommentSpan`. The reported host hides the payload at a
       // delimiter REACHING column two and did not at column zero or one, which is
       // the band this covers.
-      pendingBlankRun.count === 0 &&
+      // A blank inside the span is payload too (§28, carve#4996).
       RE_COMMENT_LINE.test(ln) &&
       bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))
     ) {
+      for (let k = 0; k < pendingBlankRun.count; k++) {
+        bufferedBlanks.add(bodyLines.length)
+        bodyLines.push('')
+        bodyLineNumbers.push(pendingBlankRun.lineNumbers[k]!)
+        bodySourceLines.push(pendingBlankRun.lines[k])
+      }
+      pendingBlankRun.clear()
       // ONE COLUMN of the authored indentation is kept, as the list collector
       // keeps it, so the body's own parse cannot read a delimiter written below
       // its column back as an authored column-0 one. A delimiter already AT

@@ -30,6 +30,7 @@ import {
   RE_FENCE_CLOSER,
 } from './parse-quote-core.js'
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
+import { FOOTNOTE_BODY_COLUMN } from './parse-block-boundaries.js'
 import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 
 export interface ParseOptions {
@@ -736,10 +737,22 @@ export function markerFreeContent(line: string): string {
  */
 export interface CommentSpanScan {
   index: number
-  opaque: { comment: boolean; char: string; run: number } | null
+  /** `owner`: the body column of a span opened on a description or note lead; a line below it ends the span (PART 0 S1). */
+  opaque: { comment: boolean; char: string; run: number; owner?: number } | null
   atBlockStart: boolean
   /** The last body line of each delimiter width, for `bodyHoldsClosableCommentSpan`. */
   runs?: { indexed: number; last: Map<number, number> }
+  /** Columns of the lines read so far, nearest last, each with whether it is a `::`/`:` entry line. */
+  entries?: Array<[number, boolean]>
+}
+
+const RE_NOTE_LEAD = /^\[\^[^\]]+\]: +(?=[^ \t])/
+const RE_DESCRIPTION_LEAD = /^: +(?=[^ \t])/
+
+// A `: ` lead opens a description only under an entry at its column (`::` or `:` above).
+function descriptionLeadOpens(entries: Array<[number, boolean]>, column: number): boolean {
+  for (let k = entries.length - 1; k >= 0; k--) if (entries[k]![0] <= column) return entries[k]![0] === column && entries[k]![1]
+  return false
 }
 
 export const newCommentSpanScan = (): CommentSpanScan => ({ index: 0, opaque: null, atBlockStart: true })
@@ -751,8 +764,24 @@ export function bodyHoldsOpenCommentSpan(
   degraded?: ReadonlySet<number> | ((index: number, run: number) => boolean),
 ): boolean {
   const isDegraded = typeof degraded === 'function' ? degraded : (index: number) => degraded?.has(index) === true
+  const entries = scan.entries ??= []
   for (; scan.index < lines.length; scan.index++) {
-    const line = stripLazyFrame(lines[scan.index]!).replace(/^[ \t]+/, '')
+    const raw = stripLazyFrame(lines[scan.index]!)
+    const line = raw.replace(/^[ \t]+/, '')
+    const column = line === '' ? 0 : indentColumns(raw)
+    const owner = scan.opaque?.owner
+    if (owner !== undefined && line !== '' && !line.startsWith('%%') && (column < owner || raw !== lines[scan.index])) {
+      scan.opaque = null
+      scan.atBlockStart = true
+    }
+    // A description or note marker line opens a body, so a span on it is that body's (carve#4996).
+    const lead = scan.opaque === null && line !== ''
+      ? RE_NOTE_LEAD.exec(line) ?? (descriptionLeadOpens(entries, column) ? RE_DESCRIPTION_LEAD.exec(line) : null)
+      : null
+    if (line !== '') {
+      while (entries.length > 0 && entries.at(-1)![0] >= column) entries.pop()
+      entries.push([column, /^::? /.test(line)])
+    }
     const open = scan.opaque
     if (open !== null) {
       let closed = false
@@ -771,7 +800,7 @@ export function bodyHoldsOpenCommentSpan(
       scan.atBlockStart = true
       continue
     }
-    const opener = scan.atBlockStart ? markerFreeContent(line) : line
+    const opener = lead !== null ? markerFreeContent(line.slice(lead[0].length)) : scan.atBlockStart ? markerFreeContent(line) : line
     scan.atBlockStart = false
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     if (code !== null) {
@@ -780,7 +809,10 @@ export function bodyHoldsOpenCommentSpan(
       continue
     }
     const comment = commentFenceRun(opener)
-    if (comment !== undefined && !isDegraded(scan.index, comment)) scan.opaque = { comment: true, char: '%', run: comment }
+    if (comment !== undefined && !isDegraded(scan.index, comment)) {
+      scan.opaque = { comment: true, char: '%', run: comment }
+      if (lead !== null) scan.opaque.owner = column + (lead[0][0] === '[' ? FOOTNOTE_BODY_COLUMN : lead[0].length)
+    }
   }
 
   return scan.opaque?.comment === true
