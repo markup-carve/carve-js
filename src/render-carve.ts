@@ -3942,7 +3942,8 @@ class CarveRenderSession {
         }
         let itemSource = spellItem(renderItem(node.tight))
         if (needsReadback && !readsBack(itemSource)) {
-          itemSource = spellItem(renderItem(false))
+          const looseItemSource = spellItem(renderItem(false))
+          if (readsBack(looseItemSource)) itemSource = looseItemSource
         }
         out += itemSource
         if (!node.tight && idx < node.items.length - 1) out += '\n'
@@ -4235,7 +4236,8 @@ class CarveRenderSession {
           // A comment does not part two lists (§11 N1a), so the boundary must survive it.
           const above = previousEmitted?.type === 'comment' ? item.children.slice(0, i).reverse().find((block: BlockNode) => block.type !== 'comment') : undefined
           const mergesAcrossComments = above?.type === 'list' && listsWouldMerge(above, b)
-          if (!separated && previousEmitted !== null && (adjacentBlocksMerge(previousEmitted, b) || mergesAcrossComments)) {
+          if (!separated && previousEmitted !== null && !opensWithAnAttributeLine(rendered) &&
+              (adjacentBlocksMerge(previousEmitted, b) || mergesAcrossComments)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
           } else {
             parts.push(rendered)

@@ -55,6 +55,20 @@ describe('a blank before a direct child block', () => {
     expect(carveToHtml(source)).toContain('<li>outer\n    <ul>')
   })
 
+  it('keeps a tight parent between sibling lists separated by an attribute line', () => {
+    const source = '- head\n  > q\n  - a\n  {.x}\n  - a\n'
+    const written = carveToCarve(source)
+    expect(carveToHtml(written)).toBe(carveToHtml(source))
+    expect(parse(written).children[0]).toMatchObject({ type: 'list', tight: true })
+  })
+
+  it('keeps a tight parent when a nested list precedes a fence and thematic break', () => {
+    const source = '- head\n  - a\n  ```\n  x\n  ```\n  ---\n'
+    const written = carveToCarve(source)
+    expect(carveToHtml(written)).toBe(carveToHtml(source))
+    expect(parse(written).children[0]).toMatchObject({ type: 'list', tight: true })
+  })
+
   it('keeps a loose list with a literal plus and later div at its original boundaries', () => {
     const source = '- a\n  - +\n\n  :::note\n  q\n  :::\n\n  - b\n'
     const written = carveToCarve(source)
