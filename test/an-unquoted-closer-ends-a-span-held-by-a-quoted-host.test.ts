@@ -41,6 +41,16 @@ describe('an unquoted closer ends a span held by a quoted host', () => {
       "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a</li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>c</p>",
     ],
     [
+      "lines after the closer of a marker-line span stay in the item",
+      "> - %%%\n%%%\n>   c\ntail\n",
+      "<blockquote>\n  <ul>\n    <li>c\ntail</li>\n  </ul>\n</blockquote>",
+    ],
+    [
+      "a note span in a quote, then its body",
+      "> [^n]: x\n>   %%%\n%%%\n>   c\ntail\n",
+      "<blockquote>\n\n</blockquote>",
+    ],
+    [
       "a closer of the wrong width ends the span and opens its own",
       "> - a\n>   %%%\n%%%%\nc\n",
       "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>",

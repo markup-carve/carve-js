@@ -1828,17 +1828,36 @@ export class ParseSession extends InlineParseSession {
     const spanWidth = (level: BlockQuoteLazyState): number | undefined =>
       level.mode.kind === 'comment_fence' ? level.mode.length
         : level.hosts?.fence?.comment ? level.hosts.fence.marker.length : undefined
+    // The column a host's span reads its closer at: the fence's floor, or the host's own column.
+    const hostColumn = (level: BlockQuoteLazyState): number | undefined =>
+      level.mode.kind === 'comment_fence'
+        ? (level.hosts?.columns.at(-1) ?? 0) > 0 ? level.hosts!.columns.at(-1) : undefined
+        : level.hosts!.fence!.floor
     let level = q.state
     let open = spanWidth(level)
-    while (level.mode.kind === 'quote') {
+    let column = open === undefined ? undefined : hostColumn(level)
+    let hostDepth = 0
+    for (let depth = 1; level.mode.kind === 'quote'; depth++) {
       level = level.mode.inner
-      open = spanWidth(level) ?? open
+      const inner = spanWidth(level)
+      if (inner === undefined) continue
+      open = inner
+      column = hostColumn(level)
+      hostDepth = depth
     }
     if (open !== width) return false
     const { lexer } = q
     const lineIndex = lexer.pos
     lexer.consume()
-    this.appendLazyQuoteLine(q, ln, lineIndex, false)
+    if (column === undefined) {
+      this.appendLazyQuoteLine(q, ln, lineIndex, false)
+      return true
+    }
+    // A host's span reads the closer as written at the host's column, as the quoted spelling is.
+    const content = '> '.repeat(hostDepth) + ' '.repeat(column) + ln.trimStart()
+    q.inner.push(content)
+    q.untracked.push([content, lineIndex])
+    q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
     return true
   }
 
