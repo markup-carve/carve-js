@@ -262,6 +262,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
     }
   }
   visit(document.children, 0)
+  for (const blocks of Object.values(document.footnoteDefs ?? {})) visit(blocks, 0)
 }
 
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
