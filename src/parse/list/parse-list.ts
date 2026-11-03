@@ -384,14 +384,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const attached = session.collectAttachedListBlock(lexer, (line) => isItemAttachBoundary(line) || (followerOpensBlock &&
       indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart()))),
     shape.baseIndent, false, followerColumn)
-    const nestedContentOffset = itemSource.lastIndexOf(head.content)
-    const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(itemSource, nestedContentOffset)
+    // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
+    // A task item's content column is its box's column.
+    const contentOffset = head.line.lastIndexOf(head.content)
+    const nestedContentOffset = head.checked !== undefined && contentOffset >= 4 &&
+      /^\[[ xX_>\/!?-]\] $/.test(head.line.slice(contentOffset - 4, contentOffset)) ? contentOffset - 4 : contentOffset
+    const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(head.line, nestedContentOffset)
     // The follower stands at the innermost opener's marker column, which is column 0 of the nested line.
     const followerSlice = indentColumns(attached.lines[0] ?? '')
     const lines = [head.content, ...attached.lines.map(line => sliceColumns(line, Math.min(followerSlice, indentColumns(line)), true))]
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
-    // A quoted line right after the block, at the stacked quote's source column, is still that quote's (§17 L3).
-    const quoteOffset = itemSource.search(/(?:> )+\+[ \t]*$/)
+    // A quoted line right after the block, at the stacked quote's owner column, is still that quote's (§17 L3).
+    // A task item owns its lines from its box's column, so the quote is measured from the box.
+    const quoteOffset = itemSource.search(/(?:\[[ xX_>\/!?-]\] )?(?:> )+\+[ \t]*$/)
     if (attached.lines.length > 0 && quoteOffset >= 0 && isStackedFirstBlockQuoteMarker(itemSource)) {
       const root = lexer.rootLines ?? lexer.lines
       const quoteColumn = sourceColumnAt(itemSource, quoteOffset)
@@ -401,11 +406,35 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (quotedSource !== undefined && sourceColumn(quotedSource, hostDepth) === quoteColumn &&
           RE_BLOCKQUOTE.test(quoted!.trimStart())) {
         for (let next = lexer.peek(); next !== undefined && !isBlankLine(next) &&
-            indentColumns(next) >= followerSlice && !isSiblingMarker(shape, next); next = lexer.peek()) {
-          lines.push(sliceColumns(next, followerSlice, true))
+            indentColumns(next) >= Math.min(followerSlice, indentColumns(quoted!)) &&
+            !isSiblingMarker(shape, next); next = lexer.peek()) {
+          lines.push(sliceColumns(next, Math.min(followerSlice, indentColumns(next)), true))
           numbers.push(lexer.lineNumber(lexer.pos))
           lexer.consume()
         }
+      }
+    }
+    // A block after a blank at a nested stacked item's content column is that inner item's (PART 0 S4).
+    const innerOffset = /^(?:[-*] |\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ) */.exec(head.content)?.[0].length
+    if (innerOffset !== undefined && contentOffset >= 0 && attached.lines.length > 0) {
+      const markerColumn = sourceColumnAt(head.line, contentOffset)
+      const innerColumn = markerColumn + innerOffset
+      while (true) {
+        let gap = 0
+        while (isBlankLine(lexer.peek(gap))) gap++
+        const next = lexer.peek(gap)
+        if (gap === 0 || next === undefined || isSiblingMarker(shape, next)) break
+        // A marker at or past the inner item's own marker column still continues the inner list.
+        if (indentColumns(next) < innerColumn && !(isListMarkerLine(next.trimStart()) && indentColumns(next) >= ownContentColumn)) break
+        for (let index = 0; index < gap; index++) {
+          lines.push('')
+          numbers.push(lexer.lineNumber(lexer.pos))
+          lexer.consume()
+        }
+        const reached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, shape.baseIndent, false)
+        lines.push(...reached.lines.map(line => sliceColumns(line, markerColumn, true)))
+        numbers.push(...reached.lineNumbers)
+        if (reached.lines.length === 0) break
       }
     }
     const emptyQuotedFollower = isStackedFirstBlockQuoteMarker(itemSource) &&
