@@ -1,0 +1,50 @@
+[
+  {
+    "source": "> - ::: in\n> %%%\n> x\nzz\n",
+    "html": "<blockquote><ul><li><div class=\"in\"></div></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ```\n> %%%\n> x\nzz\n",
+    "html": "<blockquote><ul><li><pre><code></code></pre></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ~~~\n> %%%\n>   x\nzz\n",
+    "html": "<blockquote><ul><li><pre><code></code></pre></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> 1. ::: in\n> %%%\n> x\n> y\nzz\n",
+    "html": "<blockquote><ol><li><div class=\"in\"></div></li></ol></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ::: in\n> %%%%\n>  x\nzz\n",
+    "html": "<blockquote><ul><li><div class=\"in\"></div></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ::: in\n>   :::\n> %%%\n> x\nzz\n",
+    "html": "<blockquote><ul><li><div class=\"in\"></div></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - :::: box\n>   - ::: in\n> %%%\n>   x\nTAILX\n",
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul></blockquote><p>TAILX</p>"
+  },
+  {
+    "source": "> - ::: box\n>   ```\n> %%%\n> x\n- t\n",
+    "html": "<blockquote><ul><li><div class=\"box\"><pre><code></code></pre></div></li></ul></blockquote><ul><li>t</li></ul>"
+  },
+  {
+    "source": "> > - ::: in\n> > %%%\n> > x\nzz\n",
+    "html": "<blockquote><blockquote><ul><li><div class=\"in\"></div></li></ul></blockquote></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> > - ```\n> >   code\n> > %%%\n> > x\n> q\n",
+    "html": "<blockquote><blockquote><ul><li><pre><code>code\n</code></pre></li></ul></blockquote><p>q</p></blockquote>"
+  },
+  {
+    "source": "> - ::: in\n> %%%\n> x\n> %%%\nzz\n",
+    "html": "<blockquote><ul><li><div class=\"in\"></div></li></ul></blockquote><p>zz</p>"
+  },
+  {
+    "source": "> - ::: in\n> %%%\n> x\n> %%%\n> y\nzz\n",
+    "html": "<blockquote><ul><li><div class=\"in\"></div></li></ul><p>y\nzz</p></blockquote>"
+  }
+]
