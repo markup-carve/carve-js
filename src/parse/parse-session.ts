@@ -1854,8 +1854,9 @@ export class ParseSession extends InlineParseSession {
       return true
     }
     // A host's span reads the closer as written at the host's column, as the quoted spelling is.
+    // A deeper quote gets the line as authored and reads it the same way itself.
     const content = '> '.repeat(hostDepth) + ' '.repeat(column) + ln.trimStart()
-    q.inner.push(content)
+    q.inner.push(hostDepth === 0 ? content : ln)
     q.untracked.push([content, lineIndex])
     q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
     return true

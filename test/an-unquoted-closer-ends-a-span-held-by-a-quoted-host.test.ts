@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 // An unquoted exact-width `%%%` closes a span an item, description or note holds in a quote, as it does a quote's own span (PART 0 S1, ruling on carve#5027).
 // Each output is the spec model's for the same document with the closer written inside the quote.
@@ -57,5 +57,19 @@ describe('an unquoted closer ends a span held by a quoted host', () => {
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)
+  })
+})
+
+describe('the closer of a span in a nested quoted host keeps its source position', () => {
+  it('ends the comment at the unquoted closer', () => {
+    const ast = carveToAstJson('> > - a\n> >   %%%\n%%%\nc\n', { positions: true })
+    const comments: unknown[] = []
+    const walk = (node: unknown): void => {
+      if (node === null || typeof node !== 'object') return
+      if ((node as { type?: unknown }).type === 'comment') comments.push((node as { pos?: unknown }).pos)
+      for (const value of Object.values(node)) walk(value)
+    }
+    walk(ast)
+    expect(comments).toEqual([expect.objectContaining({ startOffset: 14, endOffset: 21, startLine: 2, endLine: 3 })])
   })
 })
