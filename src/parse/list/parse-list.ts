@@ -3186,7 +3186,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // invisible LINE, so the scan steps over the whole block. Only an item
       // holding a blank can reach the flag, which is what keeps the pass off
       // every other item.
-      const hiddenByComment = hasBlank ? commentBlockSpans([content, ...nested]) : []
+      const hiddenByComment = hasBlank ? commentBlockSpans([content, ...nested], true) : []
       for (const boundary of commentBoundaryBlanks) {
         if (hiddenByComment[boundary.openerIndex + 1] === true) continue
         for (const lineNumber of boundary.lines) opaqueBlankLines.add(lineNumber)
