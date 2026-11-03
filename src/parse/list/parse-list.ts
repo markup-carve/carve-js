@@ -33,7 +33,8 @@ function childListOwnsBlankBefore(
   if ((previous.pos?.endLine ?? tailEnd ?? priorSpan.end) >= nextSpan.start) return true
   return priorSpan.end === nextSpan.start - 1 &&
     isBlankLine(rootLines[priorSpan.end - 1] ?? '') &&
-    (tail?.type === 'code_block' || tail?.type === 'raw_block')
+    (tail?.type === 'code_block' || tail?.type === 'raw_block') &&
+    tailEnd === priorSpan.end
 }
 
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {

@@ -33,9 +33,25 @@ describe('a blank before a direct child block', () => {
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
 
+  it('loosens the parent after a closed fence in its child list', () => {
+    const source = '- outer\n  - inner\n    ```\n    x\n    ```\n\n  > q\n'
+    for (const positions of [false, true]) {
+      expect(parse(source, { positions }).children[0]).toMatchObject({ type: 'list', tight: false })
+    }
+    expect(carveToHtml(source)).toContain('<li><p>outer</p>')
+  })
+
   it('keeps an open child fence blank inside that child list', () => {
     const source = '- outer\n  - para\n    ```\n    code\n\n  # h\n    ```\n'
     expect(parse(source, { positions: false }).children[0]).toMatchObject({ type: 'list', tight: true })
+    expect(carveToHtml(source)).toContain('<li>outer\n    <ul>')
+  })
+
+  it('keeps an open nested fence blank with the deepest child in both parse modes', () => {
+    const source = '- outer\n  - head1\n    - head2\n\n      ```\n\n  ```\n\n  tail\n  ```\n'
+    for (const positions of [false, true]) {
+      expect(parse(source, { positions }).children[0]).toMatchObject({ type: 'list', tight: true })
+    }
     expect(carveToHtml(source)).toContain('<li>outer\n    <ul>')
   })
 
