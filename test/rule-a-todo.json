@@ -31,9 +31,6 @@
   "caption-list-tightness.test.ts": {
     "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
   },
-  "comment-payload-columns.test.ts": {
-    "comment payload columns (carve#2535) > 'two spans'": "#3921"
-  },
   "corpus.test.ts": {
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },
