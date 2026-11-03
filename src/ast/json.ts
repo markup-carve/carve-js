@@ -481,13 +481,13 @@ export function toAstJson(doc: Document): AstJsonDocument {
     children.push(node)
   }
 
-  for (const child of definitionListsToWire(imageParagraphsToWire(doc.children))) children.push(child)
+  for (const child of definitionListsToWire(imageParagraphsToWire(doc.children))) children.push(withoutTransparentSourceMetadata(child))
 
   for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
     const node: FootnoteDefNode = {
       type: 'footnote',
       label,
-      children: definitionListsToWire(imageParagraphsToWire(body)),
+      children: definitionListsToWire(imageParagraphsToWire(body)).map(withoutTransparentSourceMetadata),
     }
     const pos = ownValue(doc.footnoteDefPos, label)
     if (pos !== undefined) node.pos = pos
@@ -508,6 +508,24 @@ export function toAstJson(doc: Document): AstJsonDocument {
   // the same route for the same reason (carve-php#917).
   const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
   return out
+}
+
+const TRANSPARENT_SOURCE_FIELDS = new Set([
+  'transparentComments', 'transparentFollowingLines', 'transparentVisibleLines',
+  'transparentBetweenItems', 'transparentInParagraph', 'transparentInList',
+  'transparentSource', 'transparentOriginalValue',
+])
+
+/** Writer placement records are runtime data, never PART 12 wire fields. */
+function withoutTransparentSourceMetadata<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withoutTransparentSourceMetadata) as T
+  if (value === null || typeof value !== 'object') return value
+  const original = value as Record<string, unknown>
+  const copy: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(original)) {
+    if (!TRANSPARENT_SOURCE_FIELDS.has(key)) copy[key] = withoutTransparentSourceMetadata(child)
+  }
+  return copy as T
 }
 
 /** Preserve a published result; compute it only for legacy payloads that omit it. */

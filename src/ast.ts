@@ -594,6 +594,8 @@ export interface Comment extends BaseNode {
   /** Its source line is written through the paragraph that crosses it. */
   transparentInParagraph?: true
   transparentInList?: true
+  transparentSource?: string
+  transparentOriginalValue?: string
   /** Present only for the explicitly closed `{% … %}` inline form. */
   delimited?: boolean
   content: string

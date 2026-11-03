@@ -857,7 +857,7 @@
   {
     "id": "preservation-171",
     "source": "- a\n    ~~~\n  ```\n  code\n  ```\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>```\ncode\n```\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li>a\n    <pre><code>```\ncode\n```\n\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-172",
@@ -892,7 +892,7 @@
   {
     "id": "preservation-178",
     "source": "- a\n    ~~~\n\n  ```\n  code\n  ```\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>\n```\ncode\n```\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li>a\n    <pre><code>\n```\ncode\n```\n\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-179",
@@ -982,7 +982,7 @@
   {
     "id": "preservation-196",
     "source": "- a\n    ```\n  ~~~\n  code\n  ~~~\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>~~~\ncode\n~~~\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li>a\n    <pre><code>~~~\ncode\n~~~\n\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-197",
@@ -1012,7 +1012,7 @@
   {
     "id": "preservation-202",
     "source": "- a\n    ```\n\n  ~~~\n  code\n  ~~~\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>\n~~~\ncode\n~~~\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li>a\n    <pre><code>\n~~~\ncode\n~~~\n\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-203",
@@ -1107,7 +1107,7 @@
   {
     "id": "preservation-221",
     "source": "> - a\n>     ~~~\n>   ```\n>   code\n>   ```\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>```\ncode\n```\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>```\ncode\n```\n\n\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-222",
@@ -1142,7 +1142,7 @@
   {
     "id": "preservation-228",
     "source": "> - a\n>     ~~~\n> \n>   ```\n>   code\n>   ```\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>\n```\ncode\n```\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>\n```\ncode\n```\n\n\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-229",
@@ -1232,7 +1232,7 @@
   {
     "id": "preservation-246",
     "source": "> - a\n>     ```\n>   ~~~\n>   code\n>   ~~~\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>~~~\ncode\n~~~\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>~~~\ncode\n~~~\n\n\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-247",
@@ -1262,7 +1262,7 @@
   {
     "id": "preservation-252",
     "source": "> - a\n>     ```\n> \n>   ~~~\n>   code\n>   ~~~\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>\n~~~\ncode\n~~~\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>\n~~~\ncode\n~~~\n\n\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-253",
@@ -1357,7 +1357,7 @@
   {
     "id": "preservation-271",
     "source": "> > - a\n> >     ~~~\n> >   ```\n> >   code\n> >   ```\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>```\ncode\n```\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>```\ncode\n```\n\n\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-272",
@@ -1392,7 +1392,7 @@
   {
     "id": "preservation-278",
     "source": "> > - a\n> >     ~~~\n> > \n> >   ```\n> >   code\n> >   ```\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>\n```\ncode\n```\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>\n```\ncode\n```\n\n\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-279",
@@ -1482,7 +1482,7 @@
   {
     "id": "preservation-296",
     "source": "> > - a\n> >     ```\n> >   ~~~\n> >   code\n> >   ~~~\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>~~~\ncode\n~~~\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>~~~\ncode\n~~~\n\n\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-297",
@@ -1512,7 +1512,7 @@
   {
     "id": "preservation-302",
     "source": "> > - a\n> >     ```\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>\n~~~\ncode\n~~~\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>\n~~~\ncode\n~~~\n\n\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-303",

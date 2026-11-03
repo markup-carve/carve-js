@@ -422,6 +422,11 @@ function treeOf(src: string): string | null {
   }
 }
 
+/** Check the parsed tree after a source writer has crossed an invisible line. */
+export function renderedReadsBack(ast: Document, source: string): boolean {
+  return treeOf(source) === stableJson(ast)
+}
+
 
 /**
  * Which headings carry the id a fresh parse would give them.
@@ -576,7 +581,8 @@ function canonical(value: unknown): unknown {
         key === 'definitionSpans' ||
         key === 'definitionLines' ||
         key === 'termSpans' ||
-        key === 'srcByteLength'
+        key === 'srcByteLength' ||
+        key.startsWith('transparent')
       )
         continue
       const field = (value as Record<string, unknown>)[key]
@@ -3495,7 +3501,8 @@ class CarveRenderSession {
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
               : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
-                (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list'))
+                (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
+                (block.type === 'comment' && /^[ \t]+/.test(block.transparentSource ?? '')))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if ((listSeparated || descriptionListsMerge) && parts.length > 0) {
@@ -3843,6 +3850,8 @@ class CarveRenderSession {
       }
       case 'comment':
         if (node.transparentInParagraph || node.transparentInList) return ''
+        if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined)
+          return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
         // inline one (carve#581) in joining a percent-leading content onto the
         // marker. At block level the comment-LINE marker is exactly `%%`; a run

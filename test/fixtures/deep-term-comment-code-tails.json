@@ -1162,22 +1162,22 @@
   {
     "id": "term-comment-break-controls-252",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-253",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-254",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-255",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-258",
@@ -1202,82 +1202,82 @@
   {
     "id": "term-comment-break-controls-264",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-265",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   paragraph\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-266",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-267",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   paragraph\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-270",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-271",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     paragraph\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-272",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-273",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>     paragraph\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-276",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   # heading\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-277",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   # heading\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-278",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   # heading\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-279",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   # heading\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n      <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-282",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   : description\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-283",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   : description\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-284",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   : description\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-285",
     "source": "> - :: term\n>      %% hidden\n> - sibling\n>   : description\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-294",
@@ -1562,22 +1562,22 @@
   {
     "id": "term-comment-break-controls-396",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-397",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-398",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-399",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-402",
@@ -1602,82 +1602,82 @@
   {
     "id": "term-comment-break-controls-408",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-409",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   paragraph\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-410",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-411",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   paragraph\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-414",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-415",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     paragraph\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-416",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-417",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >     paragraph\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\nparagraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\nparagraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-420",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   # heading\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-421",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   # heading\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-422",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   # heading\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-423",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   # heading\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n        <h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling</p><h1 id=\"heading\">heading</h1><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-426",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   : description\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-427",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   : description\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-428",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   : description\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-429",
     "source": "> > - :: term\n> >      %% hidden\n> > - sibling\n> >   : description\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li>sibling\n: description\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl></li><li><p>sibling\n: description</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-0",

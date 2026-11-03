@@ -1,5 +1,6 @@
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
+import type { Comment } from '../ast.js'
 import type {
   Admonition,
   Attrs,
@@ -517,7 +518,13 @@ export class ParseSession extends InlineParseSession {
       lexer.sourceLineMap = transparentLines.sourceLines.map((index) => index + 1)
       lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
       if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
-      lexer.rootLines = transparentLines.original
+      const erased = new Set(transparentLines.erased)
+      let previousVisible = ''
+      lexer.rootLines = transparentLines.original.map((line, index) => {
+        if (erased.has(index)) return previousVisible
+        previousVisible = line
+        return line
+      })
       lexer.documentLineCount = originalLexer.documentLineCount
       lexer.documentLacksFinalBreak = originalLexer.documentLacksFinalBreak
     }
@@ -543,6 +550,18 @@ export class ParseSession extends InlineParseSession {
     const sourceLines = transparentLines?.original ?? lexer.lines
     const ownership = ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
+    if (transparentLines && lexer.rootLines) {
+      // A code opener uses the ownership walk's column after transparent
+      // lines have gone. Keep the authored root lines for other lookups.
+      const visibleRoot = lexer.rootLines.slice()
+      for (let index = 0; index < transparentLines.sourceLines.length; index++) {
+        const originalIndex = transparentLines.sourceLines[index]!
+        if (/^[ \t]*`{3,}/.test(transparentLines.original[originalIndex]!)) {
+          visibleRoot[originalIndex] = lexer.lines[index]!
+        }
+      }
+      lexer.rootLines = visibleRoot
+    }
     this.skippedAbbreviationLines = new Set([...ownership.skippedAbbreviations.keys()]
       .filter((index) => !ownership.separatingAbbreviations.has(index)).map((index) => lexer.lineNumber(index)))
     this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
@@ -1044,7 +1063,17 @@ export class ParseSession extends InlineParseSession {
       // class, so a `%%<VT>note` line had its vertical tab eaten as the
       // separator and `carve fmt` wrote a SPACE back in its place: a character
       // the clause calls content, replaced by one the author did not write.
-      return { type: 'comment', block: false, content: commentLineContent(l) }
+      const comment: Comment = { type: 'comment', block: false, content: commentLineContent(l) }
+      const root = lexer.documentRoot ?? lexer
+      const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+      // A refused or consumed `+` is represented internally by a `%%` line.
+      // After #5012, writing that stand-in changes layout, so retain its
+      // authored spelling for the source writer.
+      if (l === '%%' && authoredLine?.trimEnd().endsWith('+') && !authoredLine.includes('%%')) {
+        comment.transparentSource = authoredLine
+        comment.transparentOriginalValue = ''
+      }
+      return comment
     }
     if (RE_LINE_BLOCK_OPEN.test(line)) return this.parseLineBlock(lexer)
     if (RE_HARDBREAKS_OPEN.test(line)) return this.parseHardBreaksBlock(lexer)

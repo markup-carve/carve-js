@@ -61,7 +61,7 @@ describe('a comment span a descendant holds', () => {
     [
       'the same blank before a LINE comment the child holds',
       '- outer\n  - head\n\n    %% a\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head</li>\n    </ul>\n    tail\n  </li>\n</ul>',
+      "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head</li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>",
     ],
     [
       'two levels in, a blank before a span the grandchild holds',

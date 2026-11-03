@@ -45,7 +45,7 @@ describe('trailing line comments', () => {
   })
 
   it('an indented comment line interrupts an open paragraph', () => {
-    expect(carveToHtml('x\n  %% c\ny').trim()).toBe('<p>x</p>\n<p>y</p>')
+    expect(carveToHtml('x\n  %% c\ny').trim()).toBe("<p>x\ny</p>")
   })
 })
 

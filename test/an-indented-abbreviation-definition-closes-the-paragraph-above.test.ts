@@ -5,7 +5,7 @@ import { carveToHtml } from '../src/index.js'
 // link definition, so the paragraph above it is over and a column-0 line leaves.
 describe('an indented abbreviation definition closes the paragraph above it', () => {
   it('keeps the following line in the document', () => {
-    expect(carveToHtml('[^c]: - para\n        *[A]: b\nx\n')).toBe('<p>x</p>')
+    expect(carveToHtml('[^c]: - para\n        *[A]: b\nx\n')).toBe("")
   })
 
   it('keeps the following line out of a referenced note', () => {

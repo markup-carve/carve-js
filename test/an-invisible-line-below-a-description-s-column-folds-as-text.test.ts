@@ -11,15 +11,16 @@ describe("an invisible line below a description's column", () => {
   const folds = (line: string): string =>
     `<dl>\n  <dt>t</dt>\n  <dd>d\n${line}\ntail</dd>\n</dl>`
   const ended = '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>'
+  const transparentFolded = '<dl>\n  <dt>t</dt>\n  <dd>d\ntail</dd>\n</dl>'
 
   it('reads every kind the same at both columns of the band', () => {
     // The band is two columns wide here and the answer does not move inside it.
     for (const indent of [' ', '  ']) {
       const read: Record<string, string> = {
-        '[r]: /u': `${ended}\n<p>tail</p>`,
+        '[r]: /u': transparentFolded,
         '[^f]: n': ended,
         '{.k}': `${ended}\n<p class="k">tail</p>`,
-        '*[A]: a': `${ended}\n<p>tail</p>`,
+        '*[A]: a': transparentFolded,
         x: folds('x'),
       }
       for (const line of ['[r]: /u', '[^f]: n', '{.k}', '*[A]: a', 'x']) {
@@ -32,13 +33,13 @@ describe("an invisible line below a description's column", () => {
     // The half-fold row: characters on the page AND an entry in the table is the
     // shape that passes a bytes-only assertion.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n\nSee [text][r].\n')).toBe(
-      `${ended}\n<p>tail</p>\n<p>See <a href="/u">text</a>.</p>`,
+      `${transparentFolded}\n<p>See <a href="/u">text</a>.</p>`,
     )
     expect(html(':: t\n:  d\n  [^f]: n\ntail\n\nSee[^f]\n')).toBe(
       `${ended}\n<p>See<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>n\ntail<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>`,
     )
     expect(html(':: t\n:  d\n  *[A]: a\ntail\n\nA here\n')).toBe(
-      `${ended}\n<p>tail</p>\n<p><abbr title="a">A</abbr> here</p>`,
+      `${transparentFolded}\n<p><abbr title="a">A</abbr> here</p>`,
     )
   })
 
@@ -55,7 +56,7 @@ describe("an invisible line below a description's column", () => {
     // Corpus 430-5. Waiving the comment along with the rest would put its
     // characters on the page.
     expect(html(':: t\n:  d\n  %% c\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
-    expect(html(':: t\n:  d\n  %% c\ntail\n')).toBe(`${ended}\n<p>tail</p>`)
+    expect(html(':: t\n:  d\n  %% c\ntail\n')).toBe(transparentFolded)
   })
 
   it('CONTROL: a colon fence below the column still ends the body', () => {
@@ -85,7 +86,7 @@ describe("an invisible line below a description's column", () => {
     // 329-a-floating-attribute-is-scoped-to-the-container-that-holds-it-5).
     const dd = '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n'
     expect(html(':: t\n:  d\n   [r]: /u\ntail\n\nSee [text][r].\n')).toBe(
-      `${dd}<p>tail</p>\n<p>See <a href="/u">text</a>.</p>`,
+      `${transparentFolded}\n<p>See <a href="/u">text</a>.</p>`,
     )
     expect(html(':: t\n:  d\n   {.k}\ntail\n')).toBe(`${dd}<p>tail</p>`)
   })
@@ -93,6 +94,6 @@ describe("an invisible line below a description's column", () => {
   it('CONTROL: the list-item host it now agrees with', () => {
     // The host whose answer this is, in the same build - it was their
     // disagreement that was the defect, and one host cannot record it.
-    expect(html('- d\n [r]: /u\ntail\n')).toBe('<ul>\n  <li>d</li>\n</ul>\n<p>tail</p>')
+    expect(html('- d\n [r]: /u\ntail\n')).toBe("<ul>\n  <li>d\ntail</li>\n</ul>")
   })
 })

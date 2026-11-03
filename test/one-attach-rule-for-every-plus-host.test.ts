@@ -9,7 +9,7 @@ const flat = (html: string): string => html.replace(/>\s+</g, '><').replace(/\s+
 const expected: [string, string, string][] = [
   ['carve#4409: a list follower attaches on the marker line', ':: t\n: +\n- l\n', '<dl><dt>t</dt><dd><ul><li>l</li></ul></dd></dl>'],
   ['carve#4409: a refused marker-line plus takes a lazy line', ':: t\n: - +\np\n', "<dl><dt>t</dt><dd><ul><li></li></ul></dd></dl><p>p</p>"],
-  ['carve#4409: an off-column follower is not pulled', '- a\n  * +\n[r]: /u\n  after\n', "<ul><li>a <ul><li></li></ul> after </li></ul>"],
+  ['carve#4409: an off-column follower is not pulled', '- a\n  * +\n[r]: /u\n  after\n', "<ul><li>a <ul><li>after</li></ul></li></ul>"],
   ['carve#4409 sub-ruling 1: a note at column 0', '[^a]: +\n# H\n\nr[^a]\n', '<p>r<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p><section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><h1 id="H">H</h1><p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>'],
   ['carve#4409 sub-ruling 1: a description at column 0', ':: t\n: +\n# H\n', '<dl><dt>t</dt><dd><h1 id="H">H</h1></dd></dl>'],
   ['carve#4409 sub-ruling 2: a quote takes a quoted follower', '> +\n> x\n', '<blockquote><blockquote><p>x</p></blockquote></blockquote>'],

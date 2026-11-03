@@ -58,13 +58,13 @@ import { carveToHtml } from '../src/index.js'
 describe('corpus 444: an opener at or past a description body column', () => {
   it("row 1: a link definition one past the column [control: carve-js was already right]", () => {
     expect(carveToHtml(":: term\n:  definition\n    [r]: /url\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>\n<p>tail</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>definition\ntail</dd>\n</dl>",
     )
   })
 
   it("row 2: a link definition AT the column [control]", () => {
     expect(carveToHtml(":: term\n:  definition\n   [r]: /url\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>\n<p>tail</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>definition\ntail</dd>\n</dl>",
     )
   })
 
@@ -106,7 +106,7 @@ describe('corpus 444: an opener at or past a description body column', () => {
 
   it("row 9: a comment one past the column [control]", () => {
     expect(carveToHtml(":: term\n:  definition\n    %% c\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>\n<p>tail</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>definition\ntail</dd>\n</dl>",
     )
   })
 

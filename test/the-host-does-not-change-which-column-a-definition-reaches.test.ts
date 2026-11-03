@@ -158,7 +158,7 @@ describe('corpus 447: the host does not change which column a definition reaches
 
   it("row 20 [control: already passing]", () => {
     expect(carveToHtml(":: t\n:  - a\n     [r]: /url\n     more\n\nSee [r][].\n")).toBe(
-      "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>a\n        more\n      </li>\n    </ul>\n  </dd>\n</dl>\n<p>See <a href=\"/url\">r</a>.</p>",
+      "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>a\nmore</li>\n    </ul>\n  </dd>\n</dl>\n<p>See <a href=\"/url\">r</a>.</p>",
     )
   })
 

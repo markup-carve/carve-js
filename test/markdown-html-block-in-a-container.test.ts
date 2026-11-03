@@ -108,7 +108,7 @@ describe('a block-level HTML element inside a container', () => {
 
     it('reads an HTML comment as a block', () => {
       const carve = markdownToCarve('- a\n\n  <!-- c -->\n')
-      expect(carve).toBe('{loose}\n- a\n\n  %% c\n')
+      expect(carve).toBe('- a\n  %% c\n')
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<\/li>/)
     })
 

@@ -69,7 +69,7 @@ describe('a definition list ends at its last placed child', () => {
     // PART 12 §7 hoists the definition to the document, so it is the list's
     // SIBLING and their spans used to overlap on 10..20.
     const source = ':: t\n:  a\n   [r]: /u\ntail\n\n[r][]\n'
-    expect(spanOf(source, 'definition_list')).toEqual([0, 9])
+    expect(spanOf(source, 'definition_list')).toEqual([0, 25])
     const def = spanOf(source, 'link_reference_definition')
     expect(def[0]).toBeGreaterThanOrEqual(9)
   })

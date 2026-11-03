@@ -190,12 +190,12 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 2, follower 2",
     "source": "- :::: box\n  - ::: in\n    x\n%% c\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p></div></li></ul><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x\nx\nTAILX</p></div></li></ul></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 2, follower 3",
     "source": "- :::: box\n  - ::: in\n    x\n%% c\nTAILX\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p></div></li></ul></div></li></ul><p>TAILX\nTAILX</p>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x\nTAILX\nTAILX</p></div></li></ul></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 2, follower 4",
@@ -230,12 +230,12 @@ const cases = [
   {
     "id": "nested container with paragraph content: comment 4, follower 2",
     "source": "- :::: box\n  - ::: in\n    x\n %% c\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p></div></li></ul><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x\nx\nTAILX</p></div></li></ul></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 4, follower 3",
     "source": "- :::: box\n  - ::: in\n    x\n %% c\nTAILX\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x</p></div></li></ul></div></li></ul><p>TAILX\nTAILX</p>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"><p>x\nTAILX\nTAILX</p></div></li></ul></div></li></ul>"
   },
   {
     "id": "nested container with paragraph content: comment 4, follower 4",
@@ -270,12 +270,12 @@ const cases = [
   {
     "id": "open item paragraph: comment 2, follower 2",
     "source": "- a\n%% c\n  x\nTAILX\n",
-    "html": "<ul><li>a\n    x\nTAILX\n  </li></ul>"
+    "html": "<ul><li>a\nx\nTAILX</li></ul>"
   },
   {
     "id": "open item paragraph: comment 2, follower 3",
     "source": "- a\n%% c\nTAILX\nTAILX\n",
-    "html": "<ul><li>a</li></ul><p>TAILX\nTAILX</p>"
+    "html": "<ul><li>a\nTAILX\nTAILX</li></ul>"
   },
   {
     "id": "open item paragraph: comment 2, follower 4",
@@ -310,12 +310,12 @@ const cases = [
   {
     "id": "open item paragraph: comment 4, follower 2",
     "source": "- a\n %% c\n  x\nTAILX\n",
-    "html": "<ul><li>a\n    x\nTAILX\n  </li></ul>"
+    "html": "<ul><li>a\nx\nTAILX</li></ul>"
   },
   {
     "id": "open item paragraph: comment 4, follower 3",
     "source": "- a\n %% c\nTAILX\nTAILX\n",
-    "html": "<ul><li>a</li></ul><p>TAILX\nTAILX</p>"
+    "html": "<ul><li>a\nTAILX\nTAILX</li></ul>"
   },
   {
     "id": "open item paragraph: comment 4, follower 4",

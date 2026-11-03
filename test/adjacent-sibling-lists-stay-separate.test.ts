@@ -128,6 +128,6 @@ describe('§11 N1a: three blank lines are a hard list boundary', () => {
     // before §11 N1a existed, and it still does. The threshold counts BLANK
     // lines only - `blankBeforeInvisible` is not added to the run - so this
     // shape is decided elsewhere and is unchanged by the rule.
-    expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list'])
+    expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list', 'comment'])
   })
 })

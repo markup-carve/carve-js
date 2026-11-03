@@ -2222,12 +2222,12 @@
   {
     "id": "review-102",
     "source": "- :: a\n  :: b\n  : p\n        ~~~\n   %% c\n    ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code>```\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-103",
     "source": "- :: a\n  :: b\n  : p\n        ~~~\n  %% c\n    > q\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code>&gt; q\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-104",
@@ -2672,7 +2672,7 @@
   {
     "id": "review-192",
     "source": "- :: a\n  :: b\n  : p\n     ~~~\n%% c\n    > ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote>\n  <pre><code></code></pre>\n</blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <pre><code>&gt; ```\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-193",
@@ -3062,7 +3062,7 @@
   {
     "id": "review-270",
     "source": "- :: t\n  :   payload\n        %% c\n    code\n     ```\n     ::: note\n%%%\n    :  p2\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>payload</dd>\n    </dl>\n    code\n    <pre><code>::: note\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>payload\ncode</dd>\n    </dl>\n    <pre><code>::: note\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "review-271",

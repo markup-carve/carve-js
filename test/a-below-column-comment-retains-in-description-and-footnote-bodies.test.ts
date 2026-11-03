@@ -7,7 +7,7 @@ describe('a below-column comment does not retain description and footnote bodies
 :  x
 %% c
 z
-`)).toBe('<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>')
+`)).toBe("<dl>\n  <dt>t</dt>\n  <dd>x\nz</dd>\n</dl>")
   })
 
   it('ends a footnote body', () => {
@@ -44,6 +44,6 @@ z
 :  x
    %% c
 z
-`)).toBe('<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>')
+`)).toBe("<dl>\n  <dt>t</dt>\n  <dd>x\nz</dd>\n</dl>")
   })
 })

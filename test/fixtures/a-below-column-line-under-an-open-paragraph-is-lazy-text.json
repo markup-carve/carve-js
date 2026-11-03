@@ -97,12 +97,12 @@
   {
     "id": "js-7-1",
     "source": "> :: t\n> : para\n  [r]: /u\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\ntail</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-7-2",
     "source": "> :: t\n> : para\n    [r]: /u\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\ntail</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-7-3",
@@ -112,7 +112,7 @@
   {
     "id": "js-7-4",
     "source": "> :: t\n> : para\n        [r]: /u\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>para\ntail</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "js-7-5",
@@ -182,12 +182,12 @@
   {
     "id": "js-20-2",
     "source": ":: t\n: > para\n    [r]: /u\n    tail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<blockquote><p>para</p></blockquote>\n<p>tail</p>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\ntail</p></blockquote>\n  </dd>\n</dl>"
   },
   {
     "id": "js-20-3",
     "source": ":: t\n: > para\n        [r]: /u\n    tail\n",
-    "html": "<dl>\n<dt>t</dt>\n<dd>\n<blockquote><p>para</p></blockquote>\n<p>tail</p>\n</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\ntail</p></blockquote>\n  </dd>\n</dl>"
   },
   {
     "id": "js-21-1",

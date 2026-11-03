@@ -2,7 +2,7 @@ import type { Document } from '../ast.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
-import { renderCarve, renderCarveFromParsedSource, type CarveRenderOptions } from '../render-carve.js'
+import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 
 /** A removed layout boundary can change ownership of later source lines. */
@@ -59,6 +59,15 @@ export function canonicalCarveWrite(
   const written = canReuseSource
     ? renderCarveFromParsedSource(document, source, opts)
     : renderCarve(document, opts)
+  // The parser used to leave `%%` stand-ins from `+` as layout boundaries.
+  // With transparent lines, a formatter candidate must prove its readback;
+  // preserve the authored spelling when no canonical candidate does.
+  if (!transformed && !opts.extensions?.length &&
+      (source.includes('%%') || source.includes(']:') || source.includes('+')) &&
+      !renderedReadsBack(document, written)) {
+    const normalized = source.replace(/\r\n?/g, '\n')
+    return normalized.endsWith('\n') ? normalized : `${normalized}\n`
+  }
   // A leaf swallowed after layout erasure has no AST spelling to write. Keep
   // its authored source instead of silently deleting a line (PART 11 §1).
   if (!transformed && !opts.extensions?.length && hasUnrepresentedAuthoredLine(document, source, written)) {

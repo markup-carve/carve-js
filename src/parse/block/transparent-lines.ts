@@ -97,7 +97,7 @@ function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: 
   for (const block of blocks) {
     const pos = block.pos
     if (pos?.startOffset !== undefined && pos.endOffset !== undefined &&
-        pos.startOffset <= offset && offset <= pos.endOffset) {
+        pos.startOffset <= offset && offset < pos.endOffset) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
       const children = block.type === 'list' ? block.items.map((item) => item.children) :
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
@@ -115,10 +115,10 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   for (const block of blocks) {
     const pos = block.pos
     if (pos?.startOffset === undefined || pos.endOffset === undefined ||
-        pos.startOffset > offset || offset > pos.endOffset) continue
+        pos.startOffset > offset || offset >= pos.endOffset) continue
     if (block.type === 'list') {
       for (const item of block.items) {
-        if ((item.pos?.startOffset ?? Infinity) <= offset && offset <= (item.pos?.endOffset ?? -1)) {
+        if ((item.pos?.startOffset ?? Infinity) <= offset && offset < (item.pos?.endOffset ?? -1)) {
           return containingBlocks(item.children, offset)
         }
       }
@@ -178,6 +178,8 @@ export function restoreTransparentComments(document: Document, authored: Documen
     if (!COMMENT_LINE.test(rest) || COMMENT_FENCE.test(rest) || REGION_MARKER.test(rest)) continue
     const comment = comments.get(index + 1)
     if (!comment?.pos || comment.pos.startOffset === undefined) continue
+    comment.transparentSource = original
+    comment.transparentOriginalValue = comment.content
     const footnote = Object.entries(document.footnoteDefPos ?? {}).find(([_label, pos]) =>
       pos.startLine <= index + 1 && index + 1 <= pos.endLine)?.[0]
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
@@ -226,7 +228,6 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
         match.paragraph.transparentFollowingLines.push({ line: following, source: stream.original[following - 1]! })
       }
       definition.transparentInParagraph = true
-      insertAfterParagraph(match.siblings, match.paragraph, definition)
     } else {
       const gap = betweenListItems(document.children, definition.pos!.startOffset!)
       if (gap) {
@@ -235,9 +236,10 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
           originalValue: `${definition.abbr}\0${definition.expansion}` })
         definition.transparentInList = true
       }
-      const siblings = containingBlocks(document.children, definition.pos!.startOffset!)
-      const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
-      siblings.splice(at < 0 ? siblings.length : at, 0, definition)
     }
+    // Abbreviations register document-wide and their AST nodes hoist beside
+    // the host block, even when a paragraph or list writes the source line.
+    const at = document.children.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
+    document.children.splice(at < 0 ? document.children.length : at, 0, definition)
   }
 }

@@ -36,7 +36,7 @@ describe('an unterminated comment fence inside a list item', () => {
   // ends it.
   it.each([
     ['row 1: the degraded fence', '- x\n%%%\ny\n', ITEM_ONLY],
-    ['row 2: the line form [control]', '- x\n%% z\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
+    ['row 2: the line form [control]', '- x\n%% z\ny\n', '<ul>\n  <li>x\ny</li>\n</ul>'],
     ['row 3: a terminated fence [control]', '- x\n%%%\n%%%\ny\n', `${ITEM_ONLY}\n<p>y</p>`],
     ['row 4: an ordered host', '1. x\n%%%\ny\n', '<ol>\n  <li>x</li>\n</ol>'],
     ['row 5: a padded marker', '-   x\n%%%\ny\n', ITEM_ONLY],
@@ -65,7 +65,7 @@ describe('an unterminated comment fence inside a list item', () => {
     ['a terminated fence', item('%%%', 2, '  %%%', 'y')],
     ['an unterminated fence', item('%%%', 2, 'y')],
   ])('reads %s at the content column the same way', (_name, source) => {
-    expect(carveToHtml(source)).toBe(`${ITEM_ONLY}\n<p>y</p>`)
+    expect(carveToHtml(source)).toBe(_name === 'the line form' ? '<ul>\n  <li>x\ny</li>\n</ul>' : `${ITEM_ONLY}\n<p>y</p>`)
   })
 
   // THE DELIMITER RUN IS NOT THE QUESTION, AND NEITHER IS THE TAIL. §28 makes

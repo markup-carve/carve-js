@@ -74,6 +74,20 @@ export const RULED_HTML_AHEAD_OF_PIN_5012: ReadonlyMap<string, { reason: string;
 
 /** The two formatter sidecars replaced by carve#5012. */
 export const RULED_FMT_AHEAD_OF_PIN_5012: ReadonlyMap<string, { reason: string; fmt: string }> = new Map([
+  ["285-adjacent-block-openers-in-an-attached-run-stay-separate-2", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- x\n+\n| a |\n|---|\n| b |\n+\n| a |\n|---|\n| b |\n" }],
+  ["411-a-lone-indented-image-is-a-paragraph-and-its-html-cannot-say-so-2", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: " ![Apollo][moon]\n\n[moon]: a.jpg\n" }],
+  ["436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not-2", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: ":: t\n:  +\n\nflush\n" }],
+  ["436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not-4", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: ":: t\n:  +\n\nflush\n" }],
+  ["929-a-refused-plus-is-escaped-when-the-block-below-would-attach", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- - +\n\n  > q\n" }],
+  ["929-a-refused-plus-is-escaped-when-the-block-below-would-attach-2", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- - +\n\n  ```\n  x\n  ```\n" }],
+  ["929-a-refused-plus-is-escaped-when-the-block-below-would-attach-3", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- - +\n\n  # H\n" }],
+  ["929-a-refused-plus-is-escaped-when-the-block-below-would-attach-4", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- - +\n\n  {.c}\n  > q\n" }],
+  ["929-a-refused-plus-is-escaped-when-the-block-below-would-attach-5", { reason: 'carve#5012 keeps formatter readback after invisible-line erasure', fmt: "- foo\n  1. +\n   > b\n" }],
+  ["626-an-indented-plus-below-a-nested-fence-stays-content-at-every-depth-8", { reason: 'carve#5012 makes the pinned stand-in move a comment out of its item', fmt: "- - [ ] ```js\n        x\n\n  +\ntail\n" }],
+  ["191-a-blank-after-a-comment-still-ends-the-item", { reason: 'carve#5012 keeps the authored transparent line within its item', fmt: "- - a\n %% c\n\nb\n" }],
+  ["430-below-a-definition-body-s-column-an-invisible-line-folds-as-text-5", { reason: 'carve#5012 keeps the authored transparent line within its description', fmt: ":: t\n: d\n  %% c\n" }],
+  ["498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-3", { reason: 'carve#5012 preserves the comment marker and its non-space content', fmt: "%%\u00a0x\n\ntext\n" }],
+  ["498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-5", { reason: 'carve#5012 preserves the comment marker and its non-space content', fmt: "%%\u000b\n\ntext\u000b\n" }],
   ["506-comment-columns-and-surviving-list-items-5", { reason: 'carve#5012 keeps authored lines across transparent layout', fmt: "- intro\n%% a\n  %% b\ntail\n" }],
   ["620-generated-container-documents-23", { reason: 'carve#5012 keeps authored lines across transparent layout', fmt: "- a\n  [^f]: t\n[^f]: a\n     [r]: /url\n[r][]\n" }],
 ])

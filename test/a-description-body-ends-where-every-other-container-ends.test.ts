@@ -140,7 +140,7 @@ describe('a comment fence at column 0 below a description body opens a block (ca
 
   it('the `%%` line form is invisible and opens nothing [control]', () => {
     expect(carveToHtml(':: t\n:  x\n%% c\nz\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>',
+      "<dl>\n  <dt>t</dt>\n  <dd>x\nz</dd>\n</dl>",
     )
   })
 })

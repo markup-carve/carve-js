@@ -36,7 +36,7 @@ describe('a closed comment fence in a list item', () => {
 describe('the neighbouring comment spellings are unchanged', () => {
   it('an at-column line comment releases a below-column follower', () => {
     expect(squash(carveToHtml('- a\n  %% x\n b\n\n- c\n'))).toBe(
-      "<ul><li>a</li></ul><p>b</p><ul><li>c</li></ul>",
+      "<ul><li><p>a b</p></li><li><p>c</p></li></ul>",
     )
   })
 

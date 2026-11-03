@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 import { canonicalCarveWrite } from '../src/ast/canonical-carve-write.js'
+import { toAstJson } from '../src/ast-json.js'
 
 const source = '- a\n%% c\nb\n'
 
@@ -119,5 +120,9 @@ describe('carve#5012 transparent single-line blocks', () => {
     const source = 'a *b\nc*\n%% c\nd\n'
     expect(carveToCarve(source)).toBe(source)
     expect(carveToCarve(source, { positions: false })).toBe(source)
+  })
+
+  it('keeps writer placement records out of the public AST', () => {
+    expect(JSON.stringify(toAstJson(parse('a\n%% c\nb')))).not.toContain('transparent')
   })
 })

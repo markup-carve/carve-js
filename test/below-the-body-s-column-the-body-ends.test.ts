@@ -90,15 +90,14 @@ describe("BELOW the body's column the body ends", () => {
   it('an INVISIBLE line below the column ends the body too', () => {
     const band = (n: number, opener: string) =>
       carveToHtml(body + ' '.repeat(n) + opener + '\npara\n')
-    for (const opener of ['{.x}', '[a]: /u']) {
-      const folded = dd + (opener === '{.x}' ? '<p class="x">para</p>' : '<p>para</p>')
-      expect(band(1, opener)).toBe(folded)
-      expect(band(2, opener)).toBe(folded)
+    for (const indent of [1, 2]) {
+      expect(band(indent, '{.x}')).toBe(dd + '<p class="x">para</p>')
+      expect(band(indent, '[a]: /u')).toBe('<dl>\n  <dt>t</dt>\n  <dd>body\nmore\npara</dd>\n</dl>')
     }
-    expect(band(1, '%% c')).toBe(dd + '<p>para</p>')
+    expect(band(1, '%% c')).toBe('<dl>\n  <dt>t</dt>\n  <dd>body\nmore\npara</dd>\n</dl>')
     expect(band(2, '%% c')).toBe(band(1, '%% c'))
     expect(carveToHtml(body + ' [a]: /u\npara\n\nSee [text][a].\n')).toBe(
-      dd + '<p>para</p>\n<p>See <a href="/u">text</a>.</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\npara</dd>\n</dl>\n<p>See <a href="/u">text</a>.</p>',
     )
     // CONTROL at column 0, the document's own opener column: there the attribute
     // really attaches and the definition really registers.
