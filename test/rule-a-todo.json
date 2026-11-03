@@ -134,13 +134,16 @@
     "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [16]": "carve-js#4276"
   },
   "corpus-canonical-form.test.ts": {
-    "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "carve-js#4276"
+    "the pinned canonical form > is what fmt produces for 418-an-invisible-fenced-block-is-not-a-list-paragraph": "markup-carve/carve#4988",
+    "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter": "markup-carve/carve#4988",
+    "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-2": "markup-carve/carve#4988",
+    "the pinned canonical form > is what fmt produces for 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "markup-carve/carve#4988"
   },
   "corpus-render-fixtures.test.ts": {
-    "spec corpus non-HTML render fixtures > fmt: 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "carve-js#4276"
-  },
-  "fmt-keeps-a-comment-span-closed-below-its-host-column.test.ts": {
-    "fmt keeps a comment span whose closer sits below its host column > two spans in a list item writes a canonical span": "carve-js#4276"
+    "spec corpus non-HTML render fixtures > fmt: 418-an-invisible-fenced-block-is-not-a-list-paragraph": "markup-carve/carve#4988",
+    "spec corpus non-HTML render fixtures > fmt: 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter": "markup-carve/carve#4988",
+    "spec corpus non-HTML render fixtures > fmt: 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-2": "markup-carve/carve#4988",
+    "spec corpus non-HTML render fixtures > fmt: 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4": "markup-carve/carve#4988"
   },
   "hosted-colon-literal-ownership.test.ts": {
     "reader scope 2, quote depth 1": "carve-js#4276",
@@ -148,7 +151,10 @@
     "review8-c02-below-column-comment-037": "carve-js#4276"
   },
   "render-carve.test.ts": {
-    "renderCarve corpus > 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4: matches the spec's canonical form, which re-parses differently": "carve-js#4276",
+    "renderCarve corpus > 418-an-invisible-fenced-block-is-not-a-list-paragraph: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4988",
+    "renderCarve corpus > 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4988",
+    "renderCarve corpus > 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-2: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4988",
+    "renderCarve corpus > 508-a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter-4: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4988",
     "renderCarve corpus > has no pinned canonical form that re-parses differently from its source": "carve-js#4276"
   }
 }
