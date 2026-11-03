@@ -5140,16 +5140,14 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
       // A list imported from HTML can carry a tightness value that its first
       // source spelling no longer expresses after the §17 L2 withdrawal.
       // Render the tree the source actually reads so the import is a fixed point.
-      if (carve.includes('\n\n')) {
-        const importedTightness = listTightnesses(value)
-        if (importedTightness.length > 0) {
-          const parsed = parse(carve)
-          const parsedTightness = listTightnesses(parsed)
-          if (importedTightness.length === parsedTightness.length &&
-              importedTightness.some((tight, index) => tight !== parsedTightness[index])) {
-            importer.reportListTightnessSerializationLoss()
-            carve = renderCarve(parsed, { preserveTableSeparators: true })
-          }
+      const importedTightness = listTightnesses(value)
+      if (importedTightness.length > 0) {
+        const parsed = parse(carve)
+        const parsedTightness = listTightnesses(parsed)
+        if (importedTightness.length === parsedTightness.length &&
+            importedTightness.some((tight, index) => tight !== parsedTightness[index])) {
+          importer.reportListTightnessSerializationLoss()
+          carve = renderCarve(parsed, { preserveTableSeparators: true })
         }
       }
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }

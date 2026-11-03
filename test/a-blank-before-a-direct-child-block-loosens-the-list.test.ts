@@ -85,6 +85,15 @@ describe('a blank before a direct child block', () => {
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
 
+  it('reports tightness loss inside a quoted HTML list', () => {
+    const html = '<blockquote><ul><li><ul><li>a</li></ul><ul><li>b</li></ul></li><li>z</li></ul></blockquote>'
+    const imported = htmlToCarve(html)
+    expect(imported.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'structure-unspellable', severity: 'warning' }),
+    ]))
+    expect(carveToCarve(imported.value)).toBe(imported.value)
+  })
+
   it('reports an HTML tightness loss when sibling nested lists need a blank boundary', () => {
     const html = '<ul><li><ul><li>a</li></ul><ul><li>b</li></ul></li><li>z</li></ul>'
     expect(htmlToAst(html).value.children[0]).toMatchObject({ type: 'list', tight: true })
