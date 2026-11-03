@@ -95,14 +95,6 @@
     "a list span holds the indentation that places its marker > starts a nested list at its parent's content column, not at its marker": "#3921",
     "a list span holds the indentation that places its marker > starts an indented top-level list at column 1": "#3921"
   },
-  "mixed-nested-marker-note-fence.test.ts": {
-    "keeps the tail outside the marker note after 'bullet-note-adjacent'": "#3922",
-    "keeps the tail outside the marker note after 'bullet-note-code'": "#3922",
-    "keeps the tail outside the marker note after 'bullet-note-raw'": "#3922",
-    "keeps the tail outside the marker note after 'ordered-note-adjacent'": "#3922",
-    "keeps the tail outside the marker note after 'ordered-note-code'": "#3922",
-    "keeps the tail outside the marker note after 'ordered-note-raw'": "#3922"
-  },
   "nested-list-source-boundaries.test.ts": {
     "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
   },
