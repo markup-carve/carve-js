@@ -1241,6 +1241,37 @@ function withoutImageHostComments(children: InlineNode[]): InlineNode[] {
   return k === 1 ? children : [children[at]!, ...children.slice(k)]
 }
 
+/**
+ * The image, or (carve#5038) the image line as a block-image paragraph when
+ * comments sit beside the image, so the tree keeps what the author wrote.
+ */
+function figureImageTarget(b: Paragraph, host: InlineNode[]): Image | Paragraph {
+  const image = host[0] as Image
+  if (host === b.children) return image
+  const children = b.children.slice(0, b.children.indexOf(host[1]!))
+  const target: Paragraph = { type: 'paragraph', children, blockImage: true }
+  const first = children[0]!.pos
+  const last = children[children.length - 1]!.pos
+  if (first && last) {
+    target.pos = {
+      startLine: first.startLine, endLine: last.endLine,
+      ...(first.startColumn !== undefined ? { startColumn: first.startColumn } : {}),
+      ...(last.endColumn !== undefined ? { endColumn: last.endColumn } : {}),
+      ...(first.startOffset !== undefined ? { startOffset: first.startOffset } : {}),
+      ...(last.endOffset !== undefined ? { endOffset: last.endOffset } : {}),
+    }
+  }
+  return target
+}
+
+/** The image a figure shows: its target, or the image of a block-image paragraph target. */
+export function figureTargetImage(target: Figure['target']): Image | undefined {
+  if (target.type === 'image') return target
+  if (target.type !== 'paragraph' || !target.blockImage) return undefined
+  const image = loneParagraphImage(target)
+  return image && target.attrs ? { ...image, attrs: mergeAttrs(target.attrs, image.attrs ?? {}) } : image
+}
+
 function captionFirstLineHasContent(children: InlineNode[]): boolean {
   const afterMarker = (children[2] as Text).value.replace(/^\^ +/, '')
   if (RE_HAS_CONTENT.test(afterMarker)) return true
@@ -1447,8 +1478,9 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // it onto the promoted block image (its own inline attrs win on conflict,
       // §15), matching a direct block image `{#id}\n![…](…)`. Otherwise the id
       // would be lost when the paragraph wrapper is dropped.
+      const own = img.attrs
       if (b.attrs) img.attrs = mergeAttrs(b.attrs, img.attrs ?? {})
-      recordPromotedImageBlockRun(img, b.attrs ?? {})
+      recordPromotedImageBlockRun(img, b.attrs ?? {}, own)
       blocks[i] = img as unknown as BlockNode
       continue
     }
@@ -1520,7 +1552,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // Carry a leading block-attribute line (`{#id}` etc.) from the paragraph
       // onto the figure, matching a direct-image figure (which takes the attrs
       // at parse time) and carve-php -- otherwise `carve fmt` would drop it.
-      const figure: Figure = { type: 'figure', target: host[0] as Image, caption }
+      const figure: Figure = { type: 'figure', target: figureImageTarget(b, host), caption }
       // The PARAGRAPH's span is the figure's: it covered the image line and the
       // caption line, which is exactly what this figure now holds. Without it
       // the node is published with no position at all - the four figure sites in

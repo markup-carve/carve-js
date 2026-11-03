@@ -58,6 +58,7 @@ import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type L
 import { escapeDestinationStructure } from './import/markdown/markdown-destination-encoding.js'
 import { carryFootnoteAttrSources, footnoteAttrSource } from './parse/inline/unresolved-reference.js'
 import { normalizeRefLabel } from './label-key.js'
+import { promotedImageAttrs } from './extension/attribute-merge.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
@@ -3766,8 +3767,13 @@ class CarveRenderSession {
         const caption = node.caption !== undefined ? this.captionLine(node.caption, ctx) : ''
         return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
       }
-      case 'image':
-        return renderImage(node)
+      case 'image': {
+        // The attribute line the parse merged in is written back as a line (carve#5039).
+        const split = promotedImageAttrs(node)
+        if (split === undefined || renderBlockAttrs(split.run) === '') return renderImage(node)
+        const { attrs: _merged, ...bare } = node
+        return `${renderBlockAttrs(split.run)}\n${renderImage(split.own === undefined ? bare : { ...bare, attrs: split.own })}`
+      }
       case 'raw_block': {
         const fence = safeFence(node.content, 3)
         const content = this.protectVerbatim(node.content)

@@ -201,13 +201,19 @@ export function accumulateAttrs(a: Attrs | undefined, b: Attrs): Attrs {
 // block attribute in Markdown; the image's glued attributes follow the inline rule.
 // The run applies only while the image's attributes are the parsed ones, so a
 // caller's tree or a later edit keeps the whole-set check.
-const promotedImageBlockRuns = new WeakMap<{ attrs?: Attrs }, { run: Attrs; parsed: string }>()
+const promotedImageBlockRuns = new WeakMap<{ attrs?: Attrs }, { run: Attrs; own: Attrs | undefined; parsed: string }>()
 
-export function recordPromotedImageBlockRun(image: { attrs?: Attrs }, run: Attrs): void {
-  promotedImageBlockRuns.set(image, { run, parsed: JSON.stringify(image.attrs ?? {}) })
+/** Call after the merge; `own` is the image's set before the run was merged in. */
+export function recordPromotedImageBlockRun(image: { attrs?: Attrs }, run: Attrs, own: Attrs | undefined): void {
+  promotedImageBlockRuns.set(image, { run, own, parsed: JSON.stringify(image.attrs ?? {}) })
 }
 
 export function promotedImageBlockRun(image: { attrs?: Attrs }): Attrs | undefined {
+  return promotedImageAttrs(image)?.run
+}
+
+/** The block run and the image's own attributes, while the merged set is the parsed one. */
+export function promotedImageAttrs(image: { attrs?: Attrs }): { run: Attrs; own: Attrs | undefined } | undefined {
   const record = promotedImageBlockRuns.get(image)
-  return record && record.parsed === JSON.stringify(image.attrs ?? {}) ? record.run : undefined
+  return record && record.parsed === JSON.stringify(image.attrs ?? {}) ? record : undefined
 }
