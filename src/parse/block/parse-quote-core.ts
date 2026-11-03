@@ -677,6 +677,8 @@ export interface BlockQuoteLazyState {
    * and the quote then ended on a line the top level folds in.
    */
   colonWidths: number[]
+  /** A nested level opened on a bare `+`, whose next quote line is the block it attaches (carve#5023). */
+  firstBlockPlus?: BlockQuoteLazyState | undefined
 }
 
 export function demoteQuotedColonCandidates(state: BlockQuoteLazyState): void {
@@ -751,8 +753,28 @@ export function trackBlockQuoteLazyState(
   }
   let paragraphOpen: boolean | undefined
   let literalDepth = 0
+  let opening = false
   const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
+  // A nested quote's first-block `+` opens no paragraph: the next line starts a block there,
+  // even one written with fewer `>` (PART 0 S3, carve#5023).
+  let plusLeaf = state.firstBlockPlus
+  if (plusLeaf !== undefined) {
+    state.firstBlockPlus = undefined
+    if (plusLeaf.mode.kind === 'paragraph' && !isBlankLine(content)) closeBlockQuoteParagraph(plusLeaf)
+    else plusLeaf = undefined
+  }
   for (;;) {
+    if (plusLeaf !== undefined) {
+      if (level === plusLeaf) plusLeaf = undefined
+      else if (quotedLineText(text, terminatorFree) === null) {
+        level = plusLeaf
+        plusLeaf = undefined
+        paragraphOpen = false
+        opening = false
+      }
+    }
+    const opensLevel = level !== state && literalDepth > 0 && level.mode.kind === 'closed' && opening
+    opening = level.mode.kind !== 'quote'
     level.hostAttrTracked = false
     const descend = classifyQuotedLine(
       text, level, commentCloser, fenceOpens, continuesParagraph, terminatorFree, descent, prefixMemo, atColumn,
@@ -762,7 +784,10 @@ export function trackBlockQuoteLazyState(
       },
       payloadCloser,
     )
-    if (descend === null) return
+    if (descend === null) {
+      if (opensLevel && isContinuationMarker(text) && level.mode.kind === 'paragraph') state.firstBlockPlus = level
+      return
+    }
     text = descend.text
     level = descend.state
     literalDepth++
