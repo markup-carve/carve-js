@@ -19,6 +19,7 @@ import { carveToHtml } from '../src/index.js'
 import { expectedCorpusSize } from './helpers/corpus-population.js'
 import { RULED_HTML_AHEAD_OF_PIN } from './ruled-ahead-of-pin-5015.js'
 import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
+import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -1494,6 +1495,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN,
   ...RULED_5013_HTML,
   ...RULED_5016_HTML,
+  ...RULED_HTML_AHEAD_OF_PIN_5012,
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

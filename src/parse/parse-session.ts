@@ -163,6 +163,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
+import { authoredAbbreviations, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -457,7 +458,7 @@ export class ParseSession extends InlineParseSession {
     return this.quoteSiblingSeparators.has(line)
   }
 
-  parse(source: string, opts: ParseOptions = {}): Document {
+  parse(source: string, opts: ParseOptions = {}, transparent = true): Document {
     const sourceByteLength = utf8ByteLength(source)
     this.recordPositions = opts.positions !== false
     this.blockLineSpans = new WeakMap()
@@ -475,6 +476,7 @@ export class ParseSession extends InlineParseSession {
     // is a heading, not literal text. Only here in the root entry -- nested
     // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
     // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
+    const authoredSource = source
     const strippedBom = source.charCodeAt(0) === 0xfeff
     if (strippedBom) source = source.slice(1)
     // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
@@ -483,12 +485,32 @@ export class ParseSession extends InlineParseSession {
     // A lone surrogate becomes U+FFFD too, so output is always well-formed
     // (CARVE-P0-023).
     source = replaceLoneSurrogates(source)
+    const transparentLines = transparent ? transparentLineStream(source) : null
+    const authoredOptions = { ...opts, positions: true }
+    delete authoredOptions.onUnclosedContainer
+    delete authoredOptions.onUnclosedCodeFence
+    delete authoredOptions.onRefusedContinuationMarker
+    delete authoredOptions.onDroppedComment
+    delete authoredOptions.onOverindentedOpener
+    delete authoredOptions.onInvalidContainerMetadata
+    delete authoredOptions.onDanglingBlockAttributes
+    const authored = transparentLines ? new ParseSession().parse(authoredSource, authoredOptions, false) : null
+    const erasedAbbreviations = transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : []
+    const originalLexer = transparentLines ? new Lexer(source, opts) : null
     const lexer = new Lexer(
-      source,
+      transparentLines?.lines ?? source,
       opts,
       0,
       opts.onUnclosedContainer || opts.onDanglingBlockAttributes || opts.onInvalidContainerMetadata ? new Set<string>() : undefined,
     )
+    if (transparentLines && originalLexer) {
+      lexer.sourceLineMap = transparentLines.sourceLines.map((index) => index + 1)
+      lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
+      if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
+      lexer.rootLines = transparentLines.original
+      lexer.documentLineCount = originalLexer.documentLineCount
+      lexer.documentLacksFinalBreak = originalLexer.documentLacksFinalBreak
+    }
     // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
     // shifted every offset in the document by one codepoint, so a consumer that
     // sliced the original bytes by a reported span got the character before the
@@ -500,15 +522,15 @@ export class ParseSession extends InlineParseSession {
     // with a fixed width of one, so it reuses it rather than adding a second
     // spelling. `linePrefixWidths` moves with it: the mark occupies the first
     // column of the first line, so the content of that line starts at column 2.
-    if (strippedBom) {
+    if (strippedBom && !transparentLines) {
       lexer.sourceOffsetMap = lexer.lineOffsets.map((offset) => offset + 1)
       lexer.linePrefixWidths = lexer.lineOffsets.map((_offset, index) => (index === 0 ? 1 : 0))
     }
     lexer.atDocumentLevel = true
     // Consume leading frontmatter first so `lexer.pos` marks the end of the
     // metadata region; the def passes and parseBlocks all start from there.
-    lexer.consumeFrontmatter()
-    const sourceLines = lexer.lines
+    if (!transparentLines || transparentLines.sourceLines[0] === 0) lexer.consumeFrontmatter()
+    const sourceLines = transparentLines?.original ?? lexer.lines
     const ownership = ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
     this.skippedAbbreviationLines = new Set([...ownership.skippedAbbreviations.keys()]
@@ -528,6 +550,31 @@ export class ParseSession extends InlineParseSession {
     // First pass: collect abbreviation and reference-link definitions so
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
+    if (transparentLines) {
+      const visibleAbbreviations = new Map<string, number>()
+      for (const [index, [name]] of lexer.collectedAbbreviations ?? []) {
+        visibleAbbreviations.set(name, transparentLines.sourceLines[index]!)
+      }
+      for (const definition of erasedAbbreviations) {
+        if (definition.pos!.startLine - 1 <= (visibleAbbreviations.get(definition.abbr) ?? -1)) continue
+        lexer.abbrDefs.set(definition.abbr, definition.expansion)
+      }
+    }
+    if (transparentLines && authored) {
+      for (const node of authored.children) {
+        if (node.type !== 'link_reference_definition' || !node.pos ||
+            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
+        const key = normalizeRefLabel(node.label)
+        const current = lexer.linkDefs.get(key)
+        const currentLine = current?.line === undefined ? -1 : transparentLines.sourceLines[current.line]!
+        if (currentLine >= node.pos.startLine - 1) continue
+        lexer.linkDefs.set(key, {
+          rawLabel: node.label, href: node.href,
+          ...(node.title === undefined ? {} : { title: node.title }),
+          ...(node.attrs === undefined ? {} : { attrs: node.attrs }),
+        })
+      }
+    }
     const children = this.parseBlocks(lexer, 0)
     hoistContainerAbbreviations(lexer)
     insertSkippedAbbreviationDefinitions(children, lexer, sourceLines, strippedBom ? '\ufeff' + source : source)
@@ -547,10 +594,29 @@ export class ParseSession extends InlineParseSession {
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = sourceByteLength
-    if (opts.positions === false) {
+    if (opts.positions === false && !transparentLines) {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
     toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
+    if (transparentLines && authored) {
+      for (const node of authored.children) {
+        if (node.type !== 'link_reference_definition' || !node.pos ||
+            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
+        const key = normalizeRefLabel(node.label)
+        const winner = lexer.linkDefs.get(key)
+        if (winner?.rawLabel !== node.label || winner.href !== node.href) continue
+        for (let i = doc.children.length - 1; i >= 0; i--) {
+          const existing = doc.children[i]!
+          if (existing.type === 'link_reference_definition' && normalizeRefLabel(existing.label) === key) doc.children.splice(i, 1)
+        }
+        doc.children.push(node)
+      }
+      restoreTransparentComments(doc, authored, transparentLines)
+      restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
+    }
+    if (opts.positions === false) {
+      return this.skipPositionDrop ? doc : dropPositions(doc)
+    }
     return doc
   }
 

@@ -133,6 +133,10 @@ export interface Heading extends BaseNode {
 export interface Paragraph extends BaseNode {
   type: 'paragraph'
   children: InlineNode[]
+  /** Runtime source placement for line comments erased before layout. */
+  transparentComments?: Array<{ line: number; source: string }>
+  /** Authored lines following a transparent boundary in this paragraph. */
+  transparentFollowingLines?: Array<{ line: number; source: string }>
   /** Set after reference resolution when the paragraph contains one resolved image. */
   blockImage?: true
 }
@@ -531,6 +535,8 @@ export interface AbbreviationDef extends BaseNode {
   type: 'abbreviation_def'
   abbr: string
   expansion: string
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
 }
 
 /**
@@ -580,6 +586,8 @@ export interface RawBlock extends BaseNode {
 export interface Comment extends BaseNode {
   type: 'comment'
   block: boolean
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
   /** Present only for the explicitly closed `{% … %}` inline form. */
   delimited?: boolean
   content: string

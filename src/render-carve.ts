@@ -67,6 +67,15 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   preserveTableSeparators?: boolean
 }
 
+/** A transparent line keeps its authored column through list and quote writing. */
+function restoreTransparentLineColumns(source: string): string {
+  if (!source.includes('\0')) return source
+  return source.split('\n').map((line) => {
+    const marker = line.indexOf('\0')
+    return marker < 0 ? line : line.slice(marker + 1)
+  }).join('\n')
+}
+
 // A body line below the body column that directly follows the line above it; the writer keeps it there.
 function bodyLineBelowColumn(blocks: BlockNode[], bodyColumn: number): boolean {
   return hasLineBelowBody(blocks, bodyColumn) || blocks.some((block, index) => {
@@ -2863,9 +2872,9 @@ class CarveRenderSession {
     for (;;) {
       this.multiLineVerbatim = new Map()
       const out = this.renderCarveOnce(ast, opts, parsedSource)
-      if (this.multiLineVerbatim.size === 0) return relaxPlusEscapes(out)
+      if (this.multiLineVerbatim.size === 0) return restoreTransparentLineColumns(relaxPlusEscapes(out))
       const missing = missingVerbatimPayloads(ast, out, this.multiLineVerbatim)
-      if (missing.length === 0) return out
+      if (missing.length === 0) return restoreTransparentLineColumns(out)
       for (const key of missing) {
         const next = (this.verbatimSpellings.get(key) ?? 0) + 1
         if (next >= VERBATIM_SPELLINGS) {
@@ -3600,6 +3609,22 @@ class CarveRenderSession {
           ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered,
           ctx.lineBlockDepth > 0,
         )
+        let withComments = text
+        if (node.transparentComments?.length) {
+          const sourceLines = [...new Set(node.children
+            .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
+            .map((child) => child.pos!.startLine))]
+          const written = text.split('\n')
+          for (const [index, line] of sourceLines.entries()) {
+            const following = node.transparentFollowingLines?.find((entry) => entry.line === line)
+            if (following && index < written.length) written[index] = `\0${following.source}`
+          }
+          for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
+            const after = sourceLines.filter((line) => line < comment.line).length
+            written.splice(Math.min(after, written.length), 0, `\0${comment.source}`)
+          }
+          withComments = written.join('\n')
+        }
         // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
         // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
         // return one stanza as two; a comment-only line is the one construct that
@@ -3621,17 +3646,17 @@ class CarveRenderSession {
         // consumes, so the stanza ends in one - and the position after it is the
         // closing fence, not an empty verse line.
         if (ctx.lineBlockDepth > 0) {
-          return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+          return withAttrs(withComments.replace(/^$(?=\n)/gm, '%%'))
         }
         // PART 11 §1 / CARVE-P11-002 and §5 keep guarded dashes as paragraph text
         // in list items and descriptions while emitting their source run bare.
         if (this.markerColumnGuardParagraphs.has(node)) {
-          return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
+          return withAttrs(withComments.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
         }
 
         // A bare plus at a host marker column is consumed even when refused.
         // Escape a literal plus before the surrounding host supplies columns.
-        return withAttrs(text.replace(/^\+(?=\n|$)/, '\\+'))
+        return withAttrs(withComments.replace(/^\+(?=\n|$)/, '\\+'))
       }
       case 'code_block': {
         const fence = safeFence(node.content, 3)
@@ -3778,6 +3803,7 @@ class CarveRenderSession {
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
+        if (node.transparentInParagraph) return ''
         return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
       case 'link_reference_definition': {
         // PART 12 §10 gave this a node precisely so the writer can put the line
@@ -3799,6 +3825,7 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
+        if (node.transparentInParagraph) return ''
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
         // inline one (carve#581) in joining a percent-leading content onto the
         // marker. At block level the comment-LINE marker is exactly `%%`; a run
