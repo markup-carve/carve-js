@@ -105,6 +105,8 @@ interface Form {
   table?: boolean
   // The continuation lines of a wrapped attribute block.
   attrLines?: number
+  // A marker-shaped line under a paragraph that renders as a spaced thematic break.
+  breakLine?: boolean
 }
 
 
@@ -571,12 +573,13 @@ export function ownLines(
       top().para = false
       top().last = 'block'
     } else if (form.kind === 'text') {
+      noteOpener(owner, form, owner.col, plusFollower)
       applyText(owner, closedColumn, plusFollower)
     } else if (plusLanding !== null) {
       lead(plusLanding)
       apply(owner, m.col, form, plusLanding)
     } else {
-      if (!plusFollower) noteOpener(owner, form, owner.col)
+      noteOpener(owner, form, owner.col, plusFollower)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
       apply(owner, m.col, form, owner.canon, closed === 0)
     }
@@ -746,7 +749,8 @@ export function ownLines(
     }
 
     // An opener past a non-item owner's content column. List items and markers have their own lint rules.
-    function noteOpener(owner: Frame, form: Form, contentColumn: number): void {
+    function noteOpener(owner: Frame, form: Form, contentColumn: number, plusFollower = false): void {
+      if (plusFollower) return
       const kind = openerKind(form, m.rest)
       if (kind === 'table row') {
         if (owner.tableLine === at - 1) return
@@ -1107,6 +1111,9 @@ export function ownLines(
       case 'colon': return 'colon fence'
       case 'fence': return form.lineBlock ? 'line block' : COMMENT_FENCE.test(rest) ? undefined : 'code fence'
       case 'term': return 'definition term'
+      // A spaced break reads as a marker here, but renders as a thematic break (carve#5003).
+      case 'item': return RE_HR.test(rest) ? 'thematic break' : undefined
+      case 'text': return form.breakLine ? 'thematic break' : undefined
       case 'leaf': return HEADING.test(rest) ? 'heading' : RE_HR.test(rest) ? 'thematic break'
         : isTableRow(rest) ? 'table row' : undefined
       default: return undefined
@@ -1193,7 +1200,7 @@ export function ownLines(
     }
     const marker = matchMarker(rest)
     // §10 I2: under an open paragraph a marker opens only in a marker body (carve#4860).
-    if (marker && owner.para && !BODY_FRAME.has(owner.kind)) return { kind: 'text', interrupts: false }
+    if (marker && owner.para && !BODY_FRAME.has(owner.kind)) return { kind: 'text', interrupts: false, breakLine: RE_HR.test(rest) }
     if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)
