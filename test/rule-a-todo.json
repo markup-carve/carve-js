@@ -54,9 +54,6 @@
   "djot-empty-definitions.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
   },
-  "djot-task-bullet-separators.test.ts": {
-    "Only Native task prefixes become checkboxes": "#3921"
-  },
   "fmt-adjacent-tight-lists-in-description.test.ts": {
     "adjacent tight lists stay in a description body": "#3921"
   },

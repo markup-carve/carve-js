@@ -518,7 +518,7 @@ function writeNoteHead(I: LayoutInput, s: LayoutState, L: LayoutLine, noteHead: 
   const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
   let childBody = body
   if (child) {
-    s.lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: s.out.length, continuation: false })
+    s.lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + currentNoteHead[1]!.length, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: s.out.length, continuation: false })
     childBody = body.slice(child[1]!.length)
     if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\](?:[ \t]+|$)/, '')
   }
