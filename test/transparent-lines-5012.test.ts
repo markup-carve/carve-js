@@ -114,4 +114,10 @@ describe('carve#5012 transparent single-line blocks', () => {
       return true
     })).toBe('a\n*[AB]: new\nb\n')
   })
+
+  it('keeps a comment after a multiline inline node', () => {
+    const source = 'a *b\nc*\n%% c\nd\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToCarve(source, { positions: false })).toBe(source)
+  })
 })
