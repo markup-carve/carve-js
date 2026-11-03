@@ -1824,18 +1824,41 @@ export class ParseSession extends InlineParseSession {
     const width = commentFenceRun(ln)
     if (width === undefined) return false
     this.trackUntrackedQuoteLines(q)
+    // The span may sit in the quote itself or in an item, description or note it holds (carve#5027).
+    const spanWidth = (level: BlockQuoteLazyState): number | undefined =>
+      level.mode.kind === 'comment_fence' ? level.mode.length
+        : level.hosts?.fence?.comment ? level.hosts.fence.marker.length : undefined
+    // The column a host's span reads its closer at: the fence's floor, or the host's own column.
+    const hostColumn = (level: BlockQuoteLazyState): number | undefined =>
+      level.mode.kind === 'comment_fence'
+        ? (level.hosts?.columns.at(-1) ?? 0) > 0 ? level.hosts!.columns.at(-1) : undefined
+        : level.hosts!.fence!.floor
     let level = q.state
-    let open: number | undefined = level.mode.kind === 'comment_fence' ? level.mode.length : undefined
-    while (level.mode.kind === 'quote') {
+    let open = spanWidth(level)
+    let column = open === undefined ? undefined : hostColumn(level)
+    let hostDepth = 0
+    for (let depth = 1; level.mode.kind === 'quote'; depth++) {
       level = level.mode.inner
-      if (level.mode.kind === 'comment_fence') open = level.mode.length
+      const inner = spanWidth(level)
+      if (inner === undefined) continue
+      open = inner
+      column = hostColumn(level)
+      hostDepth = depth
     }
-    // A span in an item or note ends at the unmarked line, which is no closer of it.
-    if (open !== width || (level.mode.kind === 'comment_fence' && level.mode.hosted)) return false
+    if (open !== width) return false
     const { lexer } = q
     const lineIndex = lexer.pos
     lexer.consume()
-    this.appendLazyQuoteLine(q, ln, lineIndex, false)
+    if (column === undefined) {
+      this.appendLazyQuoteLine(q, ln, lineIndex, false)
+      return true
+    }
+    // A host's span reads the closer as written at the host's column, as the quoted spelling is.
+    // A deeper quote gets the line as authored and reads it the same way itself.
+    const content = '> '.repeat(hostDepth) + ' '.repeat(column) + ln.trimStart()
+    q.inner.push(hostDepth === 0 ? content : ln)
+    q.untracked.push([content, lineIndex])
+    q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
     return true
   }
 

@@ -172,7 +172,7 @@ export type BlockQuoteLazyMode =
   | { kind: 'closed' }
   | { kind: 'paragraph'; term?: boolean; itemParagraph?: boolean }
   | { kind: 'code_fence'; close: RegExp }
-  | { kind: 'comment_fence'; length: number; hosted?: boolean }
+  | { kind: 'comment_fence'; length: number }
   // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
   // end on a paragraph. PART 1 S4 is about the open STACK, and the block at the
   // bottom of it may be several quotes down: `> a` / `> > # H` / `tail` ends the
@@ -1040,7 +1040,7 @@ export function classifyQuotedLine(
   const commentRun = commentFenceRun(content)
   if (commentRun !== undefined) {
     if (hasLiteralCommentCloser(commentRun, 0)) {
-      state.mode = { kind: 'comment_fence', length: commentRun, ...((state.hosts?.columns.at(-1) ?? 0) > 0 ? { hosted: true } : {}) }
+      state.mode = { kind: 'comment_fence', length: commentRun }
     } else {
       closeBlockQuoteParagraph(state)
     }
