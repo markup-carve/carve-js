@@ -2085,7 +2085,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lexer.nonAuthoredDefinitionStarts.add(lexer.lineNumber(lexer.pos))
       if (definitionHostColumn !== undefined && !RE_DEFLIST_TERM.test(sourceEntry) &&
           !RE_DEFLIST_DEF.test(sourceEntry) && lineOpensItemBlock(sourceEntry) &&
-          sourceMarkerColumn >= contentCol) {
+          sourceMarkerColumn >= contentCol &&
+          // A block in the open description's body leaves the list and its host column open.
+          !((lazyState.inDefList === 'description' || markerDescriptionCodeTracked) && definitionBodyColumn !== undefined &&
+            sourceMarkerColumn >= definitionBodyColumn)) {
         definitionHostColumn = undefined
         definitionAuthored = false
         definitionBodyColumn = undefined
@@ -2673,6 +2676,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (wasMarkerDescriptionCode && lazyState.opaque === null && opensCodeFence(dedented.trimStart())) {
         markerDescriptionCodeClosedAtFloor = indentColumns(l) === contentCol
         markerDescriptionCodeTracked = false
+        // A closer in the description's body hands the body back to the description.
+        if (markerDescriptionCodeOwner !== undefined && indentColumns(l) >= contentCol + markerDescriptionCodeOwner &&
+            lazyState.inDefList === false) lazyState.inDefList = 'description'
       }
       if (opensCodeFence(dedented.trimStart())) singleMarkerTerm = false
       if (markerDescription !== null && lazyState.inDefList === 'description' &&
