@@ -22,16 +22,7 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  ['derived-endnotes-section', {
-    reason: 'PART 11 §6 writes every thematic break as *** (markup-carve/carve#4973)',
-    carve: '***\n\n{loose}\n1. Note text.\n',
-  }],
-  ['empty-paragraph', {
-    reason: 'PART 11 §6 writes every thematic break as *** (markup-carve/carve#4973)',
-    carve: 'a\n\nb\n\nc\n\n{#h}\n***\n',
-  }],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.
