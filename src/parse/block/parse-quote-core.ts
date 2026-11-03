@@ -293,6 +293,10 @@ function trackHeldColonComment(q: QuoteHostLine): QuoteHostVerdict {
     return true
   }
   if (heldColon?.literal && column < heldColon.floor) {
+    // A text line folds into an open stanza and closes nothing, so the item stays for the next marker (PART 0 S4).
+    if (blockQuoteParagraphOpen(state) && text !== '' && commentRun === undefined && !RE_COMMENT_LINE.test(text) &&
+        !lineOpensBlock(text) && !isBlockAttributeLine(text) && !opensWrappedAttributeBlock(text) &&
+        markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 && bottomBlockLeavesParagraphOpen(text)) return true
     host.colons!.pop()
     closeBlockQuoteParagraph(state)
     if (commentRun !== undefined && q.hasCommentCloser(commentRun, column)) return false
