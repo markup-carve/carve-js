@@ -9411,9 +9411,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   }
   let body = assemble()
   // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
-  // OPEN fence and, with a later closer, swallows everything between as opaque
-  // metadata, so a document that opens with a break and holds another bare
-  // `---` would vanish. The canonical writer meets the same hazard and answers
+  // OPEN fence and swallows through its first closer or EOF as opaque metadata,
+  // so a document that opens with a break would vanish. The canonical writer
+  // meets the same hazard and answers
   // it by respelling every break in the document (PART 11 section 1a), which is
   // what `carve fmt` then writes - so the import takes the same answer, by the
   // writer's own parser test and its own marker, rather than a leading blank
@@ -9424,7 +9424,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (line?.endsWith('---')) out[at] = line.slice(0, -3) + FRONTMATTER_SAFE_BREAK
     }
     const respelled = assemble()
-    if (!opensFrontmatter(respelled)) body = renderCarve(parse(spellEmptyItemPlaceholders(respelled)))
+    if (!opensFrontmatter(respelled)) {
+      body = renderCarve(parse(spellEmptyItemPlaceholders(respelled)))
+      // The writer adds a terminal newline; migration keeps the source's EOF.
+      if (!respelled.endsWith('\n')) body = body.replace(/\n$/, '')
+    }
   }
   // The boundary under a frontmatter closer is the writer's own block
   // separator, and a frontmatter-only document still ends on a newline, so the

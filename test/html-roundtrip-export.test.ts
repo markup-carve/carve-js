@@ -77,7 +77,7 @@ describe('the HTML carriers', () => {
   it('data-char: the authored break character, only where it is not `-`', () => {
     expect(rt('***\n')).toBe('<hr data-char="*">')
     expect(rt('___\n')).toBe('<hr data-char="_">')
-    expect(rt('---\n')).toBe('<hr>')
+    expect(rt('---\n')).toBe('')
   })
 
   it('data-char leads the authored attributes, where carve-php trails them', () => {

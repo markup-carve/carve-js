@@ -5,12 +5,11 @@ const html = (s: string) => carveToHtml(s)
 
 describe('thematic break', () => {
   it('records the authored marker and writes every break as ***', () => {
-    for (const marker of ['-', '*', '_'] as const) {
+    for (const marker of ['*', '_'] as const) {
       const source = marker.repeat(3)
       const node = toAstJson(parse(source)).children[0]
       expect(node).toMatchObject({ type: 'thematic_break' })
-      if (marker === '-') expect(node).not.toHaveProperty('marker')
-      else expect(node).toHaveProperty('marker', marker)
+      expect(node).toHaveProperty('marker', marker)
       expect(renderCarve(parse(source))).toBe('***\n')
     }
   })
@@ -28,15 +27,16 @@ describe('thematic break', () => {
   })
 
   it('is a col-0 run of 3+ contiguous identical -, *, or _', () => {
-    for (const s of ['---', '***', '___', '----', '*****']) {
+    for (const s of ['***', '___', '----', '*****']) {
       expect(html(s)).toBe('<hr>')
     }
+    expect(html('---')).toBe('')
   })
 
   it('allows only trailing whitespace after the run', () => {
     expect(html('*** ')).toBe('<hr>')
     expect(html('***\t')).toBe('<hr>')
-    expect(html('---   ')).toBe('<hr>')
+    expect(html('---   ')).toBe('')
   })
 
   it('accepts single spaces in a `*` or `-` run only (carve#4814)', () => {

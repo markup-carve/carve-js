@@ -131,8 +131,8 @@ describe('a fence delimiter line', () => {
 
     const front = (ch: string) => carveToHtml('---\nt: 1\n---' + ch + '\ny\n')
     expect(front('')).not.toContain('t: 1')
-    expect(front('﻿')).toContain('t: 1')
-    expect(front(' ')).toContain('t: 1')
+    expect(front('﻿')).toBe('')
+    expect(front(' ')).toBe('')
   })
 
   it('is the same rule for a fence that interrupts a paragraph', () => {
