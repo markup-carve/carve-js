@@ -5263,7 +5263,7 @@ function collectBlockquoteInlineRun(
   // fence or indented code, on an item's own line or not.
   let paragraph = false
   // The content column of the last item line at each quote prefix.
-  const lastItem = new Map<string, number>()
+  const lastItem = heldQuotedItem(quotedLine(lines[start]!, contentCol), markers)
   // The quote prefixes a table is open at.
   const table = new Set<string>()
   // The prefix the lazy lines of the current paragraph take, once found.
@@ -5365,7 +5365,7 @@ function collectBlockquoteInlineRun(
       if (item !== null) lastItem.set(prefix, columnWidth(item.lead))
       // Left of the item, only a lazy paragraph line keeps it open.
       else if (held !== undefined && indentColumns(text) < held && !(lazy && quoteParagraphIsOpen(text))) lastItem.delete(prefix)
-      const open = RE_MD_FENCE_LINE.exec(inner)
+      const open = quotedFenceLine(inner, text, item, held)
       if (item?.code) {
         code = { prefix, col: columnWidth(item.lead) }
         resumedCode = false
@@ -5380,7 +5380,8 @@ function collectBlockquoteInlineRun(
         // Indented code may follow a heading or a thematic break without a
         // blank line, a setext one included; the caller re-enters on it.
         break
-      } else if (end > start && (interruptingHtmlBlock(text) || item !== null && quotedItemHtmlBlock(lines, end) !== null &&
+      } else if (end > start && (interruptingHtmlBlock(heldItemText(text, item, held)) ||
+        item !== null && quotedItemHtmlBlock(lines, end) !== null &&
         !(/^ *(?!0*1[.)])\d/.test(item.lead) && run.at(-1)?.prefix === prefix && opensParagraph(run.at(-1)!.text)))) {
         // What the quote holds is measured with the marker stripped, so an
         // HTML block opening mid-quote ends the inline run and the caller
@@ -5481,7 +5482,7 @@ function writeQuotedInlineRun(
   const inheritedItemCol = markers.get(run[0]?.prefix ?? '')?.itemAt(indentColumns(run[0]?.text ?? ''))?.content ?? 0
   let emptyToken = '\uE0FD'
   while (run.some(part => part.text.includes(emptyToken))) emptyToken += '\uE0FD'
-  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(quoteEmptyItems(run, emptyToken), afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
+  const written = restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(quoteEmptyItems(run, emptyToken), afterCode, quoteEnds && quotedLine(lines[end] ?? '', contentCol)?.text.trim() !== '', dialect, heldQuotedItem(run[0] ?? null, markers)), dialect), markers, quoteEnds || paddingFreeAtBlank), dialect, true, inheritedItemCol)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? emitContainerLine(l, 'blank', {
         listDepth: 0, quoteDepth: quoteDepth(l), prefix: l,
       }).line : l))
@@ -5489,6 +5490,34 @@ function writeQuotedInlineRun(
     lines: canonicalItemHeldTildeFence(written).map(line => line.replaceAll(emptyToken, '{empty}')),
     end,
   }
+}
+
+/** A quoted line's text measured from the item holding it, when one does. */
+function heldItemText(text: string, item: unknown, held: number | undefined): string {
+  return item === null && held !== undefined && indentColumns(text) >= held ? stripColumns(text, held) : text
+}
+
+/** A fence a quoted line opens, at the item's column when the item holds it. */
+function quotedFenceLine(inner: string, text: string, item: unknown, held: number | undefined): RegExpExecArray | null {
+  return RE_MD_FENCE_LINE.exec(inner) ?? (item === null ? heldItemFence(text, held) : null)
+}
+
+/** A fence four or more columns into a quote that is at most three past its item's column. */
+function heldItemFence(text: string, held: number | undefined): RegExpExecArray | null {
+  if (held === undefined || indentColumns(text) < 4 || indentColumns(text) >= held + 4) return null
+  return RE_MD_FENCE_LINE.exec(stripColumns(text, held))
+}
+
+/**
+ * The item an earlier run left open that holds a run's first line: a run
+ * re-entered inside an item still reads a fence there as the item's.
+ */
+function heldQuotedItem(first: { prefix: string; text: string } | null, markers: Map<string, ListMarkers>): Map<string, number> {
+  const held = new Map<string, number>()
+  if (first === null || quotedItemLead(first.text) !== null) return held
+  const item = markers.get(first.prefix)?.itemAt(indentColumns(first.text))
+  if (item !== undefined) held.set(first.prefix, item.content)
+  return held
 }
 
 /** Give quoted empty Markdown items a temporary body before block conversion. */
@@ -5559,7 +5588,7 @@ function canonicalItemHeldTildeFence(lines: string[]): string[] {
  * the run goes through `convertInline`, which protects a backtick fence as a
  * code span but read a tilde fence's `~~` as strikethrough.
  */
-function canonicalQuotedFences(run: readonly PrefixedInlineLine[], afterCode: boolean, quoteEnds = true, dialect: MarkdownDialect = COMMONMARK_GFM): PrefixedInlineLine[] {
+function canonicalQuotedFences(run: readonly PrefixedInlineLine[], afterCode: boolean, quoteEnds = true, dialect: MarkdownDialect = COMMONMARK_GFM, heldItem = new Map<string, number>()): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
   let opener = -1
   let closer: RegExp | null = null
@@ -5573,7 +5602,7 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[], afterCode: bo
   let indent = 0
   // The content column of the last item line at each quote prefix, outside
   // fences, whose lines are code rather than items.
-  const lastItem = new Map<string, number>()
+  const lastItem = heldItem
   const close = (): PrefixedInlineLine => {
     const bodies = out.slice(opener + 1)
     for (const [offset, part] of bodies.entries()) {
@@ -5707,7 +5736,9 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[], afterCode: bo
       continue
     }
     const inner = item === null ? part.text : part.text.slice(item.lead.length)
-    const open = RE_MD_FENCE_LINE.exec(inner)
+    const plain = RE_MD_FENCE_LINE.exec(inner)
+    const itemFence = plain === null && item === null && !part.continued ? heldItemFence(part.text, lastItem.get(part.prefix)) : null
+    const open = plain ?? itemFence
     if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) {
       const held = lastItem.get(part.prefix)
       if (item !== null) lastItem.set(part.prefix, columnWidth(item.lead))
@@ -5737,9 +5768,9 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[], afterCode: bo
       // item's column, and its body keeps its indent.
       const held = lastItem.get(part.prefix)
       const underItem = held !== undefined && columnWidth(open[1]!) >= held
-      lead = underItem ? open[1]! : ''
-      col = underItem ? held : 0
-      indent = underItem ? 0 : columnWidth(open[1]!)
+      lead = itemFence !== null ? ' '.repeat(held!) : underItem ? open[1]! : ''
+      col = itemFence !== null || underItem ? held! : 0
+      indent = underItem && itemFence === null ? 0 : columnWidth(open[1]!)
     }
     closer = new RegExp(`^ {0,3}${open[2]![0] === '`' ? '`' : '~'}{${open[2]!.length},}[ \t]*$`)
   }
@@ -6580,11 +6611,11 @@ function collectListItemLead(
       if (parsed.text.trim() === '') return ''
       return indentColumns(parsed.text) < itemCol ? null : stripColumns(parsed.text, itemCol)
     })
-    // Only a quote the block fills: this return cannot carry the item's later
-    // quoted lines, which would otherwise leave the item.
+    // Only where the block ends the quote, or the quoted item: this return
+    // cannot carry the item's later quoted lines, which would otherwise leave it.
     const after = html === null ? undefined : lines[html.end + 1]
-    const quoteGoesOn = after !== undefined && indentColumns(after) >= contentCol &&
-      blockquotePrefix(stripColumns(after, contentCol)) !== null
+    const afterQuote = after === undefined || indentColumns(after) < contentCol ? null : blockquotePrefix(stripColumns(after, contentCol))
+    const quoteGoesOn = afterQuote !== null && (quotedItem === null || afterQuote.text.trim() === '' || indentColumns(afterQuote.text) >= itemCol)
     if (html !== null && !quoteGoesOn) {
       const fence = '`'.repeat(Math.max(3, longestBacktickRun(html.lines.join('\n')) + 1))
       const emitted = quotedItem === null ? [`${fence}=html`, ...html.lines, fence] : markdownHtmlBlock(html.lines, importSourceLine?.(start))
@@ -6902,10 +6933,7 @@ function htmlBlockAt(
   return null
 }
 
-/**
- * An HTML block a quoted item's marker line opens, when it fills the rest of
- * the item: the quote writer cannot carry later item lines after the fence.
- */
+/** An HTML block a quoted item's marker line opens. */
 function quotedItemHtmlBlock(lines: readonly string[], start: number): { marker: string; block: HtmlBlockRun } | null {
   const quoted = blockquotePrefix(stripOptionalQuoteIndent(lines[start]!))
   if (quoted === null || RE_MD_THEMATIC.test(quoted.text)) return null
@@ -6922,8 +6950,7 @@ function quotedItemHtmlBlock(lines: readonly string[], start: number): { marker:
     return parsed.text.trim() === '' ? '' : stripColumns(parsed.text, column)
   }
   const block = htmlBlockAt(lines, start, readItemLine)
-  const following = block === null ? null : readItemLine(block.end + 1)
-  return block !== null && (following === null || following.trim() === '') ? { marker: item[0], block } : null
+  return block !== null ? { marker: item[0], block } : null
 }
 
 /**
@@ -6978,7 +7005,9 @@ function containerHtmlBlockAt(
           markers = new ListMarkers()
           quoteMarkers?.set(quoted.prefix, markers)
         }
-        const writtenMarker = RE_LIST_MARKER.exec(markers.write(quoted.text).line)?.[0] ?? item.marker
+        const written = markers.write(quoted.text)
+        const markerCol = indentColumns(quoted.text)
+        const writtenMarker = RE_LIST_MARKER.exec(moveIndent(written.line, markerCol, markerCol + written.outer))?.[0] ?? item.marker
         const pad = ' '.repeat(Math.min(3, indentColumns(block.lines[0]!)))
         const dedent = new RegExp(`^ {0,${pad.length}}`)
         return {
@@ -6989,11 +7018,19 @@ function containerHtmlBlockAt(
         }
       }
     }
-    return collect(quoted.prefix, at => {
+    // A line left of the quoted item holding the block leaves the item and it.
+    const itemCol = quotedItemColumns(lines)[start] ?? 0
+    // Four columns past the quote but not past the item, the block is the item's.
+    const fromItem = itemCol > 0 && indentColumns(quoted.text) >= 4 && indentColumns(quoted.text) < itemCol + 4
+    const shift = fromItem ? quoteMarkers?.get(quoted.prefix)?.shiftAt(itemCol) ?? 0 : 0
+    return collect(quoted.prefix + (fromItem ? ' '.repeat(itemCol + shift) : ''), at => {
       const line = lines[at]
       if (line === undefined) return null
       const parsed = blockquotePrefix(stripLeadingQuoteIndent(line))
-      return parsed?.prefix === quoted.prefix ? parsed.text : null
+      if (parsed?.prefix !== quoted.prefix) return null
+      if (parsed.text.trim() === '') return parsed.text
+      if (at > start && indentColumns(parsed.text) < itemCol) return null
+      return fromItem ? stripColumns(parsed.text, itemCol) : parsed.text
     })
   }
 
