@@ -43,11 +43,17 @@ describe('a paragraph attached by a continuation marker', () => {
   it('leaves the attached kinds that never folded alone', () => {
     // The control. These already round-tripped, by indenting the block into
     // the item, and a fix that emitted `+` everywhere would change all of them.
-    for (const block of ['```\nb\n```', '> b', '# b', '::: note\nb\n:::', '---']) {
+    for (const block of ['```\nb\n```', '> b', '# b', '::: note\nb\n:::']) {
       const src = `- a\n+\n${block}\n\nx\n`
       expect(roundTrips(src), src).toBe(true)
       expect(carveToCarve(src), src).not.toContain('\n+\n')
     }
+  })
+
+  it('keeps the marker before a thematic break when readback needs it', () => {
+    const src = '- a\n+\n---\n\nx\n'
+    expect(roundTrips(src)).toBe(true)
+    expect(carveToCarve(src)).toContain('\n+\n')
   })
 
   it('leaves an ordinary two-paragraph loose item alone', () => {

@@ -164,7 +164,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
-import { authoredAbbreviations, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
+import { authoredAbbreviations, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -642,6 +642,8 @@ export class ParseSession extends InlineParseSession {
       }
       restoreTransparentComments(doc, authored, transparentLines)
       restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
+      dropTransparentScaffoldText(doc, transparentLines)
+      splitTransparentQuoteParagraphs(doc, transparentLines)
     }
     if (dropRequested) {
       return this.skipPositionDrop ? doc : dropPositions(doc)

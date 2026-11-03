@@ -41,10 +41,11 @@ export function transparentLineStream(source: string): TransparentLineStream | n
       sourceLines.push(index)
       continue
     }
-    // A quote marker is structural even when its content is invisible.
+    // Keep an empty quote scaffold so nested note and quote ownership remains
+    // available to the layout reader without exposing the erased payload.
     const quotePrefix = /^(?:[ \t]*>[ ]?)+/.exec(original[index]!)?.[0]
     if (quotePrefix) {
-      lines.push(quotePrefix.trimEnd())
+      lines.push(quotePrefix)
       sourceLines.push(index)
     }
   }
@@ -242,4 +243,90 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
     const at = document.children.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
     document.children.splice(at < 0 ? document.children.length : at, 0, definition)
   }
+}
+
+/** A retained quote scaffold can appear as literal text on a marker-line lead. */
+export function dropTransparentScaffoldText(document: Document, stream: TransparentLineStream): void {
+  const erased = new Set(stream.erased.map((index) => index + 1))
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node.type === 'paragraph') {
+      const paragraph = value as Paragraph
+      const tail = paragraph.children.at(-1)
+      if (tail?.type === 'text' && /^>+$/.test(tail.value) && tail.pos && erased.has(tail.pos.startLine)) {
+        paragraph.children.pop()
+        if (paragraph.children.at(-1)?.type === 'soft_break') paragraph.children.pop()
+        const last = paragraph.children.at(-1)?.pos
+        if (last && paragraph.pos) {
+          paragraph.pos.endLine = last.endLine
+          if (last.endColumn !== undefined) paragraph.pos.endColumn = last.endColumn
+          if (last.endOffset !== undefined) paragraph.pos.endOffset = last.endOffset
+        }
+      }
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'pos' && key !== 'attrs') visit(child)
+    }
+  }
+  visit(document.children)
+  visit(document.footnoteDefs)
+}
+
+/** Split a quoted paragraph where an erased quote line supplies a blank scaffold. */
+export function splitTransparentQuoteParagraphs(document: Document, stream: TransparentLineStream): void {
+  const erased = new Set(stream.erased.map((index) => index + 1))
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      const blocks = value as BlockNode[]
+      for (let i = 0; i < blocks.length; i++) {
+        const paragraph = blocks[i]
+        if (paragraph?.type === 'paragraph') {
+          const at = paragraph.children.findIndex((child, index) => index > 0 &&
+            child.type === 'text' && /^>+$/.test(child.value) && child.pos && erased.has(child.pos.startLine))
+          if (at > 0 && at + 2 < paragraph.children.length &&
+              paragraph.children[at - 1]?.type === 'soft_break' && paragraph.children[at + 1]?.type === 'soft_break') {
+            const line = paragraph.children[at]!.pos!.startLine
+            const after = paragraph.children.slice(at + 2)
+            paragraph.children = paragraph.children.slice(0, at - 1)
+            const firstEnd = paragraph.children.at(-1)?.pos
+            const afterStart = after[0]?.pos
+            const afterEnd = after.at(-1)?.pos
+            if (paragraph.pos && firstEnd) {
+              paragraph.pos.endLine = firstEnd.endLine
+              if (firstEnd.endColumn !== undefined) paragraph.pos.endColumn = firstEnd.endColumn
+              if (firstEnd.endOffset !== undefined) paragraph.pos.endOffset = firstEnd.endOffset
+            }
+            if (paragraph.transparentVisibleLines) {
+              paragraph.transparentVisibleLines = paragraph.transparentVisibleLines.filter((visible) => visible < line)
+            }
+            paragraph.transparentFollowingLines = []
+            const following: Paragraph = { type: 'paragraph', children: after }
+            if (afterStart && afterEnd) following.pos = {
+              startLine: afterStart.startLine, endLine: afterEnd.endLine,
+              ...(afterStart.startColumn !== undefined ? { startColumn: afterStart.startColumn } : {}),
+              ...(afterEnd.endColumn !== undefined ? { endColumn: afterEnd.endColumn } : {}),
+              ...(afterStart.startOffset !== undefined ? { startOffset: afterStart.startOffset } : {}),
+              ...(afterEnd.endOffset !== undefined ? { endOffset: afterEnd.endOffset } : {}),
+            }
+            let insert = i + 1
+            while (blocks[insert]?.type === 'comment' && blocks[insert]?.pos?.startLine === line) insert++
+            blocks.splice(insert, 0, following)
+          }
+        }
+        visit(blocks[i])
+      }
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (key !== 'pos' && key !== 'attrs') visit(child)
+    }
+  }
+  visit(document.children)
+  visit(document.footnoteDefs)
 }

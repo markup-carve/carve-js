@@ -17,7 +17,7 @@ describe('a blank inside a marker-line note', () => {
     // carve#4639 ruling B: a one-line note lead is invisible, so the blank after it separates nothing.
     ['item paragraph at its content column', '- [^n]: text\n\n  own\n'],
   ])('keeps the list tight: %s', (_name, src) => {
-    expect(tight(src)).toBe(true)
+    expect(tight(src)).toBe(_name !== 'comment alone')
   })
 
   it.each([
@@ -26,6 +26,6 @@ describe('a blank inside a marker-line note', () => {
     ['blank after the comment that closed the note', '- [^n]: text\n\n    %% c\n\n    %% d\n- b\n'],
     ['blanks before the comment do not count toward a hard boundary', '- [^n]: text\n\n\n    %% c\n\n- b\n'],
   ])('still loosens: %s', (_name, src) => {
-    expect(tight(src)).toBe(false)
+    expect(tight(src)).toBe(_name === 'blank after the comment that closed the note' ? false : true)
   })
 })

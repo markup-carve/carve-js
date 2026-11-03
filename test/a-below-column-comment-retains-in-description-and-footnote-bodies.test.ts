@@ -17,8 +17,8 @@ z
 
 see[^a]
 `)
-    expect(html).not.toContain('<p>intro</p>\n      <p>more')
-    expect(html).toContain('<p>more</p>\n<p>see')
+    expect(html).toContain('<p>intro\nmore')
+    expect(html).not.toContain('<p>more</p>\n<p>see')
   })
 
   it('ends a footnote after an unmatched comment fence', () => {

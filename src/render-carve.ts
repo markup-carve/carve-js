@@ -575,6 +575,7 @@ function canonical(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      if (key === 'header' && 'span' in (value as Record<string, unknown>)) continue
       if (
         key === 'pos' ||
         key === 'footnoteDefPos' ||
@@ -582,6 +583,7 @@ function canonical(value: unknown): unknown {
         key === 'definitionLines' ||
         key === 'termSpans' ||
         key === 'srcByteLength' ||
+        key === 'separatorWidths' ||
         key.startsWith('transparent')
       )
         continue

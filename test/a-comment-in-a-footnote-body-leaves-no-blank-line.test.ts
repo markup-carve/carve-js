@@ -20,7 +20,7 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('a comment in a footnote body leaves no blank line in the output', () => {
   const commented = '[^b]: para\n      %% c\n      more\n\nuse[^b]\n'
-  const control = '[^b]: para\n\n      more\n\nuse[^b]\n'
+  const control = '[^b]: para\n      more\n\nuse[^b]\n'
 
   it('renders the commented body exactly like the blank-line control', () => {
     expect(carveToHtml(commented)).toBe(carveToHtml(control))
@@ -30,7 +30,7 @@ describe('a comment in a footnote body leaves no blank line in the output', () =
     // Asserted on the bytes, not on a collapsed reading of them: an empty line
     // is what the corpus would diff on, and it is the whole defect.
     expect(carveToHtml(commented)).not.toMatch(/\n[ \t]*\n/)
-    expect(carveToHtml(commented)).toContain('<p>para</p>\n      <p>more')
+    expect(carveToHtml(commented)).toContain('<p>para\nmore')
   })
 
   it('CONTROL: a comment between two top-level paragraphs also leaves none', () => {

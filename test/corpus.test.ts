@@ -1472,6 +1472,22 @@ const IMPLEMENTED = new Set([
   'a-name-ending-in-a-hyphen-leaves-the-next-marker-free',
   'an-accepted-plus-needs-a-follower-that-reaches-its-host',
   'an-invisible-line-keeps-a-description-entry-open',
+  'a-blank-inside-a-attached-description-keeps-the-list-tight',
+  'a-column-0-comment-before-a-sibling-keeps-the-blank-that-loosens-the-list',
+  'a-comment-line-below-a-nested-line-block-s-column-stays-in-its-span',
+  'a-comment-span-on-a-description-or-note-marker-line-closes-below-its-column',
+  'a-descendant-comment-span-closes-between-its-own-column-and-its-item-s',
+  'a-fence-a-quote-s-attached-block-opens-ends-with-its-container',
+  'a-marked-blank-inside-a-quoted-verse-span-leaves-the-stanza-open',
+  'a-nested-quote-after-a-quoted-list-leaves-a-marker-line-lazy',
+  'a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open',
+  'a-quoted-span-after-a-hosted-span-s-closer-leaves-the-follower-outside',
+  'a-span-s-closer-after-a-blank-keeps-the-list-tight',
+  'a-task-box-gap-keeps-a-nested-description-at-its-content-column',
+  'a-termless-colon-line-a-quote-attaches-opens-no-fence',
+  'an-empty-comment-span-is-written-as-adjacent-delimiters',
+  'an-unclosed-fence-in-a-marker-line-note-cannot-retain-the-following-line',
+  'an-unresolved-reference-in-a-heading-cross-reference-clone',
 ])
 
 /**
@@ -1501,6 +1517,9 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 // these three newer corpus rows; keep their measured lag explicit until that
 // parser change lands.
 const behindSpec = new Map<string, string>([
+  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open-3", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>b\n      <ul>\n        <li>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
+  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open-4", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>\n      <pre><code class=\"language-js\"></code></pre>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
+  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>\n      <pre><code class=\"language-js\">x\n</code></pre>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

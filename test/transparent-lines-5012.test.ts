@@ -36,6 +36,17 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToHtml('para\n*[AB]: Alpha Beta\nAB')).toBe('<p>para\n<abbr title="Alpha Beta">AB</abbr></p>')
   })
 
+  it.each(['%% c', '[r]: /u', '*[A]: B'])('keeps a marker-line note quote split across %s', (invisible) => {
+    const source = `[^n]: > a\n      > ${invisible}\n      > b\n\nsee[^n]\n`
+    const html = carveToHtml(source)
+    expect(html).toContain('<blockquote>\n        <p>a</p>\n        <p>b</p>\n      </blockquote>')
+    expect(html).not.toContain('&gt;')
+    const written = carveToCarve(source)
+    expect(carveToHtml(written)).toBe(html)
+    expect(carveToCarve(written)).toBe(written)
+    if (invisible === '%% c') expect(written).toContain('      > %% c\n')
+  })
+
   it('keeps spans, footnotes and attribute lines block-level', () => {
     expect(carveToHtml('para\n%%%\nhidden\n%%%\nmore')).toBe('<p>para</p>\n<p>more</p>')
     expect(carveToHtml('para\n{.x}\nmore')).toBe('<p>para</p>\n<p class="x">more</p>')
