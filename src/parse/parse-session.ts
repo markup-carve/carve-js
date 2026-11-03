@@ -1631,7 +1631,13 @@ export class ParseSession extends InlineParseSession {
       true,
       true,
     )
-    if (isContinuationMarker(content.trimStart())) {
+    if (isContinuationMarker(content.trimStart()) && attached.length === 0 &&
+        !isContinuationMarker((lexer.peek() ?? '').trimStart())) {
+      // A `+` that attaches nothing stays the quote's text.
+      if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
+      inner.push(content)
+      innerLineNumbers.push(lexer.lineNumber(lineIndex))
+    } else if (isContinuationMarker(content.trimStart())) {
       if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
       if (attached.length > 0 && inner.length > 0 && !isBlankLine(inner.at(-1)!)) {
         inner.push('')
