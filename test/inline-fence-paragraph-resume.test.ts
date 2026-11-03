@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { parse, renderHtml } from '../src/index.js'
+import { parse, renderHtml, resolve } from '../src/index.js'
 import { layoutWork } from '../src/parse.js'
 import fixtures from './fixtures/inline-fence-paragraph-resume.json'
 
@@ -8,8 +8,9 @@ const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
 for (const row of fixtures) {
   it(`reads paragraph ownership and keeps source positions in range: ${row.id}`, () => {
     const ast = parse(row.source, { positions: true })
-    expect(normalized(renderHtml(ast))).toBe(normalized(row.html))
-    expect(normalized(renderHtml(parse(row.source)))).toBe(normalized(row.html))
+    // The fixture holds the resolved document's HTML, heading ids included.
+    expect(normalized(renderHtml(resolve(parse(row.source, { positions: true }))))).toBe(normalized(row.html))
+    expect(normalized(renderHtml(resolve(parse(row.source))))).toBe(normalized(row.html))
     const length = [...row.source].length
     const visit = (value: unknown): void => {
       if (!value || typeof value !== 'object') return

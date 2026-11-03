@@ -122,12 +122,14 @@ describe('lint reports a block attribute that reaches no block', () => {
     expect(at('%%%\n{.c}\n%%%\n', 'unattached-block-attribute')).toEqual([])
   })
 
-  // An indented `{.c}` is paragraph text, not a block attribute, and the rule
-  // that owns that case is `block-marker-as-text`. Reporting both would say the
-  // line was an attribute and was not.
-  it('leaves an indented attribute-shaped line to block-marker-as-text', () => {
-    expect(at('a\n\n    {.c}\n', 'unattached-block-attribute')).toEqual([])
-    expect(at('a\n\n    {.c}\n', 'block-marker-as-text')).toEqual(['3:5'])
+  // Under rule A an indented `{.c}` is a block attribute (`a` / blank / `    {.c}` /
+  // `b` gives `<p class="c">b</p>` in the spec model), so at the end of the
+  // document it is unattached, not text.
+  it('reports an indented attribute with no block after it as unattached', () => {
+    const source = 'a\n\n    {.c}\n'
+    const found = lintCarve(source).filter((w) => w.rule === 'unattached-block-attribute')
+    expect(found.map((w) => [w.line, source.slice(w.start, w.end)])).toEqual([[3, '{.c}']])
+    expect(at(source, 'block-marker-as-text')).toEqual([])
   })
 })
 

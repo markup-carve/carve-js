@@ -1,48 +1,12 @@
 {
-  "a-comment-below-a-sub-list-in-a-tight-item.test.ts": {
-    "a comment below a sub-list in a tight item > is written where a re-parse reads it back into the OUTER item": "#3921"
-  },
-  "a-description-marker-must-reach-its-term-owner.test.ts": {
-    "a definition marker below a nested term column > lets a list marker end a term even past the surviving body column": "#3921"
-  },
-  "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
-    "a fence after a footnote boundary closes without claiming the next line": "#3921"
-  },
   "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
     "keeps the indentation latitude where only indentation precedes the list": "#3921"
-  },
-  "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
-    "does not claim a quote marker inside an inline code span": "#3921"
   },
   "djot-definition-boundaries.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
   },
   "djot-empty-definitions.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
-  },
-  "fmt-adjacent-tight-lists-in-description.test.ts": {
-    "adjacent tight lists stay in a description body": "#3921"
-  },
-  "fmt-keeps-a-region-s-selection.test.ts": {
-    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- a\\n%% note\\n%% #endregion r\\n\" keeps its reading": "#3921",
-    "fmt keeps a region marker on its line (CARVE-P11-073) > \"- x\\n  - y\\n%% #endregion r\\n\" keeps its reading": "#3921"
-  },
-  "formatter-parity-regressions.test.ts": {
-    "normalizes a constructed carriage return before guarding a quote line": "#3921"
-  },
-  "inline-fence-paragraph-resume.test.ts": {
-    "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
-    "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
-  },
-  "lint-description-separator-below-content-column.test.ts": {
-    "description-separator-below-content-column > 'double-colon'": "#3921",
-    "description-separator-below-content-column > term marker marker range": "#3921"
-  },
-  "lint-reports-a-dead-block-attribute-and-counts-codepoints.test.ts": {
-    "lint reports a block attribute that reaches no block > leaves an indented attribute-shaped line to block-marker-as-text": "#3921"
-  },
-  "list-item-block-indentation-lint.test.ts": {
-    "list item block indentation diagnostics > an astral character before the marker > opens the gate at the same indent on either side of the BMP": "#3921"
   },
   "list-span-placing-indentation.test.ts": {
     "a list span holds the indentation that places its marker > starts a nested list at its parent's content column, not at its marker": "#3921",
@@ -53,12 +17,6 @@
   },
   "quoted-colon-remaining-parity.test.ts": {
     "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
-  },
-  "two-sibling-sub-lists-in-a-tight-item.test.ts": {
-    "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"
-  },
-  "verbatim-continuation-guards.test.ts": {
-    "preserves display math around > continuation continuations": "#3921"
   },
   "corpus-canonical-form.test.ts": {
     "the pinned canonical form > is what fmt produces for 187-a-comment-fence-is-a-comment-at-any-column-too": "markup-carve/carve#4995",

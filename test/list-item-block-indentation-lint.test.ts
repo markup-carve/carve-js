@@ -153,12 +153,17 @@ describe('list item block indentation diagnostics', () => {
     })
 
     it('opens the gate at the same indent on either side of the BMP', () => {
-      const silent = [6, 7, 8]
+      const silent = [6, 8]
       const warns = [9, 10, 11]
       for (const label of ['€', '😀']) {
         for (const indent of silent) {
           expect(findings(marked(label, indent)), `indent ${indent}`).toEqual([])
         }
+        // Past the marker column and below the content column the quote leaves
+        // the item, as in the spec model (docs/validation.md).
+        expect(findings(marked(label, 7)), 'indent 7').toMatchObject([
+          { rule: 'list-item-body-detached', line: 2, column: 8 },
+        ])
         for (const indent of warns) {
           expect(findings(marked(label, indent)), `indent ${indent}`).toMatchObject([
             { rule: 'list-item-block-overindented', line: 2 },
