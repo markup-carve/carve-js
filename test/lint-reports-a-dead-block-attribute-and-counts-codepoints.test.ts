@@ -128,7 +128,7 @@ describe('lint reports a block attribute that reaches no block', () => {
   it('reports an indented attribute with no block after it as unattached', () => {
     const source = 'a\n\n    {.c}\n'
     const found = lintCarve(source).filter((w) => w.rule === 'unattached-block-attribute')
-    expect(found.map((w) => [w.line, source.slice(w.start, w.end)])).toEqual([[3, '{.c}']])
+    expect(found.map((w) => [`${w.line}:${w.column}`, source.slice(w.start, w.end)])).toEqual([['3:5', '{.c}']])
     expect(at(source, 'block-marker-as-text')).toEqual([])
   })
 })
