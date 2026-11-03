@@ -189,6 +189,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // compatible sibling marker ends this list rather than loosening it. Set
     // where the loose decision is made, acted on after the item is pushed.
     hardBoundary: boolean
+    // The item ended on a blank followed only by invisible lines; a column-0 invisible run after it still reads that blank.
+    invisibleTailBlank: boolean
   }
 
   /** Is `line` a marker that continues this list at its base column (§11)? */
@@ -3251,6 +3253,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return false
     }
     const blankBeforeInvisible = endsOnInvisibleTail()
+    flags.invisibleTailBlank = blankBeforeInvisible
 
     // A blank line inside an OPEN verbatim fence is that fence's content, not
     // spacing between blocks. Blanks are buffered in `pendingBlankRun.count` and
@@ -3598,7 +3601,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const sibling = readItemHead(lexer, shape) !== null
     lexer.pos = start
     if (!sibling) return
-    if (blanks > 0) flags.loose = true
+    if (blanks > 0 || flags.invisibleTailBlank) flags.loose = true
     for (const node of session.parseInvisibleRun(lexer, k)) {
       if (node.type === 'abbreviation_def' && node.pos?.startLine !== undefined) {
         lexer.skippedAbbreviations?.set(node.pos.startLine - 1, [node.abbr, node.expansion])
@@ -3617,7 +3620,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const shape = classifyList(lexer, helpers)
     const { firstLineIndex, baseIndent, isTask, isOrdered, firstMarkerChar, firstOrdered, orderedDelim, orderedKind, orderedStart } = shape
     const items: ListItem[] = []
-    const flags: ListFlags = { loose: false, hardBoundary: false }
+    const flags: ListFlags = { loose: false, hardBoundary: false, invisibleTailBlank: false }
 
     /**
      * The boundary set for a `+`-attached block in a list item: a blank, a
@@ -3651,6 +3654,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     while (!lexer.eof()) {
       if (items.length) invisibleBeforeSibling(lexer, session, shape, items.at(-1)!, flags)
+      flags.invisibleTailBlank = false
       const head = readItemHead(lexer, shape)
       if (!head) break
       const oneLine = oneLineItem(lexer, session, shape, head)
