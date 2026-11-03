@@ -3400,7 +3400,6 @@ class CarveRenderSession {
       const parts: string[] = []
       let previousList: List | null = null
       let listSeparated = false
-      let descriptionListOffset = 0
       let previousBlock: BlockNode | null = null
       let previousDescriptionList = false
       let previousMoved = false
@@ -3442,13 +3441,11 @@ class CarveRenderSession {
         ctx.afterCaptionHost = hostsCaption(block)
         if (block.type === 'list') {
           listSeparated = previousList !== null && listsWouldMerge(previousList, block)
-          if (!listSeparated) descriptionListOffset = 0
           previousList = block
         } else if (spellsSomething(rendered) && block.type !== 'comment') {
           // A comment does not part two lists (§11 N1a), so the boundary must survive it.
           previousList = null
           listSeparated = false
-          descriptionListOffset = 0
         }
         const descriptionListsMerge = previousDescriptionList && block.type === 'definition_list'
         if (block.type === 'definition_list') previousDescriptionList = true
@@ -3476,14 +3473,7 @@ class CarveRenderSession {
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list'))
           ) {
             parts[parts.length - 1] += `\n${text}`
-          } else if (listSeparated && parts.length > 0 && descriptionBody) {
-            // Each sibling list takes the next body column. Shift all of its
-            // lines so item continuations and nested children move with it.
-            descriptionListOffset++
-            const indent = ' '.repeat(descriptionListOffset)
-            parts[parts.length - 1] += `\n\n${text.split('\n').map(line => line ? indent + line : line).join('\n')}`
           } else if ((listSeparated || descriptionListsMerge) && parts.length > 0) {
-            descriptionListOffset = 0
             // §11 N1a's boundary, written as a SENTINEL rather than as four
             // literal newlines. `normalize` squeezes every run of three or more
             // newlines to two - correct for a decorative run, which the rule says
