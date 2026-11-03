@@ -4276,7 +4276,9 @@ class CarveRenderSession {
         }
         if (
           previousAtMarkerColumn ||
-          (next !== undefined && adjacentBlocksMerge(b, next)) ||
+          // A description list after this one is parted by a blank run; behind a `+` its `<dd>` would take it (PART 0 S2).
+          (next !== undefined && adjacentBlocksMerge(b, next) &&
+            !(b.type === 'definition_list' && next.type === 'definition_list')) ||
           (!separated &&
             previousEmitted !== null &&
             (anOpenParagraphReachesDown(previousEmitted) ||
