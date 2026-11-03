@@ -101,6 +101,7 @@ function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: 
         pos.startOffset <= offset && offset < pos.endOffset) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
       const children = block.type === 'list' ? block.items.map((item) => item.children) :
+        block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
           [block.children as BlockNode[]] : []
       for (const child of children) {
@@ -121,6 +122,13 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
       for (const item of block.items) {
         if ((item.pos?.startOffset ?? Infinity) <= offset && offset < (item.pos?.endOffset ?? -1)) {
           return containingBlocks(item.children, offset)
+        }
+      }
+    } else if (block.type === 'definition_list') {
+      for (const item of block.items) {
+        for (const definition of item.definitions) {
+          if (definition.some((child) => (child.pos?.startOffset ?? Infinity) <= offset &&
+              offset < (child.pos?.endOffset ?? -1))) return containingBlocks(definition, offset)
         }
       }
     } else if ('children' in block && Array.isArray(block.children) &&

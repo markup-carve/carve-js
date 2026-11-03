@@ -112,6 +112,18 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
+  it('keeps a comment inside a definition description', () => {
+    const source = ':: t\n: a\n  %% c\n  b\n'
+    const list = parse(source).children[0]
+    expect(list?.type).toBe('definition_list')
+    if (list?.type !== 'definition_list') return
+    const description = list.items[0]?.definitions[0]
+    expect(description?.map((node) => node.type)).toEqual(['paragraph', 'comment'])
+    expect(description?.[1]?.pos?.startLine).toBe(3)
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
   it('writes edits to restored transparent nodes', () => {
     expect(canonicalCarveWrite('a\n%% old\nb', {}, (document) => {
       const comment = document.children.find((node) => node.type === 'comment')
