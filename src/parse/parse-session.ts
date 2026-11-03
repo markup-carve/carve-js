@@ -460,6 +460,7 @@ export class ParseSession extends InlineParseSession {
 
   parse(source: string, opts: ParseOptions = {}, transparent = true): Document {
     const sourceByteLength = utf8ByteLength(source)
+    const dropRequested = opts.positions === false
     this.recordPositions = opts.positions !== false
     this.blockLineSpans = new WeakMap()
     this.authoredBlankPrefixes = new WeakMap()
@@ -486,6 +487,12 @@ export class ParseSession extends InlineParseSession {
     // (CARVE-P0-023).
     source = replaceLoneSurrogates(source)
     const transparentLines = transparent ? transparentLineStream(source) : null
+    // Restoration needs source positions even when the public AST omits them.
+    // Parse once with positions, then remove them at the return boundary.
+    if (transparentLines && dropRequested) {
+      opts = { ...opts, positions: true }
+      this.recordPositions = true
+    }
     const authoredOptions = { ...opts, positions: true }
     delete authoredOptions.onUnclosedContainer
     delete authoredOptions.onUnclosedCodeFence
@@ -614,7 +621,7 @@ export class ParseSession extends InlineParseSession {
       restoreTransparentComments(doc, authored, transparentLines)
       restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
     }
-    if (opts.positions === false) {
+    if (dropRequested) {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
     return doc

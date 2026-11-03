@@ -137,6 +137,8 @@ export interface Paragraph extends BaseNode {
   transparentComments?: Array<{ line: number; source: string }>
   /** Authored lines following a transparent boundary in this paragraph. */
   transparentFollowingLines?: Array<{ line: number; source: string }>
+  /** Visible source line order retained when public positions are omitted. */
+  transparentVisibleLines?: number[]
   /** Set after reference resolution when the paragraph contains one resolved image. */
   blockImage?: true
 }

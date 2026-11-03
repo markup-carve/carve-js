@@ -67,4 +67,20 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(written).toContain('- changed')
     expect(written).not.toBe(source)
   })
+
+  it('keeps edits to text following a transparent comment', () => {
+    const written = canonicalCarveWrite('a\n%% c\nb', {}, (document) => {
+      const paragraph = document.children[0]
+      if (paragraph?.type !== 'paragraph') return false
+      const last = paragraph.children.at(-1)
+      if (last?.type !== 'text') return false
+      last.value = 'changed'
+      return true
+    })
+    expect(written).toBe('a\n%% c\nchanged\n')
+  })
+
+  it('keeps comment placement when positions are disabled', () => {
+    expect(carveToCarve('a\n%% c\nb', { positions: false })).toBe('a\n%% c\nb\n')
+  })
 })

@@ -152,6 +152,9 @@ export function restoreTransparentComments(document: Document, authored: Documen
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
     const match = containingParagraph(blocks, comment.pos!.startOffset!)
     if (match) {
+      match.paragraph.transparentVisibleLines ??= [...new Set(match.paragraph.children
+        .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
+        .map((child) => child.pos!.startLine))]
       match.paragraph.transparentComments ??= []
       match.paragraph.transparentComments.push({ line: index + 1, source: original })
       match.paragraph.transparentFollowingLines ??= []
@@ -176,6 +179,9 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
     const line = definition.pos!.startLine
     const match = containingParagraph(document.children, definition.pos!.startOffset!)
     if (match) {
+      match.paragraph.transparentVisibleLines ??= [...new Set(match.paragraph.children
+        .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
+        .map((child) => child.pos!.startLine))]
       match.paragraph.transparentComments ??= []
       match.paragraph.transparentComments.push({ line, source: stream.original[line - 1]! })
       match.paragraph.transparentFollowingLines ??= []

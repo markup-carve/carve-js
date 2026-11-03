@@ -3611,13 +3611,20 @@ class CarveRenderSession {
         )
         let withComments = text
         if (node.transparentComments?.length) {
-          const sourceLines = [...new Set(node.children
+          const sourceLines = node.transparentVisibleLines ?? [...new Set(node.children
             .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
             .map((child) => child.pos!.startLine))]
           const written = text.split('\n')
           for (const [index, line] of sourceLines.entries()) {
             const following = node.transparentFollowingLines?.find((entry) => entry.line === line)
-            if (following && index < written.length) written[index] = `\0${following.source}`
+            if (following && index < written.length) {
+              const renderedLine = written[index]!
+              const authored = following.source
+              const prefix = renderedLine && authored.endsWith(renderedLine)
+                ? authored.slice(0, -renderedLine.length)
+                : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? ''
+              written[index] = `\0${prefix}${renderedLine}`
+            }
           }
           for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
             const after = sourceLines.filter((line) => line < comment.line).length
