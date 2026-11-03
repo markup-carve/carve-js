@@ -4,10 +4,9 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 /**
  * PART 11 §1: `to_html(fmt(x)) == to_html(x)`.
  *
- * A frontmatter block is an opening fence AT BYTE 0 plus a bare `---` CLOSER
- * anywhere below it. So a `---`-shaped line at the head of the emitted document
- * is only a hazard when something later closes it, which makes the collision a
- * property of the WHOLE emitted text rather than of its first line.
+ * A valid frontmatter opener at byte 0 claims through its first closer or EOF
+ * (carve#5016). The writer checks the finished bytes before deciding whether
+ * a thematic break or promoted paragraph needs a safer spelling.
  *
  * Two unrelated writer decisions can put a `---` there:
  *
@@ -18,9 +17,8 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  *   respelled there, so fixing the first cause does not fix this one.
  *
  * And a third shape neither ticket names: the promoted block can be a PARAGRAPH
- * whose first line is `---yaml`-shaped. No head-of-document respelling repairs
- * that one, because the paragraph's text is not the writer's to change - it is
- * saved by respelling the CLOSER instead.
+ * whose first line is `---yaml`-shaped. Its text is escaped to keep the writer
+ * from manufacturing frontmatter.
  *
  * All three are decided by handing the FINISHED BYTES to the parser's own
  * frontmatter test, in one seam, which is what carve-rs does.
@@ -55,7 +53,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
 
   it('CONTROL: a leading break with no later break is written canonically', () => {
     expect(carveToCarve('***\n\npara\n')).toBe('***\n\npara\n')
-    expect(carveToCarve('---\n\npara\n')).toBe('***\n\npara\n')
+    expect(carveToCarve('---\n\npara\n')).toBe('---yaml\n\npara\n---\n')
   })
 
   it('CONTROL: real frontmatter is still written as frontmatter', () => {
@@ -72,11 +70,11 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
   })
 
   it('a hoisted footnote definition promoting a `---yaml`-shaped PARAGRAPH', () => {
-    // The closer is a break, written `***` (markup-carve/carve#4973), so the
-    // paragraph's `---yaml` head at byte 0 has no closer and needs no escape.
+    // The paragraph's `---yaml` head at byte 0 now opens through EOF, so
+    // the writer escapes it even though the following break is `***`.
     const src = '[^a]: n\n\n---yaml\nk: v\n---\n'
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n***\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe('\\-\\-\\-yaml\nk: v\n\n***\n\n[^a]: n\n')
   })
 
   it('CONTROL: an abbreviation definition is not hoisted, and never was', () => {

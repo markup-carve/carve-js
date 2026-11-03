@@ -29,9 +29,22 @@ describe('typed frontmatter (raw-hold)', () => {
     expect(doc.frontmatter?.content).toBe('# not a heading\n[ref]: /url\n\nkey: v')
   })
 
-  it('does not treat an unclosed fence as frontmatter', () => {
+  it('holds an unclosed fence through the end of the document', () => {
     const doc = parse('---\ntitle: Hi\n\nBody with no close')
-    expect(doc.frontmatter).toBeUndefined()
+    expect(doc.frontmatter).toMatchObject({ format: 'yaml', content: 'title: Hi\n\nBody with no close' })
+    expect(doc.children).toEqual([])
+  })
+
+  it('claims a bare one-line opener and keeps the final payload line', () => {
+    expect(parse('---').frontmatter).toMatchObject({
+      format: 'yaml', content: '',
+      pos: { startLine: 1, endLine: 1, startOffset: 0, endOffset: 3 },
+    })
+    expect(parse('---toml\r\nx').frontmatter).toMatchObject({
+      format: 'toml', content: 'x',
+      pos: { startLine: 1, endLine: 2, startOffset: 0, endOffset: 10 },
+    })
+    expect(carveToHtml('---toml\r\nx')).toBe('')
   })
 
   it('honors defaultFrontmatterFormat for a bare fence', () => {
@@ -64,11 +77,9 @@ describe('typed frontmatter (raw-hold)', () => {
     expect(carveToHtml('::: note\n---toml\nkept\n---\n:::')).toContain('kept')
   })
 
-  it('still collects a link def after an unclosed leading opener', () => {
-    // No closing `---`, so it is not frontmatter; the `[r]: /u` below is a
-    // real definition and `[x][r]` must resolve to a link.
+  it('keeps a link definition inside unclosed frontmatter opaque', () => {
     const html = carveToHtml('---\n[r]: /u\n\n[x][r]')
-    expect(html).toContain('href="/u"')
+    expect(html).toBe('')
   })
 
   it('does not collect an abbreviation definition from frontmatter', () => {

@@ -565,34 +565,34 @@ export class Lexer {
   }
 
   consumeFrontmatter() {
-    if (this.lineCount < 2) return
     const open = RE_FRONTMATTER_OPEN.exec(this.lineAt(0)!)
     if (!open) return
+    let closer = -1
     for (let i = 1; i < this.lineCount; i++) {
       if (RE_FRONTMATTER_CLOSE.test(this.lineAt(i)!)) {
-        const content = this.lines.slice(1, i).join('\n')
-        const format = open[1] !== '' ? open[1]! : this.defaultFrontmatterFormat
-        // The block runs from the opening fence to the closing one. Frontmatter
-        // is document-leading, so it starts at the first byte - but the END has
-        // to be measured, and without it the node `toAstJson` builds has no
-        // position at all (carve-js#480).
-        const closeOffset = (this.lineOffsets[i] ?? 0) + this.lineAt(i)!.length
-        this.frontmatter = {
-          format,
-          content,
-          pos: {
-            startLine: 1,
-            endLine: i + 1,
-            startColumn: 1,
-            endColumn: this.lineAt(i)!.length + 1,
-            startOffset: 0,
-            endOffset: closeOffset,
-          },
-        }
-        this.pos = i + 1
-        return
+        closer = i
+        break
       }
     }
+    const end = closer < 0 ? this.lineCount : closer + 1
+    const last = end - 1
+    const content = this.lines.slice(1, closer < 0 ? end : closer).join('\n')
+    const format = open[1] !== '' ? open[1]! : this.defaultFrontmatterFormat
+    // A first-line opener owns every line through its first closer or EOF.
+    // The final line gives an unclosed block the same source span as a closed one.
+    this.frontmatter = {
+      format,
+      content,
+      pos: {
+        startLine: 1,
+        endLine: end,
+        startColumn: 1,
+        endColumn: this.lineAt(last)!.length + 1,
+        startOffset: 0,
+        endOffset: (this.lineOffsets[last] ?? 0) + this.lineAt(last)!.length,
+      },
+    }
+    this.pos = end
   }
 
   peek(offset = 0): string | undefined {

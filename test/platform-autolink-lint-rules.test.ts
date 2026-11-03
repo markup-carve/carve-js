@@ -287,11 +287,10 @@ describe('platform-autolink lint rules', () => {
         rules: [],
       })
     }
-    // CONTROL: a run that is NOT frontmatter (no closer, so the parser reports
-    // none) is ordinary published text and still flags.
+    // The ruling on carve#5016 makes an unclosed opener consume through EOF.
     expect(
       platformRules(lintCarve('---\nauthor: @alice\n\nbody\n', { platforms: ['github'] })),
-    ).toEqual(['platform-mention-token'])
+    ).toEqual([])
   })
 
   it('does not flag an email address, a heading marker, or a non-numeric hash run', () => {
