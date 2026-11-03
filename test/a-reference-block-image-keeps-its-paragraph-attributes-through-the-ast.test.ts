@@ -13,6 +13,7 @@ describe('a reference block image keeps its paragraph attributes through the AST
     '{#i k=v}\n![a][]\n\n[a]: y.png\n',
     '{.c}\n![a][r]{.d}\n\n[r]: y.png\n',
     '- {.c}\n  ![a][r]\n\n[r]: y.png\n',
+    '{.c}\n![a][r]{.a}{.b}\n\n[r]: y.png\n',
   ])('renders %j the same after the round trip', (source) => {
     expect(carveToHtml(throughAst(source))).toBe(carveToHtml(source))
   })

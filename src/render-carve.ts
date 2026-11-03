@@ -38,6 +38,7 @@ import {
   symbolOpensAt,
 } from './parse.js'
 import { isAttrValueEscapable, isValidInlineAttrPayload, parseAttrs } from './extension/attribute-parser.js'
+import { mergeAttrs } from './extension/attribute-merge.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { findDirectives, parseDirective, RunOffsets } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
@@ -1457,15 +1458,29 @@ function escapeTableReferencePipes(source: string): string {
 function referenceWithAttrs(rawRef: string, attrs: Attrs | undefined, written: string): string {
   let base = rawRef
   let own: Attrs | undefined
-  for (let k = rawRef.indexOf(']{'); k !== -1 && rawRef.endsWith('}'); k = rawRef.indexOf(']{', k + 1)) {
-    const inner = rawRef.slice(k + 2, -1)
-    if (!isValidInlineAttrPayload(inner)) continue
+  for (let k = rawRef.indexOf(']{'); k !== -1; k = rawRef.indexOf(']{', k + 1)) {
+    const blocks = trailingAttrBlocks(rawRef, k + 1)
+    if (blocks === null) continue
     base = rawRef.slice(0, k + 1)
-    own = parseAttrs(inner)
+    own = blocks.reduce<Attrs>((merged, block) => mergeAttrs(merged, parseAttrs(block)), {})
     break
   }
   if (renderAttrs(own) === renderAttrs(attrs)) return rawRef
   return base + written
+}
+
+/** The payloads of the attribute blocks that run from `at` to the end of `text`, or null. */
+function trailingAttrBlocks(text: string, at: number): string[] | null {
+  const blocks: string[] = []
+  while (at < text.length) {
+    if (text[at] !== '{') return null
+    let close = text.indexOf('}', at + 1)
+    while (close !== -1 && !isValidInlineAttrPayload(text.slice(at + 1, close))) close = text.indexOf('}', close + 1)
+    if (close === -1) return null
+    blocks.push(text.slice(at + 1, close))
+    at = close + 1
+  }
+  return blocks
 }
 
 function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTable = false): string {
