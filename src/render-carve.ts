@@ -37,7 +37,7 @@ import {
   rawImageBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
-import { isAttrValueEscapable } from './extension/attribute-parser.js'
+import { isAttrValueEscapable, isValidInlineAttrPayload, parseAttrs } from './extension/attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { findDirectives, parseDirective, RunOffsets } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
@@ -1450,6 +1450,24 @@ function escapeTableReferencePipes(source: string): string {
     slashes + (slashes.length % 2 === 0 ? '\\|' : '|'))
 }
 
+/**
+ * A reference image's `rawRef` carries only the attributes written on it; a published block image also
+ * carries its paragraph's (CARVE-P12-043), so those are written after the reference instead of dropped.
+ */
+function referenceWithAttrs(rawRef: string, attrs: Attrs | undefined, written: string): string {
+  let base = rawRef
+  let own: Attrs | undefined
+  for (let k = rawRef.indexOf(']{'); k !== -1 && rawRef.endsWith('}'); k = rawRef.indexOf(']{', k + 1)) {
+    const inner = rawRef.slice(k + 2, -1)
+    if (!isValidInlineAttrPayload(inner)) continue
+    base = rawRef.slice(0, k + 1)
+    own = parseAttrs(inner)
+    break
+  }
+  if (renderAttrs(own) === renderAttrs(attrs)) return rawRef
+  return base + written
+}
+
 function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTable = false): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
@@ -1459,7 +1477,8 @@ function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTab
   }
   // A RESOLVED reference image stays a reference, for the same reason as a link.
   if (node.ref !== undefined && node.rawRef !== undefined) {
-    return inTable ? escapeTableReferencePipes(node.rawRef) : node.rawRef
+    const raw = referenceWithAttrs(node.rawRef, node.attrs, attrs)
+    return inTable ? escapeTableReferencePipes(raw) : raw
   }
   const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src, inTable)}${title})${attrs}`
