@@ -3020,9 +3020,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const decision = admitContinuationMarker(l) ?? stopsBeforeBody(l) ?? readQuoteFacts(l) ??
         readDefinitionSource(l) ?? readDefinitionBand(l)
       if (decision !== undefined) return decision
-      // A blank reaches every frame, so no line missed the span's owner: the closer is the span's (carve#4889).
-      if (lw < contentCol && pendingBlankRun.count > 0 && (lazyState.opaque?.kind === 'comment' && !childMarkerSpan &&
-          lazyState.opaque !== childSpan?.state && commentFenceRun(l.trimStart()) === lazyState.opaque.length ||
+      // A blank reaches every frame, so no line missed the span's owner: a comment line
+      // after it is the open span's, its own or a line block's (carve#4889, carve#4994).
+      const spanOpen = lazyState.opaque?.kind === 'comment' ? lazyState.opaque !== childSpan?.state
+        : lazyState.opaque === null && lazyState.literalColon?.opaque?.belowBaseCloses === true
+      if (lw < contentCol && pendingBlankRun.count > 0 && (!childMarkerSpan && spanOpen && RE_COMMENT_LINE.test(l) ||
         // So does a span a descendant or a description or note lead holds, which the tracker cannot see (carve#4996).
         (lazyState.opaque === null || lazyState.opaque.kind === 'comment') && commentFenceRun(l.trimStart()) !== undefined &&
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners) &&

@@ -506,10 +506,26 @@ export function ownLines(
       readPayload(inner)
       continue
     }
-    if (keepsMissedLineBlock(inner, missed, reached)) {
-      readPayload(inner, true)
-      continue
+    // A comment line below the column stays in an open `%%%` span, its own or a
+    // line block's, and an exact-width run there closes it (PART 0 S1, PART 9 §28, carve#4987).
+    const keepsBelowColumnComment = (): boolean => {
+      const spanRun = inner.kind !== 'fence' ? null
+        : inner.family === 'comment' && !inner.span ? true
+          : inner.lineBlock && inner.span?.[0] === '%' ? inner.span : null
+      if (!spanRun || !missed || !m.rest.startsWith('%%') || frames.slice(reached + 1).some((f) => f.kind === 'quote')) return false
+      if (spanRun !== true && COMMENT_FENCE.exec(m.rest)?.[1]!.length === spanRun.length) inner.span = null
+      payloadLines.add(at)
+      lead(m.col)
+      finish()
+      if (trace) emit(at, 'S1', ownerPath(), 'CARVE-P0-005', 'payload', { cell: `B-${inner.family}-keep` })
+      return true
     }
+    const readsMissedLine = (): boolean => {
+      if (!keepsMissedLineBlock(inner, missed, reached)) return keepsBelowColumnComment()
+      readPayload(inner, true)
+      return true
+    }
+    if (readsMissedLine()) continue
     const leftLineBlockSpan = holdsCommentSpan(inner)
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
