@@ -1824,14 +1824,17 @@ export class ParseSession extends InlineParseSession {
     const width = commentFenceRun(ln)
     if (width === undefined) return false
     this.trackUntrackedQuoteLines(q)
+    // The span may sit in the quote itself or in an item, description or note it holds (carve#5027).
+    const spanWidth = (level: BlockQuoteLazyState): number | undefined =>
+      level.mode.kind === 'comment_fence' ? level.mode.length
+        : level.hosts?.fence?.comment ? level.hosts.fence.marker.length : undefined
     let level = q.state
-    let open: number | undefined = level.mode.kind === 'comment_fence' ? level.mode.length : undefined
+    let open = spanWidth(level)
     while (level.mode.kind === 'quote') {
       level = level.mode.inner
-      if (level.mode.kind === 'comment_fence') open = level.mode.length
+      open = spanWidth(level) ?? open
     }
-    // A span in an item or note ends at the unmarked line, which is no closer of it.
-    if (open !== width || (level.mode.kind === 'comment_fence' && level.mode.hosted)) return false
+    if (open !== width) return false
     const { lexer } = q
     const lineIndex = lexer.pos
     lexer.consume()

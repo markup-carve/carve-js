@@ -13,7 +13,7 @@
   },
   {
     "source": "> - a\n>   %%%\n>   body\n%%%\ntail\n",
-    "html": "<blockquote><ul><li>a</li></ul></blockquote>"
+    "html": "<blockquote><ul><li>a</li></ul></blockquote><p>tail</p>"
   },
   {
     "source": "- - a\n    %%%\n    body\n  x\ntail\n",
