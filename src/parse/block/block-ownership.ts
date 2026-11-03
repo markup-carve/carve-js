@@ -341,7 +341,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -367,6 +367,8 @@ export function ownLines(
   // The continuation lines of a wrapped attribute block the walk opened.
   let attrRest = null as { left: number; cut: number; floor?: number } | null
   const refusedPlus: RefusedPlus[] = []
+  // Lines whose consumed `+` now reads as a `%%` stand-in: container markup, not a comment.
+  const consumedMarkers = new Set<number>()
   // A later marker cannot take the block offered by an earlier marker.
   const claimedMarkers = new Set<number>()
   const skippedAbbreviations = new Map<number, [string, string]>()
@@ -394,6 +396,7 @@ export function ownLines(
       const skipped = skippedNoteMarker(line, skippedNotes.has(at), top().docMarker,
         (text) => docColumn(lines[at]!, text), () => standIn('+'))
       result.push(skipped.line)
+      if (skipped.column !== null) consumedMarkers.add(at)
       if (skipped.column !== null) refusedPlus.push({ index: at, column: skipped.column,
         host: LINT_HOST[top().kind] ?? 'document', reason: 'claimed', firstBlock: false })
       if (skipped.line !== line) rewritten = true
@@ -434,8 +437,26 @@ export function ownLines(
     }
     const finish = (): void => {
       const written = out + src
-      result.push(noteOverridePrefix === null ? written
-        : noteOverridePrefix + written.replace(/^[ \t]*(?:> )*/, ''))
+      const pushed = noteOverridePrefix === null ? written
+        : noteOverridePrefix + written.replace(/^[ \t]*(?:> )*/, '')
+      result.push(pushed)
+      // A rewritten lead keeps the authored text as its suffix: map that suffix back to the
+      // source, and leave the columns of the prefix the walk wrote as they were.
+      const shift = lines[at]!.length - normalized.line.length + written.length - pushed.length
+      if (shift !== 0) {
+        const source = lines[at]!
+        let common = 0
+        while (common < pushed.length && common < source.length &&
+            pushed[pushed.length - 1 - common] === source[source.length - 1 - common]) common++
+        const from = pushed.length - common
+        // A prefix that spells markup of its own has no source columns to map to.
+        const mappable = /^[ \t>]*$/.test(pushed.slice(0, from))
+        if (mappable && from === 0 && lineCuts[0]?.at === 0) lineCuts[0].removed += shift
+        else if (mappable) {
+          lineCuts.push({ at: from, removed: shift })
+          lineCuts.sort((x, y) => x.at - y.at)
+        }
+      }
       if (lineCuts.length) cuts.set(at, lineCuts)
     }
 
@@ -540,6 +561,7 @@ export function ownLines(
       if (plusReason !== null) {
         refuse(plusReason, host.kind)
         if (host.kind === 'quote') host.para = false
+        consumedMarkers.add(at)
         src = ' '.repeat(plusReason === 'claimed' || crossedDescendant ? 0 : Math.max(0, host.canon - host.markerCanon!)) + '%%'
         rewritten = true
         finish()
@@ -886,6 +908,7 @@ export function ownLines(
           } else if (reason !== null) {
             refuse(reason, frame.kind, true)
             respell('%%')
+            consumedMarkers.add(at)
             rewritten = true
             refusedItemMarker = frame.kind === 'item'
             if (frame.kind === 'note') noteTextFollower.value = { at, prefix: noteReaderPrefix(), item: false }
@@ -1023,7 +1046,7 @@ export function ownLines(
       return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
