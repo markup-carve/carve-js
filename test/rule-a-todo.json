@@ -25,9 +25,6 @@
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
   },
-  "caption-list-tightness.test.ts": {
-    "caption inside a list item > keeps captions in an accepted extension parse": "#3921"
-  },
   "corpus.test.ts": {
     "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
   },

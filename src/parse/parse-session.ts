@@ -532,7 +532,7 @@ export class ParseSession extends InlineParseSession {
     const anchor = root.pos + 1
     const sourceLineMap =
       sourceLines.length > 0 &&
-      sourceLines.every((line, i) => root.lineAt(anchor + i) === line)
+      sourceLines.every((line, i) => (root.authoredLines?.[anchor + i] ?? root.lineAt(anchor + i)) === line)
         ? sourceLines.map((_line, i) => root.lineNumber(anchor + i))
         : undefined
     const sub = subLexer(
@@ -573,7 +573,7 @@ export class ParseSession extends InlineParseSession {
     if (!ctx) return null
     for (const ext of this.activeMatchers) {
       if (!ext.matchBlock) continue
-      const res = ext.matchBlock(lexer.lines, lexer.pos, ctx)
+      const res = ext.matchBlock(lexer.authoredLines ?? lexer.lines, lexer.pos, ctx)
       if (res && res.linesConsumed > 0) {
         for (let k = 0; k < res.linesConsumed && !lexer.eof(); k++) lexer.consume()
         return res.node
