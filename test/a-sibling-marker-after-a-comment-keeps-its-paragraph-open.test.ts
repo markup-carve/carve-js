@@ -19,6 +19,11 @@ describe('a sibling marker after a comment keeps its paragraph open', () => {
     expect(html).toContain('<li>x\ntail</li>')
   })
 
+  it.each(['- ```', '- ::: d'])('leaves the line after a %s sibling outside the list', (marker) => {
+    const html = carveToHtml(['- a', '  - inner', '    %% c', `  ${marker}`, 'tail'].join('\n'))
+    expect(html).toContain('</ul>\n<p>tail</p>')
+  })
+
   it('still ends the sibling at a block opener', () => {
     const html = carveToHtml(['- a', '  - inner', '    %% c', '  - x', '> q'].join('\n'))
     expect(html).toContain('<li>x</li>')

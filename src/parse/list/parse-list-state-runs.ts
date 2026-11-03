@@ -1,6 +1,6 @@
 import type { ItemLazyState, ItemLineFacts, BlockQuoteLazyState } from '../../parse.js'
 import { isBlankLine, sliceColumns } from '../parse-lexer.js'
-import { markerLineBottomBlock, opensCodeFence } from '../block/parse-quote-core.js'
+import { colonFenceOpenerLen as colonOpenerLen, markerLineBottomBlock, opensCodeFence } from '../block/parse-quote-core.js'
 import type { listStateHelpers } from '../../parse.js'
 
 export type CommentCloser = (fence: number) => boolean
@@ -51,6 +51,12 @@ export function foldsFenceIntoFrame(frame: ItemLazyState | null | undefined, col
   if (residual <= frame.ownedMarker || residual >= frame.ownedColumn) return false
   const bottom = markerLineBottomBlock(text)
   return bottom !== text && opensCodeFence(bottom)
+}
+
+/** Whether a retained marker line leaves a paragraph its next unmarked line folds into. */
+function retainedMarkerParagraphOpen(text: string, leavesParagraphOpen: boolean): boolean {
+  const bottom = markerLineBottomBlock(text)
+  return leavesParagraphOpen && !opensCodeFence(bottom) && colonOpenerLen(bottom) === null
 }
 
 /** A phase returns true when it has decided the line and the rest are skipped. */
@@ -220,7 +226,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     if (!state.literalLayout && !rebased && !state.ownedAuthored && (state.deepest?.ownedColumn ?? -1) < 0 &&
         (state.deepest?.commentAtColumn || line.wasCommentAtColumn) && marker) {
       state.retainedMarker = true
-      state.lazyFoldable = markerLineState(text).leavesParagraphOpen
+      state.lazyFoldable = retainedMarkerParagraphOpen(text, markerLineState(text).leavesParagraphOpen)
       state.commentAtColumn = false
       return true
     }
@@ -242,7 +248,9 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     // own marker-line paragraph claim.
     if (!closedDescendantMarker) return false
     state.retainedMarker = !closedFootnoteMarker
-    state.lazyFoldable = markerLineState(text).leavesParagraphOpen
+    state.lazyFoldable = closedFootnoteMarker
+      ? markerLineState(text).leavesParagraphOpen
+      : retainedMarkerParagraphOpen(text, markerLineState(text).leavesParagraphOpen)
     return true
   }
 
