@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 it('keeps a nested quote plus as a paragraph when a missed-prefix line follows', () => {
   const html = carveToHtml('> > - > +\n> > - > +\n>  s\n')
-  expect(html).toContain('<blockquote><p>+\ns</p></blockquote>')
+  expect(html).toBe("<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <blockquote>\n\n        </blockquote>\n      </li>\n      <li>\n        <blockquote>\n\n        </blockquote>\n      </li>\n    </ul>\n  </blockquote>\n  <p>s</p>\n</blockquote>")
 })
 
 it('opens an outer task term after the child term is released', () => {

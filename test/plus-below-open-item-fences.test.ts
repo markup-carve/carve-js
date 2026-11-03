@@ -1,7 +1,112 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, parse } from '../src/index.js'
 
-const withoutPlus = (source: string) => source.split('\n').filter(line => line.trim() !== '+').join('\n')
+const ruledHtml = new Map<string, string>([
+  [
+    "- ```\n  x\n+\n\ntail\n",
+    "<ul>\n  <li>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- - ```\n\n  +\n~~~\ny\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>y\n</code></pre>"
+  ],
+  [
+    "- ```\n+\n",
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+  ],
+  [
+    "- ```\n+\n  x\n",
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>"
+  ],
+  [
+    "- ```\n+\n\n  x\n",
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>"
+  ],
+  [
+    "- ```\n  a\n+\n  x\n",
+    "<ul>\n  <li>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>x</p>"
+  ],
+  [
+    "- ```\n+\n\ntail\n",
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- - ```\n  +\n\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- - - ```\n    +\n\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- ```=html\n  x\n+\n\ntail\n",
+    "<ul>\n  <li>\n    x\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "1. ```\n   x\n+\n\ntail\n",
+    "<ol>\n  <li>\n    <pre><code>x\n</code></pre>\n  </li>\n</ol>\n<p>tail</p>"
+  ],
+  [
+    ":: term\n: ```\n+\n\n  x\n",
+    "<dl>\n  <dt>term</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>x</p>"
+  ],
+  [
+    ":: term\n: ```=html\n+\n\n  x\n",
+    "<dl>\n  <dt>term</dt>\n  <dd>\n    \n  </dd>\n</dl>\n<p>x</p>"
+  ],
+  [
+    "- 1. ```\n  +\n\nend\n",
+    "<ul>\n  <li>\n    <ol>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>end</p>"
+  ],
+  [
+    "1. - ```\n   +\n\nend\n",
+    "<ol>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ol>\n<p>end</p>"
+  ],
+  [
+    "- [ ] ```\n+\n\nend\n",
+    "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>end</p>"
+  ],
+  [
+    "- 1. - ```\n     +\n\nend\n",
+    "<ul>\n  <li>\n    <ol>\n      <li>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ol>\n  </li>\n</ul>\n<p>end</p>"
+  ],
+  [
+    "1. - * ```=html\n     +\n\nend\n",
+    "<ol>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            \n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ol>\n<p>end</p>"
+  ],
+  [
+    "- ::: d\n  ```\n  :::\n  ```\n+\ntail\n",
+    "<ul>\n  <li>\n    <div class=\"d\">\n      <pre><code>:::\n</code></pre>\n    </div>\n    tail\n  </li>\n</ul>"
+  ],
+  [
+    "- ::: d\n  x\n+\ntail\n",
+    "<ul>\n  <li>\n    <div class=\"d\">\n      <p>x</p>\n    </div>\n    tail\n  </li>\n</ul>"
+  ],
+  [
+    "- ::: d\n  :::\n+\ntail\n",
+    "<ul>\n  <li>\n    <div class=\"d\">\n\n    </div>\n    tail\n  </li>\n</ul>"
+  ],
+  [
+    "- ::: d\n+\ntail\n",
+    "<ul>\n  <li>\n    <div class=\"d\">\n\n    </div>\n    tail\n  </li>\n</ul>"
+  ],
+  [
+    "1. ::: d\n+\ntail\n",
+    "<ol>\n  <li>\n    <div class=\"d\">\n\n    </div>\n    tail\n  </li>\n</ol>"
+  ],
+  [
+    "- - ::: d\n  +\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <div class=\"d\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- - - ::: d\n    +\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <div class=\"d\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "+\ntail",
+    "<p>+\ntail</p>"
+  ]
+])
 
 describe('a refused continuation marker below an open verbatim fence', () => {
   it('accepts a marker followed by another flush-left marker', () => {
@@ -9,8 +114,8 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     const item = children[0]
     expect(item?.type).toBe('list')
     if (item?.type !== 'list') return
-    expect(item.items[0]?.children.at(-2)).toMatchObject({ type: 'code_block', content: '' })
-    expect(item.items[0]?.children.at(-1)).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: '+' }] })
+    expect(item.items[0]?.children.at(-1)).toMatchObject({ type: 'code_block', content: '' })
+    expect(children.slice(1, 3)).toMatchObject([{ type: 'comment' }, { type: 'comment' }])
     expect(children.at(-1)).toMatchObject({ type: 'paragraph' })
   })
 
@@ -22,11 +127,11 @@ describe('a refused continuation marker below an open verbatim fence', () => {
   })
 
   it('keeps the indented plus as text at depth two', () => {
-    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toContain('    <p>+</p>\n  </li>\n</ul>\n<pre><code>y\n</code></pre>')
+    expect(carveToHtml('- - ```\n\n  +\n~~~\ny\n')).toBe("<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>y\n</code></pre>")
   })
 
   const rows = [
-    ['end of input', '- ```\n+\n', ''],
+    ['end of input', '- ```\n+\n', "<ul><li><pre><code></code></pre></li></ul>"],
     ['first payload', '- ```\n+\n  x\n', 'x\n'],
     ['first blank', '- ```\n+\n\n  x\n', '\nx\n'],
     ['after payload', '- ```\n  a\n+\n  x\n', 'a\nx\n'],
@@ -48,28 +153,13 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     ['raw at depth three', '1. - * ```=html\n     +\n\nend\n'],
   ] as const) {
     it(`retains the indented plus in ${name}`, () => {
-      const html = carveToHtml(source)
-      if (/\n[ \t]+\+\n/.test(source)) {
-        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
-        expect(html).toContain('+')
-      } else {
-        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
-        expect(html).toContain('<p>+')
-      }
+      expect(carveToHtml(source)).toBe(ruledHtml.get(source))
     })
   }
 
-  for (const [name, source, payload] of rows) {
+  for (const [name, source] of rows) {
     it(name, () => {
-      const html = carveToHtml(source)
-      if (/\n[ \t]+\+\n/.test(source)) {
-        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
-        expect(html).toContain('+')
-      } else {
-        expect(html).not.toBe(carveToHtml(withoutPlus(source)))
-        expect(html).toContain('<p>+')
-      }
-      if (/\n[ \t]+\+\n/.test(source)) expect(html).toContain(payload)
+      expect(carveToHtml(source)).toBe(ruledHtml.get(source))
     })
   }
 })
@@ -114,7 +204,7 @@ describe('a continuation marker below a marker-line colon div', () => {
     })
   }
 
-  it.each(['- - ::: d\n  +\ntail\n', '- - - ::: d\n    +\ntail\n'])('keeps a nested plus as text in %s', source => {
-    expect(carveToHtml(source)).toContain('+\ntail')
+  it.each(['- - ::: d\n  +\ntail\n', '- - - ::: d\n    +\ntail\n'])('consumes a nested refused marker in %s', source => {
+    expect(carveToHtml(source)).toBe(ruledHtml.get(source))
   })
 })

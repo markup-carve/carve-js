@@ -19,7 +19,9 @@ it('uses the same owner for an attached div and its body', () => {
   ])
 })
 
-it('does not reassign an invisible comment to the item', () => {
+it('records an invisible comment between a marker and its follower in the item', () => {
   const trace = decisionTrace('- foo\n  - +\n  %%%\n  x\n  %%%\n')
-  expect(trace[2]).toMatchObject({ owner: 'doc/item:1/comment:3', closed: 1, reached: 'doc/item:1' })
+  expect(trace.slice(2)).toEqual([3, 4, 5].map(line => ({
+    line, step: 'S5', owner: 'doc/item:1/item:2', rule: 'CARVE-P0-024', form: 'leaf', plus: line - 1,
+  })))
 })

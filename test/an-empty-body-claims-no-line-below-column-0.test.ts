@@ -28,9 +28,6 @@ const comment = (container: 'description' | 'item', col: number) =>
     ? `:: t\n:  %% c\n${' '.repeat(col)}flush\n`
     : `- %% c\n${' '.repeat(col)}flush\n`
 
-const letter = (container: 'description' | 'item', col: number) =>
-  marker(container, col).replace('+', 'x')
-
 describe('an empty body claims no line below column 0', () => {
   it('reads the refused plus exactly like the letter control', () => {
     for (const container of ['description', 'item'] as const) {
@@ -38,7 +35,7 @@ describe('an empty body claims no line below column 0', () => {
         expect(
           carveToHtml(marker(container, col)),
           `${container} at payload column ${col}`,
-        ).toBe(carveToHtml(letter(container, col)).replace('x', '+'))
+        ).toBe(carveToHtml(comment(container, col)))
       }
     }
   })
@@ -46,8 +43,8 @@ describe('an empty body claims no line below column 0', () => {
   it('folds the payload into the plus across the refused band', () => {
     // The relation above is satisfied by any answer both spellings share, so it
     // cannot say WHICH answer. These pin the oracle's.
-    const dd = '<dl>\n  <dt>t</dt>\n  <dd>+\nflush</dd>\n</dl>'
-    const li = '<ul>\n  <li>+\nflush</li>\n</ul>'
+    const dd = '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>flush</p>'
+    const li = '<ul>\n  <li></li>\n</ul>\n<p>flush</p>'
     for (const col of [1, 2]) {
       expect(carveToHtml(marker('description', col)).trim()).toBe(dd)
       expect(carveToHtml(comment('description', col)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>flush</p>')
@@ -59,9 +56,9 @@ describe('an empty body claims no line below column 0', () => {
   it('folds a line at the content column into the plus', () => {
     // The other end of the band. A change that refused everything would pass
     // the rows above and break these.
-    expect(carveToHtml(marker('description', 3)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd>+\nflush</dd>\n</dl>')
+    expect(carveToHtml(marker('description', 3)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd>flush</dd>\n</dl>')
     expect(carveToHtml(comment('description', 3)).trim()).toBe('<dl>\n  <dt>t</dt>\n  <dd>flush</dd>\n</dl>')
-    expect(carveToHtml(marker('item', 2)).trim()).toBe('<ul>\n  <li>+\nflush</li>\n</ul>')
+    expect(carveToHtml(marker('item', 2)).trim()).toBe('<ul>\n  <li>flush</li>\n</ul>')
     expect(carveToHtml(comment('item', 2)).trim()).toBe('<ul>\n  <li>flush</li>\n</ul>')
   })
 

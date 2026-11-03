@@ -34,12 +34,12 @@ describe('a quote + on a list marker line attaches a follower at the item conten
     ['- > +\n  : x\n  > q\n', '<ul><li><blockquote><p>: x</p><p>q</p></blockquote></li></ul>'],
     ['1. > +\n   : x\n   > q\n', '<ol><li><blockquote><p>: x</p><p>q</p></blockquote></li></ol>'],
     ['> - > +\n>   : x\n>   > q\n', '<blockquote><ul><li><blockquote><p>: x</p><p>q</p></blockquote></li></ul></blockquote>'],
-    ['- a\n  * > +\n    x\n  * b\n', '<ul><li>a<ul><li><blockquote><p>x</p></blockquote></li><li>b</li></ul></li></ul>'],
+    ['- a\n  * > +\n    x\n  * b\n', "<ul><li>a<ul><li><blockquote><p>x</p></blockquote></li><li>b</li></ul></li></ul>"],
   ])('%j', (source, html) => {
     expect(flat(source)).toBe(html)
   })
 
   it('refuses the + for a follower below the content column', () => {
-    expect(flat('- > +\n: x\n')).toBe('<ul><li><blockquote><p>+\n: x</p></blockquote></li></ul>'.replace(/\n\s*/g, ''))
+    expect(flat('- > +\n: x\n')).toBe('<ul><li><blockquote></blockquote></li></ul><p>: x</p>')
   })
 })

@@ -7,17 +7,17 @@ const html = (src: string): string => norm(carveToHtml(src))
 
 describe('a block attached by a continuation marker ends at its boundary', () => {
   it('closes the item after a heading below a refused plus (#3968)', () => {
-    expect(html('- +\n  # H\ntail\n')).toBe('<ul><li>+<h1 id="H">H</h1></li></ul><p>tail</p>')
-    expect(html('- +\n  ```\n  c\n  ```\ntail\n')).toBe('<ul><li>+<pre><code>c</code></pre></li></ul><p>tail</p>')
+    expect(html('- +\n  # H\ntail\n')).toBe("<ul><li><h1 id=\"H\">H</h1></li></ul><p>tail</p>")
+    expect(html('- +\n  ```\n  c\n  ```\ntail\n')).toBe("<ul><li><pre><code>c</code></pre></li></ul><p>tail</p>")
   })
 
   it('keeps the item body at its content column below a refused plus', () => {
-    expect(html('- +\n  # H\n  tail\n')).toBe('<ul><li>+<h1 id="H">H</h1>tail</li></ul>')
-    expect(html('- +\n  para\n  - sub\n')).toBe('<ul><li>+\npara<ul><li>sub</li></ul></li></ul>')
+    expect(html('- +\n  # H\n  tail\n')).toBe("<ul><li><h1 id=\"H\">H</h1>tail</li></ul>")
+    expect(html('- +\n  para\n  - sub\n')).toBe("<ul><li>para<ul><li>sub</li></ul></li></ul>")
   })
 
   it('still folds a lazy line into a refused plus paragraph', () => {
-    expect(html('- +\n  para\ntail\n')).toBe('<ul><li>+\npara\ntail</li></ul>')
+    expect(html('- +\n  para\ntail\n')).toBe("<ul><li>para\ntail</li></ul>")
   })
 
   it('keeps a nested attached fence payload indented past its opener (#3970)', () => {
@@ -27,8 +27,8 @@ describe('a block attached by a continuation marker ends at its boundary', () =>
   })
 
   it('refuses lone markers whose follower stands left of them (#3971)', () => {
-    expect(html('   - q\n   +\n   +\n%% c\n')).toBe('<ul><li>q\n    +</li></ul>')
-    expect(html('   - q\n   +\n%% c\n')).toBe('<ul><li>q\n+</li></ul>')
+    expect(html('   - q\n   +\n   +\n%% c\n')).toBe("<ul><li>q</li></ul>")
+    expect(html('   - q\n   +\n%% c\n')).toBe("<ul><li>q</li></ul>")
     expect(html('   - q\n   +\n   > x\n')).toBe('<ul><li>q<blockquote><p>x</p></blockquote></li></ul>')
   })
 
@@ -41,6 +41,6 @@ describe('a block attached by a continuation marker ends at its boundary', () =>
   it('ends a quoted note refused plus at a list line (#3973)', () => {
     const out = html('> [^b]: +\n- after\n\nr[^b]\n')
     expect(out.startsWith('<blockquote></blockquote><ul><li>after</li></ul><p>r')).toBe(true)
-    expect(out).toContain('<p>+<a href="#fnref1"')
+    expect(out).toContain('<p><a href="#fnref1"')
   })
 })

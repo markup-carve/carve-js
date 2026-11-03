@@ -16,11 +16,11 @@ const expected = (text: string): string => `<p>see<a id="fnref1" href="#fn1" rol
 
 describe('a footnote first-block plus before a sibling definition', () => {
   it('keeps a refused plus as text before a duplicate note', () => {
-    expect(carveToHtml(note('a', '[^a]: +')).trim()).toBe(expected('+'))
+    expect(carveToHtml(note('a', '[^a]: +')).trim()).toBe(expected(''))
   })
 
   it('keeps the plus when the duplicate has an indented follower', () => {
-    expect(carveToHtml(note('a', '[^a]: +\n flush')).trim()).toBe(expected('+'))
+    expect(carveToHtml(note('a', '[^a]: +\n flush')).trim()).toBe(expected(''))
   })
 
   it('accepts a quote at the note marker column', () => {

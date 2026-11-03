@@ -6,7 +6,7 @@ import { carveToHtml } from '../src/index.js'
 // later paragraph at or past the column is the outer item's and a blank before it loosens.
 describe('a blank after a block that ended a sublist', () => {
   it.each([
-    ["- foo\n  - +\n   # H\n\n\n     x\n", "<ul>\n  <li><p>foo</p>\n    <ul>\n      <li>+</li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n    <p>x</p>\n  </li>\n</ul>"],
+    ["- foo\n  - +\n   # H\n\n\n     x\n", "<ul>\n  <li><p>foo</p>\n    <ul>\n      <li></li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n    <p>x</p>\n  </li>\n</ul>"],
     ["- foo\n  - s\n  # H\n\n    x\n", "<ul>\n  <li><p>foo</p>\n    <ul>\n      <li>s</li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n    <p>x</p>\n  </li>\n</ul>"],
     ["- foo\n  - s\n  ---\n\n     x\n", "<ul>\n  <li><p>foo</p>\n    <ul>\n      <li>s</li>\n    </ul>\n    <hr>\n    <p>x</p>\n  </li>\n</ul>"],
     ["- foo\n  - s\n  | a |\n\n    x\n", "<ul>\n  <li><p>foo</p>\n    <ul>\n      <li>s</li>\n    </ul>\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    <p>x</p>\n  </li>\n</ul>"],

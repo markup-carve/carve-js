@@ -3,6 +3,29 @@ import { carveToHtml } from '../src/index.js'
 
 // PART 0 O1 and PART 9 §17 L3: an accepted marker ends the fence after
 // its buffered blank payload, then attaches the next flush-left block.
+const ruledHtml = new Map<string, string>([
+  [
+    "- ```\n\n+\n- s\n",
+    "<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n  <li><p>s</p></li>\n</ul>"
+  ],
+  [
+    "- - ```\n\n\n  +\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "1. - ```\n     x\n\n\n   +\ntail\n",
+    "<ol>\n  <li>\n    <ul>\n      <li>\n        <pre><code>x\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ol>\n<p>tail</p>"
+  ],
+  [
+    "- - - ```\n      x\n\n\n    +\ntail\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code>x\n\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+  ],
+  [
+    "- - ```\n\n\n  +\n## heading\n",
+    "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h2>heading</h2>\n</section>"
+  ]
+])
+
 describe('an open item fence keeps blanks before an accepted continuation', () => {
   const cases = [
     { lead: '- ```', body: '', marker: '+', follower: 'tail', blanks: 1, code: true },
@@ -32,6 +55,10 @@ describe('an open item fence keeps blanks before an accepted continuation', () =
     it(`${lead} with ${blanks} blank(s) and ${follower}`, () => {
       const source = `${lead}\n${body}${'\n'.repeat(blanks)}${marker}\n${follower}\n`
       const html = carveToHtml(source)
+      if (ruledHtml.has(source)) {
+        expect(html).toBe(ruledHtml.get(source))
+        return
+      }
       if (marker.startsWith(' ') && blanks === 2 && code) {
         expect(html).toContain(`<pre><code>${body.trim() ? 'x\n' : ''}${'\n'.repeat(blanks)}</code></pre>`)
         expect(html).toContain(follower === 'tail' ? '<p>+\ntail</p>' : '<p>+</p>')

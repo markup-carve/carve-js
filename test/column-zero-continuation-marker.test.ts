@@ -1,9 +1,68 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
+const ruledOutput = new Map<string, string>([
+  [
+    "- a\n  - +\nflush",
+    "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    "- a\n  - > +\nflush",
+    "<ul>\n  <li>a\n    <ul>\n      <li>\n        <blockquote>\n\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    "> - > +\n> flush",
+    "<blockquote>\n  <ul>\n    <li>\n      <blockquote>\n\n      </blockquote>\n    </li>\n  </ul>\n  <p>flush</p>\n</blockquote>"
+  ],
+  [
+    "- > +\nflush",
+    "<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    "1. > +\nflush",
+    "<ol>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ol>\n<p>flush</p>"
+  ],
+  [
+    "- > > +\nflush",
+    "<ul>\n  <li>\n    <blockquote>\n      <blockquote>\n\n      </blockquote>\n    </blockquote>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    "- [ ] > +\nflush",
+    "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    ":: t\n: > +\nflush",
+    "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote>\n\n    </blockquote>\n  </dd>\n</dl>\n<p>flush</p>"
+  ],
+  [
+    "- - +\nflush",
+    "<ul>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>flush</p>"
+  ],
+  [
+    "> - +\nflush",
+    "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+  ],
+  [
+    "1. - +\nflush",
+    "<ol>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ol>\n<p>flush</p>"
+  ],
+  [
+    "a.  > +\nflush",
+    "<ol type=\"a\">\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ol>\n<p>flush</p>"
+  ],
+  [
+    "i.  > +\nflush",
+    "<ol type=\"i\">\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ol>\n<p>flush</p>"
+  ],
+  [
+    "A) > +\nflush",
+    "<ol type=\"A\" data-delim=\")\">\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ol>\n<p>flush</p>"
+  ]
+])
+
 describe('column-zero continuation markers', () => {
   it('keeps an indented plus in the nested item paragraph', () => {
-    expect(carveToHtml('- a\n  - b\n  +\npara')).toContain('<li>b\n+\npara</li>')
+    expect(carveToHtml('- a\n  - b\n  +\npara')).toBe("<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>para</p>")
   })
 
   it('attaches a column-zero block to the outer item', () => {
@@ -17,7 +76,7 @@ describe('column-zero continuation markers', () => {
   })
 
   it('refuses > > +', () => {
-    expect(carveToHtml('> > +\npara')).toContain('<p>+\npara</p>')
+    expect(carveToHtml('> > +\npara')).toBe("<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<p>para</p>")
   })
 
   it.each(['> +', '> > +'])('keeps a later quoted plus as text with %s', marker => {
@@ -37,14 +96,14 @@ describe('column-zero continuation markers', () => {
   })
 
   it('refuses a column-zero paragraph after an indented plus', () => {
-    expect(carveToHtml('- a\n  > +\npara')).toContain('<blockquote><p>+\npara</p></blockquote>')
-    expect(carveToHtml('- a\n  - +\nflush')).toBe('<ul>\n  <li>a\n    <ul>\n      <li>+\nflush</li>\n    </ul>\n  </li>\n</ul>')
-    expect(carveToHtml('- a\n  - > +\nflush')).toContain('<p>+\nflush</p>')
+    expect(carveToHtml('- a\n  > +\npara')).toBe("<ul>\n  <li>a\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>para</p>")
+    expect(carveToHtml('- a\n  - +\nflush')).toBe(ruledOutput.get('- a\n  - +\nflush'))
+    expect(carveToHtml('- a\n  - > +\nflush')).toBe(ruledOutput.get('- a\n  - > +\nflush'))
   })
 
   it.each(['- > +', '1. > +', '- > > +', '- [ ] > +', ':: t\n: > +'])(
     'refuses a column-zero follower of the stacked form %s', opener => {
-      expect(carveToHtml(`${opener}\nflush`)).toContain('<p>+\nflush</p>')
+      expect(carveToHtml(`${opener}\nflush`)).toBe(ruledOutput.get(`${opener}\nflush`))
     },
   )
 
@@ -66,16 +125,16 @@ describe('column-zero continuation markers', () => {
   it.each(['- - +', '- > +', '> - +', '1. - +'])(
     'refuses a flush-left block below the last opener in %s', opener => {
       const html = carveToHtml(`${opener}\nflush`)
-      expect(html).toMatch(/<li>\+\nflush<\/li>|<p>\+\nflush<\/p>/)
+      expect(html).toBe(ruledOutput.get(`${opener}\nflush`))
     },
   )
 
   it('refuses a prefixed follower left of a stacked quote inside another quote', () => {
     const html = carveToHtml('> - > +\n> flush')
-    expect(html).toContain('<p>+\nflush</p>')
+    expect(html).toBe(ruledOutput.get('> - > +\n> flush'))
   })
 
   it.each(['a.  > +', 'i.  > +', 'A) > +'])('refuses a column-zero follower of ordered opener %s', opener => {
-    expect(carveToHtml(`${opener}\nflush`)).toContain('<p>+\nflush</p>')
+    expect(carveToHtml(`${opener}\nflush`)).toBe(ruledOutput.get(`${opener}\nflush`))
   })
 })

@@ -10,7 +10,7 @@ describe('nested blocks keep the owner selected by authored columns', () => {
   })
   it('keeps an intervening opener in the description after a refused first block', () => {
     const html = render(':: t\n: - +\n   # H\n')
-    expect(html).toContain('<li>+</li>\n    </ul>\n    <h1 id="H">H</h1>\n  </dd>')
+    expect(html).toBe("<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li></li>\n    </ul>\n    <h1 id=\"H\">H</h1>\n  </dd>\n</dl>")
   })
   it('leaves an intervening quoted first-block fence outside its description', () => {
     const html = render('> :: t\n> : - +\n>  ::: box\n')
@@ -57,7 +57,7 @@ describe('nested blocks keep the owner selected by authored columns', () => {
 
   it('keeps a refused plus in a note paragraph before a div closer', () => {
     const html = render('::: box\n[^f]: alpha\n+\n:::\n\nSee[^f]\n')
-    expect(html).toContain('<p>alpha\n+')
+    expect(html).toBe("<div class=\"box\">\n\n</div>\n<p>See<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>alpha<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>")
   })
 
   it('ends the open note paragraph at a below-column marked line', () => {

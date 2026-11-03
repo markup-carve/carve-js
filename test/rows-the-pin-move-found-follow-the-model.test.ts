@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { carveToHtml } from '../src/index.js'
+import { RULED_5013_HTML } from './ruled-5013-ahead-of-pin.js'
 
 const corpusDir = resolve(dirname(fileURLToPath(import.meta.url)), '../spec/tests/corpus')
 
@@ -28,14 +29,14 @@ describe('rows the pin move found follow the model', () => {
     it(row, () => {
       const source = readFileSync(resolve(corpusDir, `${row}.crv`), 'utf8')
       const html = readFileSync(resolve(corpusDir, `${row}.html`), 'utf8')
-      expect(carveToHtml(source).trim()).toBe(html.trim())
+      expect(carveToHtml(source).trim()).toBe((RULED_5013_HTML.get(row)?.html ?? html).trim())
     })
   }
 
   // Shapes around the rows, each checked against the spec model.
   const SHAPES: Array<[string, string]> = [
     ['> t\n+\n:: t\n: ```\n\nx\n', '<blockquote>\n  <p>t</p>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <pre><code></code></pre>\n    </dd>\n  </dl>\n</blockquote>\n<p>x</p>'],
-    ['> > +\n> >\n', '<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>'],
+    ['> > +\n> >\n', "<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>"],
     ['- a\n+\n# h\n\n+\n# h\n', '<ul>\n  <li>a\n    <h1 id="h">h</h1>\n    <h1 id="h-2">h</h1>\n  </li>\n</ul>'],
     ['- > :: t\n : a\n  > q\n', '<ul>\n  <li>\n    <blockquote>\n      <dl>\n        <dt>t</dt>\n      </dl>\n    </blockquote>\n  </li>\n</ul>\n<p>: a</p>\n<blockquote><p>q</p></blockquote>'],
   ]

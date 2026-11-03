@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { parse, renderHtml } from '../src/index.js'
 
 it('leaves a column-zero empty quote outside a stacked first-block plus', () => {
-  expect(renderHtml(parse('- > +\n>'))).toBe('<ul>\n  <li>\n    <blockquote><p>+</p></blockquote>\n  </li>\n</ul>\n<blockquote>\n\n</blockquote>')
+  expect(renderHtml(parse('- > +\n>'))).toBe("<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<blockquote>\n\n</blockquote>")
   const list = parse('- > +\n>', { positions: true }).children[0]
   if (list?.type !== 'list') throw new Error('expected list')
   const outer = list.items[0]?.children[0]
@@ -12,5 +12,5 @@ it('leaves a column-zero empty quote outside a stacked first-block plus', () => 
 })
 
 it('folds a column-two follower into the plus of three stacked items', () => {
-  expect(renderHtml(parse('- - - +\n  b'))).toBe('<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>+\nb</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
+  expect(renderHtml(parse('- - - +\n  b'))).toBe("<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li></li>\n        </ul>\n      </li>\n    </ul>\n    b\n  </li>\n</ul>")
 })

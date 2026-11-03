@@ -10,7 +10,7 @@ describe('first-block item ownership', () => {
   })
 
   it('refuses a block at an item content column with a warning', () => {
-    expect(renderHtml(parse('- +\n  x\n'))).toBe('<ul>\n  <li>+\nx</li>\n</ul>')
+    expect(renderHtml(parse('- +\n  x\n'))).toBe("<ul>\n  <li>x</li>\n</ul>")
     expect(lintCarve('- +\n  x\n').filter(w => w.rule === 'continuation-marker-refused')).toHaveLength(1)
   })
 })

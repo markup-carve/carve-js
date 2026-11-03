@@ -869,10 +869,9 @@ export function lintIncludes(source: string, options: LintOptions, lintOne: (sou
   })
 }
 
-// PART 9 §17 L4: a refused first-block `+` adds no block to an item or a
-// description, and stays text in a quote or a note.
-function refusedMarkerEffect(marker: RefusedContinuationMarker): string {
-  return `It remains text in the ${marker.host}.`
+// PART 9 §17: a marker is consumed even when its follower cannot attach.
+function refusedMarkerEffect(_marker: RefusedContinuationMarker): string {
+  return 'It renders nothing.'
 }
 
 function appendBidiControlWarnings(source: string, warnings: LintWarning[]): void {
@@ -1116,6 +1115,7 @@ export function lintCarve(
       left: 'the next block starts left of its column',
       right: 'the next block starts right of its column',
       list: 'the first-block form does not attach a list',
+      claimed: 'an earlier marker already claims the next block',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
       rule: 'continuation-marker-refused',
@@ -1585,7 +1585,7 @@ export function lintCarve(
     const reason = atEnd ? 'it reaches the end of the document' : 'a blank line follows it'
     out.push({ line: i + 1, column: 1, start: lineOffsets[i]!, end: lineOffsets[i]! + 1,
       rule: 'continuation-marker-refused',
-      message: `This + attaches nothing because ${reason}. It remains text in the block quote.` })
+      message: `This + attaches nothing because ${reason}. It renders nothing.` })
   }
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
   collectMarkerBeforeAttributes(source, doc, out, toUtf16)

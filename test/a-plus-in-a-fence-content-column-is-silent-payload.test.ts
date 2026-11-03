@@ -28,7 +28,7 @@ describe('a plus in a fence content column', () => {
     expect(refusedMarkers(source)).toEqual([
       expect.objectContaining({ line: 2, column: 1 }),
     ])
-    expect(carveToHtml(source)).toBe('<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>+</p>\n<p>tail</p>')
+    expect(carveToHtml(source)).toBe("<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>")
   })
 
   it('still reports the shared other-column nested fence case', () => {
@@ -36,6 +36,6 @@ describe('a plus in a fence content column', () => {
     expect(refusedMarkers(source)).toEqual([
       expect.objectContaining({ line: 3, column: 3 }),
     ])
-    expect(carveToHtml(source)).toBe('<ul>\n  <li>a\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    +\n  </li>\n</ul>')
+    expect(carveToHtml(source)).toBe("<ul>\n  <li>a\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>")
   })
 })

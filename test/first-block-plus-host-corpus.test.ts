@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import { RULED_5013_HTML } from './ruled-5013-ahead-of-pin.js'
 
 const corpus = new URL('../spec/tests/corpus/', import.meta.url)
 const cases = readdirSync(corpus).filter(file =>
@@ -14,7 +15,7 @@ describe('first-block plus gives its block to the host', () => {
 
   it.each(cases)('%s', file => {
     const source = readFileSync(new URL(file, corpus), 'utf8')
-    const expected = readFileSync(new URL(file.slice(0, -4) + '.html', corpus), 'utf8')
+    const expected = RULED_5013_HTML.get(file.slice(0, -4))?.html ?? readFileSync(new URL(file.slice(0, -4) + '.html', corpus), 'utf8')
     expect(carveToHtml(source).trimEnd()).toBe(expected.trimEnd())
   })
 })

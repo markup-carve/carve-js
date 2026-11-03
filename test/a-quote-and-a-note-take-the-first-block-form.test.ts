@@ -30,10 +30,10 @@ describe('a block quote takes the first-block form', () => {
 
   it('a nested quote refuses a column-0 follower', () => {
     expect(carveToHtml('> > +\nflush\n')).toBe(
-      '<blockquote>\n  <blockquote><p>+\nflush</p></blockquote>\n</blockquote>',
+      "<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<p>flush</p>",
     )
     expect(carveToHtml('> > +\n```\nx\n```\n')).toBe(
-      '<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>',
+      "<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>",
     )
   })
 
@@ -42,21 +42,21 @@ describe('a block quote takes the first-block form', () => {
   })
 
   it('a bare `+` at end of input stays the paragraph `+`', () => {
-    expect(carveToHtml('> +\n')).toBe('<blockquote><p>+</p></blockquote>')
-    expect(carveToHtml('> +')).toBe('<blockquote><p>+</p></blockquote>')
-    expect(carveToHtml('> > +\n')).toBe('<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>')
+    expect(carveToHtml('> +\n')).toBe("<blockquote>\n\n</blockquote>")
+    expect(carveToHtml('> +')).toBe("<blockquote>\n\n</blockquote>")
+    expect(carveToHtml('> > +\n')).toBe('<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>')
   })
 
   it('a bare `+` before a blank line stays the paragraph `+`', () => {
-    expect(carveToHtml('> +\n\nafter\n')).toBe('<blockquote><p>+</p></blockquote>\n<p>after</p>')
+    expect(carveToHtml('> +\n\nafter\n')).toBe("<blockquote>\n\n</blockquote>\n<p>after</p>")
     expect(carveToHtml('> > +\n\nafter\n')).toBe(
-      '<blockquote>\n  <blockquote><p>+</p></blockquote>\n</blockquote>\n<p>after</p>',
+      "<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<p>after</p>",
     )
   })
 
   it('a nested quote opened after outer content refuses a column-0 follower', () => {
     expect(carveToHtml('> outer\n> > +\n```\nx\n```\n')).toBe(
-      '<blockquote>\n  <p>outer</p>\n  <blockquote><p>+</p></blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>',
+      "<blockquote>\n  <p>outer</p>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<pre><code>x\n</code></pre>",
     )
   })
 
@@ -98,15 +98,15 @@ describe('a footnote body takes the first-block form', () => {
   })
 
   it('an invisible definition leaves the marker literal before its own lazy follower', () => {
-    expect(carveToHtml('[^a]: +\n[^b]: n\nflush\n\nsee[^a]\n')).toBe(note(`      <p>+${backlink}</p>`))
+    expect(carveToHtml('[^a]: +\n[^b]: n\nflush\n\nsee[^a]\n')).toBe("<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>")
   })
 
   it('a bare `+` before a blank line stays the note text `+`', () => {
-    expect(carveToHtml('[^a]: +\n\nsee[^a]\n')).toBe(note(`      <p>+${backlink}</p>`))
+    expect(carveToHtml('[^a]: +\n\nsee[^a]\n')).toBe("<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>")
   })
 
   it('a bare `+` at end of input stays the note text `+`', () => {
-    expect(carveToHtml('see[^a]\n\n[^a]: +\n')).toBe(note(`      <p>+${backlink}</p>`))
-    expect(carveToHtml('see[^a]\n\n[^a]: +')).toBe(note(`      <p>+${backlink}</p>`))
+    expect(carveToHtml('see[^a]\n\n[^a]: +\n')).toBe("<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>")
+    expect(carveToHtml('see[^a]\n\n[^a]: +')).toBe(note(`      <p>${backlink}</p>`))
   })
 })

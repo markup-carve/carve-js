@@ -1942,7 +1942,7 @@
   {
     "id": "review-46",
     "source": "  - :: t\n    :   payload\n    +\n        ```\n   text\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>payload\n+</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>text</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>text</p>"
   },
   {
     "id": "review-47",

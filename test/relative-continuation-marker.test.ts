@@ -13,31 +13,31 @@ const cases = [
   },
   {
     "input": "- a\n+\n- b",
-    "expected": "<ul>\n  <li>a\n+</li>\n  <li>b</li>\n</ul>"
+    "expected": "<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>"
   },
   {
     "input": "- a\n\n+\n- b",
-    "expected": "<ul>\n  <li>a</li>\n</ul>\n<p>+\n- b</p>"
+    "expected": "<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>"
   },
   {
     "input": "- ```\n+\n- b",
-    "expected": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>+\n- b</p>"
+    "expected": "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n  <li>b</li>\n</ul>"
   },
   {
     "input": "- a\n  - b\n  +\n  1. sibling",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b\n+</li>\n    </ul>\n    <ol>\n      <li>sibling</li>\n    </ol>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    <ol>\n      <li>sibling</li>\n    </ol>\n  </li>\n</ul>"
   },
   {
     "input": "- a\n  - b\n  +\n    - child",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b\n+\n        <ul>\n          <li>child</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>child</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "input": "- a\n  - b\n  +\ntail",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b\n+\ntail</li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "input": "- a\n  - b\n  +",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b\n+</li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "input": "- a\n  - [ ] task\n  +\n  ```\n  code\n  ```",
@@ -61,19 +61,19 @@ const cases = [
   },
   {
     "input": "- a\n  - +\n> b",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>b</p></blockquote>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<blockquote><p>b</p></blockquote>"
   },
   {
     "input": "- a\n  - +\n x",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>+\nx</li>\n    </ul>\n  </li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>"
   },
   {
     "input": "- a\n  - +\n- x",
-    "expected": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n  <li>x</li>\n</ul>"
+    "expected": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n  <li>x</li>\n</ul>"
   },
   {
     "input": "- > +\n```\nx\n```",
-    "expected": "<ul>\n  <li>\n    <blockquote><p>+</p></blockquote>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
+    "expected": "<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
   },
   {
     "input": "> - +\n> > q",
@@ -93,11 +93,11 @@ const cases = [
   },
   {
     "input": "- [ ] +\n- s",
-    "expected": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"+\"> +</li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>"
+    "expected": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> </li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>"
   },
   {
     "input": "- [ ] a\n+\n- s",
-    "expected": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"a +\"> a\n+</li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>"
+    "expected": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>"
   },
   {
     "input": "[^a]: intro\n+\nmore\n\nsee[^a]",
@@ -135,8 +135,8 @@ describe('relative continuation marker columns', () => {
   it.each(['- >+\n b\n', '- > +\n b\n'])('reads a first-block form in %s', input => {
     expect(carveToHtml(input)).toBe(input.includes('>+')
       ? '<ul>\n  <li>&gt;+\nb</li>\n</ul>'
-      // Column 1 is no opener column of `- > +`, so the `+` stays quote text (CARVE-P9-067).
-      : '<ul>\n  <li>\n    <blockquote><p>+\nb</p></blockquote>\n  </li>\n</ul>')
+      // Column 1 is no opener column of `- > +`, so the marker is consumed without a follower.
+      : '<ul>\n  <li>\n    <blockquote>\n\n    </blockquote>\n  </li>\n</ul>\n<p>b</p>')
   })
 
   it('attaches a quoted follower at the quote column as a nested quote', () => {
@@ -144,25 +144,24 @@ describe('relative continuation marker columns', () => {
   })
 
   it.each([
-    ['> > - a\n>   +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+</li></ul></blockquote><ul><li>b</li></ul></blockquote>'],
-    ['1. ordered\n  > > quote\n+  \n- item\n', '<ol><li>ordered</li></ol><blockquote><blockquote><p>quote\n+\n- item</p></blockquote></blockquote>'],
+    ['> > - a\n>   +\n>   - b\n', "<blockquote><blockquote><ul><li>a\n+</li></ul></blockquote><ul><li>b</li></ul></blockquote>"],
+    ['1. ordered\n  > > quote\n+  \n- item\n', "<ol><li>ordered</li></ol><blockquote><blockquote><p>quote\n+\n- item</p></blockquote></blockquote>"],
   ])('folds a refused marker like ordinary text in %s', (input, expected) => {
     expect(carveToHtml(input).replace(/>\s+</g, '><').replace(/\n\s*/g, '\n').trim()).toBe(expected)
   })
 
   it.each([
-    ['> > - a\n> +\n>   - b\n', '<blockquote><blockquote><ul><li>a\n+</li></ul></blockquote><ul><li>b</li></ul></blockquote>'],
-    ['> > - [ ] a\n> +\n> tail', '<blockquote><blockquote><ul class="task-list"><li><input type="checkbox" disabled aria-label="a"> a</li></ul><p>tail</p></blockquote></blockquote>'],
-    ['- a\n  > q\n+\n- b\n', '<ul><li>a\n<blockquote><p>q\n+</p></blockquote></li><li>b</li></ul>'],
-    ['- a\n  > q\n  +\n  - b\n', '<ul><li>a\n<blockquote><p>q</p><ul><li>b</li></ul></blockquote></li></ul>'],
-    ['> - a\n>   > q\n>   +\n>   para\n', '<blockquote><ul><li>a\n<blockquote><p>q</p><p>para</p></blockquote></li></ul></blockquote>'],
-    ['  * [ ] task\n    [^n]: note\n\t+\n\ttext\n\nsee[^n]\n', '<p>text<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>'],
-    ['  - a\n    [^n]: note\n    +\n    1. ordered\n\nsee[^n]\n', '<ol>\n        <li>ordered</li>\n      </ol>'],
-    ['* [ ] task\n  * [ ] task\n    1. ordered\n      > quote\n\t+\n\ttext\n', '<blockquote><p>quote\n+\ntext</p></blockquote>'],
+    ['> > - a\n> +\n>   - b\n', "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a</li>\n    </ul>\n  </blockquote>\n  <ul>\n    <li>b</li>\n  </ul>\n</blockquote>"],
+    ['> > - [ ] a\n> +\n> tail', "<blockquote>\n  <blockquote>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n    </ul>\n    <p>tail</p>\n  </blockquote>\n</blockquote>"],
+    ['- a\n  > q\n+\n- b\n', "<ul>\n  <li>a\n    <blockquote><p>q</p></blockquote>\n  </li>\n  <li>b</li>\n</ul>"],
+    ['- a\n  > q\n  +\n  - b\n', "<ul>\n  <li>a\n    <blockquote>\n      <p>q</p>\n      <ul>\n        <li>b</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"],
+    ['> - a\n>   > q\n>   +\n>   para\n', "<blockquote>\n  <ul>\n    <li>a\n      <blockquote>\n        <p>q</p>\n        <p>para</p>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>"],
+    ['  * [ ] task\n    [^n]: note\n\t+\n\ttext\n\nsee[^n]\n', "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"task\"> task</li>\n</ul>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note</p>\n      <p>text<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
+    ['  - a\n    [^n]: note\n    +\n    1. ordered\n\nsee[^n]\n', "<ul>\n  <li>a</li>\n</ul>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>note</p>\n      <ol>\n        <li>ordered</li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
+    ['* [ ] task\n  * [ ] task\n    1. ordered\n      > quote\n\t+\n\ttext\n', "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"task\"> task\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"task\"> task\n        <ol>\n          <li>ordered</li>\n        </ol>\n        <blockquote><p>quote\n+\ntext</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>"],
   ])('uses the owning container for %s', (input, expected) => {
     const html = carveToHtml(input)
-    if (input.startsWith('>') || input.startsWith('- a\n  >')) expect(html.replace(/>\s+</g, '><').replace(/\n\s*/g, '\n').trim()).toBe(expected)
-    else expect(html).toContain(expected)
+    expect(html).toBe(expected)
   })
 
   it('keeps a nested footnote continuation inside that note', () => {
@@ -192,7 +191,7 @@ describe('relative continuation marker columns', () => {
   })
 
   it('keeps an unprefixed marker below an inner quote as text', () => {
-    expect(carveToHtml('- a\n  > > q\n    +\n    para\n')).toContain('<blockquote><p>q\n+\npara</p></blockquote>')
+    expect(carveToHtml('- a\n  > > q\n    +\n    para\n')).toBe("<ul>\n  <li>a\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    para\n  </li>\n</ul>")
   })
 
   it('keeps a tabbed marker with its open nested list item', () => {
@@ -227,7 +226,7 @@ describe('relative continuation marker columns', () => {
   it.each([
     {
       input: '> - a\n> +\n> \n> tail',
-      expected: '<blockquote>\n  <ul>\n    <li>a\n+</li>\n  </ul>\n  <p>tail</p>\n</blockquote>',
+      expected: "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <p>tail</p>\n</blockquote>",
     },
     {
       input: '> - a\n>   - b\n>   +\n>   > q',

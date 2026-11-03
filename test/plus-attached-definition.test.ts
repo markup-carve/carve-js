@@ -15,7 +15,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a definition attached by a + continuation marker', () => {
   it('registers', () => {
     expect(carveToHtml('- a\n+\n[r]: /u\n\nsee [t][r]\n')).toBe(
-      '<ul>\n  <li>a\n+</li>\n</ul>\n<p>see <a href="/u">t</a></p>',
+      "<ul>\n  <li>a</li>\n</ul>\n<p>see <a href=\"/u\">t</a></p>",
     )
   })
 
@@ -27,7 +27,7 @@ describe('a definition attached by a + continuation marker', () => {
     const withPlus = carveToHtml('- a\n+\n[r]: /u\n\nsee [t][r]\n')
     const withBlank = carveToHtml('- a\n\n[r]: /u\n\nsee [t][r]\n')
 
-    expect(withPlus).toBe('<ul>\n  <li>a\n+</li>\n</ul>\n<p>see <a href="/u">t</a></p>')
+    expect(withPlus).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>see <a href="/u">t</a></p>')
     expect(withBlank).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>see <a href="/u">t</a></p>')
   })
 

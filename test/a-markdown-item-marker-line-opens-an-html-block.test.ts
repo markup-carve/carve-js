@@ -45,7 +45,7 @@ describe('a Markdown item marker line opens an HTML block', () => {
     [
       'empty marker line, condition 7 below it',
       '-\n  <span>\n  *a*\n',
-      '- ```=html\n  <span>\n  *a*\n  ```\n',
+      '- %%\n  ```=html\n  <span>\n  *a*\n  ```\n',
       '<ul>\n  <li>\n    <span>\n*a*\n  </li>\n</ul>',
     ],
     [

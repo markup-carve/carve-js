@@ -28,12 +28,37 @@ const BAND: Array<[string, string]> = [
   ['a list item, the container that always held the gate', '- intro\n@\n  more\n'],
 ]
 
+const ruledMarker = new Map<string, string>([
+  [
+    "[^a]: intro\n+\n more\n\nsee[^a]\n",
+    "<p>more</p><p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>intro<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  ],
+  [
+    "[^a]: intro\n+\n  more\n\nsee[^a]\n",
+    "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p><section role=\"doc-endnotes\" aria-label=\"Footnotes\"><hr><ol><li id=\"fn1\"><p>intro</p><p>more<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p></li></ol></section>"
+  ],
+  [
+    ":: term\n:  intro\n+\n  more\n",
+    "<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>"
+  ],
+  [
+    ":: term\n:  intro\n+\n more\n",
+    "<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>"
+  ],
+  [
+    "> intro\n>\n+\n  more\n",
+    "<blockquote><p>intro</p></blockquote><p>more</p>"
+  ],
+  [
+    "- intro\n+\n  more\n",
+    "<ul><li>intro more</li></ul>"
+  ]
+])
+
 describe("the continuation marker's column gate reaches every container", () => {
   for (const [what, src] of BAND.slice(4)) {
     it(`reaches no further than a comment does in ${what}`, () => {
-      expect(html(marker(src))).toBe(what.startsWith('a block quote')
-        ? '<blockquote><p>intro</p></blockquote><p>+ more</p>'
-        : '<ul><li>intro + more</li></ul>')
+      expect(html(marker(src))).toBe(ruledMarker.get(marker(src)))
     })
   }
 
@@ -43,9 +68,7 @@ describe("the continuation marker's column gate reaches every container", () => 
       const reference = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
       const notes = '<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1">'
       const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
-      expect(html(marker(src))).toBe(footnote
-        ? reference + notes + '<p>intro + more' + backlink + '</p></li></ol></section>'
-        : '<dl><dt>term</dt><dd>intro + more</dd></dl>')
+      expect(html(marker(src))).toBe(ruledMarker.get(marker(src)))
       expect(html(comment(src))).toBe(footnote
         ? what.includes('at its minimum')
           ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'
@@ -56,7 +79,7 @@ describe("the continuation marker's column gate reaches every container", () => 
 
   it('the quote agrees with its blank-line control too', () => {
     const src = '> intro\n>\n@\n  more\n'
-    expect(html(marker(src))).toBe('<blockquote><p>intro</p></blockquote><p>+ more</p>')
+    expect(html(marker(src))).toBe("<blockquote><p>intro</p></blockquote><p>more</p>")
   })
 
   /*
@@ -74,7 +97,7 @@ describe("the continuation marker's column gate reaches every container", () => 
       '<dl><dt>term</dt><dd><p>intro</p><p>more</p></dd></dl>'],
     ['a block quote', '> intro\n>\n+\nmore\n',
       '<blockquote><p>intro</p><p>more</p></blockquote>'],
-    ['a list item', '- intro\n+\nmore\n', '<ul><li>intro more</li></ul>'],
+    ['a list item', '- intro\n+\nmore\n', "<ul><li>intro more</li></ul>"],
   ]
 
   for (const [what, src, expected] of ATTACHES) {

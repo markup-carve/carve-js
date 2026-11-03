@@ -37,7 +37,7 @@ describe("a nested quote's first-block plus opens no paragraph", () => {
     [
       "a plus with no follower stays text",
       "> > +\nq\n",
-      "<blockquote>\n  <blockquote><p>+\nq</p></blockquote>\n</blockquote>",
+      "<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n<p>q</p>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)

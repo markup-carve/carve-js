@@ -1,4 +1,5 @@
 import { ownLines } from './parse/block/block-ownership.js'
+import { toAstJson } from './ast-json.js'
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { renderHtml } from './render-html.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
@@ -1605,9 +1606,15 @@ function relaxPlusEscapes(text: string): string {
   if (!text.includes('\\+')) return text
   const lines = text.split('\n')
   const bare = lines.map((line) => line.replace(ESCAPED_PLUS_LINE, '+'))
+  const originalTree = stableJson(toAstJson(parse(text)))
+  if (stableJson(toAstJson(parse(bare.join('\n')))) === originalTree) return bare.join('\n')
   const { lines: owned, payloadLines } = ownLines(bare)
   const keeps = (i: number): boolean => payloadLines.has(i) || owned[i]!.endsWith('+')
-  return bare.map((line, i) => line === lines[i] || !keeps(i) ? line : lines[i]!).join('\n')
+  const relaxed = bare.map((line, i) => line === lines[i] || keeps(i) ? line : lines[i]!).join('\n')
+  if (relaxed === text) return text
+  // First-block markers are claimed by their host reader after ownership, so
+  // an ownership-only check cannot prove a bare plus preserves a literal plus.
+  return stableJson(toAstJson(parse(relaxed))) === originalTree ? relaxed : text
 }
 
 export function codeSpanNeedsPad(content: string): boolean {
@@ -3430,6 +3437,7 @@ class CarveRenderSession {
         let rendered = this.renderBlock(block, ctx)
         const codeCaptionGap = previousBlock ? codeIncludeCaptionGap(previousBlock, block) : null
         if (codeCaptionGap !== null && codeCaptionGap > 2) rendered = rendered.replace(/^\^/, '\\^')
+        if (item !== undefined && block.type === 'paragraph' && rendered === '+') rendered = '\\+'
         if (block.type === 'paragraph') rendered = guardLeadingPlusBelowList(rendered, previousBlock, item !== undefined)
         const moved: boolean =
           item !== undefined &&
@@ -3621,7 +3629,9 @@ class CarveRenderSession {
           return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
         }
 
-        return withAttrs(text)
+        // A bare plus at a host marker column is consumed even when refused.
+        // Escape a literal plus before the surrounding host supplies columns.
+        return withAttrs(text.replace(/^\+(?=\n|$)/, '\\+'))
       }
       case 'code_block': {
         const fence = safeFence(node.content, 3)
@@ -4213,10 +4223,8 @@ class CarveRenderSession {
         let rendered = this.renderBlock(protectEmptyListTailBeforePlus(b, next), ctx)
         if (next !== undefined && childListEndsInLiteralPlus(b) && rendered.endsWith('+') && !rendered.endsWith('\\+'))
           rendered = `${rendered.slice(0, -1)}\\+`
-        if (
-          b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx) &&
-          nestedFenceTail(previousEmitted) === undefined
-        ) rendered = '\\+'
+        // A literal one-line plus in an item needs an escape at every depth.
+        if (b.type === 'paragraph' && rendered === '+') rendered = '\\+'
         if (b.type === 'paragraph' && !separated) rendered = guardLeadingPlusBelowList(rendered, previousEmitted, true)
         if (rendered.length === 0) return
         // An authored blank run ends the nested list before this comment.

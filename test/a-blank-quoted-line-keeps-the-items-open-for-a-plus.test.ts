@@ -17,7 +17,7 @@ describe('a blank quoted line before a plus', () => {
 
   it('reads a plus before a sibling marker as text', () => {
     expect(html('- > - a\n  >   - b\n  >\n  >   +\n  >   - s\n')).toBe(
-      '<ul><li><blockquote><ul><li><p>a</p><ul><li>b</li></ul><p>+</p><ul><li>s</li></ul></li></ul></blockquote></li></ul>')
+      "<ul><li><blockquote><ul><li>a<ul><li><p>b</p></li><li><p>s</p></li></ul></li></ul></blockquote></li></ul>")
   })
 
   it('lets a deeper blank quote own the plus', () => {
