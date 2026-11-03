@@ -61,7 +61,7 @@ export function canonicalCarveWrite(
     : renderCarve(document, opts)
   // A leaf swallowed after layout erasure has no AST spelling to write. Keep
   // its authored source instead of silently deleting a line (PART 11 §1).
-  if (hasUnrepresentedAuthoredLine(document, source, written)) {
+  if (!transformed && !opts.extensions?.length && hasUnrepresentedAuthoredLine(document, source, written)) {
     const normalized = source.replace(/\r\n?/g, '\n')
     return normalized.endsWith('\n') ? normalized : `${normalized}\n`
   }

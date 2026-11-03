@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { canonicalCarveWrite } from '../src/ast/canonical-carve-write.js'
 
 const source = '- a\n%% c\nb\n'
 
@@ -43,5 +44,27 @@ describe('carve#5012 transparent single-line blocks', () => {
     let reports = 0
     parse('%% c\n::: note\nbody', { onUnclosedContainer: () => { reports++ } })
     expect(reports).toBe(1)
+  })
+
+  it('keeps erased nodes in source order across a shared paragraph', () => {
+    const nodes = parse('a\n%% one\n*[AB]: x\n%% two\nb').children
+    expect(nodes.map((node) => node.type)).toEqual([
+      'paragraph', 'comment', 'abbreviation_def', 'comment',
+    ])
+    expect(nodes.slice(1).map((node) => node.pos?.startLine)).toEqual([2, 3, 4])
+  })
+
+  it('keeps AST edits when an unrepresented line needs source recovery', () => {
+    const source = '- a\n  [^f]: t\n[^f]: a\n     [r]: /url\n[r][]\n'
+    const written = canonicalCarveWrite(source, {}, (document) => {
+      const list = document.children[0]
+      if (list?.type !== 'list') return false
+      const paragraph = list.items[0]?.children[0]
+      if (paragraph?.type !== 'paragraph' || paragraph.children[0]?.type !== 'text') return false
+      paragraph.children[0].value = 'changed'
+      return true
+    })
+    expect(written).toContain('- changed')
+    expect(written).not.toBe(source)
   })
 })

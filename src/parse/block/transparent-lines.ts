@@ -130,6 +130,14 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   return blocks
 }
 
+function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
+  let at = siblings.indexOf(paragraph) + 1
+  while (at < siblings.length &&
+         (siblings[at]?.type === 'comment' || siblings[at]?.type === 'abbreviation_def') &&
+         (siblings[at]?.pos?.startOffset ?? Infinity) <= (node.pos?.startOffset ?? -1)) at++
+  siblings.splice(at, 0, node)
+}
+
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
 export function restoreTransparentComments(document: Document, authored: Document, stream: TransparentLineStream): void {
   const comments = authoredComments(authored)
@@ -154,8 +162,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
         match.paragraph.transparentFollowingLines.push({ line, source: stream.original[line - 1]! })
       }
       comment.transparentInParagraph = true
-      const at = match.siblings.indexOf(match.paragraph)
-      match.siblings.splice(at + 1, 0, comment)
+      insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
       const siblings = containingBlocks(blocks, comment.pos.startOffset)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > comment.pos!.startOffset!)
@@ -179,7 +186,7 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
         match.paragraph.transparentFollowingLines.push({ line: following, source: stream.original[following - 1]! })
       }
       definition.transparentInParagraph = true
-      match.siblings.splice(match.siblings.indexOf(match.paragraph) + 1, 0, definition)
+      insertAfterParagraph(match.siblings, match.paragraph, definition)
     } else {
       const siblings = containingBlocks(document.children, definition.pos!.startOffset!)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
