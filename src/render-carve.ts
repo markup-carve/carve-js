@@ -5562,7 +5562,8 @@ class CarveRenderSession {
     }
     const guards = payload === undefined ? 0 : this.verbatimSpelling(nodeType, payload) % 4
     // A blank value line has no spelling at all and stays the known carve-out it was.
-    if (payload !== undefined && ctx.lineBlockDepth === 0 && payload.includes('\n') && !/\n[ \t]*(?:\n|$)/.test(payload)) this.multiLineVerbatim.set(verbatimPayloadKey(nodeType, payload), node)
+    const lines = payload?.replace(/\r\n?/g, '\n')
+    if (lines !== undefined && ctx.lineBlockDepth === 0 && lines.includes('\n') && !/\n[ \t]*(?:\n|$)/.test(lines)) this.multiLineVerbatim.set(verbatimPayloadKey(nodeType, payload!), node)
     const listed = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
     const marker = guards === 1 || guards === 3 ? /\n(?=[^\n])/g : listed
     if (ctx.lineBlockDepth > 0 || guards === 2 || !written.includes('\n') || !marker.test(written)) return written
