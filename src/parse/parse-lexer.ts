@@ -151,7 +151,7 @@ export class Lexer {
   /** Root lines whose quote first-block `+` the walk refused by its follower's raw column. */
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
-  /** Columns a leading cut removed; the offset map already holds it, the column does not. */
+  /** Columns a leading cut removed; `lineOffset` and `lineStartColumn` both include it. */
   private ownershipLeads?: Map<number, number>
   /** The same leading cuts, keyed by document line number. */
   private ownershipLeadsByLine?: Map<number, number>
@@ -619,9 +619,8 @@ export class Lexer {
       return boundary.parent.sourceBoundary(boundary.line, boundary.start + Math.max(0, column - boundary.synthetic))
     }
     let shift = 0
-    const lead = this.ownershipLeads?.get(lineIndex) ?? 0
     for (const cut of this.ownershipCuts?.get(lineIndex) ?? []) if (cut.at <= column) shift += cut.removed
-    return { offset: this.lineOffset(lineIndex) + column + shift, column: this.lineStartColumn(lineIndex) + column + shift + lead }
+    return { offset: this.lineOffset(lineIndex) + column + shift, column: this.lineStartColumn(lineIndex) + column + shift }
   }
 
   /**
@@ -632,7 +631,8 @@ export class Lexer {
     if (this.contiguousOrigin) return this.contiguousOrigin.lexer.rootFrameColumn(this.contiguousOrigin.start + lineIndex)
     const root = this.documentRoot ?? this
     const column = this.lineStartColumn(lineIndex) - 1
-    if (root === this || this.linePrefixWidths === undefined) return column
+    if (root === this) return column - (this.ownershipLeads?.get(lineIndex) ?? 0)
+    if (this.linePrefixWidths === undefined) return column
     const lineNumber = this.lineNumber(lineIndex)
     const rootLine = root.lines[lineNumber - 1] ?? ''
     root.taskBoxes ??= new Map()
@@ -645,7 +645,7 @@ export class Lexer {
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
   lineStartColumn(lineIndex: number): number {
     if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineStartColumn(this.contiguousOrigin.start + lineIndex)
-    return (this.linePrefixWidths?.[lineIndex] ?? 0) + 1
+    return (this.linePrefixWidths?.[lineIndex] ?? 0) + (this.ownershipLeads?.get(lineIndex) ?? 0) + 1
   }
 
   /**
