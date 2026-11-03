@@ -3810,7 +3810,7 @@ class CarveRenderSession {
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
-        if (node.transparentInParagraph) return ''
+        if (node.transparentInParagraph || node.transparentInList) return ''
         return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
       case 'link_reference_definition': {
         // PART 12 §10 gave this a node precisely so the writer can put the line
@@ -3832,7 +3832,7 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
-        if (node.transparentInParagraph) return ''
+        if (node.transparentInParagraph || node.transparentInList) return ''
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
         // inline one (carve#581) in joining a percent-leading content onto the
         // marker. At block level the comment-LINE marker is exactly `%%`; a run
@@ -3998,6 +3998,9 @@ class CarveRenderSession {
           if (readsBack(looseItemSource)) itemSource = looseItemSource
         }
         out += itemSource
+        for (const gap of node.transparentBetweenItems ?? []) {
+          if (gap.after === idx) out += `\0${gap.source}\n`
+        }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
       return trimEndNonNbsp(out)

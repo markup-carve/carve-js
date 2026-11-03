@@ -195,6 +195,8 @@ export interface List extends BaseNode {
   bareMarker?: true
   tight: boolean
   items: ListItem[]
+  /** Invisible source lines that fell between adjacent items before layout. */
+  transparentBetweenItems?: Array<{ after: number; source: string }>
 }
 
 /** The task marker characters an item can record (PART 12, `taskState`). */
@@ -539,6 +541,7 @@ export interface AbbreviationDef extends BaseNode {
   expansion: string
   /** Its source line is written through the paragraph that crosses it. */
   transparentInParagraph?: true
+  transparentInList?: true
 }
 
 /**
@@ -590,6 +593,7 @@ export interface Comment extends BaseNode {
   block: boolean
   /** Its source line is written through the paragraph that crosses it. */
   transparentInParagraph?: true
+  transparentInList?: true
   /** Present only for the explicitly closed `{% … %}` inline form. */
   delimited?: boolean
   content: string

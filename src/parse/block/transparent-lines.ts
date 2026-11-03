@@ -1,7 +1,7 @@
 import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
-import type { AbbreviationDef, BlockNode, Comment, Document, Paragraph } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, Comment, Document, List, Paragraph } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -130,6 +130,27 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   return blocks
 }
 
+function betweenListItems(blocks: BlockNode[], offset: number): { list: List; after: number } | null {
+  for (const block of blocks) {
+    if (block.type === 'list') {
+      for (let i = 0; i < block.items.length - 1; i++) {
+        const before = block.items[i]?.pos?.endOffset
+        const after = block.items[i + 1]?.pos?.startOffset
+        if (before !== undefined && after !== undefined && before <= offset && offset < after)
+          return { list: block, after: i }
+      }
+      for (const item of block.items) {
+        const nested = betweenListItems(item.children, offset)
+        if (nested) return nested
+      }
+    } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
+      const nested = betweenListItems(block.children as BlockNode[], offset)
+      if (nested) return nested
+    }
+  }
+  return null
+}
+
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
   let at = siblings.indexOf(paragraph) + 1
   while (at < siblings.length &&
@@ -167,6 +188,12 @@ export function restoreTransparentComments(document: Document, authored: Documen
       comment.transparentInParagraph = true
       insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
+      const gap = betweenListItems(blocks, comment.pos.startOffset)
+      if (gap) {
+        gap.list.transparentBetweenItems ??= []
+        gap.list.transparentBetweenItems.push({ after: gap.after, source: original })
+        comment.transparentInList = true
+      }
       const siblings = containingBlocks(blocks, comment.pos.startOffset)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > comment.pos!.startOffset!)
       siblings.splice(at < 0 ? siblings.length : at, 0, comment)
@@ -194,6 +221,12 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
       definition.transparentInParagraph = true
       insertAfterParagraph(match.siblings, match.paragraph, definition)
     } else {
+      const gap = betweenListItems(document.children, definition.pos!.startOffset!)
+      if (gap) {
+        gap.list.transparentBetweenItems ??= []
+        gap.list.transparentBetweenItems.push({ after: gap.after, source: stream.original[line - 1]! })
+        definition.transparentInList = true
+      }
       const siblings = containingBlocks(document.children, definition.pos!.startOffset!)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
       siblings.splice(at < 0 ? siblings.length : at, 0, definition)

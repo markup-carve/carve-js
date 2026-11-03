@@ -93,4 +93,10 @@ describe('carve#5012 transparent single-line blocks', () => {
     parse('a\n%% c\nb', { extensions })
     expect(calls).toBe(visibleCalls)
   })
+
+  it('keeps a comment between adjacent list items', () => {
+    const source = '- a\n%% c\n- b\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
 })
