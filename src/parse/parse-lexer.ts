@@ -184,10 +184,14 @@ export class Lexer {
     }
     this.sourceOffsetMap = offsets
     if (cuts.size) this.ownershipCuts = cuts
+    if (lines.length === this.lineCount) this.authoredLines = this.lines
     this.lines = lines
     this.taskBoxes = undefined
     this.leadingWhitespaceLines = []
   }
+
+  /** The lines before the ownership walk rewrote them; a block matcher reads these. */
+  authoredLines?: readonly string[]
 
   useLineView(lexer: Lexer, start: number, length: number): void {
     this.lineView = { lexer, start, length }
