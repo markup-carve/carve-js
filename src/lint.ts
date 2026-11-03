@@ -1593,8 +1593,11 @@ export function lintCarve(
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
   collectOrderedListSplitWarnings(source, doc, out)
   const splitLines = new Set(out.filter((w) => w.rule === 'ordered-list-split-by-indent').map((w) => w.line))
+  // A list item owner reports under its own rule, so one line never carries both.
+  const itemOverindentLines = new Set(out.filter((w) => w.rule === 'list-item-block-overindented').map((w) => w.line))
   for (let i = out.length - 1; i >= 0; i--) {
     if (out[i]!.rule === 'list-marker-below-content-column' && splitLines.has(out[i]!.line)) out.splice(i, 1)
+    else if (out[i]!.rule === 'block-opener-overindented' && itemOverindentLines.has(out[i]!.line)) out.splice(i, 1)
   }
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectDescriptionSeparatorBelowContentColumn(source, doc, unrendered, out)

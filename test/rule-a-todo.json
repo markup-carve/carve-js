@@ -71,10 +71,6 @@
     "reads paragraph ownership and keeps source positions in range: preservation-309": "#3921",
     "reads paragraph ownership and keeps source positions in range: preservation-311": "#3921"
   },
-  "lint-corpus-parity.test.ts": {
-    "lint corpus parity > reports the box a code fence swallows the closer of: 581": "#3921",
-    "lint corpus parity > reports the box a code fence swallows the closer of: 581-3": "#3921"
-  },
   "lint-description-separator-below-content-column.test.ts": {
     "description-separator-below-content-column > 'double-colon'": "#3921",
     "description-separator-below-content-column > term marker marker range": "#3921"
