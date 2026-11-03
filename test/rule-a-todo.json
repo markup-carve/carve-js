@@ -22,26 +22,6 @@
   "a-quoted-paragraph-keeps-a-marker-past-an-authored-base.test.ts": {
     "does not claim a quote marker inside an inline code span": "#3921"
   },
-  "deep-term-comment-code-tails.test.ts": {
-    "keeps the definition term column after its comment: comment-term-claude-1043": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-1059": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-1075": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-1107": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-1123": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-1139": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-275": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-291": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-307": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-339": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-355": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-371": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-659": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-675": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-691": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-723": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-739": "#3922",
-    "keeps the definition term column after its comment: comment-term-claude-755": "#3922"
-  },
   "djot-definition-boundaries.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
   },
