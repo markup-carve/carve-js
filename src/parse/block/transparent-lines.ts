@@ -1,7 +1,7 @@
 import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
-import type { AbbreviationDef, BlockNode, Comment, DefinitionList, Document, List, Paragraph } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, Comment, DefinitionList, Document, InlineNode, List, Paragraph } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -226,19 +226,20 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
             .map((child) => child.pos!.startLine))]
           paragraph.transparentComments ??= []
           paragraph.transparentComments.push({ line: block.pos.startLine, source, node: block, originalValue })
-          paragraph.transparentFollowingLines ??= []
-          for (const child of paragraph.children) {
-            if (child.pos?.startLine !== undefined && child.pos.startLine > block.pos.startLine &&
-                !paragraph.transparentFollowingLines.some((entry) => entry.line === child.pos!.startLine)) {
-              const prefix = ' '.repeat(Math.max(0, (child.pos.startColumn ?? 1) - 1))
-              paragraph.transparentFollowingLines.push({ line: child.pos.startLine,
-                source: prefix + (child.type === 'text' ? child.value : '') })
-            }
-          }
+          recordFollowingLines(paragraph, block.pos.startLine, (child) =>
+            ' '.repeat(Math.max(0, (child.pos?.startColumn ?? 1) - 1)) +
+              (child.type === 'text' ? child.value : ''))
           block.transparentInParagraph = true
         } else {
-          const gap = betweenDescriptions(blocks, block.pos.startOffset, block.pos.startLine)
-          if (gap) recordDescriptionGap(gap, source, block, originalValue)
+          const listGap = betweenListItems(blocks, block.pos.startOffset)
+          if (listGap) {
+            listGap.list.transparentBetweenItems ??= []
+            listGap.list.transparentBetweenItems.push({ after: listGap.after, source, node: block, originalValue })
+            block.transparentInList = true
+          } else {
+            const gap = betweenDescriptions(blocks, block.pos.startOffset, block.pos.startLine)
+            if (gap) recordDescriptionGap(gap, source, block, originalValue)
+          }
         }
       }
       if (block.type === 'list') for (const item of block.items) visit(item.children)
@@ -269,6 +270,21 @@ function visibleParagraphLines(paragraph: Paragraph, stream: TransparentLineStre
   return visible
 }
 
+const followingFromLine = new WeakMap<Paragraph, number>()
+
+function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (child: InlineNode) => string): void {
+  if ((followingFromLine.get(paragraph) ?? Infinity) <= line) return
+  paragraph.transparentFollowingLines ??= []
+  const recorded = new Set(paragraph.transparentFollowingLines.map((entry) => entry.line))
+  for (const child of paragraph.children) {
+    const following = child.pos?.startLine
+    if (following === undefined || following <= line || recorded.has(following)) continue
+    paragraph.transparentFollowingLines.push({ line: following, source: sourceFor(child) })
+    recorded.add(following)
+  }
+  followingFromLine.set(paragraph, line)
+}
+
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
 export function restoreTransparentComments(document: Document, authored: Document, stream: TransparentLineStream): void {
   const comments = authoredComments(authored)
@@ -288,13 +304,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       match.paragraph.transparentVisibleLines ??= visibleParagraphLines(match.paragraph, stream)
       match.paragraph.transparentComments ??= []
       match.paragraph.transparentComments.push({ line: index + 1, source: original, node: comment, originalValue: comment.content })
-      match.paragraph.transparentFollowingLines ??= []
-      for (const child of match.paragraph.children) {
-        const line = child.pos?.startLine
-        if (line === undefined || line <= index + 1 ||
-            match.paragraph.transparentFollowingLines.some((entry) => entry.line === line)) continue
-        match.paragraph.transparentFollowingLines.push({ line, source: stream.original[line - 1]! })
-      }
+      recordFollowingLines(match.paragraph, index + 1, (child) => stream.original[child.pos!.startLine - 1]!)
       comment.transparentInParagraph = true
       insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
@@ -322,13 +332,7 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
       match.paragraph.transparentComments ??= []
       match.paragraph.transparentComments.push({ line, source: stream.original[line - 1]!, node: definition,
         originalValue: `${definition.abbr}\0${definition.expansion}` })
-      match.paragraph.transparentFollowingLines ??= []
-      for (const child of match.paragraph.children) {
-        const following = child.pos?.startLine
-        if (following === undefined || following <= line ||
-            match.paragraph.transparentFollowingLines.some((entry) => entry.line === following)) continue
-        match.paragraph.transparentFollowingLines.push({ line: following, source: stream.original[following - 1]! })
-      }
+      recordFollowingLines(match.paragraph, line, (child) => stream.original[child.pos!.startLine - 1]!)
       definition.transparentInParagraph = true
     } else {
       const descriptionGap = betweenDescriptions(document.children, definition.pos!.startOffset!, line)

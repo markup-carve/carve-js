@@ -144,6 +144,13 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(renderCarve(fromAstJson(carveToAstJson(source)))).toBe(renderCarve(parse(source)))
   })
 
+  it('reconstructs list item placement from AST wire positions', () => {
+    const source = '- AB\n*[AB]: first\n- AB\n*[AB]: second\nAB\n'
+    const written = renderCarve(fromAstJson(carveToAstJson(source)))
+    expect(written).toBe(renderCarve(parse(source)))
+    expect(carveToHtml(written)).toBe(carveToHtml(source))
+  })
+
   it('writes edits to restored transparent nodes', () => {
     expect(canonicalCarveWrite('a\n%% old\nb', {}, (document) => {
       const comment = document.children.find((node) => node.type === 'comment')
