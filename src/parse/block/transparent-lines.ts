@@ -164,7 +164,7 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
 }
 
 function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
-  { list: DefinitionList; item: number; afterDescription: number } | null {
+  { list: DefinitionList; item: number; afterDescription: number; afterTerm: number } | null {
   for (const block of blocks) {
     if ((block.pos?.startOffset ?? Infinity) > offset || offset >= (block.pos?.endOffset ?? -1)) continue
     if (block.type === 'definition_list') {
@@ -174,19 +174,20 @@ function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
           if (nested) return nested
         }
       }
-      let preceding: { item: number; afterDescription: number; line: number } | undefined
+      let preceding: { item: number; afterDescription: number; afterTerm: number; line: number } | undefined
       block.items.forEach((item, itemIndex) => {
-        item.termSpans?.forEach((span) => {
+        item.termSpans?.forEach((span, termIndex) => {
           const start = span?.startLine
           if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
-            preceding = { item: itemIndex, afterDescription: -1, line: start }
+            preceding = { item: itemIndex, afterDescription: -1, afterTerm: termIndex, line: start }
         })
         item.definitionLines?.forEach((start, definitionIndex) => {
           if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
-            preceding = { item: itemIndex, afterDescription: definitionIndex, line: start }
+            preceding = { item: itemIndex, afterDescription: definitionIndex, afterTerm: -1, line: start }
         })
       })
-      if (preceding) return { list: block, item: preceding.item, afterDescription: preceding.afterDescription }
+      if (preceding) return { list: block, item: preceding.item, afterDescription: preceding.afterDescription,
+        afterTerm: preceding.afterTerm }
     } else if (block.type === 'list') {
       for (const item of block.items) {
         const nested = betweenDescriptions(item.children, offset, line)
@@ -200,10 +201,11 @@ function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
   return null
 }
 
-function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDescription: number },
+function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDescription: number; afterTerm: number },
   source: string, node: Comment | AbbreviationDef, originalValue: string): void {
   gap.list.transparentBetweenDescriptions ??= []
   gap.list.transparentBetweenDescriptions.push({ item: gap.item, afterDescription: gap.afterDescription,
+    afterTerm: gap.afterTerm,
     source, node, originalValue })
   node.transparentInDefinitionList = true
 }

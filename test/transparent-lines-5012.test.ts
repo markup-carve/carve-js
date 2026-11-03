@@ -130,6 +130,15 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(renderCarve(parse(source))).toBe(source)
   })
 
+  it('writes a transparent definition between grouped terms before the next term', () => {
+    const source = ':: t\n*[AB]: x\n:: t\n'
+    const written = carveToCarve(source)
+    expect(written).toBe(source)
+    expect(carveToCarve(written)).toBe(written)
+    expect(renderCarve(parse(source))).toBe(source)
+    expect(renderCarve(fromAstJson(carveToAstJson(source)))).toBe(source)
+  })
+
   it('keeps abbreviation definition order across description readback', () => {
     const source = ':: t\n: a\n  *[AB]: old\n: b\n*[AB]: new\nAB\n'
     const written = renderCarve(parse(source))

@@ -501,7 +501,7 @@ export interface DefinitionList extends BaseNode {
   items: DefinitionItem[]
   /** Authored invisible lines between terms or descriptions, written at that boundary. */
   transparentBetweenDescriptions?: Array<{
-    item: number; afterDescription: number; source: string
+    item: number; afterDescription: number; afterTerm: number; source: string
     node: Comment | AbbreviationDef; originalValue: string
   }>
   /**

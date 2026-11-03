@@ -4428,9 +4428,9 @@ class CarveRenderSession {
 
   private renderDefinitionList(node: DefinitionList, ctx: CarveContext): string {
     const out: string[] = []
-    const appendGaps = (item: number, afterDescription: number): void => {
+    const appendGaps = (item: number, afterDescription: number, afterTerm = -1): void => {
       for (const gap of node.transparentBetweenDescriptions ?? []) {
-        if (gap.item === item && gap.afterDescription === afterDescription)
+        if (gap.item === item && gap.afterDescription === afterDescription && gap.afterTerm === afterTerm)
           out.push(`\0${transparentNodeSource(gap)}`)
       }
     }
@@ -4439,7 +4439,7 @@ class CarveRenderSession {
     // parsed from.
     for (const [itemIndex, item] of node.items.entries()) {
       // A term is one line like a heading (carve#4861), so a break collapses to a space.
-      for (const term of item.terms) {
+      for (const [termIndex, term] of item.terms.entries()) {
         const outer = this.inTerm
         this.inTerm = true
         try {
@@ -4447,8 +4447,8 @@ class CarveRenderSession {
         } finally {
           this.inTerm = outer
         }
+        appendGaps(itemIndex, -1, termIndex)
       }
-      appendGaps(itemIndex, -1)
       item.definitions.forEach((def, index) => {
         // An EMPTY description whose line carries a hoisted definition is one the
         // author wrote the definition on: write it back there. Without this the
