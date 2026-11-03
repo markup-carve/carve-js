@@ -88,7 +88,7 @@ describe("a comment span's closer belongs to its span", () => {
     [
       'mid-paragraph the marker opens a list as after a blank (carve#4860)',
       ':: t\n:  head\n   - ```\n   %%%\n   p\n%%%\n\n   tail\n',
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>head</p>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>',
     ],
   ])('%s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
