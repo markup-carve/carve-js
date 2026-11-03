@@ -70,6 +70,8 @@ interface LinkScan {
 }
 
 const RAW_FORMAT_MESSAGE = 'A Djot raw-format identifier containing U+0085 cannot be spelled in Carve; its raw-output behavior is lost.'
+const TERM_CODE_LINE_BREAK_MESSAGE = 'A line break inside inline code in a definition term becomes a space; a Carve term is one line.'
+
 const EMPTY_TERM_PREFIX = /^(?:[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)+|(?:>[ \t]*)*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*|[ \t]*)$/
 
 function lineOffsets(lines: readonly string[]): number[] {
@@ -267,6 +269,36 @@ function reportEmptyDefinitionTerm(scan: LossScan, masked: readonly string[], vi
   if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary && masked[scan.offsets[n]! + line.indexOf(':')] === ':')
     if (!EMPTY_TERM_PREFIX.test(line.slice(0, line.indexOf(':'))))
       scan.report('An empty definition term is omitted during import.', n + 1)
+}
+
+/** A wrapped Djot term joins onto one Carve line, so a code span across the wrap loses its line break. */
+function reportWrappedTermCode(scan: LossScan, view: LineView, codeSpans: ReadonlyArray<readonly [number, number, boolean]>, rawCodeStarts: ReadonlySet<number>): void {
+  const { source, lines, offsets, contentStart } = scan
+  const { n, line, at, visible, content, boundary } = view
+  const term = /:[ \t]+$/.exec(visible.slice(0, at))
+  if (!term || !(term.index === 0 || /[ \t]/.test(visible[term.index - 1]!)) || /^(?:`{3,}|~{3,})/.test(content)) return
+  const previous = lines[n - 1] ?? ''
+  if (!boundary && /:[ \t]+$/.exec(previous.slice(0, contentStart(previous)))?.index !== term.index) return
+  const quoteDepth = (line.slice(0, at).match(/>/g) ?? []).length
+  let last = n
+  for (let next = n + 1; next < lines.length; next++) {
+    const following = lines[next]!
+    const prefix = following.slice(0, contentStart(following))
+    const part = following.slice(contentStart(following))
+    if ((prefix.match(/>/g) ?? []).length !== quoteDepth || part.trim() === '' || /^(?:`{3,}|~{3,}|:{3,})/.test(part)) break
+    // A list marker or `: ` at the term's own column or left of it starts the next block.
+    const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(djotItemPrefix(following, contentStart(following))) ?? /:[ \t]+$/.exec(prefix)
+    if (marker && marker.index <= term.index) break
+    last = next
+  }
+  if (last === n) return
+  const start = offsets[n]! + at, end = offsets[last]! + lines[last]!.length
+  const spans = codeSpans.filter(([from]) => from >= start && from < end)
+  // An unclosed span the mask ends inside the term reads a paragraph break Djot does not have.
+  if (spans.some(([, to, closed]) => !closed && to < end)) return
+  // A span the importer keeps as raw HTML keeps its line break.
+  if (spans.some(([from, to]) => !rawCodeStarts.has(from) && source.slice(from, Math.min(to, end)).includes('\n')))
+    scan.report(TERM_CODE_LINE_BREAK_MESSAGE, n + 1)
 }
 
 function reportEmptyDefinitionDescription(scan: LossScan, view: LineView): void {
@@ -526,6 +558,8 @@ export function djotImportLosses(
   }
   const scan: LossScan = { source, lines, offsets, rows, contentStart, quoteDepths, lineAt, report }
   for (const at of rawCode) report('Multiline inline code uses raw HTML; plain-text export omits it.', lineAt(at))
+  const rawCodeStarts = new Set(rawCode)
+  const codeSpans: Array<[number, number, boolean]> = []
   if (source.includes('`') && source.includes(':::')) reportCodeSpanContainerOpeners(scan, codeSource)
   djotEmphasis(
     source,
@@ -549,6 +583,7 @@ export function djotImportLosses(
   const masked = maskDjotCodeAndDestinations(maskSource, false, true, false, undefined, [], {
     destinations: true, autolinks: true, comments: true,
     onDestination: (start, end) => destinations.set(start, end),
+    onCode: (start, end, closed) => codeSpans.push([start, end, closed]),
     onFenceOpen: n => { if (rawFenceLines.has(n)) report(RAW_FORMAT_MESSAGE, n + 1) },
     onRawFormat: (start, end, format) => {
       if (format.includes('\u0085') && !(source[start - 1] === '$' && !isDjotEscaped(source, start - 1))) rawFormats.push([start, end])
@@ -564,6 +599,7 @@ export function djotImportLosses(
     scanHeadingLine(scan, defs, view, collapsedReferenceText)
     reportEmptyDefinitionTerm(scan, masked, view)
     reportEmptyDefinitionDescription(scan, view)
+    reportWrappedTermCode(scan, view, codeSpans, rawCodeStarts)
     if (rows[n]) reportTableRowLosses(scan, n, view.content)
   }
   if (definitionsOnly) {
