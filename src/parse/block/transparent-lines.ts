@@ -1,7 +1,7 @@
 import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
-import type { AbbreviationDef, BlockNode, Comment, Document, List, Paragraph } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, Comment, DefinitionList, Document, List, Paragraph } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -160,6 +160,97 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
   return null
 }
 
+function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
+  { list: DefinitionList; item: number; afterDescription: number } | null {
+  for (const block of blocks) {
+    if ((block.pos?.startOffset ?? Infinity) > offset || offset >= (block.pos?.endOffset ?? -1)) continue
+    if (block.type === 'definition_list') {
+      for (const item of block.items) {
+        for (const definition of item.definitions) {
+          const nested = betweenDescriptions(definition, offset, line)
+          if (nested) return nested
+        }
+      }
+      let preceding: { item: number; afterDescription: number; line: number } | undefined
+      block.items.forEach((item, itemIndex) => {
+        item.termSpans?.forEach((span) => {
+          const start = span?.startLine
+          if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
+            preceding = { item: itemIndex, afterDescription: -1, line: start }
+        })
+        item.definitionLines?.forEach((start, definitionIndex) => {
+          if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
+            preceding = { item: itemIndex, afterDescription: definitionIndex, line: start }
+        })
+      })
+      if (preceding) return { list: block, item: preceding.item, afterDescription: preceding.afterDescription }
+    } else if (block.type === 'list') {
+      for (const item of block.items) {
+        const nested = betweenDescriptions(item.children, offset, line)
+        if (nested) return nested
+      }
+    } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
+      const nested = betweenDescriptions(block.children as BlockNode[], offset, line)
+      if (nested) return nested
+    }
+  }
+  return null
+}
+
+function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDescription: number },
+  source: string, node: Comment | AbbreviationDef, originalValue: string): void {
+  gap.list.transparentBetweenDescriptions ??= []
+  gap.list.transparentBetweenDescriptions.push({ item: gap.item, afterDescription: gap.afterDescription,
+    source, node, originalValue })
+  node.transparentInDefinitionList = true
+}
+
+/** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
+export function hydrateTransparentDefinitionGaps(document: Document): void {
+  const authoredSource = (block: Comment | AbbreviationDef): string =>
+    ' '.repeat(Math.max(0, (block.pos?.startColumn ?? 1) - 1)) +
+      (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
+        `*[${block.abbr}]: ${block.expansion}`)
+  const visit = (blocks: BlockNode[]): void => {
+    for (const block of blocks) {
+      if ((block.type === 'comment' && !block.block || block.type === 'abbreviation_def') &&
+          !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
+          block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
+        const source = authoredSource(block)
+        const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
+        const match = containingParagraph(blocks, block.pos.startOffset)
+        if (match) {
+          const paragraph = match.paragraph
+          paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
+            .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
+            .map((child) => child.pos!.startLine))]
+          paragraph.transparentComments ??= []
+          paragraph.transparentComments.push({ line: block.pos.startLine, source, node: block, originalValue })
+          paragraph.transparentFollowingLines ??= []
+          for (const child of paragraph.children) {
+            if (child.pos?.startLine !== undefined && child.pos.startLine > block.pos.startLine &&
+                !paragraph.transparentFollowingLines.some((entry) => entry.line === child.pos!.startLine)) {
+              const prefix = ' '.repeat(Math.max(0, (child.pos.startColumn ?? 1) - 1))
+              paragraph.transparentFollowingLines.push({ line: child.pos.startLine,
+                source: prefix + (child.type === 'text' ? child.value : '') })
+            }
+          }
+          block.transparentInParagraph = true
+        } else {
+          const gap = betweenDescriptions(blocks, block.pos.startOffset, block.pos.startLine)
+          if (gap) recordDescriptionGap(gap, source, block, originalValue)
+        }
+      }
+      if (block.type === 'list') for (const item of block.items) visit(item.children)
+      else if (block.type === 'definition_list') for (const item of block.items)
+        for (const definition of item.definitions) visit(definition)
+      else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
+        visit(block.children as BlockNode[])
+    }
+  }
+  visit(document.children)
+}
+
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
   let at = siblings.indexOf(paragraph) + 1
   while (at < siblings.length &&
@@ -207,6 +298,8 @@ export function restoreTransparentComments(document: Document, authored: Documen
       comment.transparentInParagraph = true
       insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
+      const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
+      if (descriptionGap) recordDescriptionGap(descriptionGap, original, comment, comment.content)
       const gap = betweenListItems(blocks, comment.pos.startOffset)
       if (gap) {
         gap.list.transparentBetweenItems ??= []
@@ -238,6 +331,9 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
       }
       definition.transparentInParagraph = true
     } else {
+      const descriptionGap = betweenDescriptions(document.children, definition.pos!.startOffset!, line)
+      if (descriptionGap) recordDescriptionGap(descriptionGap, stream.original[line - 1]!, definition,
+        `${definition.abbr}\0${definition.expansion}`)
       const gap = betweenListItems(document.children, definition.pos!.startOffset!)
       if (gap) {
         gap.list.transparentBetweenItems ??= []

@@ -512,7 +512,8 @@ export function toAstJson(doc: Document): AstJsonDocument {
 
 const TRANSPARENT_SOURCE_FIELDS = new Set([
   'transparentComments', 'transparentFollowingLines', 'transparentVisibleLines',
-  'transparentBetweenItems', 'transparentInParagraph', 'transparentInList',
+  'transparentBetweenItems', 'transparentBetweenDescriptions', 'transparentInParagraph', 'transparentInList',
+  'transparentInDefinitionList',
   'transparentSource', 'transparentOriginalValue',
 ])
 

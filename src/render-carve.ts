@@ -1,4 +1,5 @@
 import { ownLines } from './parse/block/block-ownership.js'
+import { hydrateTransparentDefinitionGaps } from './parse/block/transparent-lines.js'
 import { toAstJson } from './ast-json.js'
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { renderHtml } from './render-html.js'
@@ -16,7 +17,6 @@ import type {
   Attrs,
   BlockNode,
   Comment,
-  DefinitionItem,
   DefinitionList,
   Document,
   Figure,
@@ -251,12 +251,14 @@ interface CarveContext {
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
   hydrateResolvedEmptyReferences(ast)
+  hydrateTransparentDefinitionGaps(ast)
   return new CarveRenderSession().renderCarve(ast, opts)
 }
 
 /** For an unchanged default parse, matching source bytes prove the minimal form reads back. */
 export function renderCarveFromParsedSource(ast: Document, source: string, opts: CarveRenderOptions = {}): string {
   hydrateResolvedEmptyReferences(ast)
+  hydrateTransparentDefinitionGaps(ast)
   return new CarveRenderSession().renderCarve(ast, opts, source)
 }
 
@@ -3801,7 +3803,7 @@ class CarveRenderSession {
         // spelled, so raising the body alone would leave `{loose}` at the body
         // minimum with the `::` line a column past it - a shape no author writes
         // and one the rebase then has to reconcile a line at a time.
-        return withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx), (body) => this.normalize(body))
+        return withLooseAttrs(node, attrs, this.renderDefinitionList(node, ctx), (body) => this.normalize(body))
       case 'figure':
         return withAttrs(this.renderFigure(node, ctx))
       case 'figure_group': {
@@ -3829,7 +3831,7 @@ class CarveRenderSession {
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
-        if (node.transparentInParagraph || node.transparentInList) return ''
+        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
         return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
       case 'link_reference_definition': {
         // PART 12 §10 gave this a node precisely so the writer can put the line
@@ -3851,7 +3853,7 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
-        if (node.transparentInParagraph || node.transparentInList) return ''
+        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
         if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined)
           return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
@@ -4422,12 +4424,18 @@ class CarveRenderSession {
     return [`:: ${singleLineText(line)}`, ...comments].join('\n')
   }
 
-  private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
+  private renderDefinitionList(node: DefinitionList, ctx: CarveContext): string {
     const out: string[] = []
+    const appendGaps = (item: number, afterDescription: number): void => {
+      for (const gap of node.transparentBetweenDescriptions ?? []) {
+        if (gap.item === item && gap.afterDescription === afterDescription)
+          out.push(`\0${transparentNodeSource(gap)}`)
+      }
+    }
     // Every entry writes its own description line, so consecutive `::` lines
     // never end up sharing one: the list writes back with the grouping it
     // parsed from.
-    for (const item of items) {
+    for (const [itemIndex, item] of node.items.entries()) {
       // A term is one line like a heading (carve#4861), so a break collapses to a space.
       for (const term of item.terms) {
         const outer = this.inTerm
@@ -4438,6 +4446,7 @@ class CarveRenderSession {
           this.inTerm = outer
         }
       }
+      appendGaps(itemIndex, -1)
       item.definitions.forEach((def, index) => {
         // An EMPTY description whose line carries a hoisted definition is one the
         // author wrote the definition on: write it back there. Without this the
@@ -4452,6 +4461,7 @@ class CarveRenderSession {
             const written = this.renderBlock(definition, ctx)
             this.definitionsWrittenInPlace.add(definition as unknown as object)
             out.push(`: ${written}`)
+            appendGaps(itemIndex, index)
             return
           }
           const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
@@ -4464,6 +4474,7 @@ class CarveRenderSession {
             const [first, ...rest] = written.split('\n')
             out.push(`: ${first}`)
             for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
+            appendGaps(itemIndex, index)
             return
           }
         }
@@ -4512,6 +4523,7 @@ class CarveRenderSession {
         }
         if (written === '') {
           out.push(`: ${EMPTY_BODY_SENTINEL}`)
+          appendGaps(itemIndex, index)
 
           return
         }
@@ -4523,6 +4535,7 @@ class CarveRenderSession {
           if (!line.startsWith(tag)) out.push(`${DEFINITION_BODY_INDENT}${line}`)
           else out.push(outerDescriptionBody ? line : line.slice(tag.length))
         }
+        appendGaps(itemIndex, index)
       })
     }
     return out.join('\n')

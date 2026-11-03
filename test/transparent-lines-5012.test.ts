@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, fromAstJson, parse, renderCarve } from '../src/index.js'
 import { canonicalCarveWrite } from '../src/ast/canonical-carve-write.js'
 import { toAstJson } from '../src/ast-json.js'
 
@@ -122,6 +122,26 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(description?.[1]?.pos?.startLine).toBe(3)
     expect(carveToCarve(source)).toBe(source)
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
+  it('keeps comments between definition descriptions at their authored line', () => {
+    const source = ':: t\n: a\n  %% c\n: b\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(renderCarve(parse(source))).toBe(source)
+  })
+
+  it('keeps abbreviation definition order across description readback', () => {
+    const source = ':: t\n: a\n  *[AB]: old\n: b\n*[AB]: new\nAB\n'
+    const written = renderCarve(parse(source))
+    expect(written).toBe(source)
+    expect(carveToHtml(written)).toBe(carveToHtml(source))
+    expect(written).toContain('*[AB]: old\n: b\n*[AB]: new')
+    expect(renderCarve(fromAstJson(carveToAstJson(source)))).toBe(source)
+  })
+
+  it('reconstructs paragraph placement from AST wire positions', () => {
+    const source = ':: t\n: d\n  *[A]: a\ntail\n'
+    expect(renderCarve(fromAstJson(carveToAstJson(source)))).toBe(renderCarve(parse(source)))
   })
 
   it('writes edits to restored transparent nodes', () => {

@@ -499,6 +499,11 @@ export interface DefinitionItem {
 export interface DefinitionList extends BaseNode {
   type: 'definition_list'
   items: DefinitionItem[]
+  /** Authored invisible lines between terms or descriptions, written at that boundary. */
+  transparentBetweenDescriptions?: Array<{
+    item: number; afterDescription: number; source: string
+    node: Comment | AbbreviationDef; originalValue: string
+  }>
   /**
    * PART 9 §17 L7: the container's descriptions render as BLOCKS rather than as
    * inline runs, because a preceding `{loose}` block-attribute line said so.
@@ -542,6 +547,7 @@ export interface AbbreviationDef extends BaseNode {
   /** Its source line is written through the paragraph that crosses it. */
   transparentInParagraph?: true
   transparentInList?: true
+  transparentInDefinitionList?: true
 }
 
 /**
@@ -594,6 +600,7 @@ export interface Comment extends BaseNode {
   /** Its source line is written through the paragraph that crosses it. */
   transparentInParagraph?: true
   transparentInList?: true
+  transparentInDefinitionList?: true
   transparentSource?: string
   transparentOriginalValue?: string
   /** Present only for the explicitly closed `{% … %}` inline form. */
