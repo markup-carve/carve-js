@@ -18,6 +18,7 @@ import { nextContainerContent, runIndentationContainer } from './parse-indentati
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList } from './parse-footnote-session.js'
+import { taskBoxColumns } from './task-box-frame.js'
 import {
   continueWrappedAttributeBlock,
   markerLineBottomBlock,
@@ -194,10 +195,14 @@ export function createDefinitionListParser(
     trackItemLazyState,
     trimEndSpaceTab,
   } = helpers
+  const entryColumnAt = (line: string, offset: number): number => {
+    const column = sourceEntryColumnAt(line, offset)
+    return column - taskBoxColumns(line, column)
+  }
   // A tab counts from its container's column (§24 C5). Within two columns of a
   // quote's content column no nested container can have begun, so that tab
   // counts from the quote; further in, the container is unknown here.
-  const entryColumnAt = (line: string, offset: number): number => {
+  const sourceEntryColumnAt = (line: string, offset: number): number => {
     let body = -1
     for (let end = sourceQuotePrefixEnd(line, 0); end >= 0 && end <= offset; end = sourceQuotePrefixEnd(line, end)) body = end
     if (body < 0) return sourceColumnAt(line, offset)

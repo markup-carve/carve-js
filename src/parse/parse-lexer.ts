@@ -4,6 +4,7 @@ import type { ParseOptions, UnclosedContainer, StrippedLineOrigin, CloserIndex, 
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
+import { markerLineTaskBox, taskBoxColumns } from './block/task-box-frame.js'
 import type { OverindentedOpener, OwnershipCut, RefusedPlus } from './block/block-ownership.js'
 
 export const TRAILING_WS = '[ \\t]*$'
@@ -154,6 +155,8 @@ export class Lexer {
   private ownershipLeads?: Map<number, number>
   /** The same leading cuts, keyed by document line number. */
   private ownershipLeadsByLine?: Map<number, number>
+  /** Each root line's marker-line task box, for `rootFrameColumn`. */
+  private taskBoxes: Map<number, [number, number] | null> | undefined
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
   applyOwnership({ lines, cuts, letters, refusedPlus, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
@@ -182,6 +185,7 @@ export class Lexer {
     this.sourceOffsetMap = offsets
     if (cuts.size) this.ownershipCuts = cuts
     this.lines = lines
+    this.taskBoxes = undefined
     this.leadingWhitespaceLines = []
   }
 
@@ -625,7 +629,13 @@ export class Lexer {
     const root = this.documentRoot ?? this
     const column = this.lineStartColumn(lineIndex) - 1
     if (root === this || this.linePrefixWidths === undefined) return column
-    return Math.max(0, column - (root.ownershipLeadsByLine?.get(this.lineNumber(lineIndex)) ?? 0))
+    const lineNumber = this.lineNumber(lineIndex)
+    const rootLine = root.lines[lineNumber - 1] ?? ''
+    root.taskBoxes ??= new Map()
+    let box = root.taskBoxes.get(lineNumber)
+    if (box === undefined) root.taskBoxes.set(lineNumber, box = markerLineTaskBox(rootLine))
+    const boxColumns = taskBoxColumns(rootLine, column, box)
+    return Math.max(0, column - boxColumns - (root.ownershipLeadsByLine?.get(lineNumber) ?? 0))
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
