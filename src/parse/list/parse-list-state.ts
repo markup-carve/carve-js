@@ -228,7 +228,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const open = state.literalColon
     const column = indentColumns(content, open.column + 1)
     const text = content.trimStart()
-    if (column < open.column && !state.lazyFoldable) {
+    // A comment line left of the column stays in an open `%%%` span (PART 0 S1, carve#5021).
+    if (column < open.column && !state.lazyFoldable && !(open.opaque?.belowBaseCloses && RE_COMMENT_LINE.test(text))) {
       delete state.literalColon
       state.divDepth = Math.max(0, state.divDepth - 1)
       return false
@@ -304,6 +305,19 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return true
   }
 
+  /** A comment line left of a descendant whose line block holds an open `%%%` span is that span's (PART 0 S1, carve#5021). */
+  function descendantSpanLine(line: LazyLine): boolean {
+    const { content, state, facts } = line
+    if (!RE_COMMENT_LINE.test(content.trimStart()) || !descendantSpanHolds(state) ||
+        line.atContentColumn && indentColumns(content, state.ownedColumn) >= state.ownedColumn) return false
+    const inner = state.deepest!
+    trackItemLazyState(content, inner, false, line.hasCommentCloser,
+      {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true})
+    state.lazyFoldable = inner.lazyFoldable
+    state.inDefList = false
+    return true
+  }
+
   /**
    * An open authored colon container: its closer, a dedent out of it, or a line
    * inside it, which is rebased to the container's column for the later phases.
@@ -368,7 +382,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (line.atContentColumn || state.opaque !== null || !(state.literalColon || state.authoredColon) ||
         !RE_COMMENT_LINE.test(content.trimStart())) return false
     const run = commentFenceRun(content.trimStart())
-    if (state.literalColon && run !== undefined && line.hasCommentCloser(run)) state.literalColon.belowComment = run
+    // Inside an open `%%%` span a longer run is payload, not a span of its own (carve#5021).
+    if (state.literalColon && run !== undefined && !state.literalColon.opaque?.belowBaseCloses && line.hasCommentCloser(run)) state.literalColon.belowComment = run
     if (state.authoredColon && run !== undefined && line.hasCommentCloser(run)) state.authoredColon.belowComment = run
     state.invisibleAtColumn = state.literalColon === undefined
     state.commentAtColumn = state.literalColon === undefined
@@ -531,7 +546,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { state } = line
     const commentRun = commentFenceRun(line.content)
     if (commentRun === undefined || !line.hasCommentCloser(commentRun)) return false
-    if (descendantCodeHolds(line.content, state)) return false
+    if (descendantCodeHolds(line.content, state) || descendantSpanHolds(state)) return false
     const column = line.atContentColumn ? indentColumns(line.content) : 0
     state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn,
       description: state.inDefList === 'description', ...(column > 0 ? { column } : {}) }
@@ -547,6 +562,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       text = sliceColumns(text, frame.ownedColumn, true)
       if (frame.deepest.opaque?.kind === 'code') return true
     }
+    return false
+  }
+
+  // A descendant line block's open `%%%` span takes a comment line at any column (PART 0 S1, carve#5021).
+  function descendantSpanHolds(state: ItemLazyState): boolean {
+    for (let frame = state; frame.deepest && frame.ownedColumn >= 0; frame = frame.deepest)
+      if (frame.deepest.literalColon?.opaque?.belowBaseCloses) return true
     return false
   }
 
@@ -606,7 +628,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
     const run = commentFenceRun(note[2]!)
-    if (run !== undefined && line.hasCommentCloser(run)) {
+    if (run === undefined) return true
+    // The note reads its own body, so its frame holds the span too: payload is no note paragraph (carve#4998).
+    frame.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: true }
+    frame.lazyFoldable = false
+    if (line.hasCommentCloser(run)) {
       state.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: line.atContentColumn,
         column: indentColumns(content) + FOOTNOTE_BODY_COLUMN }
       state.lazyFoldable = false
@@ -814,6 +840,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     belowColumnCommentClose,
     literalColonLine,
     descendantLiteralColon,
+    descendantSpanLine,
     authoredColonLine,
     belowColumnColonComment,
     openCommentSpan,
