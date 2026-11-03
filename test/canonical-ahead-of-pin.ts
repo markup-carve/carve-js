@@ -3,5 +3,8 @@
  * Each entry must match current writer output and differ from its pinned golden.
  * Remove a declaration when the pin includes its corrected fixture.
  */
+import { RULED_FMT_AHEAD_OF_PIN } from './ruled-ahead-of-pin-5015.js'
+
 export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: string }> = new Map([
+  ...RULED_FMT_AHEAD_OF_PIN,
 ])

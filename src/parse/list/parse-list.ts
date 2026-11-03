@@ -19,6 +19,23 @@ function noteFenceOpen(state: ItemLazyState): boolean {
   return false
 }
 
+/** A blank carried by an open fence in a child list is not an item separator. */
+function childListOwnsBlankBefore(
+  previous: BlockNode | undefined,
+  priorSpan: { start: number; end: number } | undefined,
+  next: BlockNode,
+  nextSpan: { start: number },
+  rootLines: readonly string[],
+): boolean {
+  if (next.type === 'paragraph' || previous?.type !== 'list' || priorSpan === undefined) return false
+  if ((previous.pos?.endLine ?? priorSpan.end) >= nextSpan.start) return true
+  const tail = previous.items.at(-1)?.children.at(-1)
+  return priorSpan.end === nextSpan.start - 1 &&
+    isBlankLine(rootLines[priorSpan.end - 1] ?? '') &&
+    (tail?.type === 'code_block' || tail?.type === 'raw_block') &&
+    tail.content.endsWith('\n\n')
+}
+
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {
   const {
     FOOTNOTE_BODY_COLUMN,
@@ -492,7 +509,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const bodyLexer = nestedSubLexer(lexer, body, reached.startLineIndex, reached.lineNumbers)
         const laterBlocks = session.parseBlocks(bodyLexer, 0)
         children.push(...laterBlocks)
-        if (gap > 0 && laterBlocks.some(block => block.type === 'paragraph')) loose = true
+        if (gap > 0 && children.length > laterBlocks.length && laterBlocks.some(block =>
+          block.type !== 'comment' && block.type !== 'abbreviation_def' && block.type !== 'link_reference_definition')) loose = true
       }
     }
     const stackedItem: ListItem = { type: 'list_item', children }
@@ -2009,8 +2027,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // List-continuation marker (Carve): a lone `+` at the marker column
       // attaches the FOLLOWING flush-left block to this item without indenting
       // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
-      // injects a blank separator so the block parses on its own; the
-      // compact-list rule above then keeps the item tight.
+      // injects a blank separator so the block parses on its own; the L1
+      // ownership check keeps this synthetic gap out of tightness.
       const { plusColumn, listPlusOwner, blankBeforeNestedContinuation: plusAfterBlank } =
         classifyItemContinuation({ lexer, line: l, pendingBlankCount: pendingBlankRun.count,
           itemQuoteDepth, physicalItemMarkerColumn, contentCol, baseIndent,
@@ -3489,7 +3507,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         const span = session.blockLineSpan(child)
         if (span === undefined) continue
-        // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L2).
+        // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L1).
         if (child.type === 'paragraph' && isDirectiveLine(previousVisibleBlock)) loose = true
         // A `+` lead still sets the paragraph apart; an invisible lead separates nothing (§17 L1a, L1b, carve#4639).
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && /\+[ \t]*$/.test(itemSource) &&
@@ -3550,7 +3568,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
           previousVisibleBlock.children.some(block => block.type === 'paragraph' &&
             block.children.some(inline => inline.type === 'code'))
-        if (previousVisibleSpan !== undefined && previousVisibleType === 'list') {
+        if (childListOwnsBlankBefore(previousVisibleBlock, previousVisibleSpan, child, span,
+          lexer.rootLines ?? lexer.lines)) {
+          // An open child fence can carry the blank through the following
+          // block's line. That blank still belongs to the child list.
+          previousVisibleEnd = undefined
+        } else if (previousVisibleSpan !== undefined && previousVisibleType === 'list') {
           previousVisibleEnd = Math.max(previousVisibleSpan.start, Math.min(previousVisibleSpan.end, span.start - 1))
           const rootLines = lexer.rootLines ?? lexer.lines
           while (previousVisibleEnd > previousVisibleSpan.start &&
@@ -3559,9 +3582,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             previousVisibleEnd--
           }
         }
-        if ((child.type === 'paragraph' || child.type === 'image' ||
-            child.type === 'figure' && (child.target.type === 'image' || child.target.type === 'paragraph')) &&
-            previousVisibleEnd !== undefined && !priorDivInlineCode &&
+        if (previousVisibleEnd !== undefined && !priorDivInlineCode &&
             !reachesNestedList && !authoredBlockParagraph && !belowInlineAdmonition &&
             (session.hasAuthoredBlankBetween(lexer, previousVisibleEnd, span.start,
               previousVisibleType === 'list' ? undefined : opaqueBlankLines) ||
@@ -3720,7 +3741,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (flags.hardBoundary) break
     }
 
-    return finishList(lexer, items, flags.loose, { firstLineIndex, isOrdered, orderedStart, orderedKind, orderedDelim, firstOrdered, firstMarkerChar }, helpers)
+    return finishList(items, flags.loose, { firstLineIndex, isOrdered, orderedStart, orderedKind, orderedDelim, firstOrdered, firstMarkerChar }, helpers)
   }
 
 }

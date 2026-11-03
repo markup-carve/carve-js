@@ -317,11 +317,11 @@ export function orderedContinues(line: string, kind: OlKind, delim: string, term
  * block) and the paragraph fallthrough.
  */
 /**
- * Does this line OPEN a block (vs being plain prose)? Used by the compact-list
- * rule: a blank line inside a list item loosens the list only when the content
- * after it is a plain paragraph; a blank followed by a block opener keeps the
- * item tight. Lexer-free (no `:::` closer lookahead — for the loose decision a
- * `:::`-shaped opener counts as a block regardless).
+ * Does this line OPEN a block (vs being plain prose)? Used by the list
+ * boundary rule to distinguish a visible block from an invisible line.
+ * A blank-separated direct child block loosens regardless of its kind;
+ * nested ownership is checked by the caller. Lexer-free (no `:::` closer
+ * lookahead — for the loose decision a `:::`-shaped opener is a block).
  */
 /**
  * A ONE-LINE construct that renders nothing: a line comment or a reference /

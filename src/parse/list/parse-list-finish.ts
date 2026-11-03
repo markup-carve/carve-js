@@ -1,9 +1,7 @@
 import type { List, ListItem } from '../../ast.js'
-import { Lexer, isBlankLine } from '../parse-lexer.js'
 import type { OlKind, listHelpers } from '../../parse.js'
 
 export function finishList(
-  lexer: Lexer,
   items: ListItem[],
   loose: boolean,
   shape: {
@@ -17,14 +15,9 @@ export function finishList(
   },
   helpers: typeof listHelpers,
 ): List {
-  const { firstLineIndex, isOrdered, orderedStart, orderedKind, orderedDelim, firstOrdered, firstMarkerChar } = shape
+  const { isOrdered, orderedStart, orderedKind, orderedDelim, firstOrdered, firstMarkerChar } = shape
   const { olTypeOf } = helpers
-  const singleItemWithNestedFence = items.length === 1 &&
-    items[0]?.children[0]?.type === 'paragraph' &&
-    items[0].children[1]?.type === 'list' &&
-    items[0].children[2]?.type === 'code_block' && !isBlankLine(lexer.lineAt(firstLineIndex + 1)) &&
-    items[0].children.length === 3
-  const list: List = { type: 'list', ordered: isOrdered, tight: !loose || singleItemWithNestedFence, items }
+  const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
   if (isOrdered) {
     if (orderedStart !== 1) list.start = orderedStart
     const t = olTypeOf(orderedKind)

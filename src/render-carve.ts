@@ -99,6 +99,19 @@ function nestedListHasLiteralPlusTail(item: ListItem): boolean {
     child.children[0].value === '+')
 }
 
+function childListEndsInLiteralPlus(block: BlockNode): boolean {
+  if (block.type !== 'list') return false
+  const tail = block.items.at(-1)?.children.at(-1)
+  return tail?.type === 'paragraph' && tail.children.length === 1 &&
+    (tail.children[0]?.type === 'text' || tail.children[0]?.type === 'escaped_text') &&
+    tail.children[0].value === '+'
+}
+
+function refusedPlusNeedsCompactFollower(item: ListItem): boolean {
+  return item.children.some((block, index) => childListEndsInLiteralPlus(block) &&
+    item.children[index + 1] !== undefined)
+}
+
 function reportNestedTightItemLosses(ast: Document, opts: CarveRenderOptions): void {
   if (opts.onRenderLoss === undefined) return
   const visit = (blocks: BlockNode[], depth: number, hosted = false): void => {
@@ -847,7 +860,7 @@ function needsLooseKey(
 ): boolean {
   if (node.type === 'list') {
     if (node.tight || node.items.length === 0) return false
-    // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L2), and this writer emits
+    // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L1), and this writer emits
     // one between every pair of a loose list's items, so two or more items
     // already spell it.
     if (node.items.length > 1) return false
@@ -1038,22 +1051,6 @@ function theLastBlockInside(node: BlockNode): BlockNode | undefined {
   }
 
   return undefined
-}
-
-/**
- * Whether a sub-list written at the item's content column needs a blank line
- * above it to open at all.
- */
-function needsABlankLineAbove(
-  previousEmitted: BlockNode | null,
-  previousAtMarkerColumn: boolean,
-  aSubListAlreadyOpened: boolean,
-): boolean {
-  if (previousAtMarkerColumn) return true
-  if (previousEmitted === null) return false
-  if (previousEmitted.type === 'block_quote') return true
-
-  return aSubListAlreadyOpened && LEAVES_A_PARAGRAPH_OPEN.has(previousEmitted.type)
 }
 
 /** The width of the marker `renderList` writes for this item, glued attributes included. */
@@ -3937,16 +3934,15 @@ class CarveRenderSession {
             return false
           }
         }
-        const renderItem = (tight: boolean, relativePlus = false): string => {
+        const renderItem = (tight: boolean): string => {
           this.pendingMarkerLineShift = item.checked === undefined || itemAttrs ? 0 : TASK_BOX_COLUMNS
-          const body = this.renderListItem(item, ctx, tight, relativePlus)
+          const body = this.renderListItem(item, ctx, tight)
           this.pendingMarkerLineShift = 0
           return body
         }
         let itemSource = spellItem(renderItem(node.tight))
         if (needsReadback && !readsBack(itemSource)) {
-          const relative = spellItem(renderItem(true, true))
-          itemSource = readsBack(relative) ? relative : spellItem(renderItem(false))
+          itemSource = spellItem(renderItem(false))
         }
         out += itemSource
         if (!node.tight && idx < node.items.length - 1) out += '\n'
@@ -4116,12 +4112,12 @@ class CarveRenderSession {
       index === 0 || line === '' || line.startsWith(tag) ? line : `${padding}${line}`).join('\n')
   }
 
-  private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus = false): string {
+  private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
     // A list item is a prefix/indent host: its fences start over at `:::`.
     const outerFenceDepth = ctx.colonFenceDepth
     ctx.colonFenceDepth = 0
     try {
-      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight, relativePlus), true)
+      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight), true)
     } finally {
       ctx.colonFenceDepth = outerFenceDepth
     }
@@ -4131,7 +4127,7 @@ class CarveRenderSession {
     return ctx.listDepth > 1 || this.indentedHostDepth > 0
   }
 
-  private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean, relativePlus: boolean): string {
+  private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
     for (const block of item.children) {
       if (block.type === 'paragraph') this.markerColumnGuardParagraphs.add(block)
     }
@@ -4173,7 +4169,7 @@ class CarveRenderSession {
     // them with a single newline so the re-parse stays tight. Using the generic
     // blank-line join here would loosen a tight item that has more than one child
     // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
-    if (!tight) return this.renderBlocks(item.children, ctx, item)
+    if (!tight && !refusedPlusNeedsCompactFollower(item)) return this.renderBlocks(item.children, ctx, item)
     if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     ctx.blockDepth++
     try {
@@ -4189,10 +4185,6 @@ class CarveRenderSession {
       // hoisted out of the item renders nothing and still sits in `children`.
       let previousEmitted: BlockNode | null = null
       let previousDescriptionList = false
-      // Whether a sub-list has already opened at this item's content column - the
-      // condition under which a later bullet written there joins it instead of
-      // opening below the paragraph above it. See `needsABlankLineAbove`.
-      let aSubListAlreadyOpened = false
       let movedMarker: BlockNode | null = null
       item.children.forEach((b, i) => {
         const previous = item.children[i - 1]
@@ -4210,6 +4202,8 @@ class CarveRenderSession {
           }
         }
         let rendered = this.renderBlock(protectEmptyListTailBeforePlus(b, next), ctx)
+        if (next !== undefined && childListEndsInLiteralPlus(b) && rendered.endsWith('+') && !rendered.endsWith('\\+'))
+          rendered = `${rendered.slice(0, -1)}\\+`
         if (
           b.type === 'paragraph' && rendered === '+' && this.itemNeedsIndentedBlocks(ctx) &&
           nestedFenceTail(previousEmitted) === undefined
@@ -4243,18 +4237,12 @@ class CarveRenderSession {
           const mergesAcrossComments = above?.type === 'list' && listsWouldMerge(above, b)
           if (!separated && previousEmitted !== null && (adjacentBlocksMerge(previousEmitted, b) || mergesAcrossComments)) {
             parts.push(`${this.boundaryTag()}${rendered}`)
-          } else if (
-            !separated &&
-            needsABlankLineAbove(previousEmitted, previousAtMarkerColumn, aSubListAlreadyOpened)
-          ) {
-            parts.push('', rendered)
           } else {
             parts.push(rendered)
           }
           // Back at the content column, so a child below this one is read against
           // the list rather than against whatever stood at column 0 above it.
           previousAtMarkerColumn = false
-          aSubListAlreadyOpened = true
           previousEmitted = b
           return
         }
@@ -4285,8 +4273,7 @@ class CarveRenderSession {
         ) {
           if (this.itemNeedsIndentedBlocks(ctx)) {
             if (b.type === 'comment' || b.type === 'code_block' || previousEmitted?.type === 'comment' || previousEmitted?.type === 'code_block') parts.push(rendered)
-            else if (relativePlus) parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
-            else parts.push('', rendered)
+            else parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
             previousAtMarkerColumn = false
             previousEmitted = b
             return
