@@ -22,10 +22,10 @@ it('ends a quoted code block when the quote prefix is absent', () => {
   expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
 })
 
-it('retains a marker after a comment without claiming document text', () => {
+it('reads a marker after a comment as a sibling and folds the next line into it', () => {
   const source = ['- a', '  - inner', '    %% c', '   - x', 'tail'].join('\n')
-  expect(carveToHtml(source)).toContain('<li>inner</li>\n    </ul>\n    <ul>\n      <li>x</li>')
-  expect(carveToHtml(source)).toContain('</ul>\n<p>tail</p>')
+  expect(carveToHtml(source)).toContain('<li>inner</li>\n      <li>x\ntail</li>\n    </ul>')
+  expect(carveToHtml(source)).not.toContain('<p>tail</p>')
 })
 
 it.each(['- tail', '* tail', '1. tail', 'a) tail'])('preserves inline code continuation %s in the writer', (marker) => {

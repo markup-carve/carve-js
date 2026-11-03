@@ -29,7 +29,7 @@
     {
       "name": "05-second-literal-depth2-width3-unpaired",
       "source": "> > - ::: |\n> >   %%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%\n> > - ::: |\n> >   %%%\n> >   hidden\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n        :::bad\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden\n:::</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "06-second-literal-depth2-width4-paired",
@@ -39,7 +39,7 @@
     {
       "name": "07-second-literal-depth2-width4-unpaired",
       "source": "> > - ::: |\n> >   %%%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%%\n> > - ::: |\n> >   %%%%\n> >   hidden\n> >   :::\n- tail\n",
-      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n        :::bad\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden\n:::</p>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    <p>c</p>\n    <p>hidden</p>\n    <div>\n\n    </div>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "08-named-depth1-%% note-closed",

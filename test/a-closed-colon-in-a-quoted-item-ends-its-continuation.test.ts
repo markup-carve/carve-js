@@ -216,21 +216,21 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
 
   it('ends ownership after a lazy body and later marked colon boundaries', () => {
     const source = '> - ::: box\nlazy\n>   :::\n>   :::bad\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(["block_quote","paragraph","block_quote"])
-    expect(carveToHtml(source)).toBe("<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>lazy</p>\n<blockquote><p>:::\n:::bad\n:::\n- tail</p></blockquote>")
+    expect(parse(source).children.map(node => node.type)).toEqual(["block_quote","paragraph","block_quote","list"])
+    expect(carveToHtml(source)).toBe("<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>lazy</p>\n<blockquote>\n  <div>\n    <p>:::bad</p>\n  </div>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>")
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
   it('ends the quote at an unprefixed link definition', () => {
     const source = '> - ::: box\n[x]: /u\n>   :::\n>   :::bad\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'block_quote', 'link_reference_definition'])
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'block_quote', 'list', 'link_reference_definition'])
     expect(carveToHtml(source)).toContain('</blockquote>\n<blockquote>')
   })
 
-  it('releases an unmarked line from the inner quote into its outer item', () => {
+  it('ends both quote and item before an unmarked line below the item', () => {
     const source = '- > - ::: box\n      lazy\n  >   :::\n  >   :::bad\n  >   :::\ntail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(["list"])
-    expect(carveToHtml(source)).toBe("<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>\n          <div class=\"box\">\n\n          </div>\n        </li>\n      </ul>\n    </blockquote>\n    lazy\n    <blockquote><p>:::\n:::bad\n:::\ntail</p></blockquote>\n  </li>\n</ul>")
+    expect(parse(source).children.map(node => node.type)).toEqual(["list","paragraph"])
+    expect(carveToHtml(source)).toBe("<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>\n          <div class=\"box\">\n\n          </div>\n        </li>\n      </ul>\n    </blockquote>\n    lazy\n    <blockquote>\n      <div>\n        <p>:::bad</p>\n      </div>\n    </blockquote>\n  </li>\n</ul>\n<p>tail</p>")
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 

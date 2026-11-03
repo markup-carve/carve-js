@@ -1,9 +1,4 @@
 {
-  "a-closed-colon-in-a-quoted-item-ends-its-continuation.test.ts": {
-    "closed colon fences in quoted items (carve#2925) > ends ownership after a lazy body and later marked colon boundaries": "#3922",
-    "closed colon fences in quoted items (carve#2925) > ends the quote at an unprefixed link definition": "#3922",
-    "closed colon fences in quoted items (carve#2925) > releases an unmarked line from the inner quote into its outer item": "#3922"
-  },
   "a-comment-below-a-sub-list-in-a-tight-item.test.ts": {
     "a comment below a sub-list in a tight item > is written where a re-parse reads it back into the OUTER item": "#3921"
   },
@@ -12,9 +7,6 @@
   },
   "a-footnote-boundary-leaves-no-enclosing-paragraph-claim.test.ts": {
     "a fence after a footnote boundary closes without claiming the next line": "#3921"
-  },
-  "a-line-retained-after-a-comment-opens-the-deepest-paragraph.test.ts": {
-    "retains a marker after a comment without claiming document text": "#3922"
   },
   "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
     "keeps the indentation latitude where only indentation precedes the list": "#3921"
@@ -61,13 +53,6 @@
   },
   "quoted-colon-remaining-parity.test.ts": {
     "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
-  },
-  "quoted-comment-host-columns.test.ts": {
-    "quoted comments retain stored host columns > '05-second-literal-depth2-width3-unpai…' matches the native ownership result": "#3922",
-    "quoted comments retain stored host columns > '07-second-literal-depth2-width4-unpai…' matches the native ownership result": "#3922"
-  },
-  "relative-continuation-marker.test.ts": {
-    "relative continuation marker columns > keeps an unprefixed marker after lazy quote text in its description": "#3922"
   },
   "two-sibling-sub-lists-in-a-tight-item.test.ts": {
     "two sibling sub-lists in a tight item > spells the boundary with EVERY host prefix, however deep": "#3921"

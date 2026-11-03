@@ -200,9 +200,9 @@ describe('relative continuation marker columns', () => {
     expect(html).toContain('<li><input type="checkbox" disabled aria-label="task"> task</li>\n    </ul>\n    :  detail\n')
   })
 
-  it('keeps an unprefixed marker after lazy quote text in its description', () => {
+  it('ends the description at a quote below its body column', () => {
     const html = carveToHtml(':: term\n:  detail\n  > quote\n+\n* [x] done\n')
-    expect(html).toContain('<dd>detail\n&gt; quote\n+\n* [x] done</dd>')
+    expect(html).toContain('<dd>detail</dd>\n</dl>\n<blockquote><p>quote\n+\n* [x] done</p></blockquote>')
   })
 
   it.each([
