@@ -42,7 +42,7 @@ describe('fmt keeps a comment after a block attached at the marker column (#4211
     const source = '. a\n  . %%%\n    n\n  zz\n%%%\n'
     const written = carveToCarve(source)
     // Both spans are unclosed, so the writer closes each where its parse ended (carve#4907).
-    expect(written).toBe('. a\n  . %%%\n    n\n    %%%\n  zz\n  %%%\n\n  %%%\n')
+    expect(written).toBe('. a\n  . %%%\n    n\n    %%%\n  zz\n  %%%\n  %%%\n')
     expect(carveToHtml(written)).toBe(carveToHtml(source))
     expect(carveToCarve(written)).toBe(written)
   })

@@ -5515,6 +5515,8 @@ class CarveRenderSession {
     let longest = 0
     for (const match of content.matchAll(/%+/g)) longest = Math.max(longest, match[0].length)
     const fence = '%'.repeat(Math.max(shortest, longest + 1))
+    // An empty payload line would be a blank that loosens an enclosing list (carve#5022).
+    if (content === '') return `${fence}\n${fence}`
     return `${fence}\n${this.protectVerbatim(content)}\n${fence}`
   }
 
