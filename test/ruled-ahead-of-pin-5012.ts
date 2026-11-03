@@ -66,6 +66,10 @@ export const RULED_HTML_AHEAD_OF_PIN_5012: ReadonlyMap<string, { reason: string;
   ["826-a-comment-or-link-definition-at-a-body-s-column-refuses-a-first-block-plus-5", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<ul>\n  <li>a\n    <ul>\n      <li>after</li>\n    </ul>\n  </li>\n</ul>" }],
   ["826-a-comment-or-link-definition-at-a-body-s-column-refuses-a-first-block-plus-6", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<ul>\n  <li>a\n    <ul>\n      <li>after</li>\n    </ul>\n  </li>\n</ul>" }],
   ["866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-6", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<ul>\n  <li>text</li>\n</ul>\n<p><abbr title=\"b\">A</abbr></p>" }],
+  ["855-invisible-lines-after-a-plus-are-skipped-and-the-first-visible-line-decides-4", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<ul>\n  <li>text</li>\n</ul>" }],
+  ["866-an-abbreviation-definition-after-a-plus-is-skipped-like-a-link-definition-4", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <p>text</p>\n</blockquote>\n<p><abbr title=\"b\">A</abbr></p>" }],
+  ["881-an-indented-quote-prefix-keeps-an-invisible-plus-follower-in-its-host-2", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <p>b</p>\n</blockquote>" }],
+  ["881-an-indented-quote-prefix-keeps-an-invisible-plus-follower-in-its-host-3", { reason: 'carve#5012 erases single-line invisibles before layout', html: "<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <p>b</p>\n</blockquote>" }],
 ])
 
 /** The two formatter sidecars replaced by carve#5012. */
