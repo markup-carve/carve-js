@@ -963,10 +963,12 @@ export class ParseSession extends InlineParseSession {
       lexer.consume()
       return null
     }
-    if (RE_HR.test(line)) {
+    // A spaced break keeps its indent, as a list marker line does.
+    const rule = line.trimStart()
+    if (RE_HR.test(rule)) {
       lexer.consume()
       const node: ThematicBreak = { type: 'thematic_break' }
-      if (line[0] === '*' || line[0] === '_') node.marker = line[0]
+      if (rule[0] === '*' || rule[0] === '_') node.marker = rule[0]
       return node
     }
     if (RE_HEADING.test(line)) return this.parseHeading(lexer)

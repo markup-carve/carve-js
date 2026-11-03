@@ -896,7 +896,7 @@ export function classifyQuotedLine(
   // `# h\n- item` is a heading plus a sibling list at the top level, and as
   // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
   // Mirrors trackItemLazyState.
-  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content)) {
+  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content.trimStart())) {
     state.inTable = isTableRow(content)
     closeBlockQuoteParagraph(state)
     return null
@@ -1542,7 +1542,8 @@ export function startsInterruptingBlock(
       // the body's column 0, which §24 C3 opens a sublist with. Everywhere else
       // a bullet/task does NOT interrupt a paragraph (symmetric with ordered
       // markers; a list needs a blank line, §10 I2).
-      return RE_HR.test(ln) || opensSublistHere(lexer, ln, i, sublistArm)
+      // Indented: a spaced break keeps its indent, as a list marker line does.
+      return RE_HR.test(ln.slice(i)) || opensSublistHere(lexer, ln, i, sublistArm)
     case '+':
       // `+` is the list-continuation marker, never an interrupter.
       return false
@@ -1553,7 +1554,7 @@ export function startsInterruptingBlock(
       // (symmetric, §10 I2).
       return (
         (abbreviationArm && RE_ABBR_DEF.test(ln)) ||
-        RE_HR.test(ln) ||
+        RE_HR.test(ln.slice(i)) ||
         opensSublistHere(lexer, ln, i, sublistArm)
       )
     case '_':
