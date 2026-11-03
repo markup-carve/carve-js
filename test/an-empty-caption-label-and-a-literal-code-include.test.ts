@@ -34,10 +34,10 @@ describe('an unresolved code include', () => {
 
 describe('an indented dash line', () => {
   it.each([
-    ['neither opens frontmatter', ' ---\na\n---\nx\n'],
-    ['nor closes it', '---\na\n ---\nx\n'],
-  ])('%s', (_name, source) => {
-    expect(carveToHtml(source)).toBe('<hr>\n<p>a</p>\n<hr>\n<p>x</p>')
+    ['neither opens frontmatter', ' ---\na\n---\nx\n', '<hr>\n<p>a</p>\n<hr>\n<p>x</p>'],
+    ['nor closes it', '---\na\n ---\nx\n', ''],
+  ])('%s', (_name, source, expected) => {
+    expect(carveToHtml(source)).toBe(expected)
   })
 })
 

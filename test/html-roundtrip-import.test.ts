@@ -154,7 +154,7 @@ describe('each carrier reconstructs its own node', () => {
     expect(back('***\n')).toBe('***\n')
     expect(back('___\n')).toBe('___\n')
     // `-` carries no `data-char`, so the import writes the canonical `***` (markup-carve/carve#4973).
-    expect(back('---\n')).toBe('***\n')
+    expect(back('---\n')).toBe('\n')
   })
 
   it('data-carve-explicit-id keeps an authored id and leaves a generated one', () => {

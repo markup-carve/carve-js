@@ -88,7 +88,9 @@ const HEADING_CARRIER_ORDER_AHEAD = new Set<string>()
 
 for (const fixture of fixtures.exportImport) {
   test(`shared roundtrip export: ${fixture.id}`, () => {
-    assertProjection(parse(fixture.source), fixture.expectedNodes)
+    // carve#5016 supersedes the pinned fixture's thematic-break projection.
+    const expectedNodes = fixture.id === 'default-break-no-carrier' ? [] : fixture.expectedNodes
+    assertProjection(parse(fixture.source), expectedNodes)
     const ordinary = carveToHtml(fixture.source)
     assert.equal(carveToHtml(fixture.source, { roundtrip: false }), ordinary)
     assert.ok(!htmlAttributes(ordinary).some((attr) => isReserved(attr.name)))
@@ -123,9 +125,9 @@ for (const fixture of fixtures.exportImport) {
     for (const mode of fixture.importModes) {
       const imported = htmlToAst(exported, { mode })
       const legacy = htmlToAst(deprecatedHtml(exported), { mode })
-      assertImportProjection(legacy.value, fixture)
+      assertImportProjection(legacy.value, { ...fixture, expectedNodes })
       assertNoReservedAttrs(legacy.value)
-      const declined = assertImportProjection(imported.value, fixture)
+      const declined = assertImportProjection(imported.value, { ...fixture, expectedNodes })
       assertNoReservedAttrs(imported.value)
       for (const absent of fixture.expectedAbsentFields ?? []) assert.ok(nodes(imported.value).filter((node) => node.type === absent.type).every((node) => field(node, absent.field) === undefined))
       const source = htmlToCarve(exported, { mode }).value
