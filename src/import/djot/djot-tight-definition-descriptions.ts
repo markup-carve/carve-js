@@ -2,6 +2,7 @@ import type { BlockNode } from '../../ast.js'
 import { forEachChildBlockList } from '../../parse/block/block-children.js'
 import { parse } from '../../parse.js'
 import { renderCarve } from '../../render-carve.js'
+import { SourceUnspellableError } from '../../source/source-unspellable-error.js'
 
 export function tightDjotDefinitionDescriptions(source: string): string {
   if (!source.includes('::') || !/^[ \t>]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]/m.test(source)) return source
@@ -79,7 +80,14 @@ export function tightDjotDefinitionDescriptions(source: string): string {
         const continuation = prefix.replace(/:[ \t]+$/, spaces => ' '.repeat(spaces.length))
         const joined = { ...description[0]!, children: description.flatMap((paragraph, index) => [...(index && description[index - 1]!.children.at(-1)?.type !== 'hard_break' ? [{ type: 'soft_break' as const }] : []), ...paragraph.children]) }
         delete joined.attrs
-        const contents = renderCarve({ type: 'document', children: [joined] }).replace(/\n+$/, '')
+        let contents: string
+        try {
+          contents = renderCarve({ type: 'document', children: [joined] }).replace(/\n+$/, '')
+        } catch (error) {
+          // A joined paragraph that cannot be spelled stays as written.
+          if (error instanceof SourceUnspellableError) continue
+          throw error
+        }
         edits.push({ start: sourceOffset(first.startOffset), end: sourceOffset(last.endOffset), value: contents.replace(/\n/g, '\n' + continuation) })
       }
     }
