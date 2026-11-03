@@ -50,7 +50,7 @@ import { ownValue, setOwn } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render/render-depth.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render/render-loss.js'
 import { footnoteRefSourceText, isUnresolvedReference, referenceSourceText } from './parse/inline/unresolved-reference.js'
-import { collapseLoneImageParagraphs, inlineText } from './heading/heading-ids.js'
+import { collapseLoneImageParagraphs, figureTargetImage, inlineText } from './heading/heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
 import { authoredIdOf, slotsByWriteOrder } from './extension/attribute-merge.js'
 import {
@@ -2337,15 +2337,18 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
 function renderFigure(node: Figure, opts: RenderOptions, level: number, leadClass?: string): string {
   const pad = indent(level)
   let inner: string
-  if (node.target.type === 'image') {
-    inner = `${pad}  ${renderImage(node.target, opts)}`
+  const image = figureTargetImage(node.target)
+  if (image) {
+    inner = `${pad}  ${renderImage(image, opts)}`
   } else if (node.target.type === 'block_quote') {
     const bq = renderBlockQuote(node.target, opts, level + 1)
     inner = bq
   } else if (node.target.type === 'code_block' || node.target.type === 'paragraph') {
     inner = renderBlock(node.target, opts, level + 1)
-  } else {
+  } else if (node.target.type === 'table') {
     inner = renderTable(node.target, opts, level + 1)
+  } else {
+    inner = `${pad}  ${renderImage(node.target, opts)}`
   }
   // A composite figure's PANEL leads its classes with the panel marker, the
   // way the group's own wrapper leads with `carve-figure-group` - the

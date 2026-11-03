@@ -52,7 +52,7 @@ import {
 import { ownValue, setOwn } from '../own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
-import { mergeAttrs } from '../extension/attribute-merge.js'
+import { promotedImageAttrs } from '../extension/attribute-merge.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -408,21 +408,7 @@ function orderCollectedDefinitions(children: AstJsonBlock[]): void {
 /** Keep block image promotion on the paragraph in the exchange tree. */
 function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
   return blocks.map((block): BlockNode => {
-    if (block.type === 'image') return {
-      type: 'paragraph', children: [block], blockImage: true,
-      ...(block.pos === undefined ? {} : { pos: block.pos }),
-    }
-    if (block.type === 'paragraph' && block.blockImage && block.attrs) {
-      const image = block.children.find((child): child is Image => child.type === 'image')
-      if (image) {
-        const { attrs, ...paragraph } = block
-        return {
-          ...paragraph,
-          children: block.children.map(child => child === image
-            ? { ...image, attrs: mergeAttrs(attrs, image.attrs ?? {}) } : child),
-        }
-      }
-    }
+    if (block.type === 'image') return imageBlockToWire(block)
     switch (block.type) {
       case 'block_quote':
       case 'admonition':
@@ -451,6 +437,23 @@ function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
         return block
     }
   })
+}
+
+/**
+ * PART 12 §23 (carve#5039): the promoted image's attribute line stays on the
+ * paragraph and the image keeps only its own attributes. A tree whose merged
+ * set no longer matches the parse cannot be split, so it publishes as is.
+ */
+function imageBlockToWire(image: Image): Paragraph {
+  const split = promotedImageAttrs(image)
+  const hasRun = split !== undefined && Object.keys(split.run).length > 0
+  const { attrs: _merged, ...bare } = image
+  const child: Image = !hasRun ? image : split.own === undefined ? bare : { ...bare, attrs: split.own }
+  return {
+    type: 'paragraph', children: [child], blockImage: true,
+    ...(hasRun ? { attrs: split.run } : {}),
+    ...(image.pos === undefined ? {} : { pos: image.pos }),
+  }
 }
 
 /**
