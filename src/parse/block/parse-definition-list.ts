@@ -1073,14 +1073,19 @@ export function createDefinitionListParser(
       // marker-line item starts at its authored source column, while its body
       // sublexer starts at column zero. Rebase equal-source-column list markers
       // to that same sublexer column so they remain siblings (§17 L4).
-      if (firstBlockOpenerContent(first) && isListMarkerLine(first)) {
+      // A quoted line at a stacked quote lead's column is that quote's line, as at column 0 (§17 L3).
+      const quoteLead = firstBlockOpenerContent(first) && /^(?:> )+\+[ \t]*$/.test(first)
+      if (firstBlockOpenerContent(first) && (isListMarkerLine(first) || quoteLead)) {
         const sourceOffset = markerSource.lastIndexOf(first)
         const leadColumn = sourceOffset < 0 ? -1 : sourceColumnAt(markerSource, sourceOffset)
         const rootLines = lexer.rootLines ?? lexer.lines
         for (let index = 1; index < bodyLines.length; index++) {
           const source = rootLines[bodyLineNumbers[index]! - 1]
-          if (source !== undefined && sourceColumn(source, quotePrefixDepth(source)) === leadColumn &&
-              isListMarkerLine(bodyLines[index]!.trimStart())) bodyLines[index] = bodyLines[index]!.trimStart()
+          const lead = bodyLines[index]!.trimStart()
+          // A quoted line's own `>` is no host prefix, so the quote lead reads past the marker line's hosts only.
+          const depth = quotePrefixDepth(quoteLead ? markerSource : source ?? '')
+          if (source !== undefined && sourceColumn(source, depth) === leadColumn &&
+              (quoteLead ? RE_BLOCKQUOTE.test(lead) : isListMarkerLine(lead))) bodyLines[index] = lead
         }
       }
       // The same authored-base rule list items use, now in the definition body's
