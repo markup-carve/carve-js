@@ -3941,6 +3941,11 @@ class CarveRenderSession {
           return body
         }
         let itemSource = spellItem(renderItem(node.tight))
+        // A writer boundary expands to an authored blank between direct children.
+        // Under L1 the item then re-reads loose, so spell that loose lead on the
+        // first pass rather than making a second fmt pass add its paragraph gap.
+        if (node.tight && itemSource.includes(this.boundaryTag()))
+          itemSource = spellItem(renderItem(false))
         if (needsReadback && !readsBack(itemSource)) {
           const looseItemSource = spellItem(renderItem(false))
           if (readsBack(looseItemSource)) itemSource = looseItemSource
