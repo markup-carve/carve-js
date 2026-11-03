@@ -28,7 +28,7 @@ describe('an ordered list names its delimiter in the HTML', () => {
 
   it('is derived per list, so a nested list carries its own', () => {
     expect(carveToHtml('1. outer\n\n   1) inner\n')).toBe(
-      '<ol>\n  <li>outer\n    <ol data-delim=")">\n      <li>inner</li>\n    </ol>\n  </li>\n</ol>',
+      "<ol>\n  <li><p>outer</p>\n    <ol data-delim=\")\">\n      <li>inner</li>\n    </ol>\n  </li>\n</ol>",
     )
   })
 

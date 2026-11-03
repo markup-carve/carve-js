@@ -7,7 +7,7 @@
   {
     "id": "row-2",
     "source": "- x\n\n  > para\n  ^ cap\n",
-    "html": "<ul>\n  <li>x\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>x</p>\n    <figure>\n      <blockquote><p>para</p></blockquote>\n      <figcaption>cap</figcaption>\n    </figure>\n  </li>\n</ul>"
   },
   {
     "id": "row-3",

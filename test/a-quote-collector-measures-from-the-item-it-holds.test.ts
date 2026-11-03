@@ -45,12 +45,12 @@ const cases: Array<[string, string, string]> = [
     // sample's own indentation.
     'quoted indented code an item holds is fenced at the item column',
     lines('> - alpha', '>', '>' + sp(7) + 'code'),
-    lines('> {loose}', '> - alpha', '>', '>' + sp(3) + '```', '>' + sp(3) + 'code', '>' + sp(3) + '```'),
+    lines('> - alpha', '>', '>' + sp(3) + '```', '>' + sp(3) + 'code', '>' + sp(3) + '```'),
   ],
   [
     'and the item stays open across a line that is still its own',
     lines('> - alpha', '>' + sp(3) + 'more', '>', '>' + sp(7) + 'code'),
-    lines('> {loose}', '> - alpha', '>' + sp(3) + 'more', '>', '>' + sp(3) + '```', '>' + sp(3) + 'code', '>' + sp(3) + '```'),
+    lines('> - alpha', '>' + sp(3) + 'more', '>', '>' + sp(3) + '```', '>' + sp(3) + 'code', '>' + sp(3) + '```'),
   ],
 ]
 

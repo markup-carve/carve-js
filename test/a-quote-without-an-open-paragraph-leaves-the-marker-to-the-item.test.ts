@@ -18,7 +18,9 @@ it.each([
   '* k\n  > ```\n  > code\n  > ```\n  q\n  - m\n',
 ])('leaves a marker to the item after a quote with no open paragraph', (source) => {
   const html = carveToHtml(source)
-  expect(html).toContain('    </blockquote>\n    q\n    <ul>')
+  expect(html).toContain(source.includes('\n\n\n')
+    ? '    </blockquote>\n    <p>q</p>\n    <ul>'
+    : '    </blockquote>\n    q\n    <ul>')
   expect(html).toContain('      <li>m</li>')
   expect(html).not.toContain('q\n- m')
 })

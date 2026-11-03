@@ -3,21 +3,20 @@ import { carveToHtml } from '../src/index.js'
 
 /*
  * Compact list blocks (A1) + list-continuation marker (A3) -- Carve dialect,
- * always on. A blank line before a sub-block no longer loosens the item, and a
+ * always on. A blank line before a direct sub-block loosens the item, and a
  * lone `+` at the marker column attaches the following flush-left block to the
  * item. Both keep the list tight; canonical djot would render these loose.
  */
 describe('compact list blocks (A1)', () => {
-  it('a blank line before a sub-block keeps the item tight', () => {
+  it('a blank line before a sub-block loosens the item', () => {
     expect(carveToHtml('- item\n\n  > note\n- next')).toBe(
-      '<ul>\n  <li>item\n    <blockquote><p>note</p></blockquote>\n  </li>\n  <li>next</li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <blockquote><p>note</p></blockquote>\n  </li>\n  <li><p>next</p></li>\n</ul>",
     )
   })
 
-  it('a fenced code block after a blank stays tight', () => {
+  it('a fenced code block after a blank loosens its list', () => {
     const html = carveToHtml('- run\n\n  ```sh\n  make\n  ```\n- next')
-    expect(html).toContain('<li>run\n    <pre>')
-    expect(html).not.toContain('<li><p>run</p>')
+    expect(html).toContain('<li><p>run</p>\n    <pre>')
   })
 
   it('a blank line inside a fenced code block does not loosen the list', () => {

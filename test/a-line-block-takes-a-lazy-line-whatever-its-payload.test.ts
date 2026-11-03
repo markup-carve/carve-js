@@ -40,7 +40,7 @@ for (const [marker, list, indent] of [['- a', 'ul', '  '], ['1. a', 'ol', '   ']
     it(`keeps the lazy line in ${marker} after ${JSON.stringify(payload)}`, () => {
       const lines = payload.split('\n').map((line) => indent + line).join('\n')
       expect(normalize(carveToHtml(`${marker}\n\n${indent}::: |\n${lines}\nafter`))).toBe(
-        normalize(`<${list}><li>a<div class="line-block"><p>${body}</p></div></li></${list}>`),
+        normalize(`<${list}><li><p>a</p><div class="line-block"><p>${body}</p></div></li></${list}>`),
       )
     })
   }
@@ -86,7 +86,10 @@ for (const [name, host, indent] of [
           : name === 'quoted item'
             ? `<blockquote><ul><li>a${block}</li></ul></blockquote>`
             : `<ul><li>a${block}</li></ul>`
-        expect(normalize(carveToHtml(source))).toBe(normalize(html))
+        const loosened = blank
+          ? html.replace(name === 'nested item' ? '<li>b' : '<li>a', name === 'nested item' ? '<li><p>b</p>' : '<li><p>a</p>')
+          : html
+        expect(normalize(carveToHtml(source))).toBe(normalize(loosened))
       })
     }
   }
@@ -103,6 +106,6 @@ it('ends the quoted line block at an unmarked list marker after a shifted fence 
 it('removes the lazy frame in a line block inside a quoted div', () => {
   const source = '> - b\n>\n>   :::\n>     ::: |\n>     ```\n>   :::\n>   para\n>   ```\nlazy\n'
   expect(normalize(carveToHtml(source))).toBe(normalize(
-    '<blockquote><ul><li>b<div><div class="line-block"><p><code>\n:::\npara\n</code><br>lazy</p></div></div></li></ul></blockquote>',
+    '<blockquote><ul><li><p>b</p><div><div class="line-block"><p><code>\n:::\npara\n</code><br>lazy</p></div></div></li></ul></blockquote>',
   ))
 })

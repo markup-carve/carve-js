@@ -424,7 +424,7 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     const afterBlank = lines[nestedStart]
     if (nestedStart !== i && afterBlank !== undefined &&
         afterBlank.length - afterBlank.trimStart().length === offset + 2 &&
-        afterBlank.slice(offset + 2).startsWith('- ')) i = nestedStart
+        afterBlank.slice(offset + 2).startsWith('- ')) return undefined
     if (lines[i] !== undefined) {
       const nextIndent = lines[i]!.length - lines[i]!.trimStart().length
       if (nextIndent > offset) {

@@ -38,7 +38,7 @@ describe('a list marker at the content column inside an open fence', () => {
 
   it('is code text when the fence opened after a blank line (corpus row 2)', () => {
     expect(carveToHtml('- a\n\n  ```\n  - x\n  ```\n').trim()).toBe(
-      '<ul>\n  <li>a\n    <pre><code>- x\n</code></pre>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>a</p>\n    <pre><code>- x\n</code></pre>\n  </li>\n</ul>',
     )
   })
 

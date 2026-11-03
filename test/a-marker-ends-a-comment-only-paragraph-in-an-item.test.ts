@@ -8,7 +8,7 @@ const html = (source: string) => carveToHtml(source).replace(/\s+</g, '<').repla
 describe('a marker after a comment-only paragraph in an item (carve#4890)', () => {
   it('keeps one loose sublist and a tight outer item', () => {
     expect(carveToHtml('- p\n\n  - a\n\n  {% c %}\n  - b\n')).toBe(
-      '<ul>\n  <li>p\n    <ul>\n      <li><p>a</p></li>\n      <li><p>b</p></li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>p</p>\n    <ul>\n      <li><p>a</p></li>\n      <li><p>b</p></li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 

@@ -23,7 +23,7 @@ describe('carve cause reproductions carve-js renders as the spec model', () => {
     [
       'carve#4363 reproduction 2',
       "- p\n\n   * x\n   - y\n",
-      "<ul>\n  <li>p\n    <ul>\n      <li>x</li>\n    </ul>\n    <ul>\n      <li>y</li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li><p>p</p>\n    <ul>\n      <li>x</li>\n    </ul>\n    <ul>\n      <li>y</li>\n    </ul>\n  </li>\n</ul>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)

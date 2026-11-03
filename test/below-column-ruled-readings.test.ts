@@ -22,8 +22,8 @@ for (const indent of [6, 8]) {
         `>${' '.repeat(indent + 1)}:::`,
         '1. lazy',
       )
-      expect(normalized(renderHtml(parse(source)))).toBe(rootList)
-      expect(normalized(renderHtml(parse(source, { positions: true })))).toBe(rootList)
+      expect(normalized(renderHtml(parse(source)))).toBe(blank ? rootList.replace("<li>c\n          <div>", "<li><p>c</p><div>") : rootList)
+      expect(normalized(renderHtml(parse(source, { positions: true })))).toBe(blank ? rootList.replace("<li>c\n          <div>", "<li><p>c</p><div>") : rootList)
     })
   }
 }

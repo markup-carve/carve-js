@@ -9,7 +9,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a heading leaves no item paragraph open', () => {
   it('an indented item heading after a blank ends the item', () => {
     expect(carveToHtml('- text\n\n  # N\nlazy')).toBe(
-      '<ul>\n  <li>text\n    <h1 id="N">N</h1>\n  </li>\n</ul>\n<p>lazy</p>',
+      "<ul>\n  <li><p>text</p>\n    <h1 id=\"N\">N</h1>\n  </li>\n</ul>\n<p>lazy</p>",
     )
   })
 
@@ -42,7 +42,7 @@ describe('a heading leaves no item paragraph open', () => {
     // A caption (`^ …`) is a heading terminator, so it ends the item's lazy
     // continuation instead of joining it, matching carve-php / carve-rs.
     expect(carveToHtml('- text\n\n  # H\n^ cap')).toBe(
-      '<ul>\n  <li>text\n    <h1 id="H">H</h1>\n  </li>\n</ul>\n<p>^ cap</p>',
+      "<ul>\n  <li><p>text</p>\n    <h1 id=\"H\">H</h1>\n  </li>\n</ul>\n<p>^ cap</p>",
     )
   })
 

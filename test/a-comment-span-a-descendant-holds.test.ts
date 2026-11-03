@@ -71,7 +71,7 @@ describe('a comment span a descendant holds', () => {
     [
       'control: a blank before a VISIBLE block the child holds',
       '- outer\n  - head\n\n    ```\n    a\n    ```\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    tail\n  </li>\n</ul>',
     ],
     [
       'control: a span the OUTER item holds ends its paragraph',

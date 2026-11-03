@@ -9,7 +9,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a fence run that dedents out of a child keeps the outer item tight', () => {
   it('the ticket case', () => {
     expect(carveToHtml('- outer\n  - head\n\n    ```\n    a\n  ```\n\n  tail\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>",
     )
   })
 
@@ -25,13 +25,13 @@ describe('a fence run that dedents out of a child keeps the outer item tight', (
 
   it('an ordered outer item reads the same', () => {
     expect(carveToHtml('1. outer\n   - head\n\n     ```\n     a\n   ```\n\n   tail\n')).toBe(
-      '<ol>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ol>',
+      "<ol>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ol>",
     )
   })
 
   it('a quote host reads the same', () => {
     expect(carveToHtml('> - outer\n>   - head\n>\n>     ```\n>     a\n>   ```\n>\n>   tail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>outer\n      <ul>\n        <li>head\n          <pre><code>a\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+      "<blockquote>\n  <ul>\n    <li>outer\n      <ul>\n        <li><p>head</p>\n          <pre><code>a\n</code></pre>\n        </li>\n      </ul>\n      <pre><code>\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
     )
   })
 

@@ -8,7 +8,7 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
   it('inner post-blank block keeps the outer item tight', () => {
     // outer `a` is bare (tight), only inner `b` carries the block.
     expect(carveToHtml('- a\n  - b\n\n    > q\n')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <blockquote><p>q</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <blockquote><p>q</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -32,12 +32,12 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
     expect(carveToHtml('- a\n\n  text\n')).toBe('<ul>\n  <li><p>a</p>\n    <p>text</p>\n  </li>\n</ul>')
   })
 
-  it("the outer item's OWN blank+sub-block keeps it tight", () => {
-    expect(carveToHtml('- a\n\n  > q\n')).toContain('<li>a\n    <blockquote>')
+  it("the outer item's blank before its own child block loosens it", () => {
+    expect(carveToHtml('- a\n\n  > q\n')).toContain('<li><p>a</p>\n    <blockquote>')
   })
 
   it('an above-content-column block opener uses its authored base and stays tight (§24 C3)', () => {
-    expect(carveToHtml('- one\n\n   # h\n')).toBe('<ul>\n  <li>one\n    <h1 id="h">h</h1>\n  </li>\n</ul>')
+    expect(carveToHtml('- one\n\n   # h\n')).toBe("<ul>\n  <li><p>one</p>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>")
   })
 
   it('a nested TASK item (content column is the bullet width, not the checkbox) keeps the outer tight', () => {

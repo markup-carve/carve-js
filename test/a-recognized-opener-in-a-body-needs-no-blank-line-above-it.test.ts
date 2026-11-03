@@ -152,7 +152,7 @@ describe('a recognized opener in a body needs no blank line above it', () => {
         '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body</p>\n    <blockquote><p>q\nr</p></blockquote>\n  </dd>\n</dl>',
       )
       expect(carveToHtml('- intro\n\n  :: term\n  :  definition\n   > q\n   > r\n')).toBe(
-        '<ul>\n  <li>intro\n    <dl>\n      <dt>term</dt>\n      <dd>definition</dd>\n    </dl>\n    <blockquote><p>q\nr</p></blockquote>\n  </li>\n</ul>',
+        "<ul>\n  <li><p>intro</p>\n    <dl>\n      <dt>term</dt>\n      <dd>definition</dd>\n    </dl>\n    <blockquote><p>q\nr</p></blockquote>\n  </li>\n</ul>",
       )
     })
 

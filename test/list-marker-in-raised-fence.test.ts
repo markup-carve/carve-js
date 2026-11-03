@@ -3,13 +3,13 @@ import { carveToHtml } from '../src/index.js'
 
 // Expectations verified with the layout and HTML checker at spec 32c0b881.
 const hosts = [
-  ['item', 2, '- head\n\n', '', '<ul>\n  <li>head\n    ', '\n  </li>\n</ul>'],
+  ['item', 2, '- head\n\n', '', '<ul>\n  <li><p>head</p>\n    ', '\n  </li>\n</ul>'],
   [
     'nested',
     4,
     '- outer\n\n  - inner\n\n',
     '',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        ',
+    '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        ',
     '\n      </li>\n    </ul>\n  </li>\n</ul>',
   ],
   [
@@ -17,7 +17,7 @@ const hosts = [
     2,
     '> - head\n>\n',
     '> ',
-    '<blockquote>\n  <ul>\n    <li>head\n      ',
+    '<blockquote>\n  <ul>\n    <li><p>head</p>\n      ',
     '\n    </li>\n  </ul>\n</blockquote>',
   ],
 ] as const
@@ -60,7 +60,7 @@ describe('list markers inside raised fences', () => {
     [
       'column-zero marker still ends the item',
       '- head\n\n      ```\n      a\n- second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n  <li>second</li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n  <li><p>second</p></li>\n</ul>",
     ],
     [
       'document fence keeps marker payload',
@@ -70,27 +70,27 @@ describe('list markers inside raised fences', () => {
     [
       'tab opener keeps marker at content column',
       '- head\n\n\t  ```\n\t  a\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n- second\n</code></pre>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n- second\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'raised fence closer "  ```" before marker',
       '- head\n\n      ```\n      a\n  ```\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>",
     ],
     [
       'raised fence closer "      ```" before marker',
       '- head\n\n      ```\n      a\n      ```\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>",
     ],
     [
       'raised fence closer "    ```" before marker',
       '- head\n\n      ```\n      a\n    ```\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>",
     ],
     [
       'raised fence closer "        ```" before marker',
       '- head\n\n      ```\n      a\n        ```\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n  ```\n- second\n</code></pre>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n  ```\n- second\n</code></pre>\n  </li>\n</ul>",
     ],
   ] as const
   for (const [name, source, expected] of guards) {

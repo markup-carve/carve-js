@@ -12,7 +12,7 @@
   {
     "id": "control-bt-one-q2-f2-b-p0-7",
     "source": "- text\n  > quote\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-one-q3-f3-n-p0-7",
@@ -27,12 +27,12 @@
   {
     "id": "fixed-bt-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ```\n   code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ```\n>    code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-bt-two-q2-f2-n-p0-7",
@@ -42,7 +42,7 @@
   {
     "id": "control-bt-two-q2-f2-b-p0-7",
     "source": "- text\n  > q\n  > r\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-two-q3-f3-n-p0-7",
@@ -57,12 +57,12 @@
   {
     "id": "fixed-bt-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ```\n   code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ```\n>    code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-bt-nest-q2-f2-n-p0-7",
@@ -72,7 +72,7 @@
   {
     "id": "control-bt-nest-q2-f2-b-p0-7",
     "source": "- text\n  > > q\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-nest-q3-f3-n-p0-7",
@@ -87,12 +87,12 @@
   {
     "id": "fixed-bt-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ```\n   code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ```\n>    code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-bt-qlist-q2-f2-n-p0-7",
@@ -102,7 +102,7 @@
   {
     "id": "control-bt-qlist-q2-f2-b-p0-7",
     "source": "- text\n  > - q\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-qlist-q3-f3-n-p0-7",
@@ -117,12 +117,12 @@
   {
     "id": "fixed-bt-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ```\n   code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ```\n>    code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-bt-qhead-q2-f2-n-p0-7",
@@ -132,7 +132,7 @@
   {
     "id": "control-bt-qhead-q2-f2-b-p0-7",
     "source": "- text\n  > # h\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <h1 id=\"h\">h</h1>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <h1 id=\"h\">h</h1>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "control-bt-qcode-q2-f2-n-p0-7",
@@ -142,7 +142,7 @@
   {
     "id": "control-bt-qcode-q2-f2-b-p0-7",
     "source": "- text\n  > ```\n  > x\n  > ```\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <pre><code>x\n</code></pre>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <pre><code>x\n</code></pre>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "control-tl-one-q2-f2-n-p0-7",
@@ -152,7 +152,7 @@
   {
     "id": "control-tl-one-q2-f2-b-p0-7",
     "source": "- text\n  > quote\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-one-q3-f3-n-p0-7",
@@ -167,12 +167,12 @@
   {
     "id": "fixed-tl-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ~~~\n   code\n   ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ~~~\n>    code\n>    ~~~\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-tl-two-q2-f2-n-p0-7",
@@ -182,7 +182,7 @@
   {
     "id": "control-tl-two-q2-f2-b-p0-7",
     "source": "- text\n  > q\n  > r\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-two-q3-f3-n-p0-7",
@@ -197,12 +197,12 @@
   {
     "id": "fixed-tl-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ~~~\n   code\n   ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ~~~\n>    code\n>    ~~~\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-tl-nest-q2-f2-n-p0-7",
@@ -212,7 +212,7 @@
   {
     "id": "control-tl-nest-q2-f2-b-p0-7",
     "source": "- text\n  > > q\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-nest-q3-f3-n-p0-7",
@@ -227,12 +227,12 @@
   {
     "id": "fixed-tl-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ~~~\n   code\n   ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ~~~\n>    code\n>    ~~~\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-tl-qlist-q2-f2-n-p0-7",
@@ -242,7 +242,7 @@
   {
     "id": "control-tl-qlist-q2-f2-b-p0-7",
     "source": "- text\n  > - q\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-qlist-q3-f3-n-p0-7",
@@ -257,12 +257,12 @@
   {
     "id": "fixed-tl-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ~~~\n   code\n   ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ~~~\n>    code\n>    ~~~\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "control-tl-qhead-q2-f2-n-p0-7",
@@ -272,7 +272,7 @@
   {
     "id": "control-tl-qhead-q2-f2-b-p0-7",
     "source": "- text\n  > # h\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <h1 id=\"h\">h</h1>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <h1 id=\"h\">h</h1>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "control-tl-qcode-q2-f2-n-p0-7",
@@ -282,7 +282,7 @@
   {
     "id": "control-tl-qcode-q2-f2-b-p0-7",
     "source": "- text\n  > ```\n  > x\n  > ```\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <pre><code>x\n</code></pre>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <pre><code>x\n</code></pre>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-one-q3-f3-n-p0-7",
@@ -297,12 +297,12 @@
   {
     "id": "fixed-raw-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ```=html\n   <b>x</b>\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ```=html\n>    <b>x</b>\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-two-q3-f3-n-p0-7",
@@ -317,12 +317,12 @@
   {
     "id": "fixed-raw-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ```=html\n   <b>x</b>\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ```=html\n>    <b>x</b>\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-nest-q3-f3-n-p0-7",
@@ -337,12 +337,12 @@
   {
     "id": "fixed-raw-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ```=html\n   <b>x</b>\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ```=html\n>    <b>x</b>\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-qlist-q3-f3-n-p0-7",
@@ -357,52 +357,52 @@
   {
     "id": "fixed-raw-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ```=html\n   <b>x</b>\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <b>x</b>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-raw-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ```=html\n>    <b>x</b>\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <b>x</b>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ```\n   code\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ```\n>    code\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ```\n   code\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ```\n>    code\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ```\n   code\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ```\n>    code\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ```\n   code\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btopen-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ```\n>    code\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-one-q3-f3-n-p0-7",
@@ -417,12 +417,12 @@
   {
     "id": "fixed-btdeep-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ```\n     code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ```\n>      code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-two-q3-f3-n-p0-7",
@@ -437,12 +437,12 @@
   {
     "id": "fixed-btdeep-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ```\n     code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ```\n>      code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-nest-q3-f3-n-p0-7",
@@ -457,12 +457,12 @@
   {
     "id": "fixed-btdeep-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ```\n     code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ```\n>      code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-qlist-q3-f3-n-p0-7",
@@ -477,52 +477,52 @@
   {
     "id": "fixed-btdeep-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ```\n     code\n   ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <pre><code>  code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-btdeep-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ```\n>      code\n>    ```\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <pre><code>  code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-div-one-q3-f4-b-p0-7",
     "source": "- text\n   > quote\n\n    ::: box\n    in\n    :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-div-one-q3-f4-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>     ::: box\n>     in\n>     :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-div-two-q3-f4-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n    ::: box\n    in\n    :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-div-two-q3-f4-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>     ::: box\n>     in\n>     :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-div-nest-q3-f4-b-p0-7",
     "source": "- text\n   > > q\n\n    ::: box\n    in\n    :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-div-nest-q3-f4-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>     ::: box\n>     in\n>     :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-div-qlist-q3-f4-b-p0-7",
     "source": "- text\n   > - q\n\n    ::: box\n    in\n    :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <div class=\"box\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-div-qlist-q3-f4-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>     ::: box\n>     in\n>     :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <div class=\"box\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-one-q3-f3-n-p0-7",
@@ -537,12 +537,12 @@
   {
     "id": "fixed-lineblock-one-q3-f3-b-p0-7",
     "source": "- text\n   > quote\n\n   ::: |\n   in\n   :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-one-q3-f3-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>    ::: |\n>    in\n>    :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>quote</p></blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-two-q3-f3-n-p0-7",
@@ -557,12 +557,12 @@
   {
     "id": "fixed-lineblock-two-q3-f3-b-p0-7",
     "source": "- text\n   > q\n   > r\n\n   ::: |\n   in\n   :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>q\nr</p></blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>q\nr</p></blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-two-q3-f3-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>    ::: |\n>    in\n>    :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote><p>q\nr</p></blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-nest-q3-f3-n-p0-7",
@@ -577,12 +577,12 @@
   {
     "id": "fixed-lineblock-nest-q3-f3-b-p0-7",
     "source": "- text\n   > > q\n\n   ::: |\n   in\n   :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <blockquote><p>q</p></blockquote>\n    </blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-nest-q3-f3-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>    ::: |\n>    in\n>    :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-qlist-q3-f3-n-p0-7",
@@ -597,12 +597,12 @@
   {
     "id": "fixed-lineblock-qlist-q3-f3-b-p0-7",
     "source": "- text\n   > - q\n\n   ::: |\n   in\n   :::\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote>\n      <ul>\n        <li>q</li>\n      </ul>\n    </blockquote>\n    <div class=\"line-block\">\n      <p>in</p>\n    </div>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-lineblock-qlist-q3-f3-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>    ::: |\n>    in\n>    :::\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>text</p>\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n      <div class=\"line-block\">\n        <p>in</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-fnote-one-q3-f4-b-p0-7",
@@ -697,7 +697,7 @@
   {
     "id": "fixed-bt-quoteblank-4-after-0--",
     "source": "- text\n    > quote\n\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-quote6-6-after-0--",
@@ -737,7 +737,7 @@
   {
     "id": "fixed-tl-quoteblank-4-after-0--",
     "source": "- text\n    > quote\n\n    ~~~\n    code\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>text\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>text</p>\n    <blockquote><p>quote</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "fixed-tl-quote6-6-after-0--",

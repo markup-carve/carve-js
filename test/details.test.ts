@@ -65,7 +65,7 @@ describe('details disclosure extension', () => {
     expect(h('- item\n\n  ::: details "T"\n  x\n  :::')).toBe(
       [
         '<ul>',
-        '  <li>item',
+        '  <li><p>item</p>',
         '    <details>',
         '      <summary>T</summary>',
         '      <p>x</p>',

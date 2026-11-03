@@ -24,16 +24,13 @@ const h = (s: string) => carveToHtml(s)
  * marker, so nothing split there and those cases always attached. That is why
  * the nested list was the only block type in an item that lost its attributes.
  *
- * The blank line decides nothing here, and no rule keys on it: with no blank
- * line an attribute before a PARAGRAPH inside an item already attached before
- * this fix. Both spellings are pinned below, and the neighbouring block types
- * are pinned as controls so a future change cannot buy one row by breaking
- * another.
+ * The blank line now loosens the list under PART 9 §17 L1. Both spellings are
+ * pinned below, and the neighboring block types are pinned as controls.
  */
 describe('an attribute block before a nested list (carve#1238)', () => {
   it('attaches to the sub-list across a blank line (row B)', () => {
     expect(h('- a\n\n  {.x}\n  - b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="x">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"x\">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -54,28 +51,28 @@ describe('an attribute block before a nested list (carve#1238)', () => {
 
   it('attaches to an ORDERED sub-list', () => {
     expect(h('- a\n\n  {.x}\n  1. b\n')).toBe(
-      '<ul>\n  <li>a\n    <ol class="x">\n      <li>b</li>\n    </ol>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ol class=\"x\">\n      <li>b</li>\n    </ol>\n  </li>\n</ul>",
     )
   })
 
   it('attaches to a TASK sub-list', () => {
     expect(h('- a\n\n  {.x}\n  - [ ] b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="task-list x">\n      <li><input type="checkbox" disabled aria-label="b"> b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"task-list x\">\n      <li><input type=\"checkbox\" disabled aria-label=\"b\"> b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
   it('attaches at a DEEPER nesting level, where the same split repeats', () => {
     expect(h('- a\n  - b\n\n    {.x}\n    - c\n')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul class="x">\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <ul class=\"x\">\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
   it('carries an id, and merges a stacked run of attribute lines (§15 A3)', () => {
     expect(h('- a\n\n  {#sub}\n  - b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul id="sub">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul id=\"sub\">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>",
     )
     expect(h('- a\n\n  {.x}\n  {#i}\n  - b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="x" id="i">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"x\" id=\"i\">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -83,19 +80,19 @@ describe('an attribute block before a nested list (carve#1238)', () => {
     // A comment renders nothing, so it is not "the next block" - the same rule
     // that already applied when the next block was a paragraph.
     expect(h('- a\n\n  {.x}\n  %% note\n  - b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="x">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"x\">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
   it.each([
-    ['blank line', '- a\n\n  {.x}\n  - b\n', '- a\n  {.x}\n  - b\n'],
+    ['blank line', '- a\n\n  {.x}\n  - b\n', '- a\n\n  {.x}\n  - b\n'],
     ['no blank line', '- a\n  {.x}\n  - b\n', '- a\n  {.x}\n  - b\n'],
     [
       'attribute line after the item prose',
       '- a\n  para\n  {.x}\n  - b\n',
       '- a\n  para\n  {.x}\n  - b\n',
     ],
-    ['id, class and key together', '- a\n\n  {#s .y k=v}\n  1. b\n', '- a\n  {#s .y k=v}\n  1. b\n'],
+    ['id, class and key together', '- a\n\n  {#s .y k=v}\n  1. b\n', '- a\n\n  {#s .y k=v}\n  1. b\n'],
   ])('survives the formatter (%s)', (_name, src, expected) => {
     // The formatter round-trip is only worth asserting because the attributes
     // are in the tree to begin with: `carveToHtml(fmt(x)) === carveToHtml(x)`
@@ -118,10 +115,10 @@ describe('an attribute block before a nested list (carve#1238)', () => {
 
 describe('the blocks that already attached keep attaching (controls)', () => {
   it.each([
-    ['paragraph after a blank', '- a\n\n  {.x}\n  para\n', '<p class="x">para</p>'],
-    ['paragraph with no blank', '- a\n  {.x}\n  para\n', '<p class="x">para</p>'],
-    ['block quote', '- a\n\n  {.x}\n  > q\n', '<blockquote class="x">'],
-    ['code fence', '- a\n\n  {.x}\n  ```\n  code\n  ```\n', '<pre class="x">'],
+    ['paragraph after a blank', '- a\n\n  {.x}\n  para\n', "<ul>\n  <li><p>a</p>\n    <p class=\"x\">para</p>\n  </li>\n</ul>"],
+    ['paragraph with no blank', '- a\n  {.x}\n  para\n', "<ul>\n  <li>a\n    <p class=\"x\">para</p>\n  </li>\n</ul>"],
+    ['block quote', '- a\n\n  {.x}\n  > q\n', "<ul>\n  <li><p>a</p>\n    <blockquote class=\"x\"><p>q</p></blockquote>\n  </li>\n</ul>"],
+    ['code fence', '- a\n\n  {.x}\n  ```\n  code\n  ```\n', "<ul>\n  <li><p>a</p>\n    <pre class=\"x\"><code>code\n</code></pre>\n  </li>\n</ul>"],
   ])('%s', (_name, src, expected) => {
     expect(h(src)).toContain(expected)
   })
@@ -144,7 +141,7 @@ describe('the blocks that already attached keep attaching (controls)', () => {
     // Both forms at once: the block line attributes the sub-list, the abutting
     // block attributes the item inside it.
     expect(h('- a\n\n  {.x}\n  -{.y} b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="x">\n      <li class="y">b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"x\">\n      <li class=\"y\">b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -155,7 +152,7 @@ describe('the blocks that already attached keep attaching (controls)', () => {
     // deletes this paragraph and re-tightens the item.
     expect(h('- a\n\n   {.c}\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
     expect(h('- a\n\n   {.c}\n  - b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="c">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <ul class=\"c\">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -174,13 +171,9 @@ describe('the blocks that already attached keep attaching (controls)', () => {
   })
 })
 
-describe('tightness does not move (PART 9 §17 L1/L2)', () => {
-  it('L2: a blank before an attributed sub-list leaves the item TIGHT', () => {
-    // "A blank line before an item's sub-BLOCK ... does NOT loosen: the item
-    // stays tight, lead text inline, block attached." Attaching the attributes
-    // must not turn the sub-list into something that loosens.
-    expect(h('- a\n\n  {.x}\n  - b\n')).toContain('<li>a\n')
-    expect(h('- a\n\n  {.x}\n  - b\n')).not.toContain('<li><p>a</p>')
+describe('an attributed child block follows the list looseness rule', () => {
+  it('a blank before an attributed sub-list loosens its parent item', () => {
+    expect(h('- a\n\n  {.x}\n  - b\n')).toContain('<li><p>a</p>')
   })
 
   it('L1: a blank between siblings still loosens the outer list', () => {

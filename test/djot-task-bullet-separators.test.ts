@@ -22,7 +22,9 @@ test('Only Native task prefixes become checkboxes', () => {
     const children = 'childNodes' in node ? node.childNodes.filter(child => !(['#document-fragment', 'section', 'blockquote', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr'].includes(node.nodeName) && 'value' in child && /^[\t\r\n ]*$/.test(child.value))).map(shape) : []
     if (node.nodeName === 'thead' || node.nodeName === 'tbody') return children
     const attrs = 'attrs' in node ? node.attrs.filter(attr => !(attr.name === 'scope' && attr.value === 'col') && !['data-delim', 'data-task-state', 'aria-label'].includes(attr.name)).map(attr => [attr.name, ['href', 'src'].includes(attr.name) ? attr.value.replace(/ /g, '%20') : attr.value]).sort() : []
-    return [node.nodeName, attrs, children.flatMap(child => Array.isArray(child) && Array.isArray(child[0]) ? child : [child])]
+    // CARVE-P9-017 L1 makes blank-separated direct children loose even when Native Djot keeps them tight.
+    const owned = node.nodeName === 'li' ? children.flatMap(child => Array.isArray(child) && child[0] === 'p' && Array.isArray(child[1]) && child[1].length === 0 ? child[2] as unknown[] : [child]) : children
+    return [node.nodeName, attrs, owned.flatMap((child, index) => typeof child === 'string' && index < owned.length - 1 ? [child.replace(/ $/, '')] : Array.isArray(child) && Array.isArray(child[0]) ? child : [child])]
   }
   const failures = []
   for (const row of controls) {

@@ -13,7 +13,7 @@ const cases: Array<[string, string, string]> = [
   ['image at depth 3', '- - - text\n\n    ![i](x.png)\n  - mid\n- c\n', '- - - text\n\n    ![i](x.png)\n\n  - mid\n- c\n'],
   ['paragraph at depth 2', '- - text\n\n  after\n- c\n', '- - text\n\n  after\n\n- c\n'],
   ['paragraph at depth 3', '- - - text\n\n    after\n- c\n', '- - - text\n\n    after\n- c\n'],
-  ['table', '- - text\n\n  | a |\n  | - |\n  | b |\n- c\n', '- - text\n\n  | a |\n  | --- |\n  | b |\n- c\n'],
+  ['table', '- - text\n\n  | a |\n  | - |\n  | b |\n- c\n', '- - text\n\n  | a |\n  | --- |\n  | b |\n\n- c\n'],
 ]
 
 describe('the Markdown target below a nested list', () => {
@@ -21,7 +21,7 @@ describe('the Markdown target below a nested list', () => {
     expect(carveToMarkdown(source)).toBe(expected)
   })
 
-  it('stays glued where the block below interrupts a paragraph on its own', () => {
-    expect(carveToMarkdown('- - text\n\n  # h\n- c\n')).toBe('- - text\n  # h\n- c\n')
+  it('keeps the separator where the heading changes list looseness', () => {
+    expect(carveToMarkdown('- - text\n\n  # h\n- c\n')).toBe('- - text\n  # h\n\n- c\n')
   })
 })

@@ -2,61 +2,61 @@
   {
     "source": "- - a\n  %%% note\n  ```\n  %%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%% note\n  ```\n  %%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%% note\n  ~~~\n  %%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%% note\n  ~~~\n  %%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%% note\n  ```=html\n  %%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%% note\n  ```=html\n  %%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
@@ -258,61 +258,61 @@
   {
     "source": "- - a\n  %%%% note\n  ```\n  %%%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%%% note\n  ```\n  %%%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%%% note\n  ~~~\n  %%%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%%% note\n  ~~~\n  %%%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%%% note\n  ```=html\n  %%%% end\n    - ```\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - a\n  %%%% note\n  ```=html\n  %%%% end\n    - ```\n\n\ntail\n",
     "codes": [
-  {
-    "pre": true,
-    "value": "\n\n"
-  }
-],
+      {
+        "pre": true,
+        "value": "\n\n"
+      }
+    ],
     "html": "<ul>\n  <li>\n    <ul>\n      <li>a\n        <ul>\n          <li>\n            <pre><code>\n\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
@@ -1577,7 +1577,7 @@
         "value": "%%% y\nz\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n    ```\n    %%% y\n    z\n\ntail\n",
@@ -1597,7 +1597,7 @@
         "value": "%%% y\nz\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - %%% x\n  - b\n\n      ```\n      %%% y\n      z\n\ntail\n",
@@ -1607,7 +1607,7 @@
         "value": "%%% y\nz\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n      ```\n      %%% y\n      z\n\ntail\n",
@@ -1627,7 +1627,7 @@
         "value": "%%% y\nz\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - %%% x\n  - b\n\n  ```\n  %%% y\n  z\n\n\ntail\n",
@@ -1667,7 +1667,7 @@
         "value": "%%% y\nz\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n    ```\n    %%% y\n    z\n\n\ntail\n",
@@ -1687,7 +1687,7 @@
         "value": "%%% y\nz\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - %%% x\n  - b\n\n      ```\n      %%% y\n      z\n\n\ntail\n",
@@ -1697,7 +1697,7 @@
         "value": "%%% y\nz\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n      ```\n      %%% y\n      z\n\n\ntail\n",
@@ -1717,7 +1717,7 @@
         "value": "%%% y\nz\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - %%% x\n  - b\n\n  ```\n  %%% y\n  z\n\n\n\ntail\n",
@@ -1757,7 +1757,7 @@
         "value": "%%% y\nz\n\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n    ```\n    %%% y\n    z\n\n\n\ntail\n",
@@ -1777,7 +1777,7 @@
         "value": "%%% y\nz\n\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - %%% x\n  - b\n\n      ```\n      %%% y\n      z\n\n\n\ntail\n",
@@ -1787,7 +1787,7 @@
         "value": "%%% y\nz\n\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- - > %%% x\n\n      ```\n      %%% y\n      z\n\n\n\ntail\n",
@@ -1807,6 +1807,6 @@
         "value": "%%% y\nz\n\n\n\n"
       }
     ],
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>a</li>\n      <li></li>\n      <li>b\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>a</p></li>\n      <li></li>\n      <li><p>b</p>\n        <pre><code>%%% y\nz\n\n\n\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>tail</p>"
   }
 ]

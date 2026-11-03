@@ -84,14 +84,14 @@ describe('borrowed HTML layout', () => {
     }
   })
 
-  it('accepts blank lines before a nested bullet list without changing HTML', () => {
+  it('routes a blank before a nested bullet list through the parser', () => {
     for (const source of [
       '- first\n- second\n\n  - nested *strong*\n  - another\n',
       '- first\n\n\n  - nested\n',
       '- first\n\n  - nested\n\n    - deeper\n- last\n',
     ]) {
-      expect(tryFastHtml(source, {}), source).toBe(authoritative(source))
-      expect(tryFastHtmlWithStats(source, {})?.accepted.unorderedListItems, source).toBeGreaterThan(1)
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
     }
   })
 
@@ -108,15 +108,11 @@ describe('borrowed HTML layout', () => {
     }
   })
 
-  it('uses the fast path for the unchanged shared JavaScript benchmark fixture', () => {
+  it('routes the shared JavaScript benchmark fixture through the parser', () => {
     const source = readFileSync(new URL('./fixtures/bench-commonmark-core.crv', import.meta.url), 'utf8')
     const result = tryFastHtmlWithStats(source, {})
-    expect(result).toBeDefined()
-    expect(result!.accepted.headings).toBe(151)
-    expect(result!.accepted.unorderedListItems).toBe(600)
-    expect(result!.accepted.thematicBreaks).toBe(150)
-    expect(result!.html).toBe(authoritative(source))
-    expect(carveToHtml(source)).toBe(result!.html)
+    expect(result).toBeUndefined()
+    expect(carveToHtml(source)).toBe(authoritative(source))
   })
 
   it('accepts adjacent definitions and preserves reference resolution', () => {
@@ -219,7 +215,7 @@ describe('borrowed HTML layout', () => {
     // Corpus 617 adds an unmarked CSV fence that stays on the code path.
     // The Unicode headings in corpus 15-5 and 119 take the borrowed route.
     // Spaced thematic breaks (carve#4814) add corpus 132 and 132-5.
-    expect(accepted).toBe(80)
+    expect(accepted).toBe(79)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',

@@ -28,11 +28,11 @@ const cases = [
   },
   {
     "source": "- outer\n  - para\n  > q\n\n    ```\n",
-    "html": "<ul><li>outer\n    <ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
+    "html": "<ul><li><p>outer</p><ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
   },
   {
     "source": "- outer\n  - para\n\n  > q\n\n    ```\n",
-    "html": "<ul><li>outer\n    <ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
+    "html": "<ul><li><p>outer</p><ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
   },
   {
     "source": "- ::: box\n  :::\n%% c\n  text\n",
@@ -60,11 +60,11 @@ const cases = [
   },
   {
     "source": "- outer\n  - para\n  > q\n\n    ~~~\n",
-    "html": "<ul><li>outer\n    <ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
+    "html": "<ul><li><p>outer</p><ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
   },
   {
     "source": "- outer\n  - para\n\n  > q\n\n    ~~~\n",
-    "html": "<ul><li>outer\n    <ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
+    "html": "<ul><li><p>outer</p><ul><li>para</li></ul><blockquote><p>q</p></blockquote><pre><code></code></pre></li></ul>"
   },
   {
     "source": "- intro\n  %% a\n %% b\ntail\n",

@@ -83,7 +83,7 @@ describe('a Markdown item marker line opens an HTML block', () => {
 
   it('counts a tab after the content column as the columns it covers', () => {
     const written = markdownToCarve('- a\n\n  \t<div>\n')
-    expect(written).toBe('{loose}\n- a\n\n  ```=html\n  <div>\n  ```\n')
+    expect(written).toBe('- a\n\n  ```=html\n  <div>\n  ```\n')
     expect(carveToHtml(written)).toBe('<ul>\n  <li><p>a</p>\n    <div>\n  </li>\n</ul>')
   })
 })

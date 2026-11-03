@@ -160,7 +160,7 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
   // marker opens an item as it always has.
   it('control: a blank line escapes the quote', () => {
     expect(carveToHtml('- a\n  > - x\n\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 
@@ -172,7 +172,7 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
 
   it('control: a blank line after the prose escapes it too', () => {
     expect(carveToHtml('- a\n  > - x\n  p\n\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 

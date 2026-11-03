@@ -16,7 +16,7 @@ describe('trailing item content after a description', () => {
   const source = '- intro\n\n  :: term\n  :  definition\n      # H\n  tail\n'
 
   it('re-emits the tail as a 2-space continuation, not a + lead-in', () => {
-    expect(carveToCarve(source)).toBe('- intro\n  :: term\n  : definition\n\n    # H\n  tail\n')
+    expect(carveToCarve(source)).toBe("- intro\n\n  :: term\n  : definition\n\n    # H\n\n  tail\n")
   })
 
   it('preserves the rendering and is idempotent', () => {

@@ -31,5 +31,5 @@ it.each([
 
 it('keeps a block indented into the item inside the item', () => {
   const html = carveToHtml(djotToCarve('[^1]: - a\n\n        > q\n\nt[^1]\n'))
-  expect(html).toMatch(/<li>a\s*<blockquote><p>q<\/p><\/blockquote>\s*<\/li>/)
+  expect(html).toMatch(/<li><p>a<\/p>\s*<blockquote><p>q<\/p><\/blockquote>\s*<\/li>/)
 })

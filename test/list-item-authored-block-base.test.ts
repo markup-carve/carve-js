@@ -46,7 +46,7 @@ describe('list-item authored block bases (carve#1705)', () => {
 
   it('canonicalizes the opener base but preserves payload indentation', () => {
     const formatted = carveToCarve('- x\n\n   ```\n     c\n   ```\n')
-    expect(formatted).toBe('- x\n  ```\n    c\n  ```\n')
+    expect(formatted).toBe('- x\n\n  ```\n    c\n  ```\n')
     expect(carveToCarve(formatted)).toBe(formatted)
   })
 

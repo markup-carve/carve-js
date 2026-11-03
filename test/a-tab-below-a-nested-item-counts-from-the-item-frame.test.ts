@@ -7,7 +7,7 @@ const html = (source: string) => carveToHtml(source).replace(/\s*\n\s*/g, '')
 describe('a tab below a nested item counts from the item frame', () => {
   it.each([
     ['- o\n  -   e\n  \t> q\n', '<ul><li>o<ul><li>e<blockquote><p>q</p></blockquote></li></ul></li></ul>'],
-    ['- o\n  -   e\n\n  \t> q\n', '<ul><li>o<ul><li>e<blockquote><p>q</p></blockquote></li></ul></li></ul>'],
+    ['- o\n  -   e\n\n  \t> q\n', '<ul><li>o<ul><li><p>e</p><blockquote><p>q</p></blockquote></li></ul></li></ul>'],
     ['- o\n  -   e\n  \t# h\n', '<ul><li>o<ul><li>e<h1 id="h">h</h1></li></ul></li></ul>'],
     ['- o\n  -   e\n  \t- z\n', '<ul><li>o<ul><li>e<ul><li>z</li></ul></li></ul></li></ul>'],
   ])('%j', (source, expected) => expect(html(source)).toBe(expected))

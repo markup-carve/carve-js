@@ -14,7 +14,7 @@ describe('a term folds an indented block opener at every depth', () => {
   it.each([
     ['top level heading', ':: c\n  # H\n', '<dl><dt>c</dt></dl><section id="H"><h1>H</h1></section>'],
     ['quoted heading', '> :: c\n>   # H\n', '<blockquote><dl><dt>c</dt></dl><h1 id="H">H</h1></blockquote>'],
-    ['heading in a list item', '- item\n\n  :: c\n    # H\n', '<ul><li>item<dl><dt>c</dt></dl><h1 id="H">H</h1></li></ul>'],
+    ['heading in a list item', '- item\n\n  :: c\n    # H\n', '<ul><li><p>item</p><dl><dt>c</dt></dl><h1 id="H">H</h1></li></ul>'],
     [
       'heading in a description',
       ':: a\n: b\n  :: c\n    # H\n',
@@ -28,7 +28,7 @@ describe('a term folds an indented block opener at every depth', () => {
     [
       'note in a list item',
       '- item\n\n  :: c\n    ::: note\n    body\n    :::\n',
-      '<ul><li>item<dl><dt>c</dt></dl><aside class="admonition note" aria-label="Note"><p>body</p></aside></li></ul>',
+      '<ul><li><p>item</p><dl><dt>c</dt></dl><aside class="admonition note" aria-label="Note"><p>body</p></aside></li></ul>',
     ],
     [
       'second term in a description',
@@ -128,7 +128,7 @@ describe('a comment or a definition under a term', () => {
       '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',
     )
     expect(flat('x[^n]\n\n- item\n\n  :: c\n    [^n]: y\n')).toBe(
-      '<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p><ul><li>item<dl><dt>c</dt></dl></li></ul><section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>y<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>',
+      '<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p><ul><li><p>item</p><dl><dt>c</dt></dl></li></ul><section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>y<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p></li></ol></section>',
     )
     expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n  [r]: /u\n')).toBe(
       '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',

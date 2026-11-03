@@ -177,7 +177,7 @@
   {
     "id": "carve#4305 heading after a blank in an item",
     "source": "- a\n\n  :: T\n  : # h\nafter\n",
-    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <dl>\n      <dt>T</dt>\n      <dd>\n        <h1 id=\"h\">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "paragraph on the marker line keeps the lazy line",

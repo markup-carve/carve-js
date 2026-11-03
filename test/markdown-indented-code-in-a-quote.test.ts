@@ -108,7 +108,6 @@ describe('indented code inside a block quote', () => {
     )
     expect(carve).toBe(
       lines(
-        '{loose}',
         '- item',
         '',
         sp(2) + '> para',

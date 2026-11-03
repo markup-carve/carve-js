@@ -39,32 +39,32 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'depth 2, the run at column 0 reaches the document',
       "- a\n  - b\n\n    ```\n    p\n```\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
     ],
     [
       'depth 2, the run at column 1 is prose at the document',
       "- a\n  - b\n\n    ```\n    p\n ```\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'depth 3, the run at column 0 ends all three items',
       "- a\n  - b\n    - c\n\n      ```\n      p\n```\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li><p>c</p>\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>",
     ],
     [
       'depth 3, the run at column 2 stops at the outer item',
       "- a\n  - b\n    - c\n\n      ```\n      p\n  ```\n\n      tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <pre><code>\n    tail\n</code></pre>\n  </li>\n</ul>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li><p>c</p>\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <pre><code>\n    tail\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'a tilde run degrades to prose at column 1',
       "- a\n  - b\n\n    ~~~\n    p\n ~~~\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'a raw fence ends the same way',
       "- a\n  - b\n\n    ```=html\n    <b>p</b>\n```\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <b>p</b>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <b>p</b>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
     ],
     [
       'an interrupting fence ends at the break',
@@ -79,12 +79,12 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'a line below every column is not fence payload',
       "- outer\n  - head\n\n        ```\n        a\ntext\n",
-      "<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>",
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>",
     ],
     [
       "the item's own block ends the descendant's fence, so the run opens its own fence",
       "- i0\n  - i1\n\n    ```\n    p\n\n  para\n```\n\n    tail\n",
-      "<ul>\n  <li><p>i0</p>\n    <ul>\n      <li>i1\n        <pre><code>p\n\n</code></pre>\n      </li>\n    </ul>\n    <p>para</p>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
+      "<ul>\n  <li><p>i0</p>\n    <ul>\n      <li><p>i1</p>\n        <pre><code>p\n\n</code></pre>\n      </li>\n    </ul>\n    <p>para</p>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
     ],
     [
       'a sibling marker ends it the same way',
@@ -109,22 +109,22 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       "CONTROL: an ancestor's own paragraph below the child column ends the fence",
       "- a\n  - b\n\n    ```\n    p\n\n   para\nx\n",
-      "<ul>\n  <li><p>a</p>\n    <ul>\n      <li>b\n        <pre><code>p\n\n</code></pre>\n      </li>\n    </ul>\n    <p>para\nx</p>\n  </li>\n</ul>",
+      "<ul>\n  <li><p>a</p>\n    <ul>\n      <li><p>b</p>\n        <pre><code>p\n\n</code></pre>\n      </li>\n    </ul>\n    <p>para\nx</p>\n  </li>\n</ul>",
     ],
     [
       'CONTROL: a line at an intermediate column ends it at depth three',
       "- i0\n  - i1\n    - i2\n\n      ```\n      p\n\n    para\nx\n",
-      "<ul>\n  <li>i0\n    <ul>\n      <li><p>i1</p>\n        <ul>\n          <li>i2\n            <pre><code>p\n\n</code></pre>\n          </li>\n        </ul>\n        <p>para</p>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
+      "<ul>\n  <li>i0\n    <ul>\n      <li><p>i1</p>\n        <ul>\n          <li><p>i2</p>\n            <pre><code>p\n\n</code></pre>\n          </li>\n        </ul>\n        <p>para</p>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
     ],
     [
       'CONTROL: a comment-shaped payload line does not stop the real closer',
       "- a\n  - b\n\n    ```\n    %%%\n    ```\n    %%%\n    q\nx\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>%%%\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <pre><code>%%%\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
     ],
     [
       'CONTROL: the run at the outer item column closes nothing and stays there',
       "- a\n  - b\n\n    ```\n    p\n  ```\n\n    tail\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n  tail\n</code></pre>\n  </li>\n</ul>",
+      "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <pre><code>p\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\n  tail\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'with no blank the run still ends the fence',

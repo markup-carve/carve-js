@@ -2,82 +2,82 @@
   {
     "id": "dedent-0",
     "source": "- item\n\n  ::: |\n  %%%\npayload\n  %%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-1",
     "source": "> - item\n>\n>   ::: |\n>   %%%\n> payload\n>   %%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-2",
     "source": "- item\n\n  ::: |\n  %%%\n payload\n  %%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-3",
     "source": "> - item\n>\n>   ::: |\n>   %%%\n>  payload\n>   %%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-4",
     "source": "- item\n\n  ::: |\n  %%%\n  payload\n  %%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-5",
     "source": "> - item\n>\n>   ::: |\n>   %%%\n>   payload\n>   %%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-6",
     "source": "- item\n\n  ::: |\n  %%%\n\tpayload\n  %%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-7",
     "source": "> - item\n>\n>   ::: |\n>   %%%\n> \tpayload\n>   %%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-8",
     "source": "- item\n\n  ::: |\n  %%%%\npayload\n  %%%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-9",
     "source": "> - item\n>\n>   ::: |\n>   %%%%\n> payload\n>   %%%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-10",
     "source": "- item\n\n  ::: |\n  %%%%\n payload\n  %%%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-11",
     "source": "> - item\n>\n>   ::: |\n>   %%%%\n>  payload\n>   %%%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-12",
     "source": "- item\n\n  ::: |\n  %%%%\n  payload\n  %%%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-13",
     "source": "> - item\n>\n>   ::: |\n>   %%%%\n>   payload\n>   %%%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-14",
     "source": "- item\n\n  ::: |\n  %%%%\n\tpayload\n  %%%%\n  :::\n",
-    "html": "<ul>\n  <li>item\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>item</p>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-15",
     "source": "> - item\n>\n>   ::: |\n>   %%%%\n> \tpayload\n>   %%%%\n>   :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>item\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>item</p>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-16",
@@ -162,81 +162,81 @@
   {
     "id": "dedent-32",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\npayload\n    %%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-33",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%\n> payload\n>     %%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-34",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n payload\n    %%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-35",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%\n>  payload\n>     %%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-36",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n  payload\n    %%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
   },
   {
     "id": "dedent-37",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%\n>   payload\n>     %%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-38",
     "source": "- a\n  - b\n\n    ::: |\n    %%%\n\tpayload\n    %%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-39",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%\n> \tpayload\n>     %%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-40",
     "source": "- a\n  - b\n\n    ::: |\n    %%%%\npayload\n    %%%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-41",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%%\n> payload\n>     %%%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-42",
     "source": "- a\n  - b\n\n    ::: |\n    %%%%\n payload\n    %%%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
   },
   {
     "id": "dedent-43",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%%\n>  payload\n>     %%%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
   },
   {
     "id": "dedent-44",
     "source": "- a\n  - b\n\n    ::: |\n    %%%%\n  payload\n    %%%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
   },
   {
     "id": "dedent-45",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%%\n>   payload\n>     %%%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "dedent-46",
     "source": "- a\n  - b\n\n    ::: |\n    %%%%\n\tpayload\n    %%%%\n    :::\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "dedent-47",
     "source": "> - a\n>   - b\n>\n>     ::: |\n>     %%%%\n> \tpayload\n>     %%%%\n>     :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <div class=\"line-block\">\n\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   }
 ]

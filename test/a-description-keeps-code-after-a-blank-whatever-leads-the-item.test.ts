@@ -27,7 +27,7 @@ for (const [name, lead, open] of leads) {
 
   it(`releases code at the item's column after a blank in an item led by ${name}`, () => {
     const source = lines(...lead, '', `  ${FENCE}`, '  code', `  ${FENCE}`, 'after')
-    const html = `${open}<dt>term</dt><dd>definition</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>`
+    const html = `${name === 'text' ? '<ul><li><p>intro</p><dl>' : open}<dt>term</dt><dd>definition</dd></dl><pre><code>code\n</code></pre></li></ul><p>after</p>`
     expect(normalized(renderHtml(parse(source)))).toBe(html)
   })
 }

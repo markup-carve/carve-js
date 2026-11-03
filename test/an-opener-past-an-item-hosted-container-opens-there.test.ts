@@ -25,7 +25,7 @@ tail
 
   ---
     \`\`\`
-`, '<ul><li>outer<ul><li>para</li></ul><hr><pre><code></code></pre></li></ul>'],
+`, '<ul><li><p>outer</p><ul><li>para</li></ul><hr><pre><code></code></pre></li></ul>'],
     ['ended sublist with an unclosed fence', `- outer
   - para
     \`\`\`

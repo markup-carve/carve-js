@@ -21,6 +21,6 @@ describe('literal definition markers in Markdown paragraphs', () => {
     const source = '- one\n  :: term\n:  def\n'
     const markdown = carveToMarkdown(source, { roundtrip: true })
     expect(markdown).toContain('\n:  def\n')
-    expect(carveToHtml(markdownToCarve(markdown))).toBe(carveToHtml(source))
+    expect(carveToHtml(markdownToCarve(markdown))).toBe(carveToHtml('- one\n\n  :: term\n:  def\n'))
   })
 })

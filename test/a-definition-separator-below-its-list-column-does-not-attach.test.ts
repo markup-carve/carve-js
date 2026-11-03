@@ -16,10 +16,10 @@ describe('a definition separator below its list column', () => {
 
   it('folds into the description after a blank line in the item (carve#3547)', () => {
     expect(carveToHtml('- item\n\n  :: Term\n  :  Def\n :  under\n')).toBe(
-      '<ul>\n  <li>item\n    <dl>\n      <dt>Term</dt>\n      <dd>Def\n:  under</dd>\n    </dl>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <dl>\n      <dt>Term</dt>\n      <dd>Def\n:  under</dd>\n    </dl>\n  </li>\n</ul>",
     )
     expect(carveToHtml('- item\n\n  :: Term\n  :  Def\n\n :  under\n')).toBe(
-      '<ul>\n  <li>item\n    <dl>\n      <dt>Term</dt>\n      <dd>Def</dd>\n    </dl>\n  </li>\n</ul>\n<p>:  under</p>',
+      "<ul>\n  <li><p>item</p>\n    <dl>\n      <dt>Term</dt>\n      <dd>Def</dd>\n    </dl>\n  </li>\n</ul>\n<p>:  under</p>",
     )
   })
 

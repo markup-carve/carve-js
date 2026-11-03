@@ -29,37 +29,37 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'family 1: a closer at column 0, trailing line at the outer column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n  tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n  tail\n</code></pre>",
     ],
     [
       'family 1: a closer at column 0, trailing line at the child column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>",
     ],
     [
       'family 1: a closer at column 0, trailing line past the child column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n      tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n      tail\n</code></pre>",
     ],
     [
       'family 1: a closer at column 1, trailing line at the outer column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n tail\n</code></pre>",
     ],
     [
       'family 1: a closer at column 1, trailing line at the child column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'family 1: a closer at column 1, trailing line past the child column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n     tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n     tail\n</code></pre>",
     ],
     [
       'family 2: a band closer at an over-indent of one, blank before',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
     [
       'family 2: a band closer at an over-indent of one, no blank before',
@@ -69,12 +69,12 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'family 2: the trailing line at the child column joins the div',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
     [
       'family 2: the trailing line past the child column joins the div',
       '- outer\n  - head\n\n     :::\n     a\n :::\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
   ])('%s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
@@ -90,7 +90,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a code closer at the outer column still closes',
       '- outer\n  - head\n\n    ```\n    a\n  ```\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    <pre><code>\ntail\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'a code closer at the child column still closes',
@@ -105,17 +105,17 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a band closer at no over-indent is payload already',
       '- outer\n  - head\n\n    :::\n    a\n :::\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
     [
       'a colon closer at the fence base still closes',
       '- outer\n  - head\n\n     :::\n     a\n     :::\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>",
     ],
     [
       'a colon closer at column zero still closes',
       '- outer\n  - head\n\n     :::\n     a\n:::\n\n  tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <div>\n          <p>a</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
     // A FENCE BODY REACHED THE COLUMN. The first version of the family 2 guard
     // read the authored-base eligibility set, which also excludes a line
@@ -125,22 +125,22 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a raised colon container rebases its nested code block',
       '- item\n\n   :::\n\n   ```\n   a\n   ```\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>",
     ],
     [
       'the same container with no blank before the fence',
       '- item\n\n   :::\n   ```\n   a\n   ```\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>",
     ],
     [
       'the same container one column deeper',
       '- item\n\n    :::\n\n    ```\n    a\n    ```\n    :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <pre><code>a\n</code></pre>\n    </div>\n  </li>\n</ul>",
     ],
     [
       'a raised colon container rebases a nested comment fence',
       '- item\n\n   :::\n\n   %%%\n   a\n   %%%\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n\n    </div>\n  </li>\n</ul>",
     ],
     // THE HOLD REACHES EVERY FOLDED LINE, NOT ONLY A COLON RUN. A heading, a
     // thematic break or a quote written in the band is text where the host folded
@@ -148,22 +148,22 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a folded heading stays text',
       '- item\n\n   :::\n   a\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>",
     ],
     [
       'a folded thematic break stays text',
       '- item\n\n   :::\n   a\n ---\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<hr>\n<div>\n\n</div>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<hr>\n<div>\n\n</div>",
     ],
     [
       'a folded quote marker stays text',
       '- item\n\n   :::\n   a\n > q\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>\n<div>\n\n</div>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<blockquote><p>q</p></blockquote>\n<div>\n\n</div>",
     ],
     [
       'a heading that reached the column is still a block',
       '- item\n\n    :::\n    a\n  # heading\n    :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <h1 id="heading">heading</h1>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n      <h1 id=\"heading\">heading</h1>\n    </div>\n  </li>\n</ul>",
     ],
     // AND IT STOPS AT AN OPAQUE PAYLOAD. A comment fence's own closing run can be
     // written in the band, and holding it there left the payload open with the
@@ -176,7 +176,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a flush comment closer ends it too, and the band run after it is text',
       '- item\n\n   :::\n\n   %%%\n   a\n%%%\n :::\n\n  tail\n',
-      '<ul>\n  <li>item\n    <div>\n\n    </div>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<div>\n  <p>tail</p>\n</div>",
     ],
     // AN UNTERMINATED FENCE OPENS NO PAYLOAD, so the hold still reaches a folded
     // line below it. The first attempt at the opaque arm marked everything after
@@ -185,17 +185,17 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a degraded comment fence leaves the folded heading as text',
       '- item\n\n   :::\n   a\n   %%%\n   b\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>",
     ],
     [
       'an unclosed tilde fence leaves it as text too',
       '- item\n\n   :::\n   a\n   ~~~\n   b\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<section id="heading">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>",
     ],
     [
       'a terminated comment fence still leaves it as text',
       '- item\n\n   :::\n   a\n   %%%\n   b\n   %%%\n # heading\n   :::\n',
-      "<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>",
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n  <div>\n\n  </div>\n</section>",
     ],
     // A VERBATIM CLOSER RE-BASES AND A COMMENT ONE DOES NOT, so a folded run is
     // the comment fence's closer and never the code fence's. Reading it as one
@@ -203,12 +203,12 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a folded code run is not a closer at column zero',
       '- item\n\n   :::\n   a\n   ```\n   b\n```\n   :::\n\n  tail\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>   :::\n\n  tail\n</code></pre>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>   :::\n\n  tail\n</code></pre>",
     ],
     [
       'nor in the band',
       '- item\n\n   :::\n   a\n   ```\n   b\n ```\n   :::\n\n  tail\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>  :::\n\n tail\n</code></pre>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <p>a</p>\n      <pre><code>b\n</code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>  :::\n\n tail\n</code></pre>",
     ],
     // A closer that REACHED the container's column is not folded, and it still
     // closes from there. The lookahead accepts the group's own base and the
@@ -216,7 +216,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a closer at the container column still closes the payload',
       '- item\n\n   :::\n   ```\n   x\n  ```\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <pre><code>x\n</code></pre>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>item</p>\n    <div>\n      <pre><code>x\n</code></pre>\n    </div>\n  </li>\n</ul>",
     ],
   ])('control: %s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
@@ -331,7 +331,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a blank before the opener keeps the block',
       '- outer\n  - head\n\n     ```\n     a\n ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n   tail\n</code></pre>",
     ],
     [
       'a body line at the fence base still rebases with it',

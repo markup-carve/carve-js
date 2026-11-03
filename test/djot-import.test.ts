@@ -97,7 +97,7 @@ describe('djotToCarve', () => {
     ['-  -\t-', '<hr>'],
     ['      * * * *', '<hr>'],
     ['> * * *', '<hr>'],
-    ['- item\n\n  * * *', '<li>item\n    <hr>'],
+    ['- item\n\n  * * *', '<li><p>item</p>\n    <hr>'],
   ])('preserves a Djot thematic break in %s', (source, needle) => {
     expect(carveToHtml(djotToCarve(source))).toContain(needle)
   })

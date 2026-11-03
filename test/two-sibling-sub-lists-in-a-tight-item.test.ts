@@ -61,7 +61,7 @@ describe('two sibling sub-lists in a tight item', () => {
   it('writes the ticket document back as the author wrote it', () => {
     const source = '- outer\n\n  - a\n\n\n\n  - b\n'
     expect(shape(source)).toBe('document(list(list_item(list(list_item),list(list_item))))')
-    expect(carveToCarve(source)).toBe('- outer\n  - a\n\n\n\n  - b\n')
+    expect(carveToCarve(source)).toBe("- outer\n\n  - a\n\n\n\n  - b\n")
     roundTrips(source)
   })
 
@@ -83,13 +83,13 @@ describe('two sibling sub-lists in a tight item', () => {
 
   it('collapses a longer run to three inside an item too (§10i)', () => {
     const six = '- outer\n\n  - a\n\n\n\n\n\n\n  - b\n'
-    expect(carveToCarve(six)).toBe('- outer\n  - a\n\n\n\n  - b\n')
+    expect(carveToCarve(six)).toBe("- outer\n\n  - a\n\n\n\n  - b\n")
     roundTrips(six)
   })
 
   it('separates a third and a fourth sub-list the same way', () => {
     const three = '- outer\n\n  - a\n\n\n\n  - b\n\n\n\n  - c\n'
-    expect(carveToCarve(three)).toBe('- outer\n  - a\n\n\n\n  - b\n\n\n\n  - c\n')
+    expect(carveToCarve(three)).toBe("- outer\n\n  - a\n\n\n\n  - b\n\n\n\n  - c\n")
     roundTrips(three)
     roundTrips('- o\n\n  - a\n\n\n\n  - b\n\n\n\n  - c\n\n\n\n  - d\n')
   })
@@ -106,7 +106,7 @@ describe('two sibling sub-lists in a tight item', () => {
 
   it('separates sub-lists two levels down', () => {
     const source = '- L1\n\n  - L2\n\n    - a\n\n\n\n    - b\n'
-    expect(carveToCarve(source)).toBe('- L1\n  - L2\n    - a\n\n\n\n    - b\n')
+    expect(carveToCarve(source)).toBe("- L1\n\n  - L2\n\n    - a\n\n\n\n    - b\n")
     roundTrips(source)
   })
 
@@ -133,7 +133,7 @@ describe('two sibling sub-lists in a tight item', () => {
     // the boundary opens are `>` lines - an empty line would end the quote and
     // take the second list out of it.
     const source = '> - outer\n>\n>   - a\n>\n>\n>\n>   - b\n'
-    expect(carveToCarve(source)).toBe('> - outer\n>   - a\n>\n>\n>\n>   - b\n')
+    expect(carveToCarve(source)).toBe("> - outer\n>\n>   - a\n>\n>\n>\n>   - b\n")
     roundTrips(source)
   })
 
@@ -164,7 +164,7 @@ describe('two sibling sub-lists in a tight item', () => {
 describe('a sub-list in a tight item gets the separator its neighbour needs', () => {
   it('writes one blank line below a block at the marker column', () => {
     // §17 L3 puts the attached paragraph at column 0; the sub-list at the item's content column stays the item's.
-    const source = '- x\n+\np2\n\n  - b\n'
+    const source = "- x\n\n  p2\n\n  - b\n"
     expect(carveToCarve(source)).toBe(source)
     roundTrips(source)
   })
@@ -174,7 +174,7 @@ describe('a sub-list in a tight item gets the separator its neighbour needs', ()
     // sub-list became text inside the quote. This shape carries no boundary at
     // all - it failed on its own before #1501 and the same rule settles it.
     const source = '- x\n  > q\n\n  - b\n'
-    expect(carveToCarve(source)).toBe('- x\n  > q\n\n  - b\n')
+    expect(carveToCarve(source)).toBe("- x\n\n  > q\n\n  - b\n")
     roundTrips(source)
     roundTrips('- x\n\n  - a\n\n  > q\n\n  - b\n')
   })
@@ -196,18 +196,15 @@ describe('a sub-list in a tight item gets the separator its neighbour needs', ()
     // The bound on the rule: a heading, fence, table, break, div or admonition
     // closes at its last line, so the sub-list opens on the next one and owes
     // nothing. A blank line here would be a construct the document did not have.
-    expect(carveToCarve('- x\n\n  # h\n\n  - b\n')).toBe('- x\n  # h\n  - b\n')
-    expect(carveToCarve('- x\n\n  | a |\n\n  - b\n')).toBe('- x\n  | a |\n  - b\n')
-    expect(carveToCarve('- x\n\n  ***\n\n  - b\n')).toBe('- x\n  ***\n  - b\n')
-    expect(carveToCarve('- outer\n\n  - a\n')).toBe('- outer\n  - a\n')
+    expect(carveToCarve('- x\n\n  # h\n\n  - b\n')).toBe("- x\n\n  # h\n\n  - b\n")
+    expect(carveToCarve('- x\n\n  | a |\n\n  - b\n')).toBe("- x\n\n  | a |\n\n  - b\n")
+    expect(carveToCarve('- x\n\n  ***\n\n  - b\n')).toBe("- x\n\n  ***\n\n  - b\n")
+    expect(carveToCarve('- outer\n\n  - a\n')).toBe("- outer\n\n  - a\n")
   })
 
-  it('leaves the marker column to the kinds that still need it', () => {
-    // Two sibling blockquotes, tables, line blocks and definition lists merge
-    // when written adjacent and CAN be attached at column 0, because none of
-    // them opens there in preference to being attached. They keep the `+`.
-    expect(carveToCarve('- outer\n\n  > a\n\n  > b\n')).toContain('\n+\n')
-    expect(carveToCarve('- outer\n\n  | a |\n\n  | b |\n')).toContain('\n+\n')
+  it('preserves the blank boundary between sibling child blocks', () => {
+    expect(carveToCarve('- outer\n\n  > a\n\n  > b\n')).toBe('- outer\n\n  > a\n\n  > b\n')
+    expect(carveToCarve('- outer\n\n  | a |\n\n  | b |\n')).toBe('- outer\n\n  | a |\n\n  | b |\n')
     roundTrips('- outer\n\n  > a\n\n  > b\n')
     roundTrips('- outer\n\n  | a |\n\n  | b |\n')
   })
@@ -215,7 +212,7 @@ describe('a sub-list in a tight item gets the separator its neighbour needs', ()
   it('owes nothing to sub-lists whose markers already differ', () => {
     // carve#286's axis: different markers separate on their own, so no
     // boundary is written and the author's adjacency survives.
-    expect(carveToCarve('- outer\n\n  - a\n\n  * b\n')).toBe('- outer\n  - a\n  * b\n')
+    expect(carveToCarve('- outer\n\n  - a\n\n  * b\n')).toBe("- outer\n\n  - a\n\n  * b\n")
     roundTrips('- outer\n\n  - a\n\n\n\n  * b\n')
   })
 })

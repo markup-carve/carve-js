@@ -57,7 +57,7 @@ describe('a blank line before a comment span loosens the list', () => {
     ['a fence below it', '- t\n\n  ```\n  x\n\n  %%%\n  c\n  %%%\n- s\n'],
     ["a fence on a CHILD item's marker line", '- outer\n  - ```\n    x\n\n    %%%\n    c\n    %%%\n- s\n'],
   ])('a %%%%%% run inside verbatim payload is not a comment block: %s', (_name, source) => {
-    expect(carveToHtml(source)).toContain('<li>s</li>')
+    expect(carveToHtml(source)).toContain(source.startsWith('- t\n\n') ? '<li><p>s</p></li>' : '<li>s</li>')
   })
 
   it('a comment span after a CLOSED code fence still loosens', () => {

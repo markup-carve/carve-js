@@ -20,19 +20,19 @@ import { carveToHtml } from '../src/index.js'
 describe('corpus 519: a shifted fence in a quoted item stores no continuation claim', () => {
   it('a flush line after an unclosed shifted fence is the document’s', () => {
     expect(carveToHtml('> - a\n>\n>     ```\n>     x\nflush\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>',
+      "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>",
     )
   })
 
   it('a flush line between two payload lines ends the quote there', () => {
     expect(carveToHtml('> - a\n>\n>     ~~~\n>     x\nz\n>     b\n>     ~~~\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>z</p>\n<blockquote>\n  <p>b</p>\n  <pre><code></code></pre>\n</blockquote>',
+      "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>z</p>\n<blockquote>\n  <p>b</p>\n  <pre><code></code></pre>\n</blockquote>",
     )
   })
 
   it('reads a raw fence two quotes deep the same way', () => {
     expect(carveToHtml('> > - a\n> >\n> >     ```=html\n> >     x\nflush\n')).toBe(
-      '<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        x\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>flush</p>',
+      "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        x\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>flush</p>",
     )
   })
 
