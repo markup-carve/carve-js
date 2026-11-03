@@ -1462,6 +1462,12 @@ const IMPLEMENTED = new Set([
   'three-blank-lines-end-a-description-list',
   'unicode-letters-block-bare-emphasis',
   'whitespace-after-a-leading-content-tab-is-not-content',
+  'a-braced-comment-before-a-flag-opener-counts-as-nothing',
+  'a-line-after-a-comment-block-in-a-line-block-reads-the-stanza-without-it',
+  'a-list-marker-in-an-item-ends-a-comment-only-paragraph',
+  'a-name-ending-in-a-hyphen-leaves-the-next-marker-free',
+  'an-accepted-plus-needs-a-follower-that-reaches-its-host',
+  'an-invisible-line-keeps-a-description-entry-open',
 ])
 
 /**

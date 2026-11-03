@@ -25,9 +25,6 @@
   "an-offset-past-a-removed-line-names-the-line-it-is-on.test.ts": {
     "an offset past a line the block layer removed names the line it is on > agrees with its own line table on every span of every corpus document": "#3921"
   },
-  "corpus.test.ts": {
-    "spec corpus coverage guard > every corpus base category is in IMPLEMENTED": "#3921"
-  },
   "deep-term-comment-code-tails.test.ts": {
     "keeps the definition term column after its comment: comment-term-claude-1043": "#3922",
     "keeps the definition term column after its comment: comment-term-claude-1059": "#3922",
