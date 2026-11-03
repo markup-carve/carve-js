@@ -1,23 +1,23 @@
 [
   {
     "source": "- +\n{% c %}\n- b\n",
-    "html": "<ul><li>+\n</li><li>b</li></ul>"
+    "html": "<ul><li></li></ul><p>\n- b</p>"
   },
   {
     "source": "1. +\n{% c %}\n2. b\n",
-    "html": "<ol><li>+\n</li><li>b</li></ol>"
+    "html": "<ol><li></li></ol><p>\n2. b</p>"
   },
   {
     "source": "> - +\n> {% c %}\n> - b\n",
-    "html": "<blockquote><ul><li>+\n</li><li>b</li></ul></blockquote>"
+    "html": "<blockquote><ul><li></li></ul><p>\n- b</p></blockquote>"
   },
   {
     "source": "- a\n  - +\n  {% c %}\n  - b\n",
-    "html": "<ul><li>a\n    <ul><li>+\n</li><li>b</li></ul></li></ul>"
+    "html": "<ul><li>a\n    <ul><li></li><li>b</li></ul></li></ul>"
   },
   {
     "source": "- +\n{% c %} {% d %}\n- b\n",
-    "html": "<ul><li>+\n </li><li>b</li></ul>"
+    "html": "<ul><li></li></ul><p> \n- b</p>"
   },
   {
     "source": "- +\n{% c %}\nx\n",

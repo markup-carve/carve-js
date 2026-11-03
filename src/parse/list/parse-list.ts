@@ -399,6 +399,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, isItemAttachBoundary)
     }
     if (!firstBlockMarker) return { kind: 'none' }
+    // Ownership already classified these definition lines as invisible to the
+    // marker. Let the first-block reader reach the next visible follower.
+    const root = lexer.documentRoot ?? lexer
+    while (root.skippedAbbreviations?.has(lexer.lineNumber(lexer.pos) - 1) &&
+        !root.separatingAbbreviations?.has(lexer.lineNumber(lexer.pos) - 1)) lexer.consume()
     if (lexer.peek() === undefined || isBlankLine(lexer.peek()!)) return { kind: 'none' }
     return attachedFirstBlockItem(lexer, session, shape, head, placement, isItemAttachBoundary, flags)
   }

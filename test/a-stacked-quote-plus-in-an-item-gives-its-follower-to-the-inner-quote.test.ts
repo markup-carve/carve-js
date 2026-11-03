@@ -6,7 +6,7 @@ const flat = (html: string): string => html.split('\n').map((line) => line.trim(
 // Stacked openers on one line keep the innermost owner (CARVE-P9-067, markup-carve/carve-js#3454).
 describe('a stacked quote plus opened on its own line in a host', () => {
   const cases: Array<[string, string]> = [
-    ['- a\n  > > +\n  > q\n', '<ul><li>a<blockquote><blockquote><p>q</p></blockquote></blockquote></li></ul>'],
+    ['- a\n  > > +\n  > q\n', "<ul><li>a<blockquote><blockquote><p>q</p></blockquote></blockquote></li></ul>"],
   ]
   for (const [source, html] of cases) {
     it(`attaches the follower of ${JSON.stringify(source)} to the innermost quote`, () => {
@@ -16,13 +16,13 @@ describe('a stacked quote plus opened on its own line in a host', () => {
 
   // No prefix on the follower, so it does not reach the inner quote (markup-carve/carve#4409).
   const refused: Array<[string, string]> = [
-    ['- a\n  > > +\n  q\n', '<ul><li>a<blockquote><blockquote><p>+q</p></blockquote></blockquote></li></ul>'],
-    ['- a\n  > > +\n  | c |\n', '<ul><li>a<blockquote><blockquote><p>+</p></blockquote></blockquote><table><tbody><tr><td>c</td></tr></tbody></table></li></ul>'],
-    ['- a\n  > > +\n  ```\n  code\n  ```\n', '<ul><li>a<blockquote><blockquote><p>+</p></blockquote></blockquote><pre><code>code</code></pre></li></ul>'],
-    ['1. a\n   > > +\n   q\n', '<ol><li>a<blockquote><blockquote><p>+q</p></blockquote></blockquote></li></ol>'],
-    ['- a\n  - b\n    > > +\n    q\n', '<ul><li>a<ul><li>b<blockquote><blockquote><p>+q</p></blockquote></blockquote></li></ul></li></ul>'],
-    [':: t\n: d\n  > > +\n  q\n', '<dl><dt>t</dt><dd><p>d</p><blockquote><blockquote><p>+q</p></blockquote></blockquote></dd></dl>'],
-    ['- a\n  > > > +\n  q\n', '<ul><li>a<blockquote><blockquote><blockquote><p>+q</p></blockquote></blockquote></blockquote></li></ul>'],
+    ['- a\n  > > +\n  q\n', "<ul><li>a<blockquote><blockquote></blockquote></blockquote>q</li></ul>"],
+    ['- a\n  > > +\n  | c |\n', "<ul><li>a<blockquote><blockquote></blockquote></blockquote><table><tbody><tr><td>c</td></tr></tbody></table></li></ul>"],
+    ['- a\n  > > +\n  ```\n  code\n  ```\n', "<ul><li>a<blockquote><blockquote></blockquote></blockquote><pre><code>code</code></pre></li></ul>"],
+    ['1. a\n   > > +\n   q\n', "<ol><li>a<blockquote><blockquote></blockquote></blockquote>q</li></ol>"],
+    ['- a\n  - b\n    > > +\n    q\n', "<ul><li>a<ul><li>b<blockquote><blockquote></blockquote></blockquote>q</li></ul></li></ul>"],
+    [':: t\n: d\n  > > +\n  q\n', "<dl><dt>t</dt><dd><p>d</p><blockquote><blockquote></blockquote></blockquote><p>q</p></dd></dl>"],
+    ['- a\n  > > > +\n  q\n', "<ul><li>a<blockquote><blockquote><blockquote></blockquote></blockquote></blockquote>q</li></ul>"],
   ]
   for (const [source, html] of refused) {
     it(`keeps the plus and refuses the follower of ${JSON.stringify(source)}`, () => {

@@ -64,9 +64,22 @@ const run = (): Run => {
   for (const f of names) {
     const source = readFileSync(resolve(corpusDir, f), 'utf8')
     const doc = carveToAstJson(source, { positions: true })
+    // Forward-only markers are carried as invisible comment placeholders in
+    // the parser tree. Their source opener is `+`, not comment markup.
+    const openingDoc = structuredClone(doc)
+    const markPlaceholder = (value: unknown): void => {
+      if (value === null || typeof value !== 'object') return
+      if (Array.isArray(value)) { value.forEach(markPlaceholder); return }
+      const node = value as Record<string, unknown>
+      const pos = node['pos'] as { startOffset?: number } | undefined
+      if (node['type'] === 'comment' && node['content'] === '' && pos?.startOffset !== undefined &&
+          !source.slice(pos.startOffset).trimStart().startsWith('%')) node['type'] = 'continuation_marker'
+      Object.values(node).forEach(markPlaceholder)
+    }
+    markPlaceholder(openingDoc)
     documents++
     const before = findings.length
-    spans += checkOpeningMarkup(doc, [...source], findings) as number
+    spans += checkOpeningMarkup(openingDoc, [...source], findings) as number
     pairs += checkContainment(doc, findings) as number
     for (let i = before; i < findings.length; i++) {
       findings[i] = `${basename(f, '.crv')}: ${findings[i]}`

@@ -7,7 +7,7 @@ const refusals = (source: string): number =>
 
 // A stacked first-block `+` takes a follower only at the column of the innermost
 // quote, which owns the `+` (markup-carve/carve#4409). Every other column is refused,
-// so the `+` reads like a letter and the follower folds in.
+// so the refused marker renders nothing.
 describe('a stacked quote plus behind more than one opener', () => {
   const refused = [
     '- - > +\n  b\n',
@@ -28,10 +28,79 @@ describe('a stacked quote plus behind more than one opener', () => {
     '- > > +\n> q\n',
     '> - > > +\n>     b\n',
   ]
+  const ruledRefused = new Map<string, string>([
+  [
+    "- - > +\n  b\n",
+    "<ul><li><ul><li><blockquote></blockquote></li></ul>b</li></ul>"
+  ],
+  [
+    "- - > +\n b\n",
+    "<ul><li><ul><li><blockquote></blockquote></li></ul></li></ul><p>b</p>"
+  ],
+  [
+    "- 1. > +\n  b\n",
+    "<ul><li><ol><li><blockquote></blockquote></li></ol>b</li></ul>"
+  ],
+  [
+    "- a\n  - - > +\n    b\n",
+    "<ul><li>a<ul><li><ul><li><blockquote></blockquote></li></ul>b</li></ul></li></ul>"
+  ],
+  [
+    "- a\n  - - > +\n   b\n",
+    "<ul><li>a<ul><li><ul><li><blockquote></blockquote></li></ul></li></ul>b</li></ul>"
+  ],
+  [
+    "- - > +\n  # h\n",
+    "<ul><li><ul><li><blockquote></blockquote></li></ul><h1 id=\"h\">h</h1></li></ul>"
+  ],
+  [
+    "- > > +\n  b\n",
+    "<ul><li><blockquote><blockquote></blockquote></blockquote>b</li></ul>"
+  ],
+  [
+    "- > > +\n  # h\n",
+    "<ul><li><blockquote><blockquote></blockquote></blockquote><h1 id=\"h\">h</h1></li></ul>"
+  ],
+  [
+    "- a\n  - > > +\n    b\n",
+    "<ul><li>a<ul><li><blockquote><blockquote></blockquote></blockquote>b</li></ul></li></ul>"
+  ],
+  [
+    "> - - > +\n>   b\n",
+    "<blockquote><ul><li><ul><li><blockquote></blockquote></li></ul>b</li></ul></blockquote>"
+  ],
+  [
+    "> - > > +\n>   b\n",
+    "<blockquote><ul><li><blockquote><blockquote></blockquote></blockquote>b</li></ul></blockquote>"
+  ],
+  [
+    "> - > > +\n>   | c |\n",
+    "<blockquote><ul><li><blockquote><blockquote></blockquote></blockquote><table><tbody><tr><td>c</td></tr></tbody></table></li></ul></blockquote>"
+  ],
+  [
+    "- - > +\nb\n",
+    "<ul><li><ul><li><blockquote></blockquote></li></ul></li></ul><p>b</p>"
+  ],
+  [
+    "- a\n  - - > +\n  b\n",
+    "<ul><li>a<ul><li><ul><li><blockquote></blockquote></li></ul></li></ul>b</li></ul>"
+  ],
+  [
+    "- > > +\n    b\n",
+    "<ul><li><blockquote><blockquote></blockquote></blockquote>b</li></ul>"
+  ],
+  [
+    "- > > +\n> q\n",
+    "<ul><li><blockquote><blockquote></blockquote></blockquote></li></ul><blockquote><p>q</p></blockquote>"
+  ],
+  [
+    "> - > > +\n>     b\n",
+    "<blockquote><ul><li><blockquote><blockquote></blockquote></blockquote>b</li></ul></blockquote>"
+  ]
+])
   for (const source of refused) {
     it(`reads the refused plus in ${JSON.stringify(source)} like a letter`, () => {
-      const letter = flat(carveToHtml(source.replace('> +', '> x')))
-      expect(flat(carveToHtml(source))).toBe(letter.replace('<p>x', '<p>+'))
+      expect(flat(carveToHtml(source))).toBe(ruledRefused.get(source))
       expect(refusals(source)).toBe(1)
     })
   }
@@ -47,7 +116,7 @@ describe('a stacked quote plus behind more than one opener', () => {
     ['- - > +\n    b\n', '<ul><li><ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul>'],
     ['- - > +\n    # h\n', '<ul><li><ul><li><blockquote><h1 id="h">h</h1></blockquote></li></ul></li></ul>'],
     ['- 1. > +\n     b\n', '<ul><li><ol><li><blockquote><p>b</p></blockquote></li></ol></li></ul>'],
-    ['- a\n  - - > +\n      b\n', '<ul><li>a<ul><li><ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul></li></ul>'],
+    ['- a\n  - - > +\n      b\n', "<ul><li>a<ul><li><ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul></li></ul>"],
     ['> - - > +\n>     b\n', '<blockquote><ul><li><ul><li><blockquote><p>b</p></blockquote></li></ul></li></ul></blockquote>'],
   ]
   for (const [source, html] of attached) {

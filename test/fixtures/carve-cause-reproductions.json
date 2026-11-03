@@ -22,12 +22,12 @@
   {
     "id": "carve-4152-1",
     "source": "- - +\npara\n",
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>+\npara</li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>para</p>"
   },
   {
     "id": "carve-4152-2",
     "source": "[^a]: +\n  flush\n\nsee[^a]\n",
-    "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+\nflush<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>flush<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "carve-4160-1",
@@ -37,37 +37,37 @@
   {
     "id": "carve-4166-1",
     "source": "- a\n  :: t\n  : +\n```\nx\n```\n",
-    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+</dd>\n    </dl>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "carve-4166-2",
     "source": "- a\n  - +\n```\nx\n```\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<pre><code>x\n</code></pre>"
   },
   {
     "id": "carve-4166-3",
     "source": "1. a\n   :: t\n   : +\nx\n  : d\n",
-    "html": "<ol>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+\nx\n: d</dd>\n    </dl>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd></dd>\n    </dl>\n  </li>\n</ol>\n<p>x\n: d</p>"
   },
   {
     "id": "carve-4228-1",
     "source": ":: t\n: [^q]: +\n- y\n\nr[^q]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "carve-4228-2",
     "source": ":: t\n: [^q]: +\n - y\n\nr[^q]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "carve-4230-1",
     "source": "> :: t\n> : +\npara\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>+\npara</dd>\n  </dl>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n  <p>para</p>\n</blockquote>"
   },
   {
     "id": "carve-4230-2",
     "source": "> :: t\n> : [^b]: +\n- y\n\nr[^b]\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n</blockquote>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n</blockquote>\n<ul>\n  <li>y</li>\n</ul>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "carve-4243-1",
@@ -87,26 +87,26 @@
   {
     "id": "carve-4259-1",
     "source": "[^a]: 1. +\n  - y\ntail\n\nr[^a]\n",
-    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <ol>\n        <li>+</li>\n      </ol>\n      <ul>\n        <li>y\ntail</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <ol>\n        <li></li>\n      </ol>\n      <ul>\n        <li>y\ntail</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "carve-4307-1",
     "source": "- a\n  * +\n    %% c\nafter\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "carve-4407-1",
     "source": ":: t\n : +\nl\n: b\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>+\nl</dd>\n  <dd>b</dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>l\n: b</p>"
   },
   {
     "id": "carve-4407-2",
     "source": ":: t\n : +\n> q\n: b\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>+</dd>\n</dl>\n<blockquote><p>q\n: b</p></blockquote>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<blockquote><p>q\n: b</p></blockquote>"
   },
   {
     "id": "carve-4407-3",
     "source": ":: t\n : +\nl\n: b\n\n  p\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>+\nl</dd>\n  <dd>\n    <p>b</p>\n    <p>p</p>\n  </dd>\n</dl>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>l\n: b</p>\n<p>p</p>"
   }
 ]

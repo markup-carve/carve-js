@@ -27,7 +27,7 @@ describe('container ownership regressions', () => {
 
   it('keeps a refused second plus inside its first-block item', () => {
     expect(compact(carveToHtml(':::\n- +\n+\n- next\n:::\n'))).toBe(
-      '<div><ul><li>+</li><li>next</li></ul></div>',
+      "<div><ul><li></li><li>next</li></ul></div>",
     )
   })
 

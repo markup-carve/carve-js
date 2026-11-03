@@ -4,7 +4,7 @@ import { carveToHtml } from '../src/index.js'
 describe('parser ownership across nested marker bodies', () => {
   it('folds a line below a nested first-block plus into that plus', () => {
     const html = carveToHtml(':: t\n: - - +\n  x\n')
-    expect(html).toContain('<li>+\nx</li>')
+    expect(html).toBe("<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <ul>\n          <li></li>\n        </ul>\n      </li>\n    </ul>\n    <p>x</p>\n  </dd>\n</dl>")
   })
 
   // A marker below the note body column closes the note (PART 0 S3, carve#4860).
@@ -16,7 +16,7 @@ describe('parser ownership across nested marker bodies', () => {
 
   it('keeps a refused quoted plus and its lazy continuation', () => {
     const html = carveToHtml('> > . > +\n> > . > +\n>  s\n')
-    expect(html).toContain('<blockquote><p>+\ns</p></blockquote>')
+    expect(html).toBe("<blockquote>\n  <blockquote>\n    <ol>\n      <li>\n        <blockquote>\n\n        </blockquote>\n      </li>\n      <li>\n        <blockquote>\n\n        </blockquote>\n      </li>\n    </ol>\n  </blockquote>\n  <p>s</p>\n</blockquote>")
   })
 
   it('drops only the residual source indent from a later term tail', () => {
@@ -35,8 +35,8 @@ describe('parser ownership across nested marker bodies', () => {
   })
 
   it('refuses column-zero heading and quote followers inside a description list', () => {
-    expect(carveToHtml(':: t\n: - +\n# H\n')).toContain('<li>+</li>\n    </ul>\n  </dd>\n</dl>\n<section id="H">')
-    expect(carveToHtml(':: t\n: - +\n> b\n')).toContain('<li>+</li>\n    </ul>\n  </dd>\n</dl>\n<blockquote><p>b</p></blockquote>')
+    expect(carveToHtml(':: t\n: - +\n# H\n')).toBe("<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li></li>\n    </ul>\n  </dd>\n</dl>\n<section id=\"H\">\n  <h1>H</h1>\n</section>")
+    expect(carveToHtml(':: t\n: - +\n> b\n')).toBe("<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li></li>\n    </ul>\n  </dd>\n</dl>\n<blockquote><p>b</p></blockquote>")
   })
 
   it('ends an open footnote paragraph at a below-column list marker', () => {
@@ -47,7 +47,7 @@ describe('parser ownership across nested marker bodies', () => {
 
   it('keeps a refused trailing plus in the paragraph attached by the first plus', () => {
     const html = carveToHtml('> - q\n> +\n> x\n> +\n')
-    expect(html).toContain('<li>q\n      x\n+\n    </li>')
+    expect(html).toBe("<blockquote>\n  <ul>\n    <li>q\n      x\n    </li>\n  </ul>\n</blockquote>")
     expect(html).not.toContain('<p>+</p>')
   })
 

@@ -5,9 +5,9 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 // stay at the enclosing content column.
 describe('a block below a refused nested plus keeps the nearest column', () => {
   it.each([
-    ['- foo\n  1. +\n    > b\n', '- foo\n  1. \\+\n  > b\n'],
-    ['- foo\n  1. +\n    ```\n    x\n    ```\n', '- foo\n  1. \\+\n  ```\n  x\n  ```\n'],
-    ['> - foo\n>   1. +\n>     > b\n', '> - foo\n>   1. \\+\n>   > b\n'],
+    ['- foo\n  1. +\n    > b\n', "- foo\n  1. %%\n  > b\n"],
+    ['- foo\n  1. +\n    ```\n    x\n    ```\n', "- foo\n  1. %%\n  ```\n  x\n  ```\n"],
+    ['> - foo\n>   1. +\n>     > b\n', "> - foo\n>   1. %%\n>   > b\n"],
   ])('%j', (source, written) => {
     expect(carveToCarve(source)).toBe(written)
     expect(carveToHtml(written)).toBe(carveToHtml(source))

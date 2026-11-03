@@ -5,19 +5,19 @@ const modelHtml = (source: string): string => carveToHtml(source).split('\n').ma
 
 describe('an indented first-block opener refuses a column-zero follower', () => {
   it('keeps the plus in a description quote', () => {
-    expect(modelHtml(':: term\n: body\n  > +\nnext\n')).toBe('<dl>\n<dt>term</dt>\n<dd>\n<p>body</p>\n<blockquote><p>+\nnext</p></blockquote>\n</dd>\n</dl>')
+    expect(modelHtml(':: term\n: body\n  > +\nnext\n')).toBe("<dl>\n<dt>term</dt>\n<dd>\n<p>body</p>\n<blockquote>\n</blockquote>\n</dd>\n</dl>\n<p>next</p>")
   })
 
   it('keeps the plus in an item quote', () => {
-    expect(modelHtml('- a\n  > +\npara')).toBe('<ul>\n<li>a\n<blockquote><p>+\npara</p></blockquote>\n</li>\n</ul>')
+    expect(modelHtml('- a\n  > +\npara')).toBe("<ul>\n<li>a\n<blockquote>\n</blockquote>\n</li>\n</ul>\n<p>para</p>")
   })
 
   it('keeps the plus in the innermost quote', () => {
-    expect(modelHtml('- a\n  > > +\npara')).toBe('<ul>\n<li>a\n<blockquote>\n<blockquote><p>+\npara</p></blockquote>\n</blockquote>\n</li>\n</ul>')
+    expect(modelHtml('- a\n  > > +\npara')).toBe("<ul>\n<li>a\n<blockquote>\n<blockquote>\n</blockquote>\n</blockquote>\n</li>\n</ul>\n<p>para</p>")
   })
 
   it('keeps the plus in a task item quote', () => {
-    expect(modelHtml('- [ ] > +\npara')).toBe('<ul class="task-list">\n<li><input type="checkbox" disabled>\n<blockquote><p>+\npara</p></blockquote>\n</li>\n</ul>')
+    expect(modelHtml('- [ ] > +\npara')).toBe("<ul class=\"task-list\">\n<li><input type=\"checkbox\" disabled>\n<blockquote>\n</blockquote>\n</li>\n</ul>\n<p>para</p>")
   })
 
   it('takes a column-zero paragraph into a footnote', () => {

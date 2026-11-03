@@ -19,8 +19,8 @@ describe('a blank after an invisible item lead', () => {
   it.each([
     ['a plus lead', '- +\n\n  Body.\n- x\n'],
     ['a visible lead', '- a\n\n  Body.\n- x\n'],
-  ])('still loosens: %s', (_name, source) => {
-    expect(carveToHtml(source)).toContain('<p>Body.</p>')
+  ])('reads the blank after %s', (name, source) => {
+    expect(carveToHtml(source)).toContain(name === 'a plus lead' ? '<li>Body.</li>' : '<p>Body.</p>')
   })
 
   it('a djot empty task item over a blank keeps its loose list through {loose}', () => {

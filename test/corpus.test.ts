@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { RULED_5013_HTML } from './ruled-5013-ahead-of-pin.js'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1490,6 +1491,7 @@ const IMPLEMENTED = new Set([
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN,
+  ...RULED_5013_HTML,
 ])
 // carve-js#3105 is separate from empty destinations. The spec pin includes
 // these three newer corpus rows; keep their measured lag explicit until that

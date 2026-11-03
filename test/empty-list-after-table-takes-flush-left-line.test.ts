@@ -6,7 +6,7 @@ const table = '<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>
 describe('a lone plus item after a table', () => {
   it('refuses the flush-left line after a first-block marker', () => {
     expect(carveToHtml('| a | b |\n  - +\nline two\n')).toBe(
-      '<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n<ul>\n  <li>+\nline two</li>\n</ul>',
+      "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n<ul>\n  <li></li>\n</ul>\n<p>line two</p>",
     )
   })
 
@@ -18,9 +18,9 @@ describe('a lone plus item after a table', () => {
 })
 
 it('does not attach a flush-left list marker as the first block', () => {
-  expect(carveToHtml(' - a\n +\n- b\n')).toBe('<ul>\n  <li>a\n+</li>\n  <li>b</li>\n</ul>')
+  expect(carveToHtml(' - a\n +\n- b\n')).toBe("<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>")
 })
 
 it('does not attach a flush-left heading as the first block', () => {
-  expect(carveToHtml(' - a\n +\n# h\n')).toBe('<ul>\n  <li>a\n+</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>')
+  expect(carveToHtml(' - a\n +\n# h\n')).toBe("<ul>\n  <li>a</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>")
 })

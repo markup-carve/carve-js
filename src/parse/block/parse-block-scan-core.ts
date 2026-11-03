@@ -134,7 +134,7 @@ export interface RefusedContinuationMarker {
   line: number
   column: number
   host: 'document' | 'list item' | 'definition description' | 'footnote' | 'block quote'
-  reason: 'blank' | 'document' | 'sibling' | 'left' | 'right' | 'wrong-column' | 'list' | 'unclaimed'
+  reason: 'blank' | 'document' | 'sibling' | 'left' | 'right' | 'wrong-column' | 'list' | 'unclaimed' | 'claimed'
   firstBlock?: boolean
 }
 

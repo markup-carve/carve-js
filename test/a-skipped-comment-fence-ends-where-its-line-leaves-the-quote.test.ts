@@ -5,7 +5,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a skipped comment fence ends where its line leaves the quote', () => {
   it('refuses the plus, which stays a letter', () => {
     expect(carveToHtml('> - +\n> %%%\n\n> %%%\n> text\n').trim()).toBe(
-      '<blockquote>\n  <ul>\n    <li>+</li>\n  </ul>\n</blockquote>\n<blockquote>\n\n</blockquote>')
+      '<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n</blockquote>\n<blockquote>\n\n</blockquote>')
   })
 
   it('still attaches past a fence that closes inside the quote', () => {

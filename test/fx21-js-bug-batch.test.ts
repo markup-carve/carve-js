@@ -21,16 +21,16 @@ describe('container ownership across source columns', () => {
   })
 
   it('splits a description paragraph before a second consecutive plus', () => {
-    expect(carveToHtml(':: m\n: f\nl\n+\n+\n')).toContain('<p>f\nl</p>\n    <p>+</p>')
+    expect(carveToHtml(':: m\n: f\nl\n+\n+\n')).toBe("<dl>\n  <dt>m</dt>\n  <dd>f\nl</dd>\n</dl>")
   })
 
   it('keeps a refused last plus in the first-block host', () => {
-    expect(carveToHtml('- +\n+\n')).toBe('<ul>\n  <li>+</li>\n</ul>')
-    expect(carveToHtml('- +\n+\n\n- tail\n')).toBe('<ul>\n  <li><p>+</p></li>\n  <li><p>tail</p></li>\n</ul>')
+    expect(carveToHtml('- +\n+\n')).toBe("<ul>\n  <li></li>\n</ul>")
+    expect(carveToHtml('- +\n+\n\n- tail\n')).toBe("<ul>\n  <li></li>\n  <li><p>tail</p></li>\n</ul>")
   })
 
   it('does not throw when a stacked item has no owned follower', () => {
-    expect(carveToHtml('> - - +\n    x\n')).toContain('<li>+\nx</li>')
+    expect(carveToHtml('> - - +\n    x\n')).toBe("<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li></li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>x</p>")
   })
 })
 

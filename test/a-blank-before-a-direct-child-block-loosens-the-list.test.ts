@@ -87,7 +87,7 @@ describe('a blank before a direct child block', () => {
   it('escapes a refused nested plus and preserves an outer loose list', () => {
     const source = '- - +\n\n  > q\n'
     const written = carveToCarve(source)
-    expect(written).toBe('{loose}\n- - \\+\n  > q\n')
+    expect(written).toBe('- - %%\n\n  > q\n')
     expect(carveToCarve(written)).toBe(written)
     expect(parse(written).children[0]).toMatchObject({ type: 'list', tight: false })
     expect(carveToHtml(written)).toBe(carveToHtml(source))

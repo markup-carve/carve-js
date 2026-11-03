@@ -50,7 +50,7 @@ describe('a continuation marker attaches one block', () => {
 
   it('a sibling marker attaches nothing and opens a sibling', () => {
     expect(carveToHtml('- a\n+\n- x\n- y\n')).toBe(
-      '<ul>\n  <li>a\n+</li>\n  <li>x</li>\n  <li>y</li>\n</ul>',
+      "<ul>\n  <li>a</li>\n  <li>x</li>\n  <li>y</li>\n</ul>",
     )
   })
 
@@ -91,8 +91,7 @@ describe('a continuation marker attaches one block', () => {
     // extent instead restored the old behavior one level down and enlarged the
     // outer block with it, putting the heading inside the item.
     expect(carveToHtml('- a\n+\n:: t\n:  +\n   p\n   q\n# H\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>+\np\nq</dd>\n    </dl>\n  </li>\n</ul>\n' +
-        '<section id="H">\n  <h1>H</h1>\n</section>',
+      "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>p\nq</dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"H\">\n  <h1>H</h1>\n</section>",
     )
   })
 

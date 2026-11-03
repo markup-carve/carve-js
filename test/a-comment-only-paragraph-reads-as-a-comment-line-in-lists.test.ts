@@ -35,6 +35,6 @@ describe('a comment-only paragraph reads as its %% twin in lists', () => {
   it.each([
     ['- a\n\n{% c %}\n\n- b\n', '<ul><li><p>a</p></li><li><p>b</p></li></ul>'],
     [':: t\n: a\n\n{% c %}\n\n: b\n', '<dl><dt>t</dt><dd>a</dd><dd>b</dd></dl>'],
-    ['- +\n{% c %}\n\n# H\n', '<ul><li>+</li></ul><section id="H"><h1>H</h1></section>'],
+    ['- +\n{% c %}\n\n# H\n', "<ul><li></li></ul><section id=\"H\"><h1>H</h1></section>"],
   ])('%j', (source, expected) => expect(html(source)).toBe(expected))
 })
