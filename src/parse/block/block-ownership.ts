@@ -201,6 +201,11 @@ function matchMarker(rest: string): { width: number; head: number; axes: string 
   return null
 }
 
+// A line leaving a line block's open `%%%` span is markup-carve/carve#4994; it keeps the opener base.
+function holdsCommentSpan(frame: Frame): boolean {
+  return frame.kind === 'fence' && frame.lineBlock === true && frame.span?.[0] === '%'
+}
+
 // Frames inside a quote a marker-line `+` took leave the body's column to its host (CARVE-P9-067, carve#4385).
 function closesAColumn(closed: Frame[]): boolean {
   const quote = closed.findIndex((f) => f.firstBlockQuote === true)
@@ -503,6 +508,7 @@ export function ownLines(
       readPayload(inner, true)
       continue
     }
+    const leftLineBlockSpan = holdsCommentSpan(inner)
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
@@ -578,7 +584,7 @@ export function ownLines(
     } else {
       if (!plusFollower) noteOpener(owner, form, owner.col)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
-      apply(owner, m.col, form, owner.canon, closed === 0)
+      apply(owner, m.col, form, owner.canon, !leftLineBlockSpan)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
     if (plusFollower && closedDescription) owner.last = 'dd'
