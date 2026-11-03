@@ -172,7 +172,7 @@ describe('a comment body retains indentation beyond its host', () => {
     }
     walk(ast)
 
-    expect(comments).toEqual(['n\nx'])
+    expect(comments).toEqual(['n\n x'])
   })
 
   it('keeps every payload column at document level', () => {
@@ -185,7 +185,7 @@ describe('a comment body retains indentation beyond its host', () => {
     const src = '- a\n %%% n\n x\n %%%\n tail\n'
     const once = renderCarve(parse(src))
 
-    expect(once).toBe('- a\n\n%%%\nn\nx\n%%%\n\ntail\n')
+    expect(once).toBe('- a\n\n%%%\nn\n x\n%%%\n\ntail\n')
     expect(renderCarve(parse(once))).toBe(once)
   })
 })
