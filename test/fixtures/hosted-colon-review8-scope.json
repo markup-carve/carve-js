@@ -567,7 +567,7 @@
   {
     "id": "review8-c02-below-column-comment-037",
     "source": "- ::: |\n  %%%%\n %%%\n ```\n  %%%%\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n\n    </div>\n  </li>\n</ul>\n<pre><code> %%%%\n</code></pre>"
   },
   {
     "id": "review8-c02-below-column-comment-038",

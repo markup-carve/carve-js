@@ -114,17 +114,7 @@
   "verbatim-continuation-guards.test.ts": {
     "preserves display math around > continuation continuations": "#3921"
   },
-  "a-comment-below-an-empty-container-item-closes-without-a-claim.test.ts": {
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [2]": "carve-js#4276",
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [3]": "carve-js#4276",
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [8]": "carve-js#4276",
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [10]": "carve-js#4276",
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [11]": "carve-js#4276",
-    "below-column comments require an open paragraph or earlier retention > 'quoted empty nested container: commen…' [16]": "carve-js#4276"
-  },
   "hosted-colon-literal-ownership.test.ts": {
-    "reader scope 2, quote depth 1": "carve-js#4276",
-    "reader scope 2, quote depth 2": "carve-js#4276",
-    "review8-c02-below-column-comment-037": "carve-js#4276"
+    "review8-c02-below-column-comment-044": "markup-carve/carve#5007"
   }
 }

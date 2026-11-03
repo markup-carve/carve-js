@@ -339,7 +339,14 @@ function trackHostCommentLine(q: QuoteHostLine): boolean {
   if (!blockQuoteParagraphOpen(state) && host.markers.length > 0 && column < host.columns.at(-1)!) {
     while (host.markers.length > 0 && host.markers.at(-1)! >= column) popQuoteHost(host)
     if (host.colons) host.colons = host.colons.filter(open => open.floor <= host.columns.at(-1)!)
-    if (host.markers.length === 0) { host.rejectedItemComment = true; closeBlockQuoteParagraph(state); return true }
+    if (host.markers.length === 0) {
+      closeBlockQuoteParagraph(state)
+      // A span opener below every host opens the quote's own span (PART 9 §28): the classifier takes it.
+      const run = commentFenceRun(text)
+      if (run !== undefined && q.hasCommentCloser(run, column)) return false
+      host.rejectedItemComment = true
+      return true
+    }
   }
   const level = Math.max(0, upperBound(host.columns, column, entry => entry) - 1)
   const floor = host.columns[level]!
