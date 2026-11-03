@@ -365,7 +365,7 @@ export function isInvisibleLine(line: string, whitespace?: number): boolean {
  * in the payload, and the cost of that is an unmarked comment block, which lands
  * the caller back on the reading it had before this pass existed.
  */
-export function commentBlockSpans(lines: string[]): boolean[] {
+export function commentBlockSpans(lines: string[], behindMarkers = false): boolean[] {
   const hidden = new Array<boolean>(lines.length).fill(false)
   // The last line carrying each run width: an opener past it runs to the end (PART 9 §28) without a scan.
   const lastAt = new Map<number, number>()
@@ -374,6 +374,7 @@ export function commentBlockSpans(lines: string[]): boolean[] {
     if (run !== undefined) lastAt.set(run, k)
   }
   if (lastAt.size === 0) return hidden
+  const descriptionOwners = new Map<number, boolean>()
   let verbatimClose: RegExp | null = null
   for (let k = 0; k < lines.length; k++) {
     const line = lines[k]!
@@ -381,16 +382,19 @@ export function commentBlockSpans(lines: string[]): boolean[] {
       if (verbatimClose.test(line)) verbatimClose = null
       continue
     }
-    const run = commentFenceRun(line)
+    const ownRun = commentFenceRun(line)
+    // A marker before the opener renders, so its line stays visible (carve#5030).
+    const run = ownRun ?? (behindMarkers ? markedCommentFenceRun(lines, k, descriptionOwners) : undefined)
     if (run !== undefined) {
+      const first = ownRun === undefined ? k + 1 : k
       if ((lastAt.get(run) ?? -1) <= k) {
-        for (let j = k; j < lines.length; j++) hidden[j] = true
+        for (let j = first; j < lines.length; j++) hidden[j] = true
         break
       }
       // EXACT length closes; a shorter run inside a wider block is payload.
       let close = k + 1
       while (commentFenceRun(lines[close]!) !== run) close++
-      for (let j = k; j <= close; j++) hidden[j] = true
+      for (let j = first; j <= close; j++) hidden[j] = true
       k = close
       continue
     }
@@ -399,6 +403,62 @@ export function commentBlockSpans(lines: string[]): boolean[] {
   }
 
   return hidden
+}
+
+/** The run of a `%%%` opener behind list, task or description markers on `lines[index]`. */
+function markedCommentFenceRun(lines: string[], index: number, memo: Map<number, boolean>): number | undefined {
+  const line = lines[index]!
+  if (!line.includes('%%%')) return undefined
+  let rest = line.replace(/^[ \t]+/, '')
+  let marked = false
+  while (rest.length > 0) {
+    if (marked) {
+      const run = commentFenceRun(rest)
+      if (run !== undefined) return run
+    }
+    const task = RE_TASK.exec(rest)
+    const unordered = task ? null : RE_UNORDERED.exec(rest)
+    const ordered = task ?? unordered ? null : RE_ORDERED.exec(rest)
+    // Without a term or description above it, a colon line is paragraph text.
+    const description = task !== null || unordered !== null || ordered !== null || marked || !opensDescription(lines, index, memo)
+      ? null : RE_DEFLIST_DEF.exec(rest)
+    const content = task ? task[3] : unordered ? unordered[2] : ordered ? ordered[4] : description?.[2]
+    if (content === undefined) return undefined
+    rest = content
+    marked = true
+  }
+  return undefined
+}
+
+/** Whether a run of description lines at this line's column leads up to a term; `memo` keeps the scan linear. */
+function opensDescription(lines: string[], index: number, memo: Map<number, boolean>): boolean {
+  const chain: number[] = []
+  let at = index
+  let result = false
+  for (;;) {
+    const cached = memo.get(at)
+    if (cached !== undefined) {
+      result = cached
+      break
+    }
+    chain.push(at)
+    const column = indentColumns(lines[at]!)
+    let next = -1
+    for (let k = at - 1; k >= 0; k--) {
+      const above = lines[k]!
+      if (isBlankLine(above) || indentColumns(above) > column) continue
+      if (indentColumns(above) === column) {
+        const rest = above.trimStart()
+        if (RE_DEFLIST_TERM.test(rest)) result = true
+        else if (RE_DEFLIST_DEF.test(rest)) next = k
+      }
+      break
+    }
+    if (next < 0) break
+    at = next
+  }
+  for (const k of chain) memo.set(k, result)
+  return result
 }
 
 /**
