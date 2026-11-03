@@ -578,7 +578,7 @@ export function ownLines(
     } else {
       if (!plusFollower) noteOpener(owner, form, owner.col)
       lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
-      apply(owner, m.col, form)
+      apply(owner, m.col, form, owner.canon, closed === 0)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
     if (plusFollower && closedDescription) owner.last = 'dd'
@@ -696,7 +696,7 @@ export function ownLines(
       if (quote) quote.firstBlockQuote = true
     }
 
-    function apply(owner: Frame, col: number, form: Form, canon = owner.canon): void {
+    function apply(owner: Frame, col: number, form: Form, canon = owner.canon, inHost = false): void {
       // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
       owner.para = form.caption === true
       const invisibleLeaf = form.kind === 'leaf' &&
@@ -709,7 +709,9 @@ export function ownLines(
       if (form.kind === 'term') owner.termShift = col - owner.canon
       if (form.kind === 'dd') owner.ddShift = col - owner.canon
       if (form.kind === 'fence' || form.kind === 'colon') {
-        frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut: col - canon,
+        // A comment payload is host-relative; the opener's indentation sets no base (CARVE-P9-060).
+        const cut = form.family === 'comment' && inHost ? owner.col - owner.canon : col - canon
+        frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut,
           closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null,
           entryLast: spanInEntry ? owner.last! : undefined })
         return
@@ -785,7 +787,7 @@ export function ownLines(
         const col = m.col
         noteOpener(frame, form, 0)
         lead(0)
-        apply(frame, col, form, 0)
+        apply(frame, col, form, 0, true)
         return
       }
       const col = start + m.col

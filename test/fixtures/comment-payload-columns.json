@@ -3,49 +3,49 @@
     "name": "document",
     "source": "  %%%\n  x\n%%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "deeper document",
     "source": "  %%%\n    x\n  %%%\n",
     "expected": [
-      "  x"
+      "    x"
     ]
   },
   {
     "name": "shallower document",
     "source": "  %%%\n x\n%%%\n",
     "expected": [
-      "x"
+      " x"
     ]
   },
   {
     "name": "document tabs",
     "source": "\t%%%\n\tx\n%%%\n",
     "expected": [
-      "x"
+      "\tx"
     ]
   },
   {
     "name": "description",
     "source": ":: t\n:  head\n\n     %%%\n     x\n%%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "description deeper",
     "source": ":: t\n:  head\n\n     %%%\n       x\n  %%%\n",
     "expected": [
-      "  x"
+      "    x"
     ]
   },
   {
     "name": "item",
     "source": "- head\n\n    %%%\n    x\n%%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
@@ -80,35 +80,35 @@
     "name": "folded term",
     "source": ":: term\n  %%%\n  x\n  %%%\n:  def\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "quoted",
     "source": ">   %%%\n>   x\n> %%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "nested item",
     "source": "- outer\n  - head\n\n      %%%\n      x\n    %%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "note",
     "source": "see[^f]\n\n[^f]: head\n\n    %%%\n    x\n  %%%\n",
     "expected": [
-      "x"
+      "  x"
     ]
   },
   {
     "name": "whitespace payload",
     "source": "  %%%\n \n  x  \n   \n%%%\n",
     "expected": [
-      "\nx  \n "
+      " \n  x  \n   "
     ]
   },
   {
