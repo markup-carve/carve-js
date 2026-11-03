@@ -1662,9 +1662,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
     }
     const admitBlank = (l: string): Decision => {
-      if (lazyState.opaque?.kind === 'comment')
+      const { offset: afterBlanks, line: afterBlankLine } = nextContainerContent(lexer, refusedPlus)
+      // A line that misses the span's owner ends the span, so the blank before it separates blocks (PART 0 S1).
+      const spanColumn = lazyState.opaque?.kind === 'comment' ? lazyState.opaque.column : undefined
+      if (lazyState.opaque?.kind === 'comment' && !(spanColumn !== undefined && afterBlankLine !== undefined &&
+          !RE_COMMENT_LINE.test(afterBlankLine.trimStart()) && indentColumns(afterBlankLine) - contentCol < spanColumn))
         opaqueBlankLines.add(lexer.lineNumber(lexer.pos))
-      const { offset: afterBlanks } = nextContainerContent(lexer, refusedPlus)
       for (; inlineFenceScanned < nestedSourceLines.length; inlineFenceScanned++) {
         const source = nestedSourceLines[inlineFenceScanned]
         if (source === undefined || isBlankLine(source)) continue
@@ -3018,8 +3021,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         readDefinitionSource(l) ?? readDefinitionBand(l)
       if (decision !== undefined) return decision
       // A blank reaches every frame, so no line missed the span's owner: the closer is the span's (carve#4889).
-      if (lw < contentCol && pendingBlankRun.count > 0 && lazyState.opaque?.kind === 'comment' && !childMarkerSpan &&
-          lazyState.opaque !== childSpan?.state && commentFenceRun(l.trimStart()) === lazyState.opaque.length) {
+      if (lw < contentCol && pendingBlankRun.count > 0 && (lazyState.opaque?.kind === 'comment' && !childMarkerSpan &&
+          lazyState.opaque !== childSpan?.state && commentFenceRun(l.trimStart()) === lazyState.opaque.length ||
+        // So does a span a descendant or a description or note lead holds, which the tracker cannot see (carve#4996).
+        (lazyState.opaque === null || lazyState.opaque.kind === 'comment') && commentFenceRun(l.trimStart()) !== undefined &&
+          bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners) &&
+          commentFenceRun(l.trimStart()) === itemSpanScan.opaque?.run)) {
         for (let k = 0; k < pendingBlankRun.lines.length; k++) {
           nestedSourceLines.push(pendingBlankRun.lines[k])
           nested.push(sliceColumns(pendingBlankRun.lines[k] ?? '', contentCol, true))

@@ -781,7 +781,10 @@ export function createDefinitionListParser(
         if (
           after !== undefined &&
           !isBlankLine(after) &&
-          indentColumns(after, contentCol) >= contentCol
+          (indentColumns(after, contentCol) >= contentCol ||
+            // A blank inside a live span is payload; a comment line below the column still closes it (§28).
+            (RE_COMMENT_LINE.test(after.trimStart()) &&
+              bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))))
         ) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos

@@ -2,6 +2,15 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#4996",
+      "cause": "a comment span on a description or note lead closes below its column, following the current spec ahead of this pin",
+      "cases": [
+        "ownership-8760a6163bbb",
+        "roundtrip-bdfff9a16d1b",
+        "roundtrip-f7b4d30bf6dc"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve-js#3948",
       "cause": "an indented plus in a note body absorbs a following quote that belongs to the document",
       "cases": [

@@ -481,6 +481,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // A term is one line and leaves no paragraph (carve#4861).
     state.lazyFoldable = !isTerm &&
       colonBlockOpenerRun(description![2]!) === null && bottomBlockLeavesParagraphOpen(description![2]!)
+    // A span on the lead is the body's, and a line that misses it finds no paragraph (carve#4996).
+    const run = description && hasTerm ? commentFenceRun(description[2]!) : undefined
+    if (run !== undefined && line.hasCommentCloser(run)) {
+      state.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: line.atContentColumn, description: true,
+        column: indentColumns(content) + 1 + description![1]!.length }
+      state.deepest = null
+    }
     return true
   }
 
@@ -595,6 +602,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.noteFrame = frame
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
+    const run = commentFenceRun(note[2]!)
+    if (run !== undefined && line.hasCommentCloser(run)) {
+      state.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: line.atContentColumn,
+        column: indentColumns(content) + FOOTNOTE_BODY_COLUMN }
+      state.lazyFoldable = false
+    }
     return true
   }
 
