@@ -7,6 +7,7 @@ import {
   containerQuoteDepth,
   extractItemAttr,
   FENCE_TRAILING_WS,
+  isListMarkerLine,
   leadingWhitespace,
   type PrepassScope,
   RE_ADMONITION_CLOSE,
@@ -801,7 +802,9 @@ export function bodyHoldsOpenCommentSpan(
       scan.atBlockStart = true
       continue
     }
-    const opener = lead !== null ? markerFreeContent(line.slice(lead[0].length)) : scan.atBlockStart ? markerFreeContent(line) : line
+    // A marker line opens an item even after paragraph text, so its first block is read behind the marker (carve#5028).
+    const opensItem = scan.atBlockStart || (raw === lines[scan.index] && isListMarkerLine(line))
+    const opener = lead !== null ? markerFreeContent(line.slice(lead[0].length)) : opensItem ? markerFreeContent(line) : line
     scan.atBlockStart = false
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     if (code !== null) {
