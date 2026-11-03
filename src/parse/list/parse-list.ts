@@ -1336,6 +1336,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     // Candidate sublist markers, resolved after authored fence bases are applied.
     const subListMarkers = new Set<number>()
+    // Where a list a body's `+` attached starts in `nested`; its markers up to the next blank are that body's.
+    let ownedListStart = -1
+    let ownedListScanned = -1
     let belowDescendantComment: { run: number; state: ItemLazyState } | undefined
     const pendingBlankRun = new ContainerBlankBuffer()
     // A comment in a marker-line note changes nothing (CARVE-P9-053, carve#3060):
@@ -2312,10 +2315,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           extractItemAttr(l) !== null)
       const precedingSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
       // A marker below an accepted `+` of a note or description is that body's first block.
+      const isBodyOwner = (kind: string | undefined): boolean => kind === 'footnote' || kind === 'description'
       const followsOwnedMarker = precedingSource !== undefined && (
-        isContinuationMarker(sourceQuoteBody(precedingSource)) && markerDecision(lexer, lexer.pos - 1).owner?.kind === 'footnote' ||
+        isContinuationMarker(sourceQuoteBody(precedingSource)) && isBodyOwner(markerDecision(lexer, lexer.pos - 1).owner?.kind) ||
         /^(?::|\[\^[^\]]+\]:)[ \t]+\+[ \t]*$/.test(sourceQuoteBody(precedingSource).trimStart()))
-      if (isMarker && !followsOwnedMarker) subListMarkers.add(nested.length)
+      if (isMarker && ownedListStart >= 0) {
+        for (let k = Math.max(ownedListScanned, ownedListStart); k < nested.length; k++) {
+          if (isBlankLine(nested[k]!)) { ownedListStart = -1; break }
+        }
+        ownedListScanned = nested.length
+      }
+      if (isMarker && followsOwnedMarker) ownedListStart = nested.length
+      else if (isMarker && ownedListStart < 0) subListMarkers.add(nested.length)
     }
     const dedentContentLine = (l: string): void => {
       // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
