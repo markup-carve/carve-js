@@ -468,8 +468,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         !bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) {
       // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
       return 'stop'
-    } else if (lazyState.opaque === null && RE_COMMENT_LINE.test(ln.trimStart())) {
-      // A comment below the body's column closes the body (carve#3885).
+    } else if ((lazyState.opaque === null || lazyState.opaque.kind === 'code') && RE_COMMENT_LINE.test(ln.trimStart())) {
+      // A comment below the body's column closes the body (carve#3885), and the code fence it holds.
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
