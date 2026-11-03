@@ -482,6 +482,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const { content, state } = line
     if (!RE_DEFLIST_TERM.test(content) && !RE_DEFLIST_DEF.test(content)) return false
     const isTerm = RE_DEFLIST_TERM.test(content)
+    // A marker left of the descendant item's column is not in that item, so its closed frame stops answering.
+    if (state.ownedColumn >= 0 && !state.ownedAuthored && indentColumns(content) < state.ownedColumn) {
+      state.ownedColumn = -1
+      state.deepest = null
+    }
     const hasTerm = isTerm || state.inDefList === 'term' ||
       (state.inDefList === 'description' && state.descriptionHasTerm === true)
     state.descriptionHasTerm = hasTerm
