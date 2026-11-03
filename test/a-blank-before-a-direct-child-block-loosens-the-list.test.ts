@@ -33,6 +33,14 @@ describe('a blank before a direct child block', () => {
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
 
+  it('loosens after a closed div containing inline code', () => {
+    const source = '- :::\n  `x`\n  :::\n\n  > q\n- z\n'
+    for (const positions of [false, true]) {
+      expect(parse(source, { positions }).children[0]).toMatchObject({ type: 'list', tight: false })
+    }
+    expect(carveToHtml(source)).toContain('<li><p>z</p></li>')
+  })
+
   it('loosens the parent after a closed fence in its child list', () => {
     const source = '- outer\n  - inner\n    ```\n    x\n    ```\n\n  > q\n'
     for (const positions of [false, true]) {

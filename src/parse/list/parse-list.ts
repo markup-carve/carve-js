@@ -3566,9 +3566,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem &&
             noteRunPartsFrom(span.start)) loose = true
         let previousVisibleEnd = previousVisibleSpan?.end
-        const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
-          previousVisibleBlock.children.some(block => block.type === 'paragraph' &&
-            block.children.some(inline => inline.type === 'code'))
         let childListTail = previousVisibleBlock?.type === 'list'
           ? previousVisibleBlock.items.at(-1)?.children.at(-1)
           : undefined
@@ -3589,7 +3586,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             previousVisibleEnd--
           }
         }
-        if (previousVisibleEnd !== undefined && !priorDivInlineCode &&
+        if (previousVisibleEnd !== undefined &&
             !reachesNestedList && !authoredBlockParagraph && !belowInlineAdmonition &&
             (session.hasAuthoredBlankBetween(lexer, previousVisibleEnd, span.start,
               previousVisibleType === 'list' ? undefined : opaqueBlankLines) ||
