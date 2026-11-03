@@ -99,4 +99,19 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToCarve(source)).toBe(source)
     expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
+
+  it('writes edits to restored transparent nodes', () => {
+    expect(canonicalCarveWrite('a\n%% old\nb', {}, (document) => {
+      const comment = document.children.find((node) => node.type === 'comment')
+      if (!comment || comment.type !== 'comment') return false
+      comment.content = 'new'
+      return true
+    })).toBe('a\n%% new\nb\n')
+    expect(canonicalCarveWrite('a\n*[AB]: old\nb', {}, (document) => {
+      const definition = document.children.find((node) => node.type === 'abbreviation_def')
+      if (!definition || definition.type !== 'abbreviation_def') return false
+      definition.expansion = 'new'
+      return true
+    })).toBe('a\n*[AB]: new\nb\n')
+  })
 })

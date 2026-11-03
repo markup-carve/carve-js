@@ -134,7 +134,7 @@ export interface Paragraph extends BaseNode {
   type: 'paragraph'
   children: InlineNode[]
   /** Runtime source placement for line comments erased before layout. */
-  transparentComments?: Array<{ line: number; source: string }>
+  transparentComments?: Array<{ line: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
   /** Authored lines following a transparent boundary in this paragraph. */
   transparentFollowingLines?: Array<{ line: number; source: string }>
   /** Visible source line order retained when public positions are omitted. */
@@ -196,7 +196,7 @@ export interface List extends BaseNode {
   tight: boolean
   items: ListItem[]
   /** Invisible source lines that fell between adjacent items before layout. */
-  transparentBetweenItems?: Array<{ after: number; source: string }>
+  transparentBetweenItems?: Array<{ after: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
 }
 
 /** The task marker characters an item can record (PART 12, `taskState`). */

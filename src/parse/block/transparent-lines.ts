@@ -177,7 +177,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
         .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
         .map((child) => child.pos!.startLine))]
       match.paragraph.transparentComments ??= []
-      match.paragraph.transparentComments.push({ line: index + 1, source: original })
+      match.paragraph.transparentComments.push({ line: index + 1, source: original, node: comment, originalValue: comment.content })
       match.paragraph.transparentFollowingLines ??= []
       for (const child of match.paragraph.children) {
         const line = child.pos?.startLine
@@ -191,7 +191,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       const gap = betweenListItems(blocks, comment.pos.startOffset)
       if (gap) {
         gap.list.transparentBetweenItems ??= []
-        gap.list.transparentBetweenItems.push({ after: gap.after, source: original })
+        gap.list.transparentBetweenItems.push({ after: gap.after, source: original, node: comment, originalValue: comment.content })
         comment.transparentInList = true
       }
       const siblings = containingBlocks(blocks, comment.pos.startOffset)
@@ -210,7 +210,8 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
         .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
         .map((child) => child.pos!.startLine))]
       match.paragraph.transparentComments ??= []
-      match.paragraph.transparentComments.push({ line, source: stream.original[line - 1]! })
+      match.paragraph.transparentComments.push({ line, source: stream.original[line - 1]!, node: definition,
+        originalValue: `${definition.abbr}\0${definition.expansion}` })
       match.paragraph.transparentFollowingLines ??= []
       for (const child of match.paragraph.children) {
         const following = child.pos?.startLine
@@ -224,7 +225,8 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
       const gap = betweenListItems(document.children, definition.pos!.startOffset!)
       if (gap) {
         gap.list.transparentBetweenItems ??= []
-        gap.list.transparentBetweenItems.push({ after: gap.after, source: stream.original[line - 1]! })
+        gap.list.transparentBetweenItems.push({ after: gap.after, source: stream.original[line - 1]!, node: definition,
+          originalValue: `${definition.abbr}\0${definition.expansion}` })
         definition.transparentInList = true
       }
       const siblings = containingBlocks(document.children, definition.pos!.startOffset!)

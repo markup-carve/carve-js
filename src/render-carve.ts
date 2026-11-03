@@ -12,6 +12,7 @@ import { allocateDashes, wordAfter, wordBeforeGrapheme } from './parse/inline/pa
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
+  AbbreviationDef,
   Attrs,
   BlockNode,
   Comment,
@@ -74,6 +75,15 @@ function restoreTransparentLineColumns(source: string): string {
     const marker = line.indexOf('\0')
     return marker < 0 ? line : line.slice(marker + 1)
   }).join('\n')
+}
+
+function transparentNodeSource(entry: { source: string; node: Comment | AbbreviationDef; originalValue: string }): string {
+  const { node, source, originalValue } = entry
+  const value = node.type === 'comment' ? node.content : `${node.abbr}\0${node.expansion}`
+  if (value === originalValue) return source
+  const prefix = /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(source)?.[0] ?? ''
+  return prefix + (node.type === 'comment' ? `%% ${node.content}` :
+    `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`)
 }
 
 // A body line below the body column that directly follows the line above it; the writer keeps it there.
@@ -3628,7 +3638,7 @@ class CarveRenderSession {
           }
           for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
             const after = sourceLines.filter((line) => line < comment.line).length
-            written.splice(Math.min(after, written.length), 0, `\0${comment.source}`)
+            written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource(comment)}`)
           }
           withComments = written.join('\n')
         }
@@ -3999,7 +4009,7 @@ class CarveRenderSession {
         }
         out += itemSource
         for (const gap of node.transparentBetweenItems ?? []) {
-          if (gap.after === idx) out += `\0${gap.source}\n`
+          if (gap.after === idx) out += `\0${transparentNodeSource(gap)}\n`
         }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
