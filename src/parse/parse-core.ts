@@ -784,6 +784,7 @@ export {
   RE_UNORDERED,
   RE_VALID_ADMONITION_OPEN,
   attachBlockPos,
+  unplacedBlocks,
   balancedLabelMatcher,
   composeContainerPrefix,
   consumeLooseKey,

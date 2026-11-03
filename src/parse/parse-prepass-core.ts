@@ -1192,6 +1192,9 @@ export const EMPTIED_CONTAINER_MARKUP: Record<string, RegExp> = {
   list_item: /^[ \t]*(?:[-+*]|[0-9]+[.)]|[A-Za-z]+[.)]|\.)[ \t]*/,
 }
 
+/** Blocks whose source is a stand-in the ownership walk wrote; their `pos` is dropped once the tree is built. */
+export const unplacedBlocks = new WeakSet<object>()
+
 export function attachBlockPos(
   lexer: Lexer,
   node: { pos?: Position },

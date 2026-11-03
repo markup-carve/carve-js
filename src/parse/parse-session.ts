@@ -67,6 +67,7 @@ import {
   insertSkippedAbbreviationDefinitions,
   hoistContainerAbbreviations,
   attachBlockPos,
+  unplacedBlocks,
   blockQuoteParagraphClaimOpen,
   closeBlockQuoteParagraph,
   closerIndex,
@@ -266,6 +267,59 @@ function leavesFenceOpen(lines: readonly string[]): boolean {
   return close !== null
 }
 
+type Span = { endLine: number; endColumn?: number; endOffset?: number }
+
+// Blocks whose content is inline or verbatim: no stand-in sits inside them.
+const STAND_IN_FREE = new Set(['paragraph', 'heading', 'code_block', 'raw_block', 'table', 'line_block', 'thematic_break', 'comment'])
+
+// A consumed `+`'s `%%` stand-in is wider than the `+`. Its span is dropped, since the source
+// holds no comment there (CARVE-P12-022), and every span that ended where the stand-in ended,
+// its own containers and their side tables alike, ends at the authored `+` (CARVE-P12-020).
+function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset: number; column: number }): void {
+  const ends = new Map<string, { line: number; offset: number; column: number }>()
+  const spans: Span[] = []
+  const endOf = (node: { pos?: Span }): Span | undefined => {
+    const pos = node.pos
+    if (pos === undefined || !unplacedBlocks.has(node)) return pos
+    const end = plusEnd(pos.endLine)
+    return { endLine: pos.endLine, endColumn: end.column, endOffset: end.offset }
+  }
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    const pos = (value as { pos?: Span }).pos
+    if (unplacedBlocks.has(value)) {
+      if (pos?.endOffset !== undefined) ends.set(`${pos.endLine}:${pos.endOffset}`, { line: pos.endLine, ...plusEnd(pos.endLine) })
+      delete (value as { pos?: Span }).pos
+      return
+    }
+    // A description's recorded span covers its marker line; its children supply the end.
+    const item = value as { definitions?: Array<Array<{ pos?: Span }>>; definitionSpans?: Array<Span | undefined> }
+    item.definitions?.forEach((children, index) => {
+      const recorded = item.definitionSpans?.[index]
+      const last = children.length > 0 ? endOf(children[children.length - 1]!) : undefined
+      if (recorded === undefined || last?.endOffset === undefined || !children.some((child) => unplacedBlocks.has(child))) return
+      recorded.endLine = last.endLine
+      if (last.endColumn !== undefined) recorded.endColumn = last.endColumn
+      recorded.endOffset = last.endOffset
+    })
+    if (typeof (value as Span).endOffset === 'number') spans.push(value as Span)
+    if (pos !== undefined) spans.push(pos)
+    if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
+    for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
+  }
+  visit(doc)
+  for (const span of spans) {
+    const end = ends.get(`${span.endLine}:${span.endOffset}`)
+    if (end === undefined) continue
+    span.endColumn = end.column
+    span.endOffset = end.offset
+  }
+}
+
 function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockNode[] {
   if (letters !== null) restoreLetters(blocks, letters)
   return blocks
@@ -395,6 +449,8 @@ export class ParseSession extends InlineParseSession {
   private skipPositionDrop = false
   private skippedAbbreviationLines = new Set<number>()
   private skippedCommentFences = new Map<number, { closer: number; content: string }>()
+  /** Document lines whose consumed `+` the ownership walk wrote as a `%%` stand-in. */
+  private consumedMarkerLines = new Set<number>()
 
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
@@ -454,6 +510,7 @@ export class ParseSession extends InlineParseSession {
       .filter((index) => !ownership.separatingAbbreviations.has(index)).map((index) => lexer.lineNumber(index)))
     this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
       [lexer.lineNumber(index), { closer: lexer.lineNumber(closer), content }]))
+    this.consumedMarkerLines = new Set([...ownership.consumedMarkers].map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -474,6 +531,13 @@ export class ParseSession extends InlineParseSession {
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
     if (ownership.letters !== null) restoreLetters(doc, ownership.letters)
+    if (this.consumedMarkerLines.size > 0) {
+      const bom = strippedBom ? 1 : 0
+      dropStandInPositions(doc, (line) => {
+        const plus = sourceLines[line - 1]!.lastIndexOf('+')
+        return { offset: lexer.lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
+      })
+    }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = sourceByteLength
@@ -553,6 +617,7 @@ export class ParseSession extends InlineParseSession {
     sub.footnoteDefPos = root.footnoteDefPos
     const ownership = ownLines(sub.lines as string[], 0)
     sub.applyOwnership(ownership)
+    for (const index of ownership.consumedMarkers) this.consumedMarkerLines.add(sub.lineNumber(index))
     this.collectLinkDefs(sub)
     if (!this.activeMatchers.length) return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
     const prevCtx = this.activeMatcherCtx
@@ -879,6 +944,12 @@ export class ParseSession extends InlineParseSession {
       const l = lexer.consume()
       // The stand-in for an abbreviation definition a `+` skipped; the document holds its node.
       if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
+      // A consumed `+` keeps its `%%` stand-in so the writer can spell it; see dropStandInPositions.
+      if (l.trimStart() === '%%' && this.consumedMarkerLines.has(lexer.lineNumber(lexer.pos - 1))) {
+        const standIn = { type: 'comment' as const, block: false, content: '' }
+        unplacedBlocks.add(standIn)
+        return standIn
+      }
       // A comment fence a `+` skipped, whose lines read as `%%` stand-ins.
       const fence = l === '%%' ? this.skippedCommentFences.get(lexer.lineNumber(lexer.pos - 1)) : undefined
       if (fence !== undefined) {
