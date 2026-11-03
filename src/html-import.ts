@@ -4953,6 +4953,13 @@ class Importer {
     )
   }
 
+  reportListTightnessSerializationLoss(): void {
+    if (this.root === undefined) return
+    this.report.add('structure-unspellable',
+      'An HTML list changes tightness in Carve because its direct child blocks need blank separators',
+      'warning', '', this.root)
+  }
+
   reportSerializationLosses(document: Document): void {
     for (const { node, path, message } of this.unspellable) {
       this.report.add('structure-unspellable', message, 'warning', path, node)
@@ -5140,6 +5147,7 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
           const parsedTightness = listTightnesses(parsed)
           if (importedTightness.length === parsedTightness.length &&
               importedTightness.some((tight, index) => tight !== parsedTightness[index])) {
+            importer.reportListTightnessSerializationLoss()
             carve = renderCarve(parsed, { preserveTableSeparators: true })
           }
         }

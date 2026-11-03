@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { carveToCarve, carveToHtml, htmlToAst, htmlToCarve, parse } from '../src/index.js'
 
 // PART 9 §17 L1 after carve#5015: the item owns this blank and the child block.
 const expected = `<ul>
@@ -70,4 +70,16 @@ describe('a blank before a direct child block', () => {
     expect(parse(written).children[0]).toMatchObject({ type: 'list', tight: false })
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
+
+  it('reports an HTML tightness loss when sibling nested lists need a blank boundary', () => {
+    const html = '<ul><li><ul><li>a</li></ul><ul><li>b</li></ul></li><li>z</li></ul>'
+    expect(htmlToAst(html).value.children[0]).toMatchObject({ type: 'list', tight: true })
+    const imported = htmlToCarve(html)
+    expect(parse(imported.value).children[0]).toMatchObject({ type: 'list', tight: false })
+    expect(imported.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'structure-unspellable', severity: 'warning', fidelity: 'dropped' }),
+    ]))
+    expect(carveToCarve(imported.value)).toBe(imported.value)
+  })
+
 })
