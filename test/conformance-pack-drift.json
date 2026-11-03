@@ -2,6 +2,13 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#5023",
+      "cause": "a nested quote's first-block plus opens no paragraph, following the current spec ahead of this pin",
+      "cases": [
+        "lazy-68fe7c68d81d"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#4996",
       "cause": "a comment span on a description or note lead closes below its column, following the current spec ahead of this pin",
       "cases": [
