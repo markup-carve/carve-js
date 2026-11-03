@@ -851,9 +851,16 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     authoredFenceWhitespace?: number,
     authoredQuoteParagraphOpen = false,
   ): void {
+    const describing = state.inDefList === 'description' && !isBlankLine(content) &&
+      inDescriptionBody(state, indentColumns(content))
     const line = beginLine(content, state, atContentColumn, hasCommentCloser, facts,
       hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
-    for (const phase of phases) if (phase(line)) return
+    for (const phase of phases) {
+      if (!phase(line)) continue
+      // A block at or past the open description's body column is that body's (PART 0 S3, carve#4860).
+      if (describing && state.inDefList === false) state.inDefList = 'description'
+      return
+    }
   }
 
   return trackItemLazyState
