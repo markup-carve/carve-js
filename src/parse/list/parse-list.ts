@@ -117,12 +117,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
   const attachesQuote = (lines: readonly string[]): boolean =>
     /^>/.test(lines.find(line => !isBlankLine(line) && !isBlockAttributeLine(line.trimStart())) ?? '')
-  // The `<dd>` body column a column-0 line of a `+`-attached block leaves open; a term closes it.
+  // The `<dd>` body column a column-0 line of a `+`-attached block leaves open: 0 after a term, -1 outside a description list.
   const attachedBodyColumnAfter = (line: string, column: number): number => {
     if (indentColumns(line) !== 0) return column
-    const dd = RE_DEFLIST_DEF.exec(line)
-    if (dd) return 1 + dd[1]!.length
-    return RE_DEFLIST_TERM.test(line) ? -1 : column
+    if (RE_DEFLIST_TERM.test(line)) return 0
+    const dd = column >= 0 ? RE_DEFLIST_DEF.exec(line) : null
+    return dd ? 1 + dd[1]!.length : column
   }
   // A marker below the item's column ends the item: only plain text continues an attached quote lazily (CARVE-P2-008).
   const endsAttachedQuote = (line: string, column: number): boolean =>
@@ -1947,7 +1947,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
         const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
-          !(attachedBodyColumn >= 0 && contentCol >= attachedBodyColumn) &&
+          !(attachedBodyColumn > 0 && contentCol >= attachedBodyColumn) &&
           (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
         // The lines of that block are measured from the same column.
         ownBlock ||= ownOpener
@@ -2290,8 +2290,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line at the content column, in the order the item reads it.
     const placeContentLine = (l: string): void => {
       strippedPrefix = undefined
-      if (attachedDescriptionBody >= 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
-      placed = sliceColumns(l, attachedDescriptionBody >= 0 ? 0 : contentCol, true, prefix => { strippedPrefix = prefix })
+      if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
+      placed = sliceColumns(l, attachedDescriptionBody > 0 ? 0 : contentCol, true, prefix => { strippedPrefix = prefix })
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
           isListMarkerLine(placed.trimStart())) blockedNoteClaimFloor = undefined
       if (lazyState.opaque === null && descendantOpaque === null &&

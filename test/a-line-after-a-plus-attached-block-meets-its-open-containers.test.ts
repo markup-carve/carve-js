@@ -19,6 +19,8 @@ describe('a line after a plus-attached block meets its open containers', () => {
       '<ul><li>a\n    <dl><dt>term</dt><dd><p>d</p><p>x</p></dd></dl></li></ul>'],
     ['line short of a wider dd body column ends the item', '- a\n+\n:: term\n:   d\n\n  x\n',
       '<ul><li>a\n    <dl><dt>term</dt><dd>d</dd></dl></li></ul><p>x</p>'],
+    ['a description line without a term opens no dd', '- a\n+\np\n: d\n  # z\n',
+      '<ul><li>a\n    p\n: d\n    <h1 id="z">z</h1></li></ul>'],
     ['ordered host, marker below the content column', '1. a\n+\n> q\n  - y\n',
       '<ol><li>a\n    <blockquote><p>q</p></blockquote></li></ol><ul><li>y</li></ul>'],
     ['bullet host, marker at column 1', '- a\n+\n> q\n - y\n',
