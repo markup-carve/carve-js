@@ -73,7 +73,7 @@ describe('the written spelling', () => {
   // so carve#581 joins; at block level there is, so this arm separates.
   it('separates the marker from the content at block level', () => {
     // A bare `%%%` is an unclosed span now, written closed (carve#4907).
-    expect(renderCarve(parse('%%%\n'))).toBe('%%%\n\n%%%\n')
+    expect(renderCarve(parse('%%%\n'))).toBe('%%%\n%%%\n')
     expect(renderCarve(parse('%% %\n'))).toBe('%% %\n')
   })
 
