@@ -108,6 +108,7 @@ function childListEndsInLiteralPlus(block: BlockNode): boolean {
 }
 
 function refusedPlusNeedsCompactFollower(item: ListItem): boolean {
+  if (item.children.length !== 2) return false
   return item.children.some((block, index) => childListEndsInLiteralPlus(block) &&
     item.children[index + 1] !== undefined)
 }

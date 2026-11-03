@@ -55,6 +55,13 @@ describe('a blank before a direct child block', () => {
     expect(carveToHtml(source)).toContain('<li>outer\n    <ul>')
   })
 
+  it('keeps a loose list with a literal plus and later div at its original boundaries', () => {
+    const source = '- a\n  - +\n\n  :::note\n  q\n  :::\n\n  - b\n'
+    const written = carveToCarve(source)
+    expect(carveToHtml(written)).toBe(carveToHtml(source))
+    expect(carveToCarve(written)).toBe(written)
+  })
+
   it('escapes a refused nested plus and preserves an outer loose list', () => {
     const source = '- - +\n\n  > q\n'
     const written = carveToCarve(source)
