@@ -79,7 +79,7 @@ tail
    :::
   :::
 tail
-`, '<ul><li>a'+box+'</li></ul>' + tail],
+`, '<ul><li><p>a</p>'+box+'</li></ul>' + tail],
     ['G', `::: box
  ::: note
  x

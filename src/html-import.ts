@@ -5098,6 +5098,22 @@ export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlIm
   return { value, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }
 
+function listTightnesses(root: Document): boolean[] {
+  const values: boolean[] = []
+  const pending: unknown[] = [root]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node === null || typeof node !== 'object' || seen.has(node)) continue
+    seen.add(node)
+    if ('type' in node && node.type === 'list' && 'tight' in node && typeof node.tight === 'boolean') {
+      values.push(node.tight)
+    }
+    for (const value of Object.values(node)) if (value !== null && typeof value === 'object') pending.push(value)
+  }
+  return values
+}
+
 export function htmlToCarve(html: string, options: HtmlImportOptions = {}): HtmlImportResult<string> {
   const importer = new Importer(options, true)
   const value = importer.import(replaceLoneSurrogates(html))
@@ -5113,6 +5129,20 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
       if (carve.includes('</\\#')) {
         preserveHtmlTextCrossrefs(value, convertedIds(carve))
         carve = renderCarveForHtmlImport(value)
+      }
+      // A list imported from HTML can carry a tightness value that its first
+      // source spelling no longer expresses after the §17 L2 withdrawal.
+      // Render the tree the source actually reads so the import is a fixed point.
+      if (carve.includes('\n\n')) {
+        const importedTightness = listTightnesses(value)
+        if (importedTightness.length > 0) {
+          const parsed = parse(carve)
+          const parsedTightness = listTightnesses(parsed)
+          if (importedTightness.length === parsedTightness.length &&
+              importedTightness.some((tight, index) => tight !== parsedTightness[index])) {
+            carve = renderCarve(parsed, { preserveTableSeparators: true })
+          }
+        }
       }
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {

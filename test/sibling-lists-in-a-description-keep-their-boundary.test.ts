@@ -9,7 +9,7 @@ describe('two sibling lists in a description body', () => {
     [':: t\n:  - a\n\n\n\n   - b\n', ':: t\n: - a\n\n\n\n  - b\n'],
     [':: t\n: 1. a\n\n\n\n  1. b\n  2. c\n', ':: t\n: 1. a\n\n\n\n  1. b\n  2. c\n'],
     ['> :: t\n> : - a\n>\n>\n>\n>   - b\n', '> :: t\n> : - a\n>\n>\n>\n>   - b\n'],
-    ['- x\n\n  :: t\n  : - a\n\n\n\n    - b\n', '- x\n  :: t\n  : - a\n\n\n\n    - b\n'],
+    ['- x\n\n  :: t\n  : - a\n\n\n\n    - b\n', '- x\n\n  :: t\n  : - a\n\n\n\n    - b\n'],
   ]
   for (const [source, written] of cases) {
     it(`stay two lists: ${JSON.stringify(source)}`, () => {

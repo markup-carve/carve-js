@@ -10,7 +10,7 @@ describe('a lead tab run sets the content column where the content starts', () =
     ['- \t e\n\n\tf\n', '<ul><li><p>\t e</p><p>f</p></li></ul>'],
     ['- \te\n\t> q\n', '<ul><li>\te<blockquote><p>q</p></blockquote></li></ul>'],
     ['- \te\n    # h\n', '<ul><li>\te<h1 id="h">h</h1></li></ul>'],
-    ['- \te\n\n    # h\n', '<ul><li>\te<h1 id="h">h</h1></li></ul>'],
+    ['- \te\n\n    # h\n', '<ul><li><p>\te</p><h1 id="h">h</h1></li></ul>'],
     ['1. \te\n    > q\n', '<ol><li>\te<blockquote><p>q</p></blockquote></li></ol>'],
     ['- \te\n  > q\n', '<ul><li>\te<blockquote><p>q</p></blockquote></li></ul>'],
     ['- \te\n  - s\n', '<ul><li>\te<ul><li>s</li></ul></li></ul>'],

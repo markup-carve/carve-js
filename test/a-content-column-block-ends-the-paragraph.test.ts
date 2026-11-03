@@ -58,7 +58,7 @@ describe('a block at a container content column ends the paragraph', () => {
 
   it('continues a paragraph after a blank-separated fence and another fence', () => {
     expect(html('- a\n    - child\n\n    ```\n    code\n    ```\n    para\n    ```\n    y\n    ```\n    tail\nafter\n'))
-      .toContain('tail\nafter\n  </li>')
+      .toContain('<p>tail\nafter</p>')
     expect(html('- a\n    - child\n\n    ```\n    code\n    ```\n\n    para\n    ```\n    y\n    ```\n    tail\nafter\n'))
       .toContain('<p>tail\nafter</p>')
   })

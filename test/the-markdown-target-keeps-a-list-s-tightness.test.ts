@@ -12,14 +12,14 @@ const readBack = (source: string) => {
 }
 
 describe("the Markdown target keeps a list's tightness", () => {
-  it('keeps a tight item tight above a nested block quote', () => {
+  it('reads the imported blank before nested blocks as loose', () => {
     const source = '- a\n  > - x\n  - m\n'
     const { markdown, list, html } = readBack(source)
 
     // `- m` opens the item's list rather than folding into the quote (PART 0 S3, carve#4860).
     expect(markdown).toBe('- a\n  > - x\n  - m\n')
-    expect(list).toMatchObject({ type: 'list', tight: true })
-    expect(html).toBe(renderHtml(parse(source)))
+    expect(list).toMatchObject({ type: 'list', tight: false })
+    expect(html).toBe(renderHtml(parse('- a\n\n  > - x\n\n  - m\n')))
   })
 
   it('keeps a flat loose list loose', () => {

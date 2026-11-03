@@ -130,7 +130,7 @@ describe('corpus 444: an opener at or past a description body column', () => {
 
   it("row 13: the same inside a list item", () => {
     expect(carveToHtml("- intro\n\n  :: term\n  :  definition\n      # H\n  tail\n")).toBe(
-      "<ul>\n  <li>intro\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>definition</p>\n        <h1 id=\"H\">H</h1>\n      </dd>\n    </dl>\n    tail\n  </li>\n</ul>",
+      "<ul>\n  <li><p>intro</p>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>definition</p>\n        <h1 id=\"H\">H</h1>\n      </dd>\n    </dl>\n    <p>tail</p>\n  </li>\n</ul>",
     )
   })
 

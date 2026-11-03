@@ -27,52 +27,52 @@ const cases = [
   [
     'item: below-base ::: does not change nesting',
     '- head\n\n      :::\n      a\n    :::\n      b\n      :::\n\n  tail\n',
-    '<ul>\n  <li>head\n    <div>\n      <p>a</p>\n    </div>\n    b\n    <div>\n      <p>tail</p>\n    </div>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <div>\n      <p>a</p>\n    </div>\n    <p>b</p>\n    <div>\n      <p>tail</p>\n    </div>\n  </li>\n</ul>",
   ],
   [
     'item: below-base :::: does not change nesting',
     '- head\n\n      :::\n      a\n    ::::\n      b\n      :::\n\n  tail\n',
-    '<ul>\n  <li>head\n    <div>\n      <p>a</p>\n      <div>\n        <p>b</p>\n        <div>\n          <p>tail</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <div>\n      <p>a</p>\n      <div>\n        <p>b</p>\n        <div>\n          <p>tail</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>",
   ],
   [
     'item: nested exact-width colon closers',
     '- head\n\n      :::\n      ::::\n      a\n    ::::\n      ::::\n      b\n      :::\n',
-    '<ul>\n  <li>head\n    <div>\n      <div>\n        <p>a</p>\n      </div>\n      <div>\n        <p>b</p>\n        <div>\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <div>\n      <div>\n        <p>a</p>\n      </div>\n      <div>\n        <p>b</p>\n        <div>\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>",
   ],
   [
     'nested: colon closer below',
     '- outer\n\n  - inner\n\n        :::\n        a\n      :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: colon closer at-base',
     '- outer\n\n  - inner\n\n        :::\n        a\n        :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: colon closer past-base',
     '- outer\n\n  - inner\n\n        :::\n        a\n          :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: colon closer at-content',
     '- outer\n\n  - inner\n\n        :::\n        a\n    :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: below-base ::: does not change nesting',
     '- outer\n\n  - inner\n\n        :::\n        a\n      :::\n        b\n        :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <div>\n          <p>a</p>\n        </div>\n        b\n        <div>\n          <p>tail</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n        </div>\n        <p>b</p>\n        <div>\n          <p>tail</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: below-base :::: does not change nesting',
     '- outer\n\n  - inner\n\n        :::\n        a\n      ::::\n        b\n        :::\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <div>\n          <p>a</p>\n          <div>\n            <p>b</p>\n            <div>\n              <p>tail</p>\n            </div>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <p>a</p>\n          <div>\n            <p>b</p>\n            <div>\n              <p>tail</p>\n            </div>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: nested exact-width colon closers',
     '- outer\n\n  - inner\n\n        :::\n        ::::\n        a\n      ::::\n        ::::\n        b\n        :::\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <div>\n          <div>\n            <p>a</p>\n          </div>\n          <div>\n            <p>b</p>\n            <div>\n\n            </div>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <div>\n          <div>\n            <p>a</p>\n          </div>\n          <div>\n            <p>b</p>\n            <div>\n\n            </div>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'quoteitem: colon closer below',
@@ -97,17 +97,17 @@ const cases = [
   [
     'quoteitem: below-base ::: does not change nesting',
     '> - head\n>\n>       :::\n>       a\n>     :::\n>       b\n>       :::\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <div>\n        <p>a</p>\n      </div>\n      b\n      <div>\n        <p>tail</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <div>\n        <p>a</p>\n      </div>\n      <p>b</p>\n      <div>\n        <p>tail</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: below-base :::: does not change nesting',
     '> - head\n>\n>       :::\n>       a\n>     ::::\n>       b\n>       :::\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <div>\n        <p>a</p>\n        <div>\n          <p>b</p>\n          <div>\n            <p>tail</p>\n          </div>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <div>\n        <p>a</p>\n        <div>\n          <p>b</p>\n          <div>\n            <p>tail</p>\n          </div>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: nested exact-width colon closers',
     '> - head\n>\n>       :::\n>       ::::\n>       a\n>     ::::\n>       ::::\n>       b\n>       :::\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <div>\n        <div>\n          <p>a</p>\n        </div>\n        <div>\n          <p>b</p>\n          <div>\n\n          </div>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <div>\n        <div>\n          <p>a</p>\n        </div>\n        <div>\n          <p>b</p>\n          <div>\n\n          </div>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'fn: colon closer below',

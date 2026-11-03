@@ -61,6 +61,7 @@ test('matches native Djot block attribute boundaries', async () => {
       while (ancestor && ancestor.nodeName !== 'code' && ancestor.nodeName !== 'pre') ancestor = 'parentNode' in ancestor ? ancestor.parentNode : null
       let value = ancestor ? node.value : node.value.replace(/[\t\r\n ]+/g, ' ')
       if (parent && 'attrs' in parent && parent.attrs.some(attr => attr.name === 'role' && attr.value === 'doc-backlink')) value = value.replace(/\uFE0E/g, '')
+      if (parent?.nodeName === 'li') value = value.trimEnd()
       if (parent && ['p', 'li', 'blockquote', 'td', 'th'].includes(parent.nodeName)) {
         const children = parent.childNodes.filter(child => !('value' in child && /^[\t\r\n ]*$/.test(child.value)))
         if (children[0] === node) value = value.replace(/^ /, '')
@@ -71,7 +72,10 @@ test('matches native Djot block attribute boundaries', async () => {
     const children = 'childNodes' in node ? node.childNodes.filter(child => !(['#document-fragment', 'section', 'blockquote', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr'].includes(node.nodeName) && 'value' in child && /^[\t\r\n ]*$/.test(child.value))).map(shape) : []
     if (node.nodeName === 'thead' || node.nodeName === 'tbody') return children
     const attrs = 'attrs' in node ? node.attrs.filter(attr => !(attr.name === 'scope' && attr.value === 'col') && !['data-delim', 'data-task-state', 'aria-label'].includes(attr.name)).map(attr => [attr.name, attr.value]).sort() : []
-    return [node.nodeName, attrs, children.flatMap(child => Array.isArray(child) && Array.isArray(child[0]) ? child : [child])]
+    // CARVE-P9-017 L1: a blank before an item's direct child block makes Carve's list loose.
+    // Native Djot can keep these lists tight; this comparison checks attributes and block ownership.
+    const owned = node.nodeName === 'li' ? children.flatMap(child => Array.isArray(child) && child[0] === 'p' && Array.isArray(child[1]) && child[1].length === 0 ? child[2] as unknown[] : [child]) : children
+    return [node.nodeName, attrs, owned.flatMap(child => Array.isArray(child) && Array.isArray(child[0]) ? child : [child])]
   }
   const failures: unknown[] = []
   for (const { source, html, nativeAst } of controls) {

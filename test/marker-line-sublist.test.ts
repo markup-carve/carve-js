@@ -42,7 +42,7 @@ describe('marker-line sub-lists', () => {
     // The quote indented to the first cell's content column belongs to that
     // cell, not the parent row.
     expect(h('- - A\n\n    > quote\n  - B')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>A\n        <blockquote><p>quote</p></blockquote>\n      </li>\n      <li>B</li>\n    </ul>\n  </li>\n</ul>',
+      "<ul>\n  <li>\n    <ul>\n      <li><p>A</p>\n        <blockquote><p>quote</p></blockquote>\n      </li>\n      <li><p>B</p></li>\n    </ul>\n  </li>\n</ul>",
     )
   })
 

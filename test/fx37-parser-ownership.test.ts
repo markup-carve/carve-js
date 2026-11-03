@@ -10,7 +10,7 @@ describe('parser ownership across nested marker bodies', () => {
   // A marker below the note body column closes the note (PART 0 S3, carve#4860).
   it('opens the item list at a marker below a footnote (corpus 454-4)', () => {
     const html = carveToHtml('- body\n\n  [^g]: n\n   - item\n\nafter\n')
-    expect(html).toContain('<li>body\n    <ul>\n      <li>item</li>')
+    expect(html).toContain('<li><p>body</p>\n    <ul>\n      <li>item</li>')
     expect(html).toContain('<p>after</p>')
   })
 

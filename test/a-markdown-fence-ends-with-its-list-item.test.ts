@@ -6,28 +6,28 @@ import { markdownToCarve } from '../src/index.js'
 
 describe('a Markdown fence in a list item', () => {
   it('closes before a dedented line after a blank line', () => {
-    expect(markdownToCarve('1. x\n\n   ```\n   code\n\n*after*')).toBe('{loose}\n1. x\n\n   ```\n   code\n\n   ```\n\n/after/')
+    expect(markdownToCarve('1. x\n\n   ```\n   code\n\n*after*')).toBe("1. x\n\n   ```\n   code\n\n   ```\n\n/after/")
   })
 
   it('closes before a dedented line with no blank line', () => {
-    expect(markdownToCarve('1. x\n\n   ```\n   code\n*after*')).toBe('{loose}\n1. x\n\n   ```\n   code\n   ```\n\n/after/')
+    expect(markdownToCarve('1. x\n\n   ```\n   code\n*after*')).toBe("1. x\n\n   ```\n   code\n   ```\n\n/after/")
   })
 
   it('closes at the column of its item', () => {
-    expect(markdownToCarve('- x\n\n  ~~~~\n  code\n*after*')).toBe('{loose}\n- x\n\n  ```\n  code\n  ```\n\n/after/')
+    expect(markdownToCarve('- x\n\n  ~~~~\n  code\n*after*')).toBe("- x\n\n  ```\n  code\n  ```\n\n/after/")
   })
 
   it('closes before a new list', () => {
-    expect(markdownToCarve('1. x\n\n   ```\n   code\n- *next*')).toBe('{loose}\n1. x\n\n   ```\n   code\n   ```\n\n- /next/')
+    expect(markdownToCarve('1. x\n\n   ```\n   code\n- *next*')).toBe("1. x\n\n   ```\n   code\n   ```\n\n- /next/")
   })
 
   it('closes before a heading', () => {
-    expect(markdownToCarve('- x\n\n  ```\n  code\n# *h*')).toBe('{loose}\n- x\n\n  ```\n  code\n  ```\n\n# /h/')
+    expect(markdownToCarve('- x\n\n  ```\n  code\n# *h*')).toBe("- x\n\n  ```\n  code\n  ```\n\n# /h/")
   })
 
   // The explicit attribute preserves Markdown looseness now that the fence blank stays tight.
   it('stays open across a blank line to a line at the content column', () => {
-    expect(markdownToCarve('- x\n\n  ```\n  code\n\n  *still*')).toBe('{loose}\n- x\n\n  ```\n  code\n\n  *still*\n  ```')
+    expect(markdownToCarve('- x\n\n  ```\n  code\n\n  *still*')).toBe("- x\n\n  ```\n  code\n\n  *still*\n  ```")
   })
 
   it('runs to the end of the document', () => {

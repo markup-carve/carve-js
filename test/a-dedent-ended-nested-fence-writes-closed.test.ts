@@ -5,17 +5,17 @@ const rows = [
   {
     name: 'tight bullet item',
     source: ['- outer', '  - head', '', '    ```', '    a', '   ```', '', '  tail', ''].join('\n'),
-    expected: ['- outer', '  - head', '    ```', '    a', '    ```', '  ```', '', '  tail', '  ```', ''].join('\n'),
+    expected: ['- outer', '  - head', '', '    ```', '    a', '    ```', '  ```', '', '  tail', '  ```', ''].join('\n'),
   },
   {
     name: 'nested closer with following text',
     source: ['- a', '  - b', '', '    ```', '    p', '  ```', '', '    tail', ''].join('\n'),
-    expected: ['- a', '  - b', '    ```', '    p', '    ```', '  ```', '', '    tail', '  ```', ''].join('\n'),
+    expected: ['- a', '  - b', '', '    ```', '    p', '    ```', '  ```', '', '    tail', '  ```', ''].join('\n'),
   },
   {
     name: 'quoted tight item',
     source: ['> - outer', '>   - head', '>', '>     ```', '>     a', '>   ```', '>', '>   tail', ''].join('\n'),
-    expected: ['> - outer', '>   - head', '>     ```', '>     a', '>     ```', '>   ```', '>', '>   tail', '>   ```', ''].join('\n'),
+    expected: ['> - outer', '>   - head', '>', '>     ```', '>     a', '>     ```', '>   ```', '>', '>   tail', '>   ```', ''].join('\n'),
   },
 ] as const
 

@@ -276,7 +276,7 @@ describe('relative continuation marker columns', () => {
   it('uses a content-column spelling when it preserves a nested tight item', () => {
     const original = parse('- outer\n  - inner\n\n    > q', { positions: false })
     const written = renderCarve(original)
-    expect(written).toBe('- outer\n  - inner\n    > q\n')
+    expect(written).toBe('- outer\n  - inner\n\n    > q\n')
     expect({ ...parse(written, { positions: false }), srcByteLength: 0 }).toEqual({ ...original, srcByteLength: 0 })
   })
 

@@ -93,10 +93,10 @@ describe('bare-dot ordered marker', () => {
   describe('nesting', () => {
     it('nests by indentation, in both directions', () => {
       expect(carveToHtml('- a\n\n  . b')).toBe(
-        '<ul>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ul>',
+        "<ul>\n  <li><p>a</p>\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ul>",
       )
       expect(carveToHtml('. a\n\n  - b')).toBe(
-        '<ol>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ol>',
+        "<ol>\n  <li><p>a</p>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ol>",
       )
     })
 

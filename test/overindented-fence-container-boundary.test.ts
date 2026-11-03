@@ -5,7 +5,7 @@ import { renderCarve } from '../src/render-carve.js'
 describe('a line below an over-indented list fence', () => {
   it.each(['```', '~~~'])('ends the item holding %s', (fence) => {
     const source = `- head\n\n      ${fence}\n      a\ntext\n`
-    const expected = '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>'
+    const expected = '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>'
     expect(carveToHtml(source)).toBe(expected)
     const formatted = renderCarve(parse(source))
     expect(carveToHtml(formatted)).toBe(expected)
@@ -14,13 +14,13 @@ describe('a line below an over-indented list fence', () => {
 
   it('ends an item holding a raw fence', () => {
     expect(carveToHtml('- head\n\n      ```=html\n      a\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    a\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    a\n  </li>\n</ul>\n<p>text</p>',
     )
   })
 
   it.each(['   ', '    ', '      ', '\t\t'])('measures the opener at %j', (indent) => {
     expect(carveToHtml(`- head\n\n${indent}\`\`\`\n${indent}a\ntext\n`)).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
 })
@@ -28,47 +28,47 @@ describe('a line below an over-indented list fence', () => {
 describe('over-indented fence boundary controls', () => {
   it('flush opener', () => {
     expect(carveToHtml('- head\n\n  ```\n  a\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('sibling marker', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n- next\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n  <li>next</li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n  <li><p>next</p></li>\n</ul>",
     )
   })
   it('ordered host', () => {
     expect(carveToHtml('1. head\n\n       ```\n       a\ntext\n')).toBe(
-      '<ol>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ol>\n<p>text</p>',
+      '<ol>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ol>\n<p>text</p>',
     )
   })
   it('task host', () => {
     expect(carveToHtml('- [x] head\n\n      ```\n      a\ntext\n')).toBe(
-      '<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled aria-label="head"> head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"head\"> <p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>",
     )
   })
   it('closer at the base', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n      ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('closer at the item column', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n  ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('run below the base', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n    ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('run above the base', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n        ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n  ```\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n  ```\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('paragraph after the closer', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n      ```\n  para\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    para\ntext\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <pre><code>a\n</code></pre>\n    <p>para\ntext</p>\n  </li>\n</ul>",
     )
   })
   // A FLUSH-LEFT LINE REACHES THE DOCUMENT, not the descendant's fence body.
@@ -77,17 +77,17 @@ describe('over-indented fence boundary controls', () => {
   // end there, and the fence ends unterminated (carve-js#2261).
   it('nested item', () => {
     expect(carveToHtml('- outer\n  - head\n\n        ```\n        a\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('nested lazy text', () => {
     expect(carveToHtml('- outer\n  - head\n  lazy\n\n        ```\n        a\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head\nlazy</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>",
     )
   })
   it('nested closed fence', () => {
     expect(carveToHtml('- outer\n  - head\n  lazy\n\n    ```\n    a\n    ```\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
+      "<ul>\n  <li>outer\n    <ul>\n      <li><p>head\nlazy</p>\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>",
     )
   })
   it('nested paragraph continuation', () => {
@@ -97,12 +97,12 @@ describe('over-indented fence boundary controls', () => {
   })
   it('quoted paragraph continuation', () => {
     expect(carveToHtml('- head\n\n  > q\n    ```\n\n  - next\n')).toBe(
-      '<ul>\n  <li>head\n    <blockquote><p>q</p></blockquote>\n    <pre><code>\n- next\n</code></pre>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>head</p>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>\n- next\n</code></pre>\n  </li>\n</ul>',
     )
   })
   it('a heading before the fence', () => {
     expect(carveToHtml('- head\n\n  # heading\n      ```\n      a\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <h1 id="heading">heading</h1>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <h1 id="heading">heading</h1>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
 })
@@ -134,7 +134,7 @@ describe('fence ownership after earlier blocks', () => {
   })
   it('a heading after a sublist', () => {
     expect(carveToHtml('- head\n\n  - sub\n\n  # heading\n\n      ```\n      a\n      ```\ntext\n')).toBe(
-      "<ul>\n  <li>head\n    <ul>\n      <li>sub</li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>",
+      "<ul>\n  <li><p>head</p>\n    <ul>\n      <li>sub</li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>",
     )
   })
   it('quote-lazy text', () => {
@@ -143,7 +143,7 @@ describe('fence ownership after earlier blocks', () => {
     // unmarked line to continue and the line is the document's
     // (markup-carve/carve-js#2350).
     expect(carveToHtml('> - head\n>\n>       ```\n>       a\ntext\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>text</p>',
+      '<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>text</p>',
     )
   })
   it('trailing blank before a sibling', () => {
@@ -153,12 +153,12 @@ describe('fence ownership after earlier blocks', () => {
   })
   it('trailing blank before document text', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('trailing blank at EOF', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>head</p>\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>',
     )
   })
 })

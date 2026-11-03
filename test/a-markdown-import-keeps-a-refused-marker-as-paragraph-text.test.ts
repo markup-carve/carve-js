@@ -38,7 +38,7 @@ describe('Markdown list markers after an open item paragraph', () => {
 
   for (const tail of ['1. y', '1) y']) {
     it(`lets ${tail} interrupt the paragraph`, () => {
-      check(nestedFence + tail + '\n', nestedFence.slice(0, -2) + '\n  ' + tail + '\n', 3)
+      check(nestedFence + tail + '\n', `- a\n\n  - ${fence}\n    ${fence}\n\n  x\n\n  ${tail}\n`, 3)
     })
   }
 

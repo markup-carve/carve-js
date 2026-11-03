@@ -42,7 +42,8 @@ it.each([
   const remainingLosses: Record<string, string> = {
     '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace':
       ':: term\n: {empty}\n\nsee [t][r]\n\n[r]: /u\n',
-    '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-5': '- x\n  :::\n  a\n  \\- m\n  b\n  :::\n',
+    '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-5': '- x\n\n  :::\n  a\n  \\- m\n  b\n  :::\n',
+    '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-10': '- x\n\n  :::\n  a\n\n  b\n  :::\n',
   }
   expect(tree(result.value)).toEqual(tree(remainingLosses[slug] ?? source))
 })

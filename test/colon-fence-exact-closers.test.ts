@@ -122,7 +122,7 @@ describe('colon fences with exact-length closers', () => {
     expect(h('- item\n\n  ::: note\n  ```text\n  :::\n  ```\n  body\n  :::\nafter')).toBe(
       [
         '<ul>',
-        '  <li>item',
+        '  <li><p>item</p>',
         '    <aside class="admonition note" aria-label="Note">',
         '      <pre><code class="language-text">:::',
         '</code></pre>',

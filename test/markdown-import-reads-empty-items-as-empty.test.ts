@@ -13,7 +13,7 @@ it.each([
   ['- > *\n', '- > * {empty}\n'],
   ['- >*\n', '- > * {empty}\n'],
   ['- > *\n  > *\n', '- > * {empty}\n  > * {empty}\n'],
-  [' - >*\n\n   -\n', '{loose}\n- > * {empty}\n\n  - {empty}\n'],
+  [' - >*\n\n   -\n', '- > * {empty}\n\n  - {empty}\n'],
   // An empty item takes no lazy line: what is left of its content leaves it.
   ['1.\n  para\n', '1. {empty}\n\npara\n'],
   ['-\n foo\n', '- {empty}\n\nfoo\n'],

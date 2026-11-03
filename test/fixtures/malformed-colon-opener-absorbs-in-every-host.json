@@ -52,6 +52,6 @@
   {
     "id": "nested-marker-line-after-blank",
     "source": "- - :::e\n\n    :::\nl\n",
-    "html": "<ul>\n  <li>\n    <ul>\n      <li>:::e\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>l</p>"
+    "html": "<ul>\n  <li>\n    <ul>\n      <li><p>:::e</p>\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>l</p>"
   }
 ]

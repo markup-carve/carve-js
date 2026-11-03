@@ -52,13 +52,13 @@ describe('a quoted Markdown item holds an HTML block that ends before it', () =>
     [
       'a fence within three columns of the item, after a blank',
       '> - a\n>\n>     ```\n>   z\nafter\n',
-      '> {loose}\n> - a\n>\n>   ```\n>   z\n>   ```\n\nafter\n',
+      '> - a\n>\n>   ```\n>   z\n>   ```\n\nafter\n',
       '<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>z\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>',
     ],
     [
       'a fence after a blank in an item whose marker moves',
       '>  - a\n>\n>    ```\n>    x\n>    ```\n',
-      '> {loose}\n> - a\n>\n>   ```\n>   x\n>   ```\n',
+      '> - a\n>\n>   ```\n>   x\n>   ```\n',
       '<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
     ],
     [

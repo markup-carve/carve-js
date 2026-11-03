@@ -867,10 +867,9 @@ function needsLooseKey(
     // ONE ITEM has no "between items" for a blank line to stand in, so the only
     // spelling left is one the item's own content produces - and whether it
     // does is the PARSER's question, not a shape this writer can read off the
-    // tree. §17's looseness rules (L1, L2, L6) decide it together, so a second
+    // tree. §17's looseness rules (L1 and L6) decide it together, so a second
     // copy of them here would answer differently the day any of them moves:
-    // a lead container holding a blank line re-reads LOOSE, while the same
-    // blank line before a fence does not.
+    // a blank before a direct child block now re-reads LOOSE under L1.
     //
     // A body with NO blank line in it cannot re-read loose either way, so the
     // common shape - a one-item list holding one paragraph - is answered

@@ -16,7 +16,7 @@ describe('an authored footnote column owns its body', () => {
 
   it('opens a block after a blank below the body column', () => {
     expect(carveToHtml('- a\n    [^n]: e\n\n     ||\n')).toBe(
-      '<ul>\n  <li>a\n    <table>\n      <tbody>\n        <tr><td></td></tr>\n      </tbody>\n    </table>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>a</p>\n    <table>\n      <tbody>\n        <tr><td></td></tr>\n      </tbody>\n    </table>\n  </li>\n</ul>",
     )
   })
 

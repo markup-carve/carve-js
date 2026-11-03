@@ -777,7 +777,7 @@ export function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers:
  * Wider than `lineOpensBlock` by the two shapes that still deserve to be moved
  * back to the item's base even though they are not block OPENERS there: a block
  * attribute line and a bare block image.  Both are PARAGRAPHS at the canonical
- * content column (PART 9 §17 L2) and stay paragraphs after the move - the point
+ * content column and stay paragraphs after the move - the point
  * of rebasing them is that `{.c}` reaches the heading below it, and that the
  * image is inside the item rather than an indented run beside it.
  *

@@ -30,8 +30,8 @@ import { carveToHtml, carveToCarve, parse } from '../src/index.js'
 const NO_SENTINEL = /[\ue000-\uf8ff]/
 
 const cases: Array<[string, string, string]> = [
-  ['a quote below a quote, bullet item', '- > q\n\n  > b\nZ\n', '- > q\n+\n> b\n> Z\n'],
-  ['a quote below a quote, ordered item', '1. > q\n\n   > b\nZ\n', '1. > q\n+\n> b\n> Z\n'],
+  ['a quote below a quote, bullet item', '- > q\n\n  > b\nZ\n', "- > q\n\n  > b\n  > Z\n"],
+  ['a quote below a quote, ordered item', '1. > q\n\n   > b\nZ\n', "1. > q\n\n   > b\n   > Z\n"],
   [
     'a quote below a quote, item in a blockquote',
     '> - > q\n>\n>   > b\n> Z\n',
@@ -40,42 +40,42 @@ const cases: Array<[string, string, string]> = [
   [
     'a quote below a quote, item in a div',
     '::: h\n- > q\n\n  > b\nZ\n:::\n',
-    '::: h\n- > q\n+\n> b\n> Z\n:::\n',
+    "::: h\n- > q\n\n  > b\n  > Z\n:::\n",
   ],
   [
     'a quote below a quote whose only child is a heading',
     '- > ## H\n\n  > b\nZ\n',
-    '- > ## H\n+\n> b\n> Z\n',
+    "- > ## H\n\n  > b\n  > Z\n",
   ],
   [
     'a quote below a quote whose only child is a heading, item in a div',
     '::: h\n- > ## H\n\n  > b\nZ\n:::\n',
-    '::: h\n- > ## H\n+\n> b\n> Z\n:::\n',
+    "::: h\n- > ## H\n\n  > b\n  > Z\n:::\n",
   ],
   [
     'a table below a table',
     '- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n',
-    '- |= a |\n+\n|= a |\n\nZ\n',
+    "- |= a |\n\n  |= a |\n\nZ\n",
   ],
   [
     'a table below a table, item in a div',
     '::: h\n- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n:::\n',
-    '::: h\n- |= a |\n+\n|= a |\n\nZ\n:::\n',
+    "::: h\n- |= a |\n\n  |= a |\n\nZ\n:::\n",
   ],
   [
     'a quote below an emptied sub-list item',
     '- - +\n\n  > b\nZ\n',
-    '- - \\+\n  > b\n  > Z\n',
+    "{loose}\n- - \\+\n  > b\n  > Z\n",
   ],
   [
     'a quote below an emptied sub-list item, ordered host',
     '1. - +\n\n   > b\nZ\n',
-    '1. - \\+\n   > b\n   > Z\n',
+    "{loose}\n1. - \\+\n   > b\n   > Z\n",
   ],
   [
     'a quote below an emptied sub-list item, item in a div',
     '::: h\n- - +\n\n  > b\nZ\n:::\n',
-    '::: h\n- - \\+\n  > b\n  > Z\n:::\n',
+    "::: h\n{loose}\n- - \\+\n  > b\n  > Z\n:::\n",
   ],
 ]
 
@@ -116,9 +116,9 @@ describe('a block continued inside a tight item', () => {
 describe('the spellings the fix leaves alone', () => {
   const controls: Array<[string, string, string]> = [
     ['corpus 285, a marker-column run below a paragraph', '- x\n+\n> q\n+\n> q\n', '- x\n+\n> q\n+\n> q\n'],
-    ['a sub-list whose last item is not empty', '- - +\n  x\n\n  > b\nZ\n', '- - x\n  > b\n  > Z\n'],
-    ['a heading below an emptied sub-list item', '- - +\n\n  # H\nZ\n', '- - \\+\n  # H\n\nZ\n'],
-    ['a paragraph below an emptied sub-list item', '- - +\n\n  p\nZ\n', '- - +\n\n  p\n  Z\n'],
+    ['a sub-list whose last item is not empty', '- - +\n  x\n\n  > b\nZ\n', "- - x\n\n  > b\n  > Z\n"],
+    ['a heading below an emptied sub-list item', '- - +\n\n  # H\nZ\n', "{loose}\n- - \\+\n  # H\n\nZ\n"],
+    ['a paragraph below an emptied sub-list item', '- - +\n\n  p\nZ\n', "{loose}\n- - +\n+\np\nZ\n"],
   ]
 
   for (const [name, source, written] of controls) {

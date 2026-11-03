@@ -48,7 +48,7 @@ describe('a block at a quoted item content column leaves the quote for the line 
       '<blockquote><blockquote><ul><li>a\n<h1>H</h1></li></ul></blockquote></blockquote><p>tail</p>',
     )
     expect(read(lines('> - a', '>', '>   # H', 'tail'))).toBe(
-      '<blockquote><ul><li>a\n<h1>H</h1></li></ul></blockquote><p>tail</p>',
+      '<blockquote><ul><li><p>a</p><h1>H</h1></li></ul></blockquote><p>tail</p>',
     )
   })
 
@@ -77,7 +77,7 @@ describe('a fence on a sublist marker line leaves the list for the line below', 
     ['a fence with no closer', ['  - ```', '    x'], '<ul><li><pre><code>x\n</code></pre></li></ul>'],
     ['a blank above the sublist', ['', '  - ```', '    x', '    ```'], '<ul><li><pre><code>x\n</code></pre></li></ul>'],
   ])('%s', (_name, body, sublist) => {
-    expect(read(lines('- a', ...body, 'tail'))).toBe(`<ul><li>a\n${sublist}</li></ul><p>tail</p>`)
+    expect(read(lines('- a', ...body, 'tail'))).toBe(`<ul><li>${body[0] === '' ? '<p>a</p>' : 'a'}${body[0] === '' ? '' : '\n'}${sublist}</li></ul><p>tail</p>`)
   })
 
   it('keeps a marker-shaped line in a literal line block inline, so the line below continues it', () => {

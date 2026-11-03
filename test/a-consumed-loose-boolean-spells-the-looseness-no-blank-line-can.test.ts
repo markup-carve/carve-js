@@ -265,12 +265,10 @@ describe('the writer spells looseness only where a blank line cannot', () => {
     expect(parse(':: T\n:  a\n\n   b\n').children[0]).not.toHaveProperty('loose')
   })
 
-  // A blank line loosens an item only before a genuine PARAGRAPH (§17 L2), so a
-  // one-item list whose second child is a sub-block re-reads TIGHT and the key is
-  // the only spelling left.
-  it('spells it where the item\'s own blank line would not loosen on re-read', () => {
+  // PART 9 §17 L1 now lets the blank before a direct child fence spell looseness.
+  it('omits the key where the item\'s blank line loosens on re-read', () => {
     const src = '{loose}\n- a\n\n  ```\n  code\n  ```\n'
-    expect(fmt(src)).toContain('{loose}')
+    expect(fmt(src)).not.toContain('{loose}')
     expect(h(fmt(src))).toBe(h(src))
   })
 

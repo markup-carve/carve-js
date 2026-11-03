@@ -7,12 +7,12 @@ const cases: Array<[string, string, string]> = [
   [
     'tab-authored opener and closer',
     '- a\n\n\t\t```\n\tcode\n\t```\n    tail\nafter\n',
-    '<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n    tail\nafter\n  </li>\n</ul>',
+    "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n    <p>tail\nafter</p>\n  </li>\n</ul>",
   ],
   [
     'space-authored opener above the closer',
     '- a\n\n        ```\n  code\n    ```\n    tail\nafter\n',
-    '<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n    tail\nafter\n  </li>\n</ul>',
+    "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n    <p>tail\nafter</p>\n  </li>\n</ul>",
   ],
   [
     'tab closer at a space opener',
@@ -22,7 +22,7 @@ const cases: Array<[string, string, string]> = [
   [
     'quoted item',
     '> - a\n>\n> \t\t```\n> \tcode\n> \t```\n>     tail\n> after\n',
-    '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n      tail\nafter\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n      <p>tail\nafter</p>\n    </li>\n  </ul>\n</blockquote>",
   ],
 ]
 

@@ -17,7 +17,7 @@ const quoteCases = [
 describe('ruled continuation markers', () => {
   it.each(fenceCases)('keeps the second refused plus in the %s item after an open fence', (_name, source) => {
     const html = carveToHtml(source)
-    expect(html).toMatch(/<pre><code><\/code><\/pre>\n\s*\+\n\s*<\/li>/)
+    expect(html).toMatch(/<pre><code><\/code><\/pre>\n\s*<p>\+<\/p>\n\s*<\/li>/)
     expect(html).toContain('<p>tail</p>')
     expect(html).not.toContain('</ul>\n<p>+</p>')
     expect(carveToHtml(carveToCarve(source))).toBe(html)

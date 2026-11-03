@@ -70,7 +70,7 @@ describe('the HTML carriers', () => {
 
   it('data-marker: §12 N2 keeps it on the list, so a nested list derives its own', () => {
     expect(rt('* a\n\n  - b\n')).toBe(
-      '<ul data-marker="*">\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul data-marker="*">\n  <li><p>a</p>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 

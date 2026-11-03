@@ -16,7 +16,7 @@ describe('the blank run around a comment', () => {
   })
 
   it('in a nested list', () => {
-    expect(compact('- o\n  - a\n\n\n  %% c\n\n  - b\n')).toBe('<ul><li>o\n    <ul><li>a</li></ul><ul><li>b</li></ul></li></ul>')
+    expect(compact('- o\n  - a\n\n\n  %% c\n\n  - b\n')).toBe('<ul><li><p>o</p><ul><li>a</li></ul><ul><li>b</li></ul></li></ul>')
   })
 
   it('one blank on each side stays one loose list', () => {

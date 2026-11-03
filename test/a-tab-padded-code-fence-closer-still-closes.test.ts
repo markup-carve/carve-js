@@ -123,7 +123,7 @@ describe('a tab-padded code fence closer still closes', () => {
     expect(carveToHtml(`p\n${F}\nx\n${F}${T}\n\nafter\n`)).toContain('<p>after</p>')
   })
 
-  it('THE CLOSER INDEX widened with the matcher, so a blank in the fence is not an item blank', () => {
+  it('THE CLOSER INDEX widened with the matcher, so a blank in the fence stays code', () => {
     // The row that catches widening the real matcher and leaving
     // `RE_ANY_FENCE_CLOSER` narrow. That combination survives every other row
     // in this file, because the index gates two side paths rather than the
@@ -131,17 +131,13 @@ describe('a tab-padded code fence closer still closes', () => {
     //
     // Here it is observable. The pass asks the index whether this fence has a
     // closer ahead, so it can mark the fence's lines opaque and know the blank
-    // inside them is CODE and not an item-separating blank. A narrow index
-    // refutes, the fence is never marked, the blank loosens the item, and a
-    // stray `<p>` appears around the item's text:
-    //
-    //   <li><p>a</p>   with the index narrow
-    //   <li>a          with it widened, and in carve-php
+    // inside them is CODE. The blank before the fence now loosens the item
+    // under PART 9 §17 L1, regardless of the closer's spelling.
     const src = `- a\n\n  ${F}\n  x\n\n  y\n  ${F}${T}\n`
     expect(carveToHtml(src)).toBe(
-      '<ul>\n  <li>a\n    <pre><code>x\n\ny\n</code></pre>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>a</p>\n    <pre><code>x\n\ny\n</code></pre>\n  </li>\n</ul>',
     )
-    expect(carveToHtml(src)).not.toContain('<p>')
+    expect(carveToHtml(src)).toContain('<li><p>a</p>')
     // CONTROL: the same document with a plain closer, which never depended on
     // the widening, renders identically.
     expect(carveToHtml(`- a\n\n  ${F}\n  x\n\n  y\n  ${F}\n`)).toBe(carveToHtml(src))

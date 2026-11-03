@@ -308,10 +308,10 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     [
       'leaves open a fence set apart from its item text with a blank line inside',
       md('- a', '', '  ~~~', '  x', '', '  y'),
-      md('{loose}', '- a', '', '  ```', '  x', '', '  y', '  ```'),
+      md('- a', '', '  ```', '  x', '', '  y', '  ```'),
     ],
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', '', 'more', '', '9. b')],
-    ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('{loose}', '- a', '', '  > iq', '', '> q')],
+    ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
     [
       'writes a quoted fence at the quote column once a block left the item',
       md('> - a', '> # h', '>   ~~~', '>   x', '>   ~~~'),
@@ -392,7 +392,7 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
     ["continues the quote of the outer item", "- - c\n  > c\n      x\n", "- - c\n  > c\n  > x\n"],
     ["writes a lazy line at the innermost item", "- - c\n  y\n    z\n", "- - c\n    y\n    z\n"],
     ["ends the nested list with a lazy line and opens another", "- - y\nz\n2. y\n", "- - y\n    z\n\n2. y\n"],
-    ["continues the list at its level after a lazy line", " * y\n      > x\n      - - y\n c\n   - foo\n", "* y\n  > x\n\n  - - y\n      c\n  - foo\n"],
+    ["continues the list at its level after a lazy line", " * y\n      > x\n      - - y\n c\n   - foo\n", "* y\n\n  > x\n\n  - - y\n      c\n  - foo\n"],
     // The next item of an open list is one, whatever its number.
     ["writes a sibling after an item paragraph at its list column", "   1. x\n\n      a\n   2. z\n", "1. x\n\n   a\n\n2. z\n"],
     // A shallower quote line lazily continues the deeper paragraph.
@@ -426,7 +426,7 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
   it('reads a list under a quote in an item as the list GFM reads', () => {
     const html = carveToHtml(markdownToCarve(md('- > a', '  - b', '- c')))
     expect(html).toMatch(/<blockquote><p>a<\/p><\/blockquote>\s*<ul>\s*<li>b<\/li>/)
-    expect(html).toMatch(/<li>c<\/li>/)
+    expect(html).toMatch(/<li><p>c<\/p><\/li>/)
   })
 
   it('reads an over-indented marker as the text GFM reads', () => {
@@ -584,10 +584,10 @@ describe('a Markdown import keeps quoted items and item looseness', () => {
   it.each([
     // A blank line between two blocks of an item makes the list loose, which
     // Carve spells with blank lines between items or `{loose}` on one item.
-    ['sets a one-item list loose for a heading under a blank line', '- a\n\n  b\n  ---\n', '{loose}\n- a\n\n  ## b\n', '<ul>\n  <li><p>a</p>\n    <h2 id="b">b</h2>\n  </li>\n</ul>'],
+    ['sets a one-item list loose for a heading under a blank line', '- a\n\n  b\n  ---\n', "- a\n\n  ## b\n", '<ul>\n  <li><p>a</p>\n    <h2 id="b">b</h2>\n  </li>\n</ul>'],
     ['keeps a list of two items loose for a heading under a blank line (control)', '1. a\n\n   # b\n2. c\n', '1. a\n\n   # b\n\n2. c\n', '<ol>\n  <li><p>a</p>\n    <h1 id="b">b</h1>\n  </li>\n  <li><p>c</p></li>\n</ol>'],
-    ['sets a quoted one-item list loose', '> - a\n>\n>   # b\n', '> {loose}\n> - a\n>\n>   # b\n', null],
-    ['sets a list opening on an item line loose', '- - a\n\n    # b\n', '- {loose}\n  - a\n\n    # b\n', null],
+    ['sets a quoted one-item list loose', '> - a\n>\n>   # b\n', "> - a\n>\n>   # b\n", null],
+    ['sets a list opening on an item line loose', '- - a\n\n    # b\n', "- - a\n\n    # b\n", null],
     // Quoted marker padding is written as one space, as fmt writes it.
     ['writes quoted marker padding as one space', '> -  a\n', '> - a\n', '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>'],
     ['writes the padding of each quoted item as one space', '> -  a\n> -   b\n', '> - a\n> - b\n', null],

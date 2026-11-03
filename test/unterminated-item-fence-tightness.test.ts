@@ -7,17 +7,17 @@ const cases = [
   [
     'item: unterminated code at +0 with interior blank',
     '- head\n\n  ```\n  a\n\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: unterminated code at +0 without interior blank',
     '- head\n\n  ```\n  a\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed code at +0 with interior blank',
     '- head\n\n  ```\n  a\n\n  b\n  ```\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed code at +0 then blank and tail',
@@ -27,17 +27,17 @@ const cases = [
   [
     'item: unterminated code at +4 with interior blank',
     '- head\n\n      ```\n      a\n\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: unterminated code at +4 without interior blank',
     '- head\n\n      ```\n      a\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed code at +4 with interior blank',
     '- head\n\n      ```\n      a\n\n      b\n      ```\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed code at +4 then blank and tail',
@@ -47,17 +47,17 @@ const cases = [
   [
     'item: unterminated tilde at +0 with interior blank',
     '- head\n\n  ~~~\n  a\n\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: unterminated tilde at +0 without interior blank',
     '- head\n\n  ~~~\n  a\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed tilde at +0 with interior blank',
     '- head\n\n  ~~~\n  a\n\n  b\n  ~~~\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed tilde at +0 then blank and tail',
@@ -67,17 +67,17 @@ const cases = [
   [
     'item: unterminated tilde at +4 with interior blank',
     '- head\n\n      ~~~\n      a\n\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: unterminated tilde at +4 without interior blank',
     '- head\n\n      ~~~\n      a\n  tail\n',
-    '<ul>\n  <li>head\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\ntail\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed tilde at +4 with interior blank',
     '- head\n\n      ~~~\n      a\n\n      b\n      ~~~\n',
-    '<ul>\n  <li>head\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>",
   ],
   [
     'item: closed tilde at +4 then blank and tail',
@@ -87,17 +87,17 @@ const cases = [
   [
     'item: unterminated raw at +0 with interior blank',
     '- head\n\n  ```=html\n  a\n\n  tail\n',
-    '<ul>\n  <li>head\n    a\n\ntail\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\n\ntail\n  </li>\n</ul>",
   ],
   [
     'item: unterminated raw at +0 without interior blank',
     '- head\n\n  ```=html\n  a\n  tail\n',
-    '<ul>\n  <li>head\n    a\ntail\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\ntail\n  </li>\n</ul>",
   ],
   [
     'item: closed raw at +0 with interior blank',
     '- head\n\n  ```=html\n  a\n\n  b\n  ```\n',
-    '<ul>\n  <li>head\n    a\n\nb\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\n\nb\n  </li>\n</ul>",
   ],
   [
     'item: closed raw at +0 then blank and tail',
@@ -107,17 +107,17 @@ const cases = [
   [
     'item: unterminated raw at +4 with interior blank',
     '- head\n\n      ```=html\n      a\n\n  tail\n',
-    '<ul>\n  <li>head\n    a\n\ntail\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\n\ntail\n  </li>\n</ul>",
   ],
   [
     'item: unterminated raw at +4 without interior blank',
     '- head\n\n      ```=html\n      a\n  tail\n',
-    '<ul>\n  <li>head\n    a\ntail\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\ntail\n  </li>\n</ul>",
   ],
   [
     'item: closed raw at +4 with interior blank',
     '- head\n\n      ```=html\n      a\n\n      b\n      ```\n',
-    '<ul>\n  <li>head\n    a\n\nb\n  </li>\n</ul>',
+    "<ul>\n  <li><p>head</p>\n    a\n\nb\n  </li>\n</ul>",
   ],
   [
     'item: closed raw at +4 then blank and tail',
@@ -127,137 +127,137 @@ const cases = [
   [
     'nested: unterminated code at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ```\n    a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated code at +0 without interior blank',
     '- outer\n\n  - inner\n\n    ```\n    a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed code at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ```\n    a\n\n    b\n    ```\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed code at +0 then blank and tail',
     '- outer\n\n  - inner\n\n    ```\n    a\n    ```\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated code at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ```\n        a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated code at +4 without interior blank',
     '- outer\n\n  - inner\n\n        ```\n        a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed code at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ```\n        a\n\n        b\n        ```\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed code at +4 then blank and tail',
     '- outer\n\n  - inner\n\n        ```\n        a\n        ```\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated tilde at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ~~~\n    a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated tilde at +0 without interior blank',
     '- outer\n\n  - inner\n\n    ~~~\n    a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed tilde at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ~~~\n    a\n\n    b\n    ~~~\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed tilde at +0 then blank and tail',
     '- outer\n\n  - inner\n\n    ~~~\n    a\n    ~~~\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated tilde at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ~~~\n        a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated tilde at +4 without interior blank',
     '- outer\n\n  - inner\n\n        ~~~\n        a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed tilde at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ~~~\n        a\n\n        b\n        ~~~\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n\nb\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed tilde at +4 then blank and tail',
     '- outer\n\n  - inner\n\n        ~~~\n        a\n        ~~~\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated raw at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ```=html\n    a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\n\ntail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n\ntail\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated raw at +0 without interior blank',
     '- outer\n\n  - inner\n\n    ```=html\n    a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\ntail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\ntail\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed raw at +0 with interior blank',
     '- outer\n\n  - inner\n\n    ```=html\n    a\n\n    b\n    ```\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\n\nb\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n\nb\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed raw at +0 then blank and tail',
     '- outer\n\n  - inner\n\n    ```=html\n    a\n    ```\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        a\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated raw at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ```=html\n        a\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\n\ntail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n\ntail\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: unterminated raw at +4 without interior blank',
     '- outer\n\n  - inner\n\n        ```=html\n        a\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\ntail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\ntail\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed raw at +4 with interior blank',
     '- outer\n\n  - inner\n\n        ```=html\n        a\n\n        b\n        ```\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li>inner\n        a\n\nb\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n\nb\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'nested: closed raw at +4 then blank and tail',
     '- outer\n\n  - inner\n\n        ```=html\n        a\n        ```\n\n    tail\n',
-    '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p>\n        a\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    "<ul>\n  <li><p>outer</p>\n    <ul>\n      <li><p>inner</p>\n        a\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
   ],
   [
     'quoteitem: unterminated code at +0 with interior blank',
     '> - head\n>\n>   ```\n>   a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated code at +0 without interior blank',
     '> - head\n>\n>   ```\n>   a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed code at +0 with interior blank',
     '> - head\n>\n>   ```\n>   a\n> \n>   b\n>   ```\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed code at +0 then blank and tail',
@@ -267,17 +267,17 @@ const cases = [
   [
     'quoteitem: unterminated code at +4 with interior blank',
     '> - head\n>\n>       ```\n>       a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated code at +4 without interior blank',
     '> - head\n>\n>       ```\n>       a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed code at +4 with interior blank',
     '> - head\n>\n>       ```\n>       a\n> \n>       b\n>       ```\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed code at +4 then blank and tail',
@@ -287,17 +287,17 @@ const cases = [
   [
     'quoteitem: unterminated tilde at +0 with interior blank',
     '> - head\n>\n>   ~~~\n>   a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated tilde at +0 without interior blank',
     '> - head\n>\n>   ~~~\n>   a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed tilde at +0 with interior blank',
     '> - head\n>\n>   ~~~\n>   a\n> \n>   b\n>   ~~~\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed tilde at +0 then blank and tail',
@@ -307,17 +307,17 @@ const cases = [
   [
     'quoteitem: unterminated tilde at +4 with interior blank',
     '> - head\n>\n>       ~~~\n>       a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated tilde at +4 without interior blank',
     '> - head\n>\n>       ~~~\n>       a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\ntail\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed tilde at +4 with interior blank',
     '> - head\n>\n>       ~~~\n>       a\n> \n>       b\n>       ~~~\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      <pre><code>a\n\nb\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed tilde at +4 then blank and tail',
@@ -327,17 +327,17 @@ const cases = [
   [
     'quoteitem: unterminated raw at +0 with interior blank',
     '> - head\n>\n>   ```=html\n>   a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\n\ntail\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\n\ntail\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated raw at +0 without interior blank',
     '> - head\n>\n>   ```=html\n>   a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\ntail\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\ntail\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed raw at +0 with interior blank',
     '> - head\n>\n>   ```=html\n>   a\n> \n>   b\n>   ```\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\n\nb\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\n\nb\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed raw at +0 then blank and tail',
@@ -347,17 +347,17 @@ const cases = [
   [
     'quoteitem: unterminated raw at +4 with interior blank',
     '> - head\n>\n>       ```=html\n>       a\n> \n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\n\ntail\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\n\ntail\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: unterminated raw at +4 without interior blank',
     '> - head\n>\n>       ```=html\n>       a\n>   tail\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\ntail\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\ntail\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed raw at +4 with interior blank',
     '> - head\n>\n>       ```=html\n>       a\n> \n>       b\n>       ```\n',
-    '<blockquote>\n  <ul>\n    <li>head\n      a\n\nb\n    </li>\n  </ul>\n</blockquote>',
+    "<blockquote>\n  <ul>\n    <li><p>head</p>\n      a\n\nb\n    </li>\n  </ul>\n</blockquote>",
   ],
   [
     'quoteitem: closed raw at +4 then blank and tail',

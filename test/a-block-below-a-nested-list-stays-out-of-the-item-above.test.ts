@@ -55,14 +55,12 @@ describe('a block below a nested list keeps its blank line', () => {
     // either, so it is written as a block of its own (markup-carve/carve#2884).
     expect(carveToMarkdown('- a\n  - b\n    # N\nlazy\n')).toBe('- a\n  - b\n    # N\n\nlazy\n')
     // A thematic break closes what is above it rather than continuing it.
-    expect(carveToMarkdown('- - A\n\n    ---\n  second\n')).toBe('- - A\n    ***\n  second\n')
-    expect(reread('- - A\n\n    ---\n  second\n')).toBe(carveToHtml('- - A\n\n    ---\n  second\n'))
+    expect(carveToMarkdown('- - A\n\n    ---\n  second\n')).toBe('- - A\n\n    ---\n  second\n')
+    expect(reread('- - A\n\n    ---\n  second\n')).toBe(carveToHtml('- - A\n\n    ---\n\n  second\n'))
   })
 
-  it('leaves the tight-item separator rule where it was', () => {
-    // Two sibling quotes keep their separator and read back as two quotes; a
-    // quote under a paragraph still drops it and reads tight (carve-js#2056).
-    expect(carveToMarkdown('- x\n  > q\n\n  > r\n')).toBe('- x\n  > q\n\n  > r\n')
+  it('keeps the blank that loosens a list item', () => {
+    expect(carveToMarkdown('- x\n  > q\n\n  > r\n')).toBe('- x\n\n  > q\n\n  > r\n')
     expect(carveToMarkdown('- x\n  > q\n')).toBe('- x\n  > q\n')
   })
 })

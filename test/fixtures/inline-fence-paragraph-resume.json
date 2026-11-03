@@ -727,7 +727,7 @@
   {
     "id": "ordinary-closed-code-q0-`-blanktrue",
     "source": "- a\n\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "ordinary-closed-code-q0-~-blankfalse",
@@ -737,7 +737,7 @@
   {
     "id": "ordinary-closed-code-q0-~-blanktrue",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "ordinary-closed-code-q1-`-blankfalse",
@@ -747,7 +747,7 @@
   {
     "id": "ordinary-closed-code-q1-`-blanktrue",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "ordinary-closed-code-q1-~-blankfalse",
@@ -757,7 +757,7 @@
   {
     "id": "ordinary-closed-code-q1-~-blanktrue",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "ordinary-closed-code-q2-`-blankfalse",
@@ -767,7 +767,7 @@
   {
     "id": "ordinary-closed-code-q2-`-blanktrue",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "ordinary-closed-code-q2-~-blankfalse",
@@ -777,7 +777,7 @@
   {
     "id": "ordinary-closed-code-q2-~-blanktrue",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-156",
@@ -812,32 +812,32 @@
   {
     "id": "preservation-162",
     "source": "- a\n\n  ```\n  code\n  ```\n---\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<hr>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<hr>"
   },
   {
     "id": "preservation-163",
     "source": "- a\n\n  ```\n  code\n  ```\n| a |\n| - |\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n</table>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n</table>"
   },
   {
     "id": "preservation-164",
     "source": "- a\n\n  ```\n  code\n  ```\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-165",
     "source": "- a\n\n  ```\n  code\n  ```\n- sibling\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>sibling</li>\n</ul>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li><p>sibling</p></li>\n</ul>"
   },
   {
     "id": "preservation-166",
     "source": "- a\n\n  ```\n  code\n  ```\n:: t\n: body\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>"
   },
   {
     "id": "preservation-167",
     "source": "- a\n\n  ```\n  code\n  ```\n  ```\n  unclosed\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n    <pre><code>unclosed\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n    <pre><code>unclosed\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "preservation-168",
@@ -942,32 +942,32 @@
   {
     "id": "preservation-188",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n---\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<hr>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<hr>"
   },
   {
     "id": "preservation-189",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n| a |\n| - |\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n</table>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n</table>"
   },
   {
     "id": "preservation-190",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n[r]: /u\n\n[r][]\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "preservation-191",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n- sibling\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n  <li>sibling</li>\n</ul>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n  <li><p>sibling</p></li>\n</ul>"
   },
   {
     "id": "preservation-192",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n:: t\n: body\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>"
   },
   {
     "id": "preservation-193",
     "source": "- a\n\n  ~~~\n  code\n  ~~~\n  ```\n  unclosed\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>code\n</code></pre>\n    <pre><code>unclosed\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>code\n</code></pre>\n    <pre><code>unclosed\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "preservation-194",
@@ -1062,32 +1062,32 @@
   {
     "id": "preservation-212",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> ---\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <hr>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <hr>\n</blockquote>"
   },
   {
     "id": "preservation-213",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> | a |\n> | - |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">a</th></tr>\n    </thead>\n  </table>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">a</th></tr>\n    </thead>\n  </table>\n</blockquote>"
   },
   {
     "id": "preservation-214",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-215",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> - sibling\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n    <li>sibling</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n    <li><p>sibling</p></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "preservation-216",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n> :: t\n> : body\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <dl>\n    <dt>t</dt>\n    <dd>body</dd>\n  </dl>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <dl>\n    <dt>t</dt>\n    <dd>body</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "preservation-217",
     "source": "> - a\n> \n>   ```\n>   code\n>   ```\n>   ```\n>   unclosed\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n      <pre><code>unclosed\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n      <pre><code>unclosed\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "preservation-218",
@@ -1192,32 +1192,32 @@
   {
     "id": "preservation-238",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> ---\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <hr>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <hr>\n</blockquote>"
   },
   {
     "id": "preservation-239",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> | a |\n> | - |\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">a</th></tr>\n    </thead>\n  </table>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">a</th></tr>\n    </thead>\n  </table>\n</blockquote>"
   },
   {
     "id": "preservation-240",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> [r]: /u\n> \n> [r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p><a href=\"/u\">r</a></p>\n</blockquote>"
   },
   {
     "id": "preservation-241",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> - sibling\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n    <li>sibling</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n    <li><p>sibling</p></li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "preservation-242",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n> :: t\n> : body\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <dl>\n    <dt>t</dt>\n    <dd>body</dd>\n  </dl>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <dl>\n    <dt>t</dt>\n    <dd>body</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "preservation-243",
     "source": "> - a\n> \n>   ~~~\n>   code\n>   ~~~\n>   ```\n>   unclosed\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n      <pre><code>unclosed\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>code\n</code></pre>\n      <pre><code>unclosed\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "preservation-244",
@@ -1312,32 +1312,32 @@
   {
     "id": "preservation-262",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > ---\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <hr>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <hr>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-263",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > | a |\n> > | - |\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <table>\n      <thead>\n        <tr><th scope=\"col\">a</th></tr>\n      </thead>\n    </table>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <table>\n      <thead>\n        <tr><th scope=\"col\">a</th></tr>\n      </thead>\n    </table>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-264",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-265",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > - sibling\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n      <li>sibling</li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n      <li><p>sibling</p></li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-266",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> > :: t\n> > : body\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n      <dd>body</dd>\n    </dl>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n      <dd>body</dd>\n    </dl>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-267",
     "source": "> > - a\n> > \n> >   ```\n> >   code\n> >   ```\n> >   ```\n> >   unclosed\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n        <pre><code>unclosed\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n        <pre><code>unclosed\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-268",
@@ -1442,32 +1442,32 @@
   {
     "id": "preservation-288",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > ---\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <hr>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <hr>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-289",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > | a |\n> > | - |\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <table>\n      <thead>\n        <tr><th scope=\"col\">a</th></tr>\n      </thead>\n    </table>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <table>\n      <thead>\n        <tr><th scope=\"col\">a</th></tr>\n      </thead>\n    </table>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-290",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > [r]: /u\n> > \n> > [r][]\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p><a href=\"/u\">r</a></p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-291",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > - sibling\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n      <li>sibling</li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n      <li><p>sibling</p></li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-292",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> > :: t\n> > : body\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n      <dd>body</dd>\n    </dl>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n      <dd>body</dd>\n    </dl>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-293",
     "source": "> > - a\n> > \n> >   ~~~\n> >   code\n> >   ~~~\n> >   ```\n> >   unclosed\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>code\n</code></pre>\n        <pre><code>unclosed\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>code\n</code></pre>\n        <pre><code>unclosed\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "preservation-294",
@@ -1712,7 +1712,7 @@
   {
     "id": "review-boundary-6",
     "source": "- a\n    ```\n- b\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code></code></pre>\n  </li>\n  <li>b\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code></code></pre>\n  </li>\n  <li><p>b</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "review-boundary-7",
@@ -1892,7 +1892,7 @@
   {
     "id": "review-resume-54",
     "source": "- a\n\n    ~~~~\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>\n~~~\ncode\n~~~\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>\n~~~\ncode\n~~~\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "review-resume-56",

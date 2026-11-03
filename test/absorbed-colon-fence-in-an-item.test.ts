@@ -51,7 +51,7 @@ describe('a malformed colon fence leaves no state in an item paragraph', () => {
 
   it('opens the div after a blank line as well', () => {
     expect(html('- item\n  :::note\n\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n:::note\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li><p>item\n:::note</p>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 

@@ -26,14 +26,14 @@ function childListOwnsBlankBefore(
   next: BlockNode,
   nextSpan: { start: number },
   rootLines: readonly string[],
+  tail: BlockNode | undefined,
+  tailEnd: number | undefined,
 ): boolean {
   if (next.type === 'paragraph' || previous?.type !== 'list' || priorSpan === undefined) return false
-  if ((previous.pos?.endLine ?? priorSpan.end) >= nextSpan.start) return true
-  const tail = previous.items.at(-1)?.children.at(-1)
+  if ((previous.pos?.endLine ?? tailEnd ?? priorSpan.end) >= nextSpan.start) return true
   return priorSpan.end === nextSpan.start - 1 &&
     isBlankLine(rootLines[priorSpan.end - 1] ?? '') &&
-    (tail?.type === 'code_block' || tail?.type === 'raw_block') &&
-    tail.content.endsWith('\n\n')
+    (tail?.type === 'code_block' || tail?.type === 'raw_block')
 }
 
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {
@@ -3568,8 +3568,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const priorDivInlineCode = previousVisibleBlock?.type === 'div' &&
           previousVisibleBlock.children.some(block => block.type === 'paragraph' &&
             block.children.some(inline => inline.type === 'code'))
+        let childListTail = previousVisibleBlock?.type === 'list'
+          ? previousVisibleBlock.items.at(-1)?.children.at(-1)
+          : undefined
+        while (childListTail?.type === 'list') childListTail = childListTail.items.at(-1)?.children.at(-1)
         if (childListOwnsBlankBefore(previousVisibleBlock, previousVisibleSpan, child, span,
-          lexer.rootLines ?? lexer.lines)) {
+          lexer.rootLines ?? lexer.lines,
+          childListTail,
+          childListTail === undefined ? undefined : session.blockLineSpan(childListTail)?.end)) {
           // An open child fence can carry the blank through the following
           // block's line. That blank still belongs to the child list.
           previousVisibleEnd = undefined

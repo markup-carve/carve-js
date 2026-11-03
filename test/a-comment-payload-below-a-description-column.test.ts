@@ -93,7 +93,7 @@ describe('a comment payload below a description column', () => {
 
   it('keeps folding a marker below a raised colon-container base', () => {
     expect(carveToHtml('- head\n\n      :::\n      a\n  - second\n')).toBe(
-      '<ul>\n  <li>head\n    <div>\n      <p>a\n- second</p>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>head</p>\n    <div>\n      <p>a\n- second</p>\n    </div>\n  </li>\n</ul>",
     )
   })
 })

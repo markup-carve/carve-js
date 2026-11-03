@@ -26,7 +26,7 @@ it('keeps a refused plus as text in an open note paragraph', () => {
 // A marker below the note body column closes the note and opens the item's list (PART 0 S3, carve#4860).
 it('closes the note at a marker below its body column (corpus 454-4)', () => {
   const html = carveToHtml('- body\n\n  [^g]: n\n   - item\n\nafter\n')
-  expect(html).toContain('<li>body\n    <ul>\n      <li>item</li>')
+  expect(html).toContain('<li><p>body</p>\n    <ul>\n      <li>item</li>')
 })
 
 it('keeps a list tight when a note after a blank keeps a prose follower', () => {

@@ -41,7 +41,7 @@ describe('an invisible line after a fence leaves the blank after it a separator'
     ['a braced comment in a quote', '> - :: term\n>   : payload\n>     ~~~\n>   {% c %}\n> \n>   text\n',
       `<blockquote>\n${looseAfterDescription.replace(/^/gm, '  ')}\n</blockquote>`],
     ['a definition that ends a sublist', '- - a\n    ~~~\n  [x]: /u\n\n    text\n', looseAfterSublist],
-    ['a braced comment that ends a sublist', '- - a\n\n    ```\n  {% c %}\n\n    text\n', looseAfterSublist],
+    ['a braced comment that ends a sublist', '- - a\n\n    ```\n  {% c %}\n\n    text\n', looseAfterSublist.replace('<li>a\n', '<li><p>a</p>\n')],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)
   })

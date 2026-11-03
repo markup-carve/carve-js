@@ -5,82 +5,82 @@ const cases = [
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-10",
     "> - a\n>\n>   ```\n>   x\n> after\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n  <p>after\nflush</p>\n</blockquote>\n"
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n  <p>after\nflush</p>\n</blockquote>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-11",
     "> :  a\n>\n>    ```\n>    x\nflush\n",
-    "<blockquote>\n  <p>:  a</p>\n  <pre><code>x\n</code></pre>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <p>:  a</p>\n  <pre><code>x\n</code></pre>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-12",
     "> :: t\n> :  d\n>    - ```\n>      x\nflush\n",
-    "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <p>d</p>\n      <ul>\n        <li>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </dd>\n  </dl>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <p>d</p>\n      <ul>\n        <li>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </dd>\n  </dl>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-2",
     "> - a\n>   - b\n>\n>     ```\n>     x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-3",
     "> - a\n>\n>   ```\n>   x\n>   ```\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-4",
     "> - a\n>   - b\n>\n>     ```\n>     x\n>     ```\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b</p>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-5",
     "> - ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-6",
     "> [^f]: t\n>\n>   ```\n>   x\nflush\n",
-    "<blockquote>\n\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-7",
     "> - a\n>\n>   ```\n>   x\n>   ```\n>\n>   z\nflush\n",
-    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n      <p>z\nflush</p>\n    </li>\n  </ul>\n</blockquote>\n"
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n      <p>z\nflush</p>\n    </li>\n  </ul>\n</blockquote>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-8",
     "> > - a\n> >\n> >   ```\n> >   x\nflush\n",
-    "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>x\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>x\n</code></pre>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim-9",
     "> - a\n> - ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a</li>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li>a</li>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "514-a-fence-a-container-inside-a-quote-holds-open-stores-no-claim",
     "> - a\n>\n>   ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>\n"
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "a lazy line preserves the item column",
     "> - a\nb\n>\n>   ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\nb\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+    "<blockquote>\n  <ul>\n    <li><p>a\nb</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "a lazy line before a closed fence",
     "> - a\nb\n>\n>   ```\n>   x\n>   ```\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\nb\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+    "<blockquote>\n  <ul>\n    <li><p>a\nb</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "a lazy line preserves nested item columns",
     "> - a\n>   - b\nc\n>\n>     ```\n>     x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\nc\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+    "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li><p>b\nc</p>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "an invalid info string leaves no closer",
     "> - a\n>   ```bad`\n>\n>   ```\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n<code>bad`</code>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+    "<blockquote>\n  <ul>\n    <li><p>a\n<code>bad`</code></p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "over-indented runs pair",

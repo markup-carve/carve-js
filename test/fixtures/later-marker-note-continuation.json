@@ -307,7 +307,7 @@
   {
     "id": "later-83",
     "source": "- [^n]: \n    more\n\n    - next\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <ul>\n      <li>next</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <ul>\n      <li>next</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-85",
@@ -317,7 +317,7 @@
   {
     "id": "later-87",
     "source": "- [^n]: \n    more\n\n    1. next\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <ol>\n      <li>next</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <ol>\n      <li>next</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-89",
@@ -327,7 +327,7 @@
   {
     "id": "later-91",
     "source": "- [^n]: \n    more\n\n    > q\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <blockquote><p>q</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-92",
@@ -342,12 +342,12 @@
   {
     "id": "later-94",
     "source": "- [^n]: \n    more\n\n    [^b]: inner\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-95",
     "source": "- [^n]: \n    more\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-96",
@@ -362,12 +362,12 @@
   {
     "id": "later-98",
     "source": "- [^n]: \n    more\n\n    :: t\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-99",
     "source": "- [^n]: \n    more\n\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-100",
@@ -402,12 +402,12 @@
   {
     "id": "later-106",
     "source": "- [^n]: \n    more\n\n    # h\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-107",
     "source": "- [^n]: \n    more\n\n    # h\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-108",
@@ -422,12 +422,12 @@
   {
     "id": "later-110",
     "source": "- [^n]: \n    more\n\n    ---\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-111",
     "source": "- [^n]: \n    more\n\n    ---\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-112",
@@ -437,7 +437,7 @@
   {
     "id": "later-114",
     "source": "- [^n]: \n    more\n\n    {.c}\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre class=\"c\"><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <pre class=\"c\"><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-116",
@@ -452,12 +452,12 @@
   {
     "id": "later-118",
     "source": "- [^n]: \n    more\n\n    %% c\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-119",
     "source": "- [^n]: \n    more\n\n    %% c\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\nmore\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:\nmore</p>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-121",
@@ -477,7 +477,7 @@
   {
     "id": "later-127",
     "source": "- [^n]: \n    - child\n\n    1. next\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <ol>\n      <li>next</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <ol>\n      <li>next</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-129",
@@ -487,17 +487,17 @@
   {
     "id": "later-131",
     "source": "- [^n]: \n    - child\n\n    > q\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <blockquote><p>q</p></blockquote>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-134",
     "source": "- [^n]: \n    - child\n\n    [^b]: inner\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-135",
     "source": "- [^n]: \n    - child\n\n    [^b]: inner\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-136",
@@ -512,12 +512,12 @@
   {
     "id": "later-138",
     "source": "- [^n]: \n    - child\n\n    :: t\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-139",
     "source": "- [^n]: \n    - child\n\n    :: t\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-141",
@@ -537,22 +537,22 @@
   {
     "id": "later-146",
     "source": "- [^n]: \n    - child\n\n    # h\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-147",
     "source": "- [^n]: \n    - child\n\n    # h\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-150",
     "source": "- [^n]: \n    - child\n\n    ---\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-151",
     "source": "- [^n]: \n    - child\n\n    ---\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <hr>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-152",
@@ -562,17 +562,17 @@
   {
     "id": "later-154",
     "source": "- [^n]: \n    - child\n\n    {.c}\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre class=\"c\"><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre class=\"c\"><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-158",
     "source": "- [^n]: \n    - child\n\n    %% c\n    ~~~\n    code\n    ~~~\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-159",
     "source": "- [^n]: \n    - child\n\n    %% c\n    ~~~\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>[^n]:\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
+    "html": "<ul>\n  <li><p>[^n]:</p>\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after [^n]</p>"
   },
   {
     "id": "later-160",
@@ -882,7 +882,7 @@
   {
     "id": "later-243",
     "source": "> - [^n]: \n>     more\n> \n>     - next\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <ul>\n        <li>next</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <ul>\n        <li>next</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-245",
@@ -892,7 +892,7 @@
   {
     "id": "later-247",
     "source": "> - [^n]: \n>     more\n> \n>     1. next\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <ol>\n        <li>next</li>\n      </ol>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <ol>\n        <li>next</li>\n      </ol>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-249",
@@ -902,7 +902,7 @@
   {
     "id": "later-251",
     "source": "> - [^n]: \n>     more\n> \n>     > q\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <blockquote><p>q</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <blockquote><p>q</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-252",
@@ -917,12 +917,12 @@
   {
     "id": "later-254",
     "source": "> - [^n]: \n>     more\n> \n>     [^b]: inner\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-255",
     "source": "> - [^n]: \n>     more\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-256",
@@ -937,12 +937,12 @@
   {
     "id": "later-258",
     "source": "> - [^n]: \n>     more\n> \n>     :: t\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-259",
     "source": "> - [^n]: \n>     more\n> \n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-260",
@@ -977,12 +977,12 @@
   {
     "id": "later-266",
     "source": "> - [^n]: \n>     more\n> \n>     # h\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-267",
     "source": "> - [^n]: \n>     more\n> \n>     # h\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-268",
@@ -997,12 +997,12 @@
   {
     "id": "later-270",
     "source": "> - [^n]: \n>     more\n> \n>     ---\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-271",
     "source": "> - [^n]: \n>     more\n> \n>     ---\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-272",
@@ -1012,7 +1012,7 @@
   {
     "id": "later-274",
     "source": "> - [^n]: \n>     more\n> \n>     {.c}\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre class=\"c\"><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <pre class=\"c\"><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-276",
@@ -1027,12 +1027,12 @@
   {
     "id": "later-278",
     "source": "> - [^n]: \n>     more\n> \n>     %% c\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-279",
     "source": "> - [^n]: \n>     more\n> \n>     %% c\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\nmore\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:\nmore</p>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-281",
@@ -1052,7 +1052,7 @@
   {
     "id": "later-287",
     "source": "> - [^n]: \n>     - child\n> \n>     1. next\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <ol>\n        <li>next</li>\n      </ol>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <ol>\n        <li>next</li>\n      </ol>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-289",
@@ -1062,17 +1062,17 @@
   {
     "id": "later-291",
     "source": "> - [^n]: \n>     - child\n> \n>     > q\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <blockquote><p>q</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <blockquote><p>q</p></blockquote>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-294",
     "source": "> - [^n]: \n>     - child\n> \n>     [^b]: inner\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-295",
     "source": "> - [^n]: \n>     - child\n> \n>     [^b]: inner\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-296",
@@ -1087,12 +1087,12 @@
   {
     "id": "later-298",
     "source": "> - [^n]: \n>     - child\n> \n>     :: t\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-299",
     "source": "> - [^n]: \n>     - child\n> \n>     :: t\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-301",
@@ -1112,22 +1112,22 @@
   {
     "id": "later-306",
     "source": "> - [^n]: \n>     - child\n> \n>     # h\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-307",
     "source": "> - [^n]: \n>     - child\n> \n>     # h\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-310",
     "source": "> - [^n]: \n>     - child\n> \n>     ---\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-311",
     "source": "> - [^n]: \n>     - child\n> \n>     ---\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <hr>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-312",
@@ -1137,16 +1137,16 @@
   {
     "id": "later-314",
     "source": "> - [^n]: \n>     - child\n> \n>     {.c}\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre class=\"c\"><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre class=\"c\"><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-318",
     "source": "> - [^n]: \n>     - child\n> \n>     %% c\n>     ~~~\n>     code\n>     ~~~\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   },
   {
     "id": "later-319",
     "source": "> - [^n]: \n>     - child\n> \n>     %% c\n>     ~~~\n>     code\n> after [^n]\n> ",
-    "html": "<blockquote>\n  <ul>\n    <li>[^n]:\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>[^n]:</p>\n      <ul>\n        <li>child</li>\n      </ul>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after [^n]</p>\n</blockquote>"
   }
 ]

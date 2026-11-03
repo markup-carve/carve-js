@@ -31,13 +31,13 @@ describe('post-blank continuation: bullet (content column 2)', () => {
 
   it('AT the content column (2 spaces) attaches as a block and stays tight', () => {
     expect(h('- one\n\n  > q')).toBe(
-      '<ul>\n  <li>one\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>one</p>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>",
     )
   })
 
   it('ABOVE the content column (3 spaces) is a structural block at its authored base', () => {
     expect(h('- one\n\n   > q')).toBe(
-      '<ul>\n  <li>one\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>',
+      "<ul>\n  <li><p>one</p>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>",
     )
   })
 })
@@ -51,13 +51,13 @@ describe('post-blank continuation: ordered (content column 3)', () => {
 
   it('AT the content column (3 spaces) attaches and stays tight', () => {
     expect(h('1. one\n\n   > q')).toBe(
-      '<ol>\n  <li>one\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
+      "<ol>\n  <li><p>one</p>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>",
     )
   })
 
   it('ABOVE the content column (4 spaces) is structural at its authored base', () => {
     expect(h('1. one\n\n    > q')).toBe(
-      '<ol>\n  <li>one\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
+      "<ol>\n  <li><p>one</p>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>",
     )
   })
 })
