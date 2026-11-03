@@ -1174,7 +1174,14 @@ export function createDefinitionListParser(
     const authoredList = (lexer.hostBody === 'list' || lexer.hostBody === 'description') && !lexer.definitionLeadFromItemMarker &&
       listColumn > lexer.hostContentColumn &&
       !lexer.nonAuthoredDefinitionStarts.has(lexer.lineNumber(lexer.pos))
-    const entryReachesList = () => !authoredList || entryColumn() === listColumn
+    // A block a `+` attached is placed by the `+`, not by its source column (§17 L3): its first
+    // line reaches the list, and the entries after it are measured from that line's column.
+    let reachColumn = listColumn
+    const entryReachesList = (): boolean => {
+      if (!authoredList) return true
+      if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) reachColumn = entryColumn()
+      return entryColumn() === reachColumn
+    }
     while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry()) && entryReachesList()) {
       const terms: InlineNode[][] = []
       const termSpans: (Position | undefined)[] = []
