@@ -509,7 +509,7 @@ export function createDefinitionListParser(
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
         for (let k = 0; k < attached.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
-        bodyLines.push(...attached.lines)
+        bodyLines.push(...attached.lines.map(line => sliceColumns(line, Math.min(contentCol, indentColumns(line)), true)))
         bodySourceLines.push(...attached.lines)
         bodyLineNumbers.push(...attached.lineNumbers)
         for (const line of attached.lines) track(line)
