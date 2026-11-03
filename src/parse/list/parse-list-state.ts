@@ -203,10 +203,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const run = commentFenceRun(content.trimStart())
     if (!line.atContentColumn && state.literalColon?.opaque?.belowBaseCloses && run === state.literalColon.opaque.run) {
       delete state.literalColon.opaque
-      return endsOnBlock(state)
+      // A `%%%` span leaves nothing: the stanza it interrupted stays as it was (carve#4956).
+      state.lazyFoldable = state.literalColon.spanFoldable === true
+      state.inDefList = false
+      return true
     }
-    if (!line.atContentColumn && run === undefined && content.trim() !== '') {
-      // Any other text line below the column misses every span owner from here down and ends the span (PART 0 S1).
+    if (!line.atContentColumn && run === undefined && content.trim() !== '' && !RE_COMMENT_LINE.test(content)) {
+      // Any other non-comment line below the column misses every span owner from here down and ends the span (PART 0 S1, carve#4994).
       for (let frame: ItemLazyState | null | undefined = state; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
         if (frame.literalColon?.opaque?.belowBaseCloses) delete frame.literalColon.opaque
     }

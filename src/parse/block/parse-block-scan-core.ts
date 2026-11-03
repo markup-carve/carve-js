@@ -12,6 +12,7 @@ import {
   RE_ADMONITION_CLOSE,
   RE_ADMONITION_OPEN,
   RE_FENCE,
+  RE_COMMENT_LINE,
   RE_HARDBREAKS_OPEN,
   RE_LINE_BLOCK_OPEN,
   RE_ORDERED,
@@ -1007,9 +1008,11 @@ export function consumeOpaqueColonFenceBodySpan(
       const innerText = lexer.peek()!
       const commentClose = RE_COMMENT_BLOCK_ANY.exec(innerText)
       const closes = commentClose !== null && commentClose[1]!.length === fence
-      // Any other lazy line misses the span's owner and ends the span (PART 0 S1).
+      // Any other lazy line misses the span's owner and ends the span (PART 0 S1); an
+      // item's comment-shaped lazy line stays payload (carve#4994).
       const number = lexer.lineNumber(innerLineIndex)
-      if (!closes && literalOwnerLine !== undefined && (lexer.itemLazyLines.has(number) || lexer.quoteLazyLines.has(number))) break
+      if (!closes && literalOwnerLine !== undefined && (lexer.quoteLazyLines.has(number) ||
+          (lexer.itemLazyLines.has(number) && !RE_COMMENT_LINE.test(innerText)))) break
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
       if (closes) break

@@ -1077,7 +1077,7 @@
   {
     "id": "review8-older-o01-overindented-verse-013",
     "source": "- a\n     ::: |\n    %%%\n %%%\n     :::\n    > q\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;:::<br>\n&nbsp;&gt; q</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n\n    </div>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o04-fence-comment-shifted-colon-006",
